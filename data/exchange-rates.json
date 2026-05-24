@@ -1,0 +1,18 @@
+[
+  { "date": "2026/05/24", "currency": "JPY", "rate": 0.00872, "source": "ECB" },
+  { "date": "2026/05/24", "currency": "CNY", "rate": 0.18950, "source": "ECB" },
+  { "date": "2026/05/24", "currency": "USD", "rate": 1.34120, "source": "ECB" },
+  { "date": "2026/05/24", "currency": "EUR", "rate": 1.45920, "source": "ECB" },
+  { "date": "2026/05/23", "currency": "JPY", "rate": 0.00869, "source": "ECB" },
+  { "date": "2026/05/23", "currency": "CNY", "rate": 0.18920, "source": "ECB" },
+  { "date": "2026/05/22", "currency": "JPY", "rate": 0.00871, "source": "ECB" },
+  { "date": "2026/05/22", "currency": "CNY", "rate": 0.18931, "source": "ECB" },
+  { "date": "2026/05/21", "currency": "JPY", "rate": 0.00873, "source": "ECB" },
+  { "date": "2026/05/21", "currency": "CNY", "rate": 0.18928, "source": "ECB" },
+  { "date": "2026/05/20", "currency": "JPY", "rate": 0.00868, "source": "Yahoo" },
+  { "date": "2026/05/20", "currency": "CNY", "rate": 0.18915, "source": "Yahoo" },
+  { "date": "2026/05/19", "currency": "JPY", "rate": 0.00874, "source": "ECB" },
+  { "date": "2026/05/19", "currency": "CNY", "rate": 0.18935, "source": "ECB" },
+  { "date": "2026/05/18", "currency": "JPY", "rate": 0.00876, "source": "ECB" },
+  { "date": "2026/05/18", "currency": "CNY", "rate": 0.18927, "source": "manual" }
+]

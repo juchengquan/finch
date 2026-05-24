@@ -1,0 +1,10 @@
+[
+  { "id": "food",   "name": "Food & Dining", "spent": 612.40, "budget": 700,  "icon": "fork",     "hue": 12  },
+  { "id": "rent",   "name": "Housing",       "spent": 1850,   "budget": 1850, "icon": "home",     "hue": 220 },
+  { "id": "trans",  "name": "Transport",     "spent": 184.60, "budget": 250,  "icon": "car",      "hue": 200 },
+  { "id": "shop",   "name": "Shopping",      "spent": 312.18, "budget": 300, "icon": "bag",      "hue": 280 },
+  { "id": "enter",  "name": "Entertainment", "spent":  98.40, "budget": 200, "icon": "film",     "hue": 320 },
+  { "id": "health", "name": "Health",        "spent":  42.00, "budget": 150, "icon": "heart",    "hue":  90 },
+  { "id": "subs",   "name": "Subscriptions", "spent": 138.58, "budget": 150, "icon": "sync",     "hue": 160 },
+  { "id": "misc",   "name": "Other",         "spent":  50.00, "budget": 100, "icon": "dots",     "hue":  40 }
+]

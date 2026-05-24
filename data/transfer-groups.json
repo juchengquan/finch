@@ -1,0 +1,8 @@
+[
+  { "id": "tg-001", "date": "2026-05-22", "amountBase": 1500.00, "fromCurrency": "SGD", "toCurrency": "SGD", "exchangeRate": 1.0000,
+    "fromAccount": "UOB One",  "fromLedger": "Personal", "toAccount": "Marcus Savings", "toLedger": "Personal", "notes": "Monthly savings sweep" },
+  { "id": "tg-002", "date": "2026-05-18", "amountBase": 80000.00, "fromCurrency": "SGD", "toCurrency": "CNY", "exchangeRate": 5.2841,
+    "amountFrom": 80000.00, "amountTo": 422728.00, "fromAccount": "UOB One", "fromLedger": "Personal", "toAccount": "CMB \u00b7 6291", "toLedger": "Side studio", "notes": "Quarterly capital transfer" },
+  { "id": "tg-003", "date": "2026-05-12", "amountBase": 540.00, "fromCurrency": "SGD", "toCurrency": "JPY", "exchangeRate": 117.43,
+    "amountFrom": 540.00, "amountTo": 63412.00, "fromAccount": "Amex Gold", "fromLedger": "Personal", "toAccount": "Wise JPY \u00b7 8841", "toLedger": "Japan \u201926", "notes": "Trip top-up" }
+]

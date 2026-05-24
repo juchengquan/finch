@@ -1,0 +1,18 @@
+[
+  { "id": "t01", "merchant": "Blue Bottle Coffee",    "category": "food",   "amount": -6.75,   "account": "cc",  "date": "2026-05-24", "time": "08:14", "note": "Cortado",           "pending": false },
+  { "id": "t02", "merchant": "Whole Foods Market",    "category": "food",   "amount": -84.32,  "account": "cc",  "date": "2026-05-23", "time": "18:42", "note": "Weekly groceries",  "pending": false },
+  { "id": "t03", "merchant": "Lyft",                  "category": "trans",  "amount": -18.40,  "account": "cc",  "date": "2026-05-23", "time": "14:01", "note": "To downtown",       "pending": true  },
+  { "id": "t04", "merchant": "Spotify",               "category": "subs",   "amount": -11.99,  "account": "cc",  "date": "2026-05-22", "time": "06:00", "note": "Premium · monthly", "pending": false, "recurring": true },
+  { "id": "t05", "merchant": "Acme Payroll",          "category": null,     "amount": 2900.00, "account": "chk", "date": "2026-05-22", "time": "00:00", "note": "Bi-weekly salary",  "pending": false, "kind": "income" },
+  { "id": "t06", "merchant": "Trader Joe\u2019s",      "category": "food",   "amount": -42.18,  "account": "cc",  "date": "2026-05-21", "time": "19:24", "note": "",                  "pending": false },
+  { "id": "t07", "merchant": "Apple",                 "category": "shop",   "amount": -129.00, "account": "cc",  "date": "2026-05-20", "time": "12:08", "note": "AirPods cleaning",  "pending": false },
+  { "id": "t08", "merchant": "NYC Transit",           "category": "trans",  "amount": -33.00,  "account": "cc",  "date": "2026-05-20", "time": "07:55", "note": "Weekly pass",       "pending": false },
+  { "id": "t09", "merchant": "Pret a Manger",          "category": "food",  "amount": -14.20,  "account": "cc",  "date": "2026-05-19", "time": "12:42", "note": "Lunch",             "pending": false },
+  { "id": "t10", "merchant": "Netflix",               "category": "subs",   "amount": -22.99,  "account": "cc",  "date": "2026-05-19", "time": "06:00", "note": "Standard · monthly","pending": false, "recurring": true },
+  { "id": "t11", "merchant": "IKEA",                  "category": "shop",   "amount": -183.18, "account": "cc",  "date": "2026-05-18", "time": "14:30", "note": "Office chair",      "pending": false },
+  { "id": "t12", "merchant": "Equinox",               "category": "health", "amount": -42.00,  "account": "cc",  "date": "2026-05-17", "time": "07:00", "note": "Day pass",           "pending": false },
+  { "id": "t13", "merchant": "Brooklyn Brewery",      "category": "enter",  "amount": -38.40,  "account": "cc",  "date": "2026-05-16", "time": "20:15", "note": "Friday drinks",     "pending": false },
+  { "id": "t14", "merchant": "Rent \u00b7 Greene St.", "category": "rent",   "amount": -1850.00,"account": "chk", "date": "2026-05-15", "time": "09:00", "note": "May rent",          "pending": false, "recurring": true },
+  { "id": "t15", "merchant": "Uber Eats",             "category": "food",   "amount": -29.84,  "account": "cc",  "date": "2026-05-14", "time": "20:48", "note": "Thai cuisine",      "pending": false },
+  { "id": "t16", "merchant": "Strand Books",          "category": "shop",   "amount": -27.50,  "account": "cc",  "date": "2026-05-13", "time": "17:22", "note": "",                  "pending": false }
+]

@@ -1,0 +1,6 @@
+[
+  { "id": "personal", "name": "Personal",     "base": "SGD", "isDefault": 1, "accounts": 4, "txns": 1842, "color": "#c96442", "tagline": "Daily life \u00b7 the main book" },
+  { "id": "family",   "name": "Family",        "base": "SGD", "isDefault": 0, "accounts": 2, "txns":  612, "color": "#3d6b46", "tagline": "Joint expenses with Sam" },
+  { "id": "business", "name": "Side studio",   "base": "CNY", "isDefault": 0, "accounts": 3, "txns":  284, "color": "#5d76a8", "tagline": "Freelance income & expenses" },
+  { "id": "travel",   "name": "Japan \u201926", "base": "JPY", "isDefault": 0, "accounts": 2, "txns":   38, "color": "#c89a3e", "tagline": "Closed trip \u00b7 archived next month" }
+]
