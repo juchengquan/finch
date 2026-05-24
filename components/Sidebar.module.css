@@ -1,0 +1,240 @@
+.sidebar {
+  height: 100vh;
+  background: var(--paper-alt);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  gap: 4px;
+  border-right: 1px solid var(--line);
+  flex-shrink: 0;
+  transition: width 0.2s;
+  overflow: hidden;
+}
+
+.sidebar.open {
+  width: 220px;
+}
+
+.sidebar.collapsed {
+  width: 60px;
+}
+
+/* Brand section */
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.brandGlyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.brandLabel {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+  letter-spacing: -0.3;
+  white-space: nowrap;
+}
+
+/* Toggle button */
+.toggleButton {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  background: var(--paper-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggleButton:hover {
+  background: var(--paper);
+}
+
+/* Navigation tabs */
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navTab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 400;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.navTab:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.navTab.active {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.navLabel {
+  white-space: nowrap;
+}
+
+/* Section divider */
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1.5px;
+  padding: 14px 10px 6px;
+}
+
+/* Spacer */
+.spacer {
+  flex: 1;
+}
+
+/* Bottom section */
+.bottomLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+}
+
+.bottomLink:hover {
+  color: var(--ink);
+}
+
+.bottomLink.warn {
+  color: var(--warn);
+}
+
+/* User profile */
+.userProfile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-top: 0.5px solid var(--line);
+  margin-top: 4px;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.userInfo {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.userName {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.userLabel {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Warn dot indicator */
+.warnDot {
+  position: absolute;
+  top: 6px;
+  left: 140px;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--warn);
+}
+
+.sidebar.collapsed .warnDot {
+  left: 16px;
+}
+
+/* Mobile tab bar */
+.mobileTabBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: var(--tab-bar-height);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: var(--tab-bar-padding-y) var(--tab-bar-padding-x) 24px;
+}
+
+.mobileTab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: var(--tab-min-width);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.mobileTab.active {
+  color: var(--ink);
+}
+
+.mobileTabLabel {
+  font-size: 10px;
+  font-weight: 400;
+  color: inherit;
+}
+
+.mobileTab.active .mobileTabLabel {
+  font-weight: 600;
+}

@@ -1,0 +1,92 @@
+.iconButton {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+/* Ghost variant - no border, transparent background */
+.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ghost:hover {
+  background-color: var(--paper-alt);
+}
+
+/* Primary variant - filled accent */
+.primary {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.primary:hover {
+  background-color: var(--accent2);
+  border-color: var(--accent2);
+}
+
+/* Default (outline) variant */
+.default {
+  background: transparent;
+  border-color: var(--line);
+}
+
+.default:hover {
+  border-color: var(--ink);
+}
+
+/* Disabled state */
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* Size variants */
+.small {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+}
+
+.small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.medium {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+}
+
+.medium svg {
+  width: 16px;
+  height: 16px;
+}
+
+.large {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+}
+
+.large svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Active/pressed state */
+.iconButton:active:not(.disabled) {
+  transform: scale(0.95);
+}

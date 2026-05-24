@@ -1,0 +1,509 @@
+/* ============================================
+   MobileComponents CSS Module
+   ============================================ */
+
+/* ============================================
+   Mobile Tab Bar
+   ============================================ */
+.tabBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: var(--tab-bar-height);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: var(--tab-bar-padding-y) var(--tab-bar-padding-x) 24px;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: var(--tab-min-width);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.tabActive {
+  color: var(--ink);
+}
+
+.tabLabel {
+  font-size: 10px;
+  font-weight: 400;
+  color: inherit;
+}
+
+.tabActive .tabLabel {
+  font-weight: 600;
+}
+
+.pinnedButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(201, 100, 66, 0.3);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ============================================
+   Profile Chip
+   ============================================ */
+.profileChip {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-style: italic;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+/* ============================================
+   Sidebar
+   ============================================ */
+.sidebar {
+  height: 100dvh;
+  background: var(--paper-alt);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  gap: 4px;
+  border-right: 1px solid var(--line);
+  flex-shrink: 0;
+  transition: width 0.2s;
+  overflow: hidden;
+}
+
+.sidebarOpen {
+  width: 220px;
+}
+
+.sidebarCollapsed {
+  width: 60px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.brandGlyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.brandLabel {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+  letter-spacing: -0.3;
+  white-space: nowrap;
+}
+
+.toggleButton {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  background: var(--paper-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.toggleButton:hover {
+  background: var(--paper);
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navTab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 400;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.navTab:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.navTabActive {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.navLabel {
+  white-space: nowrap;
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1.5px;
+  padding: 14px 10px 6px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.bottomLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+}
+
+.bottomLink:hover {
+  color: var(--ink);
+}
+
+.bottomLinkWarn {
+  color: var(--warn);
+}
+
+.warnDot {
+  position: absolute;
+  top: 6px;
+  left: 140px;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--warn);
+}
+
+.sidebarCollapsed .warnDot {
+  left: 16px;
+}
+
+.userProfile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-top: 0.5px solid var(--line);
+  margin-top: 4px;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.userInfo {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.userName {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.userLabel {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ============================================
+   Screen Header
+   ============================================ */
+.screenHeader {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .screenHeader {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--paper);
+  }
+}
+
+.headerGrid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: calc(16px + env(safe-area-inset-top)) 20px 16px;
+  gap: 8px;
+}
+
+.leading,
+.trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--icon-btn-size);
+}
+
+.leading {
+  justify-self: start;
+}
+
+.trailing {
+  justify-self: end;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+  letter-spacing: -0.2;
+  text-align: center;
+  color: var(--ink);
+}
+
+/* ============================================
+   Page Header (stats section)
+   ============================================ */
+.pageHeader {
+  padding: 0 20px 22px;
+}
+
+.borderTop {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pageLabel {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.pageValue {
+  font-family: var(--font-display);
+  font-size: 48px;
+  letter-spacing: -2px;
+  line-height: 1;
+  margin-top: 6px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.pageSublabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.pageTrend {
+  margin-top: 8px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.pos {
+  background: rgba(94, 125, 94, 0.1);
+  color: var(--pos);
+}
+
+.neg {
+  background: rgba(201, 100, 66, 0.1);
+  color: var(--neg);
+}
+
+.warn {
+  background: rgba(200, 154, 62, 0.1);
+  color: var(--warn);
+}
+
+/* ============================================
+   Schema Chip
+   ============================================ */
+.schemaChip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* ============================================
+   Icon Button
+   ============================================ */
+.iconButton {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.iconButton:active {
+  transform: scale(0.95);
+}
+
+/* Variants */
+.default {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.default:hover {
+  border-color: var(--ink);
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink);
+}
+
+.ghost:hover {
+  background-color: var(--paper-alt);
+}
+
+.primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: white;
+}
+
+.primary:hover {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+
+/* Disabled */
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Sizes */
+.small {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+}
+
+.medium {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+}
+
+.large {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+}
+
+/* ============================================
+   Mobile Page Shell
+   ============================================ */
+.mobilePage {
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  position: relative;
+  overflow: hidden;
+}
+
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--paper);
+  will-change: transform;
+}
+
+.scrollContainer {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.content {
+  min-height: 100%;
+}

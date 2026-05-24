@@ -1,0 +1,167 @@
+/* ============================================
+   Design Tokens - Finch CSS Custom Properties
+   Generated from lib/theme.ts
+   ============================================ */
+
+@layer tokens {
+  :root {
+    /* ============================================
+       Color Palette - WARM (default)
+       ============================================ */
+    --paper: #f5f1ea;
+    --paper-alt: #ece5d9;
+    --card: #faf7f1;
+    --ink: #1a1614;
+    --ink2: #3a322c;
+    --muted: #8a7e6e;
+    --line: #d8cfc1;
+    --accent: #c96442;
+    --accent2: #e07856;
+    --pos: #5e7d5e;
+    --neg: #c96442;
+    --warn: #c89a3e;
+
+    /* ============================================
+       Typography - EDITORIAL (default)
+       ============================================ */
+    --font-display: 'Instrument Serif', 'EB Garamond', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+    /* ============================================
+       Density - REGULAR (default)
+       ============================================ */
+    --density-row: 56px;
+    --density-gap: 12px;
+    --density-pad: 16px;
+    --density-fs: 14px;
+
+    /* ============================================
+       Component Sizing
+       ============================================ */
+    --icon-btn-size: 36px;
+    --icon-btn-radius: 18px;
+    --avatar-size: 36px;
+    --avatar-radius: 18px;
+    --tab-bar-height: 88px;
+    --tab-bar-padding-y: 12px;
+    --tab-bar-padding-x: 8px;
+    --tab-min-width: 56px;
+  }
+}
+
+/* ============================================
+   NOIR Palette
+   ============================================ */
+[data-palette="noir"] {
+  --paper: #0e0d0c;
+  --paper-alt: #1a1816;
+  --card: #1c1a17;
+  --ink: #f1ece2;
+  --ink2: #c9c0b1;
+  --muted: #7a7367;
+  --line: #2a2722;
+  --accent: #e07856;
+  --accent2: #c89a3e;
+  --pos: #9bb89b;
+  --neg: #e07856;
+  --warn: #d8b366;
+}
+
+/* ============================================
+   FOREST Palette
+   ============================================ */
+[data-palette="forest"] {
+  --paper: #f3f0e8;
+  --paper-alt: #e6e0d2;
+  --card: #fbf8f1;
+  --ink: #1a2018;
+  --ink2: #3a4438;
+  --muted: #7a8478;
+  --line: #cdd3c4;
+  --accent: #3d6b46;
+  --accent2: #6b8a6b;
+  --pos: #3d6b46;
+  --neg: #a8533a;
+  --warn: #b88a3a;
+}
+
+/* ============================================
+   INDIGO Palette
+   ============================================ */
+[data-palette="indigo"] {
+  --paper: #f4f4f8;
+  --paper-alt: #e8e8f0;
+  --card: #ffffff;
+  --ink: #0f1024;
+  --ink2: #2e3050;
+  --muted: #7a7c92;
+  --line: #d4d6e0;
+  --accent: #3a3aff;
+  --accent2: #8a8cff;
+  --pos: #1f8a5b;
+  --neg: #c83a3a;
+  --warn: #c89a3e;
+}
+
+/* ============================================
+   Density: COMPACT
+   ============================================ */
+[data-density="compact"] {
+  --density-row: 44px;
+  --density-gap: 8px;
+  --density-pad: 12px;
+  --density-fs: 13px;
+}
+
+/* ============================================
+   Density: ROOMY
+   ============================================ */
+[data-density="roomy"] {
+  --density-row: 68px;
+  --density-gap: 18px;
+  --density-pad: 20px;
+  --density-fs: 15px;
+}
+
+/* ============================================
+   Typography Classes (for reference)
+   These are used in font-family CSS declarations
+   ============================================ */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.text-paper { color: var(--paper); }
+.text-paper-alt { color: var(--paper-alt); }
+.text-card { color: var(--card); }
+.text-ink { color: var(--ink); }
+.text-ink2 { color: var(--ink2); }
+.text-muted { color: var(--muted); }
+.text-accent { color: var(--accent); }
+.text-pos { color: var(--pos); }
+.text-neg { color: var(--neg); }
+.text-warn { color: var(--warn); }
+
+.bg-paper { background-color: var(--paper); }
+.bg-paper-alt { background-color: var(--paper-alt); }
+.bg-card { background-color: var(--card); }
+.bg-ink { background-color: var(--ink); }
+.bg-accent { background-color: var(--accent); }
+
+.border-line { border: 1px solid var(--line); }
+.rounded-sm { border-radius: 8px; }
+.rounded-md { border-radius: 14px; }
+.rounded-lg { border-radius: 18px; }
+.rounded-full { border-radius: 9999px; }
