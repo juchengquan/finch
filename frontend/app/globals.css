@@ -1,22 +1,9 @@
+@import '@/styles/tokens.css';
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
-
-:root {
-  --paper: #f5f1ea;
-  --paper-alt: #ece5d9;
-  --card: #faf7f1;
-  --ink: #1a1614;
-  --ink2: #3a322c;
-  --muted: #8a7e6e;
-  --line: #d8cfc1;
-  --accent: #c96442;
-  --accent2: #e07856;
-  --pos: #5e7d5e;
-  --neg: #c96442;
-  --warn: #c89a3e;
 }
 
 html {
@@ -24,13 +11,16 @@ html {
 }
 
 body {
-  background: #1a1614;
+  background: var(--paper);
   color: var(--ink);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
 
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -43,13 +33,67 @@ body {
   border-radius: 3px;
 }
 
-.mobile-shell { display: none; }
-.desktop-shell { display: flex; }
+/* ============================================
+   Shell Layout Classes
+   ============================================ */
+.mobile-shell {
+  display: none;
+}
 
-.mobile-only { display: none; }
+.desktop-shell {
+  display: flex;
+}
 
+.mobile-only {
+  display: none;
+}
+
+/* ============================================
+   Responsive Breakpoint
+   ============================================ */
 @media (max-width: 767px) {
-  .mobile-shell { display: flex !important; }
-  .desktop-shell { display: none !important; }
-  .mobile-only { display: block; }
+  .mobile-shell {
+    display: flex !important;
+  }
+  .desktop-shell {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block;
+  }
+}
+
+/* ============================================
+   Focus Styles
+   ============================================ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   Button Reset
+   ============================================ */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ============================================
+   Link Reset
+   ============================================ */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ============================================
+   Safe Area Insets (for notched devices)
+   ============================================ */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

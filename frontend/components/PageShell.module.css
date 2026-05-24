@@ -1,0 +1,364 @@
+/* ============================================
+   PageShell CSS Module
+   ============================================ */
+
+/* ============================================
+   Mobile Shell
+   ============================================ */
+.mobileShell {
+  height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  position: relative;
+  overflow: hidden;
+}
+
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--paper);
+  will-change: transform;
+}
+
+.scrollContainer {
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--tab-bar-height) + 5px);
+}
+
+/* ============================================
+   Mobile Tab Bar
+   ============================================ */
+.tabBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: var(--tab-bar-height);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: var(--tab-bar-padding-y) var(--tab-bar-padding-x);
+  /* iOS Safari: prevent overscroll from dragging the nav */
+  overscroll-behavior: contain;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: var(--tab-min-width);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.tabActive {
+  color: var(--ink);
+}
+
+.tabLabel {
+  font-size: 10px;
+  font-weight: 400;
+  color: inherit;
+}
+
+.tabActive .tabLabel {
+  font-weight: 600;
+}
+
+.pinnedButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(201, 100, 66, 0.3);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ============================================
+   Desktop Shell
+   ============================================ */
+.desktopShell {
+  display: flex;
+  height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.desktopContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.desktopHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--line);
+  gap: 16px;
+}
+
+.desktopHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.searchButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--paper-alt);
+  border-radius: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  width: 240px;
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.desktopScroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ============================================
+   Sidebar (Desktop)
+   ============================================ */
+.sidebar {
+  height: 100vh;
+  background: var(--paper-alt);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  gap: 4px;
+  border-right: 1px solid var(--line);
+  flex-shrink: 0;
+  transition: width 0.2s;
+  overflow: hidden;
+}
+
+.sidebarOpen {
+  width: 220px;
+}
+
+.sidebarCollapsed {
+  width: 60px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.brandGlyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.brandLabel {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+  letter-spacing: -0.3;
+  white-space: nowrap;
+}
+
+.toggleButton {
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border-radius: var(--icon-btn-radius);
+  background: var(--paper-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.toggleButton:hover {
+  background: var(--paper);
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navTab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 400;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.navTab:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.navTabActive {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.navLabel {
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.bottomLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+}
+
+.bottomLink:hover {
+  color: var(--ink);
+}
+
+.bottomLinkWarn {
+  color: var(--warn);
+}
+
+.warnDot {
+  position: absolute;
+  top: 6px;
+  left: 140px;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--warn);
+}
+
+.sidebarCollapsed .warnDot {
+  left: 16px;
+}
+
+.userProfile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-top: 0.5px solid var(--line);
+  margin-top: 4px;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.userInfo {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.userName {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.userLabel {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ============================================
+   Responsive: Hide on Desktop
+   ============================================ */
+@media (min-width: 768px) {
+  .mobileShell {
+    display: none;
+  }
+}
+
+/* ============================================
+   Responsive: Hide on Mobile
+   ============================================ */
+@media (max-width: 767px) {
+  .desktopShell {
+    display: none;
+  }
+}
