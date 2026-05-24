@@ -1,0 +1,9 @@
+{
+  "user": { "name": "Alex Morgan", "currency": "USD" },
+  "balance": 12847.32,
+  "monthSpent": 2438.16,
+  "monthBudget": 3200,
+  "monthIncome": 5800,
+  "monthChange": -8.4,
+  "monthlyChangeAmount": 812
+}

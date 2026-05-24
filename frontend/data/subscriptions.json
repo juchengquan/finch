@@ -1,0 +1,8 @@
+[
+  { "id": "s1", "name": "Spotify",   "amount": 11.99, "cadence": "monthly", "next": "Jun 22", "logoHue": 145 },
+  { "id": "s2", "name": "Netflix",   "amount": 22.99, "cadence": "monthly", "next": "Jun 19", "logoHue":   0 },
+  { "id": "s3", "name": "NYT",       "amount":  4.00, "cadence": "monthly", "next": "Jun 14", "logoHue": 220 },
+  { "id": "s4", "name": "iCloud+",   "amount":  9.99, "cadence": "monthly", "next": "Jun  8", "logoHue": 200 },
+  { "id": "s5", "name": "Figma Pro", "amount": 15.00, "cadence": "monthly", "next": "Jun 28", "logoHue": 280 },
+  { "id": "s6", "name": "Audible",   "amount": 14.95, "cadence": "monthly", "next": "Jul  2", "logoHue":  30 }
+]

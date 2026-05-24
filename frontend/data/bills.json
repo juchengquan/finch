@@ -1,0 +1,6 @@
+[
+  { "id": "b1", "name": "Rent \u00b7 Greene St.", "amount": 1850, "dueIn": "in 22 days", "dueDate": "Jun 15" },
+  { "id": "b2", "name": "ConEd Electric",    "amount":   84, "dueIn": "in 6 days",  "dueDate": "May 30" },
+  { "id": "b3", "name": "Verizon Fios",      "amount":   69, "dueIn": "in 11 days", "dueDate": "Jun  4" },
+  { "id": "b4", "name": "Amex Gold",        "amount":  842, "dueIn": "in 14 days", "dueDate": "Jun  7" }
+]
