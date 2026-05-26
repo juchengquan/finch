@@ -14,11 +14,12 @@ export default function BudgetsPage() {
   const { short } = useMoney();
   const { active, activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
+  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
   const categories = MOCK.categories
     .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
-    .map((c) => ({ ...c, spent: categorySpent(ledgerTxns, c.id) }));
+    .map((c) => ({ ...c, spent: categorySpent(ledgerTxns, c.id), budget: budgetOverrides[c.id] ?? c.budget }));
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
   const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
   const pct = totalBudget ? Math.round((totalSpent / totalBudget) * 100) : 0;
