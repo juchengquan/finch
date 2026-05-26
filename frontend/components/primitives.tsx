@@ -69,7 +69,7 @@ export function Sparkline({ values, width = 200, height = 50, color = 'var(--pri
   const fill = d + ` L${width} ${height} L0 ${height} Z`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <svg aria-hidden width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       <path d={fill} style={{ fill: color, opacity: fillOpacity }} />
       <path d={d} fill="none" style={{ stroke: color }} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
@@ -94,7 +94,7 @@ export function BarChart({ values, labels, width = 280, height = 80, color = 'va
   const bw = (width - gap * (n - 1)) / n;
 
   return (
-    <svg width={width} height={height + 14} viewBox={`0 0 ${width} ${height + 14}`} className={className} preserveAspectRatio="none">
+    <svg aria-hidden width={width} height={height + 14} viewBox={`0 0 ${width} ${height + 14}`} className={className} preserveAspectRatio="none">
       {values.map((v, i) => {
         const h = (v / max) * height;
         const x = i * (bw + gap);
@@ -129,7 +129,7 @@ export function AreaChart({ series, labels, width = 310, height = 120, className
       .join(' ');
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className} preserveAspectRatio="none">
+    <svg aria-hidden width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className} preserveAspectRatio="none">
       {series.map((s, si) => {
         const d = path(s.values);
         return (
@@ -166,7 +166,7 @@ export function Donut({ slices, size = 140, stroke = 22, gap = 2 }: DonutProps) 
   });
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+    <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
       {arcs.map((a, i) => (
         <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
           style={{ stroke: a.color }} strokeWidth={stroke}
@@ -189,7 +189,7 @@ export function StackedBar({ slices, width = 280, height = 8, radius = 4 }: Stac
   const widths = slices.map((s, i) => Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0));
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <svg aria-hidden width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       {widths.map((w, i) => {
         const x = widths.slice(0, i).reduce((sum, ww) => sum + ww + 2, 0);
         return <rect key={i} x={x} y={0} width={w} height={height} style={{ fill: slices[i].color }} rx={radius} />;
@@ -215,7 +215,7 @@ export function Ring({ value, max = 100, size = 48, stroke = 5, color = 'var(--p
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+      <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: track }} strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: color }} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`} />

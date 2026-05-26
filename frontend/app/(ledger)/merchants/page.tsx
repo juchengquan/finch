@@ -77,7 +77,7 @@ function MerchantRow({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submitAlias()}
-                placeholder="ALIAS"
+                aria-label="New alias" placeholder="ALIAS"
                 autoFocus
                 className="h-6 w-28 px-2 font-mono text-[10px]"
               />
@@ -157,7 +157,7 @@ export default function MerchantsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search merchants & aliases…"
+            aria-label="Search merchants" placeholder="Search merchants &amp; aliases…"
             className="placeholder:text-muted-foreground w-full bg-transparent outline-none"
           />
         </div>
