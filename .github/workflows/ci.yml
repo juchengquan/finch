@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (typecheck · lint · build)
+    name: Frontend (typecheck · lint · test · build)
     runs-on: ubuntu-latest
     defaults:
       run:
