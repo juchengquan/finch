@@ -246,9 +246,8 @@ export function PageShell({
             </button>
             <ThemeToggle />
             {showAdd && (
-              <Button className="rounded-full" onClick={openAddExpense}>
-                <Icon name="plus" size={14} stroke={2} />
-                Add expense
+              <Button onClick={openAddExpense} size="icon" aria-label="Add expense" title="Add expense">
+                <Icon name="plus" size={16} stroke={2} />
               </Button>
             )}
           </div>

@@ -33,7 +33,7 @@ import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
-  const { short, display } = useMoney();
+  const { display } = useMoney();
   const params = useParams();
   const accountId = params.id as string;
   const account = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
@@ -101,26 +101,20 @@ export default function AccountDetailPage() {
           <span className="text-foreground">{name}</span>
         </div>
 
-        <div className="relative mb-6 overflow-hidden rounded-2xl p-7 text-white" style={{ background: account.color }}>
+        <div className="relative mb-6 overflow-hidden rounded-2xl px-7 py-5 text-white" style={{ background: account.color }}>
           <div className="absolute -top-[60px] -right-20 size-60 rounded-full bg-white/5"/>
-          <button
-            type="button"
-            onClick={openEdit}
-            aria-label="Edit account"
-            className="absolute top-5 right-5 z-10 flex size-9 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15"
-          >
-            <Icon name="edit" size={16} />
-          </button>
-          <div>
-            <div className="mb-1.5 text-[11px] uppercase tracking-[1px] opacity-65">Available balance</div>
-            <div className="font-serif text-[56px] leading-none -tracking-[2px]">
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="min-w-0 font-serif text-[40px] leading-none -tracking-[1.5px]">
               <Money value={account.balance} mono={false} className="font-serif"/>
             </div>
-            <div className="mt-[22px] flex gap-5">
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">IN · 30D</div><div className="font-serif text-[22px]">{short(5800)}</div></div>
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">OUT · 30D</div><div className="font-serif text-[22px]">{short(1850)}</div></div>
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">NET</div><div className="font-serif text-[22px]" style={{ color: '#9bb89b' }}>+{short(3950)}</div></div>
-            </div>
+            <button
+              type="button"
+              onClick={openEdit}
+              aria-label="Edit account"
+              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15"
+            >
+              <Icon name="edit" size={16} />
+            </button>
           </div>
         </div>
 
