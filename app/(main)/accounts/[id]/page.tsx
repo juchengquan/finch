@@ -6,6 +6,7 @@ import { Icon, Money, Sparkline, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { useCurrency } from '@/components/currency-provider';
 import { MOCK, fmtMoneyShort, catById } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -13,7 +14,7 @@ export default function AccountDetailPage() {
   const params = useParams();
   const accountId = params.id as string;
   const account = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
-  const txs = MOCK.transactions.filter(t => t.account === account.id);
+  const txs = useFinanceStore((s) => s.transactions).filter(t => t.account === account.id);
 
   return (
     <MobilePage
