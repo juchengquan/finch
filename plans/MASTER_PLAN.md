@@ -125,14 +125,16 @@ Built on existing mock data; no new state machinery.
 > machine, counterparties, parent categories, snapshots) is backend-shaped and lands in
 > **Phase F**. The in-memory store has no persistence yet — a full reload resets to seed.
 
-### Phase D — Bespoke desktop dashboards 🟡 _(in progress)_
+### Phase D — Bespoke desktop dashboards ✅ _(done)_
 - [x] Desktop content container (centered, `max-w-6xl`) in the shell so pages stop
       stretching edge-to-edge.
 - [x] **Desktop Accounts** — gradient account-card grid + recent-activity table.
 - [x] **Desktop Activity** — full transactions table (date/merchant/category/account/status/amount).
 - [x] **Desktop Budgets** — Spent/Remaining/Over stat tiles + 2-column category grid.
-- [ ] Desktop Insights (wider charts) and Scheduled (large calendar) — to follow.
-- [ ] Desktop drill-ins with breadcrumbs (account/budget detail are usable as-is).
+- [x] **Desktop Insights** — full-width fluid charts + metric/range controls + 3-up
+      insight cards + Apr-vs-May comparison.
+- [x] **Desktop Scheduled** — large calendar + upcoming list, side by side.
+- Account/budget detail drill-ins already read well on desktop (breadcrumbs present).
 
 ### Phase E — Ledger-admin completeness
 - [ ] Transfers + Recurring as **list-driven** detail (not single samples).
@@ -166,6 +168,7 @@ Built on existing mock data; no new state machinery.
 
 ## 5. Suggested next step
 
-Phases A, B, and the core of C are complete — interactive, ledger-scoped, with
-live derived figures. Next: **Phase D** (bespoke desktop dashboards) or finish
-the remaining **Phase C** schema/data work (per-ledger accounts & categories).
+Phases A–D are complete — the app is interactive, ledger-scoped, with live
+derived figures and bespoke desktop dashboards across all main screens. Next:
+**Phase E** (ledger-admin screens: category tree, exchange-rate book, sync log,
+FX transaction detail) or **Phase F** (persistence/backend).

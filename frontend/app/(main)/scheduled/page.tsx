@@ -53,8 +53,9 @@ export default function ScheduledPage() {
         />
       </div>
 
-      <div className="px-5 pb-5">
-        <div className="bg-card border-border rounded-xl border p-4">
+      <div className="md:grid md:grid-cols-[1.6fr_1fr] md:items-start md:gap-6 md:px-8">
+      <div className="px-5 pb-5 md:px-0">
+        <div className="bg-card border-border rounded-xl border p-4 md:p-5">
           <div className="mb-3 flex items-center justify-between">
             <button
               type="button"
@@ -89,7 +90,7 @@ export default function ScheduledPage() {
               const day = i + 1;
               const dots = dotsByDay.get(day);
               return (
-                <div key={day} className="flex flex-col items-center gap-1 py-1">
+                <div key={day} className="flex flex-col items-center gap-1 py-1 md:py-2.5">
                   <span className="text-[13px] tabular-nums">{day}</span>
                   <span className="flex h-1.5 gap-0.5">
                     {dots?.slice(0, 3).map((c, j) => (
@@ -103,13 +104,14 @@ export default function ScheduledPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2.5 px-5 pb-[120px]">
+      <div className="flex flex-col gap-2.5 px-5 pb-[120px] md:px-0 md:pb-12">
         <div className="text-muted-foreground px-1 font-mono text-[10px] tracking-wider uppercase">
           Upcoming
         </div>
         {SCHEDULED_ITEMS.map((item, i) => (
           <ScheduledItem key={i} item={item} />
         ))}
+      </div>
       </div>
     </MobilePage>
   );

@@ -83,8 +83,9 @@ export default function InsightsPage() {
             <BarChart
               values={monthly.map((m) => m.v)}
               labels={monthly.map((m) => m.m[0])}
-              width={310}
-              height={120}
+              width={600}
+              height={150}
+              className="h-40 w-full"
               color="var(--muted-foreground)"
               highlight="var(--primary)"
               muted="var(--secondary)"
@@ -94,8 +95,9 @@ export default function InsightsPage() {
             <BarChart
               values={cashflow.map((c) => c.inc)}
               labels={cashflow.map((c) => c.m[0])}
-              width={310}
-              height={120}
+              width={600}
+              height={150}
+              className="h-40 w-full"
               color="var(--muted-foreground)"
               highlight="var(--success)"
               muted="var(--secondary)"
@@ -109,8 +111,9 @@ export default function InsightsPage() {
                   { values: cashflow.map((c) => c.exp), color: 'var(--destructive)' },
                 ]}
                 labels={cashflow.map((c) => c.m)}
-                width={310}
-                height={120}
+                width={600}
+                height={150}
+                className="h-40 w-full"
               />
               <div className="text-muted-foreground mt-2 flex gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5">
@@ -126,9 +129,11 @@ export default function InsightsPage() {
           )}
         </div>
 
-        {INSIGHTS.map((ins) => (
-          <InsightCard key={ins.title} insight={ins} />
-        ))}
+        <div className="md:grid md:grid-cols-3 md:gap-3">
+          {INSIGHTS.map((ins) => (
+            <InsightCard key={ins.title} insight={ins} />
+          ))}
+        </div>
 
         <div className="mt-[22px]">
           <div className="mb-2.5 flex items-baseline justify-between">
