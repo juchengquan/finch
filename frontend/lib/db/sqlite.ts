@@ -22,7 +22,7 @@ async function loadInit(): Promise<InitFn> {
 }
 
 let _sqlite3: Promise<Sqlite3Static> | null = null;
-function getSqlite3(): Promise<Sqlite3Static> {
+export function getSqlite3(): Promise<Sqlite3Static> {
   if (!_sqlite3) {
     _sqlite3 = loadInit().then((init) => {
       const opts: InitOptions = { print: () => {}, printErr: () => {} };
@@ -34,9 +34,9 @@ function getSqlite3(): Promise<Sqlite3Static> {
   return _sqlite3;
 }
 
-type OO1DB = { exec: (opts: unknown) => void; close: () => void; pointer?: number };
+export type OO1DB = { exec: (opts: unknown) => void; close: () => void; pointer?: number };
 
-function execFor(db: OO1DB): Exec {
+export function execFor(db: OO1DB): Exec {
   return async (sql, bind) => {
     const rows: Record<string, unknown>[] = [];
     db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });

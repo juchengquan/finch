@@ -206,16 +206,26 @@ Each phase is its own PR against `feat/frontend`, ends with **typecheck · lint 
 > add-expense / transaction sheet components. Phases below build the relational layer
 > and route interactions (§4) through it.
 
-### Phase 0 — Foundation (no UI change)
-- `lib/db/schema.ts` — full schema (17 tables + indexes + triggers).
-- `lib/db/client.ts` — one persistent `oo1.DB`; **deserialize an existing OPFS
-  `finch.db` if present**, else create + schema + seed; `exec` / `query` / `export()`.
-- Repoint `SqliteBackupProvider` to export the **live client** (keep debounce,
-  visibilitychange flush, fallback, download/import).
-- `lib/db/seed.ts` — relational + dual-currency seed (per §6).
-- bun tests: schema applies; triggers fire (balance, snapshot, summary); headline
-  queries return expected numbers.
-- *App still runs off the store; DB runs alongside, test-verified.*
+### Phase 0 — Foundation (no UI change) ✅ *landed*
+- ✅ `lib/db/schema.ts` — full schema (17 tables + indexes + triggers).
+- ✅ `lib/db/client.ts` — live `oo1.DB`: `createLiveDb()` (schema + seed) and
+  `openLiveDb(bytes)` (deserialize an existing file); `exec` / `export()`.
+- ✅ `lib/db/seed.ts` — relational + dual-currency seed (per §6): ledgers,
+  account_groups, accounts, categories, counterparties, budgets, transfer_groups,
+  exchange_rates, transactions (+ snapshot/summary tables filled by triggers).
+  recurring/pending/tags/sync_log/net_worth are seeded in their own phases.
+- ✅ `lib/db/queries/transactions.ts` — list / search / filter / add / update /
+  cancel / confirm (the §4 transactions interactions).
+- ✅ bun tests (`seed.test.ts`, `queries/transactions.test.ts`): schema applies;
+  balance/snapshot/summary triggers fire; ledger isolation; headline query.
+- *App still runs off the store; the live DB layer runs alongside, test-verified.*
+- ⏭ **Deferred to Phase 1** (needs in-browser verification): repointing
+  `SqliteBackupProvider`/`persistence.ts` to the live client. **Hazard found:** the
+  current OPFS `finch.db` uses the *flat* schema (`lib/db/repo.ts`) with a
+  `transactions` table whose columns differ from the relational one — `CREATE TABLE
+  IF NOT EXISTS` will **not** reconcile them. Phase 1 must use a new OPFS filename
+  (or an explicit migration) so the relational DB never collides with a flat-schema
+  file.
 
 ### Phase 1 — Transactions spine + dual-currency
 Wire the **existing** surfaces — `activity` list, `transaction-sheet`/`-detail`,

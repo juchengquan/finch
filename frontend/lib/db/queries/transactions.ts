@@ -1,0 +1,160 @@
+// DB-backed transaction interactions. Each function runs SQL against the live
+// connection (lib/db/client.ts). Reads return the store's `Tx` shape so the
+// store-as-cache bridge can consume them directly.
+
+import type { Exec } from '@/lib/db/repo';
+import type { Tx } from '@/lib/store';
+
+export type Direction = 'all' | 'in' | 'out';
+
+export interface ListOptions {
+  ledgerId: string;
+  direction?: Direction;
+  query?: string;
+  accountId?: string;
+  categoryId?: string;
+  status?: 'pending' | 'confirmed';
+  from?: string; // inclusive YYYY-MM-DD
+  to?: string; // inclusive YYYY-MM-DD
+  limit?: number;
+  offset?: number;
+}
+
+export interface AddInput {
+  ledgerId: string;
+  accountId: string;
+  amount: number; // signed, in the account's currency
+  merchant: string;
+  categoryId?: string | null;
+  date: string;
+  time?: string;
+  note?: string;
+  status?: 'pending' | 'confirmed';
+}
+
+function rowToTx(r: Record<string, unknown>): Tx {
+  const amount = Number(r.amount);
+  return {
+    id: String(r.id),
+    merchant: String(r.description ?? ''),
+    category: r.category_id === null || r.category_id === undefined ? null : String(r.category_id),
+    amount,
+    account: String(r.account_id),
+    date: String(r.date),
+    time: r.time == null ? undefined : String(r.time),
+    note: r.notes == null ? undefined : String(r.notes),
+    pending: String(r.status) === 'pending',
+    recurring: !!Number(r.recurring),
+    kind: amount > 0 ? 'income' : undefined,
+    ledgerId: String(r.ledger_id),
+  };
+}
+
+/** List transactions for a ledger with optional search / filters. Excludes cancelled. */
+export async function listTransactions(exec: Exec, opts: ListOptions): Promise<Tx[]> {
+  const where: string[] = ['ledger_id = ?', "status != 'cancelled'"];
+  const bind: (string | number | null)[] = [opts.ledgerId];
+
+  if (opts.direction === 'in') where.push('amount > 0');
+  if (opts.direction === 'out') where.push('amount < 0');
+  if (opts.query) {
+    where.push('description LIKE ?');
+    bind.push(`%${opts.query}%`);
+  }
+  if (opts.accountId) {
+    where.push('account_id = ?');
+    bind.push(opts.accountId);
+  }
+  if (opts.categoryId) {
+    where.push('category_id = ?');
+    bind.push(opts.categoryId);
+  }
+  if (opts.status) {
+    where.push('status = ?');
+    bind.push(opts.status);
+  }
+  if (opts.from) {
+    where.push('date >= ?');
+    bind.push(opts.from);
+  }
+  if (opts.to) {
+    where.push('date <= ?');
+    bind.push(opts.to);
+  }
+
+  let sql = `SELECT * FROM transactions WHERE ${where.join(' AND ')} ORDER BY date DESC, time DESC`;
+  if (opts.limit != null) {
+    sql += ' LIMIT ?';
+    bind.push(opts.limit);
+    sql += ' OFFSET ?';
+    bind.push(opts.offset ?? 0);
+  }
+  const rows = await exec(sql, bind);
+  return rows.map(rowToTx);
+}
+
+export async function getTransaction(exec: Exec, id: string): Promise<Tx | null> {
+  const rows = await exec('SELECT * FROM transactions WHERE id = ?', [id]);
+  return rows[0] ? rowToTx(rows[0]) : null;
+}
+
+function newId(): string {
+  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** Insert a transaction; computes balance_after from the account's current balance. */
+export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
+  const id = newId();
+  const status = input.status ?? 'confirmed';
+  const acct = await exec('SELECT current_balance, currency FROM accounts WHERE id = ?', [input.accountId]);
+  const currentBalance = Number(acct[0]?.current_balance ?? 0);
+  const currency = String(acct[0]?.currency ?? 'USD');
+  // Accounts are denominated in their ledger's base today, so the rate is 1.
+  // Cross-currency locking (exchange_rates lookup) arrives in Phase 7.
+  const amountBase = input.amount;
+  const balanceAfter = Math.round((currentBalance + input.amount) * 100) / 100;
+  await exec(
+    `INSERT INTO transactions
+      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
+       description,category_id,counterparty_id,transfer_group_id,status,confirmed_at,
+       balance_after,currency,notes,recurring,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
+    [
+      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, 1, input.date,
+      input.merchant, input.categoryId ?? null, null, null, status, status === 'confirmed' ? new Date().toISOString() : null,
+      balanceAfter, currency, input.note || null, 0,
+    ],
+  );
+  return id;
+}
+
+export async function updateTransaction(
+  exec: Exec,
+  id: string,
+  patch: Partial<Pick<Tx, 'merchant' | 'category' | 'amount' | 'date' | 'time' | 'note'>>,
+): Promise<void> {
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  if (patch.merchant !== undefined) { sets.push('description = ?'); bind.push(patch.merchant); }
+  if (patch.category !== undefined) { sets.push('category_id = ?'); bind.push(patch.category); }
+  if (patch.amount !== undefined) { sets.push('amount = ?', 'amount_base = ?'); bind.push(patch.amount, patch.amount); }
+  if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
+  if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }
+  if (patch.note !== undefined) { sets.push('notes = ?'); bind.push(patch.note ?? null); }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
+/** Void a transaction (soft delete) — keeps history, drops it from reports. */
+export async function cancelTransaction(exec: Exec, id: string): Promise<void> {
+  await exec("UPDATE transactions SET status = 'cancelled' WHERE id = ?", [id]);
+}
+
+/** Confirm a pending transaction so it counts in reports. */
+export async function confirmTransaction(exec: Exec, id: string): Promise<void> {
+  await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE id = ? AND status = 'pending'", [
+    new Date().toISOString(),
+    id,
+  ]);
+}
