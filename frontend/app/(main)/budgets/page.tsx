@@ -57,17 +57,34 @@ export default function BudgetsPage() {
         />
       </div>
 
+      <div className="hidden gap-3 px-5 pb-4 md:grid md:grid-cols-3">
+        <div className="bg-card border-border rounded-xl border p-4">
+          <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Spent</div>
+          <div className="mt-1 font-serif text-2xl">{short(totalSpent)}</div>
+        </div>
+        <div className="bg-card border-border rounded-xl border p-4">
+          <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Remaining</div>
+          <div className="mt-1 font-serif text-2xl">{short(Math.max(totalBudget - totalSpent, 0))}</div>
+        </div>
+        <div className="bg-card border-border rounded-xl border p-4">
+          <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Over budget</div>
+          <div className="mt-1 font-serif text-2xl">{categories.filter((c) => c.spent > c.budget).length}</div>
+        </div>
+      </div>
+
       <div className="px-5 pb-[22px]">
         <div className="bg-card border-border rounded-xl border p-3.5">
           <div className="mb-2 flex items-baseline justify-between">
             <div className="font-serif text-lg italic">Categories</div>
             <span className="text-muted-foreground font-mono text-[10px] tracking-[0.8px]">SPENT / BUDGET</span>
           </div>
-          {categories.map((c) => (
-            <Link key={c.id} href={`/budgets/${c.id}`} className="block">
-              <CategoryRow category={c}/>
-            </Link>
-          ))}
+          <div className="md:grid md:grid-cols-2 md:gap-x-4">
+            {categories.map((c) => (
+              <Link key={c.id} href={`/budgets/${c.id}`} className="block">
+                <CategoryRow category={c}/>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </MobilePage>
