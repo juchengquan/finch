@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, forwardRef, ElementType } from 'react';
+import { ReactNode, forwardRef } from 'react';
 import * as Accordion from '@radix-ui/react-accordion';
 import * as Toggle from '@radix-ui/react-toggle';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
@@ -191,18 +191,13 @@ export function FinchToggleGroupItem({
   disabled = false,
 }: FinchToggleGroupItemProps) {
   return (
-    <ToggleGroup.Item value={value} disabled={disabled} className={className}>
+    <ToggleGroup.Item
+      value={value}
+      disabled={disabled}
+      className={`${styles.paletteButton} ${className ?? ''}`}
+    >
       {children}
     </ToggleGroup.Item>
   );
 }
 
-/* ============================================
-   Slot (for polymorphic components)
-   ============================================ */
-export { Slot } from '@radix-ui/react-slot';
-
-/* ============================================
-   Visually Hidden (for accessibility)
-   ============================================ */
-export { VisuallyHidden } from '@radix-ui/react-visually-hidden';

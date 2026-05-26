@@ -23,21 +23,17 @@ const BOTTOM_LINKS = [
 
 export default function LedgerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const activeTab = pathname.replace('/', '') || 'pending';
+  const activeTab = pathname.split('/')[1] || 'pending';
 
   return (
     <PageShell
-      mode="split"
       brand={{ glyph: 'L', label: 'Ledger' }}
       tabs={LEDGER_TABS}
       mobileTabs={LEDGER_MOBILE_TABS}
       activeTab={activeTab}
       bottomLinks={BOTTOM_LINKS}
-      sidebarOpen={true}
+      headerTitle="Ledger admin"
     >
-      <div style={{ padding: '20px 32px' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, letterSpacing: -0.5 }}>Ledger Admin</div>
-      </div>
       {children}
     </PageShell>
   );

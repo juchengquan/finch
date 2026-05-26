@@ -1,8 +1,8 @@
 'use client';
 
-import { useTweaks } from './TweaksContext';
 import { Icon } from './primitives';
 import { FinchToggle } from './RadixWrappers';
+import styles from './SettingsItem.module.css';
 
 interface SettingsItemProps {
   item: {
@@ -15,23 +15,20 @@ interface SettingsItemProps {
 }
 
 export function SettingsItem({ item }: SettingsItemProps) {
-  const { theme: th } = useTweaks();
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: `1px solid var(--line)` }}>
-      <div style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--paper-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink2)' }}>
-        <Icon name={item.icon} size={14}/>
+    <div className={styles.row}>
+      <div className={styles.icon}>
+        <Icon name={item.icon} size={14} />
       </div>
-      <div style={{ flex: 1, fontSize: 14 }}>{item.label}</div>
-      {item.toggle !== undefined && (
-        <FinchToggle
-          pressed={item.toggle}
-          onPressedChange={item.onToggle ?? (() => {})}
-          size="medium"
-        />
+      <div className={styles.label}>{item.label}</div>
+      {item.toggle !== undefined ? (
+        <FinchToggle pressed={item.toggle} onPressedChange={item.onToggle ?? (() => {})} size="medium" />
+      ) : (
+        <div className={styles.value}>
+          {item.value && <span>{item.value}</span>}
+          <Icon name="chev" size={12} style={{ color: 'var(--muted)' }} />
+        </div>
       )}
-      {!item.toggle && item.value && <Icon name="chev" size={12} style={{ color: 'var(--muted)' }}/>}
-      {!item.toggle && !item.value && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{item.value}</span>}
     </div>
   );
 }

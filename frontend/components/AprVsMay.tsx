@@ -2,6 +2,7 @@
 
 import { useTweaks } from './TweaksContext';
 import { fmtMoneyShort } from '@/lib/data';
+import styles from './AprVsMay.module.css';
 
 interface AprVsMayProps {
   data: {
@@ -18,12 +19,12 @@ export function AprVsMay({ data }: AprVsMayProps) {
   return (
     <div>
       {data.map((c) => (
-        <div key={c.name} style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderTop: `1px solid ${th.line}` }}>
-          <div style={{ flex: 1, fontSize: 14 }}>{c.name}</div>
-          <div style={{ fontFamily: th.mono, fontSize: 11, color: th.muted, marginRight: 14 }}>
+        <div key={c.name} className={styles.row}>
+          <div className={styles.name}>{c.name}</div>
+          <div className={styles.range}>
             {fmtMoneyShort(c.a, th.currency)} → {fmtMoneyShort(c.b, th.currency)}
           </div>
-          <div style={{ fontFamily: th.mono, fontSize: 12, fontWeight: 600, color: c.d < 0 ? th.pos : th.neg }}>
+          <div className={styles.delta} style={{ color: c.d < 0 ? 'var(--pos)' : 'var(--neg)' }}>
             {c.d > 0 ? '+' : ''}{c.d}%
           </div>
         </div>

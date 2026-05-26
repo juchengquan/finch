@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader } from '@/components/MobileComponents';
-import { MOCK, catById, acctById } from '@/lib/data';
+import { MOCK, catById, acctById, fmtMoney } from '@/lib/data';
 
 export default function TxDetailPage() {
   const { theme: th } = useTweaks();
@@ -12,6 +12,10 @@ export default function TxDetailPage() {
   const txId = params.id as string;
   const tx = MOCK.transactions.find(t => t.id === txId) || MOCK.transactions[1];
   const cat = catById(tx.category);
+  const acct = acctById(tx.account);
+  const when = new Date(`${tx.date}T${tx.time ?? '00:00'}`);
+  const whenStr = `${when.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  const acctLabel = acct.last4 ? `${acct.name} · ${acct.last4}` : acct.name;
 
   return (
     <div style={{ padding: '0 20px 120px' }}>
@@ -22,9 +26,9 @@ export default function TxDetailPage() {
         <div style={{ fontFamily: th.display, fontStyle: 'italic', fontSize: 22, color: th.muted, marginTop: 18 }}>You spent at</div>
         <div style={{ fontFamily: th.display, fontSize: 34, letterSpacing: -0.8, lineHeight: 1, marginTop: 4 }}>{tx.merchant}</div>
         <div style={{ fontFamily: th.display, fontSize: 56, letterSpacing: -2, marginTop: 18, fontWeight: 400 }}>
-          {th.currency === 'USD' ? '$' : th.currency === 'EUR' ? '€' : th.currency === 'JPY' ? '¥' : 'S$'}{Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          {fmtMoney(Math.abs(tx.amount), th.currency)}
         </div>
-        <div style={{ fontSize: 12, color: th.muted, marginTop: 6 }}>Fri, May 23 · 6:42 PM · {acctById(tx.account).name}</div>
+        <div style={{ fontSize: 12, color: th.muted, marginTop: 6 }}>{whenStr} · {acct.name}</div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, padding: '0 0 22px' }}>
@@ -39,8 +43,8 @@ export default function TxDetailPage() {
       <div style={{ background: th.card, border: `1px solid ${th.line}`, borderRadius: 14, padding: '4px 16px' }}>
         {[
           { l: 'Category', v: cat.name },
-          { l: 'Account', v: 'Amex Gold · 1009' },
-          { l: 'Status', v: 'Posted' },
+          { l: 'Account', v: acctLabel },
+          { l: 'Status', v: tx.pending ? 'Pending' : 'Posted' },
           { l: 'Note', v: tx.note || '—' },
           { l: 'Transaction', v: 'AMX-9F2B-44A1' },
         ].map((r, i) => (

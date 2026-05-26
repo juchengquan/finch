@@ -5,6 +5,7 @@ import { Money } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { SCHEDULED_ITEMS } from '@/lib/data';
 import { ScheduledItem } from '@/components/ScheduledItem';
+import styles from './scheduled.module.css';
 
 export default function ScheduledPage() {
   const { theme: th } = useTweaks();
@@ -22,17 +23,17 @@ export default function ScheduledPage() {
         />
       }
     >
-      <div style={{ padding: '0 20px 22px' }}>
+      <div className={styles.header}>
         <PageHeader
           label="Next 30 days"
           value={<Money value={netTotal} currency={th.currency} mono={false} style={{ fontFamily: th.display }}/>}
           sublabel={
-            <span style={{ color: th.pos }}>+<Money value={totalIncoming} currency={th.currency}/> incoming</span>
+            <span className={styles.incoming}>+<Money value={totalIncoming} currency={th.currency}/> incoming</span>
           }
         />
       </div>
 
-      <div style={{ padding: '0 20px 120px' }}>
+      <div className={styles.body}>
         {SCHEDULED_ITEMS.map((item, i) => (
           <ScheduledItem key={i} item={item}/>
         ))}

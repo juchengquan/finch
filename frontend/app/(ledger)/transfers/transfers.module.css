@@ -1,0 +1,145 @@
+.page {
+  padding: 0 20px 120px;
+}
+
+.head {
+  padding: 0 4px 22px;
+  text-align: center;
+}
+
+.lead {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+.amount {
+  font-family: var(--font-display);
+  font-size: 52px;
+  letter-spacing: -1.8px;
+  margin-top: 4px;
+}
+
+.amountCents {
+  font-size: 28px;
+  color: var(--muted);
+  letter-spacing: -0.5px;
+}
+
+.received {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink2);
+  margin-top: 2px;
+}
+
+.rateLock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: var(--paper-alt);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--ink2);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+
+.legRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.legRowDivider {
+  border-bottom: 1px dashed var(--line);
+}
+
+.legIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legBody {
+  flex: 1;
+}
+
+.legLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+.legAccount {
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.legAmount {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px 16px;
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  font-size: 13px;
+}
+
+.detailRowDivider {
+  border-top: 0.5px solid var(--line);
+}
+
+.detailKey {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+}
+
+.detailValue {
+  text-align: right;
+}
+
+.note {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  padding: 0 4px;
+}
+
+.noteCode {
+  font-family: var(--font-mono);
+  color: var(--ink2);
+}

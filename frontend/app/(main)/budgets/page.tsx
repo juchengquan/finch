@@ -1,10 +1,11 @@
 'use client';
 
 import { useTweaks } from '@/components/TweaksContext';
-import { Icon, Card, Ring } from '@/components/primitives';
+import { Card, Ring } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK, fmtMoneyShort } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
+import styles from './budgets.module.css';
 
 export default function BudgetsPage() {
   const { theme: th } = useTweaks();
@@ -21,25 +22,25 @@ export default function BudgetsPage() {
         />
       }
     >
-      <div style={{ padding: '0 20px 22px' }}>
+      <div className={styles.header}>
         <PageHeader
           label="Spent of budget"
           value={<Ring value={totalSpent} max={totalBudget} size={120} stroke={10} color={th.accent} track={th.paperAlt}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: th.display, fontSize: 28, letterSpacing: -0.6, lineHeight: 1 }}>{pct}%</div>
-              <div style={{ fontSize: 9, color: th.muted, letterSpacing: 1, marginTop: 2 }}>USED</div>
+            <div className={styles.ringContent}>
+              <div className={styles.ringPct}>{pct}%</div>
+              <div className={styles.ringUsed}>USED</div>
             </div>
           </Ring>}
-          sublabel={<>of <span style={{ fontFamily: th.mono }}>{fmtMoneyShort(totalBudget, th.currency)}</span></>}
+          sublabel={<>of <span className={styles.subMono}>{fmtMoneyShort(totalBudget, th.currency)}</span></>}
           trend={{ text: 'On track for May', icon: 'check', color: th.pos }}
         />
       </div>
 
-      <div style={{ padding: '0 20px 22px' }}>
+      <div className={styles.body}>
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <div style={{ fontFamily: th.display, fontSize: 18, fontStyle: 'italic' }}>Categories</div>
-            <span style={{ fontFamily: th.mono, fontSize: 10, color: th.muted, letterSpacing: 0.8 }}>SPENT / BUDGET</span>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitle}>Categories</div>
+            <span className={styles.cardMeta}>SPENT / BUDGET</span>
           </div>
           {MOCK.categories.map((c) => (
             <CategoryRow key={c.id} category={c}/>

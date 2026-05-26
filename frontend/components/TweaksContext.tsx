@@ -46,6 +46,19 @@ export function TweaksProvider({ children }: { children: ReactNode }) {
     const fonts = FONT_PAIRS[tweaks.fonts as keyof typeof FONT_PAIRS] || FONT_PAIRS.editorial;
     const density = DENSITY[tweaks.density as keyof typeof DENSITY] || DENSITY.regular;
 
+    root.style.setProperty('--paper', palette.paper);
+    root.style.setProperty('--paper-alt', palette.paperAlt);
+    root.style.setProperty('--card', palette.card);
+    root.style.setProperty('--ink', palette.ink);
+    root.style.setProperty('--ink2', palette.ink2);
+    root.style.setProperty('--muted', palette.muted);
+    root.style.setProperty('--line', palette.line);
+    root.style.setProperty('--accent', palette.accent);
+    root.style.setProperty('--accent2', palette.accent2);
+    root.style.setProperty('--pos', palette.pos);
+    root.style.setProperty('--neg', palette.neg);
+    root.style.setProperty('--warn', palette.warn);
+
     root.style.setProperty('--font-display', fonts.display);
     root.style.setProperty('--font-body', fonts.body);
     root.style.setProperty('--font-mono', fonts.mono);

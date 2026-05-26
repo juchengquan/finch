@@ -1,6 +1,7 @@
 'use client';
 
-import { useTweaks } from '@/components/TweaksContext';
+import { fmtMoney } from '@/lib/data';
+import styles from './primitives.module.css';
 
 interface IconProps {
   name: string;
@@ -29,6 +30,8 @@ export function Icon({ name, size = 18, stroke = 1.5, style }: IconProps) {
     case 'chev-d': return <svg {...props}><path d="m6 9 6 6 6-6"/></svg>;
     case 'chev-u': return <svg {...props}><path d="m6 15 6-6 6 6"/></svg>;
     case 'arrow-r':return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7"/></svg>;
+    case 'arrow-l':return <svg {...props}><path d="M19 12H5M11 5l-7 7 7 7"/></svg>;
+    case 'clock':  return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>;
     case 'arrow-u':return <svg {...props}><path d="M12 19V5M5 12l7-7 7 7"/></svg>;
     case 'arrow-d':return <svg {...props}><path d="M12 5v14M5 12l7 7 7-7"/></svg>;
     case 'arrow-dl':return <svg {...props}><path d="M17 7L7 17M17 17H7V7"/></svg>;
@@ -61,15 +64,13 @@ interface MoneyProps {
   style?: React.CSSProperties;
 }
 
-import { fmtMoney } from '@/lib/data';
-
 export function Money({ value, currency = 'USD', signed = false, mono = true, style }: MoneyProps) {
   const s = fmtMoney(value, currency);
   return (
     <span style={{
       fontVariantNumeric: 'tabular-nums',
       fontFeatureSettings: '"tnum"',
-      fontFamily: mono ? "'JetBrains Mono', ui-monospace, monospace" : 'inherit',
+      fontFamily: mono ? 'var(--font-mono)' : 'inherit',
       ...style,
     }}>
       {signed && value > 0 ? '+' : ''}{s}
@@ -86,7 +87,7 @@ interface SparklineProps {
   stroke?: number;
 }
 
-export function Sparkline({ values, width = 200, height = 50, color = '#c96442', fillOpacity = 0.12, stroke = 1.5 }: SparklineProps) {
+export function Sparkline({ values, width = 200, height = 50, color = 'var(--accent)', fillOpacity = 0.12, stroke = 1.5 }: SparklineProps) {
   const max = Math.max(...values, 1);
   const step = width / Math.max(values.length - 1, 1);
   const pts = values.map((v, i) => [i * step, height - (v / max) * (height - 4) - 2] as [number, number]);
@@ -95,8 +96,8 @@ export function Sparkline({ values, width = 200, height = 50, color = '#c96442',
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <path d={fill} fill={color} opacity={fillOpacity}/>
-      <path d={d} fill="none" stroke={color} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round"/>
+      <path d={fill} style={{ fill: color, opacity: fillOpacity }}/>
+      <path d={d} fill="none" style={{ stroke: color }} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -111,7 +112,7 @@ interface BarChartProps {
   muted?: string;
 }
 
-export function BarChart({ values, labels, width = 280, height = 80, color = '#1a1614', highlight = '#c96442', muted = '#d8cfc1' }: BarChartProps) {
+export function BarChart({ values, labels, width = 280, height = 80, color = 'var(--ink)', highlight = 'var(--accent)', muted = 'var(--line)' }: BarChartProps) {
   const max = Math.max(...values, 1);
   const n = values.length;
   const gap = 4;
@@ -125,8 +126,8 @@ export function BarChart({ values, labels, width = 280, height = 80, color = '#1
         const isLast = i === n - 1;
         return (
           <g key={i}>
-            <rect x={x} y={height - h} width={bw} height={h} fill={isLast ? highlight : muted} rx={1.5}/>
-            {labels && <text x={x + bw / 2} y={height + 11} fontSize="9" fill={color} opacity="0.55" textAnchor="middle" fontFamily="inherit">{labels[i]}</text>}
+            <rect x={x} y={height - h} width={bw} height={h} style={{ fill: isLast ? highlight : muted }} rx={1.5}/>
+            {labels && <text x={x + bw / 2} y={height + 11} fontSize="9" style={{ fill: color }} opacity="0.55" textAnchor="middle" fontFamily="inherit">{labels[i]}</text>}
           </g>
         );
       })}
@@ -145,21 +146,20 @@ export function Donut({ slices, size = 140, stroke = 22, gap = 2 }: DonutProps) 
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  let acc = 0;
+  const arcs = slices.map((s, i) => {
+    const len = (s.value / total) * c;
+    const offset = -slices.slice(0, i).reduce((sum, p) => sum + (p.value / total) * c, 0);
+    return { len, offset, color: s.color };
+  });
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      {slices.map((s, i) => {
-        const len = (s.value / total) * c;
-        const offset = -acc;
-        acc += len;
-        return (
-          <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
-            stroke={s.color} strokeWidth={stroke}
-            strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
-            strokeDashoffset={offset} />
-        );
-      })}
+      {arcs.map((a, i) => (
+        <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
+          style={{ stroke: a.color }} strokeWidth={stroke}
+          strokeDasharray={`${Math.max(a.len - gap, 0.1)} ${c}`}
+          strokeDashoffset={a.offset} />
+      ))}
     </svg>
   );
 }
@@ -173,15 +173,13 @@ interface StackedBarProps {
 
 export function StackedBar({ slices, width = 280, height = 8, radius = 4 }: StackedBarProps) {
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  let x = 0;
+  const widths = slices.map((s, i) => Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0));
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {slices.map((s, i) => {
-        const w = Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0);
-        const rect = <rect key={i} x={x} y={0} width={w} height={height} fill={s.color} rx={radius}/>;
-        x += w + 2;
-        return rect;
+      {widths.map((w, i) => {
+        const x = widths.slice(0, i).reduce((sum, ww) => sum + ww + 2, 0);
+        return <rect key={i} x={x} y={0} width={w} height={height} style={{ fill: slices[i].color }} rx={radius}/>;
       })}
     </svg>
   );
@@ -197,7 +195,7 @@ interface RingProps {
   children?: React.ReactNode;
 }
 
-export function Ring({ value, max = 100, size = 48, stroke = 5, color = '#c96442', track = '#e8dfd0', children }: RingProps) {
+export function Ring({ value, max = 100, size = 48, stroke = 5, color = 'var(--accent)', track = 'var(--paper-alt)', children }: RingProps) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, value / max));
@@ -205,8 +203,8 @@ export function Ring({ value, max = 100, size = 48, stroke = 5, color = '#c96442
   return (
     <div style={{ position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke}/>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: track }} strokeWidth={stroke}/>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: color }} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`}/>
       </svg>
       {children && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>}
@@ -250,128 +248,11 @@ interface CardProps {
 }
 
 export function Card({ children, padding = 14, radius = 14, style }: CardProps) {
-  const { theme: th } = useTweaks();
   return (
-    <div style={{
-      background: th.card,
-      border: `1px solid ${th.line}`,
-      borderRadius: radius,
-      padding,
-      ...style,
-    }}>
+    <div className={styles.card} style={{ borderRadius: radius, padding, ...style }}>
       {children}
     </div>
   );
 }
 
-interface ListItemRowProps {
-  icon?: string;
-  hue?: number;
-  avatar?: { initials: string; color: string };
-  leading?: React.ReactNode;
-  trailing?: React.ReactNode;
-  onClick?: () => void;
-  children: React.ReactNode;
-}
 
-export function ListItemRow({ icon, hue, avatar, leading, trailing, onClick, children }: ListItemRowProps) {
-  const { theme: th } = useTweaks();
-
-  let leadingEl: React.ReactNode = null;
-  if (icon !== undefined) {
-    leadingEl = (
-      <div style={{
-        width: 38, height: 38, borderRadius: 19, background: `oklch(0.92 0.04 ${hue ?? 30})`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.ink, flexShrink: 0
-      }}>
-        <Icon name={icon} size={18}/>
-      </div>
-    );
-  } else if (avatar) {
-    leadingEl = (
-      <div style={{
-        width: 38, height: 38, borderRadius: 8, background: avatar.color, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: th.mono, fontSize: 10, fontWeight: 600, letterSpacing: 0.5, flexShrink: 0
-      }}>{avatar.initials}</div>
-    );
-  } else if (leading) {
-    leadingEl = leading;
-  }
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: th.card, border: `1px solid ${th.line}`, borderRadius: 14,
-        display: 'flex', alignItems: 'center', gap: 14, cursor: onClick ? 'pointer' : 'default',
-        padding: 14, marginBottom: 8,
-      }}
-    >
-      {leadingEl}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {children}
-      </div>
-      {trailing}
-    </div>
-  );
-}
-
-interface ProgressBarProps {
-  value: number;
-  max: number;
-  color?: string;
-  trackColor?: string;
-  height?: number;
-}
-
-export function ProgressBar({ value, max, color, trackColor, height = 3 }: ProgressBarProps) {
-  const { theme: th } = useTweaks();
-  const pct = (value / max) * 100;
-  const over = pct > 100;
-  return (
-    <div style={{ height, background: trackColor ?? th.paperAlt, borderRadius: 2, overflow: 'hidden' }}>
-      <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: over ? th.neg : (color ?? th.accent) }}/>
-    </div>
-  );
-}
-
-interface RingStatsHeaderProps {
-  spent: number;
-  budget: number;
-  label?: string;
-  status?: { text: string; icon: string };
-}
-
-export function RingStatsHeader({ spent, budget, label = 'Spent of budget', status }: RingStatsHeaderProps) {
-  const { theme: th } = useTweaks();
-  const pct = (spent / budget) * 100;
-  const remaining = budget - spent;
-  const over = remaining < 0;
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
-      <Ring value={spent} max={budget} size={120} stroke={10} color={th.accent} track={th.paperAlt}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: th.display, fontSize: 28, letterSpacing: -0.6, lineHeight: 1 }}>{Math.round(pct)}%</div>
-          <div style={{ fontSize: 9, color: th.muted, letterSpacing: 1, marginTop: 2 }}>USED</div>
-        </div>
-      </Ring>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 11, color: th.muted, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
-        <div style={{ fontFamily: th.display, fontSize: 30, letterSpacing: -0.6, marginTop: 2 }}>
-          <Money value={spent} currency={th.currency} mono={false} style={{ fontFamily: th.display }}/>
-        </div>
-        <div style={{ fontSize: 12, color: th.muted, marginTop: 2 }}>of <Money value={budget} currency={th.currency}/></div>
-        {status && (
-          <div style={{
-            marginTop: 8, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: `${th.pos}1a`, color: th.pos, borderRadius: 10, fontSize: 11, fontWeight: 500
-          }}>
-            <Icon name={status.icon} size={12}/>{status.text}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
