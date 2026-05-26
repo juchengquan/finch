@@ -1,8 +1,7 @@
 'use client';
 
-import { useTweaks } from './TweaksContext';
 import { Money } from './primitives';
-import styles from './ScheduledItem.module.css';
+import { cn } from '@/lib/utils';
 
 interface ScheduledItemProps {
   item: {
@@ -16,25 +15,24 @@ interface ScheduledItemProps {
 }
 
 export function ScheduledItem({ item }: ScheduledItemProps) {
-  const { theme: th } = useTweaks();
-
   return (
-    <div className={styles.row}>
-      <div className={styles.date}>
-        <div className={styles.month}>{item.month}</div>
-        <div className={styles.day}>{item.day}</div>
+    <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
+      <div className="w-11 shrink-0 text-center">
+        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">
+          {item.month}
+        </div>
+        <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
       </div>
-      <div className={styles.body}>
-        <div className={styles.label}>{item.label}</div>
-        <div className={styles.type}>
-          <span className={styles.dot} style={{ background: item.color }} />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{item.label}</div>
+        <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
+          <span className="size-1.5 rounded-full" style={{ background: item.color }} />
           {item.type}
         </div>
       </div>
       <Money
         value={item.amount}
-        currency={th.currency}
-        style={{ fontSize: 14, fontWeight: 500, color: item.amount > 0 ? 'var(--pos)' : 'var(--ink)' }}
+        className={cn('text-sm font-medium', item.amount > 0 ? 'text-success' : 'text-foreground')}
       />
     </div>
   );

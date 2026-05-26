@@ -10,8 +10,8 @@ multi-ledger, mobile-first with a responsive desktop shell.
 
 - **Next.js 16** (App Router, Turbopack) + **React 19**
 - **TypeScript**
-- **CSS Modules** + design-token CSS custom properties (no Tailwind)
-- **Radix UI** primitives (accordion, toggle, toggle-group)
+- **Tailwind CSS v4** + **shadcn/ui** (Radix-based components in `components/ui`)
+- **lucide-react** icons, **next-themes** for light/dark
 - **Bun** for install / lockfile (`bun.lock`)
 
 ## Getting started
@@ -42,17 +42,20 @@ Scripts:
   renders once; breakpoint chrome is toggled with CSS.
 - `components/MobileComponents.tsx` — shared page chrome (`MobilePage`,
   `ScreenHeader`, `PageHeader`, `IconButton`, …).
-- `components/primitives.tsx` — icons, money formatting, and SVG charts
-  (sparkline, bar, donut, ring) that default to palette CSS variables.
-- `lib/theme.ts` — palettes, font pairs and density presets. This is the
-  source of truth for theme values; `TweaksContext` applies them to CSS
-  custom properties at runtime and `styles/tokens.css` holds the
-  no-JS defaults.
+- `components/ui/*` — shadcn/ui components (button, card, dialog, select,
+  switch, dropdown-menu, avatar, tooltip, progress, …).
+- `components/primitives.tsx` — the lucide-backed `Icon` shim, money
+  formatting, and SVG charts (sparkline, bar, donut, ring) that default to
+  the theme token CSS variables.
 - `lib/data.ts` — mock data loaders and money formatters. `fmtMoney`
   converts a USD base amount into the chosen display currency; `fmtNative`
   formats an amount already denominated in its own currency (ledger data).
 
 ## Theming
 
-Theme, typeface, density and display currency are user-switchable from
-**Settings** and applied live via CSS custom properties.
+Design tokens live in `app/globals.css` using the shadcn CSS-variable
+convention. The light theme is the "warm editorial" palette and the dark
+theme is "noir"; toggle with the theme control (powered by `next-themes`).
+Finance-semantic tokens `--success` / `--warning` supplement the standard
+shadcn set. Display currency is switchable in **Settings** via
+`CurrencyProvider`.
