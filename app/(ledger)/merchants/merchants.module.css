@@ -1,0 +1,153 @@
+.page {
+  padding: 0 20px 120px;
+}
+
+.head {
+  padding: 0 4px 18px;
+}
+
+.stats {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.statNum {
+  font-family: var(--font-display);
+  font-size: 40px;
+  letter-spacing: -1.4px;
+  line-height: 1;
+}
+
+.statNumWarn {
+  color: var(--warn);
+}
+
+.statLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+.statDivider {
+  width: 1px;
+  height: 32px;
+  background: var(--line);
+}
+
+.search {
+  margin: 0 0 14px;
+  height: 38px;
+  border-radius: 19px;
+  background: var(--paper-alt);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+}
+
+.rowDivider {
+  border-top: 0.5px solid var(--line);
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nameWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--warn);
+  letter-spacing: 0.6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.category {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.dot {
+  margin: 0 5px;
+}
+
+.aliasLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink2);
+}
+
+.aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.alias {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  background: var(--paper-alt);
+  color: var(--ink2);
+  border-radius: 4px;
+  letter-spacing: 0.2px;
+}

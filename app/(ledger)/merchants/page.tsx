@@ -4,6 +4,7 @@ import { useTweaks } from '@/components/TweaksContext';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { LEDGER } from '@/lib/data';
+import styles from './merchants.module.css';
 
 export default function MerchantsPage() {
   const { theme: th } = useTweaks();
@@ -17,60 +18,51 @@ export default function MerchantsPage() {
         />
       }
     >
-      <div style={{ padding: '0 20px 120px' }}>
-        <div style={{ padding: '0 4px 18px' }}>
+      <div className={styles.page}>
+        <div className={styles.head}>
           <SchemaChip label="counterparties"/>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 8 }}>
+          <div className={styles.stats}>
             <div>
-              <div style={{ fontFamily: th.display, fontSize: 40, letterSpacing: -1.4, lineHeight: 1 }}>{LEDGER.counterparties.length}</div>
-              <div style={{ fontFamily: th.mono, fontSize: 9, color: th.muted, letterSpacing: 1, marginTop: 4 }}>STANDARDISED</div>
+              <div className={styles.statNum}>{LEDGER.counterparties.length}</div>
+              <div className={styles.statLabel}>STANDARDISED</div>
             </div>
-            <div style={{ width: 1, height: 32, background: th.line }}/>
+            <div className={styles.statDivider}/>
             <div>
-              <div style={{ fontFamily: th.display, fontSize: 40, letterSpacing: -1.4, lineHeight: 1, color: th.warn }}>
+              <div className={`${styles.statNum} ${styles.statNumWarn}`}>
                 {LEDGER.counterparties.filter(c => !c.verified).length}
               </div>
-              <div style={{ fontFamily: th.mono, fontSize: 9, color: th.muted, letterSpacing: 1, marginTop: 4 }}>UNVERIFIED</div>
+              <div className={styles.statLabel}>UNVERIFIED</div>
             </div>
           </div>
         </div>
 
-        <div style={{ margin: '0 0 14px', height: 38, borderRadius: 19, background: th.paperAlt, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', color: th.muted, fontSize: 13 }}>
+        <div className={styles.search}>
           <Icon name="search" size={14}/>Search merchants & aliases…
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={styles.list}>
           {LEDGER.counterparties.map((c, i) => (
-            <div key={c.id} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-              padding: '14px 0', borderTop: i ? `0.5px solid ${th.line}` : 'none'
-            }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: `oklch(0.65 0.2 ${c.hue})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: th.mono, fontSize: 10, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
+            <div key={c.id} className={`${styles.row}${i ? ` ${styles.rowDivider}` : ''}`}>
+              <div className={styles.avatar} style={{ background: `oklch(0.65 0.2 ${c.hue})` }}>
                 {c.name.slice(0, 2).toUpperCase()}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{c.name}</div>
+              <div className={styles.body}>
+                <div className={styles.titleRow}>
+                  <div className={styles.nameWrap}>
+                    <div className={styles.name}>{c.name}</div>
                     {!c.verified && (
-                      <span style={{
-                        fontFamily: th.mono, fontSize: 9, color: th.warn, letterSpacing: 0.6,
-                        padding: '2px 6px', border: `1px solid ${th.warn}66`, borderRadius: 4
-                      }}>UNVERIFIED</span>
+                      <span className={styles.badge} style={{ border: `1px solid ${th.warn}66` }}>UNVERIFIED</span>
                     )}
                   </div>
-                  <div style={{ fontFamily: th.mono, fontSize: 11, color: th.muted }}>{c.txCount}×</div>
+                  <div className={styles.count}>{c.txCount}×</div>
                 </div>
-                <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
-                  {c.category} <span style={{ margin: '0 5px' }}>·</span>
-                  <span style={{ fontFamily: th.mono, fontSize: 10, color: th.ink2 }}>aliases:</span>
+                <div className={styles.category}>
+                  {c.category} <span className={styles.dot}>·</span>
+                  <span className={styles.aliasLabel}>aliases:</span>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                <div className={styles.aliases}>
                   {c.aliases.map((a) => (
-                    <span key={a} style={{
-                      fontFamily: th.mono, fontSize: 10, padding: '2px 7px', background: th.paperAlt,
-                      color: th.ink2, borderRadius: 4, letterSpacing: 0.2
-                    }}>{a}</span>
+                    <span key={a} className={styles.alias}>{a}</span>
                   ))}
                 </div>
               </div>
