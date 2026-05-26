@@ -84,16 +84,17 @@ interface BarChartProps {
   color?: string;
   highlight?: string;
   muted?: string;
+  className?: string;
 }
 
-export function BarChart({ values, labels, width = 280, height = 80, color = 'var(--foreground)', highlight = 'var(--primary)', muted = 'var(--border)' }: BarChartProps) {
+export function BarChart({ values, labels, width = 280, height = 80, color = 'var(--foreground)', highlight = 'var(--primary)', muted = 'var(--border)', className }: BarChartProps) {
   const max = Math.max(...values, 1);
   const n = values.length;
   const gap = 4;
   const bw = (width - gap * (n - 1)) / n;
 
   return (
-    <svg width={width} height={height + 14} viewBox={`0 0 ${width} ${height + 14}`}>
+    <svg width={width} height={height + 14} viewBox={`0 0 ${width} ${height + 14}`} className={className} preserveAspectRatio="none">
       {values.map((v, i) => {
         const h = (v / max) * height;
         const x = i * (bw + gap);
@@ -114,9 +115,10 @@ interface AreaChartProps {
   labels?: string[];
   width?: number;
   height?: number;
+  className?: string;
 }
 
-export function AreaChart({ series, labels, width = 310, height = 120 }: AreaChartProps) {
+export function AreaChart({ series, labels, width = 310, height = 120, className }: AreaChartProps) {
   const max = Math.max(...series.flatMap((s) => s.values), 1);
   const n = Math.max(...series.map((s) => s.values.length), 1);
   const step = width / Math.max(n - 1, 1);
@@ -127,7 +129,7 @@ export function AreaChart({ series, labels, width = 310, height = 120 }: AreaCha
       .join(' ');
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className} preserveAspectRatio="none">
       {series.map((s, si) => {
         const d = path(s.values);
         return (
