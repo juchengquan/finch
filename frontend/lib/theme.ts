@@ -100,10 +100,3 @@ export const DEFAULT_TWEAKS = {
   density: 'regular',
   currency: 'USD',
 };
-
-export function useTheme(t: typeof DEFAULT_TWEAKS) {
-  const pal = PALETTES[t.palette as keyof typeof PALETTES] || PALETTES.warm;
-  const fonts = FONT_PAIRS[t.fonts as keyof typeof FONT_PAIRS] || FONT_PAIRS.editorial;
-  const dens = DENSITY[t.density as keyof typeof DENSITY] || DENSITY.regular;
-  return { ...pal, ...fonts, ...dens, currency: t.currency as 'USD' | 'EUR' | 'GBP' | 'JPY' };
-}

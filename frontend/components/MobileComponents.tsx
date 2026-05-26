@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { Icon } from './primitives';
 import styles from './MobileComponents.module.css';
 
@@ -49,120 +48,6 @@ export function ProfileChip() {
     <button type="button" className={styles.profileChip} aria-label="Profile">
       A
     </button>
-  );
-}
-
-interface SidebarTab {
-  id: string;
-  icon: string;
-  label: string;
-  path: string;
-}
-
-interface SidebarBrand {
-  glyph?: string;
-  glyphBg?: string;
-  label: string;
-  toggleable?: boolean;
-}
-
-interface SidebarBottomLink {
-  icon: string;
-  label: string;
-  path: string;
-  warnDot?: boolean;
-}
-
-interface SidebarProps {
-  brand: SidebarBrand;
-  mainTabs: SidebarTab[];
-  moreTabs?: SidebarTab[];
-  bottomLinks?: SidebarBottomLink[];
-  user?: { name: string; label: string };
-  open: boolean;
-  onToggle?: () => void;
-}
-
-export function Sidebar({ brand, mainTabs, moreTabs, bottomLinks, user, open, onToggle }: SidebarProps) {
-  const pathname = usePathname();
-
-  const isActive = (path: string) => {
-    if (path === '/accounts') return pathname === '/accounts' || pathname === '/';
-    return pathname === path;
-  };
-
-  return (
-    <aside className={`${styles.sidebar} ${open ? styles.sidebarOpen : styles.sidebarCollapsed}`} role="complementary">
-      <div className={styles.brand}>
-        {brand.toggleable ? (
-          <button
-            type="button"
-            className={styles.toggleButton}
-            aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            aria-expanded={open}
-            onClick={onToggle}
-          >
-            <Icon name={open ? 'menu' : 'arrow-r'} size={16}/>
-          </button>
-        ) : (
-          <div className={styles.brandGlyph}>
-            {brand.glyph ?? brand.label.charAt(0)}
-          </div>
-        )}
-        {open && <span className={styles.brandLabel}>{brand.label}</span>}
-      </div>
-
-      <nav className={styles.navSection}>
-        {mainTabs.map((tab) => (
-          <Link
-            key={tab.id}
-            href={tab.path}
-            className={`${styles.navTab} ${isActive(tab.path) ? styles.navTabActive : ''}`}
-          >
-            <Icon name={tab.icon} size={16} stroke={1.5}/>
-            {open && <span className={styles.navLabel}>{tab.label}</span>}
-          </Link>
-        ))}
-      </nav>
-
-      {open && moreTabs && moreTabs.length > 0 && (
-        <div className={styles.sectionLabel}>MORE</div>
-      )}
-      {moreTabs?.map((tab) => (
-        <Link
-          key={tab.id}
-          href={tab.path}
-          className={`${styles.navTab} ${isActive(tab.path) ? styles.navTabActive : ''}`}
-        >
-          <Icon name={tab.icon} size={16} stroke={1.5}/>
-          {open && <span className={styles.navLabel}>{tab.label}</span>}
-        </Link>
-      ))}
-
-      <div className={styles.spacer}/>
-
-      {bottomLinks?.map((link) => (
-        <Link
-          key={link.path}
-          href={link.path}
-          className={`${styles.bottomLink} ${link.warnDot ? styles.bottomLinkWarn : ''}`}
-        >
-          <Icon name={link.icon} size={16} stroke={1.5}/>
-          {open && <span>{link.label}</span>}
-          {link.warnDot && <span className={styles.warnDot} aria-label="Pending items"/>}
-        </Link>
-      ))}
-
-      {user && open && (
-        <div className={styles.userProfile}>
-          <div className={styles.userAvatar}>{user.name.charAt(0)}</div>
-          <div className={styles.userInfo}>
-            <div className={styles.userName}>{user.name}</div>
-            <div className={styles.userLabel}>{user.label}</div>
-          </div>
-        </div>
-      )}
-    </aside>
   );
 }
 
