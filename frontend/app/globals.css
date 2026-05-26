@@ -1,100 +1,202 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap');
-@import '@/styles/tokens.css';
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@custom-variant dark (&:is(.dark *));
 
-html {
-  scroll-behavior: smooth;
-}
+/* ============================================
+   Light theme — "warm editorial" palette
+   ============================================ */
+:root {
+  --radius: 0.875rem;
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-body);
-  -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
+  --background: #f5f1ea;
+  --foreground: #1a1614;
+
+  --card: #faf7f1;
+  --card-foreground: #1a1614;
+
+  --popover: #faf7f1;
+  --popover-foreground: #1a1614;
+
+  --primary: #c96442;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ece5d9;
+  --secondary-foreground: #3a322c;
+
+  --muted: #ece5d9;
+  --muted-foreground: #8a7e6e;
+
+  --accent: #ece5d9;
+  --accent-foreground: #1a1614;
+
+  --destructive: #c96442;
+  --destructive-foreground: #ffffff;
+
+  --success: #5e7d5e;
+  --success-foreground: #ffffff;
+
+  --warning: #c89a3e;
+  --warning-foreground: #1a1614;
+
+  --border: #d8cfc1;
+  --input: #d8cfc1;
+  --ring: #c96442;
+
+  --chart-1: #c96442;
+  --chart-2: #5e7d5e;
+  --chart-3: #c89a3e;
+  --chart-4: #6b8ab0;
+  --chart-5: #8a6ba8;
+
+  --sidebar: #ece5d9;
+  --sidebar-foreground: #1a1614;
+  --sidebar-primary: #1a1614;
+  --sidebar-primary-foreground: #f5f1ea;
+  --sidebar-accent: #faf7f1;
+  --sidebar-accent-foreground: #1a1614;
+  --sidebar-border: #d8cfc1;
+  --sidebar-ring: #c96442;
 }
 
 /* ============================================
-   Scrollbar Styling
+   Dark theme — "noir" palette
    ============================================ */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 3px;
+.dark {
+  --background: #0e0d0c;
+  --foreground: #f1ece2;
+
+  --card: #1c1a17;
+  --card-foreground: #f1ece2;
+
+  --popover: #1c1a17;
+  --popover-foreground: #f1ece2;
+
+  --primary: #e07856;
+  --primary-foreground: #ffffff;
+
+  --secondary: #1a1816;
+  --secondary-foreground: #c9c0b1;
+
+  --muted: #1a1816;
+  --muted-foreground: #7a7367;
+
+  --accent: #2a2722;
+  --accent-foreground: #f1ece2;
+
+  --destructive: #e07856;
+  --destructive-foreground: #ffffff;
+
+  --success: #9bb89b;
+  --success-foreground: #0e0d0c;
+
+  --warning: #d8b366;
+  --warning-foreground: #0e0d0c;
+
+  --border: #2a2722;
+  --input: #2a2722;
+  --ring: #e07856;
+
+  --chart-1: #e07856;
+  --chart-2: #9bb89b;
+  --chart-3: #d8b366;
+  --chart-4: #7da0c4;
+  --chart-5: #a98cc4;
+
+  --sidebar: #1a1816;
+  --sidebar-foreground: #f1ece2;
+  --sidebar-primary: #e07856;
+  --sidebar-primary-foreground: #0e0d0c;
+  --sidebar-accent: #1c1a17;
+  --sidebar-accent-foreground: #f1ece2;
+  --sidebar-border: #2a2722;
+  --sidebar-ring: #e07856;
 }
 
 /* ============================================
-   Shell Layout Classes
+   Tailwind theme mapping
    ============================================ */
-.mobile-shell {
-  display: none;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
 }
 
-.desktop-shell {
-  display: flex;
-}
-
-.mobile-only {
-  display: none;
-}
-
-/* ============================================
-   Responsive Breakpoint
-   ============================================ */
-@media (max-width: 767px) {
-  .mobile-shell {
-    display: flex !important;
+@keyframes accordion-down {
+  from {
+    height: 0;
   }
-  .desktop-shell {
-    display: none !important;
-  }
-  .mobile-only {
-    display: block;
+  to {
+    height: var(--radix-accordion-content-height);
   }
 }
 
-/* ============================================
-   Focus Styles
-   ============================================ */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
 /* ============================================
-   Button Reset
+   Base layer
    ============================================ */
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 
-/* ============================================
-   Link Reset
-   ============================================ */
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-/* ============================================
-   Safe Area Insets (for notched devices)
-   ============================================ */
-.safe-area-top {
-  padding-top: env(safe-area-inset-top);
-}
-
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+  }
 }

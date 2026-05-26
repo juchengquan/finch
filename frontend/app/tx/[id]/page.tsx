@@ -1,13 +1,14 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useTweaks } from '@/components/TweaksContext';
 import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader } from '@/components/MobileComponents';
+import { useCurrency } from '@/components/currency-provider';
 import { MOCK, catById, acctById, fmtMoney } from '@/lib/data';
+import { cn } from '@/lib/utils';
 
 export default function TxDetailPage() {
-  const { theme: th } = useTweaks();
+  const { currency } = useCurrency();
   const params = useParams();
   const txId = params.id as string;
   const tx = MOCK.transactions.find(t => t.id === txId) || MOCK.transactions[1];
@@ -18,29 +19,29 @@ export default function TxDetailPage() {
   const acctLabel = acct.last4 ? `${acct.name} · ${acct.last4}` : acct.name;
 
   return (
-    <div style={{ padding: '0 20px 120px' }}>
-      <ScreenHeader title="" back={true} trailing={<div style={{ width: 36, height: 36, borderRadius: 18, border: `1px solid ${th.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.ink, cursor: 'pointer' }}><Icon name="dots" size={16}/></div>}/>
+    <div className="px-5 pb-[120px]">
+      <ScreenHeader title="" back={true} trailing={<div className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"><Icon name="dots" size={16}/></div>}/>
 
-      <div style={{ padding: '0 24px 28px', textAlign: 'center' }}>
+      <div className="px-6 pb-7 text-center">
         <MerchantGlyph name={tx.merchant} size={64} hue={cat.hue}/>
-        <div style={{ fontFamily: th.display, fontStyle: 'italic', fontSize: 22, color: th.muted, marginTop: 18 }}>You spent at</div>
-        <div style={{ fontFamily: th.display, fontSize: 34, letterSpacing: -0.8, lineHeight: 1, marginTop: 4 }}>{tx.merchant}</div>
-        <div style={{ fontFamily: th.display, fontSize: 56, letterSpacing: -2, marginTop: 18, fontWeight: 400 }}>
-          {fmtMoney(Math.abs(tx.amount), th.currency)}
+        <div className="text-muted-foreground mt-[18px] font-serif text-[22px] italic">You spent at</div>
+        <div className="mt-1 font-serif text-[34px] leading-none -tracking-[0.8px]">{tx.merchant}</div>
+        <div className="mt-[18px] font-serif text-[56px] font-normal -tracking-[2px]">
+          {fmtMoney(Math.abs(tx.amount), currency)}
         </div>
-        <div style={{ fontSize: 12, color: th.muted, marginTop: 6 }}>{whenStr} · {acct.name}</div>
+        <div className="text-muted-foreground mt-1.5 text-xs">{whenStr} · {acct.name}</div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '0 0 22px' }}>
+      <div className="flex gap-2 pb-[22px]">
         {['split', 'tag', 'sync', 'cam'].map((a) => (
-          <div key={a} style={{ flex: 1, height: 60, borderRadius: 12, border: `1px solid ${th.line}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: th.ink, cursor: 'pointer' }}>
+          <div key={a} className="border-border text-foreground flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border">
             <Icon name={a} size={18}/>
-            <span style={{ fontSize: 10, fontWeight: 500 }}>{a === 'split' ? 'Split' : a === 'tag' ? 'Tag' : a === 'sync' ? 'Recurring' : 'Receipt'}</span>
+            <span className="text-[10px] font-medium">{a === 'split' ? 'Split' : a === 'tag' ? 'Tag' : a === 'sync' ? 'Recurring' : 'Receipt'}</span>
           </div>
         ))}
       </div>
 
-      <div style={{ background: th.card, border: `1px solid ${th.line}`, borderRadius: 14, padding: '4px 16px' }}>
+      <div className="bg-card border-border rounded-[14px] border px-4 py-1">
         {[
           { l: 'Category', v: cat.name },
           { l: 'Account', v: acctLabel },
@@ -48,8 +49,8 @@ export default function TxDetailPage() {
           { l: 'Note', v: tx.note || '—' },
           { l: 'Transaction', v: 'AMX-9F2B-44A1' },
         ].map((r, i) => (
-          <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: i ? `0.5px solid ${th.line}` : 'none', fontSize: 13 }}>
-            <span style={{ color: th.muted }}>{r.l}</span>
+          <div key={r.l} className={cn('flex items-center justify-between py-3 text-[13px]', i && 'border-border border-t-[0.5px]')}>
+            <span className="text-muted-foreground">{r.l}</span>
             <span>{r.v}</span>
           </div>
         ))}

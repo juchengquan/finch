@@ -1,9 +1,9 @@
 'use client';
 
-import { useTweaks } from './TweaksContext';
 import { Icon } from './primitives';
 import { fmtMoneyShort } from '@/lib/data';
-import styles from './CategoryRow.module.css';
+import { useCurrency } from '@/components/currency-provider';
+import { cn } from '@/lib/utils';
 
 interface CategoryRowProps {
   category: {
@@ -17,31 +17,36 @@ interface CategoryRowProps {
 }
 
 export function CategoryRow({ category }: CategoryRowProps) {
-  const { theme: th } = useTweaks();
+  const { currency } = useCurrency();
   const cpct = (category.spent / category.budget) * 100;
   const over = cpct > 100;
   const remaining = category.budget - category.spent;
 
   return (
-    <div className={styles.row}>
-      <div className={styles.icon} style={{ background: `oklch(0.92 0.04 ${category.hue})` }}>
+    <div className="bg-card border-border mb-2 flex cursor-pointer items-center gap-3.5 rounded-xl border p-3.5">
+      <div
+        className="text-foreground flex size-[38px] shrink-0 items-center justify-center rounded-full"
+        style={{ background: `oklch(0.92 0.04 ${category.hue})` }}
+      >
         <Icon name={category.icon} size={18} />
       </div>
-      <div className={styles.body}>
-        <div className={styles.titleRow}>
-          <div className={styles.name}>{category.name}</div>
-          <div className={styles.amounts} style={{ color: over ? 'var(--neg)' : 'var(--ink)' }}>
-            {fmtMoneyShort(category.spent, th.currency)} / {fmtMoneyShort(category.budget, th.currency)}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between">
+          <div className="text-sm font-medium">{category.name}</div>
+          <div className={cn('font-mono text-[11px]', over ? 'text-destructive' : 'text-foreground')}>
+            {fmtMoneyShort(category.spent, currency)} / {fmtMoneyShort(category.budget, currency)}
           </div>
         </div>
-        <div className={styles.track}>
+        <div className="bg-secondary relative mt-1.5 h-[3px] overflow-hidden rounded-sm">
           <div
-            className={styles.fill}
-            style={{ width: `${Math.min(cpct, 100)}%`, background: over ? 'var(--neg)' : 'var(--accent)' }}
+            className={cn('h-full', over ? 'bg-destructive' : 'bg-primary')}
+            style={{ width: `${Math.min(cpct, 100)}%` }}
           />
         </div>
-        <div className={styles.note} style={{ color: over ? 'var(--neg)' : 'var(--muted)' }}>
-          {over ? `${fmtMoneyShort(-remaining, th.currency)} over` : `${fmtMoneyShort(remaining, th.currency)} left`}
+        <div className={cn('mt-1 text-[11px]', over ? 'text-destructive' : 'text-muted-foreground')}>
+          {over
+            ? `${fmtMoneyShort(-remaining, currency)} over`
+            : `${fmtMoneyShort(remaining, currency)} left`}
         </div>
       </div>
     </div>
