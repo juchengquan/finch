@@ -1,0 +1,49 @@
+.header {
+  padding: 0 20px 22px;
+}
+
+.ringContent {
+  text-align: center;
+}
+
+.ringPct {
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: -0.6px;
+  line-height: 1;
+}
+
+.ringUsed {
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.subMono {
+  font-family: var(--font-mono);
+}
+
+.body {
+  padding: 0 20px 22px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+}
+
+.cardMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.8px;
+}

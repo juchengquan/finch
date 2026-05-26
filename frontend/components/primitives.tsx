@@ -1,7 +1,7 @@
 'use client';
 
-import { useTweaks } from '@/components/TweaksContext';
 import { fmtMoney } from '@/lib/data';
+import styles from './primitives.module.css';
 
 interface IconProps {
   name: string;
@@ -248,89 +248,11 @@ interface CardProps {
 }
 
 export function Card({ children, padding = 14, radius = 14, style }: CardProps) {
-  const { theme: th } = useTweaks();
   return (
-    <div style={{
-      background: th.card,
-      border: `1px solid ${th.line}`,
-      borderRadius: radius,
-      padding,
-      ...style,
-    }}>
+    <div className={styles.card} style={{ borderRadius: radius, padding, ...style }}>
       {children}
     </div>
   );
 }
 
-interface ListItemRowProps {
-  icon?: string;
-  hue?: number;
-  avatar?: { initials: string; color: string };
-  leading?: React.ReactNode;
-  trailing?: React.ReactNode;
-  onClick?: () => void;
-  children: React.ReactNode;
-}
-
-export function ListItemRow({ icon, hue, avatar, leading, trailing, onClick, children }: ListItemRowProps) {
-  const { theme: th } = useTweaks();
-
-  let leadingEl: React.ReactNode = null;
-  if (icon !== undefined) {
-    leadingEl = (
-      <div style={{
-        width: 38, height: 38, borderRadius: 19, background: `oklch(0.92 0.04 ${hue ?? 30})`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.ink, flexShrink: 0
-      }}>
-        <Icon name={icon} size={18}/>
-      </div>
-    );
-  } else if (avatar) {
-    leadingEl = (
-      <div style={{
-        width: 38, height: 38, borderRadius: 8, background: avatar.color, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: th.mono, fontSize: 10, fontWeight: 600, letterSpacing: 0.5, flexShrink: 0
-      }}>{avatar.initials}</div>
-    );
-  } else if (leading) {
-    leadingEl = leading;
-  }
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: th.card, border: `1px solid ${th.line}`, borderRadius: 14,
-        display: 'flex', alignItems: 'center', gap: 14, cursor: onClick ? 'pointer' : 'default',
-        padding: 14, marginBottom: 8,
-      }}
-    >
-      {leadingEl}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {children}
-      </div>
-      {trailing}
-    </div>
-  );
-}
-
-interface ProgressBarProps {
-  value: number;
-  max: number;
-  color?: string;
-  trackColor?: string;
-  height?: number;
-}
-
-export function ProgressBar({ value, max, color, trackColor, height = 3 }: ProgressBarProps) {
-  const { theme: th } = useTweaks();
-  const pct = (value / max) * 100;
-  const over = pct > 100;
-  return (
-    <div style={{ height, background: trackColor ?? th.paperAlt, borderRadius: 2, overflow: 'hidden' }}>
-      <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: over ? th.neg : (color ?? th.accent) }}/>
-    </div>
-  );
-}
 
