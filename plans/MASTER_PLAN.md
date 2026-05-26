@@ -102,8 +102,9 @@ Built on existing mock data; no new state machinery.
       inline recategorize `Select`, recurring toggle — all with `sonner` toasts.
 - [x] **Pending review**: Confirm / Cancel / Confirm-all mutate the store + toasts.
 - [x] Reading surfaces (Activity, account detail, budget detail, tx) read from the store.
-- [ ] Remaining edit flows — budgets, recurring templates/splits, merchant verify/alias
-      (deferred; some are "coming soon" toasts for now).
+- [x] Edit flows — editable **budgets** (override dialog), **recurring splits**
+      (live recompute + 100% validation), and **merchant verify / add-alias**.
+      All persisted via the store; budgets/counterparties/recurring now editable.
 
 > Note: derived figures (net worth, per-category `spent`, budget totals) don't yet
 > recompute from new transactions — that lands with the unified model in **Phase C**.
@@ -136,10 +137,14 @@ Built on existing mock data; no new state machinery.
 - [x] **Desktop Scheduled** — large calendar + upcoming list, side by side.
 - Account/budget detail drill-ins already read well on desktop (breadcrumbs present).
 
-### Phase E — Ledger-admin completeness
-- [ ] Transfers + Recurring as **list-driven** detail (not single samples).
-- [ ] **Category tree** (2-level), **FX transaction detail**, **System admin**
-      (exchange-rate book + `sync_log` device list).
+### Phase E — Ledger-admin completeness 🟡 _(in progress)_
+- [x] **Transfers** list-driven — `/transfers` lists all groups → `/transfers/[id]`
+      detail (two-sided legs, locked rate, schema rows).
+- [x] **Recurring** list-driven — `/recurring` lists all templates → `/recurring/[id]`
+      detail with editable splits.
+- [x] **Category tree** — read-only 2-level taxonomy at `/categories` (+ ledger tab).
+- [ ] **FX transaction detail** (native vs. base amount, locked rate) — `LEDGER.fxTx`.
+- [ ] **System admin** — exchange-rate book + `sync_log` device list.
 
 ### Phase F — Persistence & backend 🟡 _(persistence done)_
 Reframed from the original "build a backend" plan: the app is client-only and runs
