@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { catById, acctById } from '@/lib/data';
@@ -76,43 +77,96 @@ export default function ActivityPage() {
           ))}
         </div>
 
-        {groups.length === 0 && (
+        {txns.length === 0 && (
           <div className="text-muted-foreground py-10 text-center text-sm">No transactions</div>
         )}
 
-        {groups.map((group) => (
-          <div key={group.date} className="mb-4">
-            <div className="text-muted-foreground mb-1 px-1 font-mono text-[10px] tracking-wider uppercase">
-              {dayLabel(group.date)}
-            </div>
-            <div className="bg-card border-border overflow-hidden rounded-xl border">
-              {group.items.map((t, i) => {
-                const cat = catById(t.category);
-                const inc = t.amount > 0;
-                return (
-                  <div
-                    key={t.id}
-                    className={cn('flex items-center gap-3 p-3.5', i && 'border-border border-t')}
-                  >
-                    <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{t.merchant}</div>
-                      <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
-                        {cat.name} · {acctById(t.account).name}
-                        {t.pending && <span className="text-warning"> · pending</span>}
+        {/* Mobile: grouped feed */}
+        <div className="md:hidden">
+          {groups.map((group) => (
+            <div key={group.date} className="mb-4">
+              <div className="text-muted-foreground mb-1 px-1 font-mono text-[10px] tracking-wider uppercase">
+                {dayLabel(group.date)}
+              </div>
+              <div className="bg-card border-border overflow-hidden rounded-xl border">
+                {group.items.map((t, i) => {
+                  const cat = catById(t.category);
+                  const inc = t.amount > 0;
+                  return (
+                    <Link
+                      key={t.id}
+                      href={`/tx/${t.id}`}
+                      className={cn('flex items-center gap-3 p-3.5', i && 'border-border border-t')}
+                    >
+                      <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{t.merchant}</div>
+                        <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
+                          {cat.name} · {acctById(t.account).name}
+                          {t.pending && <span className="text-warning"> · pending</span>}
+                        </div>
                       </div>
-                    </div>
-                    <Money
-                      value={t.amount}
-                      signed={inc}
-                      className={cn('text-sm font-medium', inc ? 'text-success' : 'text-foreground')}
-                    />
-                  </div>
-                );
-              })}
+                      <Money
+                        value={t.amount}
+                        signed={inc}
+                        className={cn('text-sm font-medium', inc ? 'text-success' : 'text-foreground')}
+                      />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
+          ))}
+        </div>
+
+        {/* Desktop: table */}
+        {txns.length > 0 && (
+          <div className="bg-card border-border hidden overflow-hidden rounded-xl border md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-border border-b text-left text-[11px] tracking-wide uppercase">
+                  <th className="px-4 py-2.5 font-medium">Date</th>
+                  <th className="px-4 py-2.5 font-medium">Merchant</th>
+                  <th className="px-4 py-2.5 font-medium">Category</th>
+                  <th className="px-4 py-2.5 font-medium">Account</th>
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {txns.map((t) => {
+                  const cat = catById(t.category);
+                  const inc = t.amount > 0;
+                  return (
+                    <tr key={t.id} className="border-border hover:bg-secondary/40 border-t first:border-t-0">
+                      <td className="text-muted-foreground px-4 py-2.5 font-mono text-xs whitespace-nowrap">
+                        {t.date.slice(5).replace('-', '/')}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Link href={`/tx/${t.id}`} className="flex items-center gap-2.5">
+                          <MerchantGlyph name={t.merchant} hue={cat.hue} size={26} />
+                          {t.merchant}
+                        </Link>
+                      </td>
+                      <td className="text-muted-foreground px-4 py-2.5">{cat.name}</td>
+                      <td className="text-muted-foreground px-4 py-2.5">{acctById(t.account).name}</td>
+                      <td className="px-4 py-2.5 text-xs">
+                        {t.pending ? (
+                          <span className="text-warning">Pending</span>
+                        ) : (
+                          <span className="text-muted-foreground">Posted</span>
+                        )}
+                      </td>
+                      <td className={cn('px-4 py-2.5 text-right font-mono', inc ? 'text-success' : 'text-foreground')}>
+                        <Money value={t.amount} signed={inc} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </div>
     </MobilePage>
   );

@@ -128,11 +128,11 @@ Built on existing mock data; no new state machinery.
 ### Phase D — Bespoke desktop dashboards 🟡 _(in progress)_
 - [x] Desktop content container (centered, `max-w-6xl`) in the shell so pages stop
       stretching edge-to-edge.
-- [x] **Desktop Accounts** — gradient account-card grid + recent-activity table
-      (distinct from the mobile accordion).
-- [ ] Desktop Budgets (on-track/over stat tiles + pace), Insights, Scheduled
-      (large calendar), Activity (table).
-- [ ] Desktop drill-ins with breadcrumbs.
+- [x] **Desktop Accounts** — gradient account-card grid + recent-activity table.
+- [x] **Desktop Activity** — full transactions table (date/merchant/category/account/status/amount).
+- [x] **Desktop Budgets** — Spent/Remaining/Over stat tiles + 2-column category grid.
+- [ ] Desktop Insights (wider charts) and Scheduled (large calendar) — to follow.
+- [ ] Desktop drill-ins with breadcrumbs (account/budget detail are usable as-is).
 
 ### Phase E — Ledger-admin completeness
 - [ ] Transfers + Recurring as **list-driven** detail (not single samples).
