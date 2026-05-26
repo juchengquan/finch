@@ -14,5 +14,10 @@
   { "id": "t13", "merchant": "Brooklyn Brewery",      "category": "enter",  "amount": -38.40,  "account": "cc",  "date": "2026-05-16", "time": "20:15", "note": "Friday drinks",     "pending": false },
   { "id": "t14", "merchant": "Rent \u00b7 Greene St.", "category": "rent",   "amount": -1850.00,"account": "chk", "date": "2026-05-15", "time": "09:00", "note": "May rent",          "pending": false, "recurring": true },
   { "id": "t15", "merchant": "Uber Eats",             "category": "food",   "amount": -29.84,  "account": "cc",  "date": "2026-05-14", "time": "20:48", "note": "Thai cuisine",      "pending": false },
-  { "id": "t16", "merchant": "Strand Books",          "category": "shop",   "amount": -27.50,  "account": "cc",  "date": "2026-05-13", "time": "17:22", "note": "",                  "pending": false }
+  { "id": "t16", "merchant": "Strand Books",          "category": "shop",   "amount": -27.50,  "account": "cc",  "date": "2026-05-13", "time": "17:22", "note": "",                  "pending": false },
+  { "id": "f01", "merchant": "FairPrice",           "category": "f-grocery",   "amount": -128.40, "account": "f-dbs",  "date": "2026-05-24", "time": "18:10", "note": "Weekly groceries", "pending": false, "ledgerId": "family" },
+  { "id": "f02", "merchant": "SP Group",            "category": "f-utilities", "amount":  -86.20, "account": "f-dbs",  "date": "2026-05-22", "time": "09:00", "note": "Electricity",      "pending": false, "ledgerId": "family" },
+  { "id": "f03", "merchant": "Popular Bookstore",   "category": "f-kids",      "amount":  -44.90, "account": "f-visa", "date": "2026-05-20", "time": "16:30", "note": "School supplies",  "pending": false, "ledgerId": "family" },
+  { "id": "f04", "merchant": "Tiong Bahru Bakery",  "category": "f-dining",    "amount":  -32.00, "account": "f-visa", "date": "2026-05-19", "time": "08:40", "note": "Breakfast",        "pending": false, "ledgerId": "family" },
+  { "id": "f05", "merchant": "Salary · Sam",   "category": null,          "amount": 4200.00, "account": "f-dbs",  "date": "2026-05-25", "time": "00:00", "note": "Monthly",          "pending": false, "kind": "income", "ledgerId": "family" }
 ]

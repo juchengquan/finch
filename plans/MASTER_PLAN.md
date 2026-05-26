@@ -108,20 +108,22 @@ Built on existing mock data; no new state machinery.
 > Note: derived figures (net worth, per-category `spent`, budget totals) don't yet
 > recompute from new transactions — that lands with the unified model in **Phase C**.
 
-### Phase C — Unify the data model around the ledger schema 🟡 _(core done)_
+### Phase C — Unify the data model around the ledger schema ✅ _(done)_
 - [x] **Per-ledger base currency** model (`LedgerProvider`, `LEDGERS` with `base`);
-      `personal` aligned to USD to match the implemented screens.
+      `personal` = USD, `family` = SGD, `business` = CNY, `travel` = JPY.
 - [x] **Ledger switcher** (`Sheet`) in the desktop sidebar + Settings; sets active ledger.
-- [x] **Scope by ledger** — transactions tagged `ledgerId`; Add tags the active ledger;
-      Activity filters by it; Accounts/Budgets show empty states for non-Personal.
+- [x] **Per-ledger data** — Family ledger fully populated (accounts, categories,
+      transactions in SGD); accounts/categories/transactions tagged by ledger.
+- [x] **Scope by ledger** — Accounts, Budgets, Activity filter by the active ledger
+      (empty states for ledgers without data); Add tags the active ledger.
 - [x] **Derive figures from the store** (`lib/derive.ts`) — category spent, account
       balances, net worth recompute (verified: Food budget $612 → $662 after a $50 add).
-- [ ] Full schema alignment (dual `amount`/`amount_base`, `status`, counterparties,
-      categories w/ parent, recurring + splits, snapshots) + per-ledger accounts/categories
-      data — needs more mock data; lands incrementally toward Phase F.
+- [x] **Currency conversion** — amounts stored in each ledger's base; `useMoney` converts
+      to the chosen display currency (verified: Family net worth SGD 7,159 → $5,303).
 
-> Note: the in-memory store has no persistence — a full page reload resets to the seed
-> (client navigation keeps state). Persistence arrives in Phase F.
+> Remaining for full schema fidelity (dual `amount`/`amount_base` on FX rows, `status`
+> machine, counterparties, parent categories, snapshots) is backend-shaped and lands in
+> **Phase F**. The in-memory store has no persistence yet — a full reload resets to seed.
 
 ### Phase D — Bespoke desktop dashboards
 - [ ] Desktop Accounts (gradient account-card grid + merged activity table).

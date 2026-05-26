@@ -3,25 +3,27 @@
 import Link from 'next/link';
 import { Ring } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
-import { useCurrency } from '@/components/currency-provider';
 import { useLedger } from '@/components/ledger-provider';
+import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { categorySpent } from '@/lib/derive';
-import { MOCK, fmtMoneyShort } from '@/lib/data';
+import { MOCK } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
 
 export default function BudgetsPage() {
-  const { currency } = useCurrency();
+  const { short } = useMoney();
   const { active, activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
-  const personalTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === 'personal');
+  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
-  const categories = MOCK.categories.map((c) => ({ ...c, spent: categorySpent(personalTxns, c.id) }));
+  const categories = MOCK.categories
+    .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
+    .map((c) => ({ ...c, spent: categorySpent(ledgerTxns, c.id) }));
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
   const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
-  const pct = Math.round((totalSpent / totalBudget) * 100);
+  const pct = totalBudget ? Math.round((totalSpent / totalBudget) * 100) : 0;
 
-  if (activeId !== 'personal') {
+  if (categories.length === 0) {
     return (
       <MobilePage>
         <ScreenHeader title="Budgets" trailing={<IconButton icon="search" />} />
@@ -50,7 +52,7 @@ export default function BudgetsPage() {
               <div className="text-muted-foreground mt-0.5 text-[9px] tracking-[1px]">USED</div>
             </div>
           </Ring>}
-          sublabel={<>of <span className="font-mono">{fmtMoneyShort(totalBudget, currency)}</span></>}
+          sublabel={<>of <span className="font-mono">{short(totalBudget)}</span></>}
           trend={{ text: 'On track for May', icon: 'check', color: 'pos' }}
         />
       </div>

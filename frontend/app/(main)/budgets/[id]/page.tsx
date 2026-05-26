@@ -14,9 +14,10 @@ export default function BudgetDetailPage() {
   const id = params.id as string;
   const cat = MOCK.categories.find((c) => c.id === id) ?? MOCK.categories[0];
   const allTxns = useFinanceStore((s) => s.transactions);
-  const personalTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === 'personal');
-  const txns = personalTxns.filter((t) => t.category === cat.id);
-  const spent = categorySpent(personalTxns, cat.id);
+  const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
+  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
+  const txns = ledgerTxns.filter((t) => t.category === cat.id);
+  const spent = categorySpent(ledgerTxns, cat.id);
   const pct = Math.round((spent / cat.budget) * 100);
   const over = spent > cat.budget;
   const remaining = cat.budget - spent;

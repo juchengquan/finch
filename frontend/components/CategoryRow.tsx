@@ -1,8 +1,7 @@
 'use client';
 
 import { Icon } from './primitives';
-import { fmtMoneyShort } from '@/lib/data';
-import { useCurrency } from '@/components/currency-provider';
+import { useMoney } from '@/components/use-money';
 import { cn } from '@/lib/utils';
 
 interface CategoryRowProps {
@@ -17,7 +16,7 @@ interface CategoryRowProps {
 }
 
 export function CategoryRow({ category }: CategoryRowProps) {
-  const { currency } = useCurrency();
+  const { short } = useMoney();
   const cpct = (category.spent / category.budget) * 100;
   const over = cpct > 100;
   const remaining = category.budget - category.spent;
@@ -34,7 +33,7 @@ export function CategoryRow({ category }: CategoryRowProps) {
         <div className="flex items-baseline justify-between">
           <div className="text-sm font-medium">{category.name}</div>
           <div className={cn('font-mono text-[11px]', over ? 'text-destructive' : 'text-foreground')}>
-            {fmtMoneyShort(category.spent, currency)} / {fmtMoneyShort(category.budget, currency)}
+            {short(category.spent)} / {short(category.budget)}
           </div>
         </div>
         <div className="bg-secondary relative mt-1.5 h-[3px] overflow-hidden rounded-sm">
@@ -45,8 +44,8 @@ export function CategoryRow({ category }: CategoryRowProps) {
         </div>
         <div className={cn('mt-1 text-[11px]', over ? 'text-destructive' : 'text-muted-foreground')}>
           {over
-            ? `${fmtMoneyShort(-remaining, currency)} over`
-            : `${fmtMoneyShort(remaining, currency)} left`}
+            ? `${short(-remaining)} over`
+            : `${short(remaining)} left`}
         </div>
       </div>
     </div>

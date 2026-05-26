@@ -4,13 +4,13 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Icon, Money, Sparkline, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
-import { useCurrency } from '@/components/currency-provider';
-import { MOCK, fmtMoneyShort, catById } from '@/lib/data';
+import { useMoney } from '@/components/use-money';
+import { MOCK, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
-  const { currency } = useCurrency();
+  const { short, display } = useMoney();
   const params = useParams();
   const accountId = params.id as string;
   const account = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
@@ -40,9 +40,9 @@ export default function AccountDetailPage() {
               <Money value={account.balance} mono={false} className="font-serif"/>
             </div>
             <div className="mt-[22px] flex gap-5">
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">IN · 30D</div><div className="font-serif text-[22px]">{fmtMoneyShort(5800, currency)}</div></div>
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">OUT · 30D</div><div className="font-serif text-[22px]">{fmtMoneyShort(1850, currency)}</div></div>
-              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">NET</div><div className="font-serif text-[22px]" style={{ color: '#9bb89b' }}>+{fmtMoneyShort(3950, currency)}</div></div>
+              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">IN · 30D</div><div className="font-serif text-[22px]">{short(5800)}</div></div>
+              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">OUT · 30D</div><div className="font-serif text-[22px]">{short(1850)}</div></div>
+              <div><div className="mb-[3px] text-[10px] tracking-[1px] opacity-60">NET</div><div className="font-serif text-[22px]" style={{ color: '#9bb89b' }}>+{short(3950)}</div></div>
             </div>
           </div>
           <div className="relative flex flex-col justify-end">
@@ -79,7 +79,7 @@ export default function AccountDetailPage() {
               ['Number', `•••• ${account.last4}`],
               ['Routing', '021000021'],
               ['Institution', 'Chase Bank, N.A.'],
-              ['Currency', currency],
+              ['Currency', display],
               ['Last sync', '2 min ago'],
               ['Linked since', 'Jan 2024'],
             ].map(([l, v], i) => (

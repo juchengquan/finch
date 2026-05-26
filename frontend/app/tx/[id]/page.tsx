@@ -4,8 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader } from '@/components/MobileComponents';
-import { useCurrency } from '@/components/currency-provider';
-import { catById, acctById, fmtMoney, MOCK } from '@/lib/data';
+import { useMoney } from '@/components/use-money';
+import { catById, acctById, MOCK } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import {
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 
 export default function TxDetailPage() {
-  const { currency } = useCurrency();
+  const { fmt } = useMoney();
   const params = useParams();
   const router = useRouter();
   const txId = params.id as string;
@@ -97,7 +97,7 @@ export default function TxDetailPage() {
         </div>
         <div className="mt-1 font-serif text-[34px] leading-none -tracking-[0.8px]">{tx.merchant}</div>
         <div className="mt-[18px] font-serif text-[56px] font-normal -tracking-[2px]">
-          {fmtMoney(Math.abs(tx.amount), currency)}
+          {fmt(Math.abs(tx.amount))}
         </div>
         <div className="text-muted-foreground mt-1.5 text-xs">
           {whenStr} · {acct.name}
