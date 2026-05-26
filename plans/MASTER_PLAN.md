@@ -150,7 +150,7 @@ Built on existing mock data; no new state machinery.
       sparklines, Refresh) + `sync_log` device list (last sync/txn, This-device badge).
       Added a desktop-only **System** ledger tab.
 
-### Phase F — Persistence & backend 🟡 _(persistence done)_
+### Phase F — Persistence & real SQLite ✅ _(done)_
 Reframed from the original "build a backend" plan: the app is client-only and runs
 in an ephemeral container, where a server/DB would not be durable and would be a
 large rewrite. So Phase F leads with **client persistence**, keeping the store as
@@ -158,12 +158,31 @@ the seam a real backend can slot behind later.
 - [x] **Client persistence** — Zustand `persist` → `localStorage` (`finch-store`,
       versioned, partialized to transactions + pending). SSR-safe via
       `skipHydration` + a `StoreHydration` rehydrate-on-mount. Mutations now
-      survive a full reload (verified).
+      survive a full reload (verified). localStorage remains the **primary** store.
 - [x] **Reset to sample data** control in Settings (restores the seed).
-- [ ] _(future, optional)_ Real server/DB: SQLite schema (`plans/database_design_en.md`)
-      behind Next.js route handlers + `better-sqlite3`, swapped in behind the store;
-      CSV import, exchange-rate fetch/cache, multi-device sync, auth. Out of scope
-      while the demo is client-only/ephemeral.
+- [x] **Real SQLite file** (`@sqlite.org/sqlite-wasm`) — the store is serialised into
+      an actual `.db`:
+      - `lib/db/repo.ts` — DB-agnostic schema + save/load (`transactions`, `pending`,
+        `meta` JSON), tested in bun against an in-memory `oo1.DB` (`repo.test.ts`).
+      - `lib/db/sqlite.ts` — in-memory export (`sqlite3_js_db_export`) / import
+        (`sqlite3_deserialize`) to/from `.db` bytes (`sqlite.test.ts` round-trip).
+        Loads the worker-free wasm build from `/public` at runtime (`webpackIgnore`)
+        so Turbopack never bundles the package's dynamic Worker URL; bun tests resolve
+        the package directly.
+      - `lib/db/storage.ts` — sinks: **OPFS** (`navigator.storage.getDirectory` →
+        `finch.db`, auto-written) and an optional **File System Access** handle the
+        user picks once (`showSaveFilePicker`), plus plain Download / Import.
+      - `components/sqlite-backup-provider.tsx` — subscribes to the store and
+        **auto-mirrors** to OPFS + the connected file on every change (debounced 800ms).
+      - Settings → **Database**: sync status, Connect/Disconnect backup file,
+        Download .db, Import .db.
+      > Verified here: SQL/repo layer + export/import (bun), typecheck/lint/build, and
+      > that `/sqlite3.mjs` + `/sqlite3.wasm` and the Settings UI are served. The
+      > in-browser OPFS / File System Access / wasm-execution paths need manual
+      > verification in a real browser.
+- [ ] _(future, optional)_ Real server/DB: the same `repo.ts` seam behind Next.js
+      route handlers + `better-sqlite3`; CSV import, exchange-rate fetch/cache,
+      multi-device sync, auth. Out of scope while the demo is client-only/ephemeral.
 
 ### Cross-cutting ✅ _(done)_
 - [x] **Accessibility pass** — decorative chart SVGs `aria-hidden`; aria-labels on
