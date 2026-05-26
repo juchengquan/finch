@@ -125,10 +125,13 @@ Built on existing mock data; no new state machinery.
 > machine, counterparties, parent categories, snapshots) is backend-shaped and lands in
 > **Phase F**. The in-memory store has no persistence yet — a full reload resets to seed.
 
-### Phase D — Bespoke desktop dashboards
-- [ ] Desktop Accounts (gradient account-card grid + merged activity table).
-- [ ] Desktop Budgets (on-track/over stat tiles + pace), Insights (metric tabs),
-      Scheduled (large calendar + view toggle), Activity (summary tiles + table).
+### Phase D — Bespoke desktop dashboards 🟡 _(in progress)_
+- [x] Desktop content container (centered, `max-w-6xl`) in the shell so pages stop
+      stretching edge-to-edge.
+- [x] **Desktop Accounts** — gradient account-card grid + recent-activity table
+      (distinct from the mobile accordion).
+- [ ] Desktop Budgets (on-track/over stat tiles + pace), Insights, Scheduled
+      (large calendar), Activity (table).
 - [ ] Desktop drill-ins with breadcrumbs.
 
 ### Phase E — Ledger-admin completeness

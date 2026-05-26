@@ -181,7 +181,7 @@ export function PageShell({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto pb-24 [overscroll-behavior:contain] md:pb-0">
-          {children}
+          <div className="md:mx-auto md:w-full md:max-w-6xl">{children}</div>
         </div>
       </main>
 
