@@ -31,18 +31,18 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | --- | --- | --- | --- |
 | Main | Accounts (net-worth hero, grouped accounts) | ✅ | Mobile parity; desktop is the mobile layout reflowed |
 | Main | Account detail (balance hero, sparkline, tx list, details panel) | ✅ | Quick actions are display-only |
-| Main | Add expense | 🟡 | Static layout only; pickers/receipt/split not wired |
+| Main | Add expense | ✅ | Amount input + category/account `Select` + date; writes to store, appears in Activity |
 | Main | Budgets (ring + category list) | ✅ | Per-category **Budget detail** drill-in done |
 | Main | Budget detail (ring, left/over, tx list) | ✅ | `budgets/[id]` |
 | Main | Insights (trend, insight cards, Apr-vs-May) | ✅ | Metric tabs (Spending/Income/Cashflow) + 3M/6M/1Y ranges |
 | Main | Scheduled (month calendar grid + upcoming list) | ✅ | Month nav + per-day dots |
-| Main | Transaction detail | 🟡 | Action bar + "dots" menu are no-ops; no mini history chart |
+| Main | Transaction detail | ✅ | Dots `DropdownMenu` (recurring/delete), inline recategorize `Select`, recurring toggle |
 | Main | Settings | 🟡 | Theme + currency + 2 rows; missing grouped sections + **tab-layout editor** |
 | Main | Goals | ✅ | Aggregate progress + per-goal Ring cards |
 | Main | Subscriptions | ✅ | Monthly + annualized totals + list |
 | Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, search |
 | Main | Reports | ✅ | Spending donut + category breakdown + export toast |
-| Ledger | Pending review (confirm/edit/cancel, bulk) | 🟡 | Renders queue; actions are no-ops |
+| Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all mutate the store + toasts |
 | Ledger | Transfers (FX rate-lock, two-sided) | 🟡 | Single hardcoded sample; not list-driven |
 | Ledger | Merchants / counterparties (aliases, verified) | ✅ | Read-only |
 | Ledger | Recurring template (splits, StackedBar) | 🟡 | Single hardcoded sample; not editable |
@@ -94,14 +94,19 @@ Built on existing mock data; no new state machinery.
 - [x] **`AreaChart`** primitive (used by Insights cashflow).
 - [ ] **`CalendarHeatmap`** primitive — deferred; not required by current screens.
 
-### Phase B — Make it interactive (client state over mock)
-- [ ] Introduce a typed in-memory **store** (Zustand or context+reducer) seeded from JSON.
-- [ ] **Add expense**: real `Select` pickers (category/account), date `Popover`+calendar,
-      amount keypad, optimistic insert → appears in lists.
-- [ ] **Transaction detail**: wire the `DropdownMenu` ("dots") + action bar
-      (split / recategorize / mark recurring / delete) with `sonner` toasts.
-- [ ] **Pending review**: Confirm / Edit / Cancel + bulk Confirm-all actually mutate status.
-- [ ] Edit flows for budgets, recurring templates/splits, merchants (verify/alias).
+### Phase B — Make it interactive (client state over mock) ✅ _(core done)_
+- [x] Typed in-memory **store** — Zustand (`lib/store.ts`), seeded from JSON.
+- [x] **Add expense**: amount input + category/account `Select` + date; optimistic
+      insert → appears in Activity / account / budget lists.
+- [x] **Transaction detail**: `DropdownMenu` ("dots") with mark-recurring + delete,
+      inline recategorize `Select`, recurring toggle — all with `sonner` toasts.
+- [x] **Pending review**: Confirm / Cancel / Confirm-all mutate the store + toasts.
+- [x] Reading surfaces (Activity, account detail, budget detail, tx) read from the store.
+- [ ] Remaining edit flows — budgets, recurring templates/splits, merchant verify/alias
+      (deferred; some are "coming soon" toasts for now).
+
+> Note: derived figures (net worth, per-category `spent`, budget totals) don't yet
+> recompute from new transactions — that lands with the unified model in **Phase C**.
 
 ### Phase C — Unify the data model around the ledger schema
 - [ ] Merge `MOCK` + `LEDGER` into one **ledger-scoped** model matching
@@ -148,6 +153,7 @@ Built on existing mock data; no new state machinery.
 
 ## 5. Suggested next step
 
-Phase A is complete — the four stubs and the partial mobile screens are now a
-demoable read-only app. **Phase B** is next: introduce a client store and make
-the actions real (Add expense pickers, the tx "dots" menu, Pending confirm/cancel).
+Phases A and B are complete — the mobile app is demoable and interactive
+(add/edit/delete transactions, confirm pending). **Phase C** is next: unify the
+two mock models around the ledger schema so derived figures recompute, and add
+the ledger switcher.

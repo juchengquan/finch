@@ -1,11 +1,18 @@
 'use client';
 
+import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
-import { LEDGER, fmtNative } from '@/lib/data';
+import { fmtNative } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function PendingPage() {
+  const pending = useFinanceStore((s) => s.pending);
+  const confirmPending = useFinanceStore((s) => s.confirmPending);
+  const cancelPending = useFinanceStore((s) => s.cancelPending);
+  const confirmAllPending = useFinanceStore((s) => s.confirmAllPending);
+
   return (
     <MobilePage
       header={
@@ -19,23 +26,30 @@ export default function PendingPage() {
         <div className="px-1 pb-5">
           <SchemaChip label="status = pending"/>
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
-            {LEDGER.pending.length} <span className="italic text-muted-foreground">items</span>
+            {pending.length} <span className="italic text-muted-foreground">items</span>
           </div>
           <div className="mt-1.5 text-[13px] text-secondary-foreground">
             Confirm them to flow into your reports. Or cancel to ignore.
           </div>
         </div>
 
+        {pending.length === 0 ? (
+          <div className="text-muted-foreground py-16 text-center text-sm">
+            All caught up — nothing pending.
+          </div>
+        ) : (
+        <>
         <div className="mb-3.5 flex gap-2">
-          <button type="button" className="flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[19px] bg-foreground text-xs font-medium text-background">
+          <button
+            type="button"
+            onClick={() => { confirmAllPending(); toast.success('All items confirmed'); }}
+            className="flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[19px] bg-foreground text-xs font-medium text-background"
+          >
             <Icon name="check" size={14}/>Confirm all
-          </button>
-          <button type="button" aria-label="Dismiss" className="flex h-[38px] w-[38px] items-center justify-center rounded-[19px] border border-border text-muted-foreground">
-            <Icon name="x" size={14}/>
           </button>
         </div>
 
-        {LEDGER.pending.map((p, i) => {
+        {pending.map((p, i) => {
           const inc = p.amount > 0;
           const isFx = p.currency !== 'SGD';
           return (
@@ -61,19 +75,34 @@ export default function PendingPage() {
                 </div>
               </div>
               <div className="mt-3 flex gap-1.5">
-                <button type="button" className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[16px] bg-foreground text-xs font-medium text-background">
+                <button
+                  type="button"
+                  onClick={() => { confirmPending(p.id); toast.success(`Confirmed ${p.merchant}`); }}
+                  className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[16px] bg-foreground text-xs font-medium text-background"
+                >
                   <Icon name="check" size={12} stroke={2}/>Confirm
                 </button>
-                <button type="button" className="flex h-8 items-center gap-1.5 rounded-[16px] border border-border px-3.5 text-xs text-foreground">
+                <button
+                  type="button"
+                  onClick={() => toast('Edit — coming soon')}
+                  className="flex h-8 items-center gap-1.5 rounded-[16px] border border-border px-3.5 text-xs text-foreground"
+                >
                   Edit
                 </button>
-                <button type="button" aria-label="Cancel" className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-border text-muted-foreground">
+                <button
+                  type="button"
+                  aria-label="Cancel"
+                  onClick={() => { cancelPending(p.id); toast(`Dismissed ${p.merchant}`); }}
+                  className="flex h-8 w-8 items-center justify-center rounded-[16px] border border-border text-muted-foreground"
+                >
                   <Icon name="x" size={12}/>
                 </button>
               </div>
             </div>
           );
         })}
+        </>
+        )}
       </div>
     </MobilePage>
   );
