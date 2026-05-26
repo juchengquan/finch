@@ -26,7 +26,7 @@ export default function AccountDetailPage() {
       }
     >
       <div className="px-5 pb-[22px]">
-        <div className="text-muted-foreground mb-[18px] flex items-center gap-2 text-xs">
+        <div className="text-muted-foreground mb-[18px] flex items-center gap-2 text-xs md:hidden">
           <Link href="/accounts" className="text-muted-foreground no-underline">Accounts</Link>
           <Icon name="chev" size={11}/>
           <span className="text-foreground">{account.name}</span>
