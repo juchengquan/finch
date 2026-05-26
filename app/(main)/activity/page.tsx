@@ -5,6 +5,7 @@ import { Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useLedger } from '@/components/ledger-provider';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
@@ -27,8 +28,10 @@ export default function ActivityPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const allTxns = useFinanceStore((s) => s.transactions);
+  const { activeId } = useLedger();
 
   const txns = allTxns.filter((t) => {
+    if ((t.ledgerId ?? 'personal') !== activeId) return false;
     if (filter === 'in' && t.amount <= 0) return false;
     if (filter === 'out' && t.amount >= 0) return false;
     if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;

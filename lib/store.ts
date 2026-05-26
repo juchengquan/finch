@@ -16,6 +16,7 @@ export interface Tx {
   pending?: boolean;
   recurring?: boolean;
   kind?: string;
+  ledgerId?: string;
 }
 
 export interface PendingItem {
