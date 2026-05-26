@@ -32,15 +32,16 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Accounts (net-worth hero, grouped accounts) | ✅ | Mobile parity; desktop is the mobile layout reflowed |
 | Main | Account detail (balance hero, sparkline, tx list, details panel) | ✅ | Quick actions are display-only |
 | Main | Add expense | 🟡 | Static layout only; pickers/receipt/split not wired |
-| Main | Budgets (ring + category list) | ✅ | No per-category **Budget detail** drill-in |
-| Main | Insights (trend, 12-mo bars, insight cards, Apr-vs-May) | 🟡 | Missing range toggles (1M/3M/6M/1Y) + metric tabs |
-| Main | Scheduled | 🟡 | List only; design wants a **month calendar grid** + view modes |
+| Main | Budgets (ring + category list) | ✅ | Per-category **Budget detail** drill-in done |
+| Main | Budget detail (ring, left/over, tx list) | ✅ | `budgets/[id]` |
+| Main | Insights (trend, insight cards, Apr-vs-May) | ✅ | Metric tabs (Spending/Income/Cashflow) + 3M/6M/1Y ranges |
+| Main | Scheduled (month calendar grid + upcoming list) | ✅ | Month nav + per-day dots |
 | Main | Transaction detail | 🟡 | Action bar + "dots" menu are no-ops; no mini history chart |
 | Main | Settings | 🟡 | Theme + currency + 2 rows; missing grouped sections + **tab-layout editor** |
-| Main | Goals | ⬜ | Stub ("coming soon"); `goals.json` exists |
-| Main | Subscriptions | ⬜ | Stub; `subscriptions.json` exists |
-| Main | Activity (cross-account feed, filters, search) | ⬜ | Stub |
-| Main | Reports | ⬜ | Stub |
+| Main | Goals | ✅ | Aggregate progress + per-goal Ring cards |
+| Main | Subscriptions | ✅ | Monthly + annualized totals + list |
+| Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, search |
+| Main | Reports | ✅ | Spending donut + category breakdown + export toast |
 | Ledger | Pending review (confirm/edit/cancel, bulk) | 🟡 | Renders queue; actions are no-ops |
 | Ledger | Transfers (FX rate-lock, two-sided) | 🟡 | Single hardcoded sample; not list-driven |
 | Ledger | Merchants / counterparties (aliases, verified) | ✅ | Read-only |
@@ -81,16 +82,17 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 
 ## 3. Roadmap
 
-### Phase A — Complete the read-only mobile surface _(highest value, low risk)_
-Use existing mock data; no new state machinery.
-- [ ] **Goals** — aggregate saved/of-target bar + goal cards (`Ring` %, ETA, auto-save).
-- [ ] **Subscriptions** — monthly-total hero, annualized, 12-mo bars, list with cadence/next.
-- [ ] **Activity** — cross-account feed grouped by day; All/Out/In filter; search box.
-- [ ] **Reports** — month summary + category breakdown (`Donut`) + export affordance.
-- [ ] **Budget detail** route (`budgets/[id]`) — category ring, 6-mo history bars, tx list.
-- [ ] **Scheduled** → month **calendar grid** with bill/sub/income dots + upcoming list.
-- [ ] **Insights** → wire range toggles (1M/3M/6M/1Y/All) + metric tabs over mock series.
-- [ ] Build **`CalendarHeatmap`** + **`AreaChart`** primitives (needed by the above).
+### Phase A — Complete the read-only mobile surface ✅ _(done)_
+Built on existing mock data; no new state machinery.
+- [x] **Goals** — aggregate saved/of-target bar + per-goal `Ring` cards.
+- [x] **Subscriptions** — monthly + annualized totals + list with cadence/next.
+- [x] **Activity** — cross-account feed grouped by day; All/Out/In filter; search box.
+- [x] **Reports** — spending `Donut` + category breakdown + CSV-export toast.
+- [x] **Budget detail** route (`budgets/[id]`) — category ring, left/over, tx list.
+- [x] **Scheduled** → month **calendar grid** (per-day dots, month nav) + upcoming list.
+- [x] **Insights** → metric tabs (Spending/Income/Cashflow) + 3M/6M/1Y ranges.
+- [x] **`AreaChart`** primitive (used by Insights cashflow).
+- [ ] **`CalendarHeatmap`** primitive — deferred; not required by current screens.
 
 ### Phase B — Make it interactive (client state over mock)
 - [ ] Introduce a typed in-memory **store** (Zustand or context+reducer) seeded from JSON.
@@ -146,7 +148,6 @@ Use existing mock data; no new state machinery.
 
 ## 5. Suggested next step
 
-Start **Phase A** — it converts the four "coming soon" stubs and the partial
-screens into a complete, demoable read-only app using data that already exists,
-with no new architecture. Recommended order: Goals → Subscriptions → Activity →
-Reports → Budget detail → Scheduled calendar → Insights toggles.
+Phase A is complete — the four stubs and the partial mobile screens are now a
+demoable read-only app. **Phase B** is next: introduce a client store and make
+the actions real (Add expense pickers, the tx "dots" menu, Pending confirm/cancel).

@@ -114,6 +114,43 @@ export function BarChart({ values, labels, width = 280, height = 80, color = 'va
   );
 }
 
+interface AreaChartProps {
+  series: { values: number[]; color: string; fillOpacity?: number }[];
+  labels?: string[];
+  width?: number;
+  height?: number;
+}
+
+export function AreaChart({ series, labels, width = 310, height = 120 }: AreaChartProps) {
+  const max = Math.max(...series.flatMap((s) => s.values), 1);
+  const n = Math.max(...series.map((s) => s.values.length), 1);
+  const step = width / Math.max(n - 1, 1);
+  const h = labels ? height - 14 : height;
+  const path = (vals: number[]) =>
+    vals
+      .map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - (v / max) * (h - 4) - 2).toFixed(1)}`)
+      .join(' ');
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      {series.map((s, si) => {
+        const d = path(s.values);
+        return (
+          <g key={si}>
+            <path d={`${d} L${width} ${h} L0 ${h} Z`} style={{ fill: s.color, opacity: s.fillOpacity ?? 0.12 }} />
+            <path d={d} fill="none" style={{ stroke: s.color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+          </g>
+        );
+      })}
+      {labels?.map((l, i) => (
+        <text key={i} x={i * step} y={height - 2} fontSize="9" style={{ fill: 'var(--muted-foreground)' }} textAnchor={i === 0 ? 'start' : i === labels.length - 1 ? 'end' : 'middle'}>
+          {l}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 interface DonutProps {
   slices: { value: number; color: string }[];
   size?: number;
