@@ -191,7 +191,11 @@ export function FinchToggleGroupItem({
   disabled = false,
 }: FinchToggleGroupItemProps) {
   return (
-    <ToggleGroup.Item value={value} disabled={disabled} className={className}>
+    <ToggleGroup.Item
+      value={value}
+      disabled={disabled}
+      className={`${styles.paletteButton} ${className ?? ''}`}
+    >
       {children}
     </ToggleGroup.Item>
   );
