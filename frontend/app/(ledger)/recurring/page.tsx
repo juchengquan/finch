@@ -14,7 +14,7 @@ export default function RecurringPage() {
       header={
         <ScreenHeader
           title="Recurring"
-          trailing={<IconButton icon="dots"/>}
+          trailing={<IconButton icon="dots" aria-label="More actions" />}
         />
       }
     >

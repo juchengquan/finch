@@ -39,7 +39,7 @@ export default function ScheduledPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="search" />} />}
+      header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="search" aria-label="Search" />} />}
     >
       <div className="px-5 pb-[22px]">
         <PageHeader

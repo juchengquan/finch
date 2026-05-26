@@ -27,7 +27,7 @@ export default function BudgetsPage() {
   if (categories.length === 0) {
     return (
       <MobilePage>
-        <ScreenHeader title="Budgets" trailing={<IconButton icon="search" />} />
+        <ScreenHeader title="Budgets" trailing={<IconButton icon="search" aria-label="Search" />} />
         <div className="text-muted-foreground px-5 pt-16 text-center text-sm">
           No budgets in <span className="text-foreground font-medium">{active.name}</span> yet.
         </div>
@@ -40,7 +40,7 @@ export default function BudgetsPage() {
       header={
         <ScreenHeader
           title="Budgets"
-          trailing={<IconButton icon="search"/>}
+          trailing={<IconButton icon="search" aria-label="Search" />}
         />
       }
     >

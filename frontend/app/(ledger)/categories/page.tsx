@@ -9,7 +9,7 @@ export default function CategoriesPage() {
       header={
         <ScreenHeader
           title="Categories"
-          trailing={<IconButton icon="dots"/>}
+          trailing={<IconButton icon="dots" aria-label="More actions" />}
         />
       }
     >

@@ -99,15 +99,16 @@ Built on existing mock data; no new state machinery.
 - [x] **Add expense**: amount input + category/account `Select` + date; optimistic
       insert → appears in Activity / account / budget lists.
 - [x] **Transaction detail**: `DropdownMenu` ("dots") with mark-recurring + delete,
-      inline recategorize `Select`, recurring toggle — all with `sonner` toasts.
+      inline recategorize `Select`, recurring toggle, and **Split** (move part of the
+      amount into another category → creates the split) — all with `sonner` toasts.
 - [x] **Pending review**: Confirm / Cancel / Confirm-all mutate the store + toasts.
 - [x] Reading surfaces (Activity, account detail, budget detail, tx) read from the store.
 - [x] Edit flows — editable **budgets** (override dialog), **recurring splits**
       (live recompute + 100% validation), and **merchant verify / add-alias**.
       All persisted via the store; budgets/counterparties/recurring now editable.
 
-> Note: derived figures (net worth, per-category `spent`, budget totals) don't yet
-> recompute from new transactions — that lands with the unified model in **Phase C**.
+> Derived figures (net worth, per-category `spent`, budget totals) recompute from the
+> store as of **Phase C**.
 
 ### Phase C — Unify the data model around the ledger schema ✅ _(done)_
 - [x] **Per-ledger base currency** model (`LedgerProvider`, `LEDGERS` with `base`);
@@ -164,10 +165,15 @@ the seam a real backend can slot behind later.
       CSV import, exchange-rate fetch/cache, multi-device sync, auth. Out of scope
       while the demo is client-only/ephemeral.
 
-### Cross-cutting (ongoing)
-- [ ] Accessibility pass (focus, labels, keyboard for menus/dialogs).
-- [ ] Tests: unit (formatters/store) + a few Playwright smoke flows.
-- [ ] CI already runs typecheck/lint/build; add tests when they exist.
+### Cross-cutting ✅ _(done)_
+- [x] **Accessibility pass** — decorative chart SVGs `aria-hidden`; aria-labels on
+      every icon-only button and search/form input; Radix covers dialogs/menus/selects/focus.
+- [x] **Unit tests** — `bun test` over `lib/` (formatters, currency conversion,
+      derive deltas); 12 tests.
+- [x] **Playwright smoke flows** — `bun run test:e2e` (root redirect, add-expense,
+      split, theme toggle).
+- [x] **CI** runs typecheck · lint · **unit tests** · build (e2e runs locally;
+      it needs a browser binary).
 
 ---
 
@@ -184,7 +190,8 @@ the seam a real backend can slot behind later.
 
 ## 5. Suggested next step
 
-Phases A–F are complete (Phase F = client persistence; the real server/DB is the
-optional future track). The remaining work is **cross-cutting polish**: an
-accessibility pass and a test suite (unit + Playwright smoke), plus the
-deferred `CalendarHeatmap` primitive and the optional backend.
+Phases A–F **and** the cross-cutting polish (a11y + tests in CI) are complete. The
+app is feature-complete against the design. What's left is **optional**: the real
+server/DB track (Phase F), the deferred `CalendarHeatmap` primitive, and two
+intentional stubs that need a backend/storage — **Receipt attach** and **Pending
+Edit** (toasts for now).

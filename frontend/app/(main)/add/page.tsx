@@ -74,7 +74,7 @@ export default function AddExpensePage() {
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
               inputMode="decimal"
-              placeholder="0"
+              aria-label="Amount" placeholder="0"
               autoFocus
               className="placeholder:text-muted-foreground w-[5ch] bg-transparent text-center font-serif text-[72px] leading-none font-normal -tracking-[3px] outline-none"
             />
@@ -86,7 +86,7 @@ export default function AddExpensePage() {
             <input
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
-              placeholder="e.g. Blue Bottle"
+              aria-label="Merchant" placeholder="e.g. Blue Bottle"
               className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
             />
           </Field>
@@ -120,7 +120,7 @@ export default function AddExpensePage() {
           </Field>
           <Field icon="calendar" label="Date">
             <input
-              type="date"
+              type="date" aria-label="Date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="bg-transparent text-right text-[15px] outline-none"
@@ -130,7 +130,7 @@ export default function AddExpensePage() {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional"
+              aria-label="Note" placeholder="Optional"
               className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
             />
           </Field>
