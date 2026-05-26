@@ -1,7 +1,7 @@
 'use client';
 
 import { useTweaks } from './TweaksContext';
-import { Icon, ProgressBar } from './primitives';
+import { Icon } from './primitives';
 import { fmtMoneyShort } from '@/lib/data';
 
 interface CategoryRowProps {

@@ -103,3 +103,17 @@ export function fmtMoneyShort(n: number, currency: string = 'USD') {
   if (v >= 1000) return c.sym + (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   return c.sym + Math.round(v);
 }
+
+// Formats an amount that is already denominated in `currency` (no FX
+// conversion). Use for ledger data where amounts are stored natively,
+// unlike fmtMoney which converts a USD base amount into a display currency.
+export function fmtNative(amount: number, currency: string, opts: { signed?: boolean } = {}) {
+  const c = CURRENCIES[currency as keyof typeof CURRENCIES] || CURRENCIES.USD;
+  const decimals = currency === 'JPY' ? 0 : 2;
+  const abs = Math.abs(amount).toLocaleString(c.locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  const sign = amount < 0 ? '−' : opts.signed ? '+' : '';
+  return sign + c.sym + abs;
+}
