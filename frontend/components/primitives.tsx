@@ -8,8 +8,7 @@ import {
   FileText, Target, Tag, Split, Pencil, Check, X, Calendar, Mic, Camera, Sparkles, Clock, Circle,
 } from 'lucide-react';
 
-import { fmtMoney } from '@/lib/data';
-import { useCurrency } from '@/components/currency-provider';
+import { useMoney } from '@/components/use-money';
 import { cn } from '@/lib/utils';
 
 const ICONS: Record<string, LucideIcon> = {
@@ -38,21 +37,17 @@ export function Icon({ name, size = 18, stroke = 1.5, className, style }: IconPr
 
 interface MoneyProps {
   value: number;
-  currency?: string;
   signed?: boolean;
   mono?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
 
-export function Money({ value, currency, signed = false, mono = true, className, style }: MoneyProps) {
-  const { currency: active } = useCurrency();
-  const cur = currency ?? active;
-  const s = fmtMoney(value, cur);
+export function Money({ value, signed = false, mono = true, className, style }: MoneyProps) {
+  const { fmt } = useMoney();
   return (
     <span className={cn('tabular-nums', mono && 'font-mono', className)} style={style}>
-      {signed && value > 0 ? '+' : ''}
-      {s}
+      {fmt(value, { signed })}
     </span>
   );
 }

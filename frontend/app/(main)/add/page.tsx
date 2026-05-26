@@ -7,6 +7,7 @@ import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useLedger } from '@/components/ledger-provider';
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ function Field({ icon, label, children }: { icon: string; label: string; childre
 export default function AddExpensePage() {
   const router = useRouter();
   const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const { activeId } = useLedger();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
@@ -55,6 +57,7 @@ export default function AddExpensePage() {
       time: new Date().toTimeString().slice(0, 5),
       note: note.trim(),
       pending: false,
+      ledgerId: activeId,
     });
     toast.success('Expense added', { description: `${merchant.trim() || 'Untitled'} · $${Math.abs(value).toFixed(2)}` });
     router.push('/activity');

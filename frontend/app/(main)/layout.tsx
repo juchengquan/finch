@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
+import { LedgerSwitcher } from '@/components/ledger-switcher';
 
 const MAIN_TABS = [
   { id: 'accounts',  icon: 'wallet',   label: 'Accounts',  path: '/accounts' },
@@ -48,6 +49,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       sidebarOpen={sidebarOpen}
       onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
       showAdd
+      sidebarTop={<LedgerSwitcher />}
     >
       {children}
     </PageShell>

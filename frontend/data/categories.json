@@ -6,5 +6,9 @@
   { "id": "enter",  "name": "Entertainment", "spent":  98.40, "budget": 200, "icon": "film",     "hue": 320 },
   { "id": "health", "name": "Health",        "spent":  42.00, "budget": 150, "icon": "heart",    "hue":  90 },
   { "id": "subs",   "name": "Subscriptions", "spent": 138.58, "budget": 150, "icon": "sync",     "hue": 160 },
-  { "id": "misc",   "name": "Other",         "spent":  50.00, "budget": 100, "icon": "dots",     "hue":  40 }
+  { "id": "misc",   "name": "Other",         "spent":  50.00, "budget": 100, "icon": "dots",     "hue":  40 },
+  { "id": "f-grocery",   "name": "Groceries",  "spent": 128.40, "budget": 1200, "icon": "bag",   "hue":  90, "ledger": "family" },
+  { "id": "f-utilities", "name": "Utilities",  "spent":  86.20, "budget":  400, "icon": "home",  "hue": 200, "ledger": "family" },
+  { "id": "f-kids",      "name": "Kids",       "spent":  44.90, "budget":  600, "icon": "heart", "hue": 320, "ledger": "family" },
+  { "id": "f-dining",    "name": "Dining out", "spent":  32.00, "budget":  500, "icon": "fork",  "hue":  12, "ledger": "family" }
 ]
