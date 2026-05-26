@@ -1,47 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { Icon } from './primitives';
 import styles from './MobileComponents.module.css';
-
-interface Tab {
-  id: string;
-  icon?: string;
-  label: string;
-  path?: string;
-  pinned?: boolean;
-}
-
-interface MobileTabBarProps {
-  active: string;
-  tabs: Tab[];
-}
-
-export function MobileTabBar({ active, tabs }: MobileTabBarProps) {
-  return (
-    <nav className={styles.tabBar} role="navigation" aria-label="Main navigation">
-      {tabs.map((tab) => {
-        const isActive = tab.id === active;
-        const isPinned = tab.pinned;
-        const href = tab.path ?? `/${tab.id}`;
-        return (
-          <Link key={tab.id} href={href} className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}>
-            {isPinned ? (
-              <button type="button" className={styles.pinnedButton} aria-label={tab.label}>
-                <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5}/>
-              </button>
-            ) : (
-              <>
-                <Icon name={tab.icon ?? 'doc'} size={22}/>
-                <span className={styles.tabLabel}>{tab.label}</span>
-              </>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
 
 export function ProfileChip() {
   return (
@@ -156,18 +116,11 @@ interface MobilePageProps {
 
 export function MobilePage({ children, header, contentPadding }: MobilePageProps) {
   return (
-    <div className={styles.mobilePage}>
-      {header && (
-        <div className={styles.stickyHeader}>
-          {header}
-        </div>
-      )}
-      <div className={styles.scrollContainer}>
-        {contentPadding !== undefined
-          ? <div className={styles.content} style={{ padding: contentPadding }}>{children}</div>
-          : children
-        }
-      </div>
-    </div>
+    <>
+      {header && <div className={styles.stickyHeader}>{header}</div>}
+      {contentPadding !== undefined
+        ? <div style={{ padding: contentPadding }}>{children}</div>
+        : children}
+    </>
   );
 }

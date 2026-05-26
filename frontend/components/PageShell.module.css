@@ -1,113 +1,34 @@
 /* ============================================
-   PageShell CSS Module
+   PageShell - single-render responsive shell
+   Sidebar + desktop header show on desktop;
+   bottom tab bar shows on mobile. Children render once.
    ============================================ */
 
-/* ============================================
-   Mobile Shell
-   ============================================ */
-.mobileShell {
+.shell {
+  display: flex;
   height: 100dvh;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
-  position: relative;
-  overflow: hidden;
 }
 
-.stickyHeader {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--paper);
-  will-change: transform;
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.scrollContainer {
-  height: 100dvh;
+.scroll {
+  flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(var(--tab-bar-height) + 5px);
 }
 
 /* ============================================
-   Mobile Tab Bar
+   Desktop header
    ============================================ */
-.tabBar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  height: var(--tab-bar-height);
-  background: var(--paper);
-  border-top: 1px solid var(--line);
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-around;
-  padding: var(--tab-bar-padding-y) var(--tab-bar-padding-x);
-  /* iOS Safari: prevent overscroll from dragging the nav */
-  overscroll-behavior: contain;
-}
-
-.tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-width: var(--tab-min-width);
-  text-decoration: none;
-  color: var(--muted);
-}
-
-.tabActive {
-  color: var(--ink);
-}
-
-.tabLabel {
-  font-size: 10px;
-  font-weight: 400;
-  color: inherit;
-}
-
-.tabActive .tabLabel {
-  font-weight: 600;
-}
-
-.pinnedButton {
-  width: 44px;
-  height: 44px;
-  border-radius: 22px;
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  box-shadow: 0 4px 12px rgba(201, 100, 66, 0.3);
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* ============================================
-   Desktop Shell
-   ============================================ */
-.desktopShell {
-  display: flex;
-  height: 100vh;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-body);
-}
-
-.desktopContent {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
 .desktopHeader {
   display: flex;
   align-items: center;
@@ -115,9 +36,16 @@
   padding: 20px 32px;
   border-bottom: 1px solid var(--line);
   gap: 16px;
+  flex-shrink: 0;
 }
 
-.desktopHeaderRight {
+.headerTitle {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: -0.5px;
+}
+
+.headerActions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -153,16 +81,11 @@
   cursor: pointer;
 }
 
-.desktopScroll {
-  flex: 1;
-  overflow-y: auto;
-}
-
 /* ============================================
-   Sidebar (Desktop)
+   Sidebar (desktop)
    ============================================ */
 .sidebar {
-  height: 100vh;
+  height: 100dvh;
   background: var(--paper-alt);
   color: var(--ink);
   display: flex;
@@ -211,7 +134,7 @@
   font-family: var(--font-display);
   font-size: 18px;
   font-style: italic;
-  letter-spacing: -0.3;
+  letter-spacing: -0.3px;
   white-space: nowrap;
 }
 
@@ -346,19 +269,76 @@
 }
 
 /* ============================================
-   Responsive: Hide on Desktop
+   Mobile tab bar
    ============================================ */
-@media (min-width: 768px) {
-  .mobileShell {
-    display: none;
-  }
+.tabBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: var(--tab-bar-height);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: var(--tab-bar-padding-y) var(--tab-bar-padding-x);
+  padding-bottom: calc(var(--tab-bar-padding-y) + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: var(--tab-min-width);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.tabActive {
+  color: var(--ink);
+}
+
+.tabLabel {
+  font-size: 10px;
+  font-weight: 400;
+  color: inherit;
+}
+
+.tabActive .tabLabel {
+  font-weight: 600;
+}
+
+.pinnedButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 /* ============================================
-   Responsive: Hide on Mobile
+   Responsive visibility
    ============================================ */
 @media (max-width: 767px) {
-  .desktopShell {
+  .sidebar,
+  .desktopHeader {
+    display: none;
+  }
+  .scroll {
+    padding-bottom: calc(var(--tab-bar-height) + 5px);
+  }
+}
+
+@media (min-width: 768px) {
+  .tabBar {
     display: none;
   }
 }

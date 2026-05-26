@@ -3,7 +3,6 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useTweaks } from './TweaksContext';
 import { Icon } from './primitives';
 import styles from './PageShell.module.css';
 
@@ -29,7 +28,6 @@ interface BottomLink {
 }
 
 interface PageShellProps {
-  mode: 'mobile' | 'desktop' | 'split';
   children: ReactNode;
   tabs?: Tab[];
   mobileTabs?: Tab[];
@@ -39,21 +37,13 @@ interface PageShellProps {
   user?: { name: string; label: string };
   sidebarOpen?: boolean;
   onSidebarToggle?: () => void;
-  header?: ReactNode;
+  headerTitle?: string;
+  showAdd?: boolean;
 }
 
-const MAIN_MOBILE_TABS = [
-  { id: 'accounts', icon: 'wallet', label: 'Accounts', path: '/accounts' },
-  { id: 'budgets', icon: 'target', label: 'Budgets', path: '/budgets' },
-  { id: 'add', icon: 'plus', label: 'Add', path: '/add', pinned: true },
-  { id: 'scheduled', icon: 'calendar', label: 'Scheduled', path: '/scheduled' },
-  { id: 'insights', icon: 'chart', label: 'Insights', path: '/insights' },
-];
-
 export function PageShell({
-  mode,
   children,
-  tabs,
+  tabs = [],
   mobileTabs,
   activeTab,
   brand,
@@ -61,159 +51,24 @@ export function PageShell({
   user,
   sidebarOpen = true,
   onSidebarToggle,
-  header,
+  headerTitle,
+  showAdd = false,
 }: PageShellProps) {
   const pathname = usePathname();
-  const { theme: th } = useTweaks();
+  const tabBarTabs = mobileTabs ?? tabs;
 
-  const displayTabs = tabs ?? MAIN_MOBILE_TABS;
-  const displayMobileTabs = mobileTabs ?? displayTabs;
-  const isActive = (path?: string) => {
+  const isActivePath = (path?: string) => {
     if (!path) return false;
     if (path === '/accounts') return pathname === '/accounts' || pathname === '/';
-    return pathname === path;
+    return pathname === path || pathname.startsWith(`${path}/`);
   };
 
-  if (mode === 'mobile') {
-    return (
-      <div className={styles.mobileShell}>
-        {header && <div className={styles.stickyHeader}>{header}</div>}
-        <div className={styles.scrollContainer}>{children}</div>
-        <nav className={styles.tabBar} role="navigation" aria-label="Main navigation">
-          {displayMobileTabs.map((tab) => {
-            const isTabActive = tab.id === activeTab;
-            const isPinned = tab.pinned;
-            return (
-              <Link key={tab.id} href={tab.path ?? '/'} className={`${styles.tab} ${isTabActive ? styles.tabActive : ''}`}>
-                {isPinned ? (
-                  <button type="button" className={styles.pinnedButton} aria-label={tab.label}>
-                    <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5}/>
-                  </button>
-                ) : (
-                  <>
-                    <Icon name={tab.icon} size={22}/>
-                    <span className={styles.tabLabel}>{tab.label}</span>
-                  </>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-    );
-  }
-
-  if (mode === 'split') {
-    return (
-      <>
-        <div className={styles.mobileShell}>
-          {header && <div className={styles.stickyHeader}>{header}</div>}
-          <div className={styles.scrollContainer}>{children}</div>
-          <nav className={styles.tabBar} role="navigation" aria-label="Main navigation">
-            {displayMobileTabs.map((tab) => {
-              const isTabActive = tab.id === activeTab;
-              const isPinned = tab.pinned;
-              return (
-                <Link key={tab.id} href={tab.path ?? '/'} className={`${styles.tab} ${isTabActive ? styles.tabActive : ''}`}>
-                  {isPinned ? (
-                    <button type="button" className={styles.pinnedButton} aria-label={tab.label}>
-                      <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5}/>
-                    </button>
-                  ) : (
-                    <>
-                      <Icon name={tab.icon} size={22}/>
-                      <span className={styles.tabLabel}>{tab.label}</span>
-                    </>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className={styles.desktopShell}>
-          <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarCollapsed}`} role="complementary">
-            <div className={styles.brand}>
-              {brand?.toggleable ? (
-                <button
-                  type="button"
-                  className={styles.toggleButton}
-                  aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-                  aria-expanded={sidebarOpen}
-                  onClick={onSidebarToggle}
-                >
-                  <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16}/>
-                </button>
-              ) : (
-                <div className={styles.brandGlyph}>
-                  {brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}
-                </div>
-              )}
-              {sidebarOpen && <span className={styles.brandLabel}>{brand?.label ?? 'Finch'}</span>}
-            </div>
-
-            {displayTabs.length > 0 && (
-              <nav className={styles.navSection}>
-                {displayTabs.map((tab) => (
-                  <Link
-                    key={tab.id}
-                    href={tab.path ?? '/'}
-                    className={`${styles.navTab} ${isActive(tab.path) ? styles.navTabActive : ''}`}
-                  >
-                    <Icon name={tab.icon} size={16} stroke={1.5}/>
-                    {sidebarOpen && <span className={styles.navLabel}>{tab.label}</span>}
-                  </Link>
-                ))}
-              </nav>
-            )}
-
-            <div className={styles.spacer}/>
-
-            {bottomLinks?.map((link) => (
-              <Link
-                key={link.path}
-                href={link.path}
-                className={`${styles.bottomLink} ${link.warnDot ? styles.bottomLinkWarn : ''}`}
-              >
-                <Icon name={link.icon} size={16} stroke={1.5}/>
-                {sidebarOpen && <span>{link.label}</span>}
-                {link.warnDot && <span className={styles.warnDot} aria-label="Pending items"/>}
-              </Link>
-            ))}
-
-            {user && sidebarOpen && (
-              <div className={styles.userProfile}>
-                <div className={styles.userAvatar}>{user.name.charAt(0)}</div>
-                <div className={styles.userInfo}>
-                  <div className={styles.userName}>{user.name}</div>
-                  <div className={styles.userLabel}>{user.label}</div>
-                </div>
-              </div>
-            )}
-          </aside>
-
-          <div className={styles.desktopContent}>
-            <div className={styles.desktopHeader}>
-              <div/>
-              <div className={styles.desktopHeaderRight}>
-                <button type="button" className={styles.searchButton}>
-                  <Icon name="search" size={14}/>Search transactions…
-                </button>
-                <Link href="/add" className={styles.addButton}>
-                  <Icon name="plus" size={14} stroke={2}/>Add expense
-                </Link>
-              </div>
-            </div>
-            <div className={styles.desktopScroll}>{children}</div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
-    <div className={styles.desktopShell}>
-      <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarCollapsed}`} role="complementary">
+    <div className={styles.shell}>
+      <aside
+        className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarCollapsed}`}
+        aria-label="Primary navigation"
+      >
         <div className={styles.brand}>
           {brand?.toggleable ? (
             <button
@@ -223,42 +78,42 @@ export function PageShell({
               aria-expanded={sidebarOpen}
               onClick={onSidebarToggle}
             >
-              <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16}/>
+              <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
             </button>
           ) : (
-            <div className={styles.brandGlyph}>
-              {brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}
-            </div>
+            <div className={styles.brandGlyph}>{brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}</div>
           )}
           {sidebarOpen && <span className={styles.brandLabel}>{brand?.label ?? 'Finch'}</span>}
         </div>
 
-        {displayTabs.length > 0 && (
+        {tabs.length > 0 && (
           <nav className={styles.navSection}>
-            {displayTabs.map((tab) => (
+            {tabs.map((tab) => (
               <Link
                 key={tab.id}
                 href={tab.path ?? '/'}
-                className={`${styles.navTab} ${isActive(tab.path) ? styles.navTabActive : ''}`}
+                title={tab.label}
+                className={`${styles.navTab} ${isActivePath(tab.path) ? styles.navTabActive : ''}`}
               >
-                <Icon name={tab.icon} size={16} stroke={1.5}/>
+                <Icon name={tab.icon} size={16} stroke={1.5} />
                 {sidebarOpen && <span className={styles.navLabel}>{tab.label}</span>}
               </Link>
             ))}
           </nav>
         )}
 
-        <div className={styles.spacer}/>
+        <div className={styles.spacer} />
 
         {bottomLinks?.map((link) => (
           <Link
             key={link.path}
             href={link.path}
+            title={link.label}
             className={`${styles.bottomLink} ${link.warnDot ? styles.bottomLinkWarn : ''}`}
           >
-            <Icon name={link.icon} size={16} stroke={1.5}/>
+            <Icon name={link.icon} size={16} stroke={1.5} />
             {sidebarOpen && <span>{link.label}</span>}
-            {link.warnDot && <span className={styles.warnDot} aria-label="Pending items"/>}
+            {link.warnDot && <span className={styles.warnDot} aria-label="Pending items" />}
           </Link>
         ))}
 
@@ -273,20 +128,46 @@ export function PageShell({
         )}
       </aside>
 
-      <div className={styles.desktopContent}>
+      <main className={styles.main}>
         <div className={styles.desktopHeader}>
-          <div/>
-          <div className={styles.desktopHeaderRight}>
+          <div className={styles.headerTitle}>{headerTitle}</div>
+          <div className={styles.headerActions}>
             <button type="button" className={styles.searchButton}>
-              <Icon name="search" size={14}/>Search transactions…
+              <Icon name="search" size={14} />Search transactions…
             </button>
-            <Link href="/add" className={styles.addButton}>
-              <Icon name="plus" size={14} stroke={2}/>Add expense
-            </Link>
+            {showAdd && (
+              <Link href="/add" className={styles.addButton}>
+                <Icon name="plus" size={14} stroke={2} />Add expense
+              </Link>
+            )}
           </div>
         </div>
-        <div className={styles.desktopScroll}>{children}</div>
-      </div>
+        <div className={styles.scroll}>{children}</div>
+      </main>
+
+      {tabBarTabs.length > 0 && (
+        <nav className={styles.tabBar} aria-label="Main navigation">
+          {tabBarTabs.map((tab) => (
+            <Link
+              key={tab.id}
+              href={tab.path ?? `/${tab.id}`}
+              aria-label={tab.label}
+              className={`${styles.tab} ${tab.id === activeTab ? styles.tabActive : ''}`}
+            >
+              {tab.pinned ? (
+                <span className={styles.pinnedButton} aria-hidden>
+                  <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5} />
+                </span>
+              ) : (
+                <>
+                  <Icon name={tab.icon} size={22} />
+                  <span className={styles.tabLabel}>{tab.label}</span>
+                </>
+              )}
+            </Link>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }

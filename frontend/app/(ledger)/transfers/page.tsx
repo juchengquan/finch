@@ -2,16 +2,15 @@
 
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton } from '@/components/MobileComponents';
+import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { LEDGER } from '@/lib/data';
-import { LedgerMobilePage } from '@/components/LedgerMobilePage';
 
 export default function TransfersPage() {
   const { theme: th } = useTweaks();
   const tg = LEDGER.transferGroups[1];
 
   return (
-    <LedgerMobilePage
+    <MobilePage
       header={
         <ScreenHeader
           title="Transfers"
@@ -91,6 +90,6 @@ export default function TransfersPage() {
           The exchange rate is locked at import time. Both transactions share <span style={{ fontFamily: th.mono, color: th.ink2 }}>amount_base</span> so reports across ledgers stay consistent.
         </div>
       </div>
-    </LedgerMobilePage>
+    </MobilePage>
   );
 }

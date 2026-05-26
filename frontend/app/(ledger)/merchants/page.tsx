@@ -2,15 +2,14 @@
 
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton } from '@/components/MobileComponents';
+import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { LEDGER } from '@/lib/data';
-import { LedgerMobilePage } from '@/components/LedgerMobilePage';
 
 export default function MerchantsPage() {
   const { theme: th } = useTweaks();
 
   return (
-    <LedgerMobilePage
+    <MobilePage
       header={
         <ScreenHeader
           title="Merchants"
@@ -79,6 +78,6 @@ export default function MerchantsPage() {
           ))}
         </div>
       </div>
-    </LedgerMobilePage>
+    </MobilePage>
   );
 }
