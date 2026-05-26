@@ -6,6 +6,8 @@ import { CurrencyProvider } from '@/components/currency-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
+import { TransactionSheetProvider } from '@/components/transaction-sheet';
+import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
@@ -57,8 +59,12 @@ export default function RootLayout({
             <LedgerProvider>
               <StoreHydration />
               <SqliteBackupProvider>
-                {children}
-                <Toaster />
+                <TransactionSheetProvider>
+                  <AddExpenseSheetProvider>
+                    {children}
+                    <Toaster />
+                  </AddExpenseSheetProvider>
+                </TransactionSheetProvider>
               </SqliteBackupProvider>
             </LedgerProvider>
           </CurrencyProvider>

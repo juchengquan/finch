@@ -13,7 +13,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAddExpense } from '@/components/add-expense-sheet';
 import { acctById, catById } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 interface Tab {
@@ -58,7 +60,7 @@ interface PageShellProps {
   onSidebarToggle?: () => void;
   headerTitle?: string;
   showAdd?: boolean;
-  sidebarTop?: ReactNode;
+  sidebarFooter?: ReactNode;
 }
 
 export function PageShell({
@@ -73,16 +75,24 @@ export function PageShell({
   onSidebarToggle,
   headerTitle,
   showAdd = false,
-  sidebarTop,
+  sidebarFooter,
 }: PageShellProps) {
   const pathname = usePathname();
+  const { openAddExpense } = useAddExpense();
+  const accountOverrides = useFinanceStore((s) => s.accountOverrides);
   const tabBarTabs = mobileTabs ?? tabs;
 
   const segments = pathname.split('/').filter(Boolean);
   const section = BREADCRUMB_SECTIONS[segments[0]];
   const crumb =
     section && segments[1]
-      ? { label: section.label, parent: `/${segments[0]}`, current: section.name(segments[1]) }
+      ? {
+          label: section.label,
+          parent: `/${segments[0]}`,
+          current:
+            (segments[0] === 'accounts' && accountOverrides[segments[1]]?.name) ||
+            section.name(segments[1]),
+        }
       : null;
 
   const isActivePath = (path?: string) => {
@@ -92,7 +102,7 @@ export function PageShell({
   };
 
   return (
-    <div className="bg-background text-foreground flex h-[100dvh] font-sans">
+    <div className="bg-background text-foreground flex h-[100dvh] overflow-hidden font-sans">
       <aside
         aria-label="Primary navigation"
         className={cn(
@@ -100,30 +110,35 @@ export function PageShell({
           sidebarOpen ? 'w-[220px]' : 'w-[60px]',
         )}
       >
-        <div className="border-sidebar-border mb-3 flex items-center gap-2.5 border-b px-2 pb-[18px]">
+        <div className="border-sidebar-border mb-3 border-b pb-[18px]">
           {brand?.toggleable ? (
-            <Button
-              variant="ghost"
-              size="icon"
+            <button
+              type="button"
               aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               aria-expanded={sidebarOpen}
               onClick={onSidebarToggle}
+              className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-md px-2.5 py-2 transition-colors"
             >
               <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
-            </Button>
+              {sidebarOpen && (
+                <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
+                  {brand?.label ?? 'Finch'}
+                </span>
+              )}
+            </button>
           ) : (
-            <div className="bg-foreground text-background flex size-7 shrink-0 items-center justify-center rounded-full font-serif font-medium italic">
-              {brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}
+            <div className="flex items-center gap-2.5 px-2">
+              <div className="bg-foreground text-background flex size-7 shrink-0 items-center justify-center rounded-full font-serif font-medium italic">
+                {brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}
+              </div>
+              {sidebarOpen && (
+                <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
+                  {brand?.label ?? 'Finch'}
+                </span>
+              )}
             </div>
           )}
-          {sidebarOpen && (
-            <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
-              {brand?.label ?? 'Finch'}
-            </span>
-          )}
         </div>
-
-        {sidebarOpen && sidebarTop && <div className="mb-2">{sidebarTop}</div>}
 
         {tabs.length > 0 && (
           <nav className="flex flex-col gap-1">
@@ -167,6 +182,8 @@ export function PageShell({
             {sidebarOpen && <span className="whitespace-nowrap">{link.label}</span>}
           </Link>
         ))}
+
+        {sidebarFooter && <div className="mt-1">{sidebarFooter}</div>}
 
         {user && (
           <DropdownMenu>
@@ -229,16 +246,14 @@ export function PageShell({
             </button>
             <ThemeToggle />
             {showAdd && (
-              <Button asChild className="rounded-full">
-                <Link href="/add">
-                  <Icon name="plus" size={14} stroke={2} />
-                  Add expense
-                </Link>
+              <Button className="rounded-full" onClick={openAddExpense}>
+                <Icon name="plus" size={14} stroke={2} />
+                Add expense
               </Button>
             )}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto pb-24 [overscroll-behavior:contain] md:pb-0">
+        <div className="min-h-0 flex-1 overflow-y-auto pb-24 [overscroll-behavior:contain] md:pb-0">
           <div className="md:mx-auto md:w-full md:max-w-6xl">{children}</div>
         </div>
       </main>
@@ -248,30 +263,30 @@ export function PageShell({
           aria-label="Main navigation"
           className="border-border bg-background fixed inset-x-0 bottom-0 z-50 flex h-[88px] items-start justify-around border-t px-2 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
         >
-          {tabBarTabs.map((tab) => (
-            <Link
-              key={tab.id}
-              href={tab.path ?? `/${tab.id}`}
-              aria-label={tab.label}
-              className={cn(
-                'flex min-w-[56px] flex-col items-center gap-1',
-                tab.id === activeTab ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {tab.pinned ? (
-                <span className="bg-primary text-primary-foreground flex size-11 items-center justify-center rounded-full shadow-lg">
-                  <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5} />
-                </span>
-              ) : (
-                <>
-                  <Icon name={tab.icon} size={22} />
-                  <span className={cn('text-[10px]', tab.id === activeTab && 'font-semibold')}>
-                    {tab.label}
+          {tabBarTabs.map((tab) => {
+            const tabClass = cn(
+              'flex min-w-[56px] flex-col items-center gap-1',
+              tab.id === activeTab ? 'text-foreground' : 'text-muted-foreground',
+            );
+            // The pinned (+) tab opens the add-expense slider instead of navigating.
+            if (tab.pinned) {
+              return (
+                <button key={tab.id} type="button" aria-label={tab.label} onClick={openAddExpense} className={tabClass}>
+                  <span className="bg-primary text-primary-foreground flex size-11 items-center justify-center rounded-full shadow-lg">
+                    <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5} />
                   </span>
-                </>
-              )}
-            </Link>
-          ))}
+                </button>
+              );
+            }
+            return (
+              <Link key={tab.id} href={tab.path ?? `/${tab.id}`} aria-label={tab.label} className={tabClass}>
+                <Icon name={tab.icon} size={22} />
+                <span className={cn('text-[10px]', tab.id === activeTab && 'font-semibold')}>
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
         </nav>
       )}
     </div>

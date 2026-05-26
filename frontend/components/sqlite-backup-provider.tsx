@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import { useFinanceStore } from '@/lib/store';
+import { lsWrite } from '@/lib/persistence';
 import type { PersistState } from '@/lib/db/repo';
 
 type SyncStatus = 'idle' | 'saving' | 'error';
@@ -53,6 +54,7 @@ function snapshot(): PersistState {
     transactions: s.transactions,
     pending: s.pending,
     budgetOverrides: s.budgetOverrides,
+    accountOverrides: s.accountOverrides,
     verifiedExtra: s.verifiedExtra,
     aliasExtra: s.aliasExtra,
     recurring: s.recurring,
@@ -101,13 +103,23 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
         queued.current = false;
         setStatus('saving');
         try {
-          const [{ exportStateToBytes }, storage] = await Promise.all([
-            import('@/lib/db/sqlite'),
-            import('@/lib/db/storage'),
-          ]);
-          const bytes = await exportStateToBytes(snapshot());
-          if (storage.opfsSupported()) await storage.writeOpfs(bytes);
-          if (handleRef.current) await storage.writeHandle(handleRef.current, bytes);
+          const storage = await import('@/lib/db/storage');
+          const state = snapshot();
+          const useOpfs = storage.opfsSupported();
+
+          // Only serialise to SQLite bytes when something consumes them: the
+          // OPFS file (primary store when supported) or a connected backup file.
+          if (useOpfs || handleRef.current) {
+            const { exportStateToBytes } = await import('@/lib/db/sqlite');
+            const bytes = await exportStateToBytes(state);
+            if (useOpfs) await storage.writeOpfs(bytes);
+            if (handleRef.current) await storage.writeHandle(handleRef.current, bytes);
+          }
+
+          // When OPFS is unavailable, localStorage is the primary store. We
+          // never write both, so there is only ever one fresh copy.
+          if (!useOpfs) lsWrite(state);
+
           setLastSync(Date.now());
           setStatus('idle');
         } catch (err) {
@@ -134,6 +146,28 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
       if (timer.current) clearTimeout(timer.current);
     };
   }, [schedule]);
+
+  // Flush immediately when the tab is hidden or closing, so the last change
+  // isn't lost in the debounce window. visibilitychange is the more reliable of
+  // the two for letting an async write start.
+  useEffect(() => {
+    const flushImmediately = () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      void flushNow();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushImmediately();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flushImmediately);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flushImmediately);
+    };
+  }, [flushNow]);
 
   const connectBackup = useCallback(async () => {
     const storage = await import('@/lib/db/storage');
