@@ -176,7 +176,7 @@
 .paletteButton[data-radix-toggle-group-item-state="on"],
 .paletteButton:active {
   border-color: var(--accent);
-  background: rgba(201, 100, 66, 0.1);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* ============================================
