@@ -35,7 +35,7 @@ export default function TransferDetailPage() {
   return (
     <MobilePage header={<ScreenHeader title="Transfer" back />}>
       <div className="px-5 pb-[120px]">
-        <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground md:hidden">
           <Link href="/transfers" className="text-muted-foreground">
             Transfers
           </Link>

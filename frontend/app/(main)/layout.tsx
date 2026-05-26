@@ -20,7 +20,6 @@ const MORE_TABS = [
 ];
 
 const BOTTOM_LINKS = [
-  { icon: 'cog',    label: 'Settings', path: '/settings' },
   { icon: 'bell',   label: 'Pending',   path: '/pending',  warnDot: true },
 ];
 

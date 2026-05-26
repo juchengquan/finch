@@ -7,6 +7,13 @@ import { usePathname } from 'next/navigation';
 import { Icon } from './primitives';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { acctById, catById } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
 interface Tab {
@@ -29,6 +36,15 @@ interface BottomLink {
   path: string;
   warnDot?: boolean;
 }
+
+// Detail routes (`/<section>/<id>`) that show a breadcrumb in the desktop
+// header. `name` mirrors what each detail page displays as its current crumb.
+const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) => string }> = {
+  accounts: { label: 'Accounts', name: (id) => acctById(id).name || id },
+  budgets: { label: 'Budgets', name: (id) => catById(id).name },
+  transfers: { label: 'Transfers', name: (id) => id },
+  recurring: { label: 'Recurring', name: (id) => id },
+};
 
 interface PageShellProps {
   children: ReactNode;
@@ -61,6 +77,13 @@ export function PageShell({
 }: PageShellProps) {
   const pathname = usePathname();
   const tabBarTabs = mobileTabs ?? tabs;
+
+  const segments = pathname.split('/').filter(Boolean);
+  const section = BREADCRUMB_SECTIONS[segments[0]];
+  const crumb =
+    section && segments[1]
+      ? { label: section.label, parent: `/${segments[0]}`, current: section.name(segments[1]) }
+      : null;
 
   const isActivePath = (path?: string) => {
     if (!path) return false;
@@ -145,22 +168,57 @@ export function PageShell({
           </Link>
         ))}
 
-        {user && sidebarOpen && (
-          <div className="border-sidebar-border mt-1 flex items-center gap-2.5 border-t px-2.5 py-2">
-            <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full font-serif text-sm italic">
-              {user.name.charAt(0)}
-            </div>
-            <div className="text-xs leading-tight">
-              <div className="text-foreground font-medium">{user.name}</div>
-              <div className="text-muted-foreground text-[11px]">{user.label}</div>
-            </div>
-          </div>
+        {user && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Account menu"
+                title={sidebarOpen ? undefined : user.name}
+                className={cn(
+                  'border-sidebar-border hover:bg-sidebar-accent mt-1 flex items-center gap-2.5 border-t px-2.5 py-2 transition-colors',
+                  sidebarOpen ? 'w-full text-left' : 'justify-center',
+                )}
+              >
+                <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full font-serif text-sm italic">
+                  {user.name.charAt(0)}
+                </div>
+                {sidebarOpen && (
+                  <>
+                    <div className="min-w-0 flex-1 text-xs leading-tight">
+                      <div className="text-foreground truncate font-medium">{user.name}</div>
+                      <div className="text-muted-foreground text-[11px]">{user.label}</div>
+                    </div>
+                    <Icon name="chev-u" size={14} className="text-muted-foreground shrink-0" />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-[200px]">
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Icon name="cog" size={16} />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="border-border hidden shrink-0 items-center justify-between gap-4 border-b px-8 py-5 md:flex">
-          <div className="font-serif text-2xl tracking-tight">{headerTitle}</div>
+          {crumb ? (
+            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
+              <Link href={crumb.parent} className="text-muted-foreground hover:text-foreground">
+                {crumb.label}
+              </Link>
+              <Icon name="chev" size={11} className="text-muted-foreground" />
+              <span className="text-foreground font-medium">{crumb.current}</span>
+            </nav>
+          ) : (
+            <div className="font-serif text-2xl tracking-tight">{headerTitle}</div>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"

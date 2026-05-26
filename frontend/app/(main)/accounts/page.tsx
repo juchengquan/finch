@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
 
 export default function AccountsPage() {
-  const { short } = useMoney();
+  const { fmt } = useMoney();
   const { active, activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
@@ -60,11 +60,11 @@ export default function AccountsPage() {
 
             return (
               <AccordionItem key={g.id} value={g.id}>
-                <AccordionTrigger>
-                  <div className="flex items-center gap-2.5">
+                <AccordionTrigger chevronSide="left">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
                     <div className="flex-1 font-serif text-lg italic -tracking-[0.2px]">{g.name}</div>
-                    <span className={cn('font-mono text-[11px] tracking-[0.3px]', empty ? 'text-muted-foreground' : 'text-secondary-foreground')}>
-                      {empty ? '—' : `${g.accounts.length} · ${groupTotal < 0 ? '−' : ''}${short(Math.abs(groupTotal))}`}
+                    <span className={cn('font-mono text-[11px] tracking-[0.3px] tabular-nums', empty ? 'text-muted-foreground' : 'text-secondary-foreground')}>
+                      {empty ? '—' : `${g.accounts.length} · ${groupTotal < 0 ? '−' : ''}${fmt(Math.abs(groupTotal))}`}
                     </span>
                   </div>
                 </AccordionTrigger>
@@ -87,7 +87,7 @@ export default function AccountsPage() {
                             <div className="flex items-center gap-2.5">
                               <div className="min-w-[70px] text-right">
                                 <div className={cn('font-sans text-base font-medium leading-none tabular-nums', bal < 0 ? 'text-destructive' : 'text-foreground')}>
-                                  {bal < 0 ? '−' : ''}{short(Math.abs(bal))}
+                                  {bal < 0 ? '−' : ''}{fmt(Math.abs(bal))}
                                 </div>
                               </div>
                               <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
@@ -105,33 +105,52 @@ export default function AccountsPage() {
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
-          {ledgerAccounts.map((a) => {
-            const bal = accountBalance(ledgerTxns, a.id);
+        <div className="flex flex-col gap-9">
+          {groupedAccounts.map((g) => {
+            if (g.accounts.length === 0) return null;
+            const groupTotal = g.accounts.reduce((s, a) => s + accountBalance(ledgerTxns, a.id), 0);
             return (
-              <div key={a.id} className="relative overflow-hidden rounded-2xl p-5 text-white" style={{ background: a.color }}>
-                <div className="absolute -top-10 -right-10 size-32 rounded-full bg-white/5" />
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{a.name}</div>
-                    <div className="mt-0.5 font-mono text-[10px] opacity-60">•••• {a.last4}</div>
+              <section key={g.id}>
+                <div className="border-border mb-4 flex items-baseline justify-between border-b pb-2.5">
+                  <div className="flex items-baseline gap-2.5">
+                    <h2 className="font-serif text-xl italic -tracking-[0.3px]">{g.name}</h2>
+                    <span className="text-muted-foreground font-mono text-[11px]">{g.accounts.length}</span>
                   </div>
-                  <Link href={`/accounts/${a.id}`} aria-label={`Open ${a.name}`} className="opacity-70 hover:opacity-100">
-                    <Icon name="arrow-ur" size={16} />
-                  </Link>
+                  <span className="text-foreground font-mono text-sm tabular-nums">
+                    {groupTotal < 0 ? '−' : ''}{fmt(Math.abs(groupTotal))}
+                  </span>
                 </div>
-                <div className="mt-6 font-serif text-3xl -tracking-[1px]">
-                  <Money value={bal} mono={false} className="font-serif" />
+                <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+                  {g.accounts.map((a) => {
+                    const bal = accountBalance(ledgerTxns, a.id);
+                    return (
+                      <div key={a.id} className="relative overflow-hidden rounded-2xl p-5 text-white" style={{ background: a.color }}>
+                        <div className="absolute -top-10 -right-10 size-32 rounded-full bg-white/5" />
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-sm font-medium">{a.name}</div>
+                            <div className="mt-0.5 font-mono text-[10px] opacity-60">•••• {a.last4}</div>
+                          </div>
+                          <Link href={`/accounts/${a.id}`} aria-label={`Open ${a.name}`} className="opacity-70 hover:opacity-100">
+                            <Icon name="arrow-ur" size={16} />
+                          </Link>
+                        </div>
+                        <div className="mt-6 font-serif text-3xl -tracking-[1px]">
+                          <Money value={bal} mono={false} className="font-serif" />
+                        </div>
+                        <div className="-mx-1 mt-2 opacity-80">
+                          <Sparkline values={[30, 42, 38, 50, 46, 58, 54, 62, 60, 68]} width={300} height={34} color="#fff" stroke={1.5} fillOpacity={0.14} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="-mx-1 mt-2 opacity-80">
-                  <Sparkline values={[30, 42, 38, 50, 46, 58, 54, 62, 60, 68]} width={300} height={34} color="#fff" stroke={1.5} fillOpacity={0.14} />
-                </div>
-              </div>
+              </section>
             );
           })}
         </div>
 
-        <div className="mt-8">
+        <div className="mt-9">
           <div className="mb-3 font-serif text-lg italic">Recent activity</div>
           <div className="bg-card border-border overflow-hidden rounded-xl border">
             <table className="w-full text-sm">

@@ -53,7 +53,7 @@ export default function BudgetDetailPage() {
   return (
     <MobilePage header={<ScreenHeader title={cat.name} back />}>
       <div className="px-5 pb-[120px]">
-        <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs">
+        <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs md:hidden">
           <Link href="/budgets" className="text-muted-foreground">
             Budgets
           </Link>
