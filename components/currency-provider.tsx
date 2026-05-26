@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY';
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'SGD' | 'CNY';
 
 interface CurrencyContextValue {
   currency: Currency;

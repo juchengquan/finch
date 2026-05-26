@@ -79,6 +79,22 @@ export const CURRENCIES = currenciesData;
 
 export const FX = { USD: 1, EUR: 0.92, GBP: 0.79, JPY: 156.4 };
 
+// Units per 1 USD — used to convert between any two currencies for display.
+export const RATE: Record<string, number> = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  JPY: 156.4,
+  SGD: 1.35,
+  CNY: 7.24,
+};
+
+export function convertAmount(amount: number, from: string, to: string) {
+  if (from === to) return amount;
+  const usd = amount / (RATE[from] ?? 1);
+  return usd * (RATE[to] ?? 1);
+}
+
 export const INSIGHTS = insightsData as { tone: 'pos' | 'warn' | 'neut'; icon: string; title: string; body: string }[];
 export const APR_VS_MAY = aprVsMayData as { name: string; a: number; b: number; d: number }[];
 export const SCHEDULED_ITEMS = scheduledItemsData;
@@ -116,4 +132,11 @@ export function fmtNative(amount: number, currency: string, opts: { signed?: boo
   });
   const sign = amount < 0 ? '−' : opts.signed ? '+' : '';
   return sign + c.sym + abs;
+}
+
+export function fmtNativeShort(amount: number, currency: string) {
+  const c = CURRENCIES[currency as keyof typeof CURRENCIES] || CURRENCIES.USD;
+  const v = Math.abs(amount);
+  if (v >= 1000) return c.sym + (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return c.sym + Math.round(v);
 }

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'JPY'];
+const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'JPY', 'SGD', 'CNY'];
 
 function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
