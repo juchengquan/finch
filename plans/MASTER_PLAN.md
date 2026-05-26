@@ -137,14 +137,17 @@ Built on existing mock data; no new state machinery.
 - [x] **Desktop Scheduled** — large calendar + upcoming list, side by side.
 - Account/budget detail drill-ins already read well on desktop (breadcrumbs present).
 
-### Phase E — Ledger-admin completeness 🟡 _(in progress)_
+### Phase E — Ledger-admin completeness ✅ _(done)_
 - [x] **Transfers** list-driven — `/transfers` lists all groups → `/transfers/[id]`
       detail (two-sided legs, locked rate, schema rows).
 - [x] **Recurring** list-driven — `/recurring` lists all templates → `/recurring/[id]`
       detail with editable splits.
 - [x] **Category tree** — read-only 2-level taxonomy at `/categories` (+ ledger tab).
-- [ ] **FX transaction detail** (native vs. base amount, locked rate) — `LEDGER.fxTx`.
-- [ ] **System admin** — exchange-rate book + `sync_log` device list.
+- [x] **FX transaction detail** (`/fx`) — original vs. locked base amount, locked
+      rate + date, schema rows, and a JPY→SGD rate sparkline.
+- [x] **System admin** (`/system`) — exchange-rate book (rates, source badges,
+      sparklines, Refresh) + `sync_log` device list (last sync/txn, This-device badge).
+      Added a desktop-only **System** ledger tab.
 
 ### Phase F — Persistence & backend 🟡 _(persistence done)_
 Reframed from the original "build a backend" plan: the app is client-only and runs
@@ -181,7 +184,7 @@ the seam a real backend can slot behind later.
 
 ## 5. Suggested next step
 
-Phases A–D are complete and Phase F now persists data to `localStorage` (changes
-survive reloads, with a reset-to-sample control). Next: **Phase E** (ledger-admin
-screens: category tree, exchange-rate book, sync log, FX transaction detail), or
-the optional real-backend track in Phase F.
+Phases A–F are complete (Phase F = client persistence; the real server/DB is the
+optional future track). The remaining work is **cross-cutting polish**: an
+accessibility pass and a test suite (unit + Playwright smoke), plus the
+deferred `CalendarHeatmap` primitive and the optional backend.

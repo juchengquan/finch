@@ -10,6 +10,7 @@ const LEDGER_TABS = [
   { id: 'merchants', icon: 'bag',   label: 'Merchants', path: '/merchants' },
   { id: 'recurring', icon: 'sync',  label: 'Recurring', path: '/recurring' },
   { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
+  { id: 'system', icon: 'cog', label: 'System', path: '/system' },
 ];
 
 const LEDGER_MOBILE_TABS = [
