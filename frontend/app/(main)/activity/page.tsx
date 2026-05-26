@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
-import { MOCK, catById, acctById } from '@/lib/data';
+import { catById, acctById } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
@@ -25,8 +26,9 @@ function dayLabel(date: string) {
 export default function ActivityPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const allTxns = useFinanceStore((s) => s.transactions);
 
-  const txns = MOCK.transactions.filter((t) => {
+  const txns = allTxns.filter((t) => {
     if (filter === 'in' && t.amount <= 0) return false;
     if (filter === 'out' && t.amount >= 0) return false;
     if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;

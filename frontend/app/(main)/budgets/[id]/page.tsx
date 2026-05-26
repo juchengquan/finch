@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Ring, Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function BudgetDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const cat = MOCK.categories.find((c) => c.id === id) ?? MOCK.categories[0];
-  const txns = MOCK.transactions.filter((t) => t.category === cat.id);
+  const txns = useFinanceStore((s) => s.transactions).filter((t) => t.category === cat.id);
   const pct = Math.round((cat.spent / cat.budget) * 100);
   const over = cat.spent > cat.budget;
   const remaining = cat.budget - cat.spent;
