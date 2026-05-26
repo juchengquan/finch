@@ -1,11 +1,13 @@
 'use client';
 
-import { Icon, StackedBar } from '@/components/primitives';
+import Link from 'next/link';
+import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
-import { LEDGER } from '@/lib/data';
+import { fmtNative } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 
 export default function RecurringPage() {
-  const t = LEDGER.recurringTemplates[0];
+  const recurring = useFinanceStore((s) => s.recurring);
 
   return (
     <MobilePage
@@ -17,62 +19,41 @@ export default function RecurringPage() {
       }
     >
       <div className="px-5 pb-[120px]">
-        <div className="px-1 pb-[22px]">
+        <div className="px-1 pb-5">
           <SchemaChip label="recurring_templates"/>
-          <div className="mt-2.5 font-serif text-[36px] leading-[1.1] tracking-[-0.8px]">
-            <span className="italic text-muted-foreground">Every 25th, you receive</span><br/>
-            <span className="text-[44px]">S$5,800.00</span>
+          <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
+            {recurring.length} <span className="italic text-muted-foreground">templates</span>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            from <b className="text-secondary-foreground">Acme</b> — next on May 25 · awaits your confirmation
-          </div>
-        </div>
-
-        <div className="mb-2 flex items-baseline justify-between px-1">
-          <div className="font-serif text-[20px] italic tracking-[-0.2px]">Splits</div>
-          <SchemaChip label="recurring_splits"/>
-        </div>
-        <div className="px-1 pb-2.5 text-xs text-muted-foreground">
-          Salary is split across accounts. Total must equal 100%.
-        </div>
-
-        <div className="mb-2.5 rounded-[14px] border border-border bg-card p-3.5">
-          <StackedBar
-            slices={(t.splits || []).map((s, i) => ({ value: s.pct || 0, color: i === 0 ? 'var(--primary)' : i === 1 ? 'var(--warning)' : 'var(--success)' }))}
-            width={310} height={12} radius={6}/>
-          <div className="mt-2.5 flex justify-between font-mono text-[10px] text-muted-foreground">
-            <span>0%</span><span>50%</span><span>100%</span>
+          <div className="mt-1.5 text-[13px] text-secondary-foreground">
+            Scheduled income & bills. Tap one to edit its splits.
           </div>
         </div>
 
-        {(t.splits || []).map((s, i) => {
-          const dot = i === 0 ? 'var(--primary)' : i === 1 ? 'var(--warning)' : 'var(--success)';
-          const amount = 5800 * s.pct / 100;
-          return (
-            <div key={i} className="mb-2 rounded-[14px] border border-border bg-card p-3.5">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-2 rounded" style={{ background: dot }}/>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between">
-                    <div className="text-sm font-medium">{s.account}</div>
-                    <div className="font-sans text-sm font-medium">S${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{s.label} · <span className="font-mono text-[10px]">amount_pct = {s.pct}</span></div>
+        {recurring.map((t) => (
+          <Link
+            key={t.id}
+            href={`/recurring/${t.id}`}
+            className="mb-2.5 flex items-center gap-3 rounded-[14px] border border-border bg-card p-4"
+          >
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[16px] bg-secondary text-secondary-foreground">
+              <Icon name="sync" size={16} stroke={2}/>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="truncate text-sm font-medium">{t.name}</div>
+                <div className="font-sans text-[15px] font-medium tabular-nums">
+                  {t.varies ? 'Varies' : fmtNative(t.amount ?? 0, 'SGD')}
                 </div>
               </div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                {t.frequency} · day {t.dayOfMonth} · next {t.nextRun}
+                {t.autoPost ? (
+                  <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span>
+                ) : null}
+              </div>
             </div>
-          );
-        })}
-
-        <div className="mt-1 flex h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border text-xs text-muted-foreground">
-          <Icon name="plus" size={14}/>Add split rule
-        </div>
-
-        <div className="px-0 pb-2 pt-6">
-          <div className="flex h-[50px] items-center justify-center rounded-[25px] bg-foreground text-[15px] font-medium text-background">
-            Save template
-          </div>
-        </div>
+          </Link>
+        ))}
       </div>
     </MobilePage>
   );

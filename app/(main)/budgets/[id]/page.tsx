@@ -1,12 +1,26 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Ring, Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { categorySpent } from '@/lib/derive';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 export default function BudgetDetailPage() {
@@ -14,13 +28,27 @@ export default function BudgetDetailPage() {
   const id = params.id as string;
   const cat = MOCK.categories.find((c) => c.id === id) ?? MOCK.categories[0];
   const allTxns = useFinanceStore((s) => s.transactions);
+  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
+  const setBudget = useFinanceStore((s) => s.setBudget);
+
   const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
   const txns = ledgerTxns.filter((t) => t.category === cat.id);
+  const budget = budgetOverrides[cat.id] ?? cat.budget;
   const spent = categorySpent(ledgerTxns, cat.id);
-  const pct = Math.round((spent / cat.budget) * 100);
-  const over = spent > cat.budget;
-  const remaining = cat.budget - spent;
+  const pct = Math.round((spent / budget) * 100);
+  const over = spent > budget;
+  const remaining = budget - spent;
+
+  const [draft, setDraft] = useState(String(budget));
+
+  const saveBudget = () => {
+    const value = parseFloat(draft);
+    if (value > 0) {
+      setBudget(cat.id, value);
+      toast.success('Budget updated', { description: `${cat.name} · ${value.toLocaleString()}` });
+    }
+  };
 
   return (
     <MobilePage header={<ScreenHeader title={cat.name} back />}>
@@ -36,7 +64,7 @@ export default function BudgetDetailPage() {
         <div className="mb-6 flex items-center gap-5">
           <Ring
             value={spent}
-            max={cat.budget}
+            max={budget}
             size={104}
             stroke={10}
             color={over ? 'var(--destructive)' : 'var(--primary)'}
@@ -52,7 +80,7 @@ export default function BudgetDetailPage() {
               <Money value={spent} mono={false} />
             </div>
             <div className="text-muted-foreground mt-1 text-xs">
-              of <Money value={cat.budget} />
+              of <Money value={budget} />
             </div>
             <div
               className={cn(
@@ -71,6 +99,40 @@ export default function BudgetDetailPage() {
                   &nbsp;left
                 </>
               )}
+            </div>
+            <div className="mt-3">
+              <Dialog onOpenChange={(open) => open && setDraft(String(budget))}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Icon name="edit" size={14} />
+                    Edit budget
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit budget</DialogTitle>
+                    <DialogDescription>{cat.name} · monthly limit</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-serif text-xl">$</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Button onClick={saveBudget}>Save</Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
