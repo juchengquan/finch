@@ -32,7 +32,7 @@ export interface AddInput {
   status?: 'pending' | 'confirmed';
 }
 
-function rowToTx(r: Record<string, unknown>): Tx {
+export function rowToTx(r: Record<string, unknown>): Tx {
   const amount = Number(r.amount);
   return {
     id: String(r.id),

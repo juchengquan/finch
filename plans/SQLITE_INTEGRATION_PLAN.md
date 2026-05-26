@@ -227,13 +227,22 @@ Each phase is its own PR against `feat/frontend`, ends with **typecheck · lint 
   (or an explicit migration) so the relational DB never collides with a flat-schema
   file.
 
-### Phase 1 — Transactions spine + dual-currency
-Wire the **existing** surfaces — `activity` list, `transaction-sheet`/`-detail`,
-`add-expense-form`/`-sheet` — to DB queries from §4 (list / search / filter / sort /
-add / edit / delete / confirm), with `amount`/`amount_base`/`exchange_rate`/
-`balance_after` + triggers. Hydrate the store's `transactions` slice from SQL; month
-spent/income from `ledger_summaries`. Establishes the `DbProvider` + query-hook infra.
-(May split 1a read / 1b write.)
+### Phase 1 — Relational persistence + store-as-cache ✅ *landed*
+- ✅ Persistence flipped from the flat `repo.ts` schema to the **relational schema**.
+  `lib/db/state.ts`: `serializeState(state)` builds a relational DB from the store
+  (reference seed + the store's transactions as real rows + a transitional `app_state`
+  table for pending/recurring/overrides) and exports bytes; `deserializeState(bytes)`
+  projects them back to the store shape.
+- ✅ New OPFS filename `finch.sqlite3` (avoids the flat-schema collision). On load:
+  relational file → else legacy flat `finch.db` (one-time migration) → else
+  localStorage. `SqliteBackupProvider` now writes the relational bytes.
+- ✅ Round-trip test (`state.test.ts`): store → relational `.db` → store preserves
+  transactions (incl. ledger, pending, null category) and every slice.
+- The store stays the in-memory working model; the `.db` is its relational, queryable
+  form. Components unchanged.
+- ⏭ Still to wire (later commits, needs in-browser verification): pointing `activity`
+  search/filter and `add-expense` at the `lib/db/queries` SQL directly, and sourcing
+  month spent/income from `ledger_summaries` instead of the `derive.ts` deltas.
 
 ### Phase 2 — Accounts, groups, balances, net worth
 Account list/detail + balance curve (`account_balance_snapshots`) + net worth (two-level

@@ -223,6 +223,14 @@ CREATE TABLE IF NOT EXISTS sync_log (
   last_txn_id  TEXT
 );
 
+-- Transitional store slices not yet migrated to real tables (pending, recurring,
+-- and the override maps). Each later phase moves a key out of here into its
+-- proper table. Holds one JSON value per key.
+CREATE TABLE IF NOT EXISTS app_state (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_ag_ledger ON account_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
