@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Ring } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { useCurrency } from '@/components/currency-provider';
@@ -42,7 +43,9 @@ export default function BudgetsPage() {
             <span className="text-muted-foreground font-mono text-[10px] tracking-[0.8px]">SPENT / BUDGET</span>
           </div>
           {MOCK.categories.map((c) => (
-            <CategoryRow key={c.id} category={c}/>
+            <Link key={c.id} href={`/budgets/${c.id}`} className="block">
+              <CategoryRow category={c}/>
+            </Link>
           ))}
         </div>
       </div>
