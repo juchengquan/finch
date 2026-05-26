@@ -56,7 +56,7 @@ export default function ActivityPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search transactions"
+            aria-label="Search transactions" placeholder="Search transactions"
             className="placeholder:text-muted-foreground w-full bg-transparent text-[13px] outline-none"
           />
         </div>

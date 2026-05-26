@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Icon, MerchantGlyph } from '@/components/primitives';
@@ -22,6 +23,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 export default function TxDetailPage() {
   const { fmt } = useMoney();
@@ -32,6 +45,9 @@ export default function TxDetailPage() {
   const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const [splitAmt, setSplitAmt] = useState('');
+  const [splitCat, setSplitCat] = useState(MOCK.categories[0].id);
 
   if (!tx) {
     return (
@@ -57,6 +73,30 @@ export default function TxDetailPage() {
     deleteTransaction(tx.id);
     toast.success('Transaction deleted');
     router.back();
+  };
+
+  const origAbs = Math.abs(tx.amount);
+  const sign = tx.amount < 0 ? -1 : 1;
+  const doSplit = () => {
+    const part = parseFloat(splitAmt);
+    if (!part || part <= 0 || part >= origAbs) {
+      toast.error(`Enter an amount between 0 and ${origAbs}`);
+      return;
+    }
+    updateTransaction(tx.id, { amount: sign * (origAbs - part) });
+    addTransaction({
+      merchant: tx.merchant,
+      category: splitCat,
+      amount: sign * part,
+      account: tx.account,
+      date: tx.date,
+      time: tx.time,
+      note: `Split from ${tx.merchant}`,
+      pending: tx.pending,
+      ledgerId: tx.ledgerId,
+    });
+    setSplitAmt('');
+    toast.success('Transaction split');
   };
 
   return (
@@ -105,14 +145,59 @@ export default function TxDetailPage() {
       </div>
 
       <div className="flex gap-2 pb-[22px]">
-        <button
-          type="button"
-          onClick={() => toast('Split — coming soon')}
-          className="border-border text-foreground flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border"
-        >
-          <Icon name="split" size={18} />
-          <span className="text-[10px] font-medium">Split</span>
-        </button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="border-border text-foreground flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border"
+            >
+              <Icon name="split" size={18} />
+              <span className="text-[10px] font-medium">Split</span>
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Split transaction</DialogTitle>
+              <DialogDescription>
+                Move part of {fmt(origAbs)} into another category.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground font-serif text-xl">$</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  aria-label="Split amount"
+                  placeholder="0.00"
+                  value={splitAmt}
+                  onChange={(e) => setSplitAmt(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <Select value={splitCat} onValueChange={setSplitCat}>
+                <SelectTrigger aria-label="Split category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MOCK.categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <DialogClose asChild>
+                <Button onClick={doSplit}>Split</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <button
           type="button"
           onClick={toggleRecurring}

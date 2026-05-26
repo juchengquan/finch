@@ -18,7 +18,7 @@ export default function PendingPage() {
       header={
         <ScreenHeader
           title="Pending"
-          trailing={<IconButton icon="filter"/>}
+          trailing={<IconButton icon="filter" aria-label="Filter" />}
         />
       }
     >

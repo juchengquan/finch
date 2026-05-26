@@ -12,7 +12,7 @@ export default function TransfersPage() {
       header={
         <ScreenHeader
           title="Transfers"
-          trailing={<IconButton icon="dots"/>}
+          trailing={<IconButton icon="dots" aria-label="More actions" />}
         />
       }
     >

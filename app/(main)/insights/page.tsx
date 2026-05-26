@@ -30,7 +30,7 @@ export default function InsightsPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Insights" trailing={<IconButton icon="search" />} />}
+      header={<ScreenHeader title="Insights" trailing={<IconButton icon="search" aria-label="Search" />} />}
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
