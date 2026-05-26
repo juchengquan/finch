@@ -1,7 +1,7 @@
 'use client';
 
 import { useTweaks } from '@/components/TweaksContext';
-import { Icon, Card, Ring } from '@/components/primitives';
+import { Card, Ring } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK, fmtMoneyShort } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';

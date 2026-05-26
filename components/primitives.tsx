@@ -30,6 +30,8 @@ export function Icon({ name, size = 18, stroke = 1.5, style }: IconProps) {
     case 'chev-d': return <svg {...props}><path d="m6 9 6 6 6-6"/></svg>;
     case 'chev-u': return <svg {...props}><path d="m6 15 6-6 6 6"/></svg>;
     case 'arrow-r':return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7"/></svg>;
+    case 'arrow-l':return <svg {...props}><path d="M19 12H5M11 5l-7 7 7 7"/></svg>;
+    case 'clock':  return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>;
     case 'arrow-u':return <svg {...props}><path d="M12 19V5M5 12l7-7 7 7"/></svg>;
     case 'arrow-d':return <svg {...props}><path d="M12 5v14M5 12l7 7 7-7"/></svg>;
     case 'arrow-dl':return <svg {...props}><path d="M17 7L7 17M17 17H7V7"/></svg>;

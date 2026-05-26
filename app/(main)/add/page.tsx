@@ -2,7 +2,7 @@
 
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 
 export default function AddExpensePage() {
   const { theme: th } = useTweaks();

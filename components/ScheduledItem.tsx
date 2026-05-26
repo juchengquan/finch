@@ -1,7 +1,6 @@
 'use client';
 
 import { useTweaks } from './TweaksContext';
-import { Icon } from './primitives';
 import { Money } from './primitives';
 
 interface ScheduledItemProps {

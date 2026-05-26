@@ -3,7 +3,7 @@
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
-import { LEDGER } from '@/lib/data';
+import { LEDGER, fmtNative } from '@/lib/data';
 
 export default function PendingPage() {
   const { theme: th } = useTweaks();
@@ -50,7 +50,7 @@ export default function PendingPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{p.merchant}</div>
                     <div style={{ fontFamily: th.body, fontSize: 15, fontWeight: 500, color: inc ? th.pos : th.ink, fontVariantNumeric: 'tabular-nums' }}>
-                      {inc ? '+' : ''}{p.currency === 'JPY' ? '¥' : 'S$'}{Math.abs(p.amount).toLocaleString()}
+                      {fmtNative(p.amount, p.currency, { signed: true })}
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: th.muted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
