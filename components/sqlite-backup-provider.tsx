@@ -110,8 +110,8 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
           // Only serialise to SQLite bytes when something consumes them: the
           // OPFS file (primary store when supported) or a connected backup file.
           if (useOpfs || handleRef.current) {
-            const { exportStateToBytes } = await import('@/lib/db/sqlite');
-            const bytes = await exportStateToBytes(state);
+            const { serializeState } = await import('@/lib/db/state');
+            const bytes = await serializeState(state);
             if (useOpfs) await storage.writeOpfs(bytes);
             if (handleRef.current) await storage.writeHandle(handleRef.current, bytes);
           }
@@ -198,22 +198,22 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const download = useCallback(async () => {
-    const [{ exportStateToBytes }, storage] = await Promise.all([
-      import('@/lib/db/sqlite'),
+    const [{ serializeState }, storage] = await Promise.all([
+      import('@/lib/db/state'),
       import('@/lib/db/storage'),
     ]);
-    const bytes = await exportStateToBytes(snapshot());
+    const bytes = await serializeState(snapshot());
     storage.downloadBytes(bytes);
   }, []);
 
   const importFile = useCallback(
     async (file: Blob) => {
-      const [{ importBytesToState }, storage] = await Promise.all([
-        import('@/lib/db/sqlite'),
+      const [{ deserializeState }, storage] = await Promise.all([
+        import('@/lib/db/state'),
         import('@/lib/db/storage'),
       ]);
       const bytes = await storage.readFileBytes(file);
-      const state = await importBytesToState(bytes);
+      const state = await deserializeState(bytes);
       useFinanceStore.setState(state);
       await flushNow();
       toast.success('Database imported');
