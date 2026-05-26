@@ -1,6 +1,7 @@
 'use client';
 
 import { useTweaks } from '@/components/TweaksContext';
+import { fmtMoney } from '@/lib/data';
 
 interface IconProps {
   name: string;
@@ -61,15 +62,13 @@ interface MoneyProps {
   style?: React.CSSProperties;
 }
 
-import { fmtMoney } from '@/lib/data';
-
 export function Money({ value, currency = 'USD', signed = false, mono = true, style }: MoneyProps) {
   const s = fmtMoney(value, currency);
   return (
     <span style={{
       fontVariantNumeric: 'tabular-nums',
       fontFeatureSettings: '"tnum"',
-      fontFamily: mono ? "'JetBrains Mono', ui-monospace, monospace" : 'inherit',
+      fontFamily: mono ? 'var(--font-mono)' : 'inherit',
       ...style,
     }}>
       {signed && value > 0 ? '+' : ''}{s}
@@ -86,7 +85,7 @@ interface SparklineProps {
   stroke?: number;
 }
 
-export function Sparkline({ values, width = 200, height = 50, color = '#c96442', fillOpacity = 0.12, stroke = 1.5 }: SparklineProps) {
+export function Sparkline({ values, width = 200, height = 50, color = 'var(--accent)', fillOpacity = 0.12, stroke = 1.5 }: SparklineProps) {
   const max = Math.max(...values, 1);
   const step = width / Math.max(values.length - 1, 1);
   const pts = values.map((v, i) => [i * step, height - (v / max) * (height - 4) - 2] as [number, number]);
@@ -95,8 +94,8 @@ export function Sparkline({ values, width = 200, height = 50, color = '#c96442',
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <path d={fill} fill={color} opacity={fillOpacity}/>
-      <path d={d} fill="none" stroke={color} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round"/>
+      <path d={fill} style={{ fill: color, opacity: fillOpacity }}/>
+      <path d={d} fill="none" style={{ stroke: color }} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -111,7 +110,7 @@ interface BarChartProps {
   muted?: string;
 }
 
-export function BarChart({ values, labels, width = 280, height = 80, color = '#1a1614', highlight = '#c96442', muted = '#d8cfc1' }: BarChartProps) {
+export function BarChart({ values, labels, width = 280, height = 80, color = 'var(--ink)', highlight = 'var(--accent)', muted = 'var(--line)' }: BarChartProps) {
   const max = Math.max(...values, 1);
   const n = values.length;
   const gap = 4;
@@ -125,8 +124,8 @@ export function BarChart({ values, labels, width = 280, height = 80, color = '#1
         const isLast = i === n - 1;
         return (
           <g key={i}>
-            <rect x={x} y={height - h} width={bw} height={h} fill={isLast ? highlight : muted} rx={1.5}/>
-            {labels && <text x={x + bw / 2} y={height + 11} fontSize="9" fill={color} opacity="0.55" textAnchor="middle" fontFamily="inherit">{labels[i]}</text>}
+            <rect x={x} y={height - h} width={bw} height={h} style={{ fill: isLast ? highlight : muted }} rx={1.5}/>
+            {labels && <text x={x + bw / 2} y={height + 11} fontSize="9" style={{ fill: color }} opacity="0.55" textAnchor="middle" fontFamily="inherit">{labels[i]}</text>}
           </g>
         );
       })}
@@ -145,21 +144,20 @@ export function Donut({ slices, size = 140, stroke = 22, gap = 2 }: DonutProps) 
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  let acc = 0;
+  const arcs = slices.map((s, i) => {
+    const len = (s.value / total) * c;
+    const offset = -slices.slice(0, i).reduce((sum, p) => sum + (p.value / total) * c, 0);
+    return { len, offset, color: s.color };
+  });
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      {slices.map((s, i) => {
-        const len = (s.value / total) * c;
-        const offset = -acc;
-        acc += len;
-        return (
-          <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
-            stroke={s.color} strokeWidth={stroke}
-            strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
-            strokeDashoffset={offset} />
-        );
-      })}
+      {arcs.map((a, i) => (
+        <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
+          style={{ stroke: a.color }} strokeWidth={stroke}
+          strokeDasharray={`${Math.max(a.len - gap, 0.1)} ${c}`}
+          strokeDashoffset={a.offset} />
+      ))}
     </svg>
   );
 }
@@ -173,15 +171,13 @@ interface StackedBarProps {
 
 export function StackedBar({ slices, width = 280, height = 8, radius = 4 }: StackedBarProps) {
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  let x = 0;
+  const widths = slices.map((s, i) => Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0));
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {slices.map((s, i) => {
-        const w = Math.max((s.value / total) * width - (i < slices.length - 1 ? 2 : 0), 0);
-        const rect = <rect key={i} x={x} y={0} width={w} height={height} fill={s.color} rx={radius}/>;
-        x += w + 2;
-        return rect;
+      {widths.map((w, i) => {
+        const x = widths.slice(0, i).reduce((sum, ww) => sum + ww + 2, 0);
+        return <rect key={i} x={x} y={0} width={w} height={height} style={{ fill: slices[i].color }} rx={radius}/>;
       })}
     </svg>
   );
@@ -197,7 +193,7 @@ interface RingProps {
   children?: React.ReactNode;
 }
 
-export function Ring({ value, max = 100, size = 48, stroke = 5, color = '#c96442', track = '#e8dfd0', children }: RingProps) {
+export function Ring({ value, max = 100, size = 48, stroke = 5, color = 'var(--accent)', track = 'var(--paper-alt)', children }: RingProps) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, value / max));
@@ -205,8 +201,8 @@ export function Ring({ value, max = 100, size = 48, stroke = 5, color = '#c96442
   return (
     <div style={{ position: 'relative', width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke}/>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: track }} strokeWidth={stroke}/>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: color }} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`}/>
       </svg>
       {children && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>}
@@ -336,42 +332,3 @@ export function ProgressBar({ value, max, color, trackColor, height = 3 }: Progr
   );
 }
 
-interface RingStatsHeaderProps {
-  spent: number;
-  budget: number;
-  label?: string;
-  status?: { text: string; icon: string };
-}
-
-export function RingStatsHeader({ spent, budget, label = 'Spent of budget', status }: RingStatsHeaderProps) {
-  const { theme: th } = useTweaks();
-  const pct = (spent / budget) * 100;
-  const remaining = budget - spent;
-  const over = remaining < 0;
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
-      <Ring value={spent} max={budget} size={120} stroke={10} color={th.accent} track={th.paperAlt}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: th.display, fontSize: 28, letterSpacing: -0.6, lineHeight: 1 }}>{Math.round(pct)}%</div>
-          <div style={{ fontSize: 9, color: th.muted, letterSpacing: 1, marginTop: 2 }}>USED</div>
-        </div>
-      </Ring>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 11, color: th.muted, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
-        <div style={{ fontFamily: th.display, fontSize: 30, letterSpacing: -0.6, marginTop: 2 }}>
-          <Money value={spent} currency={th.currency} mono={false} style={{ fontFamily: th.display }}/>
-        </div>
-        <div style={{ fontSize: 12, color: th.muted, marginTop: 2 }}>of <Money value={budget} currency={th.currency}/></div>
-        {status && (
-          <div style={{
-            marginTop: 8, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: `${th.pos}1a`, color: th.pos, borderRadius: 10, fontSize: 11, fontWeight: 500
-          }}>
-            <Icon name={status.icon} size={12}/>{status.text}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
