@@ -1,87 +1,74 @@
 'use client';
 
-import { useTweaks } from '@/components/TweaksContext';
-import { MerchantGlyph } from '@/components/primitives';
+import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { SettingsItem } from '@/components/SettingsItem';
-import { FinchToggleGroup, FinchToggleGroupItem } from '@/components/RadixWrappers';
-import { PALETTES, FONT_PAIRS, DENSITY, DEFAULT_TWEAKS } from '@/lib/theme';
-import styles from './settings.module.css';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useCurrency, type Currency } from '@/components/currency-provider';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY'];
+const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'JPY'];
 
-type TweakKey = keyof typeof DEFAULT_TWEAKS;
-
-function TweakGroup({
-  label,
-  tweakKey,
-  options,
-}: {
-  label: string;
-  tweakKey: TweakKey;
-  options: { value: string; label: string }[];
-}) {
-  const { tweaks, setTweak } = useTweaks();
+function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
-    <>
-      <div className={styles.sectionLabel}>{label}</div>
-      <FinchToggleGroup
-        value={tweaks[tweakKey]}
-        onValueChange={(val) => {
-          if (val) setTweak(tweakKey, val);
-        }}
-      >
-        {options.map((opt) => (
-          <FinchToggleGroupItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </FinchToggleGroupItem>
-        ))}
-      </FinchToggleGroup>
-    </>
+    <div className="border-border flex items-center gap-3.5 border-b py-3.5">
+      <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
+        <Icon name={icon} size={14} />
+      </div>
+      <div className="flex-1 text-sm">{label}</div>
+      {children}
+    </div>
   );
 }
 
 export default function SettingsPage() {
-  const { theme: th } = useTweaks();
+  const { currency, setCurrency } = useCurrency();
 
   return (
     <MobilePage>
       <ScreenHeader title="Settings" trailing={<IconButton icon="search" aria-label="Search" />} />
 
-      <div className={styles.profile}>
-        <MerchantGlyph name="Alex Morgan" size={64} bg={th.accent} fg="#fff" />
-        <div className={styles.profileInfo}>
-          <div className={styles.profileName}>Alex Morgan</div>
-          <div className={styles.profilePlan}>Personal plan</div>
+      <div className="flex items-center gap-3.5 px-5 pb-[22px]">
+        <MerchantGlyph name="Alex Morgan" size={64} bg="var(--primary)" fg="var(--primary-foreground)" />
+        <div className="flex-1">
+          <div className="font-serif text-[22px] -tracking-[0.3px]">Alex Morgan</div>
+          <div className="text-muted-foreground text-xs">Personal plan</div>
         </div>
       </div>
 
-      <div className={styles.body}>
-        <div className={styles.sectionLabel}>Preferences</div>
-        <SettingsItem item={{ label: 'Default currency', value: th.currency, icon: 'wallet' }} />
+      <div className="px-5 pb-28">
+        <div className="text-muted-foreground pb-2 font-mono text-[10px] tracking-wider uppercase">
+          Preferences
+        </div>
         <SettingsItem item={{ label: 'Categories', value: '8 active', icon: 'tag' }} />
         <SettingsItem item={{ label: 'Notifications', toggle: true, icon: 'bell' }} />
 
-        <TweakGroup
-          label="Theme"
-          tweakKey="palette"
-          options={Object.entries(PALETTES).map(([value, p]) => ({ value, label: p.name }))}
-        />
-        <TweakGroup
-          label="Typeface"
-          tweakKey="fonts"
-          options={Object.entries(FONT_PAIRS).map(([value, f]) => ({ value, label: f.name }))}
-        />
-        <TweakGroup
-          label="Density"
-          tweakKey="density"
-          options={Object.keys(DENSITY).map((value) => ({ value, label: value }))}
-        />
-        <TweakGroup
-          label="Currency"
-          tweakKey="currency"
-          options={CURRENCIES.map((value) => ({ value, label: value }))}
-        />
+        <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
+          Appearance
+        </div>
+        <Row icon="sparkle" label="Theme">
+          <ThemeToggle />
+        </Row>
+        <Row icon="wallet" label="Display currency">
+          <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
+            <SelectTrigger size="sm" className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Row>
       </div>
     </MobilePage>
   );

@@ -3,8 +3,11 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
 import { Icon } from './primitives';
-import styles from './PageShell.module.css';
+import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { cn } from '@/lib/utils';
 
 interface Tab {
   id: string;
@@ -64,104 +67,145 @@ export function PageShell({
   };
 
   return (
-    <div className={styles.shell}>
+    <div className="bg-background text-foreground flex h-[100dvh] font-sans">
       <aside
-        className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarCollapsed}`}
         aria-label="Primary navigation"
+        className={cn(
+          'bg-sidebar text-sidebar-foreground border-sidebar-border hidden h-[100dvh] shrink-0 flex-col gap-1 overflow-hidden border-r px-3 py-5 transition-[width] duration-200 md:flex',
+          sidebarOpen ? 'w-[220px]' : 'w-[60px]',
+        )}
       >
-        <div className={styles.brand}>
+        <div className="border-sidebar-border mb-3 flex items-center gap-2.5 border-b px-2 pb-[18px]">
           {brand?.toggleable ? (
-            <button
-              type="button"
-              className={styles.toggleButton}
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               aria-expanded={sidebarOpen}
               onClick={onSidebarToggle}
             >
               <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
-            </button>
+            </Button>
           ) : (
-            <div className={styles.brandGlyph}>{brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}</div>
+            <div className="bg-foreground text-background flex size-7 shrink-0 items-center justify-center rounded-full font-serif font-medium italic">
+              {brand?.glyph ?? brand?.label?.charAt(0) ?? 'F'}
+            </div>
           )}
-          {sidebarOpen && <span className={styles.brandLabel}>{brand?.label ?? 'Finch'}</span>}
+          {sidebarOpen && (
+            <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
+              {brand?.label ?? 'Finch'}
+            </span>
+          )}
         </div>
 
         {tabs.length > 0 && (
-          <nav className={styles.navSection}>
+          <nav className="flex flex-col gap-1">
             {tabs.map((tab) => (
               <Link
                 key={tab.id}
                 href={tab.path ?? '/'}
                 title={tab.label}
-                className={`${styles.navTab} ${isActivePath(tab.path) ? styles.navTabActive : ''}`}
+                className={cn(
+                  'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] transition-colors',
+                  isActivePath(tab.path)
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                )}
               >
-                <Icon name={tab.icon} size={16} stroke={1.5} />
-                {sidebarOpen && <span className={styles.navLabel}>{tab.label}</span>}
+                <Icon name={tab.icon} size={16} />
+                {sidebarOpen && <span className="whitespace-nowrap">{tab.label}</span>}
               </Link>
             ))}
           </nav>
         )}
 
-        <div className={styles.spacer} />
+        <div className="flex-1" />
 
         {bottomLinks?.map((link) => (
           <Link
             key={link.path}
             href={link.path}
             title={link.label}
-            className={`${styles.bottomLink} ${link.warnDot ? styles.bottomLinkWarn : ''}`}
+            className={cn(
+              'relative flex items-center gap-3 rounded-md px-2.5 py-2',
+              link.warnDot ? 'text-warning' : 'text-muted-foreground hover:text-foreground',
+            )}
           >
-            <Icon name={link.icon} size={16} stroke={1.5} />
-            {sidebarOpen && <span>{link.label}</span>}
-            {link.warnDot && <span className={styles.warnDot} aria-label="Pending items" />}
+            <span className="relative">
+              <Icon name={link.icon} size={16} />
+              {link.warnDot && (
+                <span className="bg-warning absolute -top-0.5 -right-0.5 size-2 rounded-full" />
+              )}
+            </span>
+            {sidebarOpen && <span className="whitespace-nowrap">{link.label}</span>}
           </Link>
         ))}
 
         {user && sidebarOpen && (
-          <div className={styles.userProfile}>
-            <div className={styles.userAvatar}>{user.name.charAt(0)}</div>
-            <div className={styles.userInfo}>
-              <div className={styles.userName}>{user.name}</div>
-              <div className={styles.userLabel}>{user.label}</div>
+          <div className="border-sidebar-border mt-1 flex items-center gap-2.5 border-t px-2.5 py-2">
+            <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full font-serif text-sm italic">
+              {user.name.charAt(0)}
+            </div>
+            <div className="text-xs leading-tight">
+              <div className="text-foreground font-medium">{user.name}</div>
+              <div className="text-muted-foreground text-[11px]">{user.label}</div>
             </div>
           </div>
         )}
       </aside>
 
-      <main className={styles.main}>
-        <div className={styles.desktopHeader}>
-          <div className={styles.headerTitle}>{headerTitle}</div>
-          <div className={styles.headerActions}>
-            <button type="button" className={styles.searchButton}>
-              <Icon name="search" size={14} />Search transactions…
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="border-border hidden shrink-0 items-center justify-between gap-4 border-b px-8 py-5 md:flex">
+          <div className="font-serif text-2xl tracking-tight">{headerTitle}</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="bg-secondary text-muted-foreground flex h-9 w-60 items-center gap-2 rounded-full px-3.5 text-[13px]"
+            >
+              <Icon name="search" size={14} />
+              Search transactions…
             </button>
+            <ThemeToggle />
             {showAdd && (
-              <Link href="/add" className={styles.addButton}>
-                <Icon name="plus" size={14} stroke={2} />Add expense
-              </Link>
+              <Button asChild className="rounded-full">
+                <Link href="/add">
+                  <Icon name="plus" size={14} stroke={2} />
+                  Add expense
+                </Link>
+              </Button>
             )}
           </div>
         </div>
-        <div className={styles.scroll}>{children}</div>
+        <div className="flex-1 overflow-y-auto pb-24 [overscroll-behavior:contain] md:pb-0">
+          {children}
+        </div>
       </main>
 
       {tabBarTabs.length > 0 && (
-        <nav className={styles.tabBar} aria-label="Main navigation">
+        <nav
+          aria-label="Main navigation"
+          className="border-border bg-background fixed inset-x-0 bottom-0 z-50 flex h-[88px] items-start justify-around border-t px-2 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
+        >
           {tabBarTabs.map((tab) => (
             <Link
               key={tab.id}
               href={tab.path ?? `/${tab.id}`}
               aria-label={tab.label}
-              className={`${styles.tab} ${tab.id === activeTab ? styles.tabActive : ''}`}
+              className={cn(
+                'flex min-w-[56px] flex-col items-center gap-1',
+                tab.id === activeTab ? 'text-foreground' : 'text-muted-foreground',
+              )}
             >
               {tab.pinned ? (
-                <span className={styles.pinnedButton} aria-hidden>
+                <span className="bg-primary text-primary-foreground flex size-11 items-center justify-center rounded-full shadow-lg">
                   <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5} />
                 </span>
               ) : (
                 <>
                   <Icon name={tab.icon} size={22} />
-                  <span className={styles.tabLabel}>{tab.label}</span>
+                  <span className={cn('text-[10px]', tab.id === activeTab && 'font-semibold')}>
+                    {tab.label}
+                  </span>
                 </>
               )}
             </Link>

@@ -1,8 +1,7 @@
 'use client';
 
 import { Icon } from './primitives';
-import { FinchToggle } from './RadixWrappers';
-import styles from './SettingsItem.module.css';
+import { Switch } from '@/components/ui/switch';
 
 interface SettingsItemProps {
   item: {
@@ -16,17 +15,17 @@ interface SettingsItemProps {
 
 export function SettingsItem({ item }: SettingsItemProps) {
   return (
-    <div className={styles.row}>
-      <div className={styles.icon}>
+    <div className="border-border flex items-center gap-3.5 border-b py-3.5">
+      <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
         <Icon name={item.icon} size={14} />
       </div>
-      <div className={styles.label}>{item.label}</div>
+      <div className="flex-1 text-sm">{item.label}</div>
       {item.toggle !== undefined ? (
-        <FinchToggle pressed={item.toggle} onPressedChange={item.onToggle ?? (() => {})} size="medium" />
+        <Switch checked={item.toggle} onCheckedChange={item.onToggle ?? (() => {})} />
       ) : (
-        <div className={styles.value}>
+        <div className="text-muted-foreground flex items-center gap-1.5 font-mono text-xs">
           {item.value && <span>{item.value}</span>}
-          <Icon name="chev" size={12} style={{ color: 'var(--muted)' }} />
+          <Icon name="chev" size={12} />
         </div>
       )}
     </div>

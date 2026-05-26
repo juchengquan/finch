@@ -1,16 +1,12 @@
 'use client';
 
-import { useTweaks } from '@/components/TweaksContext';
-import { BarChart, Card } from '@/components/primitives';
+import { BarChart } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK, INSIGHTS, APR_VS_MAY } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
-import styles from './insights.module.css';
 
 export default function InsightsPage() {
-  const { theme: th } = useTweaks();
-
   return (
     <MobilePage
       header={
@@ -20,35 +16,35 @@ export default function InsightsPage() {
         />
       }
     >
-      <div className={styles.header}>
+      <div className="px-5 pb-[22px]">
         <PageHeader
           label="You're spending less"
-          value={<span className={styles.bigPct}>↓ 8.4%</span>}
+          value={<span className="font-serif text-[60px] leading-none -tracking-[2px]">↓ 8.4%</span>}
           sublabel={
-            <span className={styles.subLabel}>
-              than April. Mostly less <span className={styles.accent}>Shopping</span>.
+            <span className="text-secondary-foreground font-serif text-base italic">
+              than April. Mostly less <span className="text-primary">Shopping</span>.
             </span>
           }
         />
       </div>
 
-      <div className={styles.body}>
-        <Card style={{ marginBottom: 16 }}>
-          <div className={styles.chartCardHeader}>
-            <div className={styles.chartTitle}>Monthly spending</div>
-            <div className={styles.chartRange}>LAST 12 MO</div>
+      <div className="px-5 pb-[120px]">
+        <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
+          <div className="mb-3 flex items-baseline justify-between">
+            <div className="text-[13px] font-semibold">Monthly spending</div>
+            <div className="text-muted-foreground font-mono text-[10px] tracking-[0.8px]">LAST 12 MO</div>
           </div>
-          <BarChart values={MOCK.monthly.map(m => m.v)} labels={MOCK.monthly.map(m => m.m[0])} width={310} height={120} color={th.muted} highlight={th.accent} muted={th.paperAlt}/>
-        </Card>
+          <BarChart values={MOCK.monthly.map(m => m.v)} labels={MOCK.monthly.map(m => m.m[0])} width={310} height={120} color="var(--muted-foreground)" highlight="var(--primary)" muted="var(--secondary)"/>
+        </div>
 
         {INSIGHTS.map((ins) => (
           <InsightCard key={ins.title} insight={ins}/>
         ))}
 
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <div className={styles.sectionTitle}>Apr vs May</div>
-            <span className={styles.sectionMeta}>Top changes</span>
+        <div className="mt-[22px]">
+          <div className="mb-2.5 flex items-baseline justify-between">
+            <div className="font-serif text-lg italic">Apr vs May</div>
+            <span className="text-muted-foreground text-[11px]">Top changes</span>
           </div>
           <AprVsMay data={APR_VS_MAY}/>
         </div>
