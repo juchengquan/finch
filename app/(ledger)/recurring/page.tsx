@@ -2,16 +2,15 @@
 
 import { useTweaks } from '@/components/TweaksContext';
 import { Icon, StackedBar } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton } from '@/components/MobileComponents';
+import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { LEDGER } from '@/lib/data';
-import { LedgerMobilePage } from '@/components/LedgerMobilePage';
 
 export default function RecurringPage() {
   const { theme: th } = useTweaks();
   const t = LEDGER.recurringTemplates[0];
 
   return (
-    <LedgerMobilePage
+    <MobilePage
       header={
         <ScreenHeader
           title="Recurring"
@@ -83,6 +82,6 @@ export default function RecurringPage() {
           </div>
         </div>
       </div>
-    </LedgerMobilePage>
+    </MobilePage>
   );
 }

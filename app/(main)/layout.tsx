@@ -35,11 +35,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const activeTab = pathname.replace('/', '') || 'accounts';
+  const activeTab = pathname.split('/')[1] || 'accounts';
 
   return (
     <PageShell
-      mode="split"
       brand={{ glyph: 'F', label: 'Finch', toggleable: true }}
       tabs={[...MAIN_TABS, ...MORE_TABS]}
       mobileTabs={MAIN_MOBILE_TABS}
@@ -48,6 +47,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       user={{ name: 'Alex Morgan', label: 'Personal' }}
       sidebarOpen={sidebarOpen}
       onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
+      showAdd
     >
       {children}
     </PageShell>
