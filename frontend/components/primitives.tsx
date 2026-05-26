@@ -6,6 +6,7 @@ import {
   SlidersHorizontal, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowRight, ArrowLeft,
   ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, Menu, Bell, Wallet, ChartColumn, Settings,
   FileText, Target, Tag, Split, Pencil, Check, X, Calendar, Mic, Camera, Sparkles, Clock, Circle,
+  Download, Upload,
 } from 'lucide-react';
 
 import { useMoney } from '@/components/use-money';
@@ -19,7 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
   'arrow-dl': ArrowDownLeft, 'arrow-ur': ArrowUpRight, menu: Menu, bell: Bell, wallet: Wallet,
   chart: ChartColumn, cog: Settings, doc: FileText, target: Target, tag: Tag, split: Split,
   edit: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
-  clock: Clock,
+  clock: Clock, download: Download, upload: Upload,
 };
 
 interface IconProps {
