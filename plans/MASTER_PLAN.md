@@ -4,6 +4,9 @@ Status snapshot and roadmap, derived from the design prototypes in
 `plans/frontend_design/`, the data model in `plans/database_design_en.md`,
 and the current implementation in `frontend/`.
 
+> **Active track:** making the design-doc SQLite schema the live backing model —
+> see `plans/SQLITE_INTEGRATION_PLAN.md`.
+
 _Last updated: 2026-05-26._
 
 ---
