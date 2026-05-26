@@ -198,32 +198,58 @@ working checklist (grouped by surface; the phase that delivers each is in bracke
 
 ## 7. Phases
 
-Each phase is its own PR against `feat/frontend`, ends with **typecheck · lint ·
-`bun test` · build** green, and notes what needs in-browser verification.
+This is being delivered as commits on one PR. Each commit ends **typecheck · lint ·
+`bun test` · build** green.
+
+> **Status (PR #15):** Phases 0–1 fully landed (relational schema + the persisted,
+> queryable DB with the store as cache). The **DB-backed query backends** for Phases
+> 2–4 and 7 (accounts/net-worth, categories spend, counterparties, cash-flow/budget
+> progress) are landed and unit-tested in `lib/db/queries/*`. **Remaining: wiring those
+> queries into the React components, and Phases 5–6 (recurring/transfers writes)** —
+> the component wiring needs in-browser verification, which can't run headlessly in CI.
 
 > **Already landed** (Phase F + `b8aed11`): file-based persistence, OPFS-authoritative
 > load, localStorage fallback/migration, dropping `persist`, and the
 > add-expense / transaction sheet components. Phases below build the relational layer
 > and route interactions (§4) through it.
 
-### Phase 0 — Foundation (no UI change)
-- `lib/db/schema.ts` — full schema (17 tables + indexes + triggers).
-- `lib/db/client.ts` — one persistent `oo1.DB`; **deserialize an existing OPFS
-  `finch.db` if present**, else create + schema + seed; `exec` / `query` / `export()`.
-- Repoint `SqliteBackupProvider` to export the **live client** (keep debounce,
-  visibilitychange flush, fallback, download/import).
-- `lib/db/seed.ts` — relational + dual-currency seed (per §6).
-- bun tests: schema applies; triggers fire (balance, snapshot, summary); headline
-  queries return expected numbers.
-- *App still runs off the store; DB runs alongside, test-verified.*
+### Phase 0 — Foundation (no UI change) ✅ *landed*
+- ✅ `lib/db/schema.ts` — full schema (17 tables + indexes + triggers).
+- ✅ `lib/db/client.ts` — live `oo1.DB`: `createLiveDb()` (schema + seed) and
+  `openLiveDb(bytes)` (deserialize an existing file); `exec` / `export()`.
+- ✅ `lib/db/seed.ts` — relational + dual-currency seed (per §6): ledgers,
+  account_groups, accounts, categories, counterparties, budgets, transfer_groups,
+  exchange_rates, transactions (+ snapshot/summary tables filled by triggers).
+  recurring/pending/tags/sync_log/net_worth are seeded in their own phases.
+- ✅ `lib/db/queries/transactions.ts` — list / search / filter / add / update /
+  cancel / confirm (the §4 transactions interactions).
+- ✅ bun tests (`seed.test.ts`, `queries/transactions.test.ts`): schema applies;
+  balance/snapshot/summary triggers fire; ledger isolation; headline query.
+- *App still runs off the store; the live DB layer runs alongside, test-verified.*
+- ⏭ **Deferred to Phase 1** (needs in-browser verification): repointing
+  `SqliteBackupProvider`/`persistence.ts` to the live client. **Hazard found:** the
+  current OPFS `finch.db` uses the *flat* schema (`lib/db/repo.ts`) with a
+  `transactions` table whose columns differ from the relational one — `CREATE TABLE
+  IF NOT EXISTS` will **not** reconcile them. Phase 1 must use a new OPFS filename
+  (or an explicit migration) so the relational DB never collides with a flat-schema
+  file.
 
-### Phase 1 — Transactions spine + dual-currency
-Wire the **existing** surfaces — `activity` list, `transaction-sheet`/`-detail`,
-`add-expense-form`/`-sheet` — to DB queries from §4 (list / search / filter / sort /
-add / edit / delete / confirm), with `amount`/`amount_base`/`exchange_rate`/
-`balance_after` + triggers. Hydrate the store's `transactions` slice from SQL; month
-spent/income from `ledger_summaries`. Establishes the `DbProvider` + query-hook infra.
-(May split 1a read / 1b write.)
+### Phase 1 — Relational persistence + store-as-cache ✅ *landed*
+- ✅ Persistence flipped from the flat `repo.ts` schema to the **relational schema**.
+  `lib/db/state.ts`: `serializeState(state)` builds a relational DB from the store
+  (reference seed + the store's transactions as real rows + a transitional `app_state`
+  table for pending/recurring/overrides) and exports bytes; `deserializeState(bytes)`
+  projects them back to the store shape.
+- ✅ New OPFS filename `finch.sqlite3` (avoids the flat-schema collision). On load:
+  relational file → else legacy flat `finch.db` (one-time migration) → else
+  localStorage. `SqliteBackupProvider` now writes the relational bytes.
+- ✅ Round-trip test (`state.test.ts`): store → relational `.db` → store preserves
+  transactions (incl. ledger, pending, null category) and every slice.
+- The store stays the in-memory working model; the `.db` is its relational, queryable
+  form. Components unchanged.
+- ⏭ Still to wire (later commits, needs in-browser verification): pointing `activity`
+  search/filter and `add-expense` at the `lib/db/queries` SQL directly, and sourcing
+  month spent/income from `ledger_summaries` instead of the `derive.ts` deltas.
 
 ### Phase 2 — Accounts, groups, balances, net worth
 Account list/detail + balance curve (`account_balance_snapshots`) + net worth (two-level

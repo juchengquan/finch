@@ -4,7 +4,11 @@
 //  - File System Access: an optional real file the user picks once, then we
 //    auto-write to it on every change for the session.
 
-const DB_NAME = 'finch.db';
+// The relational schema lives in its own file so it never collides with a
+// legacy flat-schema `finch.db` left in OPFS by an earlier build.
+export const RELATIONAL_DB = 'finch.sqlite3';
+export const LEGACY_DB = 'finch.db';
+const DB_NAME = RELATIONAL_DB;
 
 // `showSaveFilePicker` is not yet in lib.dom; declare the slice we use.
 declare global {
@@ -28,18 +32,18 @@ export function fsAccessSupported(): boolean {
   return typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
 }
 
-export async function writeOpfs(bytes: Uint8Array): Promise<void> {
+export async function writeOpfs(bytes: Uint8Array, name: string = DB_NAME): Promise<void> {
   const dir = await navigator.storage.getDirectory();
-  const fh = await dir.getFileHandle(DB_NAME, { create: true });
+  const fh = await dir.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
   await w.write(bytes as BufferSource);
   await w.close();
 }
 
-export async function readOpfs(): Promise<Uint8Array | null> {
+export async function readOpfs(name: string = DB_NAME): Promise<Uint8Array | null> {
   try {
     const dir = await navigator.storage.getDirectory();
-    const fh = await dir.getFileHandle(DB_NAME);
+    const fh = await dir.getFileHandle(name);
     const file = await fh.getFile();
     if (file.size === 0) return null;
     return new Uint8Array(await file.arrayBuffer());

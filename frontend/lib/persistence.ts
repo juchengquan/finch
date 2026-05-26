@@ -1,10 +1,11 @@
 // Single source of truth for loading persisted app state on startup.
 //
 // Precedence per browser:
-//   1. OPFS `finch.db` (the real SQLite file) — authoritative when supported.
-//   2. localStorage — fallback for browsers without OPFS, and a one-time
-//      migration source for users whose data predates the SQLite store.
-//   3. null — caller keeps the seed data.
+//   1. OPFS `finch.sqlite3` (the relational SQLite file) — authoritative.
+//   2. A legacy flat-schema `finch.db` in OPFS — read once and migrated; the
+//      next save writes the relational file, which then wins forever.
+//   3. localStorage — fallback for browsers without OPFS (and older data).
+//   4. null — caller keeps the seed data.
 //
 // Saving lives in components/sqlite-backup-provider.tsx, which writes the same
 // backend (OPFS when available, otherwise localStorage). We never keep two
@@ -60,20 +61,29 @@ export function lsWrite(state: PersistState): void {
 export async function loadPersisted(): Promise<PersistState | null> {
   if (typeof window === 'undefined') return null;
 
-  const { opfsSupported, readOpfs } = await import('@/lib/db/storage');
+  const { opfsSupported, readOpfs, LEGACY_DB } = await import('@/lib/db/storage');
 
   if (opfsSupported()) {
     try {
       const bytes = await readOpfs();
       if (bytes) {
-        const { importBytesToState } = await import('@/lib/db/sqlite');
-        return await importBytesToState(bytes);
+        const { deserializeState } = await import('@/lib/db/state');
+        return await deserializeState(bytes);
       }
     } catch (err) {
-      console.error('Could not read finch.db from OPFS; falling back', err);
+      console.error('Could not read finch.sqlite3 from OPFS; falling back', err);
     }
-    // OPFS exists but is empty (first run) or unreadable — migrate from any
-    // legacy localStorage data. The next change writes it to OPFS for good.
+    // No relational file yet — migrate once from a legacy flat finch.db, else
+    // from localStorage. The next save writes the relational file for good.
+    try {
+      const legacy = await readOpfs(LEGACY_DB);
+      if (legacy) {
+        const { importBytesToState } = await import('@/lib/db/sqlite');
+        return await importBytesToState(legacy);
+      }
+    } catch (err) {
+      console.error('Could not read legacy finch.db; falling back', err);
+    }
     return lsRead();
   }
 
