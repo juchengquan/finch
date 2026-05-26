@@ -63,7 +63,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 - **Two un-unified mock models**: `MOCK` (USD/Chase framing) and `LEDGER`
   (SGD/Singapore). The DB design implies one ledger-scoped model with dual
   amounts (`amount` + `amount_base`) and a pending→confirmed→cancelled workflow.
-- No persistence, no backend/API, no CSV import, no auth/sync.
+- Client-side `localStorage` persistence (Phase F); no backend/API, CSV import, or auth/sync.
 
 ---
 
@@ -123,7 +123,7 @@ Built on existing mock data; no new state machinery.
 
 > Remaining for full schema fidelity (dual `amount`/`amount_base` on FX rows, `status`
 > machine, counterparties, parent categories, snapshots) is backend-shaped and lands in
-> **Phase F**. The in-memory store has no persistence yet — a full reload resets to seed.
+> **Phase F**. The store now persists to `localStorage` (Phase F), so changes survive reloads.
 
 ### Phase D — Bespoke desktop dashboards ✅ _(done)_
 - [x] Desktop content container (centered, `max-w-6xl`) in the shell so pages stop
@@ -141,12 +141,20 @@ Built on existing mock data; no new state machinery.
 - [ ] **Category tree** (2-level), **FX transaction detail**, **System admin**
       (exchange-rate book + `sync_log` device list).
 
-### Phase F — Backend & persistence _(largest; separate track)_
-- [ ] Implement the SQLite schema (`schema.sql` + migrations) and a data API.
-- [ ] Replace the mock store with API calls behind the same data layer.
-- [ ] CSV import (delimiter detect, transfer-keyword detect, dedup constraint),
-      exchange-rate fetch/cache, multi-device sync, auth.
-- [ ] Trigger-maintained aggregates (`ledger_summaries`, balances, snapshots).
+### Phase F — Persistence & backend 🟡 _(persistence done)_
+Reframed from the original "build a backend" plan: the app is client-only and runs
+in an ephemeral container, where a server/DB would not be durable and would be a
+large rewrite. So Phase F leads with **client persistence**, keeping the store as
+the seam a real backend can slot behind later.
+- [x] **Client persistence** — Zustand `persist` → `localStorage` (`finch-store`,
+      versioned, partialized to transactions + pending). SSR-safe via
+      `skipHydration` + a `StoreHydration` rehydrate-on-mount. Mutations now
+      survive a full reload (verified).
+- [x] **Reset to sample data** control in Settings (restores the seed).
+- [ ] _(future, optional)_ Real server/DB: SQLite schema (`plans/database_design_en.md`)
+      behind Next.js route handlers + `better-sqlite3`, swapped in behind the store;
+      CSV import, exchange-rate fetch/cache, multi-device sync, auth. Out of scope
+      while the demo is client-only/ephemeral.
 
 ### Cross-cutting (ongoing)
 - [ ] Accessibility pass (focus, labels, keyboard for menus/dialogs).
@@ -168,7 +176,7 @@ Built on existing mock data; no new state machinery.
 
 ## 5. Suggested next step
 
-Phases A–D are complete — the app is interactive, ledger-scoped, with live
-derived figures and bespoke desktop dashboards across all main screens. Next:
-**Phase E** (ledger-admin screens: category tree, exchange-rate book, sync log,
-FX transaction detail) or **Phase F** (persistence/backend).
+Phases A–D are complete and Phase F now persists data to `localStorage` (changes
+survive reloads, with a reset-to-sample control). Next: **Phase E** (ledger-admin
+screens: category tree, exchange-rate book, sync log, FX transaction detail), or
+the optional real-backend track in Phase F.

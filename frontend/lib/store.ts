@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 
@@ -30,6 +31,9 @@ export interface PendingItem {
   source: string;
 }
 
+const SEED_TX = transactionsData as Tx[];
+const SEED_PENDING = pendingData as PendingItem[];
+
 interface FinanceState {
   transactions: Tx[];
   pending: PendingItem[];
@@ -39,29 +43,45 @@ interface FinanceState {
   confirmPending: (id: string) => void;
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
+  reset: () => void;
 }
 
-export const useFinanceStore = create<FinanceState>((set) => ({
-  transactions: transactionsData as Tx[],
-  pending: pendingData as PendingItem[],
+export const useFinanceStore = create<FinanceState>()(
+  persist(
+    (set) => ({
+      transactions: SEED_TX,
+      pending: SEED_PENDING,
 
-  addTransaction: (tx) => {
-    const id = `t-${Date.now().toString(36)}`;
-    set((s) => ({ transactions: [{ ...tx, id }, ...s.transactions] }));
-    return id;
-  },
+      addTransaction: (tx) => {
+        const id = `t-${Date.now().toString(36)}`;
+        set((s) => ({ transactions: [{ ...tx, id }, ...s.transactions] }));
+        return id;
+      },
 
-  updateTransaction: (id, patch) =>
-    set((s) => ({
-      transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    })),
+      updateTransaction: (id, patch) =>
+        set((s) => ({
+          transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        })),
 
-  deleteTransaction: (id) =>
-    set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
+      deleteTransaction: (id) =>
+        set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
 
-  confirmPending: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
+      confirmPending: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
 
-  cancelPending: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
+      cancelPending: (id) => set((s) => ({ pending: s.pending.filter((p) => p.id !== id) })),
 
-  confirmAllPending: () => set({ pending: [] }),
-}));
+      confirmAllPending: () => set({ pending: [] }),
+
+      reset: () => set({ transactions: SEED_TX, pending: SEED_PENDING }),
+    }),
+    {
+      name: 'finch-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ transactions: s.transactions, pending: s.pending }),
+      // SSR-safe: keep seed state on the server + first client render, then
+      // rehydrate from localStorage after mount (see StoreHydration).
+      skipHydration: true,
+    },
+  ),
+);

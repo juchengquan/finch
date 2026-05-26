@@ -4,6 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { CurrencyProvider } from '@/components/currency-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
+import { StoreHydration } from '@/components/store-hydration';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
@@ -53,6 +54,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <CurrencyProvider>
             <LedgerProvider>
+              <StoreHydration />
               {children}
               <Toaster />
             </LedgerProvider>

@@ -6,6 +6,9 @@ import { SettingsItem } from '@/components/SettingsItem';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
 import { useCurrency, type Currency } from '@/components/currency-provider';
+import { useFinanceStore } from '@/lib/store';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -30,6 +33,7 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
 
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
+  const reset = useFinanceStore((s) => s.reset);
 
   return (
     <MobilePage>
@@ -80,6 +84,25 @@ export default function SettingsPage() {
             </SelectContent>
           </Select>
         </Row>
+
+        <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
+          Data
+        </div>
+        <Row icon="sync" label="Sample data">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              reset();
+              toast.success('Sample data restored');
+            }}
+          >
+            Reset
+          </Button>
+        </Row>
+        <div className="text-muted-foreground pt-2 text-xs">
+          Your changes are saved on this device. Reset restores the original sample data.
+        </div>
       </div>
     </MobilePage>
   );
