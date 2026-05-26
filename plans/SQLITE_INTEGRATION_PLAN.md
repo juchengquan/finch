@@ -198,8 +198,15 @@ working checklist (grouped by surface; the phase that delivers each is in bracke
 
 ## 7. Phases
 
-Each phase is its own PR against `feat/frontend`, ends with **typecheck · lint ·
-`bun test` · build** green, and notes what needs in-browser verification.
+This is being delivered as commits on one PR. Each commit ends **typecheck · lint ·
+`bun test` · build** green.
+
+> **Status (PR #15):** Phases 0–1 fully landed (relational schema + the persisted,
+> queryable DB with the store as cache). The **DB-backed query backends** for Phases
+> 2–4 and 7 (accounts/net-worth, categories spend, counterparties, cash-flow/budget
+> progress) are landed and unit-tested in `lib/db/queries/*`. **Remaining: wiring those
+> queries into the React components, and Phases 5–6 (recurring/transfers writes)** —
+> the component wiring needs in-browser verification, which can't run headlessly in CI.
 
 > **Already landed** (Phase F + `b8aed11`): file-based persistence, OPFS-authoritative
 > load, localStorage fallback/migration, dropping `persist`, and the
