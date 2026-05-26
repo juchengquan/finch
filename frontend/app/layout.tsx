@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { CurrencyProvider } from '@/components/currency-provider';
+import { LedgerProvider } from '@/components/ledger-provider';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
@@ -51,8 +52,10 @@ export default function RootLayout({
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <CurrencyProvider>
-            {children}
-            <Toaster />
+            <LedgerProvider>
+              {children}
+              <Toaster />
+            </LedgerProvider>
           </CurrencyProvider>
         </ThemeProvider>
       </body>

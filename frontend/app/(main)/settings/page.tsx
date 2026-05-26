@@ -4,6 +4,7 @@ import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { SettingsItem } from '@/components/SettingsItem';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LedgerSwitcher } from '@/components/ledger-switcher';
 import { useCurrency, type Currency } from '@/components/currency-provider';
 import {
   Select,
@@ -44,6 +45,16 @@ export default function SettingsPage() {
 
       <div className="px-5 pb-28">
         <div className="text-muted-foreground pb-2 font-mono text-[10px] tracking-wider uppercase">
+          Active ledger
+        </div>
+        <div className="md:hidden">
+          <LedgerSwitcher />
+        </div>
+        <div className="text-muted-foreground hidden pt-1 text-xs md:block">
+          Switch ledgers from the sidebar.
+        </div>
+
+        <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
           Preferences
         </div>
         <SettingsItem item={{ label: 'Categories', value: '8 active', icon: 'tag' }} />

@@ -42,6 +42,7 @@ interface PageShellProps {
   onSidebarToggle?: () => void;
   headerTitle?: string;
   showAdd?: boolean;
+  sidebarTop?: ReactNode;
 }
 
 export function PageShell({
@@ -56,6 +57,7 @@ export function PageShell({
   onSidebarToggle,
   headerTitle,
   showAdd = false,
+  sidebarTop,
 }: PageShellProps) {
   const pathname = usePathname();
   const tabBarTabs = mobileTabs ?? tabs;
@@ -97,6 +99,8 @@ export function PageShell({
             </span>
           )}
         </div>
+
+        {sidebarOpen && sidebarTop && <div className="mb-2">{sidebarTop}</div>}
 
         {tabs.length > 0 && (
           <nav className="flex flex-col gap-1">

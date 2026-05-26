@@ -46,7 +46,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Transfers (FX rate-lock, two-sided) | 🟡 | Single hardcoded sample; not list-driven |
 | Ledger | Merchants / counterparties (aliases, verified) | ✅ | Read-only |
 | Ledger | Recurring template (splits, StackedBar) | 🟡 | Single hardcoded sample; not editable |
-| Ledger | Ledger switcher (bottom sheet) | ⬜ | `ledgers.json` exists |
+| Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
 | Ledger | Category tree (2-level) | ⬜ | — |
 | Ledger | System admin (exchange-rate book, sync log) | ⬜ | `exchange-rates.json`, devices exist |
@@ -108,12 +108,20 @@ Built on existing mock data; no new state machinery.
 > Note: derived figures (net worth, per-category `spent`, budget totals) don't yet
 > recompute from new transactions — that lands with the unified model in **Phase C**.
 
-### Phase C — Unify the data model around the ledger schema
-- [ ] Merge `MOCK` + `LEDGER` into one **ledger-scoped** model matching
-      `database_design_en.md` (dual `amount`/`amount_base`, `status`, `transfer_group_id`,
-      counterparties, categories w/ parent, recurring + splits, snapshots).
-- [ ] **Ledger switcher** (bottom sheet) + ledger context; scope all views to active ledger.
-- [ ] Derive net-worth / budget / summary figures from transactions instead of static fields.
+### Phase C — Unify the data model around the ledger schema 🟡 _(core done)_
+- [x] **Per-ledger base currency** model (`LedgerProvider`, `LEDGERS` with `base`);
+      `personal` aligned to USD to match the implemented screens.
+- [x] **Ledger switcher** (`Sheet`) in the desktop sidebar + Settings; sets active ledger.
+- [x] **Scope by ledger** — transactions tagged `ledgerId`; Add tags the active ledger;
+      Activity filters by it; Accounts/Budgets show empty states for non-Personal.
+- [x] **Derive figures from the store** (`lib/derive.ts`) — category spent, account
+      balances, net worth recompute (verified: Food budget $612 → $662 after a $50 add).
+- [ ] Full schema alignment (dual `amount`/`amount_base`, `status`, counterparties,
+      categories w/ parent, recurring + splits, snapshots) + per-ledger accounts/categories
+      data — needs more mock data; lands incrementally toward Phase F.
+
+> Note: the in-memory store has no persistence — a full page reload resets to the seed
+> (client navigation keeps state). Persistence arrives in Phase F.
 
 ### Phase D — Bespoke desktop dashboards
 - [ ] Desktop Accounts (gradient account-card grid + merged activity table).
@@ -153,7 +161,6 @@ Built on existing mock data; no new state machinery.
 
 ## 5. Suggested next step
 
-Phases A and B are complete — the mobile app is demoable and interactive
-(add/edit/delete transactions, confirm pending). **Phase C** is next: unify the
-two mock models around the ledger schema so derived figures recompute, and add
-the ledger switcher.
+Phases A, B, and the core of C are complete — interactive, ledger-scoped, with
+live derived figures. Next: **Phase D** (bespoke desktop dashboards) or finish
+the remaining **Phase C** schema/data work (per-ledger accounts & categories).
