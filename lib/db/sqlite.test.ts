@@ -6,6 +6,7 @@ const sample: PersistState = {
   transactions: [{ id: 't01', merchant: 'Blue Bottle', category: 'food', amount: -6.75, account: 'cc', date: '2026-05-24', pending: false }],
   pending: [{ id: 'p1', merchant: 'Donki', amount: -82.4, currency: 'SGD', date: '2026-05-24', account: 'a', reason: 'verify', source: 'import' }],
   budgetOverrides: { food: 800 },
+  accountOverrides: {},
   verifiedExtra: ['cp-04'],
   aliasExtra: { 'cp-04': ['DDD'] },
   recurring: [],

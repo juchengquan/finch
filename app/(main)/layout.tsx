@@ -48,7 +48,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       sidebarOpen={sidebarOpen}
       onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
       showAdd
-      sidebarTop={<LedgerSwitcher />}
+      sidebarFooter={<LedgerSwitcher sidebarOpen={sidebarOpen} />}
     >
       {children}
     </PageShell>

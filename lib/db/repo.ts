@@ -1,4 +1,4 @@
-import type { Tx, PendingItem, RecurringTemplate } from '@/lib/store';
+import type { Tx, PendingItem, RecurringTemplate, AccountOverride } from '@/lib/store';
 
 // A minimal async query interface so the same repo logic works against both the
 // in-memory sqlite (tests, via oo1.DB) and the browser OPFS worker (promiser).
@@ -11,6 +11,7 @@ export interface PersistState {
   transactions: Tx[];
   pending: PendingItem[];
   budgetOverrides: Record<string, number>;
+  accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
   recurring: RecurringTemplate[];
@@ -60,6 +61,7 @@ export async function saveState(exec: Exec, s: PersistState): Promise<void> {
     await exec('DELETE FROM meta');
     const meta: [string, unknown][] = [
       ['budgetOverrides', s.budgetOverrides],
+      ['accountOverrides', s.accountOverrides],
       ['verifiedExtra', s.verifiedExtra],
       ['aliasExtra', s.aliasExtra],
       ['recurring', s.recurring],
@@ -108,6 +110,7 @@ export async function loadState(exec: Exec): Promise<PersistState> {
       source: String(r.source),
     })),
     budgetOverrides: (meta.get('budgetOverrides') as Record<string, number>) ?? {},
+    accountOverrides: (meta.get('accountOverrides') as Record<string, AccountOverride>) ?? {},
     verifiedExtra: (meta.get('verifiedExtra') as string[]) ?? [],
     aliasExtra: (meta.get('aliasExtra') as Record<string, string[]>) ?? {},
     recurring: (meta.get('recurring') as RecurringTemplate[]) ?? [],

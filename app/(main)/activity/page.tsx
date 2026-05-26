@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
+import { useTransactionSheet } from '@/components/transaction-sheet';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
@@ -30,6 +30,7 @@ export default function ActivityPage() {
   const [query, setQuery] = useState('');
   const allTxns = useFinanceStore((s) => s.transactions);
   const { activeId } = useLedger();
+  const { openTransaction } = useTransactionSheet();
 
   const txns = allTxns.filter((t) => {
     if ((t.ledgerId ?? 'personal') !== activeId) return false;
@@ -93,10 +94,11 @@ export default function ActivityPage() {
                   const cat = catById(t.category);
                   const inc = t.amount > 0;
                   return (
-                    <Link
+                    <button
                       key={t.id}
-                      href={`/tx/${t.id}`}
-                      className={cn('flex items-center gap-3 p-3.5', i && 'border-border border-t')}
+                      type="button"
+                      onClick={() => openTransaction(t.id)}
+                      className={cn('flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
                     >
                       <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
                       <div className="min-w-0 flex-1">
@@ -111,7 +113,7 @@ export default function ActivityPage() {
                         signed={inc}
                         className={cn('text-sm font-medium', inc ? 'text-success' : 'text-foreground')}
                       />
-                    </Link>
+                    </button>
                   );
                 })}
               </div>
@@ -138,15 +140,19 @@ export default function ActivityPage() {
                   const cat = catById(t.category);
                   const inc = t.amount > 0;
                   return (
-                    <tr key={t.id} className="border-border hover:bg-secondary/40 border-t first:border-t-0">
+                    <tr
+                      key={t.id}
+                      onClick={() => openTransaction(t.id)}
+                      className="border-border hover:bg-secondary/40 cursor-pointer border-t first:border-t-0"
+                    >
                       <td className="text-muted-foreground px-4 py-2.5 font-mono text-xs whitespace-nowrap">
                         {t.date.slice(5).replace('-', '/')}
                       </td>
                       <td className="px-4 py-2.5">
-                        <Link href={`/tx/${t.id}`} className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5">
                           <MerchantGlyph name={t.merchant} hue={cat.hue} size={26} />
                           {t.merchant}
-                        </Link>
+                        </div>
                       </td>
                       <td className="text-muted-foreground px-4 py-2.5">{cat.name}</td>
                       <td className="text-muted-foreground px-4 py-2.5">{acctById(t.account).name}</td>

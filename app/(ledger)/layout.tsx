@@ -37,7 +37,7 @@ export default function LedgerLayout({ children }: { children: React.ReactNode }
       activeTab={activeTab}
       bottomLinks={BOTTOM_LINKS}
       headerTitle="Ledger admin"
-      sidebarTop={<LedgerSwitcher />}
+      sidebarFooter={<LedgerSwitcher />}
     >
       {children}
     </PageShell>

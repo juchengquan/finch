@@ -1,7 +1,6 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
@@ -55,6 +54,15 @@ export interface RecurringTemplate {
   splits?: RecurringSplit[];
 }
 
+// Editable fields on an otherwise-static MOCK account.
+export interface AccountOverride {
+  name?: string;
+  type?: string;
+  last4?: string;
+  institution?: string;
+  routing?: string;
+}
+
 const SEED_TX = transactionsData as Tx[];
 const SEED_PENDING = pendingData as PendingItem[];
 const SEED_RECURRING = recurringData as RecurringTemplate[];
@@ -65,6 +73,7 @@ interface FinanceState {
   recurring: RecurringTemplate[];
   // Editable overrides on otherwise-static mock data, persisted.
   budgetOverrides: Record<string, number>;
+  accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
 
@@ -75,19 +84,24 @@ interface FinanceState {
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
+  setAccountDetails: (accountId: string, patch: AccountOverride) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   verifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
   reset: () => void;
 }
 
+// Persistence lives outside the store: lib/persistence.ts loads on startup and
+// components/sqlite-backup-provider.tsx auto-saves to the SQLite `.db` (OPFS) —
+// or localStorage when OPFS is unavailable — on every change. The store itself
+// just starts from the seed data each render (SSR-safe), then gets hydrated.
 export const useFinanceStore = create<FinanceState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       transactions: SEED_TX,
       pending: SEED_PENDING,
       recurring: SEED_RECURRING,
       budgetOverrides: {},
+      accountOverrides: {},
       verifiedExtra: [],
       aliasExtra: {},
 
@@ -114,6 +128,14 @@ export const useFinanceStore = create<FinanceState>()(
       setBudget: (categoryId, amount) =>
         set((s) => ({ budgetOverrides: { ...s.budgetOverrides, [categoryId]: amount } })),
 
+      setAccountDetails: (accountId, patch) =>
+        set((s) => ({
+          accountOverrides: {
+            ...s.accountOverrides,
+            [accountId]: { ...s.accountOverrides[accountId], ...patch },
+          },
+        })),
+
       updateRecurringSplit: (templateId, index, pct) =>
         set((s) => ({
           recurring: s.recurring.map((t) =>
@@ -137,25 +159,9 @@ export const useFinanceStore = create<FinanceState>()(
           pending: SEED_PENDING,
           recurring: SEED_RECURRING,
           budgetOverrides: {},
+          accountOverrides: {},
           verifiedExtra: [],
           aliasExtra: {},
         }),
-    }),
-    {
-      name: 'finch-store',
-      version: 1,
-      storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({
-        transactions: s.transactions,
-        pending: s.pending,
-        recurring: s.recurring,
-        budgetOverrides: s.budgetOverrides,
-        verifiedExtra: s.verifiedExtra,
-        aliasExtra: s.aliasExtra,
-      }),
-      // SSR-safe: keep seed state on the server + first client render, then
-      // rehydrate from localStorage after mount (see StoreHydration).
-      skipHydration: true,
-    },
-  ),
+  }),
 );
