@@ -22,30 +22,39 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({ title, back = false, leading, trailing }: ScreenHeaderProps) {
   return (
-    <header className="bg-background sticky top-0 z-[100] md:hidden">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4">
-        <div className="flex min-h-9 items-center gap-2 justify-self-start">
-          {leading ??
-            (back ? (
-              <Button variant="outline" size="icon" aria-label="Go back">
-                <Icon name="chev-l" size={16} />
+    <>
+      {/* Locked to the top of the viewport (mobile only), like the bottom tab
+          bar. z-40 keeps it under modal/sheet overlays (z-50). */}
+      <header className="bg-background fixed inset-x-0 top-0 z-40 md:hidden">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4">
+          <div className="flex min-h-9 items-center gap-2 justify-self-start">
+            {leading ??
+              (back ? (
+                <Button variant="outline" size="icon" aria-label="Go back">
+                  <Icon name="chev-l" size={16} />
+                </Button>
+              ) : (
+                <ProfileChip />
+              ))}
+          </div>
+          <h1 className="text-foreground text-center font-serif text-lg italic tracking-tight">
+            {title}
+          </h1>
+          <div className="flex min-h-9 items-center gap-2 justify-self-end">
+            {trailing ?? (
+              <Button variant="outline" size="icon" aria-label="Search">
+                <Icon name="search" size={16} />
               </Button>
-            ) : (
-              <ProfileChip />
-            ))}
+            )}
+          </div>
         </div>
-        <h1 className="text-foreground text-center font-serif text-lg italic tracking-tight">
-          {title}
-        </h1>
-        <div className="flex min-h-9 items-center gap-2 justify-self-end">
-          {trailing ?? (
-            <Button variant="outline" size="icon" aria-label="Search">
-              <Icon name="search" size={16} />
-            </Button>
-          )}
-        </div>
+      </header>
+      {/* Spacer: reserves the fixed header's height in the scroll flow so the
+          page content starts below it. Mirrors the header's vertical sizing. */}
+      <div aria-hidden className="px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 md:hidden">
+        <div className="min-h-9" />
       </div>
-    </header>
+    </>
   );
 }
 

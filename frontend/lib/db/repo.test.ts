@@ -26,6 +26,7 @@ const sample: PersistState = {
   ],
   pending: [{ id: 'p1', merchant: 'Donki', amount: -82.4, currency: 'SGD', date: '2026-05-24', account: 'a', reason: 'verify', source: 'import' }],
   budgetOverrides: { food: 800 },
+  accountOverrides: { cc: { name: 'Amex Platinum', institution: 'Amex' } },
   verifiedExtra: ['cp-04'],
   aliasExtra: { 'cp-04': ['DDD', 'DON DONKI'] },
   recurring: [
@@ -53,6 +54,7 @@ test('state round-trips through SQLite', async () => {
   expect(loaded.transactions.find((t) => t.id === 't05')!.category).toBeNull();
   expect(loaded.pending[0].currency).toBe('SGD');
   expect(loaded.budgetOverrides.food).toBe(800);
+  expect(loaded.accountOverrides.cc).toEqual({ name: 'Amex Platinum', institution: 'Amex' });
   expect(loaded.verifiedExtra).toContain('cp-04');
   expect(loaded.aliasExtra['cp-04']).toEqual(['DDD', 'DON DONKI']);
   expect(loaded.recurring[0].splits?.[0].pct).toBe(60);

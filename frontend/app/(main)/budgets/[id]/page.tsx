@@ -8,6 +8,7 @@ import { Ring, Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useTransactionSheet } from '@/components/transaction-sheet';
 import { categorySpent } from '@/lib/derive';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ export default function BudgetDetailPage() {
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
   const setBudget = useFinanceStore((s) => s.setBudget);
+  const { openTransaction } = useTransactionSheet();
 
   const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
@@ -146,10 +148,11 @@ export default function BudgetDetailPage() {
             <div className="text-muted-foreground p-4 text-center text-sm">No transactions yet</div>
           )}
           {txns.map((t, i) => (
-            <Link
+            <button
               key={t.id}
-              href={`/tx/${t.id}`}
-              className={cn('flex items-center gap-3 p-3.5', i && 'border-border border-t')}
+              type="button"
+              onClick={() => openTransaction(t.id)}
+              className={cn('hover:bg-secondary/40 flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
             >
               <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
               <div className="min-w-0 flex-1">
@@ -159,7 +162,7 @@ export default function BudgetDetailPage() {
                 </div>
               </div>
               <Money value={t.amount} className="text-sm font-medium" />
-            </Link>
+            </button>
           ))}
         </div>
       </div>
