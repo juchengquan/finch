@@ -273,7 +273,9 @@ remaining `app_state` shims. What's left:
 1. **Finish the last screens** on the DB — FX, System.
 2. **Cleanup pass** — retire `derive.ts` fallbacks + baked JSON totals, delete the
    dead flat-schema `repo.ts`/`storage.ts`, resolve the redundant browser `DbProvider`.
-3. Optional polish: recurring **split creation/management** UI (only % editing of
-   existing splits exists today); stream the **server DB file for download backup**
-   (today's snapshot is rebuilt from store transactions, so table-only display edits
-   aren't captured); balance-curve / net-worth charts; real FX conversion.
+3. Optional polish: balance-curve / net-worth charts; real FX conversion; the
+   deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
+
+Done since (Phase H follow-ups): recurring **split add/remove** UI on the template
+detail screen, and the **download backup** now streams the live server DB via
+`GET /api/export` (table edits included).

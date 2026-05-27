@@ -115,6 +115,8 @@ interface FinanceState {
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
+  addRecurringSplit: (templateId: string, account: string, pct: number) => void;
+  removeRecurringSplit: (templateId: string, index: number) => void;
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
@@ -275,6 +277,24 @@ export const useFinanceStore = create<FinanceState>()(
           ),
         }));
         syncMutation('updateRecurringSplit', { templateId, index, pct });
+      },
+
+      addRecurringSplit: (templateId, account, pct) => {
+        set((s) => ({
+          recurring: s.recurring.map((t) =>
+            t.id === templateId ? { ...t, splits: [...(t.splits ?? []), { account, pct, abs: null, label: '' }] } : t,
+          ),
+        }));
+        syncMutation('addRecurringSplit', { templateId, account, pct });
+      },
+
+      removeRecurringSplit: (templateId, index) => {
+        set((s) => ({
+          recurring: s.recurring.map((t) =>
+            t.id === templateId && t.splits ? { ...t, splits: t.splits.filter((_, i) => i !== index) } : t,
+          ),
+        }));
+        syncMutation('removeRecurringSplit', { templateId, index });
       },
 
       verifyCounterparty: (id) => {

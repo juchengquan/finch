@@ -245,10 +245,14 @@ edit/cancel.)
    detail screen edits split %s on existing templates).
 
 **CRUD parity is complete** for every entity with a management surface, and all
-`app_state` override shims are retired. Not pursued (out of the parity scope):
-split creation/management UI for recurring, and streaming the server DB for the
-download backup (table-only display edits aren't captured in the store-rebuilt
-snapshot today).
+`app_state` override shims are retired.
+
+8. ✅ **Follow-ups.** Recurring **split management** — add/remove splits from the
+   detail screen (`addRecurringSplit`/`removeRecurringSplit`, toggling
+   `splits_enabled`), on top of the existing % editing. **Download backup fidelity** —
+   the Settings download now streams the authoritative server DB via `GET /api/export`
+   (`exportDbBytes`), so table-only edits (renamed accounts/merchants, budgets, etc.)
+   are included rather than rebuilt from the store cache.
 
 ## 8. Risks
 
