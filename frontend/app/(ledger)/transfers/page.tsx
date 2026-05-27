@@ -1,15 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { fmtNative } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
-import { useDb } from '@/components/db-provider';
 import { useFinanceStore } from '@/lib/store';
-import { listTransfers, type Transfer } from '@/lib/db/queries/transfers';
-import { listAccounts } from '@/lib/db/queries/accounts';
+import { selectTransfers } from '@/lib/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,33 +33,23 @@ type Option = { id: string; name: string };
 
 export default function TransfersPage() {
   const { active, activeId } = useLedger();
-  const { exec, version } = useDb();
   const createTransfer = useFinanceStore((s) => s.createTransfer);
+  const allTxns = useFinanceStore((s) => s.transactions);
+  const accountRows = useFinanceStore((s) => s.accounts);
 
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [accounts, setAccounts] = useState<Option[]>([]);
+  const transfers = selectTransfers(allTxns, accountRows, activeId);
+  const accounts: Option[] = accountRows
+    .filter((a) => a.ledgerId === activeId)
+    .map((a) => ({ id: a.id, name: a.name }));
+
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    Promise.all([listTransfers(exec, activeId), listAccounts(exec, activeId)])
-      .then(([tg, accts]) => {
-        if (cancelled) return;
-        const opts = accts.map((a) => ({ id: a.id, name: a.name }));
-        setTransfers(tg);
-        setAccounts(opts);
-        setFrom((prev) => prev || opts[0]?.id || '');
-        setTo((prev) => prev || opts[1]?.id || '');
-      })
-      .catch((err) => console.error('Could not load transfers from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, activeId]);
+  // Default the from/to selects to the first two accounts once they're loaded.
+  if (accounts.length && !accounts.some((a) => a.id === from)) setFrom(accounts[0].id);
+  if (accounts.length > 1 && !accounts.some((a) => a.id === to)) setTo(accounts[1].id);
 
   const save = () => {
     const value = parseFloat(amount);

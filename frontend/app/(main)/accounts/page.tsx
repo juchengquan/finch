@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon, Money, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
@@ -8,11 +7,9 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { useDb } from '@/components/db-provider';
-import { listAccounts } from '@/lib/db/queries/accounts';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById } from '@/lib/data';
-import { accountBalance } from '@/lib/derive';
+import { accountBalance } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
@@ -92,30 +89,14 @@ export default function AccountsPage() {
   const { fmt } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
-  const { exec, version } = useDb();
   const allTxns = useFinanceStore((s) => s.transactions);
   const accountOverrides = useFinanceStore((s) => s.accountOverrides);
+  const accounts = useFinanceStore((s) => s.accounts);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
-  // Account balances come from the live DB; fall back to the derived figure
-  // (baseline + delta) until the DB is ready. Both yield the same number.
-  const [balById, setBalById] = useState<Record<string, number> | null>(null);
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    listAccounts(exec, activeId)
-      .then((accts) => {
-        if (cancelled) return;
-        const m: Record<string, number> = {};
-        for (const a of accts) m[a.id] = a.balance;
-        setBalById(m);
-      })
-      .catch((err) => console.error('Could not load account balances from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, activeId]);
-  const balanceOf = (id: string) => balById?.[id] ?? accountBalance(ledgerTxns, id);
+  // Balances come straight from the projected account rows (server DB).
+  const ledgerAccountRows = accounts.filter((a) => a.ledgerId === activeId);
+  const balanceOf = (id: string) => accountBalance(ledgerAccountRows, id);
 
   const ledgerAccounts = MOCK.accounts
     .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)

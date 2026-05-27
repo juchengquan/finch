@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar } from '@/components/primitives';
@@ -28,11 +28,9 @@ import {
 } from '@/components/ui/select';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { useDb } from '@/components/db-provider';
-import { listTransactions } from '@/lib/db/queries/transactions';
-import { listAccounts } from '@/lib/db/queries/accounts';
 import { MOCK, catById } from '@/lib/data';
-import { useFinanceStore, type Tx } from '@/lib/store';
+import { useFinanceStore } from '@/lib/store';
+import { selectTransactions, accountBalance } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -43,29 +41,14 @@ export default function AccountDetailPage() {
   const ledgerId = (account as { ledger?: string }).ledger ?? 'personal';
   const override = useFinanceStore((s) => s.accountOverrides)[accountId];
   const setAccountDetails = useFinanceStore((s) => s.setAccountDetails);
-  const storeTxs = useFinanceStore((s) => s.transactions).filter(t => t.account === account.id);
-  const { exec, version } = useDb();
+  const allTxns = useFinanceStore((s) => s.transactions);
+  const accounts = useFinanceStore((s) => s.accounts);
 
-  // Transaction list and live balance come from the DB; store fallback until ready.
-  const [dbTxs, setDbTxs] = useState<Tx[] | null>(null);
-  const [dbBalance, setDbBalance] = useState<number | null>(null);
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    Promise.all([listTransactions(exec, { ledgerId, accountId }), listAccounts(exec, ledgerId)])
-      .then(([rows, accts]) => {
-        if (cancelled) return;
-        setDbTxs(rows);
-        const a = accts.find((x) => x.id === accountId);
-        setDbBalance(a ? a.balance : null);
-      })
-      .catch((err) => console.error('Could not load account detail from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, ledgerId, accountId]);
-  const txs = dbTxs ?? storeTxs;
-  const balance = dbBalance ?? account.balance;
+  // Transaction list and live balance come from the projected store state.
+  const txs = selectTransactions(allTxns, { ledgerId, accountId });
+  const balance = accounts.some((a) => a.id === accountId)
+    ? accountBalance(accounts, accountId)
+    : account.balance;
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);

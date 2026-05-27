@@ -1,15 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
-import { useDb } from '@/components/db-provider';
-import { listAccounts } from '@/lib/db/queries/accounts';
-import { listCategories } from '@/lib/db/queries/categories';
 import {
   Select,
   SelectContent,
@@ -55,9 +52,10 @@ export function AddExpenseForm({
   className?: string;
 }) {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const storeCats = useFinanceStore((s) => s.categories);
+  const storeAccts = useFinanceStore((s) => s.accounts);
   const { activeId } = useLedger();
   const { base } = useMoney();
-  const { exec, version } = useDb();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
@@ -79,32 +77,18 @@ export function AddExpenseForm({
   const currencyOptions = Object.keys(CURRENCIES);
   const currencySym = CURRENCIES[currency as keyof typeof CURRENCIES]?.sym ?? '$';
 
-  // Category/account options come from the live DB, scoped to the active ledger.
-  const [cats, setCats] = useState<Option[]>([]);
-  const [accts, setAccts] = useState<Option[]>([]);
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    Promise.all([listCategories(exec, activeId), listAccounts(exec, activeId)])
-      .then(([c, a]) => {
-        if (cancelled) return;
-        const catOpts = c.map((x) => ({ id: x.id, name: x.name }));
-        const acctOpts = a.map((x) => ({ id: x.id, name: x.name }));
-        setCats(catOpts);
-        setAccts(acctOpts);
-        // Keep the current selection if still valid, else default to the first.
-        setCategory((prev) => (catOpts.some((o) => o.id === prev) ? prev : catOpts[0]?.id ?? prev));
-        setAccount((prev) => (acctOpts.some((o) => o.id === prev) ? prev : acctOpts[0]?.id ?? prev));
-      })
-      .catch((err) => console.error('Could not load add-expense options from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, activeId]);
+  // Category/account options come from the projected store, scoped to the active
+  // ledger; fall back to MOCK until the store is hydrated.
+  const cats: Option[] = storeCats.filter((c) => c.ledgerId === activeId).map((x) => ({ id: x.id, name: x.name }));
+  const accts: Option[] = storeAccts.filter((a) => a.ledgerId === activeId).map((x) => ({ id: x.id, name: x.name }));
 
   type Mock = { id: string; name: string; ledger?: string };
   const categoryOptions = cats.length ? cats : mockOptions(MOCK.categories as Mock[], activeId);
   const accountOptions = accts.length ? accts : mockOptions(MOCK.accounts as Mock[], activeId);
+
+  // Keep the current selection valid as options load / the ledger switches.
+  if (categoryOptions.length && !categoryOptions.some((o) => o.id === category)) setCategory(categoryOptions[0].id);
+  if (accountOptions.length && !accountOptions.some((o) => o.id === account)) setAccount(accountOptions[0].id);
 
   const save = () => {
     const value = parseFloat(amount);
