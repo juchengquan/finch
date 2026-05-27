@@ -4,6 +4,7 @@
 
 import type { Exec } from '@/lib/db/repo';
 import type { Tx } from '@/lib/store';
+import { convertToBase } from './rates';
 
 export type Direction = 'all' | 'in' | 'out';
 
@@ -116,11 +117,14 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   const status = input.status ?? 'confirmed';
   const acct = await exec('SELECT current_balance, currency FROM accounts WHERE id = ?', [input.accountId]);
   const currentBalance = Number(acct[0]?.current_balance ?? 0);
-  const currency = input.currency ?? String(acct[0]?.currency ?? 'USD');
+  const baseCurrency = String(acct[0]?.currency ?? 'USD');
+  const currency = input.currency ?? baseCurrency;
   // `amount` is native (in `currency`); `amount_base` is the ledger-base figure
-  // that drives balances/reports — they differ for foreign-currency entries.
-  const amountBase = input.amountBase ?? input.amount;
-  const exchangeRate = input.amount !== 0 ? amountBase / input.amount : 1;
+  // that drives balances/reports. Convert via the exchange_rates table and lock
+  // the rate + date on the row.
+  const conv = await convertToBase(exec, input.amount, currency, baseCurrency, input.date);
+  const amountBase = conv.amountBase;
+  const exchangeRate = conv.rate;
   const balanceAfter = Math.round((currentBalance + amountBase) * 100) / 100;
   await exec(
     `INSERT INTO transactions

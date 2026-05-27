@@ -23,5 +23,5 @@
   { "id": "pen-1", "merchant": "Salary · Acme",   "category": null,  "amount": 5800.00, "account": "chk", "date": "2026-05-25", "time": "09:00", "note": "Recurring · waiting for confirmation", "pending": true, "kind": "income" },
   { "id": "pen-2", "merchant": "Don Don Donki",   "category": "food", "amount": -82.40, "account": "cc",  "date": "2026-05-24", "time": "19:30", "note": "New merchant · please verify name",    "pending": true },
   { "id": "pen-3", "merchant": "Sushiro · Tangs", "category": "food", "amount": -34.20, "account": "cc",  "date": "2026-05-24", "time": "13:42", "note": "New merchant · matched alias",         "pending": true },
-  { "id": "t-jpy-1", "merchant": "Yodobashi Camera", "category": "shop", "amount": -28.50, "nativeAmount": -3820, "currency": "JPY", "account": "cc", "date": "2026-05-13", "time": "16:20", "note": "Earbuds · rate locked at import", "pending": false }
+  { "id": "t-jpy-1", "merchant": "Yodobashi Camera", "category": "shop", "amount": -24.84, "nativeAmount": -3820, "currency": "JPY", "account": "cc", "date": "2026-05-13", "time": "16:20", "note": "Earbuds · rate locked at import", "pending": false }
 ]
