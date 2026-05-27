@@ -54,8 +54,10 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Reports | ✅ | Spending donut + breakdown, **DB-derived** category spend, ledger-scoped |
 | Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all sync to the server (`app_state` queue) |
 | Ledger | Transfers (two-sided) | ✅ | **DB-derived list + "New transfer"** → paired rows sharing `transfer_group_id`; real transactions |
-| Ledger | Merchants / counterparties (aliases, verified) | ✅ | **SQL search**, verify, add-alias persist to `counterparties` |
-| Ledger | Recurring template (splits) | ✅ | Editable splits + **"Post now"** → creates confirmed tx(s) on the server |
+| Ledger | Merchants / counterparties (aliases, verified) | ✅ | List reads the projected table; **create / rename / recategorise / delete**, verify/unverify, add/remove alias, SQL search |
+| Ledger | Recurring templates (list + splits) | ✅ | **Create** template + edit fields/splits + delete; **"Post now"** → confirmed tx(s) on the server |
+| Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/hue); delete leaves txns uncategorised |
+| Ledger | Tags admin | ✅ | **Create / edit / delete** (name + hue); assignments cascade on delete |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
 | Ledger | Category tree (2-level) | ⬜ | `categories` table seeded; admin screen not DB-wired |
@@ -217,15 +219,37 @@ The design-doc schema is now the app's live data layer. See
       Merchants (search/verify/alias), Budgets + Reports (DB-derived spend),
       Add-expense, Transaction detail, Transfers (create paired rows), Recurring
       ("Post now").
-- [ ] **Remaining** — Categories admin / FX / System screens; tags UI; balance-curve
-      & net-worth charts; full FX conversion; cleanup (retire `derive.ts` + baked
-      JSON + dead `repo.ts`/`storage.ts`; resolve the redundant browser `DbProvider`).
+- [x] **DB-backed admin screens** — Categories admin + Tags admin landed with full
+      CRUD in Phase H (below).
+- [ ] **Remaining** — FX / System screens; balance-curve & net-worth charts; full
+      FX conversion; cleanup (retire `derive.ts` + baked JSON + dead
+      `repo.ts`/`storage.ts`; resolve the redundant browser `DbProvider`).
+
+### Phase H — Full CRUD parity ✅ _(done; see `plans/CRUD_PARITY_PLAN.md`)_
+Brought every user-facing entity to full Create / Update / Delete (or archive) and
+retired the last `app_state` override shims. Delivered in phases on one branch:
+- [x] **Schema versioning** — `SCHEMA_VERSION` + `migrate()` in `lib/db/schema.ts`
+      (stamps fresh DBs, runs ordered `ALTER`s on existing files; reached **v4**).
+- [x] **Balance recompute** — `recomputeAccount` keeps `current_balance` /
+      `balance_after` correct after any edit/cancel/delete (the trigger is INSERT-only).
+- [x] **Accounts** — display columns + create / table-backed update / archive /
+      delete; **`accountOverrides` retired**.
+- [x] **Delete/edit everywhere** — shared `<RowActions>` (⋯ menu + confirm) +
+      edit dialogs for categories, goals, tags, subscriptions, recurring, transfers,
+      merchants.
+- [x] **Budgets on the table** — per-category upsert + `budgetByCategory`
+      projection; **`budgetOverrides` retired**.
+- [x] **Scheduled** create/update/delete; **Transfers** edit (rewrite both legs +
+      recompute); **createRecurring**; **createCounterparty**.
+- [x] **Last shim retired** — verify/alias write the `counterparties` table;
+      **`verifiedExtra`/`aliasExtra` removed**, `app_state` no longer read or written.
 
 ### Cross-cutting ✅ _(done)_
 - [x] **Accessibility pass** — decorative chart SVGs `aria-hidden`; aria-labels on
       every icon-only button and search/form input; Radix covers dialogs/menus/selects/focus.
 - [x] **Unit tests** — `bun test` over `lib/` (formatters, currency conversion,
-      derive deltas, **the full DB schema/seed/queries/mutations**); ~44 tests.
+      derive deltas, **the full DB schema/seed/queries/mutations** incl. CRUD +
+      migrations + balance recompute); ~84 tests.
 - [x] **CI** runs typecheck · lint · **unit tests** · build. (Playwright e2e was
       removed; browser-only flows are verified manually.)
 
@@ -243,11 +267,13 @@ The design-doc schema is now the app's live data layer. See
 
 ## 5. Suggested next step
 
-Phases A–G are done — the design-doc SQLite schema is the live, server-backed data
-layer and the core money flows (add / edit / transfer / verify / recurring-post)
-run through it. Remaining work is tracked in `SQLITE_INTEGRATION_PLAN.md` §6:
-1. **Finish the last screens** on the DB — Categories admin, FX, System.
+Phases A–H are done — the design-doc SQLite schema is the live, server-backed data
+layer; the core money flows run through it; and every entity has full CRUD with no
+remaining `app_state` shims. What's left:
+1. **Finish the last screens** on the DB — FX, System.
 2. **Cleanup pass** — retire `derive.ts` fallbacks + baked JSON totals, delete the
    dead flat-schema `repo.ts`/`storage.ts`, resolve the redundant browser `DbProvider`.
-3. Optional: tags UI, balance-curve / net-worth charts, real FX conversion, and the
-   deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
+3. Optional polish: recurring **split creation/management** UI (only % editing of
+   existing splits exists today); stream the **server DB file for download backup**
+   (today's snapshot is rebuilt from store transactions, so table-only display edits
+   aren't captured); balance-curve / net-worth charts; real FX conversion.

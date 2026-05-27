@@ -1,10 +1,10 @@
 # Full CRUD parity — design plan
 
-Status: **proposed.** Audit of `lib/db/mutations.ts` + the store actions shows
-**Read** is complete for every entity (the `/api/state` projection), but
-**Create / Update / Delete** are uneven. This plan brings every user-facing asset
-to full CRUD, retires the last `app_state` override shims, and fixes the
-balance-recompute gap that surfaces once Update/Delete touch amounts.
+Status: **complete** (Phases 0–7 shipped; see §7). Every user-facing entity now has
+full Create / Update / Delete (or archive) wired end-to-end, all `app_state`
+override shims are retired, and the balance-recompute gap is fixed. The sections
+below are kept as the design record; the per-entity coverage matrix (§1) and the
+phasing checklist (§7) reflect the delivered state.
 
 ## 0. Schema readiness (reviewed)
 
@@ -43,21 +43,28 @@ seed for a dev DB). Low effort; removes a real footgun.
 INSERT-only (see §4) — handled in app logic via `recomputeAccount`, not new
 triggers.
 
-## 1. Current coverage (the gap)
+## 1. Coverage — delivered
+
+All ✅ below are live (mutation + store action + UI), verified by `bun test` +
+per-phase browser smokes.
 
 | Entity | C | U | D |
 |---|---|---|---|
-| Transactions | ✅ | ✅ | ✅ soft (`status='cancelled'`) |
-| Accounts | ❌ | ⚠️ override layer only | ❌ |
-| Categories | ✅ | ⚠️ name only | ❌ |
-| Budgets (per-cat) | ✅ override | ✅ override | ❌ |
-| Goals | ✅ | ⚠️ contribute only | ❌ |
-| Tags | ✅ | ❌ | ❌ |
-| Subscriptions | ✅ | ❌ | ❌ |
-| Scheduled items | ❌ | ❌ | ❌ |
-| Recurring templates | ❌ | ⚠️ split % only | ❌ |
-| Transfers | ✅ | ❌ | ❌ |
-| Merchants / counterparties | ❌ | ⚠️ verify + add-alias | ❌ |
+| Transactions | ✅ | ✅ (recomputes balance) | ✅ soft (`status='cancelled'`, recomputes) |
+| Accounts | ✅ | ✅ (table) | ✅ archive (`is_active=0`) + hard-delete when empty |
+| Categories | ✅ (icon+hue) | ✅ name/type/icon/hue | ✅ hard (txns → uncategorised) |
+| Budgets (per-cat) | ✅ (table) | ✅ (table) | ✅ remove row |
+| Goals | ✅ | ✅ name/target/eta + contribute | ✅ hard |
+| Tags | ✅ | ✅ name/color | ✅ hard (assignments cascade) |
+| Subscriptions | ✅ | ✅ name/amount/next | ✅ hard |
+| Scheduled items | ✅ | ✅ | ✅ hard |
+| Recurring templates | ✅ | ✅ fields + split % | ✅ hard (splits cascade) |
+| Transfers | ✅ | ✅ (rewrites both legs, recomputes) | ✅ hard (both legs + group, recomputes) |
+| Merchants / counterparties | ✅ | ✅ rename/category + verify/unverify + add/remove alias | ✅ hard (txns SET NULL) |
+
+Shims retired: `accountOverrides`, `budgetOverrides`, `verifiedExtra`/`aliasExtra`
+— `app_state` is no longer read or written. Schema reached **v4** (opening_balance,
+account display cols, categories.hue) via the `migrate()` runner in §0.
 
 ## 2. Principles
 
