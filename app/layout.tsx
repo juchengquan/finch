@@ -6,7 +6,6 @@ import { CurrencyProvider } from '@/components/currency-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
-import { DbProvider } from '@/components/db-provider';
 import { TransactionSheetProvider } from '@/components/transaction-sheet';
 import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
 import { Toaster } from '@/components/ui/sonner';
@@ -54,14 +53,12 @@ export default function RootLayout({
             <LedgerProvider>
               <StoreHydration />
               <SqliteBackupProvider>
-                <DbProvider>
-                  <TransactionSheetProvider>
-                    <AddExpenseSheetProvider>
-                      {children}
-                      <Toaster />
-                    </AddExpenseSheetProvider>
-                  </TransactionSheetProvider>
-                </DbProvider>
+                <TransactionSheetProvider>
+                  <AddExpenseSheetProvider>
+                    {children}
+                    <Toaster />
+                  </AddExpenseSheetProvider>
+                </TransactionSheetProvider>
               </SqliteBackupProvider>
             </LedgerProvider>
           </CurrencyProvider>

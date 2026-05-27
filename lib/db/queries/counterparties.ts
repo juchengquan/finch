@@ -4,6 +4,7 @@ import type { Exec } from '@/lib/db/repo';
 
 export interface Counterparty {
   id: string;
+  ledgerId: string;
   name: string;
   aliases: string[];
   category: string | null;
@@ -13,6 +14,7 @@ export interface Counterparty {
 function rowToCp(r: Record<string, unknown>): Counterparty {
   return {
     id: String(r.id),
+    ledgerId: String(r.ledger_id),
     name: String(r.standardized_name),
     aliases: r.aliases ? (JSON.parse(String(r.aliases)) as string[]) : [],
     category: r.category == null ? null : String(r.category),
@@ -20,8 +22,14 @@ function rowToCp(r: Record<string, unknown>): Counterparty {
   };
 }
 
-export async function listCounterparties(exec: Exec, ledgerId: string): Promise<Counterparty[]> {
-  const rows = await exec('SELECT * FROM counterparties WHERE ledger_id = ? ORDER BY standardized_name', [ledgerId]);
+/** List counterparties; pass a ledgerId to scope, or omit for all ledgers. */
+export async function listCounterparties(exec: Exec, ledgerId?: string): Promise<Counterparty[]> {
+  const rows = await exec(
+    ledgerId
+      ? 'SELECT * FROM counterparties WHERE ledger_id = ? ORDER BY standardized_name'
+      : 'SELECT * FROM counterparties ORDER BY ledger_id, standardized_name',
+    ledgerId ? [ledgerId] : [],
+  );
   return rows.map(rowToCp);
 }
 

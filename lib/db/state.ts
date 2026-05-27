@@ -13,7 +13,10 @@ import { getSqlite3, execFor, type OO1DB } from './sqlite';
 import { applySchema } from './schema';
 import { seedReference, insertTransactions } from './seed';
 import { rowToTx } from './queries/transactions';
-import type { Exec, PersistState } from './repo';
+import { listAccounts } from './queries/accounts';
+import { listCategories } from './queries/categories';
+import { listCounterparties } from './queries/counterparties';
+import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
@@ -85,12 +88,17 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
   }
 }
 
-/** Read the full store state back out of a relational DB. */
-export async function projectState(exec: Exec): Promise<PersistState> {
+/** Read the full app state (persisted slices + reference/derived data). */
+export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  return { transactions, ...rest };
+  const [accounts, categories, counterparties] = await Promise.all([
+    listAccounts(exec),
+    listCategories(exec),
+    listCounterparties(exec),
+  ]);
+  return { transactions, ...rest, accounts, categories, counterparties };
 }
 
 /** Serialise store state into portable relational `.db` bytes. */
@@ -108,7 +116,7 @@ export async function serializeState(state: PersistState): Promise<Uint8Array> {
 }
 
 /** Parse relational `.db` bytes back into store state. */
-export async function deserializeState(bytes: Uint8Array): Promise<PersistState> {
+export async function deserializeState(bytes: Uint8Array): Promise<ProjectedState> {
   const sqlite3 = await getSqlite3();
   const db = new sqlite3.oo1.DB() as unknown as OO1DB;
   try {

@@ -5,6 +5,7 @@ import type { Exec } from '@/lib/db/repo';
 
 export interface AccountRow {
   id: string;
+  ledgerId: string;
   name: string;
   type: string;
   currency: string;
@@ -14,18 +15,21 @@ export interface AccountRow {
   includeInNetWorth: number; // resolved (account override ?? group default ?? 1)
 }
 
-export async function listAccounts(exec: Exec, ledgerId: string): Promise<AccountRow[]> {
+/** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
+export async function listAccounts(exec: Exec, ledgerId?: string): Promise<AccountRow[]> {
+  const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 1' : 'WHERE a.is_active = 1';
   const rows = await exec(
-    `SELECT a.id, a.name, a.type, a.currency, a.current_balance AS balance,
+    `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
             a.group_id AS groupId, g.name AS groupName,
             COALESCE(a.include_in_net_worth, g.include_in_net_worth, 1) AS inw
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
-      WHERE a.ledger_id = ? AND a.is_active = 1
+      ${where}
       ORDER BY g.sort_order, a.name`,
-    [ledgerId],
+    ledgerId ? [ledgerId] : [],
   );
   return rows.map((r) => ({
     id: String(r.id),
+    ledgerId: String(r.ledgerId),
     name: String(r.name),
     type: String(r.type),
     currency: String(r.currency),
