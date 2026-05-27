@@ -250,6 +250,24 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createTransfer':
       await createTransfer(exec, args);
       return;
+    case 'createCategory': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Category name is required');
+      const type = args.type ? str(args.type) : 'expense';
+      const icon = args.icon ? str(args.icon) : null;
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
+      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,sort_order) VALUES (?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, null, type, icon, Number(rows[0]?.n ?? 0),
+      ]);
+      return;
+    }
+    case 'renameCategory': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Category name is required');
+      await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      return;
+    }
     case 'postRecurring':
       await postRecurring(exec, args);
       return;

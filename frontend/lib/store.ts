@@ -109,6 +109,8 @@ interface FinanceState {
   verifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; ledgerId?: string }) => void;
+  renameCategory: (id: string, name: string) => void;
   reset: () => void;
 }
 
@@ -227,6 +229,20 @@ export const useFinanceStore = create<FinanceState>()(
       // the recurring page so it can surface account-match errors.)
       createTransfer: (input) => {
         syncMutation('createTransfer', { ...input });
+      },
+
+      createCategory: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `cat-${Date.now().toString(36)}`;
+        const type = input.type ?? 'expense';
+        const icon = input.icon ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, parentName: null, type, icon }] }));
+        syncMutation('createCategory', { ledgerId, name: input.name, type, icon });
+      },
+
+      renameCategory: (id, name) => {
+        set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, name } : c)) }));
+        syncMutation('renameCategory', { id, name });
       },
 
       reset: () => {

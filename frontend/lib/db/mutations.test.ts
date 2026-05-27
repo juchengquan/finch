@@ -103,3 +103,27 @@ test('transfers are excluded from category spend and cash flow', async () => {
   // A transfer has no category, so category spend is unchanged.
   expect(JSON.stringify(after)).toBe(JSON.stringify(before));
 });
+
+test('createCategory inserts a ledger-scoped category', async () => {
+  const exec = await seeded();
+  const before = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'plane' });
+  const rows = await exec("SELECT * FROM categories WHERE name = 'Travel' AND ledger_id = 'personal'");
+  expect(rows.length).toBe(1);
+  expect(String(rows[0].type)).toBe('expense');
+  expect(String(rows[0].icon)).toBe('plane');
+  const after = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
+  expect(after).toBe(before + 1);
+});
+
+test('createCategory rejects an empty name', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: '  ' })).rejects.toThrow();
+});
+
+test('renameCategory updates the name', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'renameCategory', { id: 'food', name: 'Food & Drink' });
+  const rows = await exec("SELECT name FROM categories WHERE id = 'food'");
+  expect(String(rows[0].name)).toBe('Food & Drink');
+});
