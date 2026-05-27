@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon, Money, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
@@ -7,7 +8,9 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { useFinanceStore, type Tx } from '@/lib/store';
+import { useDb } from '@/components/db-provider';
+import { listAccounts } from '@/lib/db/queries/accounts';
+import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById } from '@/lib/data';
 import { accountBalance } from '@/lib/derive';
 import { cn } from '@/lib/utils';
@@ -24,19 +27,19 @@ type GroupWithAccounts = {
 // left column. Empty groups render a collapsible "Add account" affordance.
 function AccountGroupAccordion({
   groups,
-  txns,
+  balanceOf,
   fmt,
   defaultOpen,
 }: {
   groups: GroupWithAccounts[];
-  txns: Tx[];
+  balanceOf: (id: string) => number;
   fmt: (n: number) => string;
   defaultOpen: string[];
 }) {
   return (
     <Accordion type="multiple" defaultValue={defaultOpen}>
       {groups.map((g) => {
-        const groupTotal = g.accounts.reduce((s, a) => s + accountBalance(txns, a.id), 0);
+        const groupTotal = g.accounts.reduce((s, a) => s + balanceOf(a.id), 0);
         const empty = g.accounts.length === 0;
         return (
           <AccordionItem key={g.id} value={g.id}>
@@ -56,7 +59,7 @@ function AccountGroupAccordion({
               ) : (
                 <div className="bg-card border-border rounded-xl border">
                   {g.accounts.map((a, i) => {
-                    const bal = accountBalance(txns, a.id);
+                    const bal = balanceOf(a.id);
                     return (
                       <Link key={a.id} href={`/accounts/${a.id}`} className={cn('flex cursor-pointer items-center gap-3 p-3.5 text-inherit no-underline', i && 'border-border border-t-[0.5px]')}>
                         <div className="flex size-[38px] shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold tracking-[0.5px] text-white" style={{ background: a.color }}>{a.last4.slice(-2)}</div>
@@ -89,9 +92,30 @@ export default function AccountsPage() {
   const { fmt } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
+  const { exec, version } = useDb();
   const allTxns = useFinanceStore((s) => s.transactions);
   const accountOverrides = useFinanceStore((s) => s.accountOverrides);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
+
+  // Account balances come from the live DB; fall back to the derived figure
+  // (baseline + delta) until the DB is ready. Both yield the same number.
+  const [balById, setBalById] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    listAccounts(exec, activeId)
+      .then((accts) => {
+        if (cancelled) return;
+        const m: Record<string, number> = {};
+        for (const a of accts) m[a.id] = a.balance;
+        setBalById(m);
+      })
+      .catch((err) => console.error('Could not load account balances from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, activeId]);
+  const balanceOf = (id: string) => balById?.[id] ?? accountBalance(ledgerTxns, id);
 
   const ledgerAccounts = MOCK.accounts
     .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)
@@ -111,7 +135,7 @@ export default function AccountsPage() {
     );
   }
 
-  const total = ledgerAccounts.reduce((s, a) => s + accountBalance(ledgerTxns, a.id), 0);
+  const total = ledgerAccounts.reduce((s, a) => s + balanceOf(a.id), 0);
   const groupedAccounts = MOCK.accountGroups.map((g) => ({
     ...g,
     accounts: ledgerAccounts.filter((a) => a.group === g.id),
@@ -130,13 +154,13 @@ export default function AccountsPage() {
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">
-        <AccountGroupAccordion groups={groupedAccounts} txns={ledgerTxns} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
+        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
         <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1.7fr_1fr]">
           <div className="min-w-0">
-            <AccountGroupAccordion groups={groupedAccounts} txns={ledgerTxns} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
+            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
           </div>
 
           <aside className="min-w-0">

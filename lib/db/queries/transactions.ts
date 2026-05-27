@@ -47,6 +47,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     recurring: !!Number(r.recurring),
     kind: amount > 0 ? 'income' : undefined,
     ledgerId: String(r.ledger_id),
+    transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
   };
 }
 

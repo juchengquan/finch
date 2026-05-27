@@ -1,12 +1,38 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Donut, Money } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK } from '@/lib/data';
+import { useLedger } from '@/components/ledger-provider';
+import { useDb } from '@/components/db-provider';
+import { categorySpend } from '@/lib/db/queries/categories';
 import { toast } from 'sonner';
 
 export default function ReportsPage() {
-  const cats = [...MOCK.categories].sort((a, b) => b.spent - a.spent);
+  const { activeId } = useLedger();
+  const { exec, version } = useDb();
+
+  // Spend per category from SQL (confirmed expenses), scoped to the active
+  // ledger; falls back to the baked figure until the DB is ready.
+  const [spentById, setSpentById] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    categorySpend(exec, activeId)
+      .then((m) => {
+        if (!cancelled) setSpentById(m);
+      })
+      .catch((err) => console.error('Could not load category spend from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, activeId]);
+
+  const cats = MOCK.categories
+    .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
+    .map((c) => ({ ...c, spent: spentById?.[c.id] ?? c.spent }))
+    .sort((a, b) => b.spent - a.spent);
   const total = cats.reduce((s, c) => s + c.spent, 0);
   const slices = cats.map((c) => ({ value: c.spent, color: `oklch(0.65 0.13 ${c.hue})` }));
 
@@ -37,7 +63,7 @@ export default function ReportsPage() {
 
         <div className="mt-4">
           {cats.map((c) => {
-            const pct = Math.round((c.spent / total) * 100);
+            const pct = total ? Math.round((c.spent / total) * 100) : 0;
             return (
               <div
                 key={c.id}

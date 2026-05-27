@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Icon, Money, MerchantGlyph } from '@/components/primitives';
@@ -28,8 +28,11 @@ import {
 } from '@/components/ui/select';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useDb } from '@/components/db-provider';
+import { listTransactions } from '@/lib/db/queries/transactions';
+import { listAccounts } from '@/lib/db/queries/accounts';
 import { MOCK, catById } from '@/lib/data';
-import { useFinanceStore } from '@/lib/store';
+import { useFinanceStore, type Tx } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -37,9 +40,33 @@ export default function AccountDetailPage() {
   const params = useParams();
   const accountId = params.id as string;
   const account = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
+  const ledgerId = (account as { ledger?: string }).ledger ?? 'personal';
   const override = useFinanceStore((s) => s.accountOverrides)[accountId];
   const setAccountDetails = useFinanceStore((s) => s.setAccountDetails);
-  const txs = useFinanceStore((s) => s.transactions).filter(t => t.account === account.id);
+  const storeTxs = useFinanceStore((s) => s.transactions).filter(t => t.account === account.id);
+  const { exec, version } = useDb();
+
+  // Transaction list and live balance come from the DB; store fallback until ready.
+  const [dbTxs, setDbTxs] = useState<Tx[] | null>(null);
+  const [dbBalance, setDbBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    Promise.all([listTransactions(exec, { ledgerId, accountId }), listAccounts(exec, ledgerId)])
+      .then(([rows, accts]) => {
+        if (cancelled) return;
+        setDbTxs(rows);
+        const a = accts.find((x) => x.id === accountId);
+        setDbBalance(a ? a.balance : null);
+      })
+      .catch((err) => console.error('Could not load account detail from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, ledgerId, accountId]);
+  const txs = dbTxs ?? storeTxs;
+  const balance = dbBalance ?? account.balance;
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState({ name: '', type: 'checking', last4: '', institution: '', routing: '' });
@@ -105,7 +132,7 @@ export default function AccountDetailPage() {
           <div className="absolute -top-[60px] -right-20 size-60 rounded-full bg-white/5"/>
           <div className="relative flex items-center justify-between gap-4">
             <div className="min-w-0 font-serif text-[40px] leading-none -tracking-[1.5px]">
-              <Money value={account.balance} mono={false} className="font-serif"/>
+              <Money value={balance} mono={false} className="font-serif"/>
             </div>
             <button
               type="button"
