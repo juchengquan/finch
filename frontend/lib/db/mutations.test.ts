@@ -60,6 +60,35 @@ test('createTransfer rejects same-account and zero amount', async () => {
   ).rejects.toThrow();
 });
 
+test('postRecurring posts a resolvable expense template as a transaction', async () => {
+  const exec = await seeded();
+  // rt-spotify: $11.99 expense on "Amex Gold" → account cc.
+  const ccBefore = await balanceOf(exec, 'cc');
+  await applyMutation(exec, 'postRecurring', { templateId: 'rt-spotify' });
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 11.99, 2);
+  const rows = await exec("SELECT * FROM transactions WHERE description = 'Spotify Premium'");
+  expect(rows.length).toBe(1);
+  expect(Number(rows[0].amount)).toBeCloseTo(-11.99, 2);
+  expect(Number(rows[0].recurring)).toBe(1);
+});
+
+test('postRecurring errors clearly when the account cannot be matched', async () => {
+  const exec = await seeded();
+  // rt-rent uses "UOB One", which has no matching real account.
+  await expect(applyMutation(exec, 'postRecurring', { templateId: 'rt-rent' })).rejects.toThrow(/match account/i);
+});
+
+test('postRecurring splits income across resolvable accounts', async () => {
+  const exec = await seeded();
+  // rt-salary: $5800 income split 60/25/15 across UOB One / Marcus Savings / Fidelity.
+  // "Marcus Savings"→sav and "Fidelity"→inv resolve; "UOB One" does not.
+  const savBefore = await balanceOf(exec, 'sav');
+  const invBefore = await balanceOf(exec, 'inv');
+  await applyMutation(exec, 'postRecurring', { templateId: 'rt-salary' });
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(savBefore + 5800 * 0.25, 2);
+  expect(await balanceOf(exec, 'inv')).toBeCloseTo(invBefore + 5800 * 0.15, 2);
+});
+
 test('transfers are excluded from category spend and cash flow', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');

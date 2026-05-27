@@ -15,7 +15,16 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args }),
   });
-  if (!res.ok) throw new Error(`POST /api/mutate (${action}) ${res.status}`);
+  if (!res.ok) {
+    let message = `${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(message);
+  }
   return (await res.json()) as PersistState;
 }
 
