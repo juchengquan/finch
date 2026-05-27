@@ -52,12 +52,31 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   };
 }
 
+/** Apply the store's counterparty override slices onto the real table. */
+async function applyCounterpartyOverrides(
+  exec: Exec,
+  verifiedExtra: string[],
+  aliasExtra: Record<string, string[]>,
+): Promise<void> {
+  for (const id of verifiedExtra) {
+    await exec('UPDATE counterparties SET is_verified = 1 WHERE id = ?', [id]);
+  }
+  for (const [id, extra] of Object.entries(aliasExtra)) {
+    const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
+    if (!rows[0]) continue;
+    const merged: string[] = rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : [];
+    for (const a of extra) if (!merged.includes(a)) merged.push(a);
+    await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(merged), id]);
+  }
+}
+
 /** Build a complete relational DB (in the given connection) from store state. */
 export async function buildState(exec: Exec, state: PersistState): Promise<void> {
   await exec('BEGIN');
   try {
     await seedReference(exec);
     await insertTransactions(exec, state.transactions);
+    await applyCounterpartyOverrides(exec, state.verifiedExtra, state.aliasExtra);
     await writeAppState(exec, state);
     await exec('COMMIT');
   } catch (err) {

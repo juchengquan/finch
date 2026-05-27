@@ -77,6 +77,29 @@ test('account balance reflects the live transaction set (not just the seed)', as
   expect(Number(cc[0].b)).not.toBeCloseTo(-842.18, 2);
 });
 
+test('buildState applies verifiedExtra/aliasExtra onto the counterparties table', async () => {
+  const { applySchema } = await import('@/lib/db/schema');
+  const { buildState } = await import('@/lib/db/state');
+  const { listCounterparties } = await import('@/lib/db/queries/counterparties');
+  const init = (await import('@sqlite.org/sqlite-wasm')).default as unknown as (
+    o?: unknown,
+  ) => Promise<{ oo1: { DB: new (s?: string) => { exec: (o: unknown) => void } } }>;
+  const sqlite3 = await init({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec = async (sql: string, bind?: (string | number | null)[]) => {
+    const rows: Record<string, unknown>[] = [];
+    db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  await applySchema(exec);
+  // cp-04 (Don Don Donki) is seeded unverified; verify it + add an alias.
+  await buildState(exec, { ...sample, verifiedExtra: ['cp-04'], aliasExtra: { 'cp-04': ['DONKI JURONG'] } });
+  const cps = await listCounterparties(exec, 'personal');
+  const donki = cps.find((c) => c.id === 'cp-04')!;
+  expect(donki.verified).toBe(true);
+  expect(donki.aliases).toContain('DONKI JURONG');
+});
+
 test('cancelled transactions are dropped on projection', async () => {
   const bytes = await serializeState(sample);
   const loaded = await deserializeState(bytes);
