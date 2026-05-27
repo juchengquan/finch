@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
-import { applySchema } from './schema';
+import { applySchema, migrate } from './schema';
 import { seedDatabase } from './seed';
 import { projectState } from './state';
 import type { Exec, ProjectedState } from './repo';
@@ -54,11 +54,13 @@ async function open(): Promise<ServerDb> {
     );
     if (rc) throw new Error(`Could not open ${full} (code ${rc})`);
     await applySchema(execFor(db)); // ensure newer objects exist on older files
+    await migrate(execFor(db), { fresh: false }); // apply column migrations to old files
   } else {
     db = new sqlite3.oo1.DB(':memory:') as unknown as OO1DB;
     const exec = execFor(db);
     await applySchema(exec);
     await seedDatabase(exec);
+    await migrate(exec, { fresh: true }); // stamp the version on the new file
   }
 
   const exec = execFor(db);

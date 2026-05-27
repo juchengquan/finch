@@ -107,8 +107,10 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (const a of accounts) {
     const ledgerId = a.ledger ?? 'personal';
     await exec(
-      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,credit_limit,notes,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, null, null, null, 1, SEED_TS, SEED_TS],
+      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,credit_limit,notes,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      // opening_balance starts at the known balance; insertTransactions overwrites
+      // it with the true opening (known − Σ bases) for accounts that have txns.
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, null, null, 1, SEED_TS, SEED_TS],
     );
   }
 
@@ -263,7 +265,10 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     const resolved = await Promise.all(
       ordered.map(async (t) => ({ t, ledgerId: t.ledgerId ?? 'personal', ...(await baseOfTx(exec, t)) })),
     );
-    let running = opening.get(accountId) ?? accounts.find((a) => a.id === accountId)?.balance ?? 0;
+    const open = opening.get(accountId) ?? accounts.find((a) => a.id === accountId)?.balance ?? 0;
+    // Record the true opening so balances can be recomputed after edits/deletes.
+    await exec('UPDATE accounts SET opening_balance = ? WHERE id = ?', [open, accountId]);
+    let running = open;
     for (const r of resolved) {
       running = Math.round((running + r.amountBase) * 100) / 100;
       const t = r.t;

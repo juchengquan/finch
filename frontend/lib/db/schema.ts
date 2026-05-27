@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
   currency             TEXT NOT NULL DEFAULT 'SGD',
   current_balance      REAL NOT NULL DEFAULT 0,
+  opening_balance      REAL NOT NULL DEFAULT 0,
   credit_limit         REAL,
   notes                TEXT,
   primary_budget_id    TEXT,
@@ -367,4 +368,40 @@ END;
 
 export async function applySchema(exec: (sql: string, bind?: (string | number | null)[]) => Promise<unknown>): Promise<void> {
   await exec(SCHEMA);
+}
+
+type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record<string, unknown>[]>;
+
+// Bump when the CREATE statements above change shape. Version 1 = the original
+// schema; 2 adds accounts.opening_balance.
+export const SCHEMA_VERSION = 2;
+
+// MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
+// created DB already has the latest CREATE statements, so it skips these and is
+// just stamped with SCHEMA_VERSION.
+const MIGRATIONS: Record<number, string[]> = {
+  2: [
+    'ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0',
+    // Backfill from the (assumed-correct) current balance and the live txn set.
+    `UPDATE accounts SET opening_balance = ROUND(current_balance - COALESCE(
+       (SELECT SUM(amount_base) FROM transactions
+         WHERE transactions.account_id = accounts.id AND status != 'cancelled'), 0), 2)`,
+  ],
+};
+
+/**
+ * Bring a database up to SCHEMA_VERSION. `fresh` means the file was just created
+ * (CREATE statements are already current → only stamp the version). An existing
+ * file gets the ordered migrations for each version above its current one; a
+ * pre-versioning file reports version 0 and is treated as version 1.
+ */
+export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<void> {
+  if (!opts.fresh) {
+    const rows = await exec('PRAGMA user_version');
+    const from = Number(rows[0]?.user_version ?? 0) || 1;
+    for (let v = from + 1; v <= SCHEMA_VERSION; v++) {
+      for (const sql of MIGRATIONS[v] ?? []) await exec(sql);
+    }
+  }
+  await exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

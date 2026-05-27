@@ -3,6 +3,33 @@
 
 import type { Exec } from '@/lib/db/repo';
 
+/**
+ * Recompute an account's running balances from its opening balance forward.
+ * The balance trigger only fires on INSERT, so any edit/cancel/delete that
+ * changes the amount or membership of the live txn set must call this to keep
+ * balance_after (per row) and current_balance correct.
+ */
+export async function recomputeAccount(exec: Exec, accountId: string): Promise<void> {
+  const acc = await exec('SELECT opening_balance FROM accounts WHERE id = ?', [accountId]);
+  if (!acc.length) return;
+  let running = Number(acc[0].opening_balance ?? 0);
+  const rows = await exec(
+    "SELECT id, amount_base FROM transactions WHERE account_id = ? AND status != 'cancelled' ORDER BY date, time, created_at",
+    [accountId],
+  );
+  for (const r of rows) {
+    running = Math.round((running + Number(r.amount_base)) * 100) / 100;
+    await exec('UPDATE transactions SET balance_after = ? WHERE id = ?', [running, String(r.id)]);
+  }
+  await exec("UPDATE accounts SET current_balance = ?, updated_at = datetime('now') WHERE id = ?", [running, accountId]);
+}
+
+/** Recompute the account that the given transaction belongs to (if any). */
+export async function recomputeForTransaction(exec: Exec, txnId: string): Promise<void> {
+  const rows = await exec('SELECT account_id FROM transactions WHERE id = ?', [txnId]);
+  if (rows.length) await recomputeAccount(exec, String(rows[0].account_id));
+}
+
 export interface AccountRow {
   id: string;
   ledgerId: string;
