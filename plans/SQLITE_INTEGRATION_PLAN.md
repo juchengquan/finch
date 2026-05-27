@@ -113,26 +113,34 @@ the former curated mock totals) by explicit decision.
 
 ## 6. Remaining work
 
-**Screens still on static `MOCK` (not DB-wired):**
-- **Categories admin** (`/categories`) — create/rename to the `categories` table.
-- **FX** (`/fx`) — `exchange_rates` is seeded but the screen is static; no real
-  conversion / import-time rate locking.
-- **System** (`/system`) — `sync_log` table exists; device list is static.
-- **Pending** (`/pending`) — works via `app_state`; not migrated to the
-  `transactions.status='pending'` model.
-- **Goals / Scheduled / Subscriptions** — static; not in the design schema
-  (would need schema extensions).
+**Screens DB-wired — done:**
+- ✅ **Categories admin** (`/categories`) — reads projected categories; create + rename.
+- ✅ **FX** (`/fx`) — shows a real foreign-currency transaction with its locked
+  base/rate; rates from the projected `exchange_rates`. `insertTransactions` locks
+  the per-row rate at import.
+- ✅ **System** (`/system`) — exchange rates + devices projected (`sync_log`
+  extended with name/current).
+- ✅ **Pending** (`/pending`) — migrated to `transactions.status='pending'`;
+  confirm flips status (flows into reports/balances), cancel voids. Legacy
+  `app_state` pending slice retired.
+- ✅ **Goals** (`/goals`) — new `goals` table; create + contribute.
+- ✅ **Subscriptions** (`/subscriptions`) — new `subscriptions` table; add.
+- ✅ **Scheduled** (`/scheduled`) — new `scheduled_items` table; calendar reads it.
 
-**Schema built, no UI yet:**
-- **Tags / `transaction_tags`** — tables exist; no tag UI or filter.
-- **Balance curve** — `account_balance_snapshots` + `accountBalanceSeries` exist;
-  no chart consumes them.
-- **Net-worth trend** — `net_worth_snapshots` not populated/charted.
+**Schema-backed UI — done:**
+- ✅ **Tags / `transaction_tags`** — projected; tag chips + create + assign on the
+  transaction detail, tag filter on Activity.
+- ✅ **Balance curve** — `balanceSeries` (from the projected store) drives a
+  sparkline on the account detail.
+- ✅ **Net-worth trend** — `netWorthSeries` drives a sparkline on Accounts.
 
-**Known/intentional:**
+**Known/intentional (still simplified):**
 - **Insights** stays curated (seed has no multi-month history).
-- **Dual-currency** is plumbed and stored, but cross-currency conversion + locking
-  is simplified (rate = 1 in the common case).
+- **Dual-currency**: rate *locking* is now real (stored per transaction), but
+  cross-base conversion (e.g. deriving a USD base from a to-SGD rate table) is
+  still simplified.
+- **Recurring templates** still live in `app_state` JSON rather than the
+  `recurring_templates` table.
 
 **Cleanup / teardown — done:**
 - ✅ Deleted the dead flat-schema layer: `lib/db/repo.ts` trimmed to shared types,
