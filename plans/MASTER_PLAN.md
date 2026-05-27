@@ -4,10 +4,11 @@ Status snapshot and roadmap, derived from the design prototypes in
 `plans/frontend_design/`, the data model in `plans/database_design_en.md`,
 and the current implementation in `frontend/`.
 
-> **Active track:** making the design-doc SQLite schema the live backing model —
-> see `plans/SQLITE_INTEGRATION_PLAN.md`.
+> **SQLite integration shipped** (PRs #15–#17): the design-doc schema is now the
+> app's live data layer, served by a **server-side** SQLite database. See
+> `plans/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-05-26._
+_Last updated: 2026-05-27._
 
 ---
 
@@ -15,7 +16,13 @@ _Last updated: 2026-05-26._
 
 **Stack (implemented):** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
 Tailwind v4 · shadcn/ui (Radix) · lucide-react · next-themes (light/dark) · Bun.
-All data is mock JSON in `frontend/data/`; there is **no backend**.
+
+**Data layer:** a **server-side SQLite database** (the full
+`database_design_en.md` schema via `@sqlite.org/sqlite-wasm` in Node) is the
+source of truth, persisted to a file at `FINCH_DB_DIR`/`FINCH_DB_FILE`. The
+browser talks to it via API routes (`GET /api/state`, `POST /api/mutate`,
+`GET /api/db-info`); the Zustand store is a mirror that hydrates on load and
+syncs every mutation. Static reference seed still lives in `frontend/data/*.json`.
 
 **Shell & system:**
 - ✅ Single-render responsive shell (`PageShell`): desktop sidebar + header,
@@ -34,39 +41,46 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | --- | --- | --- | --- |
 | Main | Accounts (net-worth hero, grouped accounts) | ✅ | Mobile parity; desktop is the mobile layout reflowed |
 | Main | Account detail (balance hero, sparkline, tx list, details panel) | ✅ | Quick actions are display-only |
-| Main | Add expense | ✅ | Amount input + category/account `Select` + date; writes to store, appears in Activity |
+| Main | Add expense | ✅ | Amount + category/account `Select` (DB-sourced, ledger-scoped) + date; inserts via the server, appears in Activity |
 | Main | Budgets (ring + category list) | ✅ | Per-category **Budget detail** drill-in done |
 | Main | Budget detail (ring, left/over, tx list) | ✅ | `budgets/[id]` |
 | Main | Insights (trend, insight cards, Apr-vs-May) | ✅ | Metric tabs (Spending/Income/Cashflow) + 3M/6M/1Y ranges |
 | Main | Scheduled (month calendar grid + upcoming list) | ✅ | Month nav + per-day dots |
 | Main | Transaction detail | ✅ | Dots `DropdownMenu` (recurring/delete), inline recategorize `Select`, recurring toggle |
-| Main | Settings | 🟡 | Theme + currency + 2 rows; missing grouped sections + **tab-layout editor** |
+| Main | Settings | 🟡 | Theme + currency + Data + **Database** (shows server file path, Export, Import disabled); missing grouped sections + **tab-layout editor** |
 | Main | Goals | ✅ | Aggregate progress + per-goal Ring cards |
 | Main | Subscriptions | ✅ | Monthly + annualized totals + list |
-| Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, search |
-| Main | Reports | ✅ | Spending donut + category breakdown + export toast |
-| Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all mutate the store + toasts |
-| Ledger | Transfers (FX rate-lock, two-sided) | 🟡 | Single hardcoded sample; not list-driven |
-| Ledger | Merchants / counterparties (aliases, verified) | ✅ | Read-only |
-| Ledger | Recurring template (splits, StackedBar) | 🟡 | Single hardcoded sample; not editable |
+| Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, **SQL search/filter** via the live DB |
+| Main | Reports | ✅ | Spending donut + breakdown, **DB-derived** category spend, ledger-scoped |
+| Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all sync to the server (`app_state` queue) |
+| Ledger | Transfers (two-sided) | ✅ | **DB-derived list + "New transfer"** → paired rows sharing `transfer_group_id`; real transactions |
+| Ledger | Merchants / counterparties (aliases, verified) | ✅ | **SQL search**, verify, add-alias persist to `counterparties` |
+| Ledger | Recurring template (splits) | ✅ | Editable splits + **"Post now"** → creates confirmed tx(s) on the server |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
-| Ledger | Category tree (2-level) | ⬜ | — |
-| Ledger | System admin (exchange-rate book, sync log) | ⬜ | `exchange-rates.json`, devices exist |
-| Ledger | FX transaction detail | ⬜ | `LEDGER.fxTx` sample exists |
+| Ledger | Category tree (2-level) | ⬜ | `categories` table seeded; admin screen not DB-wired |
+| Ledger | System admin (exchange-rate book, sync log) | ⬜ | `exchange_rates` seeded; `/system` + `/fx` screens still static |
+| Ledger | FX transaction detail | 🟡 | dual-currency stored (`amount`/`amount_base`); conversion/rate-locking simplified |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
 
 **Charts not yet built (design defines them):** `CalendarHeatmap`, multi-series `AreaChart`.
 
-**Cross-cutting gaps:**
-- No client state for **mutations** — every add/edit/confirm/cancel is display-only.
-- **Desktop is the mobile layout in a sidebar shell** — the design specifies distinct
+**Cross-cutting status:**
+- ✅ **Mutations are real** — add/edit/delete/confirm/verify/alias/transfer/recurring-post
+  run SQL on the server DB (triggers maintain balances/snapshots/summaries) and the
+  store mirrors the result. (The DB's `status` model is `confirmed`/`pending`/`cancelled`;
+  delete = soft-cancel.)
+- ✅ **Server-side persistence** — a SQLite file at `FINCH_DB_DIR`/`FINCH_DB_FILE`,
+  written after every change and reloaded across restarts. No CSV import / auth / multi-device sync.
+- **Desktop is still the mobile layout in a sidebar shell** — the design specifies distinct
   desktop dashboards (account-card grid, activity/admin tables, budget stat tiles,
   large calendar, metric tabs).
-- **Two un-unified mock models**: `MOCK` (USD/Chase framing) and `LEDGER`
-  (SGD/Singapore). The DB design implies one ledger-scoped model with dual
-  amounts (`amount` + `amount_base`) and a pending→confirmed→cancelled workflow.
-- Client-side `localStorage` persistence (Phase F); no backend/API, CSV import, or auth/sync.
+- **`MOCK` vs `LEDGER` reference data** still coexist for display metadata (account
+  colors/last4, hues) the schema doesn't model; the live figures now come from the DB.
+- **Remaining DB wiring**: Categories admin, FX, System screens; tags UI; balance-curve
+  & net-worth charts; full FX conversion. Plus cleanup (retire `derive.ts` fallbacks +
+  baked JSON totals + dead `repo.ts`/`storage.ts`; resolve the redundant browser
+  `DbProvider`). See `SQLITE_INTEGRATION_PLAN.md` §6.
 
 ---
 
@@ -126,9 +140,9 @@ Built on existing mock data; no new state machinery.
 - [x] **Currency conversion** — amounts stored in each ledger's base; `useMoney` converts
       to the chosen display currency (verified: Family net worth SGD 7,159 → $5,303).
 
-> Remaining for full schema fidelity (dual `amount`/`amount_base` on FX rows, `status`
-> machine, counterparties, parent categories, snapshots) is backend-shaped and lands in
-> **Phase F**. The store now persists to `localStorage` (Phase F), so changes survive reloads.
+> Full schema fidelity (dual `amount`/`amount_base`, `status` machine,
+> counterparties, parent categories, snapshots) landed in **Phase G** — the
+> server-side SQLite database, which persists to a file across restarts.
 
 ### Phase D — Bespoke desktop dashboards ✅ _(done)_
 - [x] Desktop content container (centered, `max-w-6xl`) in the shell so pages stop
@@ -183,37 +197,57 @@ the seam a real backend can slot behind later.
       > that `/sqlite3.mjs` + `/sqlite3.wasm` and the Settings UI are served. The
       > in-browser OPFS / File System Access / wasm-execution paths need manual
       > verification in a real browser.
-- [ ] _(future, optional)_ Real server/DB: the same `repo.ts` seam behind Next.js
-      route handlers + `better-sqlite3`; CSV import, exchange-rate fetch/cache,
-      multi-device sync, auth. Out of scope while the demo is client-only/ephemeral.
+> ⚠️ **Superseded by Phase G.** The OPFS / File-System-Access / localStorage
+> client persistence above was replaced by a real server-side database. The
+> relational schema, queries, and seed built here were reused on the server.
+
+### Phase G — Relational schema + server-side SQLite ✅ _(done; PRs #15–#17)_
+The design-doc schema is now the app's live data layer. See
+`plans/SQLITE_INTEGRATION_PLAN.md` for detail.
+- [x] **Full relational schema** (`lib/db/schema.ts`) + seed (`seed.ts`) + typed
+      queries/mutations (`lib/db/queries/*`, `mutations.ts`), all unit-tested.
+- [x] **Server-side DB** (`lib/db/server.ts`) — `@sqlite.org/sqlite-wasm` in Node,
+      loaded from a file on startup, written back on every change. File path from
+      `FINCH_DB_DIR`/`FINCH_DB_FILE`. API: `GET /api/state`, `POST /api/mutate`,
+      `GET /api/db-info`.
+- [x] **Source-of-truth flip** — the store mirrors the server (hydrate on load,
+      POST every mutation). OPFS/localStorage persistence removed. Settings →
+      Database shows the file path, Export enabled, Import disabled.
+- [x] **DB-backed UI** — Activity (search/filter), Accounts (balances/net worth),
+      Merchants (search/verify/alias), Budgets + Reports (DB-derived spend),
+      Add-expense, Transaction detail, Transfers (create paired rows), Recurring
+      ("Post now").
+- [ ] **Remaining** — Categories admin / FX / System screens; tags UI; balance-curve
+      & net-worth charts; full FX conversion; cleanup (retire `derive.ts` + baked
+      JSON + dead `repo.ts`/`storage.ts`; resolve the redundant browser `DbProvider`).
 
 ### Cross-cutting ✅ _(done)_
 - [x] **Accessibility pass** — decorative chart SVGs `aria-hidden`; aria-labels on
       every icon-only button and search/form input; Radix covers dialogs/menus/selects/focus.
 - [x] **Unit tests** — `bun test` over `lib/` (formatters, currency conversion,
-      derive deltas); 12 tests.
-- [x] **Playwright smoke flows** — `bun run test:e2e` (root redirect, add-expense,
-      split, theme toggle).
-- [x] **CI** runs typecheck · lint · **unit tests** · build (e2e runs locally;
-      it needs a browser binary).
+      derive deltas, **the full DB schema/seed/queries/mutations**); ~44 tests.
+- [x] **CI** runs typecheck · lint · **unit tests** · build. (Playwright e2e was
+      removed; browser-only flows are verified manually.)
 
 ---
 
-## 4. Open decisions
+## 4. Open decisions — resolved
 
-1. **State library** for Phase B — Zustand (simple, recommended) vs. React
-   context+reducer.
-2. **Base/display currency** — design ledger base is SGD; current app defaults
-   USD. Pick the canonical base for the unified model.
-3. **Backend shape** (Phase F) — the DB doc hints at a Flask admin UI; decide
-   Next.js API routes + SQLite (e.g. `better-sqlite3`) vs. a separate service.
-4. **Desktop scope** — full bespoke dashboards (Phase D) vs. a lighter
-   responsive polish, given effort.
+1. ~~**State library**~~ → **Zustand** (store is now a mirror over the server DB).
+2. **Base/display currency** — each ledger keeps its own base; `useMoney` converts
+   to the chosen display currency. (Full cross-currency conversion/locking still simplified.)
+3. ~~**Backend shape**~~ → **Next.js API routes + server-side `@sqlite.org/sqlite-wasm`**
+   reading/writing an env-configured file (not Flask / not `better-sqlite3`).
+4. **Desktop scope** — still the responsive single-render shell; bespoke desktop
+   dashboards remain optional.
 
 ## 5. Suggested next step
 
-Phases A–F **and** the cross-cutting polish (a11y + tests in CI) are complete. The
-app is feature-complete against the design. What's left is **optional**: the real
-server/DB track (Phase F), the deferred `CalendarHeatmap` primitive, and two
-intentional stubs that need a backend/storage — **Receipt attach** and **Pending
-Edit** (toasts for now).
+Phases A–G are done — the design-doc SQLite schema is the live, server-backed data
+layer and the core money flows (add / edit / transfer / verify / recurring-post)
+run through it. Remaining work is tracked in `SQLITE_INTEGRATION_PLAN.md` §6:
+1. **Finish the last screens** on the DB — Categories admin, FX, System.
+2. **Cleanup pass** — retire `derive.ts` fallbacks + baked JSON totals, delete the
+   dead flat-schema `repo.ts`/`storage.ts`, resolve the redundant browser `DbProvider`.
+3. Optional: tags UI, balance-curve / net-worth charts, real FX conversion, and the
+   deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
