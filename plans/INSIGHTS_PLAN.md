@@ -1,7 +1,13 @@
 # Insights — design plan
 
-Status: **proposed** (not started). Companion to `SQLITE_INTEGRATION_PLAN.md` §6,
-which lists Insights as an intentional simplification (curated copy).
+Status: **Phase A implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
+- ✅ **Phase A** — `lib/insights.ts` rule engine over the projected store
+  (over-budget, pending, top category, weekday skew, goal progress, net-worth
+  direction), ranked + capped; the Insights screen renders computed cards and
+  falls back to curated copy only for a cold/empty ledger.
+- ↩ **Phase B** (not started) — seed multi-month history to unlock MoM/trend
+  insights and make the charts/header derive from real data. High blast radius;
+  its own PR.
 
 ## 1. Goal
 

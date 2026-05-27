@@ -6,6 +6,10 @@ import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/M
 import { MOCK, INSIGHTS, APR_VS_MAY } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
+import { useLedger } from '@/components/ledger-provider';
+import { useMoney } from '@/components/use-money';
+import { useFinanceStore } from '@/lib/store';
+import { generateInsights } from '@/lib/insights';
 import { cn } from '@/lib/utils';
 
 const METRICS = [
@@ -24,9 +28,30 @@ const RANGES = [
 export default function InsightsPage() {
   const [metric, setMetric] = useState<Metric>('spending');
   const [range, setRange] = useState<number>(12);
+  const { activeId } = useLedger();
+  const { fmt } = useMoney();
+  const transactions = useFinanceStore((s) => s.transactions);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const goals = useFinanceStore((s) => s.goals);
+  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
 
   const monthly = MOCK.monthly.slice(-range);
   const cashflow = MOCK.cashflow.slice(-range);
+
+  // Computed insights from the projected store; fall back to curated copy when
+  // the engine has nothing to say (cold/empty ledger).
+  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; ledger?: string }[])
+    .filter((c) => (c.ledger ?? 'personal') === activeId)
+    .map((c) => ({ id: c.id, name: c.name, budget: budgetOverrides[c.id] ?? c.budget }));
+  const computed = generateInsights({
+    transactions,
+    categories: ledgerCategories,
+    goals: goals.filter((g) => g.ledgerId === activeId),
+    accounts,
+    ledgerId: activeId,
+    fmt: (n) => fmt(n),
+  });
+  const insights = computed.length ? computed : INSIGHTS;
 
   return (
     <MobilePage
@@ -130,7 +155,7 @@ export default function InsightsPage() {
         </div>
 
         <div className="md:grid md:grid-cols-3 md:gap-3">
-          {INSIGHTS.map((ins) => (
+          {insights.map((ins) => (
             <InsightCard key={ins.title} insight={ins} />
           ))}
         </div>
