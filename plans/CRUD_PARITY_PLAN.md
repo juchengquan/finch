@@ -232,7 +232,16 @@ edit/cancel.)
    `app_state` shim** — `verifiedExtra`/`aliasExtra` are gone from the store, repo,
    seed and backup, and `app_state` is no longer read or written.
 
-Remaining open (from §5, not yet done): `createRecurring` (template + splits).
+7. ✅ **createRecurring** — new recurring templates from a dialog on the recurring
+   list (name/type/amount/frequency/dayOfMonth/account[+from for transfers]/auto-post;
+   accounts referenced by name like the seed). Splits aren't created here (the
+   detail screen edits split %s on existing templates).
+
+**CRUD parity is complete** for every entity with a management surface, and all
+`app_state` override shims are retired. Not pursued (out of the parity scope):
+split creation/management UI for recurring, and streaming the server DB for the
+download backup (table-only display edits aren't captured in the store-rebuilt
+snapshot today).
 
 ## 8. Risks
 

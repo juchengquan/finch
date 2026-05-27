@@ -429,3 +429,24 @@ test('createCounterparty inserts an unverified merchant', async () => {
   expect(cp.verified).toBe(false);
   await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
 });
+
+test('createRecurring inserts a template that lists and posts', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createRecurring', {
+    id: 'rt-new', ledgerId: 'personal', name: 'Netflix', type: 'expense',
+    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, account: 'Amex Gold', autoPost: true,
+  });
+  const { listRecurring } = await import('@/lib/db/queries/recurring');
+  const t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-new')!;
+  expect(t.name).toBe('Netflix');
+  expect(t.amount).toBeCloseTo(19.99, 2);
+  expect(t.frequency).toBe('monthly');
+  expect(t.account).toBe('Amex Gold');
+  // It resolves to a real account ("Amex Gold" → cc) and posts.
+  const ccBefore = await balanceOf(exec, 'cc');
+  await applyMutation(exec, 'postRecurring', { templateId: 'rt-new' });
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 19.99, 2);
+
+  await expect(applyMutation(exec, 'createRecurring', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createRecurring', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
+});

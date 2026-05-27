@@ -71,6 +71,31 @@ export async function updateRecurring(exec: Exec, id: string, patch: RecurringPa
   await exec(`UPDATE recurring_templates SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
+export interface NewRecurring {
+  id: string;
+  ledgerId: string;
+  name: string;
+  type: string;
+  amount: number | null;
+  frequency: string;
+  dayOfMonth: number;
+  account: string;
+  from: string | null;
+  autoPost: number;
+}
+
+/** Insert a new recurring template (accounts are referenced by name, like the seed). */
+export async function createRecurring(exec: Exec, t: NewRecurring): Promise<void> {
+  await exec(
+    `INSERT INTO recurring_templates
+       (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
+        from_account_id,from_account_name,category_id,frequency,day_of_month,start_date,
+        next_run,last_run,auto_post,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,0,0,NULL,?,NULL,?,NULL,?,?,date('now'),NULL,NULL,?,1,datetime('now'),datetime('now'))`,
+    [t.id, t.ledgerId, t.name, t.type, t.amount, t.account, t.from, t.frequency, t.dayOfMonth, t.autoPost],
+  );
+}
+
 /** Hard delete a recurring template; recurring_splits cascade away via the FK. */
 export async function deleteRecurring(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM recurring_templates WHERE id = ?', [id]);

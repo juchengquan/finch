@@ -4,7 +4,7 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import { listRecurring, deleteRecurring as qDeleteRecurring, updateRecurring as qUpdateRecurring, type RecurringPatch } from './queries/recurring';
+import { listRecurring, deleteRecurring as qDeleteRecurring, updateRecurring as qUpdateRecurring, createRecurring as qCreateRecurring, type RecurringPatch } from './queries/recurring';
 import {
   recomputeForTransaction,
   createAccount as qCreateAccount,
@@ -435,6 +435,31 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteSubscription':
       await qDeleteSubscription(exec, str(args.id));
       return;
+    case 'createRecurring': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Template name is required');
+      const type = str(args.type || 'expense');
+      if (!['income', 'expense', 'transfer'].includes(type)) throw new Error(`Unknown type "${type}"`);
+      const frequency = str(args.frequency || 'monthly');
+      if (!['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
+        throw new Error(`Unknown frequency "${frequency}"`);
+      }
+      const account = str(args.account).trim();
+      if (!account) throw new Error('An account is required');
+      await qCreateRecurring(exec, {
+        id: str(args.id || newId('rt')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        type,
+        amount: args.amount == null || args.amount === '' ? null : Number(args.amount),
+        frequency,
+        dayOfMonth: Number(args.dayOfMonth) || 1,
+        account,
+        from: type === 'transfer' && args.from ? str(args.from).trim() : null,
+        autoPost: args.autoPost ? 1 : 0,
+      });
+      return;
+    }
     case 'deleteRecurring':
       await qDeleteRecurring(exec, str(args.id));
       return;

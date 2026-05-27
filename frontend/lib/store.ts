@@ -135,6 +135,7 @@ interface FinanceState {
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
   updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
   deleteSubscription: (id: string) => void;
+  createRecurring: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; account: string; from?: string; autoPost?: boolean; ledgerId?: string }) => string;
   updateRecurring: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; autoPost?: number }) => void;
   deleteRecurring: (id: string) => void;
   updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
@@ -409,6 +410,24 @@ export const useFinanceStore = create<FinanceState>()(
       deleteSubscription: (id) => {
         set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
         syncMutation('deleteSubscription', { id });
+      },
+
+      createRecurring: (input) => {
+        const id = `rt-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const type = input.type ?? 'expense';
+        const frequency = input.frequency ?? 'monthly';
+        const dayOfMonth = input.dayOfMonth ?? 1;
+        const autoPost = input.autoPost ? 1 : 0;
+        const amount = input.amount ?? null;
+        set((s) => ({
+          recurring: [
+            ...s.recurring,
+            { id, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from, autoPost, nextRun: '', lastRun: '' },
+          ],
+        }));
+        syncMutation('createRecurring', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from ?? null, autoPost: !!input.autoPost });
+        return id;
       },
 
       updateRecurring: (id, patch) => {
