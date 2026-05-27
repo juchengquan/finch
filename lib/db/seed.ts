@@ -17,8 +17,12 @@ import ledgersData from '@/data/ledgers.json';
 import counterpartiesData from '@/data/counterparties.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
+import devicesData from '@/data/devices.json';
+import goalsData from '@/data/goals.json';
+import subscriptionsData from '@/data/subscriptions.json';
+import scheduledItemsData from '@/data/scheduled-items.json';
+import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
-import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
 
 const SEED_TS = '2026-05-26T00:00:00';
@@ -128,6 +132,65 @@ export async function seedReference(exec: Exec): Promise<void> {
       [isoDate(r.date), r.currency, r.rate, r.source ?? null],
     );
   }
+
+  type DeviceRow = { id: string; name: string; lastSync: string; lastTxn?: string; current?: number };
+  for (const d of devicesData as DeviceRow[]) {
+    await exec(
+      'INSERT OR IGNORE INTO sync_log (device_id,ledger_id,device_name,last_sync_at,last_txn_id,is_current) VALUES (?,?,?,?,?,?)',
+      [d.id, 'personal', d.name, d.lastSync, d.lastTxn ?? null, d.current ? 1 : 0],
+    );
+  }
+
+  type GoalRow = { id: string; name: string; target: number; saved: number; eta?: string; hue?: number; ledger?: string };
+  const goals = goalsData as GoalRow[];
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    await exec(
+      'INSERT OR IGNORE INTO goals (id,ledger_id,name,target,saved,eta,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [g.id, g.ledger ?? 'personal', g.name, g.target, g.saved ?? 0, g.eta ?? null, g.hue ?? 200, i, SEED_TS],
+    );
+  }
+
+  type TagSeed = { id: string; name: string; color?: string; ledger?: string };
+  for (const t of (tagsData as { tags: TagSeed[] }).tags) {
+    await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
+      t.id, t.ledger ?? 'personal', t.name, t.color ?? null,
+    ]);
+  }
+
+  type SubRow = { id: string; name: string; amount: number; cadence?: string; next?: string; logoHue?: number; ledger?: string };
+  const subs = subscriptionsData as SubRow[];
+  for (let i = 0; i < subs.length; i++) {
+    const s = subs[i];
+    await exec(
+      'INSERT OR IGNORE INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [s.id, s.ledger ?? 'personal', s.name, s.amount, s.cadence ?? 'monthly', s.next ?? null, s.logoHue ?? 200, i, SEED_TS],
+    );
+  }
+
+  type SchedRow = { day: number; month: string; label: string; amount: number; type: string; color?: string; ledger?: string };
+  const sched = scheduledItemsData as SchedRow[];
+  for (let i = 0; i < sched.length; i++) {
+    const s = sched[i];
+    await exec(
+      'INSERT OR IGNORE INTO scheduled_items (id,ledger_id,day,month,label,amount,type,color) VALUES (?,?,?,?,?,?,?,?)',
+      [`sch-${i}`, s.ledger ?? 'personal', s.day, s.month, s.label, s.amount, s.type, s.color ?? null],
+    );
+  }
+}
+
+/** Seed the static tag→transaction assignments. Must run after transactions
+ *  exist; OR IGNORE skips rows whose transaction is absent. */
+export async function seedTransactionTags(exec: Exec): Promise<void> {
+  type Assign = { transactionId: string; tagId: string };
+  for (const a of (tagsData as { assignments: Assign[] }).assignments) {
+    // Guard the FK: OR IGNORE does not suppress foreign-key violations, and
+    // buildState may rebuild from a transaction set that lacks these seed ids.
+    await exec(
+      'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM transactions WHERE id = ?)',
+      [a.transactionId, a.tagId, a.transactionId],
+    );
+  }
 }
 
 /**
@@ -148,8 +211,14 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')),
     );
     for (const t of ordered) {
+      // `amount` (Tx) is always the ledger-base figure that drives balances;
+      // `nativeAmount`/`currency` describe the original entry. For foreign-currency
+      // rows the exchange rate is locked at import (amount_base ÷ native).
       running += t.amount;
       const ledgerId = t.ledgerId ?? 'personal';
+      const native = t.nativeAmount ?? t.amount;
+      const rate = native !== 0 ? Math.round((t.amount / native) * 1e6) / 1e6 : 1;
+      const currency = t.currency ?? baseOf(ledgerId);
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
@@ -157,9 +226,9 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
            balance_after,currency,notes,recurring,created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          t.id, ledgerId, t.account, t.date, t.time ?? null, t.amount, t.amount, 1, t.date,
+          t.id, ledgerId, t.account, t.date, t.time ?? null, native, t.amount, rate, t.date,
           t.merchant, t.category, null, t.transferGroupId ?? null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          Math.round(running * 100) / 100, baseOf(ledgerId), t.note || null, t.recurring ? 1 : 0, SEED_TS,
+          Math.round(running * 100) / 100, currency, t.note || null, t.recurring ? 1 : 0, SEED_TS,
         ],
       );
     }
@@ -169,7 +238,6 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
 /** Seed the transitional store slices (pending/recurring + empty override maps). */
 export async function seedAppStateDefaults(exec: Exec): Promise<void> {
   const entries: [string, unknown][] = [
-    ['pending', pendingData],
     ['recurring', recurringData],
     ['budgetOverrides', {}],
     ['accountOverrides', {}],
@@ -187,6 +255,7 @@ export async function seedDatabase(exec: Exec): Promise<void> {
   try {
     await seedReference(exec);
     await insertTransactions(exec, transactionsData as Tx[]);
+    await seedTransactionTags(exec);
     await seedAppStateDefaults(exec);
     await exec('COMMIT');
   } catch (err) {

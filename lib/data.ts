@@ -12,7 +12,6 @@ import cashflowData from '@/data/cashflow.json';
 import ledgersData from '@/data/ledgers.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import counterpartiesData from '@/data/counterparties.json';
-import pendingData from '@/data/pending.json';
 import recurringTemplatesData from '@/data/recurring-templates.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import currenciesData from '@/data/currencies.json';
@@ -48,7 +47,6 @@ export const LEDGER = {
   active: 'personal',
   transferGroups: transferGroupsData,
   counterparties: counterpartiesData,
-  pending: pendingData,
   recurringTemplates: recurringTemplatesData,
   exchangeRates: exchangeRatesData,
   devices: [

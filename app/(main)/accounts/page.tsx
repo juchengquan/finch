@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Icon, Money, CatBar } from '@/components/primitives';
+import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { useLedger } from '@/components/ledger-provider';
@@ -9,7 +9,7 @@ import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById } from '@/lib/data';
-import { accountBalance } from '@/lib/select';
+import { accountBalance, netWorthSeries } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
@@ -117,6 +117,7 @@ export default function AccountsPage() {
   }
 
   const total = ledgerAccounts.reduce((s, a) => s + balanceOf(a.id), 0);
+  const nwSeries = netWorthSeries(allTxns, accounts, activeId);
   const groupedAccounts = MOCK.accountGroups.map((g) => ({
     ...g,
     accounts: ledgerAccounts.filter((a) => a.group === g.id),
@@ -132,6 +133,11 @@ export default function AccountsPage() {
           value={<Money value={total} mono={false} className="font-serif" />}
           sublabel={<span className="text-success">+ <Money value={812} /> this month</span>}
         />
+        {nwSeries.length > 2 && (
+          <div className="mt-3">
+            <Sparkline values={nwSeries} width={320} height={48} color="var(--primary)" fillOpacity={0.1} />
+          </div>
+        )}
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">

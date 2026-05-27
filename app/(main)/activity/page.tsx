@@ -28,15 +28,19 @@ function dayLabel(date: string) {
 export default function ActivityPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const allTxns = useFinanceStore((s) => s.transactions);
+  const allTags = useFinanceStore((s) => s.tags);
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
+  const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
 
   const txns = allTxns.filter((t) => {
     if ((t.ledgerId ?? 'personal') !== activeId) return false;
     if (filter === 'in' && t.amount <= 0) return false;
     if (filter === 'out' && t.amount >= 0) return false;
     if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;
+    if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false;
     return true;
   });
 
@@ -77,6 +81,26 @@ export default function ActivityPage() {
             </button>
           ))}
         </div>
+
+        {ledgerTags.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {ledgerTags.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTagFilter((prev) => (prev === t.id ? null : t.id))}
+                className={cn(
+                  'rounded-lg px-2.5 py-1 text-[11px] transition-colors',
+                  tagFilter === t.id
+                    ? 'bg-foreground text-background'
+                    : 'bg-secondary text-secondary-foreground',
+                )}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {txns.length === 0 && (
           <div className="text-muted-foreground py-10 text-center text-sm">No transactions</div>

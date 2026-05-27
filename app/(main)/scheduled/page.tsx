@@ -5,6 +5,8 @@ import { Money, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { SCHEDULED_ITEMS } from '@/lib/data';
 import { ScheduledItem } from '@/components/ScheduledItem';
+import { useLedger } from '@/components/ledger-provider';
+import { useFinanceStore } from '@/lib/store';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -15,16 +17,22 @@ const MONTH_NAMES = [
 
 export default function ScheduledPage() {
   const [view, setView] = useState({ y: 2026, m: 5 }); // June 2026
+  const { activeId } = useLedger();
+  const storeItems = useFinanceStore((s) => s.scheduledItems);
+  // Projected scheduled items for the active ledger; static data as SSR fallback.
+  const items = storeItems.length
+    ? storeItems.filter((i) => i.ledgerId === activeId).map((i) => ({ ...i, color: i.color ?? 'var(--primary)' }))
+    : SCHEDULED_ITEMS;
 
-  const totalOutgoing = SCHEDULED_ITEMS.filter((i) => i.amount < 0).reduce((s, i) => s + i.amount, 0);
-  const totalIncoming = SCHEDULED_ITEMS.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
+  const totalOutgoing = items.filter((i) => i.amount < 0).reduce((s, i) => s + i.amount, 0);
+  const totalIncoming = items.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
   const netTotal = totalIncoming + totalOutgoing;
 
   const firstDow = new Date(view.y, view.m, 1).getDay();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
 
   const dotsByDay = new Map<number, string[]>();
-  for (const it of SCHEDULED_ITEMS) {
+  for (const it of items) {
     if (MONTHS.indexOf(it.month) !== view.m) continue;
     const arr = dotsByDay.get(it.day) ?? [];
     arr.push(it.color);
@@ -108,7 +116,7 @@ export default function ScheduledPage() {
         <div className="text-muted-foreground px-1 font-mono text-[10px] tracking-wider uppercase">
           Upcoming
         </div>
-        {SCHEDULED_ITEMS.map((item, i) => (
+        {items.map((item, i) => (
           <ScheduledItem key={i} item={item} />
         ))}
       </div>
