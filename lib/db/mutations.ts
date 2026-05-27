@@ -4,7 +4,7 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import type { RecurringTemplate } from '@/lib/store';
+import { listRecurring } from './queries/recurring';
 import {
   addTransaction as qAdd,
   updateTransaction as qUpdate,
@@ -38,6 +38,8 @@ const RESET_TABLES = [
   'goals',
   'subscriptions',
   'scheduled_items',
+  'recurring_splits',
+  'recurring_templates',
   'sync_log',
   'tags',
   'budgets',
@@ -134,7 +136,7 @@ async function postSingle(
 async function postRecurring(exec: Exec, args: Args): Promise<void> {
   const templateId = str(args.templateId);
   const ledgerId = 'personal';
-  const recurring = await getJson<RecurringTemplate[]>(exec, 'recurring', []);
+  const recurring = await listRecurring(exec, ledgerId);
   const t = recurring.find((r) => r.id === templateId);
   if (!t) throw new Error('Template not found');
   const date = new Date().toISOString().slice(0, 10);
@@ -232,13 +234,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'updateRecurringSplit': {
-      const recurring = await getJson<RecurringTemplate[]>(exec, 'recurring', []);
-      const next = recurring.map((t) =>
-        t.id === str(args.templateId) && t.splits
-          ? { ...t, splits: t.splits.map((sp, i) => (i === Number(args.index) ? { ...sp, pct: Number(args.pct) } : sp)) }
-          : t,
+      await exec(
+        `UPDATE recurring_splits SET amount_pct = ?
+          WHERE id = (SELECT id FROM recurring_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
+        [Number(args.pct), str(args.templateId), Number(args.index)],
       );
-      await setJson(exec, 'recurring', next);
       return;
     }
     case 'verifyCounterparty': {
