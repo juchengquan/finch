@@ -219,8 +219,10 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
 CREATE TABLE IF NOT EXISTS sync_log (
   device_id    TEXT PRIMARY KEY,
   ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  device_name  TEXT NOT NULL,
   last_sync_at TEXT NOT NULL,
-  last_txn_id  TEXT
+  last_txn_id  TEXT,
+  is_current   INTEGER NOT NULL DEFAULT 0
 );
 
 -- Transitional store slices not yet migrated to real tables (pending, recurring,

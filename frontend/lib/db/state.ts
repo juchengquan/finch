@@ -16,6 +16,7 @@ import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listCategories } from './queries/categories';
 import { listCounterparties } from './queries/counterparties';
+import { listExchangeRates, listDevices } from './queries/system';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
@@ -93,12 +94,14 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties] = await Promise.all([
+  const [accounts, categories, counterparties, exchangeRates, devices] = await Promise.all([
     listAccounts(exec),
     listCategories(exec),
     listCounterparties(exec),
+    listExchangeRates(exec),
+    listDevices(exec),
   ]);
-  return { transactions, ...rest, accounts, categories, counterparties };
+  return { transactions, ...rest, accounts, categories, counterparties, exchangeRates, devices };
 }
 
 /** Serialise store state into portable relational `.db` bytes. */

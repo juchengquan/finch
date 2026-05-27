@@ -2,6 +2,7 @@ import type { Tx, PendingItem, RecurringTemplate, AccountOverride } from '@/lib/
 import type { AccountRow } from './queries/accounts';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
+import type { ExchangeRate, Device } from './queries/system';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -27,4 +28,6 @@ export interface ProjectedState extends PersistState {
   accounts: AccountRow[];
   categories: CategoryRow[];
   counterparties: Counterparty[];
+  exchangeRates: ExchangeRate[];
+  devices: Device[];
 }

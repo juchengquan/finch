@@ -7,6 +7,7 @@ import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
+import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 
 export interface Tx {
   id: string;
@@ -96,6 +97,8 @@ interface FinanceState {
   accounts: AccountRow[];
   categories: CategoryRow[];
   counterparties: Counterparty[];
+  exchangeRates: ExchangeRate[];
+  devices: Device[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -138,6 +141,8 @@ export const useFinanceStore = create<FinanceState>()(
       accounts: [],
       categories: [],
       counterparties: [],
+      exchangeRates: [],
+      devices: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;

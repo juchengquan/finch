@@ -17,6 +17,7 @@ import ledgersData from '@/data/ledgers.json';
 import counterpartiesData from '@/data/counterparties.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
+import devicesData from '@/data/devices.json';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
@@ -126,6 +127,14 @@ export async function seedReference(exec: Exec): Promise<void> {
     await exec(
       'INSERT OR IGNORE INTO exchange_rates (date,currency,rate_to_sgd,source) VALUES (?,?,?,?)',
       [isoDate(r.date), r.currency, r.rate, r.source ?? null],
+    );
+  }
+
+  type DeviceRow = { id: string; name: string; lastSync: string; lastTxn?: string; current?: number };
+  for (const d of devicesData as DeviceRow[]) {
+    await exec(
+      'INSERT OR IGNORE INTO sync_log (device_id,ledger_id,device_name,last_sync_at,last_txn_id,is_current) VALUES (?,?,?,?,?,?)',
+      [d.id, 'personal', d.name, d.lastSync, d.lastTxn ?? null, d.current ? 1 : 0],
     );
   }
 }

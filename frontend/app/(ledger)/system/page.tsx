@@ -6,6 +6,7 @@ import { Icon, Sparkline } from '@/components/primitives';
 import { ScreenHeader, MobilePage, SchemaChip, IconButton } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { LEDGER } from '@/lib/data';
+import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 const SOURCE_STYLE: Record<string, string> = {
@@ -15,10 +16,19 @@ const SOURCE_STYLE: Record<string, string> = {
 };
 
 export default function SystemPage() {
-  const rates = LEDGER.exchangeRates;
+  const storeRates = useFinanceStore((s) => s.exchangeRates);
+  const storeDevices = useFinanceStore((s) => s.devices);
+  // Projected DB rows once hydrated; static LEDGER data as the SSR fallback.
+  const rates = storeRates.length ? storeRates : LEDGER.exchangeRates;
+  const devices = storeDevices.length
+    ? storeDevices
+    : LEDGER.devices.map((d) => ({ id: d.id, name: d.name, lastSync: d.last, lastTxn: d.txn, current: !!d.current }));
   const currencies = [...new Set(rates.map((r) => r.currency))];
   const byCurrency = currencies.map((cur) => {
-    const series = rates.filter((r) => r.currency === cur).slice().reverse();
+    const series = rates
+      .filter((r) => r.currency === cur)
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
     return { cur, latest: series[series.length - 1], values: series.map((s) => s.rate) };
   });
 
@@ -45,10 +55,10 @@ export default function SystemPage() {
               <span
                 className={cn(
                   'rounded px-1.5 py-0.5 font-mono text-[9px] uppercase',
-                  SOURCE_STYLE[row.latest.source] ?? 'bg-secondary text-muted-foreground',
+                  SOURCE_STYLE[row.latest.source ?? ''] ?? 'bg-secondary text-muted-foreground',
                 )}
               >
-                {row.latest.source}
+                {row.latest.source ?? 'manual'}
               </span>
               <div className="w-24 text-right font-mono text-[13px] tabular-nums">{row.latest.rate.toFixed(5)}</div>
             </div>
@@ -73,7 +83,7 @@ export default function SystemPage() {
           <SchemaChip label="sync_log" />
         </div>
         <div className="bg-card border-border overflow-hidden rounded-xl border">
-          {LEDGER.devices.map((d, i) => (
+          {devices.map((d, i) => (
             <div key={d.id} className={cn('flex items-center gap-3 p-3.5', i && 'border-border border-t')}>
               <div className="bg-secondary text-secondary-foreground flex size-9 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold">
                 {d.name.charAt(0)}
@@ -88,7 +98,7 @@ export default function SystemPage() {
                   ) : null}
                 </div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
-                  last sync {d.last} · last txn {d.txn}
+                  last sync {d.lastSync} · last txn {d.lastTxn}
                 </div>
               </div>
             </div>
