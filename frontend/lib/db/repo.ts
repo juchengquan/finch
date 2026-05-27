@@ -1,4 +1,4 @@
-import type { Tx, RecurringTemplate, AccountOverride } from '@/lib/store';
+import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
@@ -18,7 +18,6 @@ export type Exec = (sql: string, bind?: SqlBind) => Promise<Row[]>;
 export interface PersistState {
   transactions: Tx[];
   budgetOverrides: Record<string, number>;
-  accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
 }

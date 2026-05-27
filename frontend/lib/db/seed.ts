@@ -38,7 +38,7 @@ const ACCOUNT_TYPE: Record<string, string> = {
   virtual: 'virtual',
 };
 
-type AccountRow = { id: string; name: string; type: string; group: string; balance: number; last4?: string; ledger?: string };
+type AccountRow = { id: string; name: string; type: string; group: string; balance: number; last4?: string; color?: string; ledger?: string };
 type CategoryRow = { id: string; name: string; budget?: number; icon?: string; ledger?: string };
 type CounterpartyRow = { id: string; name: string; aliases?: string[]; category?: string; verified?: number };
 type TransferRow = {
@@ -107,10 +107,10 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (const a of accounts) {
     const ledgerId = a.ledger ?? 'personal';
     await exec(
-      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,credit_limit,notes,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,credit_limit,notes,color,last4,institution,routing,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       // opening_balance starts at the known balance; insertTransactions overwrites
       // it with the true opening (known − Σ bases) for accounts that have txns.
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, null, null, 1, SEED_TS, SEED_TS],
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, null, a.color ?? null, a.last4 ?? null, null, null, null, 1, SEED_TS, SEED_TS],
     );
   }
 
@@ -292,7 +292,6 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
 export async function seedAppStateDefaults(exec: Exec): Promise<void> {
   const entries: [string, unknown][] = [
     ['budgetOverrides', {}],
-    ['accountOverrides', {}],
     ['verifiedExtra', []],
     ['aliasExtra', {}],
   ];

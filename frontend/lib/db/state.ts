@@ -10,7 +10,7 @@
 // until their own phase migrates them to real tables.
 
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
-import { applySchema } from './schema';
+import { applySchema, migrate } from './schema';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
@@ -26,7 +26,6 @@ import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
   'budgetOverrides',
-  'accountOverrides',
   'verifiedExtra',
   'aliasExtra',
 ] as const;
@@ -34,7 +33,6 @@ const APP_STATE_KEYS = [
 export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
   const values: Record<string, unknown> = {
     budgetOverrides: state.budgetOverrides,
-    accountOverrides: state.accountOverrides,
     verifiedExtra: state.verifiedExtra,
     aliasExtra: state.aliasExtra,
   };
@@ -48,7 +46,6 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
   return {
     budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
-    accountOverrides: (m.get('accountOverrides') as PersistState['accountOverrides']) ?? {},
     verifiedExtra: (m.get('verifiedExtra') as PersistState['verifiedExtra']) ?? [],
     aliasExtra: (m.get('aliasExtra') as PersistState['aliasExtra']) ?? {},
   };
@@ -135,6 +132,7 @@ export async function serializeState(state: PersistState): Promise<Uint8Array> {
     const exec = execFor(db);
     await applySchema(exec);
     await buildState(exec, state);
+    await migrate(exec, { fresh: true }); // current schema → just stamp the version
     return sqlite3.capi.sqlite3_js_db_export(db as never);
   } finally {
     db.close();
@@ -158,6 +156,7 @@ export async function deserializeState(bytes: Uint8Array): Promise<ProjectedStat
     if (rc) throw new Error(`Could not read database (code ${rc})`);
     const exec = execFor(db);
     await applySchema(exec); // ensure newer objects exist on older files
+    await migrate(exec, { fresh: false }); // bring older exports up to the current columns
     return await projectState(exec);
   } finally {
     db.close();

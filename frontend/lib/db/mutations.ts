@@ -5,7 +5,15 @@
 
 import type { Exec } from './repo';
 import { listRecurring } from './queries/recurring';
-import { recomputeForTransaction } from './queries/accounts';
+import {
+  recomputeForTransaction,
+  createAccount as qCreateAccount,
+  updateAccount as qUpdateAccount,
+  archiveAccount as qArchiveAccount,
+  deleteAccount as qDeleteAccount,
+  type AccountPatch,
+} from './queries/accounts';
+import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
   addTransaction as qAdd,
@@ -237,12 +245,40 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await setJson(exec, 'budgetOverrides', bo);
       return;
     }
-    case 'setAccountDetails': {
-      const ao = await getJson<Record<string, Record<string, unknown>>>(exec, 'accountOverrides', {});
-      ao[str(args.accountId)] = { ...ao[str(args.accountId)], ...(args.patch as Record<string, unknown>) };
-      await setJson(exec, 'accountOverrides', ao);
+    case 'createAccount': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Account name is required');
+      const type = str(args.type || 'savings');
+      if (!isAccountType(type)) throw new Error(`Unknown account type "${type}"`);
+      await qCreateAccount(exec, {
+        id: str(args.id || newId('acct')),
+        ledgerId,
+        name,
+        type,
+        currency: str(args.currency || 'SGD'),
+        groupId: args.groupId ? str(args.groupId) : null,
+        openingBalance: Number(args.openingBalance ?? 0),
+        color: args.color ? str(args.color) : null,
+        last4: args.last4 ? str(args.last4) : null,
+      });
       return;
     }
+    case 'updateAccount': {
+      const patch = (args.patch ?? {}) as AccountPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Account name is required');
+      if (patch.type !== undefined && !isAccountType(str(patch.type))) {
+        throw new Error(`Unknown account type "${patch.type}"`);
+      }
+      await qUpdateAccount(exec, str(args.id), patch);
+      return;
+    }
+    case 'archiveAccount':
+      await qArchiveAccount(exec, str(args.id));
+      return;
+    case 'deleteAccount':
+      await qDeleteAccount(exec, str(args.id));
+      return;
     case 'updateRecurringSplit': {
       await exec(
         `UPDATE recurring_splits SET amount_pct = ?

@@ -63,13 +63,26 @@ export interface RecurringTemplate {
   splits?: RecurringSplit[];
 }
 
-// Editable fields on an otherwise-static MOCK account.
-export interface AccountOverride {
+// Editable account fields, applied as a patch against the real accounts table.
+export interface AccountPatch {
   name?: string;
   type?: string;
-  last4?: string;
-  institution?: string;
-  routing?: string;
+  last4?: string | null;
+  institution?: string | null;
+  routing?: string | null;
+  color?: string | null;
+  groupId?: string | null;
+}
+
+export interface NewAccountInput {
+  name: string;
+  type: string;
+  currency?: string;
+  groupId?: string | null;
+  openingBalance?: number;
+  color?: string | null;
+  last4?: string | null;
+  ledgerId?: string;
 }
 
 const SEED_TX = transactionsData as Tx[];
@@ -80,7 +93,6 @@ interface FinanceState {
   recurring: RecurringTemplate[];
   // Editable overrides on otherwise-static mock data, persisted.
   budgetOverrides: Record<string, number>;
-  accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
   // Reference / derived data projected from the server DB (read-only mirror).
@@ -101,7 +113,9 @@ interface FinanceState {
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
-  setAccountDetails: (accountId: string, patch: AccountOverride) => void;
+  createAccount: (input: NewAccountInput) => string;
+  updateAccount: (id: string, patch: AccountPatch) => void;
+  archiveAccount: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   verifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
@@ -133,7 +147,6 @@ export const useFinanceStore = create<FinanceState>()(
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
       budgetOverrides: {},
-      accountOverrides: {},
       verifiedExtra: [],
       aliasExtra: {},
       accounts: [],
@@ -200,14 +213,31 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('setBudget', { categoryId, amount });
       },
 
-      setAccountDetails: (accountId, patch) => {
-        set((s) => ({
-          accountOverrides: {
-            ...s.accountOverrides,
-            [accountId]: { ...s.accountOverrides[accountId], ...patch },
-          },
-        }));
-        syncMutation('setAccountDetails', { accountId, patch });
+      createAccount: (input) => {
+        const id = `acct-${Date.now().toString(36)}`;
+        syncMutation('createAccount', {
+          id,
+          ledgerId: input.ledgerId ?? 'personal',
+          name: input.name,
+          type: input.type,
+          currency: input.currency ?? 'SGD',
+          groupId: input.groupId ?? null,
+          openingBalance: input.openingBalance ?? 0,
+          color: input.color ?? null,
+          last4: input.last4 ?? null,
+        });
+        return id;
+      },
+
+      updateAccount: (id, patch) => {
+        // Optimistically patch the projected row; syncMutation re-projects from the DB.
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+        syncMutation('updateAccount', { id, patch });
+      },
+
+      archiveAccount: (id) => {
+        set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
+        syncMutation('archiveAccount', { id });
       },
 
       updateRecurringSplit: (templateId, index, pct) => {
@@ -301,7 +331,6 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: SEED_TX,
           recurring: SEED_RECURRING,
           budgetOverrides: {},
-          accountOverrides: {},
           verifiedExtra: [],
           aliasExtra: {},
         });

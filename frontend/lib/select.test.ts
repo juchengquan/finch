@@ -26,6 +26,10 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
+  color: null,
+  last4: null,
+  institution: null,
+  routing: null,
   ...over,
 });
 

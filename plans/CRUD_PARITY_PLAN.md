@@ -193,9 +193,11 @@ edit/cancel.)
    `recomputeForTransaction` in `queries/accounts.ts`, wired into
    `updateTransaction` / `deleteTransaction`; `opening_balance` is now stored at
    seed time. Fixes the stale-balance-after-edit/cancel bug.
-2. **Accounts**: add the display columns (§0) + create + table-backed update +
-   archive; retire `accountOverrides`. (Highest value; removes a shim, exercises
-   the §0 versioning path.)
+2. ✅ **Accounts**: added display columns (`color`/`last4`/`institution`/`routing`,
+   migration `MIGRATIONS[3]`) + `createAccount` + table-backed `updateAccount` +
+   `archiveAccount`/`deleteAccount`; retired the `accountOverrides` shim (store,
+   projection, seed, persist, breadcrumb). The accounts list + detail screens now
+   read/write the real table; create dialog + archive-confirm UX added.
 3. **Delete/archive everywhere else** (categories, goals, tags, subscriptions,
    recurring, transfers, merchants) + the shared confirm UX.
 4. **Full edit** for tags / subscriptions / goals / recurring / merchants /

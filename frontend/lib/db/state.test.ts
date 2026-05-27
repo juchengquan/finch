@@ -10,7 +10,6 @@ const sample: PersistState = {
     { id: 'f01', merchant: 'FairPrice', category: 'f-grocery', amount: -128.4, account: 'f-dbs', date: '2026-05-24', pending: false, ledgerId: 'family' },
   ],
   budgetOverrides: { food: 800 },
-  accountOverrides: { cc: { name: 'Amex Platinum', institution: 'Amex' } },
   verifiedExtra: ['cp-04'],
   aliasExtra: { 'cp-04': ['DDD', 'DON DONKI'] },
 };
@@ -38,7 +37,6 @@ test('store state round-trips through the relational schema', async () => {
   expect(loaded.transactions.find((t) => t.id === 'f01')!.ledgerId).toBe('family');
 
   expect(loaded.budgetOverrides.food).toBe(800);
-  expect(loaded.accountOverrides.cc).toEqual({ name: 'Amex Platinum', institution: 'Amex' });
   expect(loaded.verifiedExtra).toContain('cp-04');
   expect(loaded.aliasExtra['cp-04']).toEqual(['DDD', 'DON DONKI']);
   expect(loaded.recurring[0].splits?.[0].pct).toBe(60);
