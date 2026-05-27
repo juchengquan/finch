@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { catById, acctById } from '@/lib/data';
-import { useFinanceStore } from '@/lib/store';
+import { useFinanceStore, type Tx } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
+import { useDb } from '@/components/db-provider';
+import { listTransactions, type Direction } from '@/lib/db/queries/transactions';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { cn } from '@/lib/utils';
 
@@ -31,14 +33,39 @@ export default function ActivityPage() {
   const allTxns = useFinanceStore((s) => s.transactions);
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
+  const { exec, version } = useDb();
 
-  const txns = allTxns.filter((t) => {
+  // Client-side filter over the store — used until the query DB is ready and as
+  // a fallback if a SQL query fails.
+  const storeTxns = allTxns.filter((t) => {
     if ((t.ledgerId ?? 'personal') !== activeId) return false;
     if (filter === 'in' && t.amount <= 0) return false;
     if (filter === 'out' && t.amount >= 0) return false;
     if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
   });
+
+  // DB-backed list/search/filter. Re-runs when the query DB rebuilds (version),
+  // the active ledger changes, or the filter/search input changes.
+  const [dbTxns, setDbTxns] = useState<Tx[] | null>(null);
+  useEffect(() => {
+    if (!exec) return; // not ready yet — storeTxns fallback is shown
+    let cancelled = false;
+    const direction: Direction = filter === 'all' ? 'all' : filter;
+    listTransactions(exec, { ledgerId: activeId, direction, query: query || undefined })
+      .then((rows) => {
+        if (!cancelled) setDbTxns(rows);
+      })
+      .catch((err) => {
+        console.error('Activity SQL query failed; using store fallback', err);
+        if (!cancelled) setDbTxns(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, activeId, filter, query]);
+
+  const txns = dbTxns ?? storeTxns;
 
   const groups: { date: string; items: typeof txns }[] = [];
   for (const t of txns) {

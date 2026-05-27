@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, MerchantGlyph } from '@/components/primitives';
 import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useDb } from '@/components/db-provider';
+import { listCategories } from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -110,14 +112,40 @@ export function TransactionDetail({ txId }: { txId: string }) {
   const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const { exec, version } = useDb();
   const [splitAmt, setSplitAmt] = useState('');
   const [splitCat, setSplitCat] = useState(MOCK.categories[0].id);
+
+  // Category options come from the live DB, scoped to this transaction's ledger.
+  const ledgerId = tx?.ledgerId ?? 'personal';
+  const [cats, setCats] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    listCategories(exec, ledgerId)
+      .then((c) => {
+        if (cancelled) return;
+        const opts = c.map((x) => ({ id: x.id, name: x.name }));
+        setCats(opts);
+        setSplitCat((prev) => (opts.some((o) => o.id === prev) ? prev : opts[0]?.id ?? prev));
+      })
+      .catch((err) => console.error('Could not load categories from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, ledgerId]);
 
   if (!tx) {
     return (
       <div className="text-muted-foreground py-20 text-center text-sm">Transaction not found</div>
     );
   }
+
+  const categoryOptions = cats.length
+    ? cats
+    : MOCK.categories
+        .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === ledgerId)
+        .map((c) => ({ id: c.id, name: c.name }));
 
   const cat = catById(tx.category);
   const acct = acctById(tx.account);
@@ -206,7 +234,7 @@ export function TransactionDetail({ txId }: { txId: string }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MOCK.categories.map((c) => (
+                  {categoryOptions.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -259,7 +287,7 @@ export function TransactionDetail({ txId }: { txId: string }) {
               <SelectValue placeholder="Uncategorized" />
             </SelectTrigger>
             <SelectContent align="end">
-              {MOCK.categories.map((c) => (
+              {categoryOptions.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                 </SelectItem>

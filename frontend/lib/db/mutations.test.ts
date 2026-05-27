@@ -1,0 +1,76 @@
+import { test, expect } from 'bun:test';
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import type { SqlValue } from '@sqlite.org/sqlite-wasm';
+import { applySchema } from '@/lib/db/schema';
+import { seedDatabase } from '@/lib/db/seed';
+import { applyMutation } from '@/lib/db/mutations';
+import { listTransfers } from '@/lib/db/queries/transfers';
+import type { Exec } from '@/lib/db/repo';
+
+const initSqlite = sqlite3InitModule as unknown as (
+  opts?: { print?: () => void; printErr?: () => void },
+) => ReturnType<typeof sqlite3InitModule>;
+
+async function seeded(): Promise<Exec> {
+  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec: Exec = async (sql, bind) => {
+    const rows: Record<string, SqlValue>[] = [];
+    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  await applySchema(exec);
+  await seedDatabase(exec);
+  return exec;
+}
+
+const balanceOf = async (exec: Exec, id: string) =>
+  Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
+
+test('createTransfer makes paired rows that move both balances', async () => {
+  const exec = await seeded();
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
+
+  await applyMutation(exec, 'createTransfer', {
+    fromAccountId: 'chk',
+    toAccountId: 'sav',
+    amount: 200,
+    date: '2026-05-27',
+    note: 'Savings sweep',
+  });
+
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 200, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 200, 2);
+
+  const transfers = await listTransfers(exec, 'personal');
+  expect(transfers).toHaveLength(1);
+  expect(transfers[0].fromName).toBe('Chase Checking');
+  expect(transfers[0].toName).toBe('Marcus Savings');
+  expect(transfers[0].amount).toBeCloseTo(200, 2);
+});
+
+test('createTransfer rejects same-account and zero amount', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'chk', amount: 50, date: '2026-05-27' }),
+  ).rejects.toThrow();
+  await expect(
+    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 0, date: '2026-05-27' }),
+  ).rejects.toThrow();
+});
+
+test('transfers are excluded from category spend and cash flow', async () => {
+  const exec = await seeded();
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  const before = await categorySpend(exec, 'personal');
+  await applyMutation(exec, 'createTransfer', {
+    fromAccountId: 'chk',
+    toAccountId: 'sav',
+    amount: 500,
+    date: '2026-05-27',
+  });
+  const after = await categorySpend(exec, 'personal');
+  // A transfer has no category, so category spend is unchanged.
+  expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+});

@@ -4,7 +4,7 @@ import type { SqlValue } from '@sqlite.org/sqlite-wasm';
 import { applySchema } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
 import { listAccounts, netWorth, accountBalanceSeries, setAccountDetails } from '@/lib/db/queries/accounts';
-import { listCategories, monthlyByCategory } from '@/lib/db/queries/categories';
+import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty, addAlias } from '@/lib/db/queries/counterparties';
 import { monthlyCashFlow, budgetProgress } from '@/lib/db/queries/reports';
 import type { Exec } from '@/lib/db/repo';
@@ -54,6 +54,10 @@ test('categories: list + monthly spend', async () => {
   expect(food.spent).toBeGreaterThan(0);
   // Food spend should equal the sum of confirmed food expenses.
   expect(food.spent).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84, 2);
+
+  // All-time map matches the same figure for this seed (all txns are in May).
+  const map = await categorySpend(exec, 'personal');
+  expect(map.food).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84, 2);
 });
 
 test('counterparties: list, search, verify, alias', async () => {

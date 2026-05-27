@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
@@ -8,7 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LEDGER } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useDb } from '@/components/db-provider';
+import { listCounterparties, searchCounterparties } from '@/lib/db/queries/counterparties';
 import { cn } from '@/lib/utils';
+
+const CP_LEDGER = 'personal';
 
 type Counterparty = (typeof LEDGER.counterparties)[number];
 
@@ -118,14 +122,63 @@ export default function MerchantsPage() {
   const verifiedExtra = useFinanceStore((s) => s.verifiedExtra);
   const aliasExtra = useFinanceStore((s) => s.aliasExtra);
   const [query, setQuery] = useState('');
+  const { exec, version } = useDb();
 
-  const isVerified = (c: Counterparty) => c.verified === 1 || verifiedExtra.includes(c.id);
-  const aliasesOf = (c: Counterparty) => [...c.aliases, ...(aliasExtra[c.id] ?? [])];
+  // Verified flag + aliases come from the DB (which reflects verify/alias edits
+  // applied in buildState). Search runs as SQL over name + aliases.
+  const [dbState, setDbState] = useState<{
+    verified: Record<string, boolean>;
+    aliases: Record<string, string[]>;
+  } | null>(null);
+  const [matchIds, setMatchIds] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    listCounterparties(exec, CP_LEDGER)
+      .then((cps) => {
+        if (cancelled) return;
+        const verified: Record<string, boolean> = {};
+        const aliases: Record<string, string[]> = {};
+        for (const c of cps) {
+          verified[c.id] = c.verified;
+          aliases[c.id] = c.aliases;
+        }
+        setDbState({ verified, aliases });
+      })
+      .catch((err) => console.error('Could not load counterparties from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version]);
+
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    searchCounterparties(exec, CP_LEDGER, query)
+      .then((rows) => {
+        if (!cancelled) setMatchIds(rows.map((r) => r.id));
+      })
+      .catch(() => {
+        if (!cancelled) setMatchIds(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, query]);
+
+  const isVerified = (c: Counterparty) =>
+    dbState ? !!dbState.verified[c.id] : c.verified === 1 || verifiedExtra.includes(c.id);
+  const aliasesOf = (c: Counterparty) =>
+    dbState && dbState.aliases[c.id] ? dbState.aliases[c.id] : [...c.aliases, ...(aliasExtra[c.id] ?? [])];
 
   const q = query.toLowerCase();
-  const list = LEDGER.counterparties.filter(
-    (c) => !q || c.name.toLowerCase().includes(q) || aliasesOf(c).some((a) => a.toLowerCase().includes(q)),
-  );
+  const matchSet = matchIds ? new Set(matchIds) : null;
+  const list = matchSet
+    ? LEDGER.counterparties.filter((c) => matchSet.has(c.id))
+    : LEDGER.counterparties.filter(
+        (c) => !q || c.name.toLowerCase().includes(q) || aliasesOf(c).some((a) => a.toLowerCase().includes(q)),
+      );
   const unverified = LEDGER.counterparties.filter((c) => !isVerified(c)).length;
 
   return (
