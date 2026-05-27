@@ -31,6 +31,27 @@ export async function listGoals(exec: Exec, ledgerId?: string): Promise<Goal[]> 
   }));
 }
 
+export interface GoalPatch {
+  name?: string;
+  target?: number;
+  eta?: string | null;
+}
+
+/** Update a goal's editable fields. */
+export async function updateGoal(exec: Exec, id: string, patch: GoalPatch): Promise<void> {
+  const cols: Record<keyof GoalPatch, string> = { name: 'name', target: 'target', eta: 'eta' };
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  for (const key of Object.keys(patch) as (keyof GoalPatch)[]) {
+    if (patch[key] === undefined) continue;
+    sets.push(`${cols[key]} = ?`);
+    bind.push(patch[key] ?? null);
+  }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
 /** Hard delete a goal (no foreign keys reference it). */
 export async function deleteGoal(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM goals WHERE id = ?', [id]);

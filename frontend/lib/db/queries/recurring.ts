@@ -45,6 +45,32 @@ export async function listRecurring(exec: Exec, ledgerId?: string): Promise<Recu
   });
 }
 
+export interface RecurringPatch {
+  name?: string;
+  amount?: number | null;
+  frequency?: string;
+  dayOfMonth?: number;
+  autoPost?: number;
+}
+
+/** Update a recurring template's editable fields. */
+export async function updateRecurring(exec: Exec, id: string, patch: RecurringPatch): Promise<void> {
+  const cols: Record<keyof RecurringPatch, string> = {
+    name: 'name', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month', autoPost: 'auto_post',
+  };
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  for (const key of Object.keys(patch) as (keyof RecurringPatch)[]) {
+    if (patch[key] === undefined) continue;
+    sets.push(`${cols[key]} = ?`);
+    bind.push(patch[key] ?? null);
+  }
+  if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
+  bind.push(id);
+  await exec(`UPDATE recurring_templates SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
 /** Hard delete a recurring template; recurring_splits cascade away via the FK. */
 export async function deleteRecurring(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM recurring_templates WHERE id = ?', [id]);

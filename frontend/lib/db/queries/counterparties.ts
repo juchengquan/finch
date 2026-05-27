@@ -56,6 +56,26 @@ export async function addAlias(exec: Exec, id: string, alias: string): Promise<v
   await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
 }
 
+export interface CounterpartyPatch {
+  name?: string;
+  category?: string | null;
+}
+
+/** Update a merchant's editable fields (canonical name / category). */
+export async function updateCounterparty(exec: Exec, id: string, patch: CounterpartyPatch): Promise<void> {
+  const cols: Record<keyof CounterpartyPatch, string> = { name: 'standardized_name', category: 'category' };
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  for (const key of Object.keys(patch) as (keyof CounterpartyPatch)[]) {
+    if (patch[key] === undefined) continue;
+    sets.push(`${cols[key]} = ?`);
+    bind.push(patch[key] ?? null);
+  }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE counterparties SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
 /** Hard delete a merchant; transactions.counterparty_id becomes NULL via the FK. */
 export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM counterparties WHERE id = ?', [id]);

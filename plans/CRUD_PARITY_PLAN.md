@@ -207,8 +207,14 @@ edit/cancel.)
    have the full data path + tests but no UI yet — tags have no management screen,
    and the merchants list is still static-reference-driven (needs the same
    projection switch accounts got in Phase 2); both will get the ⋯ menu then.
-4. **Full edit** for tags / subscriptions / goals / recurring / merchants /
-   categories (with `categories` `color`/`hue` from §0).
+4. ✅ **Full edit** for subscriptions / goals / recurring / categories (+ data path
+   for tags / merchants). Added `updateCategory` (name/type/icon/**hue** — schema
+   v4 adds `categories.hue`, seeded from JSON), `updateGoal`, `updateSubscription`,
+   `updateRecurring` (name/amount/frequency/dayOfMonth/autoPost), `updateTag`,
+   `updateCounterparty`. Edit dialogs wired via the shared `<RowActions onEdit>` on
+   categories/goals/subscriptions and an Edit dialog on the recurring detail page
+   (with an icon + hue picker for categories). Tags/merchants edit mutations are
+   ready but unwired pending their UI surfaces (same as Phase 3).
 5. **Budgets onto the table** (retire `budgetOverrides`); **Scheduled** CRUD;
    **Transfers** edit.
 

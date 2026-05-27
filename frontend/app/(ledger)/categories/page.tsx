@@ -28,22 +28,73 @@ import { useLedger } from '@/components/ledger-provider';
 import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK } from '@/lib/data';
+import { cn } from '@/lib/utils';
 
 const TYPES = ['expense', 'income', 'transfer'] as const;
+const ICON_CHOICES = ['fork', 'home', 'car', 'bag', 'film', 'heart', 'sync', 'tag', 'coins', 'wallet', 'chart', 'doc'];
+const HUE_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320];
+
+function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {ICON_CHOICES.map((ic) => (
+        <button
+          key={ic}
+          type="button"
+          aria-label={ic}
+          aria-pressed={value === ic}
+          onClick={() => onChange(ic)}
+          className={cn(
+            'flex size-9 items-center justify-center rounded-lg border transition-colors',
+            value === ic ? 'border-foreground bg-secondary' : 'border-border text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Icon name={ic} size={16} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function HuePicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {HUE_CHOICES.map((h) => (
+        <button
+          key={h}
+          type="button"
+          aria-label={`hue ${h}`}
+          aria-pressed={value === h}
+          onClick={() => onChange(h)}
+          className={cn('size-7 rounded-full border-2 transition-transform', value === h ? 'border-foreground scale-110' : 'border-transparent')}
+          style={{ background: `oklch(0.65 0.13 ${h})` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+type CatEdit = { id: string; name: string; type: string; icon: string; hue: number };
 
 export default function CategoriesPage() {
   const { active, activeId } = useLedger();
   const categories = useFinanceStore((s) => s.categories);
   const createCategory = useFinanceStore((s) => s.createCategory);
-  const renameCategory = useFinanceStore((s) => s.renameCategory);
+  const updateCategory = useFinanceStore((s) => s.updateCategory);
   const deleteCategory = useFinanceStore((s) => s.deleteCategory);
 
   const list = categories.filter((c) => c.ledgerId === activeId);
   const hueById = new Map(MOCK.categories.map((c) => [c.id, c.hue]));
+  const hueOf = (c: (typeof list)[number]) => c.hue ?? hueById.get(c.id) ?? 220;
 
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('expense');
-  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
+  const [icon, setIcon] = useState('tag');
+  const [hue, setHue] = useState(220);
+  const [editing, setEditing] = useState<CatEdit | null>(null);
+
+  const openEdit = (c: (typeof list)[number]) =>
+    setEditing({ id: c.id, name: c.name, type: c.type, icon: c.icon ?? 'tag', hue: hueOf(c) });
 
   const submitCreate = () => {
     const n = name.trim();
@@ -51,20 +102,22 @@ export default function CategoriesPage() {
       toast.error('Enter a category name');
       return;
     }
-    createCategory({ name: n, type, ledgerId: activeId });
+    createCategory({ name: n, type, icon, hue, ledgerId: activeId });
     toast.success('Category created', { description: n });
     setName('');
     setType('expense');
+    setIcon('tag');
+    setHue(220);
   };
 
-  const submitRename = () => {
+  const submitEdit = () => {
     const n = editing?.name.trim();
     if (!editing || !n) {
       toast.error('Enter a category name');
       return;
     }
-    renameCategory(editing.id, n);
-    toast.success('Category renamed', { description: n });
+    updateCategory(editing.id, { name: n, type: editing.type, icon: editing.icon, hue: editing.hue });
+    toast.success('Category updated', { description: n });
     setEditing(null);
   };
 
@@ -99,6 +152,14 @@ export default function CategoriesPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Icon</Label>
+            <IconPicker value={icon} onChange={setIcon} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Color</Label>
+            <HuePicker value={hue} onChange={setHue} />
           </div>
         </div>
         <DialogFooter>
@@ -139,12 +200,12 @@ export default function CategoriesPage() {
           >
             <button
               type="button"
-              onClick={() => setEditing({ id: c.id, name: c.name })}
+              onClick={() => openEdit(c)}
               className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
               <div
                 className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-                style={{ background: `oklch(0.65 0.13 ${hueById.get(c.id) ?? 220})` }}
+                style={{ background: `oklch(0.65 0.13 ${hueOf(c)})` }}
               >
                 <Icon name={c.icon ?? 'tag'} size={16} />
               </div>
@@ -154,7 +215,7 @@ export default function CategoriesPage() {
               {c.type}
             </span>
             <RowActions
-              onEdit={() => setEditing({ id: c.id, name: c.name })}
+              onEdit={() => openEdit(c)}
               onDelete={() => { deleteCategory(c.id); toast.success('Category deleted', { description: c.name }); }}
               confirmTitle={`Delete ${c.name}?`}
               confirmDescription="Transactions in this category become uncategorized. This can't be undone."
@@ -166,20 +227,46 @@ export default function CategoriesPage() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename category</DialogTitle>
-            <DialogDescription>Update the category name.</DialogDescription>
+            <DialogTitle>Edit category</DialogTitle>
+            <DialogDescription>Update the name, type, icon and colour.</DialogDescription>
           </DialogHeader>
-          <Input
-            value={editing?.name ?? ''}
-            onChange={(e) => setEditing((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
-            autoFocus
-            onKeyDown={(e) => e.key === 'Enter' && submitRename()}
-          />
+          {editing && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Name</Label>
+                <Input
+                  value={editing.name}
+                  onChange={(e) => setEditing((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && submitEdit()}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Type</Label>
+                <Select value={editing.type} onValueChange={(v) => setEditing((prev) => (prev ? { ...prev, type: v } : prev))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Icon</Label>
+                <IconPicker value={editing.icon} onChange={(v) => setEditing((prev) => (prev ? { ...prev, icon: v } : prev))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Color</Label>
+                <HuePicker value={editing.hue} onChange={(v) => setEditing((prev) => (prev ? { ...prev, hue: v } : prev))} />
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button onClick={submitRename}>Save</Button>
+            <Button onClick={submitEdit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

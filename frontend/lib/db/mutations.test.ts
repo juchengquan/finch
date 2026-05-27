@@ -225,9 +225,12 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
     db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
     return rows;
   };
-  // Minimal pre-versioning shape: accounts without opening_balance.
+  // Minimal pre-versioning shape: accounts without opening_balance (plus the other
+  // tables later migrations alter, sans their added columns — applySchema would
+  // have created these in real paths before migrate runs).
   await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
   await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
+  await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
   await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
   await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
   await migrate(exec, { fresh: false });
@@ -295,4 +298,69 @@ test('deleteTransfer removes both legs and restores balances', async () => {
   expect(Number((await exec('SELECT COUNT(*) AS n FROM transfer_groups WHERE id = ?', [groupId]))[0].n)).toBe(0);
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0, 2);
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0, 2);
+});
+
+test('updateCategory edits name/type/icon/hue', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', hue: 280 } });
+  const [c] = await exec("SELECT name, type, icon, hue FROM categories WHERE id = 'food'");
+  expect(String(c.name)).toBe('Food & Drink');
+  expect(String(c.type)).toBe('income');
+  expect(String(c.icon)).toBe('coins');
+  expect(Number(c.hue)).toBe(280);
+});
+
+test('createCategory persists icon + hue, and listCategories returns hue', async () => {
+  const exec = await seeded();
+  const { listCategories } = await import('@/lib/db/queries/categories');
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'car', hue: 200 });
+  const cat = (await listCategories(exec, 'personal')).find((c) => c.name === 'Travel')!;
+  expect(cat.icon).toBe('car');
+  expect(cat.hue).toBe(200);
+  // Seeded categories keep their JSON hue too.
+  expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
+});
+
+test('updateGoal edits fields and rejects a non-positive target', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Trip', target: 1000 });
+  const id = String((await exec("SELECT id FROM goals WHERE name = 'Trip'"))[0].id);
+  await applyMutation(exec, 'updateGoal', { id, patch: { name: 'Big Trip', target: 2500, eta: 'Dec 2026' } });
+  const [g] = await exec('SELECT name, target, eta FROM goals WHERE id = ?', [id]);
+  expect(String(g.name)).toBe('Big Trip');
+  expect(Number(g.target)).toBe(2500);
+  expect(String(g.eta)).toBe('Dec 2026');
+  await expect(applyMutation(exec, 'updateGoal', { id, patch: { target: 0 } })).rejects.toThrow();
+});
+
+test('updateTag and updateSubscription edit fields', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
+  const [tag] = await exec("SELECT name, color FROM tags WHERE id = 'tag-business'");
+  expect(String(tag.name)).toBe('Work');
+  expect(String(tag.color)).toBe('300');
+
+  const subId = String((await exec('SELECT id FROM subscriptions LIMIT 1'))[0].id);
+  await applyMutation(exec, 'updateSubscription', { id: subId, patch: { name: 'Netflix 4K', amount: 22.99, next: 'Jul 1' } });
+  const [sub] = await exec('SELECT name, amount, next_date FROM subscriptions WHERE id = ?', [subId]);
+  expect(String(sub.name)).toBe('Netflix 4K');
+  expect(Number(sub.amount)).toBeCloseTo(22.99, 2);
+  expect(String(sub.next_date)).toBe('Jul 1');
+});
+
+test('updateRecurring and updateCounterparty edit fields', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateRecurring', { id: 'rt-spotify', patch: { name: 'Spotify Duo', amount: 14.99, frequency: 'yearly', dayOfMonth: 5, autoPost: 0 } });
+  const [r] = await exec("SELECT name, amount, frequency, day_of_month, auto_post FROM recurring_templates WHERE id = 'rt-spotify'");
+  expect(String(r.name)).toBe('Spotify Duo');
+  expect(Number(r.amount)).toBeCloseTo(14.99, 2);
+  expect(String(r.frequency)).toBe('yearly');
+  expect(Number(r.day_of_month)).toBe(5);
+  expect(Number(r.auto_post)).toBe(0);
+
+  const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
+  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co', category: 'shop' } });
+  const [cp] = await exec('SELECT standardized_name, category FROM counterparties WHERE id = ?', [cpId]);
+  expect(String(cp.standardized_name)).toBe('Renamed Co');
+  expect(String(cp.category)).toBe('shop');
 });

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS categories (
   parent_name TEXT,
   type        TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon        TEXT,
+  hue         INTEGER,
   sort_order  INTEGER NOT NULL DEFAULT 0
 );
 
@@ -377,8 +378,9 @@ export async function applySchema(exec: (sql: string, bind?: (string | number | 
 type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record<string, unknown>[]>;
 
 // Bump when the CREATE statements above change shape. Version 1 = the original
-// schema; 2 adds accounts.opening_balance; 3 adds account display columns.
-export const SCHEMA_VERSION = 3;
+// schema; 2 adds accounts.opening_balance; 3 adds account display columns;
+// 4 adds categories.hue.
+export const SCHEMA_VERSION = 4;
 
 // MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
 // created DB already has the latest CREATE statements, so it skips these and is
@@ -397,6 +399,10 @@ const MIGRATIONS: Record<number, string[]> = {
     'ALTER TABLE accounts ADD COLUMN last4 TEXT',
     'ALTER TABLE accounts ADD COLUMN institution TEXT',
     'ALTER TABLE accounts ADD COLUMN routing TEXT',
+  ],
+  4: [
+    // Category accent colour (hue 0–360), previously only in the static mock.
+    'ALTER TABLE categories ADD COLUMN hue INTEGER',
   ],
 };
 

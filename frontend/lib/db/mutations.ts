@@ -4,7 +4,7 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import { listRecurring, deleteRecurring as qDeleteRecurring } from './queries/recurring';
+import { listRecurring, deleteRecurring as qDeleteRecurring, updateRecurring as qUpdateRecurring, type RecurringPatch } from './queries/recurring';
 import {
   recomputeForTransaction,
   createAccount as qCreateAccount,
@@ -13,11 +13,11 @@ import {
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries/accounts';
-import { deleteGoal as qDeleteGoal } from './queries/goals';
-import { deleteTag as qDeleteTag } from './queries/tags';
-import { deleteSubscription as qDeleteSubscription } from './queries/planning';
-import { deleteCategory as qDeleteCategory } from './queries/categories';
-import { deleteCounterparty as qDeleteCounterparty } from './queries/counterparties';
+import { deleteGoal as qDeleteGoal, updateGoal as qUpdateGoal, type GoalPatch } from './queries/goals';
+import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
+import { deleteSubscription as qDeleteSubscription, updateSubscription as qUpdateSubscription, type SubscriptionPatch } from './queries/planning';
+import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
+import { deleteCounterparty as qDeleteCounterparty, updateCounterparty as qUpdateCounterparty, type CounterpartyPatch } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer } from './queries/transfers';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
@@ -314,9 +314,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!name) throw new Error('Category name is required');
       const type = args.type ? str(args.type) : 'expense';
       const icon = args.icon ? str(args.icon) : null;
+      const hue = args.hue != null ? Number(args.hue) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,sort_order) VALUES (?,?,?,?,?,?,?)', [
-        newId('cat'), ledgerId, name, null, type, icon, Number(rows[0]?.n ?? 0),
+      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, null, type, icon, hue, Number(rows[0]?.n ?? 0),
       ]);
       return;
     }
@@ -324,6 +325,44 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const name = str(args.name).trim();
       if (!name) throw new Error('Category name is required');
       await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      return;
+    }
+    case 'updateCategory': {
+      const patch = (args.patch ?? {}) as CategoryPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
+      await qUpdateCategory(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateGoal': {
+      const patch = (args.patch ?? {}) as GoalPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Goal name is required');
+      if (patch.target !== undefined && !(Number(patch.target) > 0)) throw new Error('Goal target must be greater than 0');
+      await qUpdateGoal(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateTag': {
+      const patch = (args.patch ?? {}) as TagPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Tag name is required');
+      await qUpdateTag(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateSubscription': {
+      const patch = (args.patch ?? {}) as SubscriptionPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Subscription name is required');
+      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Amount must be greater than 0');
+      await qUpdateSubscription(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateRecurring': {
+      const patch = (args.patch ?? {}) as RecurringPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
+      await qUpdateRecurring(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateCounterparty': {
+      const patch = (args.patch ?? {}) as CounterpartyPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Merchant name is required');
+      await qUpdateCounterparty(exec, str(args.id), patch);
       return;
     }
     case 'createGoal': {
