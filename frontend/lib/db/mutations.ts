@@ -4,14 +4,15 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import type { PendingItem, RecurringTemplate } from '@/lib/store';
+import type { RecurringTemplate } from '@/lib/store';
 import {
   addTransaction as qAdd,
   updateTransaction as qUpdate,
   cancelTransaction as qCancel,
+  confirmTransaction as qConfirm,
   type AddInput,
 } from './queries/transactions';
-import { seedReference, insertTransactions, seedAppStateDefaults } from './seed';
+import { seedReference, insertTransactions, seedAppStateDefaults, seedTransactionTags } from './seed';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
 
@@ -34,6 +35,11 @@ const RESET_TABLES = [
   'transactions',
   'account_balance_snapshots',
   'ledger_summaries',
+  'goals',
+  'subscriptions',
+  'scheduled_items',
+  'sync_log',
+  'tags',
   'budgets',
   'transfer_groups',
   'counterparties',
@@ -49,6 +55,7 @@ async function resetDb(exec: Exec): Promise<void> {
   for (const t of RESET_TABLES) await exec(`DELETE FROM ${t}`);
   await seedReference(exec);
   await insertTransactions(exec, transactionsData as Tx[]);
+  await seedTransactionTags(exec);
   await seedAppStateDefaults(exec);
 }
 
@@ -204,14 +211,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteTransaction':
       await qCancel(exec, str(args.id));
       return;
-    case 'confirmPending':
-    case 'cancelPending': {
-      const pending = await getJson<PendingItem[]>(exec, 'pending', []);
-      await setJson(exec, 'pending', pending.filter((p) => p.id !== str(args.id)));
+    case 'confirmTransaction':
+      await qConfirm(exec, str(args.id));
       return;
-    }
     case 'confirmAllPending':
-      await setJson(exec, 'pending', []);
+      await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE status = 'pending'", [
+        new Date().toISOString(),
+      ]);
       return;
     case 'setBudget': {
       const bo = await getJson<Record<string, number>>(exec, 'budgetOverrides', {});
@@ -250,6 +256,74 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createTransfer':
       await createTransfer(exec, args);
       return;
+    case 'createCategory': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Category name is required');
+      const type = args.type ? str(args.type) : 'expense';
+      const icon = args.icon ? str(args.icon) : null;
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
+      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,sort_order) VALUES (?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, null, type, icon, Number(rows[0]?.n ?? 0),
+      ]);
+      return;
+    }
+    case 'renameCategory': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Category name is required');
+      await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      return;
+    }
+    case 'createGoal': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      const target = Number(args.target);
+      if (!name) throw new Error('Goal name is required');
+      if (!(target > 0)) throw new Error('Goal target must be greater than 0');
+      const eta = args.eta ? str(args.eta) : null;
+      const hue = args.hue != null ? Number(args.hue) : 200;
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM goals WHERE ledger_id = ?', [ledgerId]);
+      await exec('INSERT INTO goals (id,ledger_id,name,target,saved,eta,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)', [
+        newId('goal'), ledgerId, name, target, 0, eta, hue, Number(rows[0]?.n ?? 0), new Date().toISOString(),
+      ]);
+      return;
+    }
+    case 'contributeGoal': {
+      const amount = Number(args.amount);
+      if (!Number.isFinite(amount)) throw new Error('Invalid contribution amount');
+      await exec('UPDATE goals SET saved = MAX(0, saved + ?) WHERE id = ?', [amount, str(args.id)]);
+      return;
+    }
+    case 'createTag': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Tag name is required');
+      await exec('INSERT INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
+        args.id ? str(args.id) : newId('tag'), str(args.ledgerId || 'personal'), name, args.color ? str(args.color) : null,
+      ]);
+      return;
+    }
+    case 'setTransactionTags': {
+      const txId = str(args.id);
+      const tagIds = Array.isArray(args.tagIds) ? (args.tagIds as unknown[]).map(str) : [];
+      await exec('DELETE FROM transaction_tags WHERE transaction_id = ?', [txId]);
+      for (const tagId of tagIds) {
+        await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
+      }
+      return;
+    }
+    case 'createSubscription': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      const amount = Number(args.amount);
+      if (!name) throw new Error('Subscription name is required');
+      if (!(amount > 0)) throw new Error('Subscription amount must be greater than 0');
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM subscriptions WHERE ledger_id = ?', [ledgerId]);
+      await exec(
+        'INSERT INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        [newId('sub'), ledgerId, name, amount, args.cadence ? str(args.cadence) : 'monthly', args.next ? str(args.next) : null, args.hue != null ? Number(args.hue) : 200, Number(rows[0]?.n ?? 0), new Date().toISOString()],
+      );
+      return;
+    }
     case 'postRecurring':
       await postRecurring(exec, args);
       return;

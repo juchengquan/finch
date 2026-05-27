@@ -33,7 +33,7 @@ test('schema + seed loads the relational tables', async () => {
   expect(num(await exec('SELECT count(*) AS n FROM ledgers'))).toBe(4);
   expect(num(await exec('SELECT count(*) AS n FROM accounts'))).toBe(6);
   expect(num(await exec('SELECT count(*) AS n FROM categories'))).toBe(12);
-  expect(num(await exec('SELECT count(*) AS n FROM transactions'))).toBe(21);
+  expect(num(await exec('SELECT count(*) AS n FROM transactions'))).toBe(25);
   expect(num(await exec('SELECT count(*) AS n FROM counterparties'))).toBeGreaterThan(0);
 });
 
@@ -86,6 +86,6 @@ test('ledger isolation: family transactions are scoped to the family ledger', as
   const exec = await seeded();
   const personal = num(await exec("SELECT count(*) AS n FROM transactions WHERE ledger_id = 'personal'"));
   const family = num(await exec("SELECT count(*) AS n FROM transactions WHERE ledger_id = 'family'"));
-  expect(personal).toBe(16);
+  expect(personal).toBe(20);
   expect(family).toBe(5);
 });

@@ -1,0 +1,13 @@
+{
+  "tags": [
+    { "id": "tag-business", "name": "Business", "color": "280" },
+    { "id": "tag-reimburse", "name": "Reimbursable", "color": "200" },
+    { "id": "tag-tax", "name": "Tax", "color": "90" }
+  ],
+  "assignments": [
+    { "transactionId": "t01", "tagId": "tag-business" },
+    { "transactionId": "t03", "tagId": "tag-reimburse" },
+    { "transactionId": "t03", "tagId": "tag-business" },
+    { "transactionId": "t05", "tagId": "tag-tax" }
+  ]
+}

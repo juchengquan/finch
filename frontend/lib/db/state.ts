@@ -11,16 +11,19 @@
 
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
 import { applySchema } from './schema';
-import { seedReference, insertTransactions } from './seed';
+import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listCategories } from './queries/categories';
 import { listCounterparties } from './queries/counterparties';
+import { listExchangeRates, listDevices } from './queries/system';
+import { listGoals } from './queries/goals';
+import { listTags, transactionTagMap } from './queries/tags';
+import { listSubscriptions, listScheduledItems } from './queries/planning';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
-  'pending',
   'recurring',
   'budgetOverrides',
   'accountOverrides',
@@ -30,7 +33,6 @@ const APP_STATE_KEYS = [
 
 export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
   const values: Record<string, unknown> = {
-    pending: state.pending,
     recurring: state.recurring,
     budgetOverrides: state.budgetOverrides,
     accountOverrides: state.accountOverrides,
@@ -46,7 +48,6 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   const rows = await exec('SELECT key, value FROM app_state');
   const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
   return {
-    pending: (m.get('pending') as PersistState['pending']) ?? [],
     recurring: (m.get('recurring') as PersistState['recurring']) ?? [],
     budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
     accountOverrides: (m.get('accountOverrides') as PersistState['accountOverrides']) ?? {},
@@ -79,6 +80,7 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
   try {
     await seedReference(exec);
     await insertTransactions(exec, state.transactions);
+    await seedTransactionTags(exec);
     await applyCounterpartyOverrides(exec, state.verifiedExtra, state.aliasExtra);
     await writeAppState(exec, state);
     await exec('COMMIT');
@@ -93,12 +95,36 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties] = await Promise.all([
-    listAccounts(exec),
-    listCategories(exec),
-    listCounterparties(exec),
-  ]);
-  return { transactions, ...rest, accounts, categories, counterparties };
+  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems] =
+    await Promise.all([
+      listAccounts(exec),
+      listCategories(exec),
+      listCounterparties(exec),
+      listExchangeRates(exec),
+      listDevices(exec),
+      listGoals(exec),
+      listTags(exec),
+      transactionTagMap(exec),
+      listSubscriptions(exec),
+      listScheduledItems(exec),
+    ]);
+  for (const t of transactions) {
+    const ids = tagMap[t.id];
+    if (ids) t.tags = ids;
+  }
+  return {
+    transactions,
+    ...rest,
+    accounts,
+    categories,
+    counterparties,
+    exchangeRates,
+    devices,
+    goals,
+    tags,
+    subscriptions,
+    scheduledItems,
+  };
 }
 
 /** Serialise store state into portable relational `.db` bytes. */

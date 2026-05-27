@@ -2,11 +2,14 @@
 
 import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
-import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
+import type { ExchangeRate, Device } from '@/lib/db/queries/system';
+import type { Goal } from '@/lib/db/queries/goals';
+import type { Tag } from '@/lib/db/queries/tags';
+import type { Subscription, ScheduledItem } from '@/lib/db/queries/planning';
 
 export interface Tx {
   id: string;
@@ -26,6 +29,7 @@ export interface Tx {
   kind?: string;
   ledgerId?: string;
   transferGroupId?: string;
+  tags?: string[];
 }
 
 export interface TransferInput {
@@ -34,17 +38,6 @@ export interface TransferInput {
   amount: number;
   date: string;
   note?: string;
-}
-
-export interface PendingItem {
-  id: string;
-  merchant: string;
-  amount: number;
-  currency: string;
-  date: string;
-  account: string;
-  reason: string;
-  source: string;
 }
 
 export interface RecurringSplit {
@@ -80,12 +73,10 @@ export interface AccountOverride {
 }
 
 const SEED_TX = transactionsData as Tx[];
-const SEED_PENDING = pendingData as PendingItem[];
 const SEED_RECURRING = recurringData as RecurringTemplate[];
 
 interface FinanceState {
   transactions: Tx[];
-  pending: PendingItem[];
   recurring: RecurringTemplate[];
   // Editable overrides on otherwise-static mock data, persisted.
   budgetOverrides: Record<string, number>;
@@ -96,6 +87,12 @@ interface FinanceState {
   accounts: AccountRow[];
   categories: CategoryRow[];
   counterparties: Counterparty[];
+  exchangeRates: ExchangeRate[];
+  devices: Device[];
+  goals: Goal[];
+  tags: Tag[];
+  subscriptions: Subscription[];
+  scheduledItems: ScheduledItem[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -109,6 +106,13 @@ interface FinanceState {
   verifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; ledgerId?: string }) => void;
+  renameCategory: (id: string, name: string) => void;
+  createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
+  contributeGoal: (id: string, amount: number) => void;
+  createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
+  setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
   reset: () => void;
 }
 
@@ -127,7 +131,6 @@ function syncMutation(action: string, args?: Record<string, unknown>): void {
 export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
-      pending: SEED_PENDING,
       recurring: SEED_RECURRING,
       budgetOverrides: {},
       accountOverrides: {},
@@ -136,6 +139,12 @@ export const useFinanceStore = create<FinanceState>()(
       accounts: [],
       categories: [],
       counterparties: [],
+      exchangeRates: [],
+      devices: [],
+      goals: [],
+      tags: [],
+      subscriptions: [],
+      scheduledItems: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -169,18 +178,20 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteTransaction', { id });
       },
 
+      // Pending items are transactions with status='pending'. Confirming flips the
+      // status (flowing into reports/balances); cancelling voids the transaction.
       confirmPending: (id) => {
-        set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }));
-        syncMutation('confirmPending', { id });
+        set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, pending: false } : t)) }));
+        syncMutation('confirmTransaction', { id });
       },
 
       cancelPending: (id) => {
-        set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }));
-        syncMutation('cancelPending', { id });
+        set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+        syncMutation('deleteTransaction', { id });
       },
 
       confirmAllPending: () => {
-        set({ pending: [] });
+        set((s) => ({ transactions: s.transactions.map((t) => (t.pending ? { ...t, pending: false } : t)) }));
         syncMutation('confirmAllPending');
       },
 
@@ -229,10 +240,65 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('createTransfer', { ...input });
       },
 
+      createCategory: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `cat-${Date.now().toString(36)}`;
+        const type = input.type ?? 'expense';
+        const icon = input.icon ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, parentName: null, type, icon }] }));
+        syncMutation('createCategory', { ledgerId, name: input.name, type, icon });
+      },
+
+      renameCategory: (id, name) => {
+        set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, name } : c)) }));
+        syncMutation('renameCategory', { id, name });
+      },
+
+      createGoal: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `goal-${Date.now().toString(36)}`;
+        const hue = input.hue ?? 200;
+        set((s) => ({
+          goals: [...s.goals, { id, ledgerId, name: input.name, target: input.target, saved: 0, eta: input.eta ?? null, hue }],
+        }));
+        syncMutation('createGoal', { ledgerId, name: input.name, target: input.target, eta: input.eta ?? null, hue });
+      },
+
+      contributeGoal: (id, amount) => {
+        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
+        syncMutation('contributeGoal', { id, amount });
+      },
+
+      createTag: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `tag-${Date.now().toString(36)}`;
+        const color = input.color ?? null;
+        set((s) => ({ tags: [...s.tags, { id, ledgerId, name: input.name, color }] }));
+        syncMutation('createTag', { id, ledgerId, name: input.name, color });
+        return id;
+      },
+
+      setTransactionTags: (transactionId, tagIds) => {
+        set((s) => ({
+          transactions: s.transactions.map((t) => (t.id === transactionId ? { ...t, tags: tagIds } : t)),
+        }));
+        syncMutation('setTransactionTags', { id: transactionId, tagIds });
+      },
+
+      createSubscription: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `sub-${Date.now().toString(36)}`;
+        const cadence = input.cadence ?? 'monthly';
+        const hue = input.hue ?? 200;
+        set((s) => ({
+          subscriptions: [...s.subscriptions, { id, ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue }],
+        }));
+        syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
+      },
+
       reset: () => {
         set({
           transactions: SEED_TX,
-          pending: SEED_PENDING,
           recurring: SEED_RECURRING,
           budgetOverrides: {},
           accountOverrides: {},

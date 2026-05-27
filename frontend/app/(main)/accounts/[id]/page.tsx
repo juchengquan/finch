@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Icon, Money, CatBar } from '@/components/primitives';
+import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,7 @@ import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { MOCK, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
-import { selectTransactions, accountBalance } from '@/lib/select';
+import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -49,6 +49,7 @@ export default function AccountDetailPage() {
   const balance = accounts.some((a) => a.id === accountId)
     ? accountBalance(accounts, accountId)
     : account.balance;
+  const series = balanceSeries(allTxns, accountId, balance);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -128,6 +129,17 @@ export default function AccountDetailPage() {
               <Icon name="edit" size={16} />
             </button>
           </div>
+          {series.length > 2 && (
+            <div className="relative mt-4">
+              <Sparkline
+                values={series}
+                width={320}
+                height={44}
+                color="rgba(255,255,255,0.9)"
+                fillOpacity={0.16}
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">
