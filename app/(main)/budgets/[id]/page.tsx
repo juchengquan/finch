@@ -8,7 +8,7 @@ import { Ring, Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
-import { categorySpend } from '@/lib/select';
+import { categorySpend, currentMonth } from '@/lib/select';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,7 @@ export default function BudgetDetailPage() {
   const budget = budgetOverrides[cat.id] ?? cat.budget;
 
   // Confirmed expense for this category, from the projected store state.
-  const spent = categorySpend(allTxns, catLedger)[cat.id] ?? 0;
+  const spent = categorySpend(allTxns, catLedger, currentMonth(allTxns, catLedger))[cat.id] ?? 0;
   const pct = Math.round((spent / budget) * 100);
   const over = spent > budget;
   const remaining = budget - spent;

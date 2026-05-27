@@ -55,9 +55,9 @@ test('categories: list + monthly spend', async () => {
   // Food spend should equal the sum of confirmed food expenses.
   expect(food.spent).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84, 2);
 
-  // All-time map matches the same figure for this seed (all txns are in May).
+  // All-time map spans the seeded history (May + April a01 + March m01 food).
   const map = await categorySpend(exec, 'personal');
-  expect(map.food).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84, 2);
+  expect(map.food).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84 + 132.8 + 96.5, 2);
 });
 
 test('counterparties: list, search, verify, alias', async () => {

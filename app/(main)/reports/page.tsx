@@ -5,15 +5,15 @@ import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/M
 import { MOCK } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
-import { categorySpend } from '@/lib/select';
+import { categorySpend, currentMonth } from '@/lib/select';
 import { toast } from 'sonner';
 
 export default function ReportsPage() {
   const { activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
 
-  // Confirmed expense per category, scoped to the active ledger.
-  const spentById = categorySpend(allTxns, activeId);
+  // Confirmed expense per category for the active ledger's current month.
+  const spentById = categorySpend(allTxns, activeId, currentMonth(allTxns, activeId));
 
   const cats = MOCK.categories
     .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
