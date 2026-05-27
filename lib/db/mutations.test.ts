@@ -171,3 +171,17 @@ test('seeded tag assignments are projected onto transactions', async () => {
   const map = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't03' ORDER BY tag_id");
   expect(map.length).toBe(2);
 });
+
+test('createTransfer converts the incoming leg across currencies', async () => {
+  const exec = await seeded();
+  // Add a EUR account in the personal (USD) ledger.
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw','personal','EUR Wallet','cash','EUR',0,1,'2026-05-26','2026-05-26')",
+  );
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw', amount: 100, date: '2026-05-24' });
+  // chk is USD; 100 USD → EUR at rate_to_sgd(USD)/rate_to_sgd(EUR) = 1.3412 / 1.4592.
+  const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw'"))[0].b);
+  expect(eur).toBeCloseTo(100 * (1.3412 / 1.4592), 2);
+  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
+  expect(Number(tg[0].r)).toBeCloseTo(1.3412 / 1.4592, 4);
+});

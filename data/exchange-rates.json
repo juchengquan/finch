@@ -1,4 +1,8 @@
 [
+  { "date": "2026/05/13", "currency": "JPY", "rate": 0.00872, "source": "ECB" },
+  { "date": "2026/05/13", "currency": "CNY", "rate": 0.18940, "source": "ECB" },
+  { "date": "2026/05/13", "currency": "USD", "rate": 1.34120, "source": "ECB" },
+  { "date": "2026/05/13", "currency": "EUR", "rate": 1.45800, "source": "ECB" },
   { "date": "2026/05/24", "currency": "JPY", "rate": 0.00872, "source": "ECB" },
   { "date": "2026/05/24", "currency": "CNY", "rate": 0.18950, "source": "ECB" },
   { "date": "2026/05/24", "currency": "USD", "rate": 1.34120, "source": "ECB" },

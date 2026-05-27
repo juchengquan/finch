@@ -89,3 +89,14 @@ test('ledger isolation: family transactions are scoped to the family ledger', as
   expect(personal).toBe(20);
   expect(family).toBe(5);
 });
+
+test('foreign seed rows derive their base from the rate table and lock the rate', async () => {
+  const exec = await seeded();
+  const [row] = await exec(
+    "SELECT amount, amount_base, exchange_rate, currency FROM transactions WHERE id = 't-jpy-1'",
+  );
+  expect(Number(row.amount)).toBe(-3820); // native JPY
+  expect(String(row.currency)).toBe('JPY');
+  expect(Number(row.amount_base)).toBeCloseTo(-24.84, 2); // -3820 * (0.00872 / 1.34120)
+  expect(Number(row.exchange_rate)).toBeCloseTo(0.00872 / 1.3412, 6);
+});
