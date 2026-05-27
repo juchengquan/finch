@@ -27,6 +27,21 @@ export interface CategorySpend {
   spent: number; // positive magnitude of expenses
 }
 
+/** Confirmed expense total per category (all dates), as a {categoryId: spent} map. */
+export async function categorySpend(exec: Exec, ledgerId: string): Promise<Record<string, number>> {
+  const rows = await exec(
+    `SELECT category_id AS id, SUM(amount_base * -1) AS spent
+       FROM transactions
+      WHERE ledger_id = ? AND amount < 0 AND transfer_group_id IS NULL
+        AND status = 'confirmed' AND category_id IS NOT NULL
+      GROUP BY category_id`,
+    [ledgerId],
+  );
+  const m: Record<string, number> = {};
+  for (const r of rows) m[String(r.id)] = Number(r.spent);
+  return m;
+}
+
 /** Confirmed expense totals per category for a month (e.g. '2026-05'). */
 export async function monthlyByCategory(exec: Exec, ledgerId: string, yearMonth: string): Promise<CategorySpend[]> {
   const rows = await exec(

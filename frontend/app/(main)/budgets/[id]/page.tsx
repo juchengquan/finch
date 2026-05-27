@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -8,6 +8,8 @@ import { Ring, Money, MerchantGlyph, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useDb } from '@/components/db-provider';
+import { categorySpend } from '@/lib/db/queries/categories';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { categorySpent } from '@/lib/derive';
 import { Button } from '@/components/ui/button';
@@ -33,11 +35,28 @@ export default function BudgetDetailPage() {
   const setBudget = useFinanceStore((s) => s.setBudget);
   const { openTransaction } = useTransactionSheet();
 
+  const { exec, version } = useDb();
   const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
   const txns = ledgerTxns.filter((t) => t.category === cat.id);
   const budget = budgetOverrides[cat.id] ?? cat.budget;
-  const spent = categorySpent(ledgerTxns, cat.id);
+
+  // Spend from SQL (confirmed expenses for this category); derive fallback.
+  const [dbSpent, setDbSpent] = useState<number | null>(null);
+  useEffect(() => {
+    if (!exec) return;
+    let cancelled = false;
+    categorySpend(exec, catLedger)
+      .then((m) => {
+        if (!cancelled) setDbSpent(m[cat.id] ?? 0);
+      })
+      .catch((err) => console.error('Could not load category spend from DB', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [exec, version, catLedger, cat.id]);
+
+  const spent = dbSpent ?? categorySpent(ledgerTxns, cat.id);
   const pct = Math.round((spent / budget) * 100);
   const over = spent > budget;
   const remaining = budget - spent;
