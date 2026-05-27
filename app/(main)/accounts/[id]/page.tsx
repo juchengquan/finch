@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Icon, Money, MerchantGlyph } from '@/components/primitives';
+import { Icon, Money, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,15 +110,7 @@ export default function AccountDetailPage() {
   return (
     <MobilePage
       header={
-        <ScreenHeader
-          title={name}
-          back={true}
-          trailing={
-            <Button variant="outline" size="sm" onClick={() => setDetailsOpen(true)}>
-              <Icon name="doc" size={14} />Details
-            </Button>
-          }
-        />
+        <ScreenHeader title={name} back={true} backHref="/accounts" trailing={<></>} />
       }
     >
       <div className="px-5 pb-[22px]">
@@ -134,11 +126,21 @@ export default function AccountDetailPage() {
             <div className="min-w-0 font-serif text-[40px] leading-none -tracking-[1.5px]">
               <Money value={balance} mono={false} className="font-serif"/>
             </div>
+            {/* Mobile: single entry — opens the details sheet, which holds the Edit button. */}
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              aria-label="Account details"
+              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:hidden"
+            >
+              <Icon name="doc" size={16} />
+            </button>
+            {/* Desktop: details are shown inline, so the card button edits directly. */}
             <button
               type="button"
               onClick={openEdit}
               aria-label="Edit account"
-              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15"
+              className="hidden size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:flex"
             >
               <Icon name="edit" size={16} />
             </button>
@@ -161,7 +163,7 @@ export default function AccountDetailPage() {
                   onClick={() => openTransaction(tx.id)}
                   className={cn('hover:bg-secondary/40 flex w-full cursor-pointer items-center gap-3 px-[18px] py-3 text-left', i && 'border-border border-t-[0.5px]')}
                 >
-                  <MerchantGlyph name={tx.merchant} size={32} hue={cat.hue}/>
+                  <CatBar hue={cat.hue} />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium">{tx.merchant}</div>
                     <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.slice(5).replace('-','/')} · {cat.name || 'Income'}</div>

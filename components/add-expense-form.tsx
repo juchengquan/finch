@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { MOCK } from '@/lib/data';
+import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
+import { useMoney } from '@/components/use-money';
 import { useDb } from '@/components/db-provider';
 import { listAccounts } from '@/lib/db/queries/accounts';
 import { listCategories } from '@/lib/db/queries/categories';
@@ -55,14 +56,28 @@ export function AddExpenseForm({
 }) {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const { activeId } = useLedger();
+  const { base } = useMoney();
   const { exec, version } = useDb();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('food');
   const [account, setAccount] = useState('cc');
+  const [currency, setCurrency] = useState(base);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
+
+  // Default the entry currency to the active ledger's base, and follow a ledger
+  // switch — adjusting state during render (the React-recommended alternative to
+  // a setState-in-effect) so the picker resets when `base` changes.
+  const [prevBase, setPrevBase] = useState(base);
+  if (prevBase !== base) {
+    setPrevBase(base);
+    setCurrency(base);
+  }
+
+  const currencyOptions = Object.keys(CURRENCIES);
+  const currencySym = CURRENCIES[currency as keyof typeof CURRENCIES]?.sym ?? '$';
 
   // Category/account options come from the live DB, scoped to the active ledger.
   const [cats, setCats] = useState<Option[]>([]);
@@ -97,10 +112,16 @@ export function AddExpenseForm({
       toast.error('Enter an amount');
       return;
     }
+    const native = -Math.abs(value);
+    // Store the ledger-base amount (drives balances) alongside the original currency.
+    const baseAmount =
+      currency === base ? native : Math.round(convertAmount(native, currency, base) * 100) / 100;
     const id = addTransaction({
       merchant: merchant.trim() || 'Untitled',
       category,
-      amount: -Math.abs(value),
+      amount: baseAmount,
+      currency,
+      nativeAmount: native,
       account,
       date,
       time: new Date().toTimeString().slice(0, 5),
@@ -108,7 +129,9 @@ export function AddExpenseForm({
       pending: false,
       ledgerId: activeId,
     });
-    toast.success('Expense added', { description: `${merchant.trim() || 'Untitled'} · $${Math.abs(value).toFixed(2)}` });
+    toast.success('Expense added', {
+      description: `${merchant.trim() || 'Untitled'} · ${fmtNative(Math.abs(value), currency)}`,
+    });
     onSaved?.(id);
   };
 
@@ -117,7 +140,7 @@ export function AddExpenseForm({
       <div className="pt-5 text-center">
         <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">AMOUNT</div>
         <div className="flex items-baseline justify-center gap-1">
-          <span className="text-muted-foreground font-serif text-[40px]">$</span>
+          <span className="text-muted-foreground font-serif text-[40px]">{currencySym}</span>
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
@@ -130,6 +153,20 @@ export function AddExpenseForm({
       </div>
 
       <div>
+        <Field icon="coins" label="Currency">
+          <Select value={currency} onValueChange={setCurrency}>
+            <SelectTrigger size="sm" className="border-0 shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field icon="tag" label="Merchant">
           <input
             value={merchant}

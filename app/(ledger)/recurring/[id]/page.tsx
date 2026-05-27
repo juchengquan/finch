@@ -24,7 +24,7 @@ export default function RecurringDetailPage() {
   const totalPct = splits.reduce((sum, s) => sum + (s.pct || 0), 0);
 
   return (
-    <MobilePage header={<ScreenHeader title="Recurring" back />}>
+    <MobilePage header={<ScreenHeader title="Recurring" back backHref="/recurring" />}>
       <div className="px-5 pb-[120px]">
         <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground md:hidden">
           <Link href="/recurring" className="text-muted-foreground">

@@ -6,7 +6,7 @@ import {
   SlidersHorizontal, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowRight, ArrowLeft,
   ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, Menu, Bell, Wallet, ChartColumn, Settings,
   FileText, Target, Tag, Split, Pencil, Check, X, Calendar, Mic, Camera, Sparkles, Clock, Circle,
-  Download, Upload,
+  Download, Upload, ArrowRightLeft, Coins,
 } from 'lucide-react';
 
 import { useMoney } from '@/components/use-money';
@@ -20,7 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
   'arrow-dl': ArrowDownLeft, 'arrow-ur': ArrowUpRight, menu: Menu, bell: Bell, wallet: Wallet,
   chart: ChartColumn, cog: Settings, doc: FileText, target: Target, tag: Tag, split: Split,
   edit: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
-  clock: Clock, download: Download, upload: Upload,
+  clock: Clock, download: Download, upload: Upload, swap: ArrowRightLeft, coins: Coins,
 };
 
 interface IconProps {
@@ -251,4 +251,15 @@ export function MerchantGlyph({ name, size = 36, hue, bg, fg = 'var(--foreground
 
 export function CatDot({ hue, size = 8 }: { hue: number; size?: number }) {
   return <span className="inline-block rounded-full" style={{ width: size, height: size, background: `oklch(0.65 0.13 ${hue})` }} />;
+}
+
+// Vertical category-colored accent bar, used as the leading element of transaction rows.
+export function CatBar({ hue, className }: { hue: number; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn('w-1 shrink-0 self-stretch rounded-full', className)}
+      style={{ background: `oklch(0.65 0.13 ${hue})` }}
+    />
+  );
 }

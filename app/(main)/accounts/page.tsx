@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Icon, Money, MerchantGlyph } from '@/components/primitives';
+import { Icon, Money, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { useLedger } from '@/components/ledger-provider';
@@ -179,7 +179,7 @@ export default function AccountsPage() {
                       onClick={() => openTransaction(t.id)}
                       className={cn('hover:bg-secondary/40 flex w-full items-center gap-3 px-4 py-3 text-left text-inherit', i && 'border-border border-t-[0.5px]')}
                     >
-                      <MerchantGlyph name={t.merchant} hue={cat.hue} size={30} />
+                      <CatBar hue={cat.hue} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{t.merchant}</div>
                         <div className="text-muted-foreground text-xs">{t.date.slice(5).replace('-', '/')} · {cat.name}</div>

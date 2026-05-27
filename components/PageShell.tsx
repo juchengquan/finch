@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation';
 
 import { Icon } from './primitives';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { ThemeMenuItem } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAddExpense } from '@/components/add-expense-sheet';
@@ -46,6 +47,14 @@ const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) =>
   budgets: { label: 'Budgets', name: (id) => catById(id).name },
   transfers: { label: 'Transfers', name: (id) => id },
   recurring: { label: 'Recurring', name: (id) => id },
+};
+
+// Header titles for top-level routes that aren't represented in the nav, so
+// they still get a name. Nav routes derive their title from the tab/link label.
+const EXTRA_TITLES: Record<string, string> = {
+  add: 'Add expense',
+  settings: 'Settings',
+  fx: 'FX rates',
 };
 
 interface PageShellProps {
@@ -100,6 +109,14 @@ export function PageShell({
     if (path === '/accounts') return pathname === '/accounts' || pathname === '/';
     return pathname === path || pathname.startsWith(`${path}/`);
   };
+
+  // Title shown in the desktop header for top-level (non-detail) routes: the
+  // matching nav item's label, an explicit name for off-nav routes, else the
+  // group default passed via `headerTitle`.
+  const pageTitle =
+    [...tabs, ...(bottomLinks ?? [])].find((item) => isActivePath(item.path))?.label ??
+    EXTRA_TITLES[segments[0]] ??
+    headerTitle;
 
   return (
     <div className="bg-background text-foreground flex h-[100dvh] overflow-hidden font-sans">
@@ -212,6 +229,8 @@ export function PageShell({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-[200px]">
+              <ThemeMenuItem />
+              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Icon name="cog" size={16} />
@@ -234,7 +253,7 @@ export function PageShell({
               <span className="text-foreground font-medium">{crumb.current}</span>
             </nav>
           ) : (
-            <div className="font-serif text-2xl tracking-tight">{headerTitle}</div>
+            <div className="font-serif text-2xl tracking-tight">{pageTitle}</div>
           )}
           <div className="flex items-center gap-2">
             <button
@@ -244,7 +263,6 @@ export function PageShell({
               <Icon name="search" size={14} />
               Search transactions…
             </button>
-            <ThemeToggle />
             {showAdd && (
               <Button onClick={openAddExpense} size="icon" aria-label="Add expense" title="Add expense">
                 <Icon name="plus" size={16} stroke={2} />

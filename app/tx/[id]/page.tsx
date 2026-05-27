@@ -14,6 +14,7 @@ export default function TxDetailPage() {
       <ScreenHeader
         title=""
         back
+        backHref="/activity"
         trailing={<TransactionActionsMenu txId={txId} onDeleted={() => router.back()} />}
       />
       <TransactionDetail txId={txId} />
