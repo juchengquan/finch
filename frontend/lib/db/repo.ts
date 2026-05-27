@@ -21,7 +21,6 @@ export interface PersistState {
   accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
-  recurring: RecurringTemplate[];
 }
 
 // What the server projects to the client: persisted slices + reference/derived
@@ -36,4 +35,5 @@ export interface ProjectedState extends PersistState {
   tags: Tag[];
   subscriptions: Subscription[];
   scheduledItems: ScheduledItem[];
+  recurring: RecurringTemplate[];
 }

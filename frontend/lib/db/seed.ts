@@ -177,6 +177,39 @@ export async function seedReference(exec: Exec): Promise<void> {
       [`sch-${i}`, s.ledger ?? 'personal', s.day, s.month, s.label, s.amount, s.type, s.color ?? null],
     );
   }
+
+  // Recurring templates live in their own tables. The mock references accounts by
+  // display name (not all map to real accounts), so the names are stored verbatim
+  // (account_id stays null) and resolved at post time; next/last run are display labels.
+  type SplitSeed = { account: string; pct?: number; abs?: number | null; label?: string };
+  type RecurSeed = {
+    id: string; name: string; type: string; amount?: number | null; varies?: number;
+    frequency: string; dayOfMonth: number; account: string; from?: string; autoPost?: number;
+    nextRun?: string; lastRun?: string; splits?: SplitSeed[]; ledger?: string;
+  };
+  for (const r of recurringData as RecurSeed[]) {
+    const ledgerId = r.ledger ?? 'personal';
+    await exec(
+      `INSERT OR IGNORE INTO recurring_templates
+        (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
+         from_account_id,from_account_name,category_id,frequency,day_of_month,start_date,
+         next_run,last_run,auto_post,is_active,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        r.id, ledgerId, r.name, r.type, r.amount ?? null, r.varies ? 1 : 0, r.splits?.length ? 1 : 0,
+        null, r.account, null, r.from ?? null, null, r.frequency, r.dayOfMonth, '2026-05-01',
+        r.nextRun ?? null, r.lastRun ?? null, r.autoPost ?? 1, 1, SEED_TS, SEED_TS,
+      ],
+    );
+    const splits = r.splits ?? [];
+    for (let i = 0; i < splits.length; i++) {
+      const sp = splits[i];
+      await exec(
+        'INSERT OR IGNORE INTO recurring_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,description,sort_order) VALUES (?,?,?,?,?,?,?,?)',
+        [`${r.id}-s${i}`, r.id, null, sp.account, sp.pct ?? null, sp.abs ?? null, sp.label ?? null, i],
+      );
+    }
+  }
 }
 
 /** Seed the static tag→transaction assignments. Must run after transactions
@@ -235,10 +268,9 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
   }
 }
 
-/** Seed the transitional store slices (pending/recurring + empty override maps). */
+/** Seed the transitional store slices (empty override maps + alias/verify extras). */
 export async function seedAppStateDefaults(exec: Exec): Promise<void> {
   const entries: [string, unknown][] = [
-    ['recurring', recurringData],
     ['budgetOverrides', {}],
     ['accountOverrides', {}],
     ['verifiedExtra', []],

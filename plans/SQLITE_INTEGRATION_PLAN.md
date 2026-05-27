@@ -139,8 +139,14 @@ the former curated mock totals) by explicit decision.
 - **Dual-currency**: rate *locking* is now real (stored per transaction), but
   cross-base conversion (e.g. deriving a USD base from a to-SGD rate table) is
   still simplified.
-- **Recurring templates** still live in `app_state` JSON rather than the
-  `recurring_templates` table.
+
+**Also migrated:**
+- ✅ **Recurring templates** moved from the `app_state` JSON slice to the real
+  `recurring_templates` + `recurring_splits` tables (projected like the other
+  reference data). The tables carry the mock's display names + run labels
+  (`account_name`/`from_account_name`/`next_run`/`last_run`, split `account_id`
+  made nullable), so behaviour — incl. `postRecurring`'s name resolution — is
+  unchanged. `postRecurring`/`updateRecurringSplit` now read/write the tables.
 
 **Cleanup / teardown — done:**
 - ✅ Deleted the dead flat-schema layer: `lib/db/repo.ts` trimmed to shared types,

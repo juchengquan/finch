@@ -30,7 +30,6 @@ function snapshot(): PersistState {
     accountOverrides: s.accountOverrides,
     verifiedExtra: s.verifiedExtra,
     aliasExtra: s.aliasExtra,
-    recurring: s.recurring,
   };
 }
 

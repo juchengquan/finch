@@ -156,7 +156,9 @@ CREATE TABLE IF NOT EXISTS recurring_templates (
   amount_varies        INTEGER NOT NULL DEFAULT 0,
   splits_enabled       INTEGER NOT NULL DEFAULT 0,
   account_id           TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  account_name         TEXT,
   from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  from_account_name    TEXT,
   category_id          TEXT REFERENCES categories(id) ON DELETE RESTRICT,
   frequency            TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
   day_of_month         INTEGER,
@@ -164,6 +166,8 @@ CREATE TABLE IF NOT EXISTS recurring_templates (
   nth_weekday          INTEGER,
   start_date           TEXT NOT NULL,
   end_date             TEXT,
+  next_run             TEXT,
+  last_run             TEXT,
   auto_post            INTEGER NOT NULL DEFAULT 1,
   reminder_days_before INTEGER NOT NULL DEFAULT 3,
   is_active            INTEGER NOT NULL DEFAULT 1,
@@ -176,14 +180,15 @@ CREATE TABLE IF NOT EXISTS recurring_templates (
 );
 
 CREATE TABLE IF NOT EXISTS recurring_splits (
-  id          TEXT PRIMARY KEY,
-  template_id TEXT NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
-  account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  amount_pct  REAL,
-  amount_abs  REAL,
-  category_id TEXT REFERENCES categories(id) ON DELETE RESTRICT,
-  description TEXT,
-  sort_order  INTEGER NOT NULL DEFAULT 0,
+  id           TEXT PRIMARY KEY,
+  template_id  TEXT NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  account_name TEXT,
+  amount_pct   REAL,
+  amount_abs   REAL,
+  category_id  TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  description  TEXT,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
   CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 

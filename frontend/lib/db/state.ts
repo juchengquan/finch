@@ -20,11 +20,11 @@ import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
 import { listTags, transactionTagMap } from './queries/tags';
 import { listSubscriptions, listScheduledItems } from './queries/planning';
+import { listRecurring } from './queries/recurring';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
-  'recurring',
   'budgetOverrides',
   'accountOverrides',
   'verifiedExtra',
@@ -33,7 +33,6 @@ const APP_STATE_KEYS = [
 
 export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
   const values: Record<string, unknown> = {
-    recurring: state.recurring,
     budgetOverrides: state.budgetOverrides,
     accountOverrides: state.accountOverrides,
     verifiedExtra: state.verifiedExtra,
@@ -48,7 +47,6 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   const rows = await exec('SELECT key, value FROM app_state');
   const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
   return {
-    recurring: (m.get('recurring') as PersistState['recurring']) ?? [],
     budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
     accountOverrides: (m.get('accountOverrides') as PersistState['accountOverrides']) ?? {},
     verifiedExtra: (m.get('verifiedExtra') as PersistState['verifiedExtra']) ?? [],
@@ -95,7 +93,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems] =
+  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
     await Promise.all([
       listAccounts(exec),
       listCategories(exec),
@@ -107,6 +105,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       transactionTagMap(exec),
       listSubscriptions(exec),
       listScheduledItems(exec),
+      listRecurring(exec),
     ]);
   for (const t of transactions) {
     const ids = tagMap[t.id];
@@ -124,6 +123,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     tags,
     subscriptions,
     scheduledItems,
+    recurring,
   };
 }
 
