@@ -1,12 +1,16 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Icon, StackedBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage, SchemaChip } from '@/components/MobileComponents';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { mutate } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 const SPLIT_COLOR = (i: number) =>
@@ -22,6 +26,20 @@ export default function RecurringDetailPage() {
   const amount = t.amount ?? 0;
   const splits = t.splits ?? [];
   const totalPct = splits.reduce((sum, s) => sum + (s.pct || 0), 0);
+
+  const [posting, setPosting] = useState(false);
+  const post = async () => {
+    setPosting(true);
+    try {
+      const state = await mutate('postRecurring', { templateId: t.id });
+      useFinanceStore.setState(state);
+      toast.success(`Posted “${t.name}”`, { description: 'Added to transactions.' });
+    } catch (err) {
+      toast.error((err as Error).message || 'Could not post');
+    } finally {
+      setPosting(false);
+    }
+  };
 
   return (
     <MobilePage header={<ScreenHeader title="Recurring" back backHref="/recurring" />}>
@@ -42,6 +60,10 @@ export default function RecurringDetailPage() {
           <div className="mt-2 text-xs text-muted-foreground">
             {t.frequency} · day {t.dayOfMonth} — next on <b className="text-secondary-foreground">{t.nextRun}</b> · last {t.lastRun}
           </div>
+          <Button className="mt-4" onClick={post} disabled={posting || !!t.varies}>
+            <Icon name="plus" size={14} />
+            {posting ? 'Posting…' : t.varies ? 'Variable — add manually' : 'Post now'}
+          </Button>
         </div>
 
         {splits.length > 0 && (

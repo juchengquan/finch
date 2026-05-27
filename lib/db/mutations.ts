@@ -74,6 +74,7 @@ async function insertTxRow(
     currency: string;
     transferGroupId: string | null;
     note: string | null;
+    recurring?: boolean;
   },
 ): Promise<void> {
   const ts = new Date().toISOString();
@@ -86,9 +87,79 @@ async function insertTxRow(
     [
       newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, row.amount, 1, row.date,
       row.description, null, null, row.transferGroupId, 'confirmed', ts,
-      row.balanceAfter, row.currency, row.note, 0, ts,
+      row.balanceAfter, row.currency, row.note, row.recurring ? 1 : 0, ts,
     ],
   );
+}
+
+// Match a recurring template's account NAME to a real account id in the ledger
+// (the mock templates store names like "Amex Gold", not ids).
+async function resolveAccountId(exec: Exec, ledgerId: string, name: string): Promise<string | null> {
+  if (!name) return null;
+  const accts = await exec('SELECT id, name FROM accounts WHERE ledger_id = ?', [ledgerId]);
+  const lc = name.toLowerCase();
+  const exact = accts.find((a) => String(a.name).toLowerCase() === lc);
+  if (exact) return String(exact.id);
+  const partial = accts.find(
+    (a) => String(a.name).toLowerCase().includes(lc) || lc.includes(String(a.name).toLowerCase()),
+  );
+  return partial ? String(partial.id) : null;
+}
+
+async function postSingle(
+  exec: Exec,
+  ledgerId: string,
+  accountId: string,
+  amount: number,
+  description: string,
+  date: string,
+): Promise<void> {
+  const [acct] = await exec('SELECT current_balance, currency FROM accounts WHERE id = ?', [accountId]);
+  await insertTxRow(exec, {
+    ledgerId, accountId, date, amount, description,
+    balanceAfter: r2(Number(acct?.current_balance ?? 0) + amount), currency: String(acct?.currency ?? 'USD'),
+    transferGroupId: null, note: null, recurring: true,
+  });
+}
+
+// Post a recurring template now: create the confirmed transaction(s) it implies.
+// Income templates with splits post one row per (resolvable) split.
+async function postRecurring(exec: Exec, args: Args): Promise<void> {
+  const templateId = str(args.templateId);
+  const ledgerId = 'personal';
+  const recurring = await getJson<RecurringTemplate[]>(exec, 'recurring', []);
+  const t = recurring.find((r) => r.id === templateId);
+  if (!t) throw new Error('Template not found');
+  const date = new Date().toISOString().slice(0, 10);
+
+  if (t.type === 'transfer') {
+    const fromId = await resolveAccountId(exec, ledgerId, t.from ?? '');
+    const toId = await resolveAccountId(exec, ledgerId, t.account);
+    if (!fromId || !toId) throw new Error(`Couldn't match the accounts for "${t.name}"`);
+    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, amount: t.amount ?? 0, date, note: t.name });
+    return;
+  }
+
+  if (t.amount == null) throw new Error(`"${t.name}" has a variable amount — add it manually`);
+  const sign = t.type === 'income' ? 1 : -1;
+
+  if (t.type === 'income' && t.splits?.length) {
+    let posted = 0;
+    for (const sp of t.splits) {
+      const acctId = await resolveAccountId(exec, ledgerId, sp.account);
+      if (!acctId) continue;
+      const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
+      if (!portion) continue;
+      await postSingle(exec, ledgerId, acctId, portion, `${t.name} · ${sp.label}`, date);
+      posted++;
+    }
+    if (!posted) throw new Error(`Couldn't match any split account for "${t.name}"`);
+    return;
+  }
+
+  const acctId = await resolveAccountId(exec, ledgerId, t.account);
+  if (!acctId) throw new Error(`Couldn't match account "${t.account}" for "${t.name}"`);
+  await postSingle(exec, ledgerId, acctId, sign * t.amount, t.name, date);
 }
 
 // Create a transfer: a transfer_group plus two confirmed transactions (out/in)
@@ -178,6 +249,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'createTransfer':
       await createTransfer(exec, args);
+      return;
+    case 'postRecurring':
+      await postRecurring(exec, args);
       return;
     case 'reset':
       await resetDb(exec);
