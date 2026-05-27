@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema } from '@/lib/db/schema';
+import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
@@ -184,4 +184,54 @@ test('createTransfer converts the incoming leg across currencies', async () => {
   expect(eur).toBeCloseTo(100 * (1.3412 / 1.4592), 2);
   const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
   expect(Number(tg[0].r)).toBeCloseTo(1.3412 / 1.4592, 4);
+});
+
+test('seed records each account opening balance and balances reconcile', async () => {
+  const exec = await seeded();
+  const [a] = await exec("SELECT opening_balance, current_balance FROM accounts WHERE id = 'cc'");
+  const sum = Number(
+    (await exec("SELECT COALESCE(SUM(amount_base),0) AS s FROM transactions WHERE account_id='cc' AND status!='cancelled'"))[0].s,
+  );
+  expect(Number(a.current_balance)).toBeCloseTo(Number(a.opening_balance) + sum, 2);
+  expect(Number(a.current_balance)).toBeCloseTo(-842.18, 2);
+});
+
+test('editing a transaction amount recomputes the account balance', async () => {
+  const exec = await seeded();
+  const before = await balanceOf(exec, 'cc'); // -842.18
+  await applyMutation(exec, 'updateTransaction', { id: 't01', patch: { amount: -100 } });
+  // t01 was -6.75 → -100, so cc drops by the 93.25 difference.
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(before - (100 - 6.75), 2);
+});
+
+test('cancelling a transaction reverses its effect on the balance', async () => {
+  const exec = await seeded();
+  const before = await balanceOf(exec, 'cc');
+  await applyMutation(exec, 'deleteTransaction', { id: 't01' }); // -6.75 expense removed
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(before + 6.75, 2);
+});
+
+test('migrate stamps the schema version', async () => {
+  const exec = await seeded();
+  await migrate(exec, { fresh: true });
+  expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
+});
+
+test('migrate adds + backfills opening_balance on a pre-versioning db', async () => {
+  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec: Exec = async (sql, bind) => {
+    const rows: Record<string, SqlValue>[] = [];
+    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  // Minimal pre-versioning shape: accounts without opening_balance.
+  await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
+  await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
+  await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
+  await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
+  await migrate(exec, { fresh: false });
+  const [a] = await exec("SELECT opening_balance FROM accounts WHERE id = 'x'");
+  expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
+  expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
 });

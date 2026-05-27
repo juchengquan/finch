@@ -186,11 +186,13 @@ edit/cancel.)
 
 ## 7. Phasing (each its own PR)
 
-0. **Schema versioning** (§0) — add `PRAGMA user_version` / `SCHEMA_VERSION` gating
-   in `lib/db/server.ts` so later column-adding phases don't strand existing DB
-   files. Tiny; unblocks everything that touches the schema.
-1. **Balance recompute helper** (§4) + wire into existing `updateTransaction` /
-   `deleteTransaction`. Foundational; fixes a latent correctness bug.
+0. ✅ **Schema versioning** (§0) — `SCHEMA_VERSION` + `migrate()` in `schema.ts`,
+   called from `server.ts` (stamp on fresh, ordered ALTER migrations on existing
+   files). `MIGRATIONS[2]` adds `accounts.opening_balance` + backfills it.
+1. ✅ **Balance recompute helper** (§4) — `recomputeAccount` /
+   `recomputeForTransaction` in `queries/accounts.ts`, wired into
+   `updateTransaction` / `deleteTransaction`; `opening_balance` is now stored at
+   seed time. Fixes the stale-balance-after-edit/cancel bug.
 2. **Accounts**: add the display columns (§0) + create + table-backed update +
    archive; retire `accountOverrides`. (Highest value; removes a shim, exercises
    the §0 versioning path.)
