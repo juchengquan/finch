@@ -98,7 +98,6 @@ interface FinanceState {
   verifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
-  postRecurring: (templateId: string) => void;
   reset: () => void;
 }
 
@@ -206,14 +205,11 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('addAlias', { id, alias });
       },
 
-      // Transfers and recurring posts are created on the server (they're
-      // multi-row / relational); the server response refreshes the store.
+      // Transfers are created on the server (multi-row / relational); the server
+      // response refreshes the store. (Recurring "post" is called directly from
+      // the recurring page so it can surface account-match errors.)
       createTransfer: (input) => {
         syncMutation('createTransfer', { ...input });
-      },
-
-      postRecurring: (templateId) => {
-        syncMutation('postRecurring', { templateId });
       },
 
       reset: () => {
