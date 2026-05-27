@@ -134,12 +134,17 @@ the former curated mock totals) by explicit decision.
 - **Dual-currency** is plumbed and stored, but cross-currency conversion + locking
   is simplified (rate = 1 in the common case).
 
-**Cleanup / teardown:**
-- Retire `lib/derive.ts` delta fallbacks now that figures come from the DB.
-- Remove baked totals from `data/*.json`.
-- Delete dead code: `lib/db/repo.ts` (flat schema) + unused `lib/db/storage.ts` exports.
-- Resolve the redundant **browser `DbProvider`** — the read-query screens could call
-  the server directly instead of rebuilding an in-memory DB from the store.
+**Cleanup / teardown — done:**
+- ✅ Deleted the dead flat-schema layer: `lib/db/repo.ts` trimmed to shared types,
+  `lib/db/sqlite.ts` flat (de)serialize removed, `lib/db/storage.ts` reduced to
+  `downloadBytes`.
+- ✅ Resolved the redundant **browser `DbProvider`**: the server projection
+  (`/api/state`) now carries accounts/categories/counterparties, the store mirrors
+  them, and the read screens compute from the store via `lib/select.ts`.
+  `components/db-provider.tsx`, `lib/db/runtime.ts`, `lib/db/client.ts` deleted.
+- ✅ Retired `lib/derive.ts` (figures come from the projected store).
+- ✅ Removed the baked `spent` totals from `data/categories.json` (recomputed now).
+  `accounts.balance` / `categories.budget` stay — they seed the DB.
 
 ---
 
