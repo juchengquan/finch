@@ -6,6 +6,43 @@ Status: **proposed.** Audit of `lib/db/mutations.ts` + the store actions shows
 to full CRUD, retires the last `app_state` override shims, and fixes the
 balance-recompute gap that surfaces once Update/Delete touch amounts.
 
+## 0. Schema readiness (reviewed)
+
+The DB schema (`lib/db/schema.ts`) was built from the design doc and is **robust
+enough** — nearly every CRUD operation is already supported by existing columns,
+FKs, and indexes. Specifically already in place: per-table `ledger_id`, sensible
+`ON DELETE` rules (CASCADE for ledger children, `SET NULL` for txn→category/
+counterparty/transfer, `RESTRICT` for txn→account), archive flags
+(`accounts.is_active`, `recurring_templates.is_active/is_archived`), the full money
+model (`amount`/`amount_base`/`exchange_rate`/`exchange_rate_date`), and the
+`transaction_tags` M2M with cascade. The columns the override shims want mostly
+exist already (`budgets.amount`, `counterparties.is_verified`/`aliases`), so
+retiring those shims is a **logic** migration, not a schema change.
+
+**Schema changes genuinely required / recommended:**
+- **(required) `accounts` display columns** — add `color`, `last4`, `institution`,
+  `routing` (today in MOCK + the `accountOverrides` shim). Needed for account
+  Create and to retire `accountOverrides`. Seed from `data/accounts.json`.
+- **(recommended) `categories` `color`/`hue` (+ optional `is_active`)** — created
+  categories currently fall back to a default hue and can't be soft-deleted.
+- **(optional) `UNIQUE(ledger_id, name)`** on `categories` / `tags` to prevent
+  duplicate creates.
+- Everything else (delete/archive, edits) is covered by existing columns. The
+  `budgets` table and `counterparties.is_verified/aliases` are ready for shim
+  retirement with **no** schema change.
+
+**Operational prerequisite — schema versioning.** The schema is
+`CREATE TABLE IF NOT EXISTS` with no `PRAGMA user_version`/migration, so *adding* a
+column (e.g. the accounts ones above) does not reach an existing
+`.data/finch.sqlite3` file — queries then fail until the file is deleted. Before
+any column-adding phase, add a version-gated step in `lib/db/server.ts`: bump a
+`SCHEMA_VERSION`, and on mismatch run the needed `ALTER TABLE`s (or rebuild from
+seed for a dev DB). Low effort; removes a real footgun.
+
+**Not a schema gap, but the key correctness item:** balance maintenance is
+INSERT-only (see §4) — handled in app logic via `recomputeAccount`, not new
+triggers.
+
 ## 1. Current coverage (the gap)
 
 | Entity | C | U | D |
@@ -149,14 +186,18 @@ edit/cancel.)
 
 ## 7. Phasing (each its own PR)
 
+0. **Schema versioning** (§0) — add `PRAGMA user_version` / `SCHEMA_VERSION` gating
+   in `lib/db/server.ts` so later column-adding phases don't strand existing DB
+   files. Tiny; unblocks everything that touches the schema.
 1. **Balance recompute helper** (§4) + wire into existing `updateTransaction` /
    `deleteTransaction`. Foundational; fixes a latent correctness bug.
-2. **Accounts**: schema columns + create + table-backed update + archive; retire
-   `accountOverrides`. (Highest value; removes a shim.)
+2. **Accounts**: add the display columns (§0) + create + table-backed update +
+   archive; retire `accountOverrides`. (Highest value; removes a shim, exercises
+   the §0 versioning path.)
 3. **Delete/archive everywhere else** (categories, goals, tags, subscriptions,
    recurring, transfers, merchants) + the shared confirm UX.
 4. **Full edit** for tags / subscriptions / goals / recurring / merchants /
-   categories.
+   categories (with `categories` `color`/`hue` from §0).
 5. **Budgets onto the table** (retire `budgetOverrides`); **Scheduled** CRUD;
    **Transfers** edit.
 
