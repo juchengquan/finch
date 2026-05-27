@@ -9,6 +9,7 @@ export interface CategoryRow {
   parentName: string | null;
   type: string;
   icon: string | null;
+  hue: number | null;
 }
 
 /** List categories; pass a ledgerId to scope, or omit for all ledgers. */
@@ -26,7 +27,35 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
     parentName: r.parent_name == null ? null : String(r.parent_name),
     type: String(r.type),
     icon: r.icon == null ? null : String(r.icon),
+    hue: r.hue == null ? null : Number(r.hue),
   }));
+}
+
+export interface CategoryPatch {
+  name?: string;
+  type?: string;
+  icon?: string | null;
+  hue?: number | null;
+}
+
+/** Update a category's editable fields. */
+export async function updateCategory(exec: Exec, id: string, patch: CategoryPatch): Promise<void> {
+  const cols: Record<keyof CategoryPatch, string> = { name: 'name', type: 'type', icon: 'icon', hue: 'hue' };
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  for (const key of Object.keys(patch) as (keyof CategoryPatch)[]) {
+    if (patch[key] === undefined) continue;
+    sets.push(`${cols[key]} = ?`);
+    bind.push(patch[key] ?? null);
+  }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE categories SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
+/** Hard delete a category; transactions.category_id becomes NULL (uncategorized). */
+export async function deleteCategory(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM categories WHERE id = ?', [id]);
 }
 
 export interface CategorySpend {

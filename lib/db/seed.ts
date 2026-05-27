@@ -38,8 +38,8 @@ const ACCOUNT_TYPE: Record<string, string> = {
   virtual: 'virtual',
 };
 
-type AccountRow = { id: string; name: string; type: string; group: string; balance: number; last4?: string; ledger?: string };
-type CategoryRow = { id: string; name: string; budget?: number; icon?: string; ledger?: string };
+type AccountRow = { id: string; name: string; type: string; group: string; balance: number; last4?: string; color?: string; ledger?: string };
+type CategoryRow = { id: string; name: string; budget?: number; icon?: string; hue?: number; ledger?: string };
 type CounterpartyRow = { id: string; name: string; aliases?: string[]; category?: string; verified?: number };
 type TransferRow = {
   id: string; date: string; amountBase: number; fromCurrency: string; toCurrency: string;
@@ -107,18 +107,18 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (const a of accounts) {
     const ledgerId = a.ledger ?? 'personal';
     await exec(
-      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,credit_limit,notes,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,credit_limit,notes,color,last4,institution,routing,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       // opening_balance starts at the known balance; insertTransactions overwrites
       // it with the true opening (known − Σ bases) for accounts that have txns.
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, null, null, 1, SEED_TS, SEED_TS],
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, null, a.color ?? null, a.last4 ?? null, null, null, null, 1, SEED_TS, SEED_TS],
     );
   }
 
   for (let i = 0; i < categories.length; i++) {
     const c = categories[i];
     await exec(
-      'INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,sort_order) VALUES (?,?,?,?,?,?,?)',
-      [c.id, c.ledger ?? 'personal', c.name, null, 'expense', c.icon ?? null, i],
+      'INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?,?)',
+      [c.id, c.ledger ?? 'personal', c.name, null, 'expense', c.icon ?? null, c.hue ?? null, i],
     );
   }
 
@@ -288,27 +288,13 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
   }
 }
 
-/** Seed the transitional store slices (empty override maps + alias/verify extras). */
-export async function seedAppStateDefaults(exec: Exec): Promise<void> {
-  const entries: [string, unknown][] = [
-    ['budgetOverrides', {}],
-    ['accountOverrides', {}],
-    ['verifiedExtra', []],
-    ['aliasExtra', {}],
-  ];
-  for (const [k, v] of entries) {
-    await exec('INSERT OR REPLACE INTO app_state (key,value) VALUES (?,?)', [k, JSON.stringify(v)]);
-  }
-}
-
-/** Create a complete fresh database (reference + seed transactions + defaults). */
+/** Create a complete fresh database (reference + seed transactions). */
 export async function seedDatabase(exec: Exec): Promise<void> {
   await exec('BEGIN');
   try {
     await seedReference(exec);
     await insertTransactions(exec, transactionsData as Tx[]);
     await seedTransactionTags(exec);
-    await seedAppStateDefaults(exec);
     await exec('COMMIT');
   } catch (err) {
     await exec('ROLLBACK');

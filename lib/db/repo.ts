@@ -1,4 +1,4 @@
-import type { Tx, RecurringTemplate, AccountOverride } from '@/lib/store';
+import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
@@ -17,16 +17,13 @@ export type Exec = (sql: string, bind?: SqlBind) => Promise<Row[]>;
 // (mirrors the Zustand store).
 export interface PersistState {
   transactions: Tx[];
-  budgetOverrides: Record<string, number>;
-  accountOverrides: Record<string, AccountOverride>;
-  verifiedExtra: string[];
-  aliasExtra: Record<string, string[]>;
 }
 
 // What the server projects to the client: persisted slices + reference/derived
 // data the read screens need (account balances, categories, merchants).
 export interface ProjectedState extends PersistState {
   accounts: AccountRow[];
+  budgetByCategory: Record<string, number>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];

@@ -34,7 +34,7 @@ export default function InsightsPage() {
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const goals = useFinanceStore((s) => s.goals);
-  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
+  const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
   const monthly = MOCK.monthly.slice(-range);
   const cashflow = MOCK.cashflow.slice(-range);
@@ -43,7 +43,7 @@ export default function InsightsPage() {
   // the engine has nothing to say (cold/empty ledger).
   const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, budget: budgetOverrides[c.id] ?? c.budget }));
+    .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget }));
   const month = currentMonth(transactions, activeId);
   const computed = generateInsights({
     transactions,

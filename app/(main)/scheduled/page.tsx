@@ -1,10 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Money, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SCHEDULED_ITEMS } from '@/lib/data';
 import { ScheduledItem } from '@/components/ScheduledItem';
+import { RowActions } from '@/components/RowActions';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 
@@ -19,10 +26,39 @@ export default function ScheduledPage() {
   const [view, setView] = useState({ y: 2026, m: 5 }); // June 2026
   const { activeId } = useLedger();
   const storeItems = useFinanceStore((s) => s.scheduledItems);
+  const createScheduledItem = useFinanceStore((s) => s.createScheduledItem);
+  const updateScheduledItem = useFinanceStore((s) => s.updateScheduledItem);
+  const deleteScheduledItem = useFinanceStore((s) => s.deleteScheduledItem);
+
   // Projected scheduled items for the active ledger; static data as SSR fallback.
-  const items = storeItems.length
-    ? storeItems.filter((i) => i.ledgerId === activeId).map((i) => ({ ...i, color: i.color ?? 'var(--primary)' }))
-    : SCHEDULED_ITEMS;
+  const projected = storeItems.filter((i) => i.ledgerId === activeId).map((i) => ({ ...i, color: i.color ?? 'var(--primary)' }));
+  const items = projected.length ? projected : SCHEDULED_ITEMS;
+  const editable = projected.length > 0;
+
+  const EMPTY = { id: '', label: '', amount: '', day: '1', month: MONTHS[view.m], type: 'Bill', color: '#c96442' };
+  const [draft, setDraft] = useState<typeof EMPTY>(EMPTY);
+  const [open, setOpen] = useState(false);
+  const [isNew, setIsNew] = useState(true);
+
+  const openCreate = () => { setIsNew(true); setDraft({ ...EMPTY, month: MONTHS[view.m] }); setOpen(true); };
+  const openEdit = (it: { id?: string; label: string; amount: number; day: number; month: string; type: string; color: string }) => {
+    setIsNew(false);
+    setDraft({ id: it.id ?? '', label: it.label, amount: String(it.amount), day: String(it.day), month: it.month, type: it.type, color: it.color.startsWith('#') ? it.color : '#c96442' });
+    setOpen(true);
+  };
+  const submit = () => {
+    const label = draft.label.trim();
+    if (!label) return void toast.error('Enter a label');
+    const fields = { label, amount: Number(draft.amount) || 0, day: Number(draft.day) || 1, month: draft.month, type: draft.type, color: draft.color };
+    if (isNew) {
+      createScheduledItem({ ...fields, ledgerId: activeId });
+      toast.success('Scheduled item added', { description: label });
+    } else {
+      updateScheduledItem(draft.id, fields);
+      toast.success('Scheduled item updated', { description: label });
+    }
+    setOpen(false);
+  };
 
   const totalOutgoing = items.filter((i) => i.amount < 0).reduce((s, i) => s + i.amount, 0);
   const totalIncoming = items.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
@@ -47,7 +83,7 @@ export default function ScheduledPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="search" aria-label="Search" />} />}
+      header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="plus" aria-label="New scheduled item" onClick={openCreate} />} />}
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
@@ -113,14 +149,83 @@ export default function ScheduledPage() {
       </div>
 
       <div className="flex flex-col gap-2.5 px-5 pb-[120px] md:px-0 md:pb-12">
-        <div className="text-muted-foreground px-1 font-mono text-[10px] tracking-wider uppercase">
-          Upcoming
+        <div className="flex items-center justify-between px-1">
+          <div className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
+            Upcoming
+          </div>
+          <Button variant="outline" size="sm" className="h-7" onClick={openCreate}>
+            <Icon name="plus" size={13} />New
+          </Button>
         </div>
-        {items.map((item, i) => (
-          <ScheduledItem key={i} item={item} />
-        ))}
+        {items.map((item, i) => {
+          const id = (item as { id?: string }).id;
+          return (
+            <ScheduledItem
+              key={id ?? i}
+              item={item}
+              actions={editable && id ? (
+                <RowActions
+                  onEdit={() => openEdit(item)}
+                  onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
+                  confirmTitle={`Delete ${item.label}?`}
+                  confirmDescription="This removes the scheduled item from your calendar."
+                />
+              ) : undefined}
+            />
+          );
+        })}
       </div>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isNew ? 'New scheduled item' : 'Edit scheduled item'}</DialogTitle>
+            <DialogDescription>A recurring bill, subscription or payday on the calendar.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Label</Label>
+              <Input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Rent" autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Amount</Label>
+                <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="-0.00" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Day</Label>
+                <Input type="number" inputMode="numeric" min={1} max={31} value={draft.day} onChange={(e) => setDraft({ ...draft, day: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Month</Label>
+                <Select value={draft.month} onValueChange={(v) => setDraft({ ...draft, month: v })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Type</Label>
+                <Input value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })} placeholder="Bill" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="sch-color">Color</Label>
+              <input id="sch-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border size-9 cursor-pointer rounded-md border bg-transparent" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submit}>{isNew ? 'Add' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }

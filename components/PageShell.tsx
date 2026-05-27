@@ -88,7 +88,7 @@ export function PageShell({
 }: PageShellProps) {
   const pathname = usePathname();
   const { openAddExpense } = useAddExpense();
-  const accountOverrides = useFinanceStore((s) => s.accountOverrides);
+  const accounts = useFinanceStore((s) => s.accounts);
   const tabBarTabs = mobileTabs ?? tabs;
 
   const segments = pathname.split('/').filter(Boolean);
@@ -99,7 +99,7 @@ export function PageShell({
           label: section.label,
           parent: `/${segments[0]}`,
           current:
-            (segments[0] === 'accounts' && accountOverrides[segments[1]]?.name) ||
+            (segments[0] === 'accounts' && accounts.find((a) => a.id === segments[1])?.name) ||
             section.name(segments[1]),
         }
       : null;

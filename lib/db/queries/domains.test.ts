@@ -3,7 +3,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
 import { applySchema } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
-import { listAccounts, netWorth, accountBalanceSeries, setAccountDetails } from '@/lib/db/queries/accounts';
+import { listAccounts, netWorth, accountBalanceSeries, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty, addAlias } from '@/lib/db/queries/counterparties';
 import { monthlyCashFlow, budgetProgress } from '@/lib/db/queries/reports';
@@ -41,9 +41,32 @@ test('accounts: list, net worth, balance series, edit', async () => {
   const series = await accountBalanceSeries(exec, 'cc');
   expect(series.length).toBeGreaterThan(0);
 
-  await setAccountDetails(exec, 'cc', { name: 'Amex Platinum' });
+  // Display columns are seeded from data/accounts.json (no more override shim).
+  expect(cc.last4).toBe('1009');
+  expect(cc.color).toBe('#3a2d1f');
+
+  await updateAccount(exec, 'cc', { name: 'Amex Platinum', last4: '9999', institution: 'American Express' });
   const updated = await listAccounts(exec, 'personal');
-  expect(updated.find((a) => a.id === 'cc')!.name).toBe('Amex Platinum');
+  const ccu = updated.find((a) => a.id === 'cc')!;
+  expect(ccu.name).toBe('Amex Platinum');
+  expect(ccu.last4).toBe('9999');
+  expect(ccu.institution).toBe('American Express');
+});
+
+test('accounts: create, then archive removes from the active list', async () => {
+  const exec = await seeded();
+  await createAccount(exec, {
+    id: 'acct-new', ledgerId: 'personal', name: 'Wise USD', type: 'cash',
+    currency: 'USD', groupId: 'cash', openingBalance: 500, color: '#123456', last4: '0001',
+  });
+  let accts = await listAccounts(exec, 'personal');
+  const created = accts.find((a) => a.id === 'acct-new')!;
+  expect(created.name).toBe('Wise USD');
+  expect(created.balance).toBeCloseTo(500, 2);
+
+  await archiveAccount(exec, 'acct-new');
+  accts = await listAccounts(exec, 'personal');
+  expect(accts.find((a) => a.id === 'acct-new')).toBeUndefined();
 });
 
 test('categories: list + monthly spend', async () => {

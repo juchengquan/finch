@@ -14,7 +14,7 @@ export default function BudgetsPage() {
   const { short } = useMoney();
   const { active, activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
-  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
+  const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
   // Confirmed expense per category for the current month.
   const spentById = categorySpend(allTxns, activeId, currentMonth(allTxns, activeId));
@@ -22,7 +22,7 @@ export default function BudgetsPage() {
 
   const categories = MOCK.categories
     .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
-    .map((c) => ({ ...c, spent: spentOf(c.id), budget: budgetOverrides[c.id] ?? c.budget }));
+    .map((c) => ({ ...c, spent: spentOf(c.id), budget: budgetByCategory[c.id] ?? c.budget }));
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
   const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
   const pct = totalBudget ? Math.round((totalSpent / totalBudget) * 100) : 0;

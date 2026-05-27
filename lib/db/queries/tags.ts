@@ -23,6 +23,27 @@ export async function listTags(exec: Exec, ledgerId?: string): Promise<Tag[]> {
   }));
 }
 
+export interface TagPatch {
+  name?: string;
+  color?: string | null;
+}
+
+/** Update a tag's editable fields. */
+export async function updateTag(exec: Exec, id: string, patch: TagPatch): Promise<void> {
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  if (patch.name !== undefined) { sets.push('name = ?'); bind.push(patch.name); }
+  if (patch.color !== undefined) { sets.push('color = ?'); bind.push(patch.color ?? null); }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE tags SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
+/** Hard delete a tag; transaction_tags rows cascade away via the FK. */
+export async function deleteTag(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM tags WHERE id = ?', [id]);
+}
+
 /** Map of transaction id → tag ids. */
 export async function transactionTagMap(exec: Exec): Promise<Record<string, string[]>> {
   const rows = await exec('SELECT transaction_id, tag_id FROM transaction_tags');

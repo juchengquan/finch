@@ -10,11 +10,12 @@
 // until their own phase migrates them to real tables.
 
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
-import { applySchema } from './schema';
+import { applySchema, migrate } from './schema';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listCategories } from './queries/categories';
+import { budgetByCategory } from './queries/budgets';
 import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
@@ -24,54 +25,6 @@ import { listRecurring } from './queries/recurring';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
-const APP_STATE_KEYS = [
-  'budgetOverrides',
-  'accountOverrides',
-  'verifiedExtra',
-  'aliasExtra',
-] as const;
-
-export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
-  const values: Record<string, unknown> = {
-    budgetOverrides: state.budgetOverrides,
-    accountOverrides: state.accountOverrides,
-    verifiedExtra: state.verifiedExtra,
-    aliasExtra: state.aliasExtra,
-  };
-  for (const k of APP_STATE_KEYS) {
-    await exec('INSERT OR REPLACE INTO app_state (key,value) VALUES (?,?)', [k, JSON.stringify(values[k])]);
-  }
-}
-
-async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transactions'>> {
-  const rows = await exec('SELECT key, value FROM app_state');
-  const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
-  return {
-    budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
-    accountOverrides: (m.get('accountOverrides') as PersistState['accountOverrides']) ?? {},
-    verifiedExtra: (m.get('verifiedExtra') as PersistState['verifiedExtra']) ?? [],
-    aliasExtra: (m.get('aliasExtra') as PersistState['aliasExtra']) ?? {},
-  };
-}
-
-/** Apply the store's counterparty override slices onto the real table. */
-async function applyCounterpartyOverrides(
-  exec: Exec,
-  verifiedExtra: string[],
-  aliasExtra: Record<string, string[]>,
-): Promise<void> {
-  for (const id of verifiedExtra) {
-    await exec('UPDATE counterparties SET is_verified = 1 WHERE id = ?', [id]);
-  }
-  for (const [id, extra] of Object.entries(aliasExtra)) {
-    const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
-    if (!rows[0]) continue;
-    const merged: string[] = rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : [];
-    for (const a of extra) if (!merged.includes(a)) merged.push(a);
-    await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(merged), id]);
-  }
-}
-
 /** Build a complete relational DB (in the given connection) from store state. */
 export async function buildState(exec: Exec, state: PersistState): Promise<void> {
   await exec('BEGIN');
@@ -79,8 +32,6 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
     await seedReference(exec);
     await insertTransactions(exec, state.transactions);
     await seedTransactionTags(exec);
-    await applyCounterpartyOverrides(exec, state.verifiedExtra, state.aliasExtra);
-    await writeAppState(exec, state);
     await exec('COMMIT');
   } catch (err) {
     await exec('ROLLBACK');
@@ -88,14 +39,14 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
   }
 }
 
-/** Read the full app state (persisted slices + reference/derived data). */
+/** Read the full app state (reference/derived data + the live transactions). */
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
-  const rest = await readAppState(exec);
-  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
+  const [accounts, budgets, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
     await Promise.all([
       listAccounts(exec),
+      budgetByCategory(exec),
       listCategories(exec),
       listCounterparties(exec),
       listExchangeRates(exec),
@@ -113,8 +64,8 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   }
   return {
     transactions,
-    ...rest,
     accounts,
+    budgetByCategory: budgets,
     categories,
     counterparties,
     exchangeRates,
@@ -135,6 +86,7 @@ export async function serializeState(state: PersistState): Promise<Uint8Array> {
     const exec = execFor(db);
     await applySchema(exec);
     await buildState(exec, state);
+    await migrate(exec, { fresh: true }); // current schema → just stamp the version
     return sqlite3.capi.sqlite3_js_db_export(db as never);
   } finally {
     db.close();
@@ -158,6 +110,7 @@ export async function deserializeState(bytes: Uint8Array): Promise<ProjectedStat
     if (rc) throw new Error(`Could not read database (code ${rc})`);
     const exec = execFor(db);
     await applySchema(exec); // ensure newer objects exist on older files
+    await migrate(exec, { fresh: false }); // bring older exports up to the current columns
     return await projectState(exec);
   } finally {
     db.close();

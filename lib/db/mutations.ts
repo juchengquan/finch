@@ -4,8 +4,40 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import { listRecurring } from './queries/recurring';
-import { recomputeForTransaction } from './queries/accounts';
+import { listRecurring, deleteRecurring as qDeleteRecurring, updateRecurring as qUpdateRecurring, createRecurring as qCreateRecurring, type RecurringPatch } from './queries/recurring';
+import {
+  recomputeForTransaction,
+  createAccount as qCreateAccount,
+  updateAccount as qUpdateAccount,
+  archiveAccount as qArchiveAccount,
+  deleteAccount as qDeleteAccount,
+  type AccountPatch,
+} from './queries/accounts';
+import { deleteGoal as qDeleteGoal, updateGoal as qUpdateGoal, type GoalPatch } from './queries/goals';
+import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
+import {
+  deleteSubscription as qDeleteSubscription,
+  updateSubscription as qUpdateSubscription,
+  type SubscriptionPatch,
+  createScheduledItem as qCreateScheduledItem,
+  updateScheduledItem as qUpdateScheduledItem,
+  deleteScheduledItem as qDeleteScheduledItem,
+  type ScheduledItemPatch,
+} from './queries/planning';
+import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
+import {
+  deleteCounterparty as qDeleteCounterparty,
+  updateCounterparty as qUpdateCounterparty,
+  createCounterparty as qCreateCounterparty,
+  verifyCounterparty as qVerifyCounterparty,
+  unverifyCounterparty as qUnverifyCounterparty,
+  addAlias as qAddAlias,
+  removeAlias as qRemoveAlias,
+  type CounterpartyPatch,
+} from './queries/counterparties';
+import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
+import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
+import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
   addTransaction as qAdd,
@@ -14,24 +46,9 @@ import {
   confirmTransaction as qConfirm,
   type AddInput,
 } from './queries/transactions';
-import { seedReference, insertTransactions, seedAppStateDefaults, seedTransactionTags } from './seed';
+import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
-
-async function getJson<T>(exec: Exec, key: string, fallback: T): Promise<T> {
-  const rows = await exec('SELECT value FROM app_state WHERE key = ?', [key]);
-  const raw = rows[0]?.value;
-  if (raw == null) return fallback;
-  try {
-    return JSON.parse(String(raw)) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function setJson(exec: Exec, key: string, value: unknown): Promise<void> {
-  await exec('INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)', [key, JSON.stringify(value)]);
-}
 
 const RESET_TABLES = [
   'transactions',
@@ -60,7 +77,6 @@ async function resetDb(exec: Exec): Promise<void> {
   await seedReference(exec);
   await insertTransactions(exec, transactionsData as Tx[]);
   await seedTransactionTags(exec);
-  await seedAppStateDefaults(exec);
 }
 
 type Args = Record<string, unknown>;
@@ -232,17 +248,48 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       ]);
       return;
     case 'setBudget': {
-      const bo = await getJson<Record<string, number>>(exec, 'budgetOverrides', {});
-      bo[str(args.categoryId)] = Number(args.amount);
-      await setJson(exec, 'budgetOverrides', bo);
+      const amount = Number(args.amount);
+      if (!(amount > 0)) throw new Error('Budget must be greater than 0');
+      await qSetCategoryBudget(exec, str(args.categoryId), amount);
       return;
     }
-    case 'setAccountDetails': {
-      const ao = await getJson<Record<string, Record<string, unknown>>>(exec, 'accountOverrides', {});
-      ao[str(args.accountId)] = { ...ao[str(args.accountId)], ...(args.patch as Record<string, unknown>) };
-      await setJson(exec, 'accountOverrides', ao);
+    case 'deleteBudget':
+      await qDeleteCategoryBudget(exec, str(args.categoryId));
+      return;
+    case 'createAccount': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Account name is required');
+      const type = str(args.type || 'savings');
+      if (!isAccountType(type)) throw new Error(`Unknown account type "${type}"`);
+      await qCreateAccount(exec, {
+        id: str(args.id || newId('acct')),
+        ledgerId,
+        name,
+        type,
+        currency: str(args.currency || 'SGD'),
+        groupId: args.groupId ? str(args.groupId) : null,
+        openingBalance: Number(args.openingBalance ?? 0),
+        color: args.color ? str(args.color) : null,
+        last4: args.last4 ? str(args.last4) : null,
+      });
       return;
     }
+    case 'updateAccount': {
+      const patch = (args.patch ?? {}) as AccountPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Account name is required');
+      if (patch.type !== undefined && !isAccountType(str(patch.type))) {
+        throw new Error(`Unknown account type "${patch.type}"`);
+      }
+      await qUpdateAccount(exec, str(args.id), patch);
+      return;
+    }
+    case 'archiveAccount':
+      await qArchiveAccount(exec, str(args.id));
+      return;
+    case 'deleteAccount':
+      await qDeleteAccount(exec, str(args.id));
+      return;
     case 'updateRecurringSplit': {
       await exec(
         `UPDATE recurring_splits SET amount_pct = ?
@@ -251,20 +298,23 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       );
       return;
     }
-    case 'verifyCounterparty': {
-      const v = await getJson<string[]>(exec, 'verifiedExtra', []);
-      if (!v.includes(str(args.id))) v.push(str(args.id));
-      await setJson(exec, 'verifiedExtra', v);
+    case 'verifyCounterparty':
+      await qVerifyCounterparty(exec, str(args.id));
       return;
-    }
-    case 'addAlias': {
-      const a = await getJson<Record<string, string[]>>(exec, 'aliasExtra', {});
-      a[str(args.id)] = [...(a[str(args.id)] ?? []), str(args.alias)];
-      await setJson(exec, 'aliasExtra', a);
+    case 'unverifyCounterparty':
+      await qUnverifyCounterparty(exec, str(args.id));
       return;
-    }
+    case 'addAlias':
+      await qAddAlias(exec, str(args.id), str(args.alias).trim());
+      return;
+    case 'removeAlias':
+      await qRemoveAlias(exec, str(args.id), str(args.alias));
+      return;
     case 'createTransfer':
       await createTransfer(exec, args);
+      return;
+    case 'updateTransfer':
+      await qUpdateTransfer(exec, str(args.id), (args.patch ?? {}) as Parameters<typeof qUpdateTransfer>[2]);
       return;
     case 'createCategory': {
       const ledgerId = str(args.ledgerId || 'personal');
@@ -272,9 +322,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!name) throw new Error('Category name is required');
       const type = args.type ? str(args.type) : 'expense';
       const icon = args.icon ? str(args.icon) : null;
+      const hue = args.hue != null ? Number(args.hue) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,sort_order) VALUES (?,?,?,?,?,?,?)', [
-        newId('cat'), ledgerId, name, null, type, icon, Number(rows[0]?.n ?? 0),
+      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, null, type, icon, hue, Number(rows[0]?.n ?? 0),
       ]);
       return;
     }
@@ -282,6 +333,44 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const name = str(args.name).trim();
       if (!name) throw new Error('Category name is required');
       await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      return;
+    }
+    case 'updateCategory': {
+      const patch = (args.patch ?? {}) as CategoryPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
+      await qUpdateCategory(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateGoal': {
+      const patch = (args.patch ?? {}) as GoalPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Goal name is required');
+      if (patch.target !== undefined && !(Number(patch.target) > 0)) throw new Error('Goal target must be greater than 0');
+      await qUpdateGoal(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateTag': {
+      const patch = (args.patch ?? {}) as TagPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Tag name is required');
+      await qUpdateTag(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateSubscription': {
+      const patch = (args.patch ?? {}) as SubscriptionPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Subscription name is required');
+      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Amount must be greater than 0');
+      await qUpdateSubscription(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateRecurring': {
+      const patch = (args.patch ?? {}) as RecurringPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
+      await qUpdateRecurring(exec, str(args.id), patch);
+      return;
+    }
+    case 'updateCounterparty': {
+      const patch = (args.patch ?? {}) as CounterpartyPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Merchant name is required');
+      await qUpdateCounterparty(exec, str(args.id), patch);
       return;
     }
     case 'createGoal': {
@@ -334,6 +423,87 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       );
       return;
     }
+    case 'deleteCategory':
+      await qDeleteCategory(exec, str(args.id));
+      return;
+    case 'deleteGoal':
+      await qDeleteGoal(exec, str(args.id));
+      return;
+    case 'deleteTag':
+      await qDeleteTag(exec, str(args.id));
+      return;
+    case 'deleteSubscription':
+      await qDeleteSubscription(exec, str(args.id));
+      return;
+    case 'createRecurring': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Template name is required');
+      const type = str(args.type || 'expense');
+      if (!['income', 'expense', 'transfer'].includes(type)) throw new Error(`Unknown type "${type}"`);
+      const frequency = str(args.frequency || 'monthly');
+      if (!['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
+        throw new Error(`Unknown frequency "${frequency}"`);
+      }
+      const account = str(args.account).trim();
+      if (!account) throw new Error('An account is required');
+      await qCreateRecurring(exec, {
+        id: str(args.id || newId('rt')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        type,
+        amount: args.amount == null || args.amount === '' ? null : Number(args.amount),
+        frequency,
+        dayOfMonth: Number(args.dayOfMonth) || 1,
+        account,
+        from: type === 'transfer' && args.from ? str(args.from).trim() : null,
+        autoPost: args.autoPost ? 1 : 0,
+      });
+      return;
+    }
+    case 'deleteRecurring':
+      await qDeleteRecurring(exec, str(args.id));
+      return;
+    case 'deleteTransfer':
+      await qDeleteTransfer(exec, str(args.id));
+      return;
+    case 'createCounterparty': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Merchant name is required');
+      await qCreateCounterparty(exec, {
+        id: str(args.id || newId('cp')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        category: args.category ? str(args.category) : null,
+      });
+      return;
+    }
+    case 'deleteCounterparty':
+      await qDeleteCounterparty(exec, str(args.id));
+      return;
+    case 'createScheduledItem': {
+      const label = str(args.label).trim();
+      if (!label) throw new Error('Label is required');
+      await qCreateScheduledItem(exec, {
+        id: str(args.id || newId('sch')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        day: Number(args.day) || 1,
+        month: str(args.month || 'Jan'),
+        label,
+        amount: Number(args.amount) || 0,
+        type: str(args.type || 'bill'),
+        color: args.color ? str(args.color) : null,
+      });
+      return;
+    }
+    case 'updateScheduledItem': {
+      const patch = (args.patch ?? {}) as ScheduledItemPatch;
+      if (patch.label !== undefined && !str(patch.label).trim()) throw new Error('Label is required');
+      await qUpdateScheduledItem(exec, str(args.id), patch);
+      return;
+    }
+    case 'deleteScheduledItem':
+      await qDeleteScheduledItem(exec, str(args.id));
+      return;
     case 'postRecurring':
       await postRecurring(exec, args);
       return;

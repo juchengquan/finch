@@ -26,10 +26,6 @@ function snapshot(): PersistState {
   const s = useFinanceStore.getState();
   return {
     transactions: s.transactions,
-    budgetOverrides: s.budgetOverrides,
-    accountOverrides: s.accountOverrides,
-    verifiedExtra: s.verifiedExtra,
-    aliasExtra: s.aliasExtra,
   };
 }
 

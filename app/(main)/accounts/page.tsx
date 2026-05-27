@@ -1,14 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById } from '@/lib/data';
+import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
 import { accountBalance, netWorthSeries } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
@@ -27,11 +35,13 @@ function AccountGroupAccordion({
   balanceOf,
   fmt,
   defaultOpen,
+  onAddAccount,
 }: {
   groups: GroupWithAccounts[];
   balanceOf: (id: string) => number;
   fmt: (n: number) => string;
   defaultOpen: string[];
+  onAddAccount: (groupId: string) => void;
 }) {
   return (
     <Accordion type="multiple" defaultValue={defaultOpen}>
@@ -50,7 +60,7 @@ function AccountGroupAccordion({
             </AccordionTrigger>
             <AccordionContent>
               {empty ? (
-                <button type="button" className="border-border text-muted-foreground flex h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed text-xs">
+                <button type="button" onClick={() => onAddAccount(g.id)} className="border-border text-muted-foreground hover:text-foreground flex h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed text-xs transition-colors">
                   <Icon name="plus" size={14} />Add account
                 </button>
               ) : (
@@ -75,6 +85,9 @@ function AccountGroupAccordion({
                       </Link>
                     );
                   })}
+                  <button type="button" onClick={() => onAddAccount(g.id)} className="border-border text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center justify-center gap-2 border-t-[0.5px] px-3.5 py-2.5 text-xs transition-colors">
+                    <Icon name="plus" size={13} />Add account
+                  </button>
                 </div>
               )}
             </AccordionContent>
@@ -85,33 +98,126 @@ function AccountGroupAccordion({
   );
 }
 
+const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', openingBalance: '', last4: '', color: '#3a4a5f' };
+
 export default function AccountsPage() {
   const { fmt } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const allTxns = useFinanceStore((s) => s.transactions);
-  const accountOverrides = useFinanceStore((s) => s.accountOverrides);
   const accounts = useFinanceStore((s) => s.accounts);
+  const createAccount = useFinanceStore((s) => s.createAccount);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
-  // Balances come straight from the projected account rows (server DB).
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+
+  const openCreate = (groupId?: string) => {
+    setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash' });
+    setCreateOpen(true);
+  };
+
+  const saveCreate = () => {
+    const name = draft.name.trim();
+    if (!name) return;
+    createAccount({
+      name,
+      type: draft.type,
+      currency: active.base,
+      groupId: draft.group,
+      openingBalance: Number(draft.openingBalance) || 0,
+      color: draft.color,
+      last4: draft.last4.trim() || null,
+      ledgerId: activeId,
+    });
+    toast.success('Account created', { description: name });
+    setCreateOpen(false);
+  };
+
+  // Accounts (name/last4/color/group) and balances now come from the projected
+  // DB rows; the static mock is only a pre-hydration fallback so first paint
+  // isn't empty.
   const ledgerAccountRows = accounts.filter((a) => a.ledgerId === activeId);
   const balanceOf = (id: string) => accountBalance(ledgerAccountRows, id);
 
-  const ledgerAccounts = MOCK.accounts
-    .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)
-    .map((a) => {
-      const ov = accountOverrides[a.id];
-      return ov ? { ...a, name: ov.name || a.name, last4: ov.last4 || a.last4 } : a;
-    });
+  const ledgerAccounts = ledgerAccountRows.length
+    ? ledgerAccountRows.map((a) => ({ id: a.id, name: a.name, last4: a.last4 ?? '', color: a.color ?? '#6b7280', group: a.groupId ?? '' }))
+    : MOCK.accounts
+        .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)
+        .map((a) => ({ id: a.id, name: a.name, last4: a.last4, color: a.color, group: a.group }));
+
+  const trailing = (
+    <div className="flex items-center gap-1">
+      <IconButton icon="search" aria-label="Search" />
+      <IconButton icon="plus" aria-label="Add account" onClick={() => openCreate()} />
+    </div>
+  );
+
+  const createDialog = (
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New account</DialogTitle>
+          <DialogDescription>Added to {active.name}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-name">Name</Label>
+            <Input id="new-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-type">Type</Label>
+              <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
+                <SelectTrigger id="new-type" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-group">Group</Label>
+              <Select value={draft.group} onValueChange={(v) => setDraft({ ...draft, group: v })}>
+                <SelectTrigger id="new-group" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MOCK.accountGroups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-balance">Opening balance ({active.base})</Label>
+              <Input id="new-balance" inputMode="decimal" value={draft.openingBalance} onChange={(e) => setDraft({ ...draft, openingBalance: e.target.value })} placeholder="0.00" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-last4">Number (last 4)</Label>
+              <Input id="new-last4" inputMode="numeric" maxLength={4} value={draft.last4} onChange={(e) => setDraft({ ...draft, last4: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="new-color">Card color</Label>
+            <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="size-9 cursor-pointer rounded-md border border-border bg-transparent" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button onClick={saveCreate} disabled={!draft.name.trim()}>Create</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (ledgerAccounts.length === 0) {
     return (
       <MobilePage>
-        <ScreenHeader title="Accounts" trailing={<IconButton icon="search" aria-label="Search" />} />
+        <ScreenHeader title="Accounts" trailing={trailing} />
         <div className="text-muted-foreground px-5 pt-16 text-center text-sm">
           No accounts linked in <span className="text-foreground font-medium">{active.name}</span> yet.
         </div>
+        {createDialog}
       </MobilePage>
     );
   }
@@ -125,7 +231,7 @@ export default function AccountsPage() {
 
   return (
     <MobilePage>
-      <ScreenHeader title="Accounts" trailing={<IconButton icon="search" aria-label="Search" />} />
+      <ScreenHeader title="Accounts" trailing={trailing} />
 
       <div className="px-5 pb-[22px]">
         <PageHeader
@@ -141,13 +247,13 @@ export default function AccountsPage() {
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">
-        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
+        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} />
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
         <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1.7fr_1fr]">
           <div className="min-w-0">
-            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} />
+            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} />
           </div>
 
           <aside className="min-w-0">
@@ -179,6 +285,7 @@ export default function AccountsPage() {
           </aside>
         </div>
       </div>
+      {createDialog}
     </MobilePage>
   );
 }

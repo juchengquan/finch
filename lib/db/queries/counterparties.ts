@@ -48,10 +48,61 @@ export async function verifyCounterparty(exec: Exec, id: string): Promise<void> 
   await exec('UPDATE counterparties SET is_verified = 1 WHERE id = ?', [id]);
 }
 
+export async function unverifyCounterparty(exec: Exec, id: string): Promise<void> {
+  await exec('UPDATE counterparties SET is_verified = 0 WHERE id = ?', [id]);
+}
+
 export async function addAlias(exec: Exec, id: string, alias: string): Promise<void> {
   const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
   if (!rows[0]) return;
   const aliases = rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : [];
   if (!aliases.includes(alias)) aliases.push(alias);
   await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
+}
+
+export async function removeAlias(exec: Exec, id: string, alias: string): Promise<void> {
+  const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
+  if (!rows[0]) return;
+  const aliases = (rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : []).filter((a) => a !== alias);
+  await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
+}
+
+export interface NewCounterparty {
+  id: string;
+  ledgerId: string;
+  name: string;
+  category: string | null;
+}
+
+/** Insert a new (unverified) merchant. */
+export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
+  await exec(
+    "INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,logo_url,is_verified,created_at) VALUES (?,?,?,?,?,?,0,datetime('now'))",
+    [c.id, c.ledgerId, c.name, JSON.stringify([]), c.category, null],
+  );
+}
+
+export interface CounterpartyPatch {
+  name?: string;
+  category?: string | null;
+}
+
+/** Update a merchant's editable fields (canonical name / category). */
+export async function updateCounterparty(exec: Exec, id: string, patch: CounterpartyPatch): Promise<void> {
+  const cols: Record<keyof CounterpartyPatch, string> = { name: 'standardized_name', category: 'category' };
+  const sets: string[] = [];
+  const bind: (string | number | null)[] = [];
+  for (const key of Object.keys(patch) as (keyof CounterpartyPatch)[]) {
+    if (patch[key] === undefined) continue;
+    sets.push(`${cols[key]} = ?`);
+    bind.push(patch[key] ?? null);
+  }
+  if (!sets.length) return;
+  bind.push(id);
+  await exec(`UPDATE counterparties SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
+/** Hard delete a merchant; transactions.counterparty_id becomes NULL via the FK. */
+export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM counterparties WHERE id = ?', [id]);
 }
