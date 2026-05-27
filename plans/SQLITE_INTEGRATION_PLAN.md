@@ -1,300 +1,155 @@
 # Finch — SQLite Schema Integration Plan
 
 > Companion to `plans/database_design_en.md` (the schema source of truth) and
-> `plans/MASTER_PLAN.md` (overall roadmap). This document is the **incremental
-> plan for making the design-doc SQLite schema the live backing model** of the
-> frontend, replacing the current mix of baked JSON, the Zustand store, and the
-> `baseline + delta` derivations — and for routing **all app interactions
-> (search, add, filter, …) through the database**.
+> `plans/MASTER_PLAN.md` (overall roadmap). This tracked making the design-doc
+> SQLite schema the live backing model of the app and routing interactions
+> (search / add / filter / verify / post / transfer …) through it.
 >
-> _Branch:_ `feat/frontend` · _Last updated: 2026-05-26._
+> _Branch:_ `feat/frontend` · _Last updated: 2026-05-27._
+>
+> **Status: shipped (PRs #15–#17).** The relational schema is the app's data
+> layer, served by a **server-side** SQLite database. A few screens and some
+> cleanup remain — see §6.
 
 ---
 
-## 1. Decisions (locked)
+## 1. Decisions (final)
 
 | Question | Decision |
 |----------|----------|
-| **Persistence method** | **A SQLite `.db` file** is the persistence method — stored in **OPFS** (`finch.db`), with localStorage as a no-OPFS fallback and an optional File System Access backup file. ✅ *Implemented (Phase F + `b8aed11`) — see §2.* |
-| **DB seam (target)** | A **live in-memory SQLite** (`oo1.DB`) becomes the working source of truth, held open for the session and **queried directly** for reads/writes. The `.db` file remains the persistence method (the live DB is exported to it on change). |
-| **Schema scope** | **Full design schema** — all 17 tables + indexes + triggers from `database_design_en.md`, even where the UI doesn't use them yet. |
-| **Currency model** | **Adopt dual-currency now**: per-transaction `currency` + native `amount` + locked `amount_base` (per-ledger base currency) + `exchange_rate`. |
-| **One file, all ledgers** | **One `.db` for all ledgers** — the schema's native design; no structural changes (see §5). |
+| **Where the DB lives** | **Server-side.** The Next.js server owns a single SQLite database (`lib/db/server.ts`), loaded from a file on startup and written back after every change. The browser talks to it over API routes. *(This superseded the earlier browser-only OPFS plan — see §2.)* |
+| **File / persistence** | A real `.db` file whose location comes from env vars: **`FINCH_DB_DIR`** (default `<cwd>/.data`) + **`FINCH_DB_FILE`** (default `finch.sqlite3`). Survives restarts when the dir is persistent; written atomically (temp + rename). |
+| **Source of truth** | The **server database**. The Zustand store is a **mirror**: it hydrates from `GET /api/state` and every action POSTs `/api/mutate`, replacing the store with the server's projected state. |
+| **Schema scope** | The **full design schema** — all 17 tables + indexes + triggers from `database_design_en.md`, plus a transitional `app_state` table for slices not yet promoted to real tables. |
+| **Currency model** | Dual-currency: per-transaction `currency` + native `amount` + `amount_base` + `exchange_rate`. The add path stores all four; cross-currency conversion/locking is still simplified (rate = 1 when the entry matches the ledger base). |
+| **One file, all ledgers** | One `.db` for all ledgers; `ledger_id` scopes every table (see §3). |
 
 ---
 
-## 2. Current state — what's already implemented
+## 2. Architecture as built
 
-Persistence-by-file is **done**. Today's data flow (`b8aed11` on `feat/frontend`,
-building on Phase F):
+The plan originally targeted a **browser** live DB persisted to OPFS. Midway we
+switched to a **server-side** database (env-configured file), which is more
+correct for "synced to a file across restarts" and is fully testable via `curl`.
+The browser OPFS / localStorage persistence was removed.
 
-- **The `.db` file is the persistence method.** `lib/persistence.ts` → `loadPersisted()`
-  on startup: read `finch.db` from **OPFS** (`importBytesToState`); else **localStorage**;
-  else keep the seed. `components/store-hydration.tsx` calls it after mount and
-  `setState`s the result.
-- **Auto-save on every change.** `components/sqlite-backup-provider.tsx` debounces
-  (800ms) and writes the current state to OPFS (primary) or localStorage (fallback),
-  plus an optional connected backup file; it also **flushes immediately on
-  `visibilitychange`/`pagehide`**, and offers Download / Import `.db`.
-- **`persist` middleware removed** (`lib/store.ts`); the store starts from seed each
-  render (SSR-safe) and is hydrated post-mount. The one-time `localStorage → OPFS`
-  migration is effectively handled (localStorage is the fallback/migration source).
-- **New editable slice:** `accountOverrides` + `setAccountDetails` (account
-  name/type/last4/institution/routing), threaded into `lib/db/repo.ts` `PersistState`.
-- **New interaction surfaces** (the components the migration will wire to the DB):
-  `add-expense-form` + `add-expense-sheet` (+ provider), `transaction-sheet` +
-  `transaction-detail` (+ provider), `use-is-desktop`. Providers are mounted in
-  `app/layout.tsx`.
-- **e2e/Playwright removed** — verification is now **typecheck · lint · `bun test` ·
-  build**, plus manual in-browser checks.
+**Data flow**
+- **`lib/db/server.ts`** — process-singleton SQLite (the `@sqlite.org/sqlite-wasm`
+  runtime in Node), `deserialize`d from the env file on first use (or seeded if
+  absent), written back after each mutation. `serverExternalPackages` keeps the
+  wasm package out of the bundler.
+- **API routes** (`app/api/*`, Node runtime):
+  - `GET /api/state` → projected full app state.
+  - `POST /api/mutate` → `{ action, args }` runs a write (`lib/db/mutations.ts`),
+    triggers maintain balances/snapshots/summaries, persists, returns new state.
+  - `GET /api/db-info` → the resolved file path (shown in Settings).
+- **Client** (`lib/api-client.ts`) — `fetchState` / `mutate` / `fetchDbInfo`.
+  `StoreHydration` loads state on mount; store actions update optimistically then
+  POST and reconcile from the server response.
+- **Relational layer** (driver-agnostic, reused on server + in tests):
+  `schema.ts` (DDL + triggers), `seed.ts` (relational + dual-currency seed),
+  `state.ts` (`serializeState`/`deserializeState`/`projectState`/`buildState`),
+  `queries/*.ts` (typed reads), `mutations.ts` (typed writes).
+- **Browser query DB** (`components/db-provider.tsx` + `lib/db/runtime.ts`) — a
+  second in-memory DB rebuilt from the store, used by the read-query screens
+  (Activity/Accounts/Merchants/Budgets/Reports). Now redundant with the server
+  (see §6 cleanup).
 
-**The gap to the target.** The `.db` today is a **serialized snapshot of the Zustand
-store** through a *flat 3-table* schema (`transactions`, `pending`, `meta`-JSON in
-`lib/db/repo.ts`). SQLite is opened only momentarily at import/export and is **never
-queried**. To get the full relational schema, dual-currency, and **DB-backed
-interactions** (§4), we add a **live, queryable connection** and the relational schema —
-while keeping the file as the persistence method.
-
----
-
-## 3. Target architecture
-
-### 3.1 Live DB + file persistence
-- One persistent `sqlite-wasm` `oo1.DB` per session (`lib/db/client.ts`).
-- On startup: if OPFS holds `finch.db`, `sqlite3_deserialize` it; otherwise create a
-  fresh DB, apply the schema, and seed it.
-- On every write, the existing `SqliteBackupProvider` debounce exports the **live DB**
-  (`client.export()` → `sqlite3_js_db_export`) to OPFS + the connected file handle.
-  (Today it serializes the store; we repoint it at the live client. The provider's
-  debounce, visibilitychange flush, fallback, and download/import stay as-is.)
-
-### 3.2 The "store-as-cache" bridge (what makes this gradual)
-SQLite is the truth, but the **Zustand store stays as a read-cache** so screens don't
-all change at once:
-- On load, hydrate store slices from SQL `SELECT`s.
-- A mutation runs the SQL write (triggers maintain derived tables), then re-`SELECT`s
-  the affected slice back into the store.
-- Components keep using their existing `useFinanceStore(...)` selectors.
-
-We migrate **one domain at a time** (reads *and* writes together, so the cache never
-drifts). As each domain moves to SQL, its baked totals in `data/*.json` and its
-`baseline + delta` logic in `lib/derive.ts` are deleted.
-
-### 3.3 SQL location
-The design doc suggests `queries/*.sql` files. In the Next/Turbopack bundler we will
-instead colocate SQL as typed functions in **`lib/db/queries/*.ts`** (template strings +
-typed row mappers). Deliberate deviation, recorded here.
-
-### 3.4 Reactivity
-Writes refresh the cached store slice, which already drives re-renders — no new global
-subscription machinery is required.
+**SQL location** — colocated as typed functions in `lib/db/queries/*.ts` (not
+`queries/*.sql` as the design doc suggests). Deliberate deviation.
 
 ---
 
-## 4. DB-backed interactions (the headline goal)
+## 3. One file for all ledgers — schema impact
 
-**Every meaningful interaction is a typed function in `lib/db/queries/*.ts` that runs
-SQL against the live DB.** Reads return rows the store-cache slices consume; writes
-mutate + let triggers update derived tables, then re-`SELECT`. The catalog below is the
-working checklist (grouped by surface; the phase that delivers each is in brackets).
+**No schema changes** — the design is already single-file / multi-ledger:
+- Every per-ledger table carries `ledger_id REFERENCES ledgers(id) ON DELETE CASCADE`.
+- Active ledger is a `WHERE ledger_id = :active` filter, not a file swap.
+- `exchange_rates` is intentionally ledger-agnostic (shared).
+- Cross-ledger transfers + global net worth require the shared file.
 
-**Global [P0/P1]**
-- Ledger scoping on every query (`WHERE ledger_id = :active`); active-ledger switch is a
-  filter change, not a reload.
-
-**Transactions · Activity · `transaction-sheet`/`-detail` [P1]**
-- **List** (paginated, date-desc), **search** (substring over merchant / note /
-  counterparty), **filter** (account, category, status, date range, amount range, tag,
-  pending-only), **sort**.
-- **Add** (insert with `amount`/`amount_base`/`exchange_rate`/`balance_after`), **edit**,
-  **delete** (`status='cancelled'`), **confirm pending**, **confirm-all**.
-
-**Add-expense (`add-expense-form`/`-sheet`) [P1]**
-- Insert via the same write path; account/category pickers sourced from DB.
-
-**Accounts [P2]**
-- List + group, current balance, **balance curve** (`account_balance_snapshots`),
-  **edit details** (`accountOverrides` → `UPDATE accounts`), **net worth**
-  (two-level `include_in_net_worth`).
-
-**Categories [P3]**
-- Tree (`parent_name`), **per-category spend** (monthly query), create/rename.
-
-**Counterparties / Merchants [P3]**
-- List, **search**, **verify** (`is_verified`), **add alias**, merge.
-
-**Budgets [P4]**
-- List, **progress** query (filters + rollover), set/create/edit.
-
-**Recurring [P5]**
-- List, **edit splits**, **post** (`auto_post` → pending/confirmed tx), archive.
-
-**Transfers [P6]**
-- **Create** paired tx sharing `transfer_group_id`; list groups; cross-ledger.
-
-**Reports · Insights · FX [P7]**
-- Monthly-by-category, cash flow, apr-vs-may, net-worth trend (from `ledger_summaries` /
-  `net_worth_snapshots`); `exchange_rates` lookups + import-time rate locking.
-
-**System [P8]**
-- `sync_log` device list, DB stats, reset, export/import (already present).
+Discipline: every `INSERT` sets `ledger_id`; reads scope by it (except global
+tables); `categories.parent_name` resolves within a ledger.
 
 ---
 
-## 5. One file for all ledgers — schema impact
+## 4. Seed conversion (done)
 
-**No schema changes.** The design is already single-file / multi-ledger:
+`lib/db/seed.ts` builds the relational + dual-currency seed from `data/*.json`:
+enum mapping (`checking→savings`, `credit→credit_card`, `invest→investment`);
+each account's **opening balance** is fixed (seed balance − seed deltas) so
+`current_balance` tracks the live transaction set; counterparties/budgets/
+transfer_groups/exchange_rates seeded; pending/recurring/override slices live in
+`app_state`. `reset` reseeds the whole DB.
 
-- Every per-ledger table carries `ledger_id TEXT REFERENCES ledgers(id) ON DELETE
-  CASCADE`. One file = the `ledgers` table (N rows) + everything else discriminated
-  by `ledger_id`.
-- **Active ledger is a UI filter** (`WHERE ledger_id = :active`), not a file swap.
-  `LedgerProvider` just changes the filter value.
-- **`exchange_rates`** is intentionally ledger-agnostic (PK `date, currency`) — shared
-  across all ledgers in the file.
-- **Cross-ledger features require one file**: `transfer_groups` + the
-  `ledger_summaries` `transfer_in`/`transfer_out` split move money between ledgers
-  without double-counting in global views. Impossible with one-file-per-ledger.
-- **`sync_log`** (per device+ledger) becomes informational under whole-file OPFS
-  mirroring — it backs the System screen device list.
-
-**Application-layer discipline this imposes:**
-1. Every `INSERT` sets the correct `ledger_id`.
-2. Every read scopes by `ledger_id` (except the global tables: `exchange_rates`).
-3. `categories.parent_name` lookups are resolved **within a ledger** (names are unique
-   per ledger, not globally).
-4. Export/import moves **all ledgers together** (matches today's single `finch.db`
-   mirror). Per-ledger export, if ever wanted, is an app-layer filtered query — still
-   no schema change.
-
-> The rejected alternative (one file per ledger) would mean *removing* `ledger_id`
-> everywhere, losing cross-ledger transfers + global net worth, and mirroring N files.
+> Note: the 3 illustrative cross-ledger seeded transfers were dropped — they
+> referenced accounts that don't exist as real accounts. Transfers are now real
+> transaction pairs.
 
 ---
 
-## 6. Seed conversion (the trickiest correctness work)
+## 5. Phases — status
 
-`lib/db/seed.ts` builds the relational + dual-currency seed from the current
-`data/*.json`. Non-trivial mappings:
+| Phase | What it delivered | Status |
+|-------|-------------------|--------|
+| **0 — Foundation** | `schema.ts`, `seed.ts`, `client.ts`, `queries/transactions.ts` + tests | ✅ #15 |
+| **1 — Relational persistence** | `state.ts` serialize/deserialize; store-as-cache; round-trip test | ✅ #15 |
+| **Query backends** | `queries/{accounts,categories,counterparties,reports}.ts` + tests | ✅ #15 |
+| **UI: Activity** | list / search / filter via SQL | ✅ #16 |
+| **UI: Add-expense** | category/account pickers from the DB, ledger-scoped | ✅ #16 |
+| **UI: Transaction detail** | category pickers ledger-scoped | ✅ #16 |
+| **2 — Accounts** | balances / group totals / net worth + detail tx list from DB; opening-balance fix | ✅ #16 |
+| **3 — Merchants** | verified/aliases + search from DB; `buildState` applies verify/alias | ✅ #16 |
+| **4 — Budgets** | spend DB-derived (`categorySpend`) | ✅ #16 |
+| **7 — Reports** | DB-derived category spend, ledger-scoped | ✅ #16 |
+| **Server flip** | server-side DB + API + env file persistence; Settings shows path, Import disabled | ✅ #16 |
+| **6 — Transfers** | `createTransfer` → paired rows sharing `transfer_group_id`; DB-derived list + "New transfer" | ✅ #16 |
+| **5 — Recurring** | split editing; **"Post now"** → confirmed tx(s) with account-name resolution | ✅ #17 |
 
-- **Enums**: account `checking→savings`, `credit→credit_card`, `invest→investment`;
-  keep `cash`/`fx`/`virtual` where they appear.
-- **Categories**: flatten today's `categories.json` + the hardcoded `categoryTree`
-  (in `lib/data.ts`) into hierarchical rows (`parent_name`, `type`).
-- **Currency**: assign each transaction a `currency` from its account; compute
-  `amount_base` via `exchange_rates` (locked); set `exchange_rate`/`exchange_rate_date`.
-- **`balance_after`**: insert transactions **per account in date order** so the
-  balance trigger computes a correct running balance; seed `accounts.current_balance`
-  follows from the last row.
-- **Counterparties / budgets / recurring / account edits**: map `verified`/`aliases`,
-  `budgetOverrides`, `recurring-templates.json` (+ splits), and `accountOverrides` into
-  their tables (account edits become `UPDATE accounts`, not a separate table).
-
-> The `localStorage → DB` migration is already handled by `lib/persistence.ts` (§2).
-> Phase 0 must make the live-DB load path **read an existing OPFS `finch.db` if present**
-> and only seed when it's absent — i.e. not clobber a user's data.
-
----
-
-## 7. Phases
-
-This is being delivered as commits on one PR. Each commit ends **typecheck · lint ·
-`bun test` · build** green.
-
-> **Status (PR #15):** Phases 0–1 fully landed (relational schema + the persisted,
-> queryable DB with the store as cache). The **DB-backed query backends** for Phases
-> 2–4 and 7 (accounts/net-worth, categories spend, counterparties, cash-flow/budget
-> progress) are landed and unit-tested in `lib/db/queries/*`. **Remaining: wiring those
-> queries into the React components, and Phases 5–6 (recurring/transfers writes)** —
-> the component wiring needs in-browser verification, which can't run headlessly in CI.
-
-> **Already landed** (Phase F + `b8aed11`): file-based persistence, OPFS-authoritative
-> load, localStorage fallback/migration, dropping `persist`, and the
-> add-expense / transaction sheet components. Phases below build the relational layer
-> and route interactions (§4) through it.
-
-### Phase 0 — Foundation (no UI change) ✅ *landed*
-- ✅ `lib/db/schema.ts` — full schema (17 tables + indexes + triggers).
-- ✅ `lib/db/client.ts` — live `oo1.DB`: `createLiveDb()` (schema + seed) and
-  `openLiveDb(bytes)` (deserialize an existing file); `exec` / `export()`.
-- ✅ `lib/db/seed.ts` — relational + dual-currency seed (per §6): ledgers,
-  account_groups, accounts, categories, counterparties, budgets, transfer_groups,
-  exchange_rates, transactions (+ snapshot/summary tables filled by triggers).
-  recurring/pending/tags/sync_log/net_worth are seeded in their own phases.
-- ✅ `lib/db/queries/transactions.ts` — list / search / filter / add / update /
-  cancel / confirm (the §4 transactions interactions).
-- ✅ bun tests (`seed.test.ts`, `queries/transactions.test.ts`): schema applies;
-  balance/snapshot/summary triggers fire; ledger isolation; headline query.
-- *App still runs off the store; the live DB layer runs alongside, test-verified.*
-- ⏭ **Deferred to Phase 1** (needs in-browser verification): repointing
-  `SqliteBackupProvider`/`persistence.ts` to the live client. **Hazard found:** the
-  current OPFS `finch.db` uses the *flat* schema (`lib/db/repo.ts`) with a
-  `transactions` table whose columns differ from the relational one — `CREATE TABLE
-  IF NOT EXISTS` will **not** reconcile them. Phase 1 must use a new OPFS filename
-  (or an explicit migration) so the relational DB never collides with a flat-schema
-  file.
-
-### Phase 1 — Relational persistence + store-as-cache ✅ *landed*
-- ✅ Persistence flipped from the flat `repo.ts` schema to the **relational schema**.
-  `lib/db/state.ts`: `serializeState(state)` builds a relational DB from the store
-  (reference seed + the store's transactions as real rows + a transitional `app_state`
-  table for pending/recurring/overrides) and exports bytes; `deserializeState(bytes)`
-  projects them back to the store shape.
-- ✅ New OPFS filename `finch.sqlite3` (avoids the flat-schema collision). On load:
-  relational file → else legacy flat `finch.db` (one-time migration) → else
-  localStorage. `SqliteBackupProvider` now writes the relational bytes.
-- ✅ Round-trip test (`state.test.ts`): store → relational `.db` → store preserves
-  transactions (incl. ledger, pending, null category) and every slice.
-- The store stays the in-memory working model; the `.db` is its relational, queryable
-  form. Components unchanged.
-- ⏭ Still to wire (later commits, needs in-browser verification): pointing `activity`
-  search/filter and `add-expense` at the `lib/db/queries` SQL directly, and sourcing
-  month spent/income from `ledger_summaries` instead of the `derive.ts` deltas.
-
-### Phase 2 — Accounts, groups, balances, net worth
-Account list/detail + balance curve (`account_balance_snapshots`) + net worth (two-level
-`include_in_net_worth`, `net_worth_snapshots`). **Edit details** route
-`accountOverrides`→`UPDATE accounts`. Retire `accountBalance` / `netWorth` deltas.
-
-### Phase 3 — Categories (hierarchical) + counterparties + tags
-Category tree from `categories.parent_name`; per-category spend from the monthly query
-(kills baked `category.spent`). Counterparty list/search/**verify**/**alias** persist to
-`counterparties` (replaces `verifiedExtra` / `aliasExtra`). Add `tags` /
-`transaction_tags` plumbing + tag filter.
-
-### Phase 4 — Budgets
-Real `budgets` table with JSON filters + rollover; budget-progress query replaces
-`budgetOverrides` + baked `category.budget`.
-
-### Phase 5 — Recurring templates + splits
-`recurring_templates` + `recurring_splits`; split editing and **post** (auto_post →
-pending/confirmed tx) write to DB.
-
-### Phase 6 — Transfers + transfer_groups
-Transfer creation makes a paired tx sharing `transfer_group_id`; reports exclude
-transfers correctly (the double-count guard); cross-ledger transfers supported.
-
-### Phase 7 — Reports, summaries, exchange rates, FX
-`ledger_summaries`-driven monthly reports / cash flow / apr-vs-may; `exchange_rates`
-table + FX screen + import-time rate locking; net-worth trend.
-
-### Phase 8 — System / sync_log + teardown
-`sync_log` device list; delete `lib/derive.ts` deltas, baked totals, and replaced store
-slices; collapse `lib/db/repo.ts` (flat-schema serializer) once the live schema fully
-replaces it; final a11y / test / docs pass.
+Categories "spent" and Reports moved to **true DB-derived** figures (lower than
+the former curated mock totals) by explicit decision.
 
 ---
 
-## 8. Risks & open items
-- **Architectural shift** — today the `.db` is serialize-only; making it live-queryable
-  is the core change. The store-as-cache bridge (§3.2) is what prevents regressions
-  during the gradual migration.
-- **Seed correctness** (currency, balance ordering, category hierarchy) — verified by
-  bun tests in Phase 0 before any UI depends on it.
-- **Don't clobber user data** — the live-DB load path must reuse an existing OPFS
-  `finch.db` and only seed when absent.
-- **Browser-only paths** (OPFS, File System Access, wasm execution) remain **manually
-  verified in a real browser** each phase — no e2e harness anymore, so this is the only
-  coverage for those paths.
-- **Trigger parity in `sqlite-wasm`** — confirm triggers behave identically to the doc
-  (Phase 0 tests cover balance/summary triggers).
+## 6. Remaining work
+
+**Screens still on static `MOCK` (not DB-wired):**
+- **Categories admin** (`/categories`) — create/rename to the `categories` table.
+- **FX** (`/fx`) — `exchange_rates` is seeded but the screen is static; no real
+  conversion / import-time rate locking.
+- **System** (`/system`) — `sync_log` table exists; device list is static.
+- **Pending** (`/pending`) — works via `app_state`; not migrated to the
+  `transactions.status='pending'` model.
+- **Goals / Scheduled / Subscriptions** — static; not in the design schema
+  (would need schema extensions).
+
+**Schema built, no UI yet:**
+- **Tags / `transaction_tags`** — tables exist; no tag UI or filter.
+- **Balance curve** — `account_balance_snapshots` + `accountBalanceSeries` exist;
+  no chart consumes them.
+- **Net-worth trend** — `net_worth_snapshots` not populated/charted.
+
+**Known/intentional:**
+- **Insights** stays curated (seed has no multi-month history).
+- **Dual-currency** is plumbed and stored, but cross-currency conversion + locking
+  is simplified (rate = 1 in the common case).
+
+**Cleanup / teardown:**
+- Retire `lib/derive.ts` delta fallbacks now that figures come from the DB.
+- Remove baked totals from `data/*.json`.
+- Delete dead code: `lib/db/repo.ts` (flat schema) + unused `lib/db/storage.ts` exports.
+- Resolve the redundant **browser `DbProvider`** — the read-query screens could call
+  the server directly instead of rebuilding an in-memory DB from the store.
+
+---
+
+## 7. Notes & deviations
+- TEXT primary keys reuse the app's existing string ids (not UUIDs); dates are ISO
+  `YYYY-MM-DD`. Both are documented deviations from `database_design_en.md`.
+- A transitional `app_state(key,value)` table holds store slices (pending,
+  recurring, budget/account overrides, verified/alias) not yet promoted to real
+  tables; each is read/written by `mutations.ts` and projected by `state.ts`.
+- The server singleton assumes a single server instance (fine for `bun dev` / a
+  single container); a multi-instance deploy would need a shared DB.
+- Verification is **typecheck · lint · `bun test` · `next build`** plus `curl`
+  against the API routes; browser-only UI flows still need a manual check.
