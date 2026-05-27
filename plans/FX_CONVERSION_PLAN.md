@@ -1,7 +1,15 @@
 # FX / cross-currency conversion — design plan
 
-Status: **proposed** (not started). Companion to `SQLITE_INTEGRATION_PLAN.md` §6,
-which lists cross-base conversion as the remaining intentional simplification.
+Status: **Phase 1 + 2 implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
+- ✅ **Phase 1** — `lib/db/queries/rates.ts` (`rateToSgd` + `convertToBase`, SGD
+  pivot, nearest-on-or-before, static fallback); `addTransaction` converts
+  native→base and locks the rate.
+- ✅ **Phase 2** — seed bases for foreign rows are derived from the table (fixed
+  per-account opening recomputed from the seed's derived bases, so balances still
+  land on the known seed balance); `createTransfer` converts the incoming leg;
+  rate coverage extended to the FX seed date.
+- ↩ **Remaining**: broader/real rate history, a rate-admin affordance, and whether
+  `useMoney` display conversion should move off the static map (§7).
 
 ## 1. Goal
 
