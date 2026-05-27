@@ -134,11 +134,12 @@ the former curated mock totals) by explicit decision.
   sparkline on the account detail.
 - ✅ **Net-worth trend** — `netWorthSeries` drives a sparkline on Accounts.
 
-**Known/intentional (still simplified):**
-- **Insights** stays curated (seed has no multi-month history).
+**Known/intentional (still simplified) — design docs written:**
+- **Insights** stays curated (seed has no multi-month history). See
+  `INSIGHTS_PLAN.md`.
 - **Dual-currency**: rate *locking* is now real (stored per transaction), but
   cross-base conversion (e.g. deriving a USD base from a to-SGD rate table) is
-  still simplified.
+  still simplified. See `FX_CONVERSION_PLAN.md`.
 
 **Also migrated:**
 - ✅ **Recurring templates** moved from the `app_state` JSON slice to the real
