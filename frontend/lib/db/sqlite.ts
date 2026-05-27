@@ -1,5 +1,5 @@
 import type { Sqlite3Static } from '@sqlite.org/sqlite-wasm';
-import { initSchema, saveState, loadState, type Exec, type PersistState } from './repo';
+import type { Exec } from './repo';
 
 type InitOptions = { print?: () => void; printErr?: () => void; locateFile?: (path: string) => string };
 // The published types declare the init function as taking no arguments, but the
@@ -42,39 +42,4 @@ export function execFor(db: OO1DB): Exec {
     db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });
     return rows;
   };
-}
-
-/** Serialise the given app state into a portable SQLite `.db` byte array. */
-export async function exportStateToBytes(state: PersistState): Promise<Uint8Array> {
-  const sqlite3 = await getSqlite3();
-  const db = new sqlite3.oo1.DB(':memory:') as unknown as OO1DB;
-  try {
-    const exec = execFor(db);
-    await initSchema(exec);
-    await saveState(exec, state);
-    return sqlite3.capi.sqlite3_js_db_export(db as never);
-  } finally {
-    db.close();
-  }
-}
-
-/** Parse a SQLite `.db` byte array back into app state. */
-export async function importBytesToState(bytes: Uint8Array): Promise<PersistState> {
-  const sqlite3 = await getSqlite3();
-  const db = new sqlite3.oo1.DB() as unknown as OO1DB;
-  try {
-    const p = sqlite3.wasm.allocFromTypedArray(bytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      db.pointer!,
-      'main',
-      p,
-      bytes.length,
-      bytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    if (rc) throw new Error(`Could not read database (code ${rc})`);
-    return await loadState(execFor(db));
-  } finally {
-    db.close();
-  }
 }
