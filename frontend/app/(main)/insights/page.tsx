@@ -10,6 +10,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
+import { categorySpend, currentMonth, prevMonth } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const METRICS = [
@@ -43,15 +44,25 @@ export default function InsightsPage() {
   const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
     .map((c) => ({ id: c.id, name: c.name, budget: budgetOverrides[c.id] ?? c.budget }));
+  const month = currentMonth(transactions, activeId);
   const computed = generateInsights({
     transactions,
     categories: ledgerCategories,
     goals: goals.filter((g) => g.ledgerId === activeId),
     accounts,
     ledgerId: activeId,
+    month,
     fmt: (n) => fmt(n),
   });
   const insights = computed.length ? computed : INSIGHTS;
+
+  // Month-over-month spending for the header (falls back to curated copy if there's
+  // no prior-month data yet).
+  const curSpend = Object.values(categorySpend(transactions, activeId, month)).reduce((s, v) => s + v, 0);
+  const prevSpend = month
+    ? Object.values(categorySpend(transactions, activeId, prevMonth(month))).reduce((s, v) => s + v, 0)
+    : 0;
+  const momPct = prevSpend > 0 ? Math.round(((curSpend - prevSpend) / prevSpend) * 100) : null;
 
   return (
     <MobilePage
@@ -59,11 +70,15 @@ export default function InsightsPage() {
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
-          label="You're spending less"
-          value={<span className="font-serif text-[60px] leading-none -tracking-[2px]">↓ 8.4%</span>}
+          label={momPct == null ? "Your spending" : momPct <= 0 ? "You're spending less" : "You're spending more"}
+          value={
+            <span className="font-serif text-[60px] leading-none -tracking-[2px]">
+              {momPct == null ? fmt(curSpend) : `${momPct <= 0 ? '↓' : '↑'} ${Math.abs(momPct)}%`}
+            </span>
+          }
           sublabel={
             <span className="text-secondary-foreground font-serif text-base italic">
-              than April. Mostly less <span className="text-primary">Shopping</span>.
+              {momPct == null ? 'this month' : 'than last month'}
             </span>
           }
         />

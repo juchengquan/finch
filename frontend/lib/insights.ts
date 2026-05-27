@@ -4,7 +4,7 @@
 
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
-import { categorySpend, netWorthSeries } from '@/lib/select';
+import { categorySpend, netWorthSeries, prevMonth } from '@/lib/select';
 
 export interface Insight {
   tone: 'pos' | 'warn' | 'neut';
@@ -19,17 +19,37 @@ export interface InsightCtx {
   goals: { id: string; name: string; target: number; saved: number }[];
   accounts: AccountRow[];
   ledgerId: string;
+  month: string; // current month (YYYY-MM); budget/spend rules scope to it
   fmt: (n: number) => string;
 }
+
+const sumValues = (m: Record<string, number>) => Object.values(m).reduce((s, v) => s + v, 0);
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
 type Rule = (ctx: InsightCtx) => Insight | null;
 
+// Total spending this month vs last month.
+const spendingTrend: Rule = (ctx) => {
+  if (!ctx.month) return null;
+  const cur = sumValues(categorySpend(ctx.transactions, ctx.ledgerId, ctx.month));
+  const prev = sumValues(categorySpend(ctx.transactions, ctx.ledgerId, prevMonth(ctx.month)));
+  if (prev <= 0) return null;
+  const pct = Math.round(((cur - prev) / prev) * 100);
+  if (pct === 0) return null;
+  const down = cur < prev;
+  return {
+    tone: down ? 'pos' : 'warn',
+    icon: down ? 'arrow-d' : 'arrow-u',
+    title: `Spending ${down ? 'down' : 'up'} ${Math.abs(pct)}% vs last month`,
+    body: `${ctx.fmt(cur)} this month vs ${ctx.fmt(prev)} last month.`,
+  };
+};
+
 // Worst over-budget category.
 const overBudget: Rule = (ctx) => {
-  const spent = categorySpend(ctx.transactions, ctx.ledgerId);
+  const spent = categorySpend(ctx.transactions, ctx.ledgerId, ctx.month);
   let worst: { name: string; spent: number; budget: number; over: number } | null = null;
   for (const c of ctx.categories) {
     if (!c.budget) continue;
@@ -61,7 +81,7 @@ const pending: Rule = (ctx) => {
 
 // Top spending category + its share.
 const topCategory: Rule = (ctx) => {
-  const spent = categorySpend(ctx.transactions, ctx.ledgerId);
+  const spent = categorySpend(ctx.transactions, ctx.ledgerId, ctx.month);
   const entries = Object.entries(spent);
   if (!entries.length) return null;
   const total = entries.reduce((s, [, v]) => s + v, 0);
@@ -130,7 +150,7 @@ const netWorthTrend: Rule = (ctx) => {
   };
 };
 
-const RULES: Rule[] = [overBudget, pending, topCategory, weekdaySkew, goalProgress, netWorthTrend];
+const RULES: Rule[] = [spendingTrend, overBudget, pending, topCategory, weekdaySkew, goalProgress, netWorthTrend];
 
 /** Run the rules in priority order; returns up to `max` insights. */
 export function generateInsights(ctx: InsightCtx, max = 6): Insight[] {

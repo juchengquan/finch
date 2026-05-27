@@ -35,12 +35,27 @@ const baseCtx = (over: Partial<InsightCtx>): InsightCtx => ({
   goals: [],
   accounts: [],
   ledgerId: 'personal',
+  month: '',
   fmt: (n) => `$${n.toFixed(2)}`,
   ...over,
 });
 
 test('empty context yields no insights (caller falls back to curated)', () => {
   expect(generateInsights(baseCtx({}))).toEqual([]);
+});
+
+test('spending trend compares this month to last', () => {
+  const ctx = baseCtx({
+    month: '2026-05',
+    transactions: [
+      tx({ category: 'food', amount: -100, date: '2026-04-10' }), // last month
+      tx({ category: 'food', amount: -80, date: '2026-05-10' }), // this month
+    ],
+    categories: [{ id: 'food', name: 'Food', budget: 1000 }],
+  });
+  const trend = generateInsights(ctx).find((i) => i.title.includes('vs last month'));
+  expect(trend?.title).toBe('Spending down 20% vs last month');
+  expect(trend?.tone).toBe('pos');
 });
 
 test('over-budget category surfaces as a warning, worst first', () => {

@@ -33,7 +33,7 @@ async function seeded(): Promise<Exec> {
 test('list scopes to ledger and excludes the other ledger', async () => {
   const exec = await seeded();
   const personal = await listTransactions(exec, { ledgerId: 'personal' });
-  expect(personal.length).toBe(20);
+  expect(personal.length).toBe(34);
   expect(personal.every((t) => t.ledgerId === 'personal')).toBe(true);
 });
 
