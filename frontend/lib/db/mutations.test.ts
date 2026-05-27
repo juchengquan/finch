@@ -146,6 +146,14 @@ test('createGoal rejects empty name or non-positive target', async () => {
   await expect(applyMutation(exec, 'createGoal', { name: 'X', target: 0 })).rejects.toThrow();
 });
 
+test('updateRecurringSplit updates the nth split by sort order', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateRecurringSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
+  const rows = await exec("SELECT amount_pct FROM recurring_splits WHERE template_id = 'rt-salary' ORDER BY sort_order");
+  expect(Number(rows[0].amount_pct)).toBe(60); // unchanged
+  expect(Number(rows[1].amount_pct)).toBe(30); // updated
+});
+
 test('createTag + setTransactionTags replace the tag set', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createTag', { id: 'tag-new', ledgerId: 'personal', name: 'Trip' });

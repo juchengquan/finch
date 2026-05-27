@@ -13,9 +13,6 @@ const sample: PersistState = {
   accountOverrides: { cc: { name: 'Amex Platinum', institution: 'Amex' } },
   verifiedExtra: ['cp-04'],
   aliasExtra: { 'cp-04': ['DDD', 'DON DONKI'] },
-  recurring: [
-    { id: 'rt-salary', name: 'Salary', type: 'income', amount: 5800, frequency: 'monthly', dayOfMonth: 25, account: 'a', autoPost: 0, nextRun: 'May 25', lastRun: 'Apr 25', splits: [{ account: 'a', pct: 60, abs: null, label: 'Daily' }] },
-  ],
 };
 
 test('store state round-trips through the relational schema', async () => {
