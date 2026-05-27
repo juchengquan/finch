@@ -18,12 +18,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 
 export default function SubscriptionsPage() {
   const { active, activeId } = useLedger();
   const allSubs = useFinanceStore((s) => s.subscriptions);
   const createSubscription = useFinanceStore((s) => s.createSubscription);
+  const updateSubscription = useFinanceStore((s) => s.updateSubscription);
+  const deleteSubscription = useFinanceStore((s) => s.deleteSubscription);
 
   const subs = allSubs.filter((s) => s.ledgerId === activeId);
   const monthly = subs.reduce((s, x) => s + x.amount, 0);
@@ -31,6 +34,7 @@ export default function SubscriptionsPage() {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [next, setNext] = useState('');
+  const [editing, setEditing] = useState<{ id: string; name: string; amount: string; next: string } | null>(null);
 
   const submit = () => {
     const n = name.trim();
@@ -42,6 +46,17 @@ export default function SubscriptionsPage() {
     setName('');
     setAmount('');
     setNext('');
+  };
+
+  const submitEdit = () => {
+    if (!editing) return;
+    const n = editing.name.trim();
+    const a = parseFloat(editing.amount);
+    if (!n) return void toast.error('Enter a name');
+    if (!(a > 0)) return void toast.error('Enter an amount greater than 0');
+    updateSubscription(editing.id, { name: n, amount: a, next: editing.next.trim() || null });
+    toast.success('Subscription updated', { description: n });
+    setEditing(null);
   };
 
   const addDialog = (
@@ -117,9 +132,46 @@ export default function SubscriptionsPage() {
                 /yr
               </div>
             </div>
+            <RowActions
+              onEdit={() => setEditing({ id: s.id, name: s.name, amount: String(s.amount), next: s.next ?? '' })}
+              onDelete={() => { deleteSubscription(s.id); toast.success('Subscription deleted', { description: s.name }); }}
+              confirmTitle={`Delete ${s.name}?`}
+              confirmDescription="This removes the subscription reminder. It does not cancel the service or affect past transactions."
+            />
           </div>
         ))}
       </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit subscription</DialogTitle>
+            <DialogDescription>Update the name, amount or next charge.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Name</Label>
+                <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Amount / month</Label>
+                <Input type="number" inputMode="decimal" value={editing.amount} onChange={(e) => setEditing((p) => (p ? { ...p, amount: e.target.value } : p))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Next charge (optional)</Label>
+                <Input value={editing.next} onChange={(e) => setEditing((p) => (p ? { ...p, next: e.target.value } : p))} placeholder="e.g. Jun 30" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }

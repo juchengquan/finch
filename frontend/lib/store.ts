@@ -63,13 +63,26 @@ export interface RecurringTemplate {
   splits?: RecurringSplit[];
 }
 
-// Editable fields on an otherwise-static MOCK account.
-export interface AccountOverride {
+// Editable account fields, applied as a patch against the real accounts table.
+export interface AccountPatch {
   name?: string;
   type?: string;
-  last4?: string;
-  institution?: string;
-  routing?: string;
+  last4?: string | null;
+  institution?: string | null;
+  routing?: string | null;
+  color?: string | null;
+  groupId?: string | null;
+}
+
+export interface NewAccountInput {
+  name: string;
+  type: string;
+  currency?: string;
+  groupId?: string | null;
+  openingBalance?: number;
+  color?: string | null;
+  last4?: string | null;
+  ledgerId?: string;
 }
 
 const SEED_TX = transactionsData as Tx[];
@@ -78,13 +91,9 @@ const SEED_RECURRING = recurringData as RecurringTemplate[];
 interface FinanceState {
   transactions: Tx[];
   recurring: RecurringTemplate[];
-  // Editable overrides on otherwise-static mock data, persisted.
-  budgetOverrides: Record<string, number>;
-  accountOverrides: Record<string, AccountOverride>;
-  verifiedExtra: string[];
-  aliasExtra: Record<string, string[]>;
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
+  budgetByCategory: Record<string, number>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
@@ -101,18 +110,42 @@ interface FinanceState {
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
-  setAccountDetails: (accountId: string, patch: AccountOverride) => void;
+  deleteBudget: (categoryId: string) => void;
+  createAccount: (input: NewAccountInput) => string;
+  updateAccount: (id: string, patch: AccountPatch) => void;
+  archiveAccount: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   verifyCounterparty: (id: string) => void;
+  unverifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
+  removeAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
-  createCategory: (input: { name: string; type?: string; icon?: string; ledgerId?: string }) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; hue?: number; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
+  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; hue?: number | null }) => void;
+  deleteCategory: (id: string) => void;
   createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
   contributeGoal: (id: string, amount: number) => void;
+  updateGoal: (id: string, patch: { name?: string; target?: number; eta?: string | null }) => void;
+  deleteGoal: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
+  deleteTag: (id: string) => void;
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
+  updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
+  deleteSubscription: (id: string) => void;
+  createRecurring: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; account: string; from?: string; autoPost?: boolean; ledgerId?: string }) => string;
+  updateRecurring: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; autoPost?: number }) => void;
+  deleteRecurring: (id: string) => void;
+  updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
+  deleteTransfer: (id: string) => void;
+  createScheduledItem: (input: { label: string; amount: number; day: number; month: string; type?: string; color?: string; ledgerId?: string }) => void;
+  updateScheduledItem: (id: string, patch: { day?: number; month?: string; label?: string; amount?: number; type?: string; color?: string | null }) => void;
+  deleteScheduledItem: (id: string) => void;
+  createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
+  updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
+  deleteCounterparty: (id: string) => void;
   reset: () => void;
 }
 
@@ -132,11 +165,8 @@ export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
-      budgetOverrides: {},
-      accountOverrides: {},
-      verifiedExtra: [],
-      aliasExtra: {},
       accounts: [],
+      budgetByCategory: {},
       categories: [],
       counterparties: [],
       exchangeRates: [],
@@ -196,18 +226,44 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       setBudget: (categoryId, amount) => {
-        set((s) => ({ budgetOverrides: { ...s.budgetOverrides, [categoryId]: amount } }));
+        set((s) => ({ budgetByCategory: { ...s.budgetByCategory, [categoryId]: amount } }));
         syncMutation('setBudget', { categoryId, amount });
       },
 
-      setAccountDetails: (accountId, patch) => {
-        set((s) => ({
-          accountOverrides: {
-            ...s.accountOverrides,
-            [accountId]: { ...s.accountOverrides[accountId], ...patch },
-          },
-        }));
-        syncMutation('setAccountDetails', { accountId, patch });
+      deleteBudget: (categoryId) => {
+        set((s) => {
+          const next = { ...s.budgetByCategory };
+          delete next[categoryId];
+          return { budgetByCategory: next };
+        });
+        syncMutation('deleteBudget', { categoryId });
+      },
+
+      createAccount: (input) => {
+        const id = `acct-${Date.now().toString(36)}`;
+        syncMutation('createAccount', {
+          id,
+          ledgerId: input.ledgerId ?? 'personal',
+          name: input.name,
+          type: input.type,
+          currency: input.currency ?? 'SGD',
+          groupId: input.groupId ?? null,
+          openingBalance: input.openingBalance ?? 0,
+          color: input.color ?? null,
+          last4: input.last4 ?? null,
+        });
+        return id;
+      },
+
+      updateAccount: (id, patch) => {
+        // Optimistically patch the projected row; syncMutation re-projects from the DB.
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+        syncMutation('updateAccount', { id, patch });
+      },
+
+      archiveAccount: (id) => {
+        set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
+        syncMutation('archiveAccount', { id });
       },
 
       updateRecurringSplit: (templateId, index, pct) => {
@@ -222,15 +278,31 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       verifyCounterparty: (id) => {
-        set((s) => ({ verifiedExtra: s.verifiedExtra.includes(id) ? s.verifiedExtra : [...s.verifiedExtra, id] }));
+        set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, verified: true } : c)) }));
         syncMutation('verifyCounterparty', { id });
+      },
+
+      unverifyCounterparty: (id) => {
+        set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, verified: false } : c)) }));
+        syncMutation('unverifyCounterparty', { id });
       },
 
       addAlias: (id, alias) => {
         set((s) => ({
-          aliasExtra: { ...s.aliasExtra, [id]: [...(s.aliasExtra[id] ?? []), alias] },
+          counterparties: s.counterparties.map((c) =>
+            c.id === id && !c.aliases.includes(alias) ? { ...c, aliases: [...c.aliases, alias] } : c,
+          ),
         }));
         syncMutation('addAlias', { id, alias });
+      },
+
+      removeAlias: (id, alias) => {
+        set((s) => ({
+          counterparties: s.counterparties.map((c) =>
+            c.id === id ? { ...c, aliases: c.aliases.filter((a) => a !== alias) } : c,
+          ),
+        }));
+        syncMutation('removeAlias', { id, alias });
       },
 
       // Transfers are created on the server (multi-row / relational); the server
@@ -245,13 +317,24 @@ export const useFinanceStore = create<FinanceState>()(
         const id = `cat-${Date.now().toString(36)}`;
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
-        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, parentName: null, type, icon }] }));
-        syncMutation('createCategory', { ledgerId, name: input.name, type, icon });
+        const hue = input.hue ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, parentName: null, type, icon, hue }] }));
+        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, hue });
       },
 
       renameCategory: (id, name) => {
         set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, name } : c)) }));
         syncMutation('renameCategory', { id, name });
+      },
+
+      updateCategory: (id, patch) => {
+        set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+        syncMutation('updateCategory', { id, patch });
+      },
+
+      deleteCategory: (id) => {
+        set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
+        syncMutation('deleteCategory', { id });
       },
 
       createGoal: (input) => {
@@ -267,6 +350,16 @@ export const useFinanceStore = create<FinanceState>()(
       contributeGoal: (id, amount) => {
         set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
         syncMutation('contributeGoal', { id, amount });
+      },
+
+      updateGoal: (id, patch) => {
+        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
+        syncMutation('updateGoal', { id, patch });
+      },
+
+      deleteGoal: (id) => {
+        set((s) => ({ goals: s.goals.filter((g) => g.id !== id) }));
+        syncMutation('deleteGoal', { id });
       },
 
       createTag: (input) => {
@@ -285,6 +378,19 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('setTransactionTags', { id: transactionId, tagIds });
       },
 
+      updateTag: (id, patch) => {
+        set((s) => ({ tags: s.tags.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+        syncMutation('updateTag', { id, patch });
+      },
+
+      deleteTag: (id) => {
+        set((s) => ({
+          tags: s.tags.filter((t) => t.id !== id),
+          transactions: s.transactions.map((t) => (t.tags ? { ...t, tags: t.tags.filter((x) => x !== id) } : t)),
+        }));
+        syncMutation('deleteTag', { id });
+      },
+
       createSubscription: (input) => {
         const ledgerId = input.ledgerId ?? 'personal';
         const id = `sub-${Date.now().toString(36)}`;
@@ -296,14 +402,98 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
       },
 
+      updateSubscription: (id, patch) => {
+        set((s) => ({ subscriptions: s.subscriptions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+        syncMutation('updateSubscription', { id, patch });
+      },
+
+      deleteSubscription: (id) => {
+        set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
+        syncMutation('deleteSubscription', { id });
+      },
+
+      createRecurring: (input) => {
+        const id = `rt-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const type = input.type ?? 'expense';
+        const frequency = input.frequency ?? 'monthly';
+        const dayOfMonth = input.dayOfMonth ?? 1;
+        const autoPost = input.autoPost ? 1 : 0;
+        const amount = input.amount ?? null;
+        set((s) => ({
+          recurring: [
+            ...s.recurring,
+            { id, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from, autoPost, nextRun: '', lastRun: '' },
+          ],
+        }));
+        syncMutation('createRecurring', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from ?? null, autoPost: !!input.autoPost });
+        return id;
+      },
+
+      updateRecurring: (id, patch) => {
+        set((s) => ({ recurring: s.recurring.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+        syncMutation('updateRecurring', { id, patch });
+      },
+
+      deleteRecurring: (id) => {
+        set((s) => ({ recurring: s.recurring.filter((t) => t.id !== id) }));
+        syncMutation('deleteRecurring', { id });
+      },
+
+      updateTransfer: (id, patch) => {
+        // Both legs are rewritten + balances recomputed server-side; adopt the
+        // server's re-projection rather than re-deriving the legs client-side.
+        syncMutation('updateTransfer', { id, patch });
+      },
+
+      deleteTransfer: (id) => {
+        // A transfer is two transactions sharing a group id; drop both optimistically.
+        set((s) => ({ transactions: s.transactions.filter((t) => t.transferGroupId !== id) }));
+        syncMutation('deleteTransfer', { id });
+      },
+
+      createScheduledItem: (input) => {
+        const id = `sch-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const type = input.type ?? 'bill';
+        const color = input.color ?? null;
+        set((s) => ({ scheduledItems: [...s.scheduledItems, { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color }] }));
+        syncMutation('createScheduledItem', { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color });
+      },
+
+      updateScheduledItem: (id, patch) => {
+        set((s) => ({ scheduledItems: s.scheduledItems.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+        syncMutation('updateScheduledItem', { id, patch });
+      },
+
+      deleteScheduledItem: (id) => {
+        set((s) => ({ scheduledItems: s.scheduledItems.filter((x) => x.id !== id) }));
+        syncMutation('deleteScheduledItem', { id });
+      },
+
+      createCounterparty: (input) => {
+        const id = `cp-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const category = input.category ?? null;
+        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, aliases: [], category, verified: false }] }));
+        syncMutation('createCounterparty', { id, ledgerId, name: input.name, category });
+        return id;
+      },
+
+      updateCounterparty: (id, patch) => {
+        set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+        syncMutation('updateCounterparty', { id, patch });
+      },
+
+      deleteCounterparty: (id) => {
+        set((s) => ({ counterparties: s.counterparties.filter((c) => c.id !== id) }));
+        syncMutation('deleteCounterparty', { id });
+      },
+
       reset: () => {
         set({
           transactions: SEED_TX,
           recurring: SEED_RECURRING,
-          budgetOverrides: {},
-          accountOverrides: {},
-          verifiedExtra: [],
-          aliasExtra: {},
         });
         syncMutation('reset');
       },

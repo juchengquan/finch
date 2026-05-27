@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   opening_balance      REAL NOT NULL DEFAULT 0,
   credit_limit         REAL,
   notes                TEXT,
+  color                TEXT,
+  last4                TEXT,
+  institution          TEXT,
+  routing              TEXT,
   primary_budget_id    TEXT,
   include_in_net_worth INTEGER,
   is_active            INTEGER NOT NULL DEFAULT 1,
@@ -56,6 +60,7 @@ CREATE TABLE IF NOT EXISTS categories (
   parent_name TEXT,
   type        TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon        TEXT,
+  hue         INTEGER,
   sort_order  INTEGER NOT NULL DEFAULT 0
 );
 
@@ -373,8 +378,9 @@ export async function applySchema(exec: (sql: string, bind?: (string | number | 
 type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record<string, unknown>[]>;
 
 // Bump when the CREATE statements above change shape. Version 1 = the original
-// schema; 2 adds accounts.opening_balance.
-export const SCHEMA_VERSION = 2;
+// schema; 2 adds accounts.opening_balance; 3 adds account display columns;
+// 4 adds categories.hue.
+export const SCHEMA_VERSION = 4;
 
 // MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
 // created DB already has the latest CREATE statements, so it skips these and is
@@ -386,6 +392,17 @@ const MIGRATIONS: Record<number, string[]> = {
     `UPDATE accounts SET opening_balance = ROUND(current_balance - COALESCE(
        (SELECT SUM(amount_base) FROM transactions
          WHERE transactions.account_id = accounts.id AND status != 'cancelled'), 0), 2)`,
+  ],
+  3: [
+    // Display fields previously held in the accountOverrides app_state shim.
+    'ALTER TABLE accounts ADD COLUMN color TEXT',
+    'ALTER TABLE accounts ADD COLUMN last4 TEXT',
+    'ALTER TABLE accounts ADD COLUMN institution TEXT',
+    'ALTER TABLE accounts ADD COLUMN routing TEXT',
+  ],
+  4: [
+    // Category accent colour (hue 0–360), previously only in the static mock.
+    'ALTER TABLE categories ADD COLUMN hue INTEGER',
   ],
 };
 

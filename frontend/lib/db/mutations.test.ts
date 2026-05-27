@@ -225,13 +225,228 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
     db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
     return rows;
   };
-  // Minimal pre-versioning shape: accounts without opening_balance.
+  // Minimal pre-versioning shape: accounts without opening_balance (plus the other
+  // tables later migrations alter, sans their added columns — applySchema would
+  // have created these in real paths before migrate runs).
   await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
   await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
+  await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
   await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
   await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
   await migrate(exec, { fresh: false });
   const [a] = await exec("SELECT opening_balance FROM accounts WHERE id = 'x'");
   expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
   expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
+});
+
+test('deleteCategory uncategorizes its transactions', async () => {
+  const exec = await seeded();
+  const before = Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n);
+  expect(before).toBe(1);
+  const tagged = Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n);
+  expect(tagged).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteCategory', { id: 'food' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n)).toBe(0);
+  // FK is SET NULL: those transactions survive but become uncategorized.
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n)).toBe(0);
+});
+
+test('deleteTag drops the tag and its assignments', async () => {
+  const exec = await seeded();
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteTag', { id: 'tag-business' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM tags WHERE id = 'tag-business'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBe(0);
+});
+
+test('deleteRecurring removes the template and cascades its splits', async () => {
+  const exec = await seeded();
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteRecurring', { id: 'rt-salary' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_templates WHERE id = 'rt-salary'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
+});
+
+test('deleteGoal and deleteSubscription hard-delete the row', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Boat', target: 9000 });
+  const goalId = String((await exec("SELECT id FROM goals WHERE name = 'Boat'"))[0].id);
+  await applyMutation(exec, 'deleteGoal', { id: goalId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM goals WHERE id = ?', [goalId]))[0].n)).toBe(0);
+
+  const subId = String((await exec("SELECT id FROM subscriptions LIMIT 1"))[0].id);
+  await applyMutation(exec, 'deleteSubscription', { id: subId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM subscriptions WHERE id = ?', [subId]))[0].n)).toBe(0);
+});
+
+test('deleteCounterparty removes the merchant', async () => {
+  const exec = await seeded();
+  const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
+  await applyMutation(exec, 'deleteCounterparty', { id: cpId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM counterparties WHERE id = ?', [cpId]))[0].n)).toBe(0);
+});
+
+test('deleteTransfer removes both legs and restores balances', async () => {
+  const exec = await seeded();
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27' });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 200, 2);
+  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
+  await applyMutation(exec, 'deleteTransfer', { id: groupId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM transactions WHERE transfer_group_id = ?', [groupId]))[0].n)).toBe(0);
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM transfer_groups WHERE id = ?', [groupId]))[0].n)).toBe(0);
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0, 2);
+});
+
+test('updateCategory edits name/type/icon/hue', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', hue: 280 } });
+  const [c] = await exec("SELECT name, type, icon, hue FROM categories WHERE id = 'food'");
+  expect(String(c.name)).toBe('Food & Drink');
+  expect(String(c.type)).toBe('income');
+  expect(String(c.icon)).toBe('coins');
+  expect(Number(c.hue)).toBe(280);
+});
+
+test('createCategory persists icon + hue, and listCategories returns hue', async () => {
+  const exec = await seeded();
+  const { listCategories } = await import('@/lib/db/queries/categories');
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'car', hue: 200 });
+  const cat = (await listCategories(exec, 'personal')).find((c) => c.name === 'Travel')!;
+  expect(cat.icon).toBe('car');
+  expect(cat.hue).toBe(200);
+  // Seeded categories keep their JSON hue too.
+  expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
+});
+
+test('updateGoal edits fields and rejects a non-positive target', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Trip', target: 1000 });
+  const id = String((await exec("SELECT id FROM goals WHERE name = 'Trip'"))[0].id);
+  await applyMutation(exec, 'updateGoal', { id, patch: { name: 'Big Trip', target: 2500, eta: 'Dec 2026' } });
+  const [g] = await exec('SELECT name, target, eta FROM goals WHERE id = ?', [id]);
+  expect(String(g.name)).toBe('Big Trip');
+  expect(Number(g.target)).toBe(2500);
+  expect(String(g.eta)).toBe('Dec 2026');
+  await expect(applyMutation(exec, 'updateGoal', { id, patch: { target: 0 } })).rejects.toThrow();
+});
+
+test('updateTag and updateSubscription edit fields', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
+  const [tag] = await exec("SELECT name, color FROM tags WHERE id = 'tag-business'");
+  expect(String(tag.name)).toBe('Work');
+  expect(String(tag.color)).toBe('300');
+
+  const subId = String((await exec('SELECT id FROM subscriptions LIMIT 1'))[0].id);
+  await applyMutation(exec, 'updateSubscription', { id: subId, patch: { name: 'Netflix 4K', amount: 22.99, next: 'Jul 1' } });
+  const [sub] = await exec('SELECT name, amount, next_date FROM subscriptions WHERE id = ?', [subId]);
+  expect(String(sub.name)).toBe('Netflix 4K');
+  expect(Number(sub.amount)).toBeCloseTo(22.99, 2);
+  expect(String(sub.next_date)).toBe('Jul 1');
+});
+
+test('updateRecurring and updateCounterparty edit fields', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateRecurring', { id: 'rt-spotify', patch: { name: 'Spotify Duo', amount: 14.99, frequency: 'yearly', dayOfMonth: 5, autoPost: 0 } });
+  const [r] = await exec("SELECT name, amount, frequency, day_of_month, auto_post FROM recurring_templates WHERE id = 'rt-spotify'");
+  expect(String(r.name)).toBe('Spotify Duo');
+  expect(Number(r.amount)).toBeCloseTo(14.99, 2);
+  expect(String(r.frequency)).toBe('yearly');
+  expect(Number(r.day_of_month)).toBe(5);
+  expect(Number(r.auto_post)).toBe(0);
+
+  const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
+  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co', category: 'shop' } });
+  const [cp] = await exec('SELECT standardized_name, category FROM counterparties WHERE id = ?', [cpId]);
+  expect(String(cp.standardized_name)).toBe('Renamed Co');
+  expect(String(cp.category)).toBe('shop');
+});
+
+test('setBudget upserts the budgets table; deleteBudget removes it', async () => {
+  const exec = await seeded();
+  const { budgetByCategory } = await import('@/lib/db/queries/budgets');
+  expect((await budgetByCategory(exec)).food).toBe(700); // seeded
+
+  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: 950 });
+  expect((await budgetByCategory(exec)).food).toBe(950);
+  expect(Number((await exec("SELECT amount FROM budgets WHERE id = 'bud-food'"))[0].amount)).toBe(950);
+
+  // Insert path: a category created without a budget gets a new row.
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel' });
+  const travelId = String((await exec("SELECT id FROM categories WHERE name = 'Travel'"))[0].id);
+  await applyMutation(exec, 'setBudget', { categoryId: travelId, amount: 300 });
+  expect((await budgetByCategory(exec))[travelId]).toBe(300);
+
+  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: -5 }).then(
+    () => { throw new Error('should reject'); },
+    () => {},
+  );
+
+  await applyMutation(exec, 'deleteBudget', { categoryId: 'food' });
+  expect((await budgetByCategory(exec)).food).toBeUndefined();
+});
+
+test('updateTransfer rewrites both legs and recomputes balances', async () => {
+  const exec = await seeded();
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27', note: 'a' });
+  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
+  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { amount: 350, date: '2026-05-28', note: 'updated' } });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 350, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 350, 2);
+  const legs = await exec('SELECT date, notes FROM transactions WHERE transfer_group_id = ?', [groupId]);
+  expect(legs.every((l) => l.date === '2026-05-28' && l.notes === 'updated')).toBe(true);
+});
+
+test('scheduled items create / update / delete', async () => {
+  const exec = await seeded();
+  const { listScheduledItems } = await import('@/lib/db/queries/planning');
+  await applyMutation(exec, 'createScheduledItem', { id: 'sch-x', ledgerId: 'personal', day: 12, month: 'Jul', label: 'Insurance', amount: -120, type: 'Bill', color: '#abc' });
+  let item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
+  expect(item.label).toBe('Insurance');
+  expect(item.amount).toBeCloseTo(-120, 2);
+
+  await applyMutation(exec, 'updateScheduledItem', { id: 'sch-x', patch: { label: 'Car Insurance', amount: -130, day: 15 } });
+  item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
+  expect(item.label).toBe('Car Insurance');
+  expect(item.day).toBe(15);
+
+  await applyMutation(exec, 'deleteScheduledItem', { id: 'sch-x' });
+  expect((await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')).toBeUndefined();
+});
+
+test('createCounterparty inserts an unverified merchant', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks', category: 'Food' });
+  const { listCounterparties } = await import('@/lib/db/queries/counterparties');
+  const cp = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-new')!;
+  expect(cp.name).toBe('Starbucks');
+  expect(cp.category).toBe('Food');
+  expect(cp.verified).toBe(false);
+  await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
+});
+
+test('createRecurring inserts a template that lists and posts', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createRecurring', {
+    id: 'rt-new', ledgerId: 'personal', name: 'Netflix', type: 'expense',
+    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, account: 'Amex Gold', autoPost: true,
+  });
+  const { listRecurring } = await import('@/lib/db/queries/recurring');
+  const t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-new')!;
+  expect(t.name).toBe('Netflix');
+  expect(t.amount).toBeCloseTo(19.99, 2);
+  expect(t.frequency).toBe('monthly');
+  expect(t.account).toBe('Amex Gold');
+  // It resolves to a real account ("Amex Gold" → cc) and posts.
+  const ccBefore = await balanceOf(exec, 'cc');
+  await applyMutation(exec, 'postRecurring', { templateId: 'rt-new' });
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 19.99, 2);
+
+  await expect(applyMutation(exec, 'createRecurring', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createRecurring', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
 });

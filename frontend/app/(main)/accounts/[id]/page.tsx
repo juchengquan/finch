@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -30,39 +30,43 @@ import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { MOCK, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
   const { display } = useMoney();
   const params = useParams();
+  const router = useRouter();
   const accountId = params.id as string;
-  const account = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
-  const ledgerId = (account as { ledger?: string }).ledger ?? 'personal';
-  const override = useFinanceStore((s) => s.accountOverrides)[accountId];
-  const setAccountDetails = useFinanceStore((s) => s.setAccountDetails);
+  const mock = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
   const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
+  const updateAccount = useFinanceStore((s) => s.updateAccount);
+  const archiveAccount = useFinanceStore((s) => s.archiveAccount);
+
+  // The projected DB row is the source of truth; the mock is a pre-hydration
+  // fallback for structural fields (color, ledger).
+  const row = accounts.find((a) => a.id === accountId);
+  const ledgerId = row?.ledgerId ?? (mock as { ledger?: string }).ledger ?? 'personal';
+  const cardColor = row?.color ?? mock.color;
 
   // Transaction list and live balance come from the projected store state.
   const txs = selectTransactions(allTxns, { ledgerId, accountId });
-  const balance = accounts.some((a) => a.id === accountId)
-    ? accountBalance(accounts, accountId)
-    : account.balance;
+  const balance = row ? accountBalance(accounts, accountId) : mock.balance;
   const series = balanceSeries(allTxns, accountId, balance);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: '', type: 'checking', last4: '', institution: '', routing: '' });
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [draft, setDraft] = useState({ name: '', type: 'savings', last4: '', institution: '', routing: '' });
   const { openTransaction } = useTransactionSheet();
 
-  // Effective values: a saved override wins, otherwise fall back to the mock
-  // account / a sensible default for fields the mock doesn't carry.
-  const name = override?.name || account.name;
-  const type = override?.type || account.type;
-  const last4 = override?.last4 || account.last4;
-  const institution = override?.institution || 'Chase Bank, N.A.';
-  const routing = override?.routing || '021000021';
+  const name = row?.name ?? mock.name;
+  const type = row?.type ?? toDbType(mock.type);
+  const last4 = row?.last4 ?? mock.last4 ?? '';
+  const institution = row?.institution ?? '';
+  const routing = row?.routing ?? '';
 
   const openEdit = () => {
     setDraft({ name, type, last4, institution, routing });
@@ -71,21 +75,29 @@ export default function AccountDetailPage() {
   };
 
   const saveDetails = () => {
-    setAccountDetails(accountId, {
+    updateAccount(accountId, {
       name: draft.name.trim(),
       type: draft.type,
-      last4: draft.last4.trim(),
-      institution: draft.institution.trim(),
-      routing: draft.routing.trim(),
+      last4: draft.last4.trim() || null,
+      institution: draft.institution.trim() || null,
+      routing: draft.routing.trim() || null,
     });
-    toast.success('Account updated', { description: draft.name.trim() || account.name });
+    toast.success('Account updated', { description: draft.name.trim() || name });
+  };
+
+  const doArchive = () => {
+    archiveAccount(accountId);
+    toast.success('Account archived', { description: name });
+    setConfirmArchive(false);
+    setEditOpen(false);
+    router.push('/accounts');
   };
 
   const details: [string, string][] = [
-    ['Type', type.charAt(0).toUpperCase() + type.slice(1)],
-    ['Number', `•••• ${last4}`],
-    ['Routing', routing],
-    ['Institution', institution],
+    ['Type', accountTypeLabel(type)],
+    ['Number', `•••• ${last4 || '----'}`],
+    ['Routing', routing || '—'],
+    ['Institution', institution || '—'],
     ['Currency', display],
     ['Last sync', '2 min ago'],
     ['Linked since', 'Jan 2024'],
@@ -104,7 +116,7 @@ export default function AccountDetailPage() {
           <span className="text-foreground">{name}</span>
         </div>
 
-        <div className="relative mb-6 overflow-hidden rounded-2xl px-7 py-5 text-white" style={{ background: account.color }}>
+        <div className="relative mb-6 overflow-hidden rounded-2xl px-7 py-5 text-white" style={{ background: cardColor }}>
           <div className="absolute -top-[60px] -right-20 size-60 rounded-full bg-white/5"/>
           <div className="relative flex items-center justify-between gap-4">
             <div className="min-w-0 font-serif text-[40px] leading-none -tracking-[1.5px]">
@@ -212,7 +224,7 @@ export default function AccountDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit account</DialogTitle>
-            <DialogDescription>{account.name}</DialogDescription>
+            <DialogDescription>{name}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
@@ -224,10 +236,7 @@ export default function AccountDetailPage() {
               <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
                 <SelectTrigger id="acct-type" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="checking">Checking</SelectItem>
-                  <SelectItem value="savings">Savings</SelectItem>
-                  <SelectItem value="credit">Credit</SelectItem>
-                  <SelectItem value="invest">Investment</SelectItem>
+                  {ACCOUNT_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -244,13 +253,35 @@ export default function AccountDetailPage() {
               <Input id="acct-routing" inputMode="numeric" value={draft.routing} onChange={(e) => setDraft({ ...draft, routing: e.target.value })} />
             </div>
           </div>
+          <DialogFooter className="sm:justify-between">
+            <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { setEditOpen(false); setConfirmArchive(true); }}>
+              <Icon name="trash" size={14} />Archive
+            </Button>
+            <div className="flex gap-2">
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <DialogClose asChild>
+                <Button onClick={saveDetails}>Save</Button>
+              </DialogClose>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive {name}?</DialogTitle>
+            <DialogDescription>
+              The account is hidden from your lists but its transaction history is kept. You can&rsquo;t undo this from the app.
+            </DialogDescription>
+          </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <DialogClose asChild>
-              <Button onClick={saveDetails}>Save</Button>
-            </DialogClose>
+            <Button variant="destructive" onClick={doArchive}>Archive</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

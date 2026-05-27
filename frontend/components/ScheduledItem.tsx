@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Money } from './primitives';
 import { cn } from '@/lib/utils';
 
@@ -12,9 +13,10 @@ interface ScheduledItemProps {
     type: string;
     color: string;
   };
+  actions?: ReactNode;
 }
 
-export function ScheduledItem({ item }: ScheduledItemProps) {
+export function ScheduledItem({ item, actions }: ScheduledItemProps) {
   return (
     <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
       <div className="w-11 shrink-0 text-center">
@@ -34,6 +36,7 @@ export function ScheduledItem({ item }: ScheduledItemProps) {
         value={item.amount}
         className={cn('text-sm font-medium', item.amount > 0 ? 'text-success' : 'text-foreground')}
       />
+      {actions}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 # Full CRUD parity — design plan
 
-Status: **proposed.** Audit of `lib/db/mutations.ts` + the store actions shows
-**Read** is complete for every entity (the `/api/state` projection), but
-**Create / Update / Delete** are uneven. This plan brings every user-facing asset
-to full CRUD, retires the last `app_state` override shims, and fixes the
-balance-recompute gap that surfaces once Update/Delete touch amounts.
+Status: **complete** (Phases 0–7 shipped; see §7). Every user-facing entity now has
+full Create / Update / Delete (or archive) wired end-to-end, all `app_state`
+override shims are retired, and the balance-recompute gap is fixed. The sections
+below are kept as the design record; the per-entity coverage matrix (§1) and the
+phasing checklist (§7) reflect the delivered state.
 
 ## 0. Schema readiness (reviewed)
 
@@ -43,21 +43,28 @@ seed for a dev DB). Low effort; removes a real footgun.
 INSERT-only (see §4) — handled in app logic via `recomputeAccount`, not new
 triggers.
 
-## 1. Current coverage (the gap)
+## 1. Coverage — delivered
+
+All ✅ below are live (mutation + store action + UI), verified by `bun test` +
+per-phase browser smokes.
 
 | Entity | C | U | D |
 |---|---|---|---|
-| Transactions | ✅ | ✅ | ✅ soft (`status='cancelled'`) |
-| Accounts | ❌ | ⚠️ override layer only | ❌ |
-| Categories | ✅ | ⚠️ name only | ❌ |
-| Budgets (per-cat) | ✅ override | ✅ override | ❌ |
-| Goals | ✅ | ⚠️ contribute only | ❌ |
-| Tags | ✅ | ❌ | ❌ |
-| Subscriptions | ✅ | ❌ | ❌ |
-| Scheduled items | ❌ | ❌ | ❌ |
-| Recurring templates | ❌ | ⚠️ split % only | ❌ |
-| Transfers | ✅ | ❌ | ❌ |
-| Merchants / counterparties | ❌ | ⚠️ verify + add-alias | ❌ |
+| Transactions | ✅ | ✅ (recomputes balance) | ✅ soft (`status='cancelled'`, recomputes) |
+| Accounts | ✅ | ✅ (table) | ✅ archive (`is_active=0`) + hard-delete when empty |
+| Categories | ✅ (icon+hue) | ✅ name/type/icon/hue | ✅ hard (txns → uncategorised) |
+| Budgets (per-cat) | ✅ (table) | ✅ (table) | ✅ remove row |
+| Goals | ✅ | ✅ name/target/eta + contribute | ✅ hard |
+| Tags | ✅ | ✅ name/color | ✅ hard (assignments cascade) |
+| Subscriptions | ✅ | ✅ name/amount/next | ✅ hard |
+| Scheduled items | ✅ | ✅ | ✅ hard |
+| Recurring templates | ✅ | ✅ fields + split % | ✅ hard (splits cascade) |
+| Transfers | ✅ | ✅ (rewrites both legs, recomputes) | ✅ hard (both legs + group, recomputes) |
+| Merchants / counterparties | ✅ | ✅ rename/category + verify/unverify + add/remove alias | ✅ hard (txns SET NULL) |
+
+Shims retired: `accountOverrides`, `budgetOverrides`, `verifiedExtra`/`aliasExtra`
+— `app_state` is no longer read or written. Schema reached **v4** (opening_balance,
+account display cols, categories.hue) via the `migrate()` runner in §0.
 
 ## 2. Principles
 
@@ -193,15 +200,55 @@ edit/cancel.)
    `recomputeForTransaction` in `queries/accounts.ts`, wired into
    `updateTransaction` / `deleteTransaction`; `opening_balance` is now stored at
    seed time. Fixes the stale-balance-after-edit/cancel bug.
-2. **Accounts**: add the display columns (§0) + create + table-backed update +
-   archive; retire `accountOverrides`. (Highest value; removes a shim, exercises
-   the §0 versioning path.)
-3. **Delete/archive everywhere else** (categories, goals, tags, subscriptions,
-   recurring, transfers, merchants) + the shared confirm UX.
-4. **Full edit** for tags / subscriptions / goals / recurring / merchants /
-   categories (with `categories` `color`/`hue` from §0).
-5. **Budgets onto the table** (retire `budgetOverrides`); **Scheduled** CRUD;
-   **Transfers** edit.
+2. ✅ **Accounts**: added display columns (`color`/`last4`/`institution`/`routing`,
+   migration `MIGRATIONS[3]`) + `createAccount` + table-backed `updateAccount` +
+   `archiveAccount`/`deleteAccount`; retired the `accountOverrides` shim (store,
+   projection, seed, persist, breadcrumb). The accounts list + detail screens now
+   read/write the real table; create dialog + archive-confirm UX added.
+3. ✅ **Delete/archive everywhere else** + the shared confirm UX. Added a reusable
+   `<RowActions>` (⋯ menu + built-in confirm dialog) and delete mutations/store
+   actions for all of categories, goals, tags, subscriptions, recurring,
+   transfers, merchants. UI wired on categories/goals/subscriptions/recurring/
+   transfers; `deleteTransfer` recomputes both account balances, `deleteRecurring`
+   cascades splits, `deleteCategory` SET-NULLs its txns. **Tags** and **merchants**
+   have the full data path + tests but no UI yet — tags have no management screen,
+   and the merchants list is still static-reference-driven (needs the same
+   projection switch accounts got in Phase 2); both will get the ⋯ menu then.
+4. ✅ **Full edit** for subscriptions / goals / recurring / categories (+ data path
+   for tags / merchants). Added `updateCategory` (name/type/icon/**hue** — schema
+   v4 adds `categories.hue`, seeded from JSON), `updateGoal`, `updateSubscription`,
+   `updateRecurring` (name/amount/frequency/dayOfMonth/autoPost), `updateTag`,
+   `updateCounterparty`. Edit dialogs wired via the shared `<RowActions onEdit>` on
+   categories/goals/subscriptions and an Edit dialog on the recurring detail page
+   (with an icon + hue picker for categories). Tags/merchants edit mutations are
+   ready but unwired pending their UI surfaces (same as Phase 3).
+5. ✅ **Budgets onto the table** (retired `budgetOverrides`): `setBudget` upserts a
+   per-category `bud-<id>` row, `deleteBudget` removes it, and the budget amount is
+   now projected as a `budgetByCategory` map (read by the budgets list/detail +
+   insights). **Scheduled** CRUD (`createScheduledItem`/`updateScheduledItem`/
+   `deleteScheduledItem` + an editor dialog and per-row `<RowActions>`).
+   **Transfers** edit (`updateTransfer` scales both legs proportionally + recomputes
+   both accounts; edit dialog on the list).
+
+6. ✅ **Tags & merchants surfaces** (+ last shim retired). New **Tags** admin screen
+   (`(ledger)/tags`) with create/edit/delete + a hue picker. The **Merchants** list
+   now reads the projected `counterparties` (mock only supplies decorative
+   hue/txCount by id), with create (`createCounterparty`), edit (rename/category),
+   delete, verify/**unverify**, and add/**remove** alias. Routing `verifyCounterparty`/
+   `addAlias` to the table (and adding unverify/removeAlias) let me **retire the last
+   `app_state` shim** — `verifiedExtra`/`aliasExtra` are gone from the store, repo,
+   seed and backup, and `app_state` is no longer read or written.
+
+7. ✅ **createRecurring** — new recurring templates from a dialog on the recurring
+   list (name/type/amount/frequency/dayOfMonth/account[+from for transfers]/auto-post;
+   accounts referenced by name like the seed). Splits aren't created here (the
+   detail screen edits split %s on existing templates).
+
+**CRUD parity is complete** for every entity with a management surface, and all
+`app_state` override shims are retired. Not pursued (out of the parity scope):
+split creation/management UI for recurring, and streaming the server DB for the
+download backup (table-only display edits aren't captured in the store-rebuilt
+snapshot today).
 
 ## 8. Risks
 

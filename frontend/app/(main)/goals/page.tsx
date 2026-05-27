@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 
 export default function GoalsPage() {
@@ -25,6 +26,8 @@ export default function GoalsPage() {
   const allGoals = useFinanceStore((s) => s.goals);
   const createGoal = useFinanceStore((s) => s.createGoal);
   const contributeGoal = useFinanceStore((s) => s.contributeGoal);
+  const updateGoal = useFinanceStore((s) => s.updateGoal);
+  const deleteGoal = useFinanceStore((s) => s.deleteGoal);
 
   const goals = allGoals.filter((g) => g.ledgerId === activeId);
   const saved = goals.reduce((s, g) => s + g.saved, 0);
@@ -36,6 +39,7 @@ export default function GoalsPage() {
   const [eta, setEta] = useState('');
   const [contributing, setContributing] = useState<{ id: string; name: string } | null>(null);
   const [contribInput, setContribInput] = useState('');
+  const [editing, setEditing] = useState<{ id: string; name: string; target: string; eta: string } | null>(null);
 
   const submitCreate = () => {
     const n = name.trim();
@@ -47,6 +51,17 @@ export default function GoalsPage() {
     setName('');
     setTargetInput('');
     setEta('');
+  };
+
+  const submitEdit = () => {
+    if (!editing) return;
+    const n = editing.name.trim();
+    const t = parseFloat(editing.target);
+    if (!n) return void toast.error('Enter a goal name');
+    if (!(t > 0)) return void toast.error('Enter a target greater than 0');
+    updateGoal(editing.id, { name: n, target: t, eta: editing.eta.trim() || null });
+    toast.success('Goal updated', { description: n });
+    setEditing(null);
   };
 
   const submitContribution = () => {
@@ -158,6 +173,12 @@ export default function GoalsPage() {
                 <Icon name="plus" size={12} />
                 Add
               </Button>
+              <RowActions
+                onEdit={() => setEditing({ id: g.id, name: g.name, target: String(g.target), eta: g.eta ?? '' })}
+                onDelete={() => { deleteGoal(g.id); toast.success('Goal deleted', { description: g.name }); }}
+                confirmTitle={`Delete ${g.name}?`}
+                confirmDescription="This removes the savings goal. Your account balances are unaffected."
+              />
             </div>
           );
         })}
@@ -183,6 +204,37 @@ export default function GoalsPage() {
               <Button variant="outline">Cancel</Button>
             </DialogClose>
             <Button onClick={submitContribution}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit goal</DialogTitle>
+            <DialogDescription>Update the name, target or date.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Name</Label>
+                <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Target</Label>
+                <Input type="number" inputMode="decimal" value={editing.target} onChange={(e) => setEditing((p) => (p ? { ...p, target: e.target.value } : p))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Target date (optional)</Label>
+                <Input value={editing.eta} onChange={(e) => setEditing((p) => (p ? { ...p, eta: e.target.value } : p))} placeholder="e.g. Dec 2026" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitEdit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
