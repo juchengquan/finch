@@ -5,6 +5,7 @@
 
 import type { Exec } from './repo';
 import { listRecurring } from './queries/recurring';
+import { recomputeForTransaction } from './queries/accounts';
 import { convertToBase } from './queries/rates';
 import {
   addTransaction as qAdd,
@@ -216,9 +217,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'updateTransaction':
       await qUpdate(exec, str(args.id), args.patch as Parameters<typeof qUpdate>[2]);
+      await recomputeForTransaction(exec, str(args.id)); // an amount/date edit shifts balances
       return;
     case 'deleteTransaction':
       await qCancel(exec, str(args.id));
+      await recomputeForTransaction(exec, str(args.id)); // cancelling must reverse the balance
       return;
     case 'confirmTransaction':
       await qConfirm(exec, str(args.id));
