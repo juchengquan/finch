@@ -189,8 +189,14 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')),
     );
     for (const t of ordered) {
+      // `amount` (Tx) is always the ledger-base figure that drives balances;
+      // `nativeAmount`/`currency` describe the original entry. For foreign-currency
+      // rows the exchange rate is locked at import (amount_base ÷ native).
       running += t.amount;
       const ledgerId = t.ledgerId ?? 'personal';
+      const native = t.nativeAmount ?? t.amount;
+      const rate = native !== 0 ? Math.round((t.amount / native) * 1e6) / 1e6 : 1;
+      const currency = t.currency ?? baseOf(ledgerId);
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
@@ -198,9 +204,9 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
            balance_after,currency,notes,recurring,created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          t.id, ledgerId, t.account, t.date, t.time ?? null, t.amount, t.amount, 1, t.date,
+          t.id, ledgerId, t.account, t.date, t.time ?? null, native, t.amount, rate, t.date,
           t.merchant, t.category, null, t.transferGroupId ?? null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          Math.round(running * 100) / 100, baseOf(ledgerId), t.note || null, t.recurring ? 1 : 0, SEED_TS,
+          Math.round(running * 100) / 100, currency, t.note || null, t.recurring ? 1 : 0, SEED_TS,
         ],
       );
     }
