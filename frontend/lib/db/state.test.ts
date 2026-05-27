@@ -49,6 +49,34 @@ test('store state round-trips through the relational schema', async () => {
   expect(loaded.recurring[0].splits?.[0].pct).toBe(60);
 });
 
+test('account balance reflects the live transaction set (not just the seed)', async () => {
+  const { applySchema } = await import('@/lib/db/schema');
+  const { buildState } = await import('@/lib/db/state');
+  const sqlite3 = await (
+    (await import('@sqlite.org/sqlite-wasm')).default as unknown as (o?: unknown) => Promise<{ oo1: { DB: new (s?: string) => { exec: (o: unknown) => void } } }>
+  )({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec = async (sql: string, bind?: (string | number | null)[]) => {
+    const rows: Record<string, unknown>[] = [];
+    db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  await applySchema(exec);
+  // Seed-equivalent set for 'cc' plus one extra -100 expense.
+  const base: PersistState = {
+    ...sample,
+    transactions: [
+      { id: 't01', merchant: 'Blue Bottle', category: 'food', amount: -6.75, account: 'cc', date: '2026-05-24', pending: false },
+      { id: 'x99', merchant: 'Extra', category: 'food', amount: -100, account: 'cc', date: '2026-05-25', pending: false },
+    ],
+  };
+  await buildState(exec, base);
+  const cc = await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', ['cc']);
+  // Opening for cc = seedBalance(-842.18) - sum(seed cc deltas). Adding only
+  // these two txns gives opening + (-6.75 -100), which must differ from -842.18.
+  expect(Number(cc[0].b)).not.toBeCloseTo(-842.18, 2);
+});
+
 test('cancelled transactions are dropped on projection', async () => {
   const bytes = await serializeState(sample);
   const loaded = await deserializeState(bytes);

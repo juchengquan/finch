@@ -46,6 +46,20 @@ const accounts = accountsData as AccountRow[];
 const categories = categoriesData as CategoryRow[];
 const ledgers = ledgersData as { id: string; name: string; base: string; isDefault: number }[];
 
+// Each account's opening balance is fixed: the known seed balance minus the sum
+// of the seed transactions for that account. Running balances then start there
+// and add whatever transactions are inserted, so current_balance reflects the
+// live set (adds/deletes), not just the original seed.
+const seedDeltaByAccount = (() => {
+  const m = new Map<string, number>();
+  for (const t of transactionsData as Tx[]) m.set(t.account, (m.get(t.account) ?? 0) + t.amount);
+  return m;
+})();
+const openingBalance = (accountId: string): number => {
+  const acct = accounts.find((a) => a.id === accountId);
+  return (acct?.balance ?? 0) - (seedDeltaByAccount.get(accountId) ?? 0);
+};
+
 const baseOf = (ledgerId: string) => ledgers.find((l) => l.id === ledgerId)?.base ?? 'USD';
 const ledgerIdByName = (name: string) => ledgers.find((l) => l.name === name)?.id ?? 'personal';
 const isoDate = (d: string) => d.replace(/\//g, '-');
@@ -129,9 +143,7 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     byAccount.set(t.account, list);
   }
   for (const [accountId, list] of byAccount) {
-    const acct = accounts.find((a) => a.id === accountId);
-    const totalDelta = list.reduce((s, t) => s + t.amount, 0);
-    let running = (acct?.balance ?? 0) - totalDelta;
+    let running = openingBalance(accountId);
     const ordered = [...list].sort((a, b) =>
       (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')),
     );
