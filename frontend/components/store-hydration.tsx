@@ -2,17 +2,19 @@
 
 import { useEffect } from 'react';
 import { useFinanceStore } from '@/lib/store';
-import { loadPersisted } from '@/lib/persistence';
+import { fetchState } from '@/lib/api-client';
 
 // The store starts from seed data so server and first-client render match.
-// After mount we load the persisted state — the SQLite `finch.db` in OPFS when
-// available, otherwise localStorage — and replace the seed with it.
+// After mount we load the authoritative state from the server database and
+// replace the seed with it. Mutations sync back to the server (see store.ts).
 export function StoreHydration() {
   useEffect(() => {
     let cancelled = false;
-    void loadPersisted().then((state) => {
-      if (state && !cancelled) useFinanceStore.setState(state);
-    });
+    void fetchState()
+      .then((state) => {
+        if (!cancelled) useFinanceStore.setState(state);
+      })
+      .catch((err) => console.error('Could not load state from server', err));
     return () => {
       cancelled = true;
     };

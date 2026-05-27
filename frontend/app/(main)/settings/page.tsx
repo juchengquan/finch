@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
 import { Icon, MerchantGlyph } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { SettingsItem } from '@/components/SettingsItem';
@@ -33,18 +32,10 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
   );
 }
 
-function syncLabel(status: 'idle' | 'saving' | 'error', lastSync: number | null): string {
-  if (status === 'saving') return 'Saving…';
-  if (status === 'error') return 'Last sync failed';
-  if (lastSync) return `Synced ${new Date(lastSync).toLocaleTimeString()}`;
-  return 'Not yet synced';
-}
-
 export default function SettingsPage() {
   const { currency, setCurrency } = useCurrency();
   const reset = useFinanceStore((s) => s.reset);
   const backup = useBackup();
-  const fileInput = useRef<HTMLInputElement>(null);
 
   return (
     <MobilePage>
@@ -118,58 +109,25 @@ export default function SettingsPage() {
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
           Database
         </div>
-        <Row icon="sync" label="Auto-save (this device)">
-          <span className="text-muted-foreground text-xs">
-            {backup.opfs ? syncLabel(backup.status, backup.lastSync) : 'Unsupported'}
+        <Row icon="doc" label="Database file (server)">
+          <span className="text-muted-foreground max-w-[60%] truncate text-right font-mono text-[11px]">
+            {backup.serverPath ?? '…'}
           </span>
         </Row>
-        <Row icon="wallet" label="Backup file">
-          {backup.connected ? (
-            <Button variant="outline" size="sm" onClick={backup.disconnectBackup}>
-              Disconnect
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!backup.fsAccess}
-              onClick={() => void backup.connectBackup()}
-            >
-              {backup.fsAccess ? 'Connect' : 'Unsupported'}
-            </Button>
-          )}
-        </Row>
-        {backup.connected && backup.fileName && (
-          <div className="text-muted-foreground pt-2 text-xs">
-            Mirroring to <span className="font-mono">{backup.fileName}</span> on every change.
-          </div>
-        )}
-        <Row icon="download" label="Export database">
+        <Row icon="download" label="Export a copy">
           <Button variant="outline" size="sm" onClick={() => void backup.download()}>
             Download .db
           </Button>
         </Row>
         <Row icon="upload" label="Import database">
-          <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
-            Import .db
+          <Button variant="outline" size="sm" disabled>
+            Disabled
           </Button>
         </Row>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".db,.sqlite,application/x-sqlite3"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (!file) return;
-            backup.importFile(file).catch(() => toast.error('Could not read that database file'));
-          }}
-        />
         <div className="text-muted-foreground pt-2 text-xs">
-          A real SQLite database is mirrored automatically. Connect a backup file to keep a copy on
-          disk, or export/import a <span className="font-mono">.db</span> to move data between
-          devices.
+          Your data is stored in a SQLite file on the server and synced automatically on every
+          change. Export downloads a point-in-time copy; import is disabled while the server file is
+          the source of truth.
         </div>
       </div>
     </MobilePage>

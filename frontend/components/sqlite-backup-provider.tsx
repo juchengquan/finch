@@ -1,53 +1,27 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
-import { toast } from 'sonner';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useFinanceStore } from '@/lib/store';
-import { lsWrite } from '@/lib/persistence';
+import { fetchDbInfo } from '@/lib/api-client';
 import type { PersistState } from '@/lib/db/repo';
 
-type SyncStatus = 'idle' | 'saving' | 'error';
-
+// The server owns the authoritative SQLite file (see lib/db/server.ts), synced
+// on every change. This provider just surfaces where that file lives and lets
+// the user download a point-in-time copy of the current data.
 interface BackupContextValue {
-  opfs: boolean;
-  fsAccess: boolean;
-  connected: boolean;
-  fileName: string | null;
-  lastSync: number | null;
-  status: SyncStatus;
-  connectBackup: () => Promise<void>;
-  disconnectBackup: () => void;
+  serverPath: string | null;
   download: () => Promise<void>;
-  importFile: (file: Blob) => Promise<void>;
 }
 
-const noop = async () => {};
 const BackupContext = createContext<BackupContextValue>({
-  opfs: false,
-  fsAccess: false,
-  connected: false,
-  fileName: null,
-  lastSync: null,
-  status: 'idle',
-  connectBackup: noop,
-  disconnectBackup: () => {},
-  download: noop,
-  importFile: noop,
+  serverPath: null,
+  download: async () => {},
 });
 
 export function useBackup(): BackupContextValue {
   return useContext(BackupContext);
 }
 
-// The slice of store state we persist (mirrors the store's partialize).
 function snapshot(): PersistState {
   const s = useFinanceStore.getState();
   return {
@@ -61,140 +35,19 @@ function snapshot(): PersistState {
   };
 }
 
-// Capability detection via useSyncExternalStore so the server snapshot (false)
-// matches the first client render, then re-renders to the real value — no
-// effect/setState and no hydration mismatch.
-const subscribeNoop = () => () => {};
-const getServerFalse = () => false;
-const getOpfs = () =>
-  typeof navigator !== 'undefined' &&
-  !!navigator.storage &&
-  typeof navigator.storage.getDirectory === 'function';
-const getFsAccess = () =>
-  typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function';
-
-const DEBOUNCE_MS = 800;
-
 export function SqliteBackupProvider({ children }: { children: React.ReactNode }) {
-  const opfs = useSyncExternalStore(subscribeNoop, getOpfs, getServerFalse);
-  const fsAccess = useSyncExternalStore(subscribeNoop, getFsAccess, getServerFalse);
+  const [serverPath, setServerPath] = useState<string | null>(null);
 
-  const [connected, setConnected] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [lastSync, setLastSync] = useState<number | null>(null);
-  const [status, setStatus] = useState<SyncStatus>('idle');
-
-  const handleRef = useRef<FileSystemFileHandle | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const running = useRef(false);
-  const queued = useRef(false);
-
-  // Serialise the current store snapshot to a `.db` and write it to every
-  // available sink. Coalesces concurrent calls so writes never overlap: a call
-  // arriving mid-flush sets `queued`, and the loop runs one more pass.
-  const flushNow = useCallback(async () => {
-    if (running.current) {
-      queued.current = true;
-      return;
-    }
-    running.current = true;
-    try {
-      do {
-        queued.current = false;
-        setStatus('saving');
-        try {
-          const storage = await import('@/lib/db/storage');
-          const state = snapshot();
-          const useOpfs = storage.opfsSupported();
-
-          // Only serialise to SQLite bytes when something consumes them: the
-          // OPFS file (primary store when supported) or a connected backup file.
-          if (useOpfs || handleRef.current) {
-            const { serializeState } = await import('@/lib/db/state');
-            const bytes = await serializeState(state);
-            if (useOpfs) await storage.writeOpfs(bytes);
-            if (handleRef.current) await storage.writeHandle(handleRef.current, bytes);
-          }
-
-          // When OPFS is unavailable, localStorage is the primary store. We
-          // never write both, so there is only ever one fresh copy.
-          if (!useOpfs) lsWrite(state);
-
-          setLastSync(Date.now());
-          setStatus('idle');
-        } catch (err) {
-          console.error('SQLite backup failed', err);
-          setStatus('error');
-        }
-      } while (queued.current);
-    } finally {
-      running.current = false;
-    }
-  }, []);
-
-  const schedule = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void flushNow(), DEBOUNCE_MS);
-  }, [flushNow]);
-
-  // Auto-mirror on every store change (rehydrate-on-mount counts as a change,
-  // so the first sync happens shortly after load).
   useEffect(() => {
-    const unsub = useFinanceStore.subscribe(() => schedule());
+    let cancelled = false;
+    void fetchDbInfo()
+      .then((info) => {
+        if (!cancelled) setServerPath(info.path);
+      })
+      .catch((err) => console.error('Could not read db info', err));
     return () => {
-      unsub();
-      if (timer.current) clearTimeout(timer.current);
+      cancelled = true;
     };
-  }, [schedule]);
-
-  // Flush immediately when the tab is hidden or closing, so the last change
-  // isn't lost in the debounce window. visibilitychange is the more reliable of
-  // the two for letting an async write start.
-  useEffect(() => {
-    const flushImmediately = () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-      }
-      void flushNow();
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flushImmediately();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', flushImmediately);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', flushImmediately);
-    };
-  }, [flushNow]);
-
-  const connectBackup = useCallback(async () => {
-    const storage = await import('@/lib/db/storage');
-    if (!storage.fsAccessSupported()) {
-      toast.error('This browser cannot save to a local file');
-      return;
-    }
-    try {
-      const handle = await storage.pickBackupFile();
-      handleRef.current = handle;
-      setFileName(handle.name);
-      setConnected(true);
-      await flushNow();
-      toast.success(`Backup file connected: ${handle.name}`);
-    } catch (err) {
-      // The picker throws AbortError when the user cancels — that's not an error.
-      if ((err as DOMException)?.name !== 'AbortError') {
-        console.error(err);
-        toast.error('Could not connect backup file');
-      }
-    }
-  }, [flushNow]);
-
-  const disconnectBackup = useCallback(() => {
-    handleRef.current = null;
-    setConnected(false);
-    setFileName(null);
   }, []);
 
   const download = useCallback(async () => {
@@ -206,37 +59,5 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     storage.downloadBytes(bytes);
   }, []);
 
-  const importFile = useCallback(
-    async (file: Blob) => {
-      const [{ deserializeState }, storage] = await Promise.all([
-        import('@/lib/db/state'),
-        import('@/lib/db/storage'),
-      ]);
-      const bytes = await storage.readFileBytes(file);
-      const state = await deserializeState(bytes);
-      useFinanceStore.setState(state);
-      await flushNow();
-      toast.success('Database imported');
-    },
-    [flushNow],
-  );
-
-  return (
-    <BackupContext.Provider
-      value={{
-        opfs,
-        fsAccess,
-        connected,
-        fileName,
-        lastSync,
-        status,
-        connectBackup,
-        disconnectBackup,
-        download,
-        importFile,
-      }}
-    >
-      {children}
-    </BackupContext.Provider>
-  );
+  return <BackupContext.Provider value={{ serverPath, download }}>{children}</BackupContext.Provider>;
 }
