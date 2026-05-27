@@ -27,6 +27,8 @@ export default function RecurringDetailPage() {
   const id = params.id as string;
   const recurring = useFinanceStore((s) => s.recurring);
   const updateRecurringSplit = useFinanceStore((s) => s.updateRecurringSplit);
+  const addRecurringSplit = useFinanceStore((s) => s.addRecurringSplit);
+  const removeRecurringSplit = useFinanceStore((s) => s.removeRecurringSplit);
   const updateRecurring = useFinanceStore((s) => s.updateRecurring);
   const t = recurring.find((r) => r.id === id) ?? recurring[0];
 
@@ -58,6 +60,17 @@ export default function RecurringDetailPage() {
     });
     toast.success('Template updated', { description: n });
     setEditOpen(false);
+  };
+
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitDraft, setSplitDraft] = useState({ account: '', pct: '' });
+  const submitSplit = () => {
+    const account = splitDraft.account.trim();
+    if (!account) return void toast.error('Enter an account');
+    addRecurringSplit(t.id, account, Number(splitDraft.pct) || 0);
+    toast.success('Split added', { description: account });
+    setSplitDraft({ account: '', pct: '' });
+    setSplitOpen(false);
   };
 
   const [posting, setPosting] = useState(false);
@@ -104,16 +117,21 @@ export default function RecurringDetailPage() {
           </div>
         </div>
 
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <div className="font-serif text-[20px] italic tracking-[-0.2px]">Splits</div>
+          <div className="flex items-center gap-2">
+            <SchemaChip label="recurring_splits"/>
+            <Button variant="outline" size="sm" className="h-7" onClick={() => { setSplitDraft({ account: '', pct: '' }); setSplitOpen(true); }}>
+              <Icon name="plus" size={12} />Add split
+            </Button>
+          </div>
+        </div>
+        <div className="px-1 pb-2.5 text-xs text-muted-foreground">
+          {splits.length > 0 ? 'Split across accounts. Total must equal 100%.' : 'No splits — the whole amount posts to the account above. Add splits to divide it.'}
+        </div>
+
         {splits.length > 0 && (
           <>
-            <div className="mb-2 flex items-baseline justify-between px-1">
-              <div className="font-serif text-[20px] italic tracking-[-0.2px]">Splits</div>
-              <SchemaChip label="recurring_splits"/>
-            </div>
-            <div className="px-1 pb-2.5 text-xs text-muted-foreground">
-              Salary is split across accounts. Total must equal 100%.
-            </div>
-
             <div className="mb-2.5 rounded-[14px] border border-border bg-card p-3.5">
               <StackedBar
                 slices={splits.map((s, i) => ({ value: s.pct || 0, color: SPLIT_COLOR(i) }))}
@@ -147,6 +165,14 @@ export default function RecurringDetailPage() {
                             className="h-8 w-16 text-right font-mono text-[13px]"
                           />
                           <span className="font-mono text-[11px] text-muted-foreground">%</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${s.account} split`}
+                            onClick={() => { removeRecurringSplit(t.id, i); toast.success('Split removed', { description: s.account }); }}
+                            className="text-muted-foreground hover:text-destructive ml-0.5"
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -205,6 +231,31 @@ export default function RecurringDetailPage() {
               <Button variant="outline">Cancel</Button>
             </DialogClose>
             <Button onClick={submitEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add split</DialogTitle>
+            <DialogDescription>Direct a share of {t.name} to another account.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Account</Label>
+              <Input value={splitDraft.account} onChange={(e) => setSplitDraft({ ...splitDraft, account: e.target.value })} placeholder="e.g. Marcus Savings" autoFocus />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Percent</Label>
+              <Input type="number" inputMode="numeric" min={0} max={100} value={splitDraft.pct} onChange={(e) => setSplitDraft({ ...splitDraft, pct: e.target.value })} placeholder="0" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitSplit}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

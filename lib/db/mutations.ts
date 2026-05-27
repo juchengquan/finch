@@ -4,7 +4,15 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import { listRecurring, deleteRecurring as qDeleteRecurring, updateRecurring as qUpdateRecurring, createRecurring as qCreateRecurring, type RecurringPatch } from './queries/recurring';
+import {
+  listRecurring,
+  deleteRecurring as qDeleteRecurring,
+  updateRecurring as qUpdateRecurring,
+  createRecurring as qCreateRecurring,
+  addRecurringSplit as qAddRecurringSplit,
+  removeRecurringSplit as qRemoveRecurringSplit,
+  type RecurringPatch,
+} from './queries/recurring';
 import {
   recomputeForTransaction,
   createAccount as qCreateAccount,
@@ -296,6 +304,16 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           WHERE id = (SELECT id FROM recurring_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
         [Number(args.pct), str(args.templateId), Number(args.index)],
       );
+      return;
+    }
+    case 'addRecurringSplit': {
+      const account = str(args.account).trim();
+      if (!account) throw new Error('A split needs an account');
+      await qAddRecurringSplit(exec, str(args.templateId), account, Number(args.pct) || 0);
+      return;
+    }
+    case 'removeRecurringSplit': {
+      await qRemoveRecurringSplit(exec, str(args.templateId), Number(args.index));
       return;
     }
     case 'verifyCounterparty':

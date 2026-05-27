@@ -450,3 +450,32 @@ test('createRecurring inserts a template that lists and posts', async () => {
   await expect(applyMutation(exec, 'createRecurring', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
   await expect(applyMutation(exec, 'createRecurring', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
 });
+
+test('addRecurringSplit / removeRecurringSplit manage splits + splits_enabled', async () => {
+  const exec = await seeded();
+  // rt-spotify has no splits seeded.
+  const { listRecurring } = await import('@/lib/db/queries/recurring');
+  const flag = async () => Number((await exec("SELECT splits_enabled FROM recurring_templates WHERE id = 'rt-spotify'"))[0].splits_enabled);
+  expect(await flag()).toBe(0);
+
+  await applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: 'Marcus Savings', pct: 40 });
+  await applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: 'Fidelity', pct: 60 });
+  let t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  expect(t.splits?.map((s) => s.account)).toEqual(['Marcus Savings', 'Fidelity']);
+  expect(t.splits?.map((s) => s.pct)).toEqual([40, 60]);
+  expect(await flag()).toBe(1);
+
+  // Remove the first split (by index/sort order).
+  await applyMutation(exec, 'removeRecurringSplit', { templateId: 'rt-spotify', index: 0 });
+  t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  expect(t.splits?.map((s) => s.account)).toEqual(['Fidelity']);
+  expect(await flag()).toBe(1);
+
+  // Removing the last one clears the split-enabled flag.
+  await applyMutation(exec, 'removeRecurringSplit', { templateId: 'rt-spotify', index: 0 });
+  t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  expect(t.splits ?? []).toEqual([]);
+  expect(await flag()).toBe(0);
+
+  await expect(applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: '  ' })).rejects.toThrow();
+});
