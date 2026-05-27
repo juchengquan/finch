@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Money, MerchantGlyph, Icon } from '@/components/primitives';
+import { Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore, type Tx } from '@/lib/store';
@@ -127,7 +127,7 @@ export default function ActivityPage() {
                       onClick={() => openTransaction(t.id)}
                       className={cn('flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
                     >
-                      <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
+                      <CatBar hue={cat.hue} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{t.merchant}</div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
@@ -177,7 +177,7 @@ export default function ActivityPage() {
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2.5">
-                          <MerchantGlyph name={t.merchant} hue={cat.hue} size={26} />
+                          <CatBar hue={cat.hue} className="h-4" />
                           {t.merchant}
                         </div>
                       </td>

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Icon, MerchantGlyph } from '@/components/primitives';
+import { Icon, CatBar } from '@/components/primitives';
 import { useMoney } from '@/components/use-money';
-import { catById, acctById, MOCK } from '@/lib/data';
+import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useDb } from '@/components/db-provider';
 import { listCategories } from '@/lib/db/queries/categories';
@@ -108,7 +108,7 @@ export function TransactionActionsMenu({
  * Contains no page chrome (header/back/padding); the consumer supplies that.
  */
 export function TransactionDetail({ txId }: { txId: string }) {
-  const { fmt } = useMoney();
+  const { fmt, base } = useMoney();
   const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
@@ -185,8 +185,8 @@ export function TransactionDetail({ txId }: { txId: string }) {
   return (
     <>
       <div className="px-6 pb-7 text-center">
-        <MerchantGlyph name={tx.merchant} size={64} hue={cat.hue} />
-        <div className="text-muted-foreground mt-[18px] font-serif text-[22px] italic">
+        <CatBar hue={cat.hue} className="mx-auto mb-4 block h-1 w-10" />
+        <div className="text-muted-foreground font-serif text-[22px] italic">
           {tx.amount > 0 ? 'You received from' : 'You spent at'}
         </div>
         <div className="mt-1 font-serif text-[34px] leading-none -tracking-[0.8px]">{tx.merchant}</div>
@@ -297,6 +297,9 @@ export function TransactionDetail({ txId }: { txId: string }) {
         </div>
         {[
           { l: 'Account', v: acctLabel },
+          ...(tx.currency && tx.currency !== base && tx.nativeAmount != null
+            ? [{ l: 'Original', v: fmtNative(Math.abs(tx.nativeAmount), tx.currency) }]
+            : []),
           { l: 'Status', v: tx.pending ? 'Pending' : 'Posted' },
           { l: 'Note', v: tx.note || '—' },
           { l: 'Recurring', v: tx.recurring ? 'Yes' : 'No' },

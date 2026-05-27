@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono, Instrument_Serif } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { CurrencyProvider } from '@/components/currency-provider';
@@ -14,6 +14,7 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
+  style: ['normal', 'italic'],
   variable: '--font-inter',
 });
 
@@ -21,13 +22,6 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500'],
   variable: '--font-jetbrains-mono',
-});
-
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  style: ['normal', 'italic'],
-  variable: '--font-instrument-serif',
 });
 
 export const metadata: Metadata = {
@@ -52,7 +46,7 @@ export default function RootLayout({
       lang="en"
       data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={`${inter.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>

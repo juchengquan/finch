@@ -27,7 +27,7 @@ export default function FxTransactionPage() {
   ];
 
   return (
-    <MobilePage header={<ScreenHeader back title="FX transaction" />}>
+    <MobilePage header={<ScreenHeader back backHref="/system" title="FX transaction" />}>
       <div className="px-5 pb-[120px]">
         <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs">
           <Link href="/system" className="text-muted-foreground">

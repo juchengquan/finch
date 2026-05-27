@@ -10,6 +10,10 @@ export interface Tx {
   merchant: string;
   category: string | null;
   amount: number;
+  /** Currency the expense was entered in. Omitted/equal to the ledger base for same-currency entries. */
+  currency?: string;
+  /** Signed amount in `currency`; `amount` is always the ledger-base figure that drives balances. */
+  nativeAmount?: number;
   account: string;
   date: string;
   time?: string;
@@ -130,7 +134,10 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('addTransaction', {
           ledgerId: tx.ledgerId ?? 'personal',
           accountId: tx.account,
-          amount: tx.amount,
+          // `amount` is native (what the user entered); `amountBase` drives balances.
+          amount: tx.nativeAmount ?? tx.amount,
+          amountBase: tx.amount,
+          currency: tx.currency,
           merchant: tx.merchant,
           categoryId: tx.category,
           date: tx.date,

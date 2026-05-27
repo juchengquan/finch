@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { TransactionDetail, TransactionActionsMenu } from '@/components/transaction-detail';
+import { useIsDesktop } from '@/components/use-is-desktop';
+import { cn } from '@/lib/utils';
 
 interface TransactionSheetValue {
   /** Open the detail slider for the given transaction id. */
@@ -14,7 +16,8 @@ const TransactionSheetContext = createContext<TransactionSheetValue | null>(null
 
 /**
  * Use anywhere a transaction row is clickable. Calling `openTransaction(id)`
- * opens a single app-wide right-side slider (full-width on mobile).
+ * opens a single app-wide detail panel: a bottom sheet on mobile, a right-side
+ * slider on desktop.
  */
 export function useTransactionSheet(): TransactionSheetValue {
   const ctx = useContext(TransactionSheetContext);
@@ -27,6 +30,7 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
   // content doesn't blank out mid-transition.
   const [open, setOpen] = useState(false);
   const [txId, setTxId] = useState<string | null>(null);
+  const isDesktop = useIsDesktop();
 
   const openTransaction = useCallback((id: string) => {
     setTxId(id);
@@ -40,7 +44,13 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
     <TransactionSheetContext.Provider value={value}>
       {children}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+        <SheetContent
+          side={isDesktop ? 'right' : 'bottom'}
+          className={cn(
+            'gap-0 p-0',
+            isDesktop ? 'w-full sm:max-w-md' : 'max-h-[85vh] rounded-t-2xl',
+          )}
+        >
           <SheetTitle className="sr-only">Transaction details</SheetTitle>
           <SheetDescription className="sr-only">
             View and edit the selected transaction.

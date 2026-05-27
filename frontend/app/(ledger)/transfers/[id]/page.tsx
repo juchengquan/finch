@@ -33,7 +33,7 @@ export default function TransferDetailPage() {
   const toAmount = tg.amountTo ?? tg.amountBase;
 
   return (
-    <MobilePage header={<ScreenHeader title="Transfer" back />}>
+    <MobilePage header={<ScreenHeader title="Transfer" back backHref="/transfers" />}>
       <div className="px-5 pb-[120px]">
         <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground md:hidden">
           <Link href="/transfers" className="text-muted-foreground">

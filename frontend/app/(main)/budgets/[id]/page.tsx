@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Ring, Money, MerchantGlyph, Icon } from '@/components/primitives';
+import { Ring, Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
@@ -72,7 +72,7 @@ export default function BudgetDetailPage() {
   };
 
   return (
-    <MobilePage header={<ScreenHeader title={cat.name} back />}>
+    <MobilePage header={<ScreenHeader title={cat.name} back backHref="/budgets" />}>
       <div className="px-5 pb-[120px]">
         <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs md:hidden">
           <Link href="/budgets" className="text-muted-foreground">
@@ -173,7 +173,7 @@ export default function BudgetDetailPage() {
               onClick={() => openTransaction(t.id)}
               className={cn('hover:bg-secondary/40 flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
             >
-              <MerchantGlyph name={t.merchant} hue={cat.hue} size={36} />
+              <CatBar hue={cat.hue} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{t.merchant}</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">

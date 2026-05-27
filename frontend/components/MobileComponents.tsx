@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Icon } from './primitives';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,11 +17,14 @@ export function ProfileChip() {
 interface ScreenHeaderProps {
   title: string;
   back?: boolean;
+  /** Where the back button navigates. Falls back to browser history when omitted. */
+  backHref?: string;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
 }
 
-export function ScreenHeader({ title, back = false, leading, trailing }: ScreenHeaderProps) {
+export function ScreenHeader({ title, back = false, backHref, leading, trailing }: ScreenHeaderProps) {
+  const router = useRouter();
   return (
     <>
       {/* Locked to the top of the viewport (mobile only), like the bottom tab
@@ -30,7 +34,12 @@ export function ScreenHeader({ title, back = false, leading, trailing }: ScreenH
           <div className="flex min-h-9 items-center gap-2 justify-self-start">
             {leading ??
               (back ? (
-                <Button variant="outline" size="icon" aria-label="Go back">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Go back"
+                  onClick={() => (backHref ? router.push(backHref) : router.back())}
+                >
                   <Icon name="chev-l" size={16} />
                 </Button>
               ) : (

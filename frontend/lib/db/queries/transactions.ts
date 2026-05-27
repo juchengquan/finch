@@ -23,7 +23,9 @@ export interface ListOptions {
 export interface AddInput {
   ledgerId: string;
   accountId: string;
-  amount: number; // signed, in the account's currency
+  amount: number; // signed, native (in `currency`)
+  amountBase?: number; // signed, ledger base; defaults to `amount` (same-currency)
+  currency?: string; // native currency; defaults to the account's currency
   merchant: string;
   categoryId?: string | null;
   date: string;
@@ -33,12 +35,17 @@ export interface AddInput {
 }
 
 export function rowToTx(r: Record<string, unknown>): Tx {
-  const amount = Number(r.amount);
+  // The store/derive `amount` is the ledger-base figure (DB `amount_base`);
+  // DB `amount` is the native amount the user entered, kept for display.
+  const amount = Number(r.amount_base);
+  const nativeAmount = Number(r.amount);
   return {
     id: String(r.id),
     merchant: String(r.description ?? ''),
     category: r.category_id === null || r.category_id === undefined ? null : String(r.category_id),
     amount,
+    currency: r.currency == null ? undefined : String(r.currency),
+    nativeAmount,
     account: String(r.account_id),
     date: String(r.date),
     time: r.time == null ? undefined : String(r.time),
@@ -109,11 +116,12 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   const status = input.status ?? 'confirmed';
   const acct = await exec('SELECT current_balance, currency FROM accounts WHERE id = ?', [input.accountId]);
   const currentBalance = Number(acct[0]?.current_balance ?? 0);
-  const currency = String(acct[0]?.currency ?? 'USD');
-  // Accounts are denominated in their ledger's base today, so the rate is 1.
-  // Cross-currency locking (exchange_rates lookup) arrives in Phase 7.
-  const amountBase = input.amount;
-  const balanceAfter = Math.round((currentBalance + input.amount) * 100) / 100;
+  const currency = input.currency ?? String(acct[0]?.currency ?? 'USD');
+  // `amount` is native (in `currency`); `amount_base` is the ledger-base figure
+  // that drives balances/reports — they differ for foreign-currency entries.
+  const amountBase = input.amountBase ?? input.amount;
+  const exchangeRate = input.amount !== 0 ? amountBase / input.amount : 1;
+  const balanceAfter = Math.round((currentBalance + amountBase) * 100) / 100;
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
@@ -121,7 +129,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
        balance_after,currency,notes,recurring,created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
     [
-      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, 1, input.date,
+      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate, input.date,
       input.merchant, input.categoryId ?? null, null, null, status, status === 'confirmed' ? new Date().toISOString() : null,
       balanceAfter, currency, input.note || null, 0,
     ],
