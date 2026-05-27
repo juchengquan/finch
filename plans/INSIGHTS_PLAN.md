@@ -5,9 +5,15 @@ Status: **Phase A implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
   (over-budget, pending, top category, weekday skew, goal progress, net-worth
   direction), ranked + capped; the Insights screen renders computed cards and
   falls back to curated copy only for a cold/empty ledger.
-- ↩ **Phase B** (not started) — seed multi-month history to unlock MoM/trend
-  insights and make the charts/header derive from real data. High blast radius;
-  its own PR.
+- ✅ **Phase B** — seeded ~2 months of prior personal history (April + March),
+  month-scoped the spend computations (`categorySpend(txns, ledger, month)` +
+  `currentMonth`/`prevMonth`), and added a month-over-month `spendingTrend` rule +
+  a computed header. Balances are unchanged (the opening-balance invariant pins
+  `current_balance` to each account's known seed balance regardless of txn count);
+  budgets/reports still show the current month.
+- ↩ **Remaining**: the 12-month charts (`monthly-spending`/`cashflow`) + the
+  Apr-vs-May panel still read aggregate JSON — deriving them from real history
+  needs a full year of seeded transactions (a much larger data effort).
 
 ## 1. Goal
 

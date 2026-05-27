@@ -36,15 +36,34 @@ export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
   return out;
 }
 
-/** Mirrors categorySpend(): confirmed expense total per category (positive magnitude). */
-export function categorySpend(txns: Tx[], ledgerId: string): Record<string, number> {
+/** Confirmed expense total per category (positive magnitude). Pass `month`
+ *  (YYYY-MM) to scope to a single month; omit for all-time. */
+export function categorySpend(txns: Tx[], ledgerId: string, month?: string): Record<string, number> {
   const m: Record<string, number> = {};
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
+    if (month && t.date.slice(0, 7) !== month) continue;
     if (t.pending || t.amount >= 0 || t.transferGroupId || !t.category) continue;
     m[t.category] = (m[t.category] ?? 0) + -t.amount;
   }
   return m;
+}
+
+/** The latest transaction month (YYYY-MM) for a ledger; '' when it has none. */
+export function currentMonth(txns: Tx[], ledgerId?: string): string {
+  let max = '';
+  for (const t of txns) {
+    if (ledgerId && ledgerOf(t) !== ledgerId) continue;
+    if (t.date > max) max = t.date;
+  }
+  return max.slice(0, 7);
+}
+
+/** The calendar month before `month` (YYYY-MM). */
+export function prevMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 /** Balance of one account from the projected account rows. */

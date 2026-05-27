@@ -6,7 +6,7 @@ import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/M
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
-import { categorySpend } from '@/lib/select';
+import { categorySpend, currentMonth } from '@/lib/select';
 import { MOCK } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
 
@@ -16,8 +16,8 @@ export default function BudgetsPage() {
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
 
-  // Confirmed expense per category, computed from the projected store state.
-  const spentById = categorySpend(allTxns, activeId);
+  // Confirmed expense per category for the current month.
+  const spentById = categorySpend(allTxns, activeId, currentMonth(allTxns, activeId));
   const spentOf = (id: string) => spentById[id] ?? 0;
 
   const categories = MOCK.categories

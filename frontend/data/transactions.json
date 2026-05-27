@@ -23,5 +23,21 @@
   { "id": "pen-1", "merchant": "Salary · Acme",   "category": null,  "amount": 5800.00, "account": "chk", "date": "2026-05-25", "time": "09:00", "note": "Recurring · waiting for confirmation", "pending": true, "kind": "income" },
   { "id": "pen-2", "merchant": "Don Don Donki",   "category": "food", "amount": -82.40, "account": "cc",  "date": "2026-05-24", "time": "19:30", "note": "New merchant · please verify name",    "pending": true },
   { "id": "pen-3", "merchant": "Sushiro · Tangs", "category": "food", "amount": -34.20, "account": "cc",  "date": "2026-05-24", "time": "13:42", "note": "New merchant · matched alias",         "pending": true },
-  { "id": "t-jpy-1", "merchant": "Yodobashi Camera", "category": "shop", "amount": -24.84, "nativeAmount": -3820, "currency": "JPY", "account": "cc", "date": "2026-05-13", "time": "16:20", "note": "Earbuds · rate locked at import", "pending": false }
+  { "id": "t-jpy-1", "merchant": "Yodobashi Camera", "category": "shop", "amount": -24.84, "nativeAmount": -3820, "currency": "JPY", "account": "cc", "date": "2026-05-13", "time": "16:20", "note": "Earbuds · rate locked at import", "pending": false },
+
+  { "id": "a01", "merchant": "Whole Foods Market", "category": "food",  "amount": -132.80, "account": "cc",  "date": "2026-04-22", "note": "Groceries",      "pending": false },
+  { "id": "a02", "merchant": "Nordstrom",          "category": "shop",  "amount": -420.00, "account": "cc",  "date": "2026-04-18", "note": "Spring wardrobe", "pending": false },
+  { "id": "a03", "merchant": "Greene St. Rent",    "category": "rent",  "amount": -1850.00,"account": "chk", "date": "2026-04-01", "note": "April rent",     "pending": false },
+  { "id": "a04", "merchant": "Uber",               "category": "trans", "amount": -64.20,  "account": "cc",  "date": "2026-04-15", "note": "Airport",        "pending": false },
+  { "id": "a05", "merchant": "Alamo Drafthouse",   "category": "enter", "amount": -88.00,  "account": "cc",  "date": "2026-04-12", "note": "Movies night",   "pending": false },
+  { "id": "a06", "merchant": "CVS Pharmacy",       "category": "health","amount": -42.00,  "account": "cc",  "date": "2026-04-09", "note": "Refill",         "pending": false },
+  { "id": "a07", "merchant": "Spotify",            "category": "subs",  "amount": -11.99,  "account": "cc",  "date": "2026-04-22", "note": "Premium · monthly", "pending": false, "recurring": true },
+  { "id": "a08", "merchant": "Acme Payroll",       "category": null,    "amount": 2900.00, "account": "chk", "date": "2026-04-25", "note": "April salary",   "pending": false, "kind": "income" },
+
+  { "id": "m01", "merchant": "Trader Joe’s",       "category": "food",  "amount": -96.50,  "account": "cc",  "date": "2026-03-20", "note": "Groceries",      "pending": false },
+  { "id": "m02", "merchant": "Greene St. Rent",    "category": "rent",  "amount": -1850.00,"account": "chk", "date": "2026-03-01", "note": "March rent",     "pending": false },
+  { "id": "m03", "merchant": "Lyft",               "category": "trans", "amount": -32.10,  "account": "cc",  "date": "2026-03-14", "note": "Downtown",       "pending": false },
+  { "id": "m04", "merchant": "Uniqlo",             "category": "shop",  "amount": -120.00, "account": "cc",  "date": "2026-03-11", "note": "Basics",         "pending": false },
+  { "id": "m05", "merchant": "Spotify",            "category": "subs",  "amount": -11.99,  "account": "cc",  "date": "2026-03-22", "note": "Premium · monthly", "pending": false, "recurring": true },
+  { "id": "m06", "merchant": "Acme Payroll",       "category": null,    "amount": 2900.00, "account": "chk", "date": "2026-03-25", "note": "March salary",   "pending": false, "kind": "income" }
 ]
