@@ -36,6 +36,8 @@ const RESET_TABLES = [
   'account_balance_snapshots',
   'ledger_summaries',
   'goals',
+  'subscriptions',
+  'scheduled_items',
   'sync_log',
   'tags',
   'budgets',
@@ -307,6 +309,19 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       for (const tagId of tagIds) {
         await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
       }
+      return;
+    }
+    case 'createSubscription': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      const amount = Number(args.amount);
+      if (!name) throw new Error('Subscription name is required');
+      if (!(amount > 0)) throw new Error('Subscription amount must be greater than 0');
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM subscriptions WHERE ledger_id = ?', [ledgerId]);
+      await exec(
+        'INSERT INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        [newId('sub'), ledgerId, name, amount, args.cadence ? str(args.cadence) : 'monthly', args.next ? str(args.next) : null, args.hue != null ? Number(args.hue) : 200, Number(rows[0]?.n ?? 0), new Date().toISOString()],
+      );
       return;
     }
     case 'postRecurring':

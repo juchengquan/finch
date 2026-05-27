@@ -19,6 +19,7 @@ import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
 import { listTags, transactionTagMap } from './queries/tags';
+import { listSubscriptions, listScheduledItems } from './queries/planning';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
@@ -94,21 +95,36 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap] = await Promise.all([
-    listAccounts(exec),
-    listCategories(exec),
-    listCounterparties(exec),
-    listExchangeRates(exec),
-    listDevices(exec),
-    listGoals(exec),
-    listTags(exec),
-    transactionTagMap(exec),
-  ]);
+  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems] =
+    await Promise.all([
+      listAccounts(exec),
+      listCategories(exec),
+      listCounterparties(exec),
+      listExchangeRates(exec),
+      listDevices(exec),
+      listGoals(exec),
+      listTags(exec),
+      transactionTagMap(exec),
+      listSubscriptions(exec),
+      listScheduledItems(exec),
+    ]);
   for (const t of transactions) {
     const ids = tagMap[t.id];
     if (ids) t.tags = ids;
   }
-  return { transactions, ...rest, accounts, categories, counterparties, exchangeRates, devices, goals, tags };
+  return {
+    transactions,
+    ...rest,
+    accounts,
+    categories,
+    counterparties,
+    exchangeRates,
+    devices,
+    goals,
+    tags,
+    subscriptions,
+    scheduledItems,
+  };
 }
 
 /** Serialise store state into portable relational `.db` bytes. */

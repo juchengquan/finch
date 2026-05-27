@@ -9,6 +9,7 @@ import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 import type { Goal } from '@/lib/db/queries/goals';
 import type { Tag } from '@/lib/db/queries/tags';
+import type { Subscription, ScheduledItem } from '@/lib/db/queries/planning';
 
 export interface Tx {
   id: string;
@@ -90,6 +91,8 @@ interface FinanceState {
   devices: Device[];
   goals: Goal[];
   tags: Tag[];
+  subscriptions: Subscription[];
+  scheduledItems: ScheduledItem[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -109,6 +112,7 @@ interface FinanceState {
   contributeGoal: (id: string, amount: number) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
   reset: () => void;
 }
 
@@ -139,6 +143,8 @@ export const useFinanceStore = create<FinanceState>()(
       devices: [],
       goals: [],
       tags: [],
+      subscriptions: [],
+      scheduledItems: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -277,6 +283,17 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.id === transactionId ? { ...t, tags: tagIds } : t)),
         }));
         syncMutation('setTransactionTags', { id: transactionId, tagIds });
+      },
+
+      createSubscription: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `sub-${Date.now().toString(36)}`;
+        const cadence = input.cadence ?? 'monthly';
+        const hue = input.hue ?? 200;
+        set((s) => ({
+          subscriptions: [...s.subscriptions, { id, ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue }],
+        }));
+        syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
       },
 
       reset: () => {

@@ -19,6 +19,8 @@ import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import devicesData from '@/data/devices.json';
 import goalsData from '@/data/goals.json';
+import subscriptionsData from '@/data/subscriptions.json';
+import scheduledItemsData from '@/data/scheduled-items.json';
 import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
 import recurringData from '@/data/recurring-templates.json';
@@ -154,6 +156,26 @@ export async function seedReference(exec: Exec): Promise<void> {
     await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
       t.id, t.ledger ?? 'personal', t.name, t.color ?? null,
     ]);
+  }
+
+  type SubRow = { id: string; name: string; amount: number; cadence?: string; next?: string; logoHue?: number; ledger?: string };
+  const subs = subscriptionsData as SubRow[];
+  for (let i = 0; i < subs.length; i++) {
+    const s = subs[i];
+    await exec(
+      'INSERT OR IGNORE INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [s.id, s.ledger ?? 'personal', s.name, s.amount, s.cadence ?? 'monthly', s.next ?? null, s.logoHue ?? 200, i, SEED_TS],
+    );
+  }
+
+  type SchedRow = { day: number; month: string; label: string; amount: number; type: string; color?: string; ledger?: string };
+  const sched = scheduledItemsData as SchedRow[];
+  for (let i = 0; i < sched.length; i++) {
+    const s = sched[i];
+    await exec(
+      'INSERT OR IGNORE INTO scheduled_items (id,ledger_id,day,month,label,amount,type,color) VALUES (?,?,?,?,?,?,?,?)',
+      [`sch-${i}`, s.ledger ?? 'personal', s.day, s.month, s.label, s.amount, s.type, s.color ?? null],
+    );
   }
 }
 

@@ -210,6 +210,29 @@ CREATE TABLE IF NOT EXISTS goals (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  amount     REAL NOT NULL,
+  cadence    TEXT NOT NULL DEFAULT 'monthly',
+  next_date  TEXT,
+  hue        INTEGER NOT NULL DEFAULT 200,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_items (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  day        INTEGER NOT NULL,
+  month      TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  amount     REAL NOT NULL,
+  type       TEXT NOT NULL,
+  color      TEXT
+);
+
 CREATE TABLE IF NOT EXISTS ledger_summaries (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -265,6 +288,8 @@ CREATE INDEX IF NOT EXISTS idx_recurring_ledger_active ON recurring_templates(le
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
 CREATE INDEX IF NOT EXISTS idx_goals_ledger ON goals(ledger_id);
+CREATE INDEX IF NOT EXISTS idx_subs_ledger ON subscriptions(ledger_id);
+CREATE INDEX IF NOT EXISTS idx_sched_ledger ON scheduled_items(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 
