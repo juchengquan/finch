@@ -4,16 +4,24 @@ import type { Exec } from '@/lib/db/repo';
 
 export interface CategoryRow {
   id: string;
+  ledgerId: string;
   name: string;
   parentName: string | null;
   type: string;
   icon: string | null;
 }
 
-export async function listCategories(exec: Exec, ledgerId: string): Promise<CategoryRow[]> {
-  const rows = await exec('SELECT * FROM categories WHERE ledger_id = ? ORDER BY sort_order', [ledgerId]);
+/** List categories; pass a ledgerId to scope, or omit for all ledgers. */
+export async function listCategories(exec: Exec, ledgerId?: string): Promise<CategoryRow[]> {
+  const rows = await exec(
+    ledgerId
+      ? 'SELECT * FROM categories WHERE ledger_id = ? ORDER BY sort_order'
+      : 'SELECT * FROM categories ORDER BY ledger_id, sort_order',
+    ledgerId ? [ledgerId] : [],
+  );
   return rows.map((r) => ({
     id: String(r.id),
+    ledgerId: String(r.ledger_id),
     name: String(r.name),
     parentName: r.parent_name == null ? null : String(r.parent_name),
     type: String(r.type),

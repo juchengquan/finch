@@ -1,15 +1,15 @@
 // Thin client for the server database API. The server owns the authoritative
 // SQLite file; the store is a mirror hydrated from these calls.
 
-import type { PersistState } from '@/lib/db/repo';
+import type { ProjectedState } from '@/lib/db/repo';
 
-export async function fetchState(): Promise<PersistState> {
+export async function fetchState(): Promise<ProjectedState> {
   const res = await fetch('/api/state', { cache: 'no-store' });
   if (!res.ok) throw new Error(`GET /api/state ${res.status}`);
-  return (await res.json()) as PersistState;
+  return (await res.json()) as ProjectedState;
 }
 
-export async function mutate(action: string, args?: Record<string, unknown>): Promise<PersistState> {
+export async function mutate(action: string, args?: Record<string, unknown>): Promise<ProjectedState> {
   const res = await fetch('/api/mutate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,7 +25,7 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
     }
     throw new Error(message);
   }
-  return (await res.json()) as PersistState;
+  return (await res.json()) as ProjectedState;
 }
 
 export async function fetchDbInfo(): Promise<{ path: string }> {

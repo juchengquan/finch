@@ -4,7 +4,7 @@ import { getSqlite3, execFor, type OO1DB } from './sqlite';
 import { applySchema } from './schema';
 import { seedDatabase } from './seed';
 import { projectState } from './state';
-import type { Exec, PersistState } from './repo';
+import type { Exec, ProjectedState } from './repo';
 
 // The authoritative database: a single in-memory SQLite connection held by the
 // Node server for the life of the process, loaded from a file on startup and
@@ -80,13 +80,13 @@ export function getServerDb(): Promise<ServerDb> {
 }
 
 /** Read the full app state from the server database. */
-export async function readState(): Promise<PersistState> {
+export async function readState(): Promise<ProjectedState> {
   const { exec } = await getServerDb();
   return projectState(exec);
 }
 
 /** Run a write against the server database, persist to file, return new state. */
-export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<PersistState> {
+export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
   const db = await getServerDb();
   await fn(db.exec);
   await db.persist();

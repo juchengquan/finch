@@ -1,42 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Ring } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
-import { useDb } from '@/components/db-provider';
-import { categorySpend } from '@/lib/db/queries/categories';
 import { useFinanceStore } from '@/lib/store';
-import { categorySpent } from '@/lib/derive';
+import { categorySpend } from '@/lib/select';
 import { MOCK } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
 
 export default function BudgetsPage() {
   const { short } = useMoney();
   const { active, activeId } = useLedger();
-  const { exec, version } = useDb();
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
-  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
-  // Spend per category comes from SQL (confirmed expenses); derive fallback
-  // until the DB is ready.
-  const [spentById, setSpentById] = useState<Record<string, number> | null>(null);
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    categorySpend(exec, activeId)
-      .then((m) => {
-        if (!cancelled) setSpentById(m);
-      })
-      .catch((err) => console.error('Could not load category spend from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, activeId]);
-  const spentOf = (id: string) => spentById?.[id] ?? categorySpent(ledgerTxns, id);
+  // Confirmed expense per category, computed from the projected store state.
+  const spentById = categorySpend(allTxns, activeId);
+  const spentOf = (id: string) => spentById[id] ?? 0;
 
   const categories = MOCK.categories
     .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)

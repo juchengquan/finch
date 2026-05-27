@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -8,10 +8,8 @@ import { Ring, Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { MOCK, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
-import { useDb } from '@/components/db-provider';
-import { categorySpend } from '@/lib/db/queries/categories';
+import { categorySpend } from '@/lib/select';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { categorySpent } from '@/lib/derive';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,28 +33,13 @@ export default function BudgetDetailPage() {
   const setBudget = useFinanceStore((s) => s.setBudget);
   const { openTransaction } = useTransactionSheet();
 
-  const { exec, version } = useDb();
   const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
   const txns = ledgerTxns.filter((t) => t.category === cat.id);
   const budget = budgetOverrides[cat.id] ?? cat.budget;
 
-  // Spend from SQL (confirmed expenses for this category); derive fallback.
-  const [dbSpent, setDbSpent] = useState<number | null>(null);
-  useEffect(() => {
-    if (!exec) return;
-    let cancelled = false;
-    categorySpend(exec, catLedger)
-      .then((m) => {
-        if (!cancelled) setDbSpent(m[cat.id] ?? 0);
-      })
-      .catch((err) => console.error('Could not load category spend from DB', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [exec, version, catLedger, cat.id]);
-
-  const spent = dbSpent ?? categorySpent(ledgerTxns, cat.id);
+  // Confirmed expense for this category, from the projected store state.
+  const spent = categorySpend(allTxns, catLedger)[cat.id] ?? 0;
   const pct = Math.round((spent / budget) * 100);
   const over = spent > budget;
   const remaining = budget - spent;

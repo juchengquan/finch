@@ -1,6 +1,6 @@
-// DB-backed transaction interactions. Each function runs SQL against the live
-// connection (lib/db/client.ts). Reads return the store's `Tx` shape so the
-// store-as-cache bridge can consume them directly.
+// DB-backed transaction interactions, run server-side against the shared DB
+// (lib/db/server.ts). Reads return the store's `Tx` shape so the projected
+// state can feed the store directly.
 
 import type { Exec } from '@/lib/db/repo';
 import type { Tx } from '@/lib/store';
