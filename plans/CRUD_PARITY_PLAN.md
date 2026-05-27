@@ -223,10 +223,16 @@ edit/cancel.)
    **Transfers** edit (`updateTransfer` scales both legs proportionally + recomputes
    both accounts; edit dialog on the list).
 
-Remaining follow-ups (not yet scheduled): a **tags** management screen and moving
-the **merchants** list onto the projection — both would let the already-built
-delete/edit mutations get a UI. Recurring/merchant **create** (createRecurring,
-createCounterparty) from §5 are also still open.
+6. ✅ **Tags & merchants surfaces** (+ last shim retired). New **Tags** admin screen
+   (`(ledger)/tags`) with create/edit/delete + a hue picker. The **Merchants** list
+   now reads the projected `counterparties` (mock only supplies decorative
+   hue/txCount by id), with create (`createCounterparty`), edit (rename/category),
+   delete, verify/**unverify**, and add/**remove** alias. Routing `verifyCounterparty`/
+   `addAlias` to the table (and adding unverify/removeAlias) let me **retire the last
+   `app_state` shim** — `verifiedExtra`/`aliasExtra` are gone from the store, repo,
+   seed and backup, and `app_state` is no longer read or written.
+
+Remaining open (from §5, not yet done): `createRecurring` (template + splits).
 
 ## 8. Risks
 

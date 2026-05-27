@@ -48,12 +48,38 @@ export async function verifyCounterparty(exec: Exec, id: string): Promise<void> 
   await exec('UPDATE counterparties SET is_verified = 1 WHERE id = ?', [id]);
 }
 
+export async function unverifyCounterparty(exec: Exec, id: string): Promise<void> {
+  await exec('UPDATE counterparties SET is_verified = 0 WHERE id = ?', [id]);
+}
+
 export async function addAlias(exec: Exec, id: string, alias: string): Promise<void> {
   const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
   if (!rows[0]) return;
   const aliases = rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : [];
   if (!aliases.includes(alias)) aliases.push(alias);
   await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
+}
+
+export async function removeAlias(exec: Exec, id: string, alias: string): Promise<void> {
+  const rows = await exec('SELECT aliases FROM counterparties WHERE id = ?', [id]);
+  if (!rows[0]) return;
+  const aliases = (rows[0].aliases ? (JSON.parse(String(rows[0].aliases)) as string[]) : []).filter((a) => a !== alias);
+  await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
+}
+
+export interface NewCounterparty {
+  id: string;
+  ledgerId: string;
+  name: string;
+  category: string | null;
+}
+
+/** Insert a new (unverified) merchant. */
+export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
+  await exec(
+    "INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,logo_url,is_verified,created_at) VALUES (?,?,?,?,?,?,0,datetime('now'))",
+    [c.id, c.ledgerId, c.name, JSON.stringify([]), c.category, null],
+  );
 }
 
 export interface CounterpartyPatch {

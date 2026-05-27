@@ -26,8 +26,6 @@ function snapshot(): PersistState {
   const s = useFinanceStore.getState();
   return {
     transactions: s.transactions,
-    verifiedExtra: s.verifiedExtra,
-    aliasExtra: s.aliasExtra,
   };
 }
 

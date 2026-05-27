@@ -418,3 +418,14 @@ test('scheduled items create / update / delete', async () => {
   await applyMutation(exec, 'deleteScheduledItem', { id: 'sch-x' });
   expect((await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')).toBeUndefined();
 });
+
+test('createCounterparty inserts an unverified merchant', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks', category: 'Food' });
+  const { listCounterparties } = await import('@/lib/db/queries/counterparties');
+  const cp = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-new')!;
+  expect(cp.name).toBe('Starbucks');
+  expect(cp.category).toBe('Food');
+  expect(cp.verified).toBe(false);
+  await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
+});

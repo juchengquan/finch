@@ -91,9 +91,6 @@ const SEED_RECURRING = recurringData as RecurringTemplate[];
 interface FinanceState {
   transactions: Tx[];
   recurring: RecurringTemplate[];
-  // Editable overrides on otherwise-static mock data, persisted.
-  verifiedExtra: string[];
-  aliasExtra: Record<string, string[]>;
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
   budgetByCategory: Record<string, number>;
@@ -119,7 +116,9 @@ interface FinanceState {
   archiveAccount: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   verifyCounterparty: (id: string) => void;
+  unverifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
+  removeAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
   createCategory: (input: { name: string; type?: string; icon?: string; hue?: number; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
@@ -143,6 +142,7 @@ interface FinanceState {
   createScheduledItem: (input: { label: string; amount: number; day: number; month: string; type?: string; color?: string; ledgerId?: string }) => void;
   updateScheduledItem: (id: string, patch: { day?: number; month?: string; label?: string; amount?: number; type?: string; color?: string | null }) => void;
   deleteScheduledItem: (id: string) => void;
+  createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
   deleteCounterparty: (id: string) => void;
   reset: () => void;
@@ -164,8 +164,6 @@ export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
-      verifiedExtra: [],
-      aliasExtra: {},
       accounts: [],
       budgetByCategory: {},
       categories: [],
@@ -279,15 +277,31 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       verifyCounterparty: (id) => {
-        set((s) => ({ verifiedExtra: s.verifiedExtra.includes(id) ? s.verifiedExtra : [...s.verifiedExtra, id] }));
+        set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, verified: true } : c)) }));
         syncMutation('verifyCounterparty', { id });
+      },
+
+      unverifyCounterparty: (id) => {
+        set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, verified: false } : c)) }));
+        syncMutation('unverifyCounterparty', { id });
       },
 
       addAlias: (id, alias) => {
         set((s) => ({
-          aliasExtra: { ...s.aliasExtra, [id]: [...(s.aliasExtra[id] ?? []), alias] },
+          counterparties: s.counterparties.map((c) =>
+            c.id === id && !c.aliases.includes(alias) ? { ...c, aliases: [...c.aliases, alias] } : c,
+          ),
         }));
         syncMutation('addAlias', { id, alias });
+      },
+
+      removeAlias: (id, alias) => {
+        set((s) => ({
+          counterparties: s.counterparties.map((c) =>
+            c.id === id ? { ...c, aliases: c.aliases.filter((a) => a !== alias) } : c,
+          ),
+        }));
+        syncMutation('removeAlias', { id, alias });
       },
 
       // Transfers are created on the server (multi-row / relational); the server
@@ -438,6 +452,15 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteScheduledItem', { id });
       },
 
+      createCounterparty: (input) => {
+        const id = `cp-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const category = input.category ?? null;
+        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, aliases: [], category, verified: false }] }));
+        syncMutation('createCounterparty', { id, ledgerId, name: input.name, category });
+        return id;
+      },
+
       updateCounterparty: (id, patch) => {
         set((s) => ({ counterparties: s.counterparties.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
         syncMutation('updateCounterparty', { id, patch });
@@ -452,8 +475,6 @@ export const useFinanceStore = create<FinanceState>()(
         set({
           transactions: SEED_TX,
           recurring: SEED_RECURRING,
-          verifiedExtra: [],
-          aliasExtra: {},
         });
         syncMutation('reset');
       },

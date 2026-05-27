@@ -17,8 +17,6 @@ export type Exec = (sql: string, bind?: SqlBind) => Promise<Row[]>;
 // (mirrors the Zustand store).
 export interface PersistState {
   transactions: Tx[];
-  verifiedExtra: string[];
-  aliasExtra: Record<string, string[]>;
 }
 
 // What the server projects to the client: persisted slices + reference/derived

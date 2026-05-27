@@ -288,25 +288,13 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
   }
 }
 
-/** Seed the transitional store slices (empty override maps + alias/verify extras). */
-export async function seedAppStateDefaults(exec: Exec): Promise<void> {
-  const entries: [string, unknown][] = [
-    ['verifiedExtra', []],
-    ['aliasExtra', {}],
-  ];
-  for (const [k, v] of entries) {
-    await exec('INSERT OR REPLACE INTO app_state (key,value) VALUES (?,?)', [k, JSON.stringify(v)]);
-  }
-}
-
-/** Create a complete fresh database (reference + seed transactions + defaults). */
+/** Create a complete fresh database (reference + seed transactions). */
 export async function seedDatabase(exec: Exec): Promise<void> {
   await exec('BEGIN');
   try {
     await seedReference(exec);
     await insertTransactions(exec, transactionsData as Tx[]);
     await seedTransactionTags(exec);
-    await seedAppStateDefaults(exec);
     await exec('COMMIT');
   } catch (err) {
     await exec('ROLLBACK');

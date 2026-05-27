@@ -25,7 +25,16 @@ import {
   type ScheduledItemPatch,
 } from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
-import { deleteCounterparty as qDeleteCounterparty, updateCounterparty as qUpdateCounterparty, type CounterpartyPatch } from './queries/counterparties';
+import {
+  deleteCounterparty as qDeleteCounterparty,
+  updateCounterparty as qUpdateCounterparty,
+  createCounterparty as qCreateCounterparty,
+  verifyCounterparty as qVerifyCounterparty,
+  unverifyCounterparty as qUnverifyCounterparty,
+  addAlias as qAddAlias,
+  removeAlias as qRemoveAlias,
+  type CounterpartyPatch,
+} from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
 import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
 import { isAccountType } from '@/lib/account-types';
@@ -37,24 +46,9 @@ import {
   confirmTransaction as qConfirm,
   type AddInput,
 } from './queries/transactions';
-import { seedReference, insertTransactions, seedAppStateDefaults, seedTransactionTags } from './seed';
+import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
-
-async function getJson<T>(exec: Exec, key: string, fallback: T): Promise<T> {
-  const rows = await exec('SELECT value FROM app_state WHERE key = ?', [key]);
-  const raw = rows[0]?.value;
-  if (raw == null) return fallback;
-  try {
-    return JSON.parse(String(raw)) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function setJson(exec: Exec, key: string, value: unknown): Promise<void> {
-  await exec('INSERT OR REPLACE INTO app_state (key, value) VALUES (?, ?)', [key, JSON.stringify(value)]);
-}
 
 const RESET_TABLES = [
   'transactions',
@@ -83,7 +77,6 @@ async function resetDb(exec: Exec): Promise<void> {
   await seedReference(exec);
   await insertTransactions(exec, transactionsData as Tx[]);
   await seedTransactionTags(exec);
-  await seedAppStateDefaults(exec);
 }
 
 type Args = Record<string, unknown>;
@@ -305,18 +298,18 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       );
       return;
     }
-    case 'verifyCounterparty': {
-      const v = await getJson<string[]>(exec, 'verifiedExtra', []);
-      if (!v.includes(str(args.id))) v.push(str(args.id));
-      await setJson(exec, 'verifiedExtra', v);
+    case 'verifyCounterparty':
+      await qVerifyCounterparty(exec, str(args.id));
       return;
-    }
-    case 'addAlias': {
-      const a = await getJson<Record<string, string[]>>(exec, 'aliasExtra', {});
-      a[str(args.id)] = [...(a[str(args.id)] ?? []), str(args.alias)];
-      await setJson(exec, 'aliasExtra', a);
+    case 'unverifyCounterparty':
+      await qUnverifyCounterparty(exec, str(args.id));
       return;
-    }
+    case 'addAlias':
+      await qAddAlias(exec, str(args.id), str(args.alias).trim());
+      return;
+    case 'removeAlias':
+      await qRemoveAlias(exec, str(args.id), str(args.alias));
+      return;
     case 'createTransfer':
       await createTransfer(exec, args);
       return;
@@ -448,6 +441,17 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteTransfer':
       await qDeleteTransfer(exec, str(args.id));
       return;
+    case 'createCounterparty': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Merchant name is required');
+      await qCreateCounterparty(exec, {
+        id: str(args.id || newId('cp')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        category: args.category ? str(args.category) : null,
+      });
+      return;
+    }
     case 'deleteCounterparty':
       await qDeleteCounterparty(exec, str(args.id));
       return;

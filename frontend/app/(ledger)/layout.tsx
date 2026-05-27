@@ -10,6 +10,7 @@ const LEDGER_TABS = [
   { id: 'merchants', icon: 'bag',   label: 'Merchants', path: '/merchants' },
   { id: 'recurring', icon: 'sync',  label: 'Recurring', path: '/recurring' },
   { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
+  { id: 'tags', icon: 'tags', label: 'Tags', path: '/tags' },
   { id: 'system', icon: 'cog', label: 'System', path: '/system' },
 ];
 

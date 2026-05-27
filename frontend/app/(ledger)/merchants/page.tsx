@@ -6,27 +6,35 @@ import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RowActions } from '@/components/RowActions';
 import { LEDGER } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 const CP_LEDGER = 'personal';
 
-type Counterparty = (typeof LEDGER.counterparties)[number];
-
-function MerchantRow({
-  c,
-  verified,
-  aliases,
-  border,
-}: {
-  c: Counterparty;
+interface MerchantData {
+  id: string;
+  name: string;
+  category: string | null;
   verified: boolean;
   aliases: string[];
-  border: boolean;
-}) {
+  hue: number;
+  txCount: number | null;
+}
+
+// Decorative-only fields (hue/txCount) the table doesn't store — fall back to the
+// static seed by id, deriving a stable hue for merchants created in-app.
+const MOCK_BY_ID = new Map(LEDGER.counterparties.map((c) => [c.id, c]));
+const hueFor = (id: string, name: string) =>
+  MOCK_BY_ID.get(id)?.hue ?? [...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+
+function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border: boolean; onEdit: () => void; onDelete: () => void }) {
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
   const addAlias = useFinanceStore((s) => s.addAlias);
+  const removeAlias = useFinanceStore((s) => s.removeAlias);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -52,26 +60,38 @@ function MerchantRow({
         <div className="flex items-baseline justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="text-sm font-medium">{c.name}</div>
-            {!verified && (
+            {!c.verified && (
               <span className="border-warning/40 text-warning rounded border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px]">
                 UNVERIFIED
               </span>
             )}
           </div>
-          <div className="text-muted-foreground font-mono text-[11px]">{c.txCount}×</div>
+          <div className="flex items-center gap-1">
+            {c.txCount != null && <div className="text-muted-foreground font-mono text-[11px]">{c.txCount}×</div>}
+            <RowActions
+              onEdit={onEdit}
+              onDelete={onDelete}
+              confirmTitle={`Delete ${c.name}?`}
+              confirmDescription="The merchant is removed; transactions that referenced it are left untouched."
+            />
+          </div>
         </div>
         <div className="text-muted-foreground mt-1 text-[11px]">
-          {c.category} <span className="mx-[5px]">·</span>
+          {c.category ?? 'Uncategorised'} <span className="mx-[5px]">·</span>
           <span className="text-secondary-foreground font-mono text-[10px]">aliases:</span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {aliases.map((a) => (
-            <span
+          {c.aliases.map((a) => (
+            <button
               key={a}
-              className="bg-secondary text-secondary-foreground rounded px-[7px] py-0.5 font-mono text-[10px] tracking-[0.2px]"
+              type="button"
+              onClick={() => removeAlias(c.id, a)}
+              title="Remove alias"
+              className="bg-secondary text-secondary-foreground hover:text-destructive flex items-center gap-1 rounded px-[7px] py-0.5 font-mono text-[10px] tracking-[0.2px]"
             >
               {a}
-            </span>
+              <Icon name="x" size={9} />
+            </button>
           ))}
           {adding ? (
             <span className="flex items-center gap-1">
@@ -97,7 +117,7 @@ function MerchantRow({
             </button>
           )}
         </div>
-        {!verified && (
+        {!c.verified && (
           <Button
             size="sm"
             variant="outline"
@@ -117,49 +137,61 @@ function MerchantRow({
 }
 
 export default function MerchantsPage() {
-  const verifiedExtra = useFinanceStore((s) => s.verifiedExtra);
-  const aliasExtra = useFinanceStore((s) => s.aliasExtra);
   const counterparties = useFinanceStore((s) => s.counterparties);
+  const createCounterparty = useFinanceStore((s) => s.createCounterparty);
+  const updateCounterparty = useFinanceStore((s) => s.updateCounterparty);
+  const deleteCounterparty = useFinanceStore((s) => s.deleteCounterparty);
   const [query, setQuery] = useState('');
 
-  // Verified flag + aliases come from the projected counterparties (which
-  // reflect verify/alias edits). Until hydrated, fall back to static + overrides.
-  const cpById = new Map(counterparties.filter((c) => c.ledgerId === CP_LEDGER).map((c) => [c.id, c]));
-
-  const isVerified = (c: Counterparty) => {
-    const cp = cpById.get(c.id);
-    return cp ? cp.verified : c.verified === 1 || verifiedExtra.includes(c.id);
-  };
-  const aliasesOf = (c: Counterparty) => {
-    const cp = cpById.get(c.id);
-    return cp ? cp.aliases : [...c.aliases, ...(aliasExtra[c.id] ?? [])];
-  };
+  // Drive the list off the projected counterparties; fall back to the static
+  // seed only until the store hydrates so the first paint isn't empty.
+  const projected = counterparties.filter((c) => c.ledgerId === CP_LEDGER);
+  const rows: MerchantData[] = projected.length
+    ? projected.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified, aliases: c.aliases, hue: hueFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
+    : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified === 1, aliases: c.aliases, hue: c.hue, txCount: c.txCount }));
 
   const q = query.toLowerCase();
-  const list = LEDGER.counterparties.filter(
-    (c) => !q || c.name.toLowerCase().includes(q) || aliasesOf(c).some((a) => a.toLowerCase().includes(q)),
-  );
-  const unverified = LEDGER.counterparties.filter((c) => !isVerified(c)).length;
+  const list = rows.filter((c) => !q || c.name.toLowerCase().includes(q) || c.aliases.some((a) => a.toLowerCase().includes(q)));
+  const unverified = rows.filter((c) => !c.verified).length;
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const submitCreate = () => {
+    const name = newName.trim();
+    if (!name) return void toast.error('Enter a merchant name');
+    createCounterparty({ name, category: newCategory.trim() || null, ledgerId: CP_LEDGER });
+    toast.success('Merchant added', { description: name });
+    setNewName('');
+    setNewCategory('');
+    setCreateOpen(false);
+  };
+
+  const [editing, setEditing] = useState<{ id: string; name: string; category: string } | null>(null);
+  const submitEdit = () => {
+    if (!editing) return;
+    const name = editing.name.trim();
+    if (!name) return void toast.error('Enter a merchant name');
+    updateCounterparty(editing.id, { name, category: editing.category.trim() || null });
+    toast.success('Merchant updated', { description: name });
+    setEditing(null);
+  };
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Merchants" trailing={<IconButton icon="plus" aria-label="New merchant" />} />}
+      header={<ScreenHeader title="Merchants" trailing={<IconButton icon="plus" aria-label="New merchant" onClick={() => setCreateOpen(true)} />} />}
     >
       <div className="px-5 pb-[120px]">
         <div className="px-1 pb-[18px]">
           <SchemaChip label="counterparties" />
           <div className="mt-2 flex items-baseline gap-3.5">
             <div>
-              <div className="font-serif text-[40px] leading-none tracking-[-1.4px]">
-                {LEDGER.counterparties.length}
-              </div>
+              <div className="font-serif text-[40px] leading-none tracking-[-1.4px]">{rows.length}</div>
               <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">STANDARDISED</div>
             </div>
             <div className="bg-border h-8 w-px" />
             <div>
-              <div className="text-warning font-serif text-[40px] leading-none tracking-[-1.4px]">
-                {unverified}
-              </div>
+              <div className="text-warning font-serif text-[40px] leading-none tracking-[-1.4px]">{unverified}</div>
               <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">UNVERIFIED</div>
             </div>
           </div>
@@ -177,13 +209,71 @@ export default function MerchantsPage() {
 
         <div className="flex flex-col">
           {list.map((c, i) => (
-            <MerchantRow key={c.id} c={c} verified={isVerified(c)} aliases={aliasesOf(c)} border={i > 0} />
+            <MerchantRow
+              key={c.id}
+              c={c}
+              border={i > 0}
+              onEdit={() => setEditing({ id: c.id, name: c.name, category: c.category ?? '' })}
+              onDelete={() => { deleteCounterparty(c.id); toast.success('Merchant deleted', { description: c.name }); }}
+            />
           ))}
           {list.length === 0 && (
             <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
           )}
         </div>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New merchant</DialogTitle>
+            <DialogDescription>A standardised counterparty for matching transactions.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Name</Label>
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Starbucks" autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Category (optional)</Label>
+              <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Food" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitCreate}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit merchant</DialogTitle>
+            <DialogDescription>Rename or recategorise this merchant.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Name</Label>
+                <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Category</Label>
+                <Input value={editing.category} onChange={(e) => setEditing((p) => (p ? { ...p, category: e.target.value } : p))} placeholder="e.g. Food" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }

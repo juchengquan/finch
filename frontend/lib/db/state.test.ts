@@ -9,8 +9,6 @@ const sample: PersistState = {
     { id: 't05', merchant: 'Acme Payroll', category: null, amount: 2900, account: 'chk', date: '2026-05-22', time: '00:00', pending: false, kind: 'income' },
     { id: 'f01', merchant: 'FairPrice', category: 'f-grocery', amount: -128.4, account: 'f-dbs', date: '2026-05-24', pending: false, ledgerId: 'family' },
   ],
-  verifiedExtra: ['cp-04'],
-  aliasExtra: { 'cp-04': ['DDD', 'DON DONKI'] },
 };
 
 test('store state round-trips through the relational schema', async () => {
@@ -37,8 +35,10 @@ test('store state round-trips through the relational schema', async () => {
 
   // Budgets are seeded per-category and projected as a categoryId → amount map.
   expect(loaded.budgetByCategory.food).toBe(700);
-  expect(loaded.verifiedExtra).toContain('cp-04');
-  expect(loaded.aliasExtra['cp-04']).toEqual(['DDD', 'DON DONKI']);
+  // Counterparty verify/alias state now lives on the table (no app_state shim).
+  const cp04 = loaded.counterparties.find((c) => c.id === 'cp-04')!;
+  expect(cp04.verified).toBe(false);
+  expect(cp04.aliases).toContain('DON DONKI');
   expect(loaded.recurring[0].splits?.[0].pct).toBe(60);
 });
 
@@ -80,9 +80,10 @@ test('account balance reflects the live transaction set (not just the seed)', as
   expect(Number(cc[0].b)).not.toBeCloseTo(-842.18, 2);
 });
 
-test('buildState applies verifiedExtra/aliasExtra onto the counterparties table', async () => {
+test('counterparty verify + alias edits write the table (no app_state shim)', async () => {
   const { applySchema } = await import('@/lib/db/schema');
-  const { buildState } = await import('@/lib/db/state');
+  const { seedDatabase } = await import('@/lib/db/seed');
+  const { applyMutation } = await import('@/lib/db/mutations');
   const { listCounterparties } = await import('@/lib/db/queries/counterparties');
   const init = (await import('@sqlite.org/sqlite-wasm')).default as unknown as (
     o?: unknown,
@@ -95,12 +96,19 @@ test('buildState applies verifiedExtra/aliasExtra onto the counterparties table'
     return rows;
   };
   await applySchema(exec);
+  await seedDatabase(exec);
   // cp-04 (Don Don Donki) is seeded unverified; verify it + add an alias.
-  await buildState(exec, { ...sample, verifiedExtra: ['cp-04'], aliasExtra: { 'cp-04': ['DONKI JURONG'] } });
-  const cps = await listCounterparties(exec, 'personal');
-  const donki = cps.find((c) => c.id === 'cp-04')!;
+  await applyMutation(exec, 'verifyCounterparty', { id: 'cp-04' });
+  await applyMutation(exec, 'addAlias', { id: 'cp-04', alias: 'DONKI JURONG' });
+  let donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(true);
   expect(donki.aliases).toContain('DONKI JURONG');
+  // Unverify + removeAlias reverse it.
+  await applyMutation(exec, 'unverifyCounterparty', { id: 'cp-04' });
+  await applyMutation(exec, 'removeAlias', { id: 'cp-04', alias: 'DONKI JURONG' });
+  donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
+  expect(donki.verified).toBe(false);
+  expect(donki.aliases).not.toContain('DONKI JURONG');
 });
 
 test('cancelled transactions are dropped on projection', async () => {
