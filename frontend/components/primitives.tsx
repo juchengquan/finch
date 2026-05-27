@@ -63,9 +63,13 @@ interface SparklineProps {
 }
 
 export function Sparkline({ values, width = 200, height = 50, color = 'var(--primary)', fillOpacity = 0.12, stroke = 1.5 }: SparklineProps) {
-  const max = Math.max(...values, 1);
+  if (values.length === 0) return <svg aria-hidden width={width} height={height} />;
+  // Normalise to the value range so series with negative or large-offset values
+  // (e.g. credit-card balances) still fill the band.
+  const min = Math.min(...values);
+  const range = Math.max(...values) - min || 1;
   const step = width / Math.max(values.length - 1, 1);
-  const pts = values.map((v, i) => [i * step, height - (v / max) * (height - 4) - 2] as [number, number]);
+  const pts = values.map((v, i) => [i * step, height - ((v - min) / range) * (height - 4) - 2] as [number, number]);
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const fill = d + ` L${width} ${height} L0 ${height} Z`;
 

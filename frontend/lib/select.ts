@@ -52,6 +52,38 @@ export function accountBalance(accounts: AccountRow[], accountId: string): numbe
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
 }
 
+const byDateAsc = (a: Tx, b: Tx) => {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  const at = a.time ?? '';
+  const bt = b.time ?? '';
+  return at < bt ? -1 : at > bt ? 1 : 0;
+};
+
+// Reconstruct the running-balance curve from a transaction set whose final value
+// is `endValue`: opening = end − Σamounts, then accumulate per transaction.
+function runningSeries(txns: Tx[], endValue: number): number[] {
+  const rows = [...txns].sort(byDateAsc);
+  const opening = endValue - rows.reduce((s, t) => s + t.amount, 0);
+  const out = [opening];
+  let bal = opening;
+  for (const t of rows) {
+    bal += t.amount;
+    out.push(bal);
+  }
+  return out;
+}
+
+/** Balance-over-time series for one account (ends at its current balance). */
+export function balanceSeries(txns: Tx[], accountId: string, currentBalance: number): number[] {
+  return runningSeries(txns.filter((t) => t.account === accountId), currentBalance);
+}
+
+/** Net-worth-over-time series for a ledger (ends at the current total). */
+export function netWorthSeries(txns: Tx[], accounts: AccountRow[], ledgerId: string): number[] {
+  const total = accounts.filter((a) => a.ledgerId === ledgerId).reduce((s, a) => s + a.balance, 0);
+  return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId), total);
+}
+
 /** Mirrors listTransfers(): reconstruct transfers by grouping on transferGroupId. */
 export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: string): Transfer[] {
   const nameById = new Map(accounts.filter((a) => a.ledgerId === ledgerId).map((a) => [a.id, a.name]));
