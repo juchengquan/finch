@@ -10,6 +10,7 @@
 
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
+import { convertToBase } from './queries/rates';
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
 import categoriesData from '@/data/categories.json';
@@ -50,21 +51,37 @@ const accounts = accountsData as AccountRow[];
 const categories = categoriesData as CategoryRow[];
 const ledgers = ledgersData as { id: string; name: string; base: string; isDefault: number }[];
 
-// Each account's opening balance is fixed: the known seed balance minus the sum
-// of the seed transactions for that account. Running balances then start there
-// and add whatever transactions are inserted, so current_balance reflects the
-// live set (adds/deletes), not just the original seed.
-const seedDeltaByAccount = (() => {
-  const m = new Map<string, number>();
-  for (const t of transactionsData as Tx[]) m.set(t.account, (m.get(t.account) ?? 0) + t.amount);
-  return m;
-})();
-const openingBalance = (accountId: string): number => {
-  const acct = accounts.find((a) => a.id === accountId);
-  return (acct?.balance ?? 0) - (seedDeltaByAccount.get(accountId) ?? 0);
-};
-
 const baseOf = (ledgerId: string) => ledgers.find((l) => l.id === ledgerId)?.base ?? 'USD';
+
+// The ledger-base value of a transaction: its `amount`, except foreign rows whose
+// base is derived from the exchange_rates table (rate locked at the txn date).
+async function baseOfTx(exec: Exec, t: Tx): Promise<{ amountBase: number; rate: number; native: number; currency: string }> {
+  const baseCurrency = baseOf(t.ledgerId ?? 'personal');
+  const native = t.nativeAmount ?? t.amount;
+  const currency = t.currency ?? baseCurrency;
+  if (t.nativeAmount != null && currency !== baseCurrency) {
+    const conv = await convertToBase(exec, native, currency, baseCurrency, t.date);
+    return { amountBase: conv.amountBase, rate: conv.rate, native, currency };
+  }
+  return { amountBase: t.amount, rate: 1, native, currency };
+}
+
+// Each account's opening balance is fixed: the known seed balance minus the sum
+// of the *seed* transactions' base amounts. Running balances start there and add
+// whatever is actually inserted, so current_balance reflects the live set
+// (adds/deletes), not just the original seed.
+async function seedOpeningByAccount(exec: Exec): Promise<Map<string, number>> {
+  const deltaByAccount = new Map<string, number>();
+  for (const t of transactionsData as Tx[]) {
+    const { amountBase } = await baseOfTx(exec, t);
+    deltaByAccount.set(t.account, (deltaByAccount.get(t.account) ?? 0) + amountBase);
+  }
+  const opening = new Map<string, number>();
+  for (const a of accounts) {
+    opening.set(a.id, Math.round(((a.balance ?? 0) - (deltaByAccount.get(a.id) ?? 0)) * 100) / 100);
+  }
+  return opening;
+}
 const ledgerIdByName = (name: string) => ledgers.find((l) => l.name === name)?.id ?? 'personal';
 const isoDate = (d: string) => d.replace(/\//g, '-');
 
@@ -238,20 +255,18 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     list.push(t);
     byAccount.set(t.account, list);
   }
+  const opening = await seedOpeningByAccount(exec);
   for (const [accountId, list] of byAccount) {
-    let running = openingBalance(accountId);
     const ordered = [...list].sort((a, b) =>
       (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')),
     );
-    for (const t of ordered) {
-      // `amount` (Tx) is always the ledger-base figure that drives balances;
-      // `nativeAmount`/`currency` describe the original entry. For foreign-currency
-      // rows the exchange rate is locked at import (amount_base ÷ native).
-      running += t.amount;
-      const ledgerId = t.ledgerId ?? 'personal';
-      const native = t.nativeAmount ?? t.amount;
-      const rate = native !== 0 ? Math.round((t.amount / native) * 1e6) / 1e6 : 1;
-      const currency = t.currency ?? baseOf(ledgerId);
+    const resolved = await Promise.all(
+      ordered.map(async (t) => ({ t, ledgerId: t.ledgerId ?? 'personal', ...(await baseOfTx(exec, t)) })),
+    );
+    let running = opening.get(accountId) ?? accounts.find((a) => a.id === accountId)?.balance ?? 0;
+    for (const r of resolved) {
+      running = Math.round((running + r.amountBase) * 100) / 100;
+      const t = r.t;
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
@@ -259,9 +274,9 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
            balance_after,currency,notes,recurring,created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          t.id, ledgerId, t.account, t.date, t.time ?? null, native, t.amount, rate, t.date,
+          t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate, t.date,
           t.merchant, t.category, null, t.transferGroupId ?? null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          Math.round(running * 100) / 100, currency, t.note || null, t.recurring ? 1 : 0, SEED_TS,
+          running, r.currency, t.note || null, t.recurring ? 1 : 0, SEED_TS,
         ],
       );
     }

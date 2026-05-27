@@ -5,6 +5,7 @@
 
 import type { Exec } from './repo';
 import { listRecurring } from './queries/recurring';
+import { convertToBase } from './queries/rates';
 import {
   addTransaction as qAdd,
   updateTransaction as qUpdate,
@@ -187,18 +188,24 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   if (!from || !to) throw new Error('Account not found');
 
   const ledgerId = String(from.ledger_id);
+  const fromCurrency = String(from.currency);
+  const toCurrency = String(to.currency);
+  // `amount` is in the from-account's currency; convert it to the to-account's
+  // currency for the incoming leg (no-op when the currencies match).
+  const conv = await convertToBase(exec, amount, fromCurrency, toCurrency, date);
+  const toAmount = conv.amountBase;
   const tgId = newId('tg');
   await exec(
     'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, date, amount, String(from.currency), String(to.currency), 1, note],
+    [tgId, ledgerId, date, amount, fromCurrency, toCurrency, conv.rate, note],
   );
   await insertTxRow(exec, {
     ledgerId, accountId: fromId, date, amount: -amount, description: `Transfer to ${String(to.name)}`,
-    balanceAfter: r2(Number(from.current_balance) - amount), currency: String(from.currency), transferGroupId: tgId, note,
+    balanceAfter: r2(Number(from.current_balance) - amount), currency: fromCurrency, transferGroupId: tgId, note,
   });
   await insertTxRow(exec, {
-    ledgerId, accountId: toId, date, amount, description: `Transfer from ${String(from.name)}`,
-    balanceAfter: r2(Number(to.current_balance) + amount), currency: String(to.currency), transferGroupId: tgId, note,
+    ledgerId, accountId: toId, date, amount: toAmount, description: `Transfer from ${String(from.name)}`,
+    balanceAfter: r2(Number(to.current_balance) + toAmount), currency: toCurrency, transferGroupId: tgId, note,
   });
 }
 
