@@ -4,6 +4,9 @@ import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
+import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { CategoryRow } from '@/lib/db/queries/categories';
+import type { Counterparty } from '@/lib/db/queries/counterparties';
 
 export interface Tx {
   id: string;
@@ -89,6 +92,10 @@ interface FinanceState {
   accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
+  // Reference / derived data projected from the server DB (read-only mirror).
+  accounts: AccountRow[];
+  categories: CategoryRow[];
+  counterparties: Counterparty[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -126,6 +133,9 @@ export const useFinanceStore = create<FinanceState>()(
       accountOverrides: {},
       verifiedExtra: [],
       aliasExtra: {},
+      accounts: [],
+      categories: [],
+      counterparties: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;

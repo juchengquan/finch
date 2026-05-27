@@ -1,4 +1,7 @@
 import type { Tx, PendingItem, RecurringTemplate, AccountOverride } from '@/lib/store';
+import type { AccountRow } from './queries/accounts';
+import type { CategoryRow } from './queries/categories';
+import type { Counterparty } from './queries/counterparties';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -16,4 +19,12 @@ export interface PersistState {
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
   recurring: RecurringTemplate[];
+}
+
+// What the server projects to the client: persisted slices + reference/derived
+// data the read screens need (account balances, categories, merchants).
+export interface ProjectedState extends PersistState {
+  accounts: AccountRow[];
+  categories: CategoryRow[];
+  counterparties: Counterparty[];
 }

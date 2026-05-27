@@ -49,6 +49,16 @@ test('store state round-trips through the relational schema', async () => {
   expect(loaded.recurring[0].splits?.[0].pct).toBe(60);
 });
 
+test('projected state carries accounts / categories / counterparties', async () => {
+  const bytes = await serializeState(sample);
+  const loaded = await deserializeState(bytes);
+  expect(loaded.accounts.length).toBe(6);
+  expect(loaded.accounts.find((a) => a.id === 'cc')?.name).toBe('Amex Gold');
+  expect(typeof loaded.accounts[0].balance).toBe('number');
+  expect(loaded.categories.length).toBe(12);
+  expect(loaded.counterparties.length).toBeGreaterThan(0);
+});
+
 test('account balance reflects the live transaction set (not just the seed)', async () => {
   const { applySchema } = await import('@/lib/db/schema');
   const { buildState } = await import('@/lib/db/state');
