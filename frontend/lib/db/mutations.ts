@@ -54,6 +54,73 @@ async function resetDb(exec: Exec): Promise<void> {
 
 type Args = Record<string, unknown>;
 const str = (v: unknown) => String(v);
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+// Insert one transaction row directly (used for transfers, which carry a
+// transfer_group_id and need an explicit balance_after).
+async function insertTxRow(
+  exec: Exec,
+  row: {
+    ledgerId: string;
+    accountId: string;
+    date: string;
+    amount: number;
+    description: string;
+    balanceAfter: number;
+    currency: string;
+    transferGroupId: string | null;
+    note: string | null;
+  },
+): Promise<void> {
+  const ts = new Date().toISOString();
+  await exec(
+    `INSERT INTO transactions
+      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
+       description,category_id,counterparty_id,transfer_group_id,status,confirmed_at,
+       balance_after,currency,notes,recurring,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, row.amount, 1, row.date,
+      row.description, null, null, row.transferGroupId, 'confirmed', ts,
+      row.balanceAfter, row.currency, row.note, 0, ts,
+    ],
+  );
+}
+
+// Create a transfer: a transfer_group plus two confirmed transactions (out/in)
+// that share its id, so it moves both account balances and shows in Activity.
+async function createTransfer(exec: Exec, args: Args): Promise<void> {
+  const fromId = str(args.fromAccountId);
+  const toId = str(args.toAccountId);
+  const amount = Math.abs(Number(args.amount));
+  const date = str(args.date);
+  const note = args.note ? str(args.note) : null;
+  if (!amount) throw new Error('Transfer amount must be greater than 0');
+  if (fromId === toId) throw new Error('Pick two different accounts');
+
+  const [from] = await exec('SELECT ledger_id, currency, current_balance, name FROM accounts WHERE id = ?', [fromId]);
+  const [to] = await exec('SELECT currency, current_balance, name FROM accounts WHERE id = ?', [toId]);
+  if (!from || !to) throw new Error('Account not found');
+
+  const ledgerId = String(from.ledger_id);
+  const tgId = newId('tg');
+  await exec(
+    'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
+    [tgId, ledgerId, date, amount, String(from.currency), String(to.currency), 1, note],
+  );
+  await insertTxRow(exec, {
+    ledgerId, accountId: fromId, date, amount: -amount, description: `Transfer to ${String(to.name)}`,
+    balanceAfter: r2(Number(from.current_balance) - amount), currency: String(from.currency), transferGroupId: tgId, note,
+  });
+  await insertTxRow(exec, {
+    ledgerId, accountId: toId, date, amount, description: `Transfer from ${String(from.name)}`,
+    balanceAfter: r2(Number(to.current_balance) + amount), currency: String(to.currency), transferGroupId: tgId, note,
+  });
+}
 
 export async function applyMutation(exec: Exec, action: string, args: Args): Promise<void> {
   switch (action) {
@@ -109,6 +176,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await setJson(exec, 'aliasExtra', a);
       return;
     }
+    case 'createTransfer':
+      await createTransfer(exec, args);
+      return;
     case 'reset':
       await resetDb(exec);
       return;

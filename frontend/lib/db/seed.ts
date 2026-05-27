@@ -158,7 +158,7 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           t.id, ledgerId, t.account, t.date, t.time ?? null, t.amount, t.amount, 1, t.date,
-          t.merchant, t.category, null, null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
+          t.merchant, t.category, null, t.transferGroupId ?? null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
           Math.round(running * 100) / 100, baseOf(ledgerId), t.note || null, t.recurring ? 1 : 0, SEED_TS,
         ],
       );
