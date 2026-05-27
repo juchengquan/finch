@@ -364,3 +364,57 @@ test('updateRecurring and updateCounterparty edit fields', async () => {
   expect(String(cp.standardized_name)).toBe('Renamed Co');
   expect(String(cp.category)).toBe('shop');
 });
+
+test('setBudget upserts the budgets table; deleteBudget removes it', async () => {
+  const exec = await seeded();
+  const { budgetByCategory } = await import('@/lib/db/queries/budgets');
+  expect((await budgetByCategory(exec)).food).toBe(700); // seeded
+
+  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: 950 });
+  expect((await budgetByCategory(exec)).food).toBe(950);
+  expect(Number((await exec("SELECT amount FROM budgets WHERE id = 'bud-food'"))[0].amount)).toBe(950);
+
+  // Insert path: a category created without a budget gets a new row.
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel' });
+  const travelId = String((await exec("SELECT id FROM categories WHERE name = 'Travel'"))[0].id);
+  await applyMutation(exec, 'setBudget', { categoryId: travelId, amount: 300 });
+  expect((await budgetByCategory(exec))[travelId]).toBe(300);
+
+  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: -5 }).then(
+    () => { throw new Error('should reject'); },
+    () => {},
+  );
+
+  await applyMutation(exec, 'deleteBudget', { categoryId: 'food' });
+  expect((await budgetByCategory(exec)).food).toBeUndefined();
+});
+
+test('updateTransfer rewrites both legs and recomputes balances', async () => {
+  const exec = await seeded();
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27', note: 'a' });
+  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
+  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { amount: 350, date: '2026-05-28', note: 'updated' } });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 350, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 350, 2);
+  const legs = await exec('SELECT date, notes FROM transactions WHERE transfer_group_id = ?', [groupId]);
+  expect(legs.every((l) => l.date === '2026-05-28' && l.notes === 'updated')).toBe(true);
+});
+
+test('scheduled items create / update / delete', async () => {
+  const exec = await seeded();
+  const { listScheduledItems } = await import('@/lib/db/queries/planning');
+  await applyMutation(exec, 'createScheduledItem', { id: 'sch-x', ledgerId: 'personal', day: 12, month: 'Jul', label: 'Insurance', amount: -120, type: 'Bill', color: '#abc' });
+  let item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
+  expect(item.label).toBe('Insurance');
+  expect(item.amount).toBeCloseTo(-120, 2);
+
+  await applyMutation(exec, 'updateScheduledItem', { id: 'sch-x', patch: { label: 'Car Insurance', amount: -130, day: 15 } });
+  item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
+  expect(item.label).toBe('Car Insurance');
+  expect(item.day).toBe(15);
+
+  await applyMutation(exec, 'deleteScheduledItem', { id: 'sch-x' });
+  expect((await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')).toBeUndefined();
+});

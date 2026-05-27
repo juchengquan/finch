@@ -29,14 +29,16 @@ export default function BudgetDetailPage() {
   const id = params.id as string;
   const cat = MOCK.categories.find((c) => c.id === id) ?? MOCK.categories[0];
   const allTxns = useFinanceStore((s) => s.transactions);
-  const budgetOverrides = useFinanceStore((s) => s.budgetOverrides);
+  const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
   const setBudget = useFinanceStore((s) => s.setBudget);
+  const deleteBudget = useFinanceStore((s) => s.deleteBudget);
   const { openTransaction } = useTransactionSheet();
 
   const catLedger = (cat as { ledger?: string }).ledger ?? 'personal';
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === catLedger);
   const txns = ledgerTxns.filter((t) => t.category === cat.id);
-  const budget = budgetOverrides[cat.id] ?? cat.budget;
+  const hasBudget = budgetByCategory[cat.id] != null;
+  const budget = budgetByCategory[cat.id] ?? cat.budget;
 
   // Confirmed expense for this category, from the projected store state.
   const spent = categorySpend(allTxns, catLedger, currentMonth(allTxns, catLedger))[cat.id] ?? 0;
@@ -52,6 +54,11 @@ export default function BudgetDetailPage() {
       setBudget(cat.id, value);
       toast.success('Budget updated', { description: `${cat.name} · ${value.toLocaleString()}` });
     }
+  };
+
+  const removeBudget = () => {
+    deleteBudget(cat.id);
+    toast.success('Budget removed', { description: cat.name });
   };
 
   return (
@@ -104,7 +111,7 @@ export default function BudgetDetailPage() {
                 </>
               )}
             </div>
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-2">
               <Dialog onOpenChange={(open) => open && setDraft(String(budget))}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -137,6 +144,12 @@ export default function BudgetDetailPage() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              {hasBudget && (
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={removeBudget}>
+                  <Icon name="trash" size={14} />
+                  Remove
+                </Button>
+              )}
             </div>
           </div>
         </div>

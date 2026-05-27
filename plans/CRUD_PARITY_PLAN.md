@@ -215,8 +215,18 @@ edit/cancel.)
    categories/goals/subscriptions and an Edit dialog on the recurring detail page
    (with an icon + hue picker for categories). Tags/merchants edit mutations are
    ready but unwired pending their UI surfaces (same as Phase 3).
-5. **Budgets onto the table** (retire `budgetOverrides`); **Scheduled** CRUD;
-   **Transfers** edit.
+5. ✅ **Budgets onto the table** (retired `budgetOverrides`): `setBudget` upserts a
+   per-category `bud-<id>` row, `deleteBudget` removes it, and the budget amount is
+   now projected as a `budgetByCategory` map (read by the budgets list/detail +
+   insights). **Scheduled** CRUD (`createScheduledItem`/`updateScheduledItem`/
+   `deleteScheduledItem` + an editor dialog and per-row `<RowActions>`).
+   **Transfers** edit (`updateTransfer` scales both legs proportionally + recomputes
+   both accounts; edit dialog on the list).
+
+Remaining follow-ups (not yet scheduled): a **tags** management screen and moving
+the **merchants** list onto the projection — both would let the already-built
+delete/edit mutations get a UI. Recurring/merchant **create** (createRecurring,
+createCounterparty) from §5 are also still open.
 
 ## 8. Risks
 

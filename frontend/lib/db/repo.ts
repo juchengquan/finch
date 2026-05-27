@@ -17,7 +17,6 @@ export type Exec = (sql: string, bind?: SqlBind) => Promise<Row[]>;
 // (mirrors the Zustand store).
 export interface PersistState {
   transactions: Tx[];
-  budgetOverrides: Record<string, number>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
 }
@@ -26,6 +25,7 @@ export interface PersistState {
 // data the read screens need (account balances, categories, merchants).
 export interface ProjectedState extends PersistState {
   accounts: AccountRow[];
+  budgetByCategory: Record<string, number>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];

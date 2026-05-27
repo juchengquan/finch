@@ -15,10 +15,19 @@ import {
 } from './queries/accounts';
 import { deleteGoal as qDeleteGoal, updateGoal as qUpdateGoal, type GoalPatch } from './queries/goals';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
-import { deleteSubscription as qDeleteSubscription, updateSubscription as qUpdateSubscription, type SubscriptionPatch } from './queries/planning';
+import {
+  deleteSubscription as qDeleteSubscription,
+  updateSubscription as qUpdateSubscription,
+  type SubscriptionPatch,
+  createScheduledItem as qCreateScheduledItem,
+  updateScheduledItem as qUpdateScheduledItem,
+  deleteScheduledItem as qDeleteScheduledItem,
+  type ScheduledItemPatch,
+} from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
 import { deleteCounterparty as qDeleteCounterparty, updateCounterparty as qUpdateCounterparty, type CounterpartyPatch } from './queries/counterparties';
-import { deleteTransfer as qDeleteTransfer } from './queries/transfers';
+import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
+import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -246,11 +255,14 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       ]);
       return;
     case 'setBudget': {
-      const bo = await getJson<Record<string, number>>(exec, 'budgetOverrides', {});
-      bo[str(args.categoryId)] = Number(args.amount);
-      await setJson(exec, 'budgetOverrides', bo);
+      const amount = Number(args.amount);
+      if (!(amount > 0)) throw new Error('Budget must be greater than 0');
+      await qSetCategoryBudget(exec, str(args.categoryId), amount);
       return;
     }
+    case 'deleteBudget':
+      await qDeleteCategoryBudget(exec, str(args.categoryId));
+      return;
     case 'createAccount': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();
@@ -307,6 +319,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'createTransfer':
       await createTransfer(exec, args);
+      return;
+    case 'updateTransfer':
+      await qUpdateTransfer(exec, str(args.id), (args.patch ?? {}) as Parameters<typeof qUpdateTransfer>[2]);
       return;
     case 'createCategory': {
       const ledgerId = str(args.ledgerId || 'personal');
@@ -435,6 +450,30 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'deleteCounterparty':
       await qDeleteCounterparty(exec, str(args.id));
+      return;
+    case 'createScheduledItem': {
+      const label = str(args.label).trim();
+      if (!label) throw new Error('Label is required');
+      await qCreateScheduledItem(exec, {
+        id: str(args.id || newId('sch')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        day: Number(args.day) || 1,
+        month: str(args.month || 'Jan'),
+        label,
+        amount: Number(args.amount) || 0,
+        type: str(args.type || 'bill'),
+        color: args.color ? str(args.color) : null,
+      });
+      return;
+    }
+    case 'updateScheduledItem': {
+      const patch = (args.patch ?? {}) as ScheduledItemPatch;
+      if (patch.label !== undefined && !str(patch.label).trim()) throw new Error('Label is required');
+      await qUpdateScheduledItem(exec, str(args.id), patch);
+      return;
+    }
+    case 'deleteScheduledItem':
+      await qDeleteScheduledItem(exec, str(args.id));
       return;
     case 'postRecurring':
       await postRecurring(exec, args);

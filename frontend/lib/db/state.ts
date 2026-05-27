@@ -15,6 +15,7 @@ import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listCategories } from './queries/categories';
+import { budgetByCategory } from './queries/budgets';
 import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
@@ -25,14 +26,12 @@ import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
-  'budgetOverrides',
   'verifiedExtra',
   'aliasExtra',
 ] as const;
 
 export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
   const values: Record<string, unknown> = {
-    budgetOverrides: state.budgetOverrides,
     verifiedExtra: state.verifiedExtra,
     aliasExtra: state.aliasExtra,
   };
@@ -45,7 +44,6 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   const rows = await exec('SELECT key, value FROM app_state');
   const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
   return {
-    budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
     verifiedExtra: (m.get('verifiedExtra') as PersistState['verifiedExtra']) ?? [],
     aliasExtra: (m.get('aliasExtra') as PersistState['aliasExtra']) ?? {},
   };
@@ -90,9 +88,10 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
+  const [accounts, budgets, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
     await Promise.all([
       listAccounts(exec),
+      budgetByCategory(exec),
       listCategories(exec),
       listCounterparties(exec),
       listExchangeRates(exec),
@@ -112,6 +111,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     transactions,
     ...rest,
     accounts,
+    budgetByCategory: budgets,
     categories,
     counterparties,
     exchangeRates,

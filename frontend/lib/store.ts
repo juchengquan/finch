@@ -92,11 +92,11 @@ interface FinanceState {
   transactions: Tx[];
   recurring: RecurringTemplate[];
   // Editable overrides on otherwise-static mock data, persisted.
-  budgetOverrides: Record<string, number>;
   verifiedExtra: string[];
   aliasExtra: Record<string, string[]>;
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
+  budgetByCategory: Record<string, number>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
@@ -113,6 +113,7 @@ interface FinanceState {
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
+  deleteBudget: (categoryId: string) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
@@ -137,7 +138,11 @@ interface FinanceState {
   deleteSubscription: (id: string) => void;
   updateRecurring: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; autoPost?: number }) => void;
   deleteRecurring: (id: string) => void;
+  updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
+  createScheduledItem: (input: { label: string; amount: number; day: number; month: string; type?: string; color?: string; ledgerId?: string }) => void;
+  updateScheduledItem: (id: string, patch: { day?: number; month?: string; label?: string; amount?: number; type?: string; color?: string | null }) => void;
+  deleteScheduledItem: (id: string) => void;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
   deleteCounterparty: (id: string) => void;
   reset: () => void;
@@ -159,10 +164,10 @@ export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
-      budgetOverrides: {},
       verifiedExtra: [],
       aliasExtra: {},
       accounts: [],
+      budgetByCategory: {},
       categories: [],
       counterparties: [],
       exchangeRates: [],
@@ -222,8 +227,17 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       setBudget: (categoryId, amount) => {
-        set((s) => ({ budgetOverrides: { ...s.budgetOverrides, [categoryId]: amount } }));
+        set((s) => ({ budgetByCategory: { ...s.budgetByCategory, [categoryId]: amount } }));
         syncMutation('setBudget', { categoryId, amount });
+      },
+
+      deleteBudget: (categoryId) => {
+        set((s) => {
+          const next = { ...s.budgetByCategory };
+          delete next[categoryId];
+          return { budgetByCategory: next };
+        });
+        syncMutation('deleteBudget', { categoryId });
       },
 
       createAccount: (input) => {
@@ -393,10 +407,35 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteRecurring', { id });
       },
 
+      updateTransfer: (id, patch) => {
+        // Both legs are rewritten + balances recomputed server-side; adopt the
+        // server's re-projection rather than re-deriving the legs client-side.
+        syncMutation('updateTransfer', { id, patch });
+      },
+
       deleteTransfer: (id) => {
         // A transfer is two transactions sharing a group id; drop both optimistically.
         set((s) => ({ transactions: s.transactions.filter((t) => t.transferGroupId !== id) }));
         syncMutation('deleteTransfer', { id });
+      },
+
+      createScheduledItem: (input) => {
+        const id = `sch-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const type = input.type ?? 'bill';
+        const color = input.color ?? null;
+        set((s) => ({ scheduledItems: [...s.scheduledItems, { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color }] }));
+        syncMutation('createScheduledItem', { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color });
+      },
+
+      updateScheduledItem: (id, patch) => {
+        set((s) => ({ scheduledItems: s.scheduledItems.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+        syncMutation('updateScheduledItem', { id, patch });
+      },
+
+      deleteScheduledItem: (id) => {
+        set((s) => ({ scheduledItems: s.scheduledItems.filter((x) => x.id !== id) }));
+        syncMutation('deleteScheduledItem', { id });
       },
 
       updateCounterparty: (id, patch) => {
@@ -413,7 +452,6 @@ export const useFinanceStore = create<FinanceState>()(
         set({
           transactions: SEED_TX,
           recurring: SEED_RECURRING,
-          budgetOverrides: {},
           verifiedExtra: [],
           aliasExtra: {},
         });

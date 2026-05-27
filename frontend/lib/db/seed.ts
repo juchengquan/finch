@@ -291,7 +291,6 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
 /** Seed the transitional store slices (empty override maps + alias/verify extras). */
 export async function seedAppStateDefaults(exec: Exec): Promise<void> {
   const entries: [string, unknown][] = [
-    ['budgetOverrides', {}],
     ['verifiedExtra', []],
     ['aliasExtra', {}],
   ];

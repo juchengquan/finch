@@ -35,6 +35,7 @@ type Option = { id: string; name: string };
 export default function TransfersPage() {
   const { active, activeId } = useLedger();
   const createTransfer = useFinanceStore((s) => s.createTransfer);
+  const updateTransfer = useFinanceStore((s) => s.updateTransfer);
   const deleteTransfer = useFinanceStore((s) => s.deleteTransfer);
   const allTxns = useFinanceStore((s) => s.transactions);
   const accountRows = useFinanceStore((s) => s.accounts);
@@ -48,6 +49,16 @@ export default function TransfersPage() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [editing, setEditing] = useState<{ id: string; amount: string; date: string; note: string } | null>(null);
+
+  const submitEdit = () => {
+    if (!editing) return;
+    const value = parseFloat(editing.amount);
+    if (!value || value <= 0) return void toast.error('Enter an amount');
+    updateTransfer(editing.id, { amount: value, date: editing.date, note: editing.note.trim() || null });
+    toast.success('Transfer updated');
+    setEditing(null);
+  };
 
   // Default the from/to selects to the first two accounts once they're loaded.
   if (accounts.length && !accounts.some((a) => a.id === from)) setFrom(accounts[0].id);
@@ -155,6 +166,7 @@ export default function TransfersPage() {
               </div>
             </div>
             <RowActions
+              onEdit={() => setEditing({ id: tg.id, amount: String(tg.amount), date: tg.date, note: tg.note ?? '' })}
               onDelete={() => { deleteTransfer(tg.id); toast.success('Transfer deleted'); }}
               confirmTitle="Delete this transfer?"
               confirmDescription={`Removes both legs (${tg.fromName ?? '—'} → ${tg.toName ?? '—'}) and restores the account balances.`}
@@ -162,6 +174,37 @@ export default function TransfersPage() {
           </div>
         ))}
       </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit transfer</DialogTitle>
+            <DialogDescription>Adjust the amount, date or note. Balances are recomputed.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Amount</Label>
+                <Input type="number" inputMode="decimal" value={editing.amount} onChange={(e) => setEditing((p) => (p ? { ...p, amount: e.target.value } : p))} autoFocus />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Date</Label>
+                <Input type="date" value={editing.date} onChange={(e) => setEditing((p) => (p ? { ...p, date: e.target.value } : p))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Note (optional)</Label>
+                <Input value={editing.note} onChange={(e) => setEditing((p) => (p ? { ...p, note: e.target.value } : p))} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }
