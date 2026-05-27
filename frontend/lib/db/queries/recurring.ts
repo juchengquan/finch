@@ -96,6 +96,31 @@ export async function createRecurring(exec: Exec, t: NewRecurring): Promise<void
   );
 }
 
+/** Append a split (referenced by account name) and mark the template split-enabled. */
+export async function addRecurringSplit(exec: Exec, templateId: string, account: string, pct: number): Promise<void> {
+  const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM recurring_splits WHERE template_id = ?', [templateId]);
+  const sort = Number(rows[0]?.n ?? 0);
+  const id = `${templateId}-s${sort}-${Math.random().toString(36).slice(2, 8)}`;
+  await exec(
+    'INSERT INTO recurring_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,category_id,description,sort_order) VALUES (?,?,NULL,?,?,NULL,NULL,NULL,?)',
+    [id, templateId, account, pct, sort],
+  );
+  await exec("UPDATE recurring_templates SET splits_enabled = 1, updated_at = datetime('now') WHERE id = ?", [templateId]);
+}
+
+/** Remove the nth split (by sort order); clears split-enabled when none remain. */
+export async function removeRecurringSplit(exec: Exec, templateId: string, index: number): Promise<void> {
+  await exec(
+    `DELETE FROM recurring_splits
+      WHERE id = (SELECT id FROM recurring_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
+    [templateId, index],
+  );
+  const rows = await exec('SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = ?', [templateId]);
+  if (Number(rows[0]?.n ?? 0) === 0) {
+    await exec("UPDATE recurring_templates SET splits_enabled = 0, updated_at = datetime('now') WHERE id = ?", [templateId]);
+  }
+}
+
 /** Hard delete a recurring template; recurring_splits cascade away via the FK. */
 export async function deleteRecurring(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM recurring_templates WHERE id = ?', [id]);

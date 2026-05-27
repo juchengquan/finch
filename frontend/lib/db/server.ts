@@ -94,3 +94,11 @@ export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<Proj
   await db.persist();
   return projectState(db.exec);
 }
+
+/** Current bytes of the authoritative DB file (for the download backup). */
+export async function exportDbBytes(): Promise<Uint8Array> {
+  const db = await getServerDb();
+  await db.persist(); // flush in-memory state to the file so the copy is current
+  const buf = await fs.readFile(db.file);
+  return new Uint8Array(buf);
+}
