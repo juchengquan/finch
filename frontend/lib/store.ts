@@ -9,6 +9,7 @@ import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 import type { Goal } from '@/lib/db/queries/goals';
+import type { Tag } from '@/lib/db/queries/tags';
 
 export interface Tx {
   id: string;
@@ -28,6 +29,7 @@ export interface Tx {
   kind?: string;
   ledgerId?: string;
   transferGroupId?: string;
+  tags?: string[];
 }
 
 export interface TransferInput {
@@ -101,6 +103,7 @@ interface FinanceState {
   exchangeRates: ExchangeRate[];
   devices: Device[];
   goals: Goal[];
+  tags: Tag[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -118,6 +121,8 @@ interface FinanceState {
   renameCategory: (id: string, name: string) => void;
   createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
   contributeGoal: (id: string, amount: number) => void;
+  createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
+  setTransactionTags: (transactionId: string, tagIds: string[]) => void;
   reset: () => void;
 }
 
@@ -148,6 +153,7 @@ export const useFinanceStore = create<FinanceState>()(
       exchangeRates: [],
       devices: [],
       goals: [],
+      tags: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -268,6 +274,22 @@ export const useFinanceStore = create<FinanceState>()(
       contributeGoal: (id, amount) => {
         set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
         syncMutation('contributeGoal', { id, amount });
+      },
+
+      createTag: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `tag-${Date.now().toString(36)}`;
+        const color = input.color ?? null;
+        set((s) => ({ tags: [...s.tags, { id, ledgerId, name: input.name, color }] }));
+        syncMutation('createTag', { id, ledgerId, name: input.name, color });
+        return id;
+      },
+
+      setTransactionTags: (transactionId, tagIds) => {
+        set((s) => ({
+          transactions: s.transactions.map((t) => (t.id === transactionId ? { ...t, tags: tagIds } : t)),
+        }));
+        syncMutation('setTransactionTags', { id: transactionId, tagIds });
       },
 
       reset: () => {

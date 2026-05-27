@@ -11,13 +11,14 @@
 
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
 import { applySchema } from './schema';
-import { seedReference, insertTransactions } from './seed';
+import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listCategories } from './queries/categories';
 import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
+import { listTags, transactionTagMap } from './queries/tags';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
@@ -81,6 +82,7 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
   try {
     await seedReference(exec);
     await insertTransactions(exec, state.transactions);
+    await seedTransactionTags(exec);
     await applyCounterpartyOverrides(exec, state.verifiedExtra, state.aliasExtra);
     await writeAppState(exec, state);
     await exec('COMMIT');
@@ -95,15 +97,21 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
   const rest = await readAppState(exec);
-  const [accounts, categories, counterparties, exchangeRates, devices, goals] = await Promise.all([
+  const [accounts, categories, counterparties, exchangeRates, devices, goals, tags, tagMap] = await Promise.all([
     listAccounts(exec),
     listCategories(exec),
     listCounterparties(exec),
     listExchangeRates(exec),
     listDevices(exec),
     listGoals(exec),
+    listTags(exec),
+    transactionTagMap(exec),
   ]);
-  return { transactions, ...rest, accounts, categories, counterparties, exchangeRates, devices, goals };
+  for (const t of transactions) {
+    const ids = tagMap[t.id];
+    if (ids) t.tags = ids;
+  }
+  return { transactions, ...rest, accounts, categories, counterparties, exchangeRates, devices, goals, tags };
 }
 
 /** Serialise store state into portable relational `.db` bytes. */

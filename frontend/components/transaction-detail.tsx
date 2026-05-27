@@ -111,8 +111,12 @@ export function TransactionDetail({ txId }: { txId: string }) {
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const storeCats = useFinanceStore((s) => s.categories);
+  const storeTags = useFinanceStore((s) => s.tags);
+  const createTag = useFinanceStore((s) => s.createTag);
+  const setTransactionTags = useFinanceStore((s) => s.setTransactionTags);
   const [splitAmt, setSplitAmt] = useState('');
   const [splitCat, setSplitCat] = useState(MOCK.categories[0].id);
+  const [newTag, setNewTag] = useState('');
 
   // Category options come from the projected store, scoped to this tx's ledger.
   const ledgerId = tx?.ledgerId ?? 'personal';
@@ -296,6 +300,76 @@ export function TransactionDetail({ txId }: { txId: string }) {
           </div>
         ))}
       </div>
+
+      {(() => {
+        const ledgerTags = storeTags.filter((t) => t.ledgerId === ledgerId);
+        const applied = tx.tags ?? [];
+        const available = ledgerTags.filter((t) => !applied.includes(t.id));
+        const tagById = new Map(ledgerTags.map((t) => [t.id, t]));
+        const addTag = (id: string) => setTransactionTags(tx.id, [...applied, id]);
+        const removeTag = (id: string) => setTransactionTags(tx.id, applied.filter((x) => x !== id));
+        const submitNewTag = () => {
+          const n = newTag.trim();
+          if (!n) return;
+          const id = createTag({ name: n, ledgerId });
+          setTransactionTags(tx.id, [...applied, id]);
+          setNewTag('');
+        };
+        return (
+          <div className="mt-4">
+            <div className="text-muted-foreground mb-2 px-1 font-mono text-[10px] tracking-wider uppercase">Tags</div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {applied.map((id) => {
+                const t = tagById.get(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => removeTag(id)}
+                    className="bg-secondary text-secondary-foreground flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px]"
+                    style={t?.color ? { color: `oklch(0.55 0.15 ${t.color})` } : undefined}
+                  >
+                    {t?.name ?? id}
+                    <Icon name="x" size={11} />
+                  </button>
+                );
+              })}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground rounded-lg border border-dashed px-2.5 py-1 text-[11px]"
+                  >
+                    + tag
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {available.map((t) => (
+                    <DropdownMenuItem key={t.id} onSelect={() => addTag(t.id)}>
+                      {t.name}
+                    </DropdownMenuItem>
+                  ))}
+                  {available.length === 0 && (
+                    <div className="text-muted-foreground px-2 py-1.5 text-[11px]">All tags applied</div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <Input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitNewTag()}
+                placeholder="New tag…"
+                className="h-7 w-36 text-[11px]"
+              />
+              <Button size="sm" variant="outline" className="h-7" onClick={submitNewTag}>
+                Create
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

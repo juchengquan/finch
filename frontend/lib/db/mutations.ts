@@ -11,7 +11,7 @@ import {
   cancelTransaction as qCancel,
   type AddInput,
 } from './queries/transactions';
-import { seedReference, insertTransactions, seedAppStateDefaults } from './seed';
+import { seedReference, insertTransactions, seedAppStateDefaults, seedTransactionTags } from './seed';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
 
@@ -36,6 +36,7 @@ const RESET_TABLES = [
   'ledger_summaries',
   'goals',
   'sync_log',
+  'tags',
   'budgets',
   'transfer_groups',
   'counterparties',
@@ -51,6 +52,7 @@ async function resetDb(exec: Exec): Promise<void> {
   for (const t of RESET_TABLES) await exec(`DELETE FROM ${t}`);
   await seedReference(exec);
   await insertTransactions(exec, transactionsData as Tx[]);
+  await seedTransactionTags(exec);
   await seedAppStateDefaults(exec);
 }
 
@@ -288,6 +290,23 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const amount = Number(args.amount);
       if (!Number.isFinite(amount)) throw new Error('Invalid contribution amount');
       await exec('UPDATE goals SET saved = MAX(0, saved + ?) WHERE id = ?', [amount, str(args.id)]);
+      return;
+    }
+    case 'createTag': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Tag name is required');
+      await exec('INSERT INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
+        args.id ? str(args.id) : newId('tag'), str(args.ledgerId || 'personal'), name, args.color ? str(args.color) : null,
+      ]);
+      return;
+    }
+    case 'setTransactionTags': {
+      const txId = str(args.id);
+      const tagIds = Array.isArray(args.tagIds) ? (args.tagIds as unknown[]).map(str) : [];
+      await exec('DELETE FROM transaction_tags WHERE transaction_id = ?', [txId]);
+      for (const tagId of tagIds) {
+        await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
+      }
       return;
     }
     case 'postRecurring':

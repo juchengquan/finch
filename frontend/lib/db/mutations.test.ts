@@ -145,3 +145,21 @@ test('createGoal rejects empty name or non-positive target', async () => {
   await expect(applyMutation(exec, 'createGoal', { name: '', target: 100 })).rejects.toThrow();
   await expect(applyMutation(exec, 'createGoal', { name: 'X', target: 0 })).rejects.toThrow();
 });
+
+test('createTag + setTransactionTags replace the tag set', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createTag', { id: 'tag-new', ledgerId: 'personal', name: 'Trip' });
+  await applyMutation(exec, 'setTransactionTags', { id: 't02', tagIds: ['tag-new', 'tag-business'] });
+  const rows = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't02' ORDER BY tag_id");
+  expect(rows.map((r) => String(r.tag_id))).toEqual(['tag-business', 'tag-new']);
+  // Replacing with a smaller set removes the others.
+  await applyMutation(exec, 'setTransactionTags', { id: 't02', tagIds: ['tag-new'] });
+  const after = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't02'");
+  expect(after.map((r) => String(r.tag_id))).toEqual(['tag-new']);
+});
+
+test('seeded tag assignments are projected onto transactions', async () => {
+  const exec = await seeded();
+  const map = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't03' ORDER BY tag_id");
+  expect(map.length).toBe(2);
+});

@@ -19,6 +19,7 @@ import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import devicesData from '@/data/devices.json';
 import goalsData from '@/data/goals.json';
+import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
@@ -148,6 +149,27 @@ export async function seedReference(exec: Exec): Promise<void> {
       [g.id, g.ledger ?? 'personal', g.name, g.target, g.saved ?? 0, g.eta ?? null, g.hue ?? 200, i, SEED_TS],
     );
   }
+
+  type TagSeed = { id: string; name: string; color?: string; ledger?: string };
+  for (const t of (tagsData as { tags: TagSeed[] }).tags) {
+    await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
+      t.id, t.ledger ?? 'personal', t.name, t.color ?? null,
+    ]);
+  }
+}
+
+/** Seed the static tag→transaction assignments. Must run after transactions
+ *  exist; OR IGNORE skips rows whose transaction is absent. */
+export async function seedTransactionTags(exec: Exec): Promise<void> {
+  type Assign = { transactionId: string; tagId: string };
+  for (const a of (tagsData as { assignments: Assign[] }).assignments) {
+    // Guard the FK: OR IGNORE does not suppress foreign-key violations, and
+    // buildState may rebuild from a transaction set that lacks these seed ids.
+    await exec(
+      'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM transactions WHERE id = ?)',
+      [a.transactionId, a.tagId, a.transactionId],
+    );
+  }
 }
 
 /**
@@ -207,6 +229,7 @@ export async function seedDatabase(exec: Exec): Promise<void> {
   try {
     await seedReference(exec);
     await insertTransactions(exec, transactionsData as Tx[]);
+    await seedTransactionTags(exec);
     await seedAppStateDefaults(exec);
     await exec('COMMIT');
   } catch (err) {
