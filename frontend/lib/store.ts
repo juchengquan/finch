@@ -122,11 +122,18 @@ interface FinanceState {
   createTransfer: (input: TransferInput) => void;
   createCategory: (input: { name: string; type?: string; icon?: string; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
+  deleteCategory: (id: string) => void;
   createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
   contributeGoal: (id: string, amount: number) => void;
+  deleteGoal: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  deleteTag: (id: string) => void;
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
+  deleteSubscription: (id: string) => void;
+  deleteRecurring: (id: string) => void;
+  deleteTransfer: (id: string) => void;
+  deleteCounterparty: (id: string) => void;
   reset: () => void;
 }
 
@@ -284,6 +291,11 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('renameCategory', { id, name });
       },
 
+      deleteCategory: (id) => {
+        set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
+        syncMutation('deleteCategory', { id });
+      },
+
       createGoal: (input) => {
         const ledgerId = input.ledgerId ?? 'personal';
         const id = `goal-${Date.now().toString(36)}`;
@@ -297,6 +309,11 @@ export const useFinanceStore = create<FinanceState>()(
       contributeGoal: (id, amount) => {
         set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
         syncMutation('contributeGoal', { id, amount });
+      },
+
+      deleteGoal: (id) => {
+        set((s) => ({ goals: s.goals.filter((g) => g.id !== id) }));
+        syncMutation('deleteGoal', { id });
       },
 
       createTag: (input) => {
@@ -315,6 +332,14 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('setTransactionTags', { id: transactionId, tagIds });
       },
 
+      deleteTag: (id) => {
+        set((s) => ({
+          tags: s.tags.filter((t) => t.id !== id),
+          transactions: s.transactions.map((t) => (t.tags ? { ...t, tags: t.tags.filter((x) => x !== id) } : t)),
+        }));
+        syncMutation('deleteTag', { id });
+      },
+
       createSubscription: (input) => {
         const ledgerId = input.ledgerId ?? 'personal';
         const id = `sub-${Date.now().toString(36)}`;
@@ -324,6 +349,27 @@ export const useFinanceStore = create<FinanceState>()(
           subscriptions: [...s.subscriptions, { id, ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue }],
         }));
         syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
+      },
+
+      deleteSubscription: (id) => {
+        set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
+        syncMutation('deleteSubscription', { id });
+      },
+
+      deleteRecurring: (id) => {
+        set((s) => ({ recurring: s.recurring.filter((t) => t.id !== id) }));
+        syncMutation('deleteRecurring', { id });
+      },
+
+      deleteTransfer: (id) => {
+        // A transfer is two transactions sharing a group id; drop both optimistically.
+        set((s) => ({ transactions: s.transactions.filter((t) => t.transferGroupId !== id) }));
+        syncMutation('deleteTransfer', { id });
+      },
+
+      deleteCounterparty: (id) => {
+        set((s) => ({ counterparties: s.counterparties.filter((c) => c.id !== id) }));
+        syncMutation('deleteCounterparty', { id });
       },
 
       reset: () => {

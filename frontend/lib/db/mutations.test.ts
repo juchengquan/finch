@@ -235,3 +235,64 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
   expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
   expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
 });
+
+test('deleteCategory uncategorizes its transactions', async () => {
+  const exec = await seeded();
+  const before = Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n);
+  expect(before).toBe(1);
+  const tagged = Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n);
+  expect(tagged).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteCategory', { id: 'food' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n)).toBe(0);
+  // FK is SET NULL: those transactions survive but become uncategorized.
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n)).toBe(0);
+});
+
+test('deleteTag drops the tag and its assignments', async () => {
+  const exec = await seeded();
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteTag', { id: 'tag-business' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM tags WHERE id = 'tag-business'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBe(0);
+});
+
+test('deleteRecurring removes the template and cascades its splits', async () => {
+  const exec = await seeded();
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteRecurring', { id: 'rt-salary' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_templates WHERE id = 'rt-salary'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
+});
+
+test('deleteGoal and deleteSubscription hard-delete the row', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Boat', target: 9000 });
+  const goalId = String((await exec("SELECT id FROM goals WHERE name = 'Boat'"))[0].id);
+  await applyMutation(exec, 'deleteGoal', { id: goalId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM goals WHERE id = ?', [goalId]))[0].n)).toBe(0);
+
+  const subId = String((await exec("SELECT id FROM subscriptions LIMIT 1"))[0].id);
+  await applyMutation(exec, 'deleteSubscription', { id: subId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM subscriptions WHERE id = ?', [subId]))[0].n)).toBe(0);
+});
+
+test('deleteCounterparty removes the merchant', async () => {
+  const exec = await seeded();
+  const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
+  await applyMutation(exec, 'deleteCounterparty', { id: cpId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM counterparties WHERE id = ?', [cpId]))[0].n)).toBe(0);
+});
+
+test('deleteTransfer removes both legs and restores balances', async () => {
+  const exec = await seeded();
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27' });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 200, 2);
+  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
+  await applyMutation(exec, 'deleteTransfer', { id: groupId });
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM transactions WHERE transfer_group_id = ?', [groupId]))[0].n)).toBe(0);
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM transfer_groups WHERE id = ?', [groupId]))[0].n)).toBe(0);
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0, 2);
+});

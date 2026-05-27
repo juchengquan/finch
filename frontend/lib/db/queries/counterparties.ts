@@ -55,3 +55,8 @@ export async function addAlias(exec: Exec, id: string, alias: string): Promise<v
   if (!aliases.includes(alias)) aliases.push(alias);
   await exec('UPDATE counterparties SET aliases = ? WHERE id = ?', [JSON.stringify(aliases), id]);
 }
+
+/** Hard delete a merchant; transactions.counterparty_id becomes NULL via the FK. */
+export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM counterparties WHERE id = ?', [id]);
+}

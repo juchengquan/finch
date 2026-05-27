@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 
 export default function GoalsPage() {
@@ -25,6 +26,7 @@ export default function GoalsPage() {
   const allGoals = useFinanceStore((s) => s.goals);
   const createGoal = useFinanceStore((s) => s.createGoal);
   const contributeGoal = useFinanceStore((s) => s.contributeGoal);
+  const deleteGoal = useFinanceStore((s) => s.deleteGoal);
 
   const goals = allGoals.filter((g) => g.ledgerId === activeId);
   const saved = goals.reduce((s, g) => s + g.saved, 0);
@@ -158,6 +160,11 @@ export default function GoalsPage() {
                 <Icon name="plus" size={12} />
                 Add
               </Button>
+              <RowActions
+                onDelete={() => { deleteGoal(g.id); toast.success('Goal deleted', { description: g.name }); }}
+                confirmTitle={`Delete ${g.name}?`}
+                confirmDescription="This removes the savings goal. Your account balances are unaffected."
+              />
             </div>
           );
         })}

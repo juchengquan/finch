@@ -18,12 +18,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 
 export default function SubscriptionsPage() {
   const { active, activeId } = useLedger();
   const allSubs = useFinanceStore((s) => s.subscriptions);
   const createSubscription = useFinanceStore((s) => s.createSubscription);
+  const deleteSubscription = useFinanceStore((s) => s.deleteSubscription);
 
   const subs = allSubs.filter((s) => s.ledgerId === activeId);
   const monthly = subs.reduce((s, x) => s + x.amount, 0);
@@ -117,6 +119,11 @@ export default function SubscriptionsPage() {
                 /yr
               </div>
             </div>
+            <RowActions
+              onDelete={() => { deleteSubscription(s.id); toast.success('Subscription deleted', { description: s.name }); }}
+              confirmTitle={`Delete ${s.name}?`}
+              confirmDescription="This removes the subscription reminder. It does not cancel the service or affect past transactions."
+            />
           </div>
         ))}
       </div>

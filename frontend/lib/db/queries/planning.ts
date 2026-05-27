@@ -39,6 +39,11 @@ export async function listSubscriptions(exec: Exec, ledgerId?: string): Promise<
   }));
 }
 
+/** Hard delete a subscription (no foreign keys reference it). */
+export async function deleteSubscription(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM subscriptions WHERE id = ?', [id]);
+}
+
 export async function listScheduledItems(exec: Exec, ledgerId?: string): Promise<ScheduledItem[]> {
   const rows = await exec(
     ledgerId ? 'SELECT * FROM scheduled_items WHERE ledger_id = ?' : 'SELECT * FROM scheduled_items',

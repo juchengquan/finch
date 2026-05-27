@@ -4,7 +4,7 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import { listRecurring } from './queries/recurring';
+import { listRecurring, deleteRecurring as qDeleteRecurring } from './queries/recurring';
 import {
   recomputeForTransaction,
   createAccount as qCreateAccount,
@@ -13,6 +13,12 @@ import {
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries/accounts';
+import { deleteGoal as qDeleteGoal } from './queries/goals';
+import { deleteTag as qDeleteTag } from './queries/tags';
+import { deleteSubscription as qDeleteSubscription } from './queries/planning';
+import { deleteCategory as qDeleteCategory } from './queries/categories';
+import { deleteCounterparty as qDeleteCounterparty } from './queries/counterparties';
+import { deleteTransfer as qDeleteTransfer } from './queries/transfers';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -370,6 +376,27 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       );
       return;
     }
+    case 'deleteCategory':
+      await qDeleteCategory(exec, str(args.id));
+      return;
+    case 'deleteGoal':
+      await qDeleteGoal(exec, str(args.id));
+      return;
+    case 'deleteTag':
+      await qDeleteTag(exec, str(args.id));
+      return;
+    case 'deleteSubscription':
+      await qDeleteSubscription(exec, str(args.id));
+      return;
+    case 'deleteRecurring':
+      await qDeleteRecurring(exec, str(args.id));
+      return;
+    case 'deleteTransfer':
+      await qDeleteTransfer(exec, str(args.id));
+      return;
+    case 'deleteCounterparty':
+      await qDeleteCounterparty(exec, str(args.id));
+      return;
     case 'postRecurring':
       await postRecurring(exec, args);
       return;

@@ -198,8 +198,15 @@ edit/cancel.)
    `archiveAccount`/`deleteAccount`; retired the `accountOverrides` shim (store,
    projection, seed, persist, breadcrumb). The accounts list + detail screens now
    read/write the real table; create dialog + archive-confirm UX added.
-3. **Delete/archive everywhere else** (categories, goals, tags, subscriptions,
-   recurring, transfers, merchants) + the shared confirm UX.
+3. ✅ **Delete/archive everywhere else** + the shared confirm UX. Added a reusable
+   `<RowActions>` (⋯ menu + built-in confirm dialog) and delete mutations/store
+   actions for all of categories, goals, tags, subscriptions, recurring,
+   transfers, merchants. UI wired on categories/goals/subscriptions/recurring/
+   transfers; `deleteTransfer` recomputes both account balances, `deleteRecurring`
+   cascades splits, `deleteCategory` SET-NULLs its txns. **Tags** and **merchants**
+   have the full data path + tests but no UI yet — tags have no management screen,
+   and the merchants list is still static-reference-driven (needs the same
+   projection switch accounts got in Phase 2); both will get the ⋯ menu then.
 4. **Full edit** for tags / subscriptions / goals / recurring / merchants /
    categories (with `categories` `color`/`hue` from §0).
 5. **Budgets onto the table** (retire `budgetOverrides`); **Scheduled** CRUD;

@@ -29,6 +29,11 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
   }));
 }
 
+/** Hard delete a category; transactions.category_id becomes NULL (uncategorized). */
+export async function deleteCategory(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM categories WHERE id = ?', [id]);
+}
+
 export interface CategorySpend {
   id: string;
   name: string;

@@ -3,6 +3,7 @@
 // from/to accounts and amount by grouping on transfer_group_id.
 
 import type { Exec } from '@/lib/db/repo';
+import { recomputeAccount } from './accounts';
 
 export interface Transfer {
   id: string; // transfer_group_id
@@ -44,4 +45,16 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
     toName: r.toId == null ? null : nameById.get(String(r.toId)) ?? null,
     note: r.note == null ? null : String(r.note),
   }));
+}
+
+/**
+ * Delete a transfer: remove both leg transactions and the group row, then
+ * recompute the balances of the affected accounts (the balance trigger only
+ * fires on INSERT, so removing rows needs an explicit recompute).
+ */
+export async function deleteTransfer(exec: Exec, groupId: string): Promise<void> {
+  const legs = await exec('SELECT DISTINCT account_id FROM transactions WHERE transfer_group_id = ?', [groupId]);
+  await exec('DELETE FROM transactions WHERE transfer_group_id = ?', [groupId]);
+  await exec('DELETE FROM transfer_groups WHERE id = ?', [groupId]);
+  for (const r of legs) await recomputeAccount(exec, String(r.account_id));
 }

@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK } from '@/lib/data';
 
@@ -35,6 +36,7 @@ export default function CategoriesPage() {
   const categories = useFinanceStore((s) => s.categories);
   const createCategory = useFinanceStore((s) => s.createCategory);
   const renameCategory = useFinanceStore((s) => s.renameCategory);
+  const deleteCategory = useFinanceStore((s) => s.deleteCategory);
 
   const list = categories.filter((c) => c.ledgerId === activeId);
   const hueById = new Map(MOCK.categories.map((c) => [c.id, c.hue]));
@@ -131,24 +133,33 @@ export default function CategoriesPage() {
         )}
 
         {list.map((c) => (
-          <button
+          <div
             key={c.id}
-            type="button"
-            onClick={() => setEditing({ id: c.id, name: c.name })}
-            className="border-border bg-card mb-2.5 flex w-full items-center gap-3 rounded-[14px] border p-4 text-left"
+            className="border-border bg-card mb-2.5 flex w-full items-center gap-3 rounded-[14px] border p-4"
           >
-            <div
-              className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-              style={{ background: `oklch(0.65 0.13 ${hueById.get(c.id) ?? 220})` }}
+            <button
+              type="button"
+              onClick={() => setEditing({ id: c.id, name: c.name })}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
-              <Icon name={c.icon ?? 'tag'} size={16} />
-            </div>
-            <div className="min-w-0 flex-1 text-sm font-medium">{c.name}</div>
+              <div
+                className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
+                style={{ background: `oklch(0.65 0.13 ${hueById.get(c.id) ?? 220})` }}
+              >
+                <Icon name={c.icon ?? 'tag'} size={16} />
+              </div>
+              <div className="min-w-0 flex-1 text-sm font-medium">{c.name}</div>
+            </button>
             <span className="bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] uppercase">
               {c.type}
             </span>
-            <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
-          </button>
+            <RowActions
+              onEdit={() => setEditing({ id: c.id, name: c.name })}
+              onDelete={() => { deleteCategory(c.id); toast.success('Category deleted', { description: c.name }); }}
+              confirmTitle={`Delete ${c.name}?`}
+              confirmDescription="Transactions in this category become uncategorized. This can't be undone."
+            />
+          </div>
         ))}
       </div>
 

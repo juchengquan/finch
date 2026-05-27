@@ -30,3 +30,8 @@ export async function listGoals(exec: Exec, ledgerId?: string): Promise<Goal[]> 
     hue: Number(r.hue),
   }));
 }
+
+/** Hard delete a goal (no foreign keys reference it). */
+export async function deleteGoal(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM goals WHERE id = ?', [id]);
+}

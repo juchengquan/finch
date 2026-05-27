@@ -23,6 +23,11 @@ export async function listTags(exec: Exec, ledgerId?: string): Promise<Tag[]> {
   }));
 }
 
+/** Hard delete a tag; transaction_tags rows cascade away via the FK. */
+export async function deleteTag(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM tags WHERE id = ?', [id]);
+}
+
 /** Map of transaction id → tag ids. */
 export async function transactionTagMap(exec: Exec): Promise<Record<string, string[]>> {
   const rows = await exec('SELECT transaction_id, tag_id FROM transaction_tags');

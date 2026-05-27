@@ -44,3 +44,8 @@ export async function listRecurring(exec: Exec, ledgerId?: string): Promise<Recu
     };
   });
 }
+
+/** Hard delete a recurring template; recurring_splits cascade away via the FK. */
+export async function deleteRecurring(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM recurring_templates WHERE id = ?', [id]);
+}

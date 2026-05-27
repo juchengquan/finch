@@ -6,6 +6,7 @@ import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { fmtNative } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
+import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 import { selectTransfers } from '@/lib/select';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ type Option = { id: string; name: string };
 export default function TransfersPage() {
   const { active, activeId } = useLedger();
   const createTransfer = useFinanceStore((s) => s.createTransfer);
+  const deleteTransfer = useFinanceStore((s) => s.deleteTransfer);
   const allTxns = useFinanceStore((s) => s.transactions);
   const accountRows = useFinanceStore((s) => s.accounts);
 
@@ -152,6 +154,11 @@ export default function TransfersPage() {
                 {tg.note ? ` · ${tg.note}` : ''}
               </div>
             </div>
+            <RowActions
+              onDelete={() => { deleteTransfer(tg.id); toast.success('Transfer deleted'); }}
+              confirmTitle="Delete this transfer?"
+              confirmDescription={`Removes both legs (${tg.fromName ?? '—'} → ${tg.toName ?? '—'}) and restores the account balances.`}
+            />
           </div>
         ))}
       </div>
