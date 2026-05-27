@@ -34,6 +34,8 @@ const RESET_TABLES = [
   'transactions',
   'account_balance_snapshots',
   'ledger_summaries',
+  'goals',
+  'sync_log',
   'budgets',
   'transfer_groups',
   'counterparties',
@@ -266,6 +268,26 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const name = str(args.name).trim();
       if (!name) throw new Error('Category name is required');
       await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      return;
+    }
+    case 'createGoal': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const name = str(args.name).trim();
+      const target = Number(args.target);
+      if (!name) throw new Error('Goal name is required');
+      if (!(target > 0)) throw new Error('Goal target must be greater than 0');
+      const eta = args.eta ? str(args.eta) : null;
+      const hue = args.hue != null ? Number(args.hue) : 200;
+      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM goals WHERE ledger_id = ?', [ledgerId]);
+      await exec('INSERT INTO goals (id,ledger_id,name,target,saved,eta,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)', [
+        newId('goal'), ledgerId, name, target, 0, eta, hue, Number(rows[0]?.n ?? 0), new Date().toISOString(),
+      ]);
+      return;
+    }
+    case 'contributeGoal': {
+      const amount = Number(args.amount);
+      if (!Number.isFinite(amount)) throw new Error('Invalid contribution amount');
+      await exec('UPDATE goals SET saved = MAX(0, saved + ?) WHERE id = ?', [amount, str(args.id)]);
       return;
     }
     case 'postRecurring':

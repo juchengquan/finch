@@ -18,6 +18,7 @@ import counterpartiesData from '@/data/counterparties.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import devicesData from '@/data/devices.json';
+import goalsData from '@/data/goals.json';
 import transactionsData from '@/data/transactions.json';
 import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
@@ -135,6 +136,16 @@ export async function seedReference(exec: Exec): Promise<void> {
     await exec(
       'INSERT OR IGNORE INTO sync_log (device_id,ledger_id,device_name,last_sync_at,last_txn_id,is_current) VALUES (?,?,?,?,?,?)',
       [d.id, 'personal', d.name, d.lastSync, d.lastTxn ?? null, d.current ? 1 : 0],
+    );
+  }
+
+  type GoalRow = { id: string; name: string; target: number; saved: number; eta?: string; hue?: number; ledger?: string };
+  const goals = goalsData as GoalRow[];
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    await exec(
+      'INSERT OR IGNORE INTO goals (id,ledger_id,name,target,saved,eta,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [g.id, g.ledger ?? 'personal', g.name, g.target, g.saved ?? 0, g.eta ?? null, g.hue ?? 200, i, SEED_TS],
     );
   }
 }

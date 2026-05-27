@@ -198,6 +198,18 @@ CREATE TABLE IF NOT EXISTS net_worth_snapshots (
   UNIQUE(ledger_id, date)
 );
 
+CREATE TABLE IF NOT EXISTS goals (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  target     REAL NOT NULL,
+  saved      REAL NOT NULL DEFAULT 0,
+  eta        TEXT,
+  hue        INTEGER NOT NULL DEFAULT 200,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ledger_summaries (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -252,6 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequenc
 CREATE INDEX IF NOT EXISTS idx_recurring_ledger_active ON recurring_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
+CREATE INDEX IF NOT EXISTS idx_goals_ledger ON goals(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 

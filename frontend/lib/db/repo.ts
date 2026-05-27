@@ -3,6 +3,7 @@ import type { AccountRow } from './queries/accounts';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
 import type { ExchangeRate, Device } from './queries/system';
+import type { Goal } from './queries/goals';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -30,4 +31,5 @@ export interface ProjectedState extends PersistState {
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   devices: Device[];
+  goals: Goal[];
 }

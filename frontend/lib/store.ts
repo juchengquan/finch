@@ -8,6 +8,7 @@ import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
+import type { Goal } from '@/lib/db/queries/goals';
 
 export interface Tx {
   id: string;
@@ -99,6 +100,7 @@ interface FinanceState {
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   devices: Device[];
+  goals: Goal[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
@@ -114,6 +116,8 @@ interface FinanceState {
   createTransfer: (input: TransferInput) => void;
   createCategory: (input: { name: string; type?: string; icon?: string; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
+  createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
+  contributeGoal: (id: string, amount: number) => void;
   reset: () => void;
 }
 
@@ -143,6 +147,7 @@ export const useFinanceStore = create<FinanceState>()(
       counterparties: [],
       exchangeRates: [],
       devices: [],
+      goals: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -248,6 +253,21 @@ export const useFinanceStore = create<FinanceState>()(
       renameCategory: (id, name) => {
         set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, name } : c)) }));
         syncMutation('renameCategory', { id, name });
+      },
+
+      createGoal: (input) => {
+        const ledgerId = input.ledgerId ?? 'personal';
+        const id = `goal-${Date.now().toString(36)}`;
+        const hue = input.hue ?? 200;
+        set((s) => ({
+          goals: [...s.goals, { id, ledgerId, name: input.name, target: input.target, saved: 0, eta: input.eta ?? null, hue }],
+        }));
+        syncMutation('createGoal', { ledgerId, name: input.name, target: input.target, eta: input.eta ?? null, hue });
+      },
+
+      contributeGoal: (id, amount) => {
+        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
+        syncMutation('contributeGoal', { id, amount });
       },
 
       reset: () => {

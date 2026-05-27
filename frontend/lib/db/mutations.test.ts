@@ -127,3 +127,21 @@ test('renameCategory updates the name', async () => {
   const rows = await exec("SELECT name FROM categories WHERE id = 'food'");
   expect(String(rows[0].name)).toBe('Food & Drink');
 });
+
+test('createGoal inserts and contributeGoal adds to saved (clamped at 0)', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'New car', target: 5000, eta: 'Dec 2026' });
+  const created = await exec("SELECT id, saved FROM goals WHERE name = 'New car'");
+  expect(created.length).toBe(1);
+  const id = String(created[0].id);
+  await applyMutation(exec, 'contributeGoal', { id, amount: 250 });
+  expect(Number((await exec('SELECT saved FROM goals WHERE id = ?', [id]))[0].saved)).toBe(250);
+  await applyMutation(exec, 'contributeGoal', { id, amount: -1000 });
+  expect(Number((await exec('SELECT saved FROM goals WHERE id = ?', [id]))[0].saved)).toBe(0);
+});
+
+test('createGoal rejects empty name or non-positive target', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'createGoal', { name: '', target: 100 })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createGoal', { name: 'X', target: 0 })).rejects.toThrow();
+});
