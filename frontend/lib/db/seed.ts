@@ -21,7 +21,6 @@ import devicesData from '@/data/devices.json';
 import goalsData from '@/data/goals.json';
 import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
-import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
 
 const SEED_TS = '2026-05-26T00:00:00';
@@ -211,7 +210,6 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
 /** Seed the transitional store slices (pending/recurring + empty override maps). */
 export async function seedAppStateDefaults(exec: Exec): Promise<void> {
   const entries: [string, unknown][] = [
-    ['pending', pendingData],
     ['recurring', recurringData],
     ['budgetOverrides', {}],
     ['accountOverrides', {}],

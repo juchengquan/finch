@@ -1,6 +1,0 @@
-[
-  { "id": "pen-1", "merchant": "Salary \u00b7 Acme",      "amount":  5800.00, "currency": "SGD", "date": "2026-05-25", "account": "UOB One",    "reason": "Recurring \u00b7 waiting for confirmation", "source": "rt-salary" },
-  { "id": "pen-2", "merchant": "Don Don Donki",           "amount":   -82.40, "currency": "SGD", "date": "2026-05-24", "account": "Amex Gold", "reason": "New merchant \u00b7 please verify name",    "source": "import" },
-  { "id": "pen-3", "merchant": "Sushiro \u00b7 Tangs",      "amount":   -34.20, "currency": "SGD", "date": "2026-05-24", "account": "Amex Gold", "reason": "New merchant \u00b7 matched alias",         "source": "import" },
-  { "id": "pen-4", "merchant": "JR East \u00b7 IC top-up",  "amount":  -3000,   "currency": "JPY", "date": "2026-05-23", "account": "Wise JPY",  "reason": "No FX rate cached for this date",        "source": "import" }
-]

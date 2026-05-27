@@ -2,7 +2,6 @@
 
 import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
-import pendingData from '@/data/pending.json';
 import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { CategoryRow } from '@/lib/db/queries/categories';
@@ -40,17 +39,6 @@ export interface TransferInput {
   note?: string;
 }
 
-export interface PendingItem {
-  id: string;
-  merchant: string;
-  amount: number;
-  currency: string;
-  date: string;
-  account: string;
-  reason: string;
-  source: string;
-}
-
 export interface RecurringSplit {
   account: string;
   pct: number;
@@ -84,12 +72,10 @@ export interface AccountOverride {
 }
 
 const SEED_TX = transactionsData as Tx[];
-const SEED_PENDING = pendingData as PendingItem[];
 const SEED_RECURRING = recurringData as RecurringTemplate[];
 
 interface FinanceState {
   transactions: Tx[];
-  pending: PendingItem[];
   recurring: RecurringTemplate[];
   // Editable overrides on otherwise-static mock data, persisted.
   budgetOverrides: Record<string, number>;
@@ -141,7 +127,6 @@ function syncMutation(action: string, args?: Record<string, unknown>): void {
 export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
-      pending: SEED_PENDING,
       recurring: SEED_RECURRING,
       budgetOverrides: {},
       accountOverrides: {},
@@ -187,18 +172,20 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteTransaction', { id });
       },
 
+      // Pending items are transactions with status='pending'. Confirming flips the
+      // status (flowing into reports/balances); cancelling voids the transaction.
       confirmPending: (id) => {
-        set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }));
-        syncMutation('confirmPending', { id });
+        set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, pending: false } : t)) }));
+        syncMutation('confirmTransaction', { id });
       },
 
       cancelPending: (id) => {
-        set((s) => ({ pending: s.pending.filter((p) => p.id !== id) }));
-        syncMutation('cancelPending', { id });
+        set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+        syncMutation('deleteTransaction', { id });
       },
 
       confirmAllPending: () => {
-        set({ pending: [] });
+        set((s) => ({ transactions: s.transactions.map((t) => (t.pending ? { ...t, pending: false } : t)) }));
         syncMutation('confirmAllPending');
       },
 
@@ -295,7 +282,6 @@ export const useFinanceStore = create<FinanceState>()(
       reset: () => {
         set({
           transactions: SEED_TX,
-          pending: SEED_PENDING,
           recurring: SEED_RECURRING,
           budgetOverrides: {},
           accountOverrides: {},

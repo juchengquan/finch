@@ -23,7 +23,6 @@ import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
 const APP_STATE_KEYS = [
-  'pending',
   'recurring',
   'budgetOverrides',
   'accountOverrides',
@@ -33,7 +32,6 @@ const APP_STATE_KEYS = [
 
 export async function writeAppState(exec: Exec, state: PersistState): Promise<void> {
   const values: Record<string, unknown> = {
-    pending: state.pending,
     recurring: state.recurring,
     budgetOverrides: state.budgetOverrides,
     accountOverrides: state.accountOverrides,
@@ -49,7 +47,6 @@ async function readAppState(exec: Exec): Promise<Omit<PersistState, 'transaction
   const rows = await exec('SELECT key, value FROM app_state');
   const m = new Map(rows.map((r) => [String(r.key), r.value == null ? null : JSON.parse(String(r.value))]));
   return {
-    pending: (m.get('pending') as PersistState['pending']) ?? [],
     recurring: (m.get('recurring') as PersistState['recurring']) ?? [],
     budgetOverrides: (m.get('budgetOverrides') as PersistState['budgetOverrides']) ?? {},
     accountOverrides: (m.get('accountOverrides') as PersistState['accountOverrides']) ?? {},

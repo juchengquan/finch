@@ -1,4 +1,4 @@
-import type { Tx, PendingItem, RecurringTemplate, AccountOverride } from '@/lib/store';
+import type { Tx, RecurringTemplate, AccountOverride } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
@@ -16,7 +16,6 @@ export type Exec = (sql: string, bind?: SqlBind) => Promise<Row[]>;
 // (mirrors the Zustand store).
 export interface PersistState {
   transactions: Tx[];
-  pending: PendingItem[];
   budgetOverrides: Record<string, number>;
   accountOverrides: Record<string, AccountOverride>;
   verifiedExtra: string[];

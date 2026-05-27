@@ -4,11 +4,12 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
-import type { PendingItem, RecurringTemplate } from '@/lib/store';
+import type { RecurringTemplate } from '@/lib/store';
 import {
   addTransaction as qAdd,
   updateTransaction as qUpdate,
   cancelTransaction as qCancel,
+  confirmTransaction as qConfirm,
   type AddInput,
 } from './queries/transactions';
 import { seedReference, insertTransactions, seedAppStateDefaults, seedTransactionTags } from './seed';
@@ -208,14 +209,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteTransaction':
       await qCancel(exec, str(args.id));
       return;
-    case 'confirmPending':
-    case 'cancelPending': {
-      const pending = await getJson<PendingItem[]>(exec, 'pending', []);
-      await setJson(exec, 'pending', pending.filter((p) => p.id !== str(args.id)));
+    case 'confirmTransaction':
+      await qConfirm(exec, str(args.id));
       return;
-    }
     case 'confirmAllPending':
-      await setJson(exec, 'pending', []);
+      await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE status = 'pending'", [
+        new Date().toISOString(),
+      ]);
       return;
     case 'setBudget': {
       const bo = await getJson<Record<string, number>>(exec, 'budgetOverrides', {});
