@@ -1,12 +1,6 @@
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
 import categoriesData from '@/data/categories.json';
-import transactionsData from '@/data/transactions.json';
-import subscriptionsData from '@/data/subscriptions.json';
-import billsData from '@/data/bills.json';
-import goalsData from '@/data/goals.json';
-import dashboardSummaryData from '@/data/dashboard-summary.json';
-import dailySpendingData from '@/data/daily-spending.json';
 import monthlySpendingData from '@/data/monthly-spending.json';
 import cashflowData from '@/data/cashflow.json';
 import ledgersData from '@/data/ledgers.json';
@@ -19,27 +13,16 @@ import insightsData from '@/data/insights.json';
 import aprVsMayData from '@/data/apr-vs-may.json';
 import scheduledItemsData from '@/data/scheduled-items.json';
 
+// Static reference data used as a pre-hydration fallback by a handful of
+// screens. Live data comes from the projected DB via the store. Series used by
+// Insights (monthly, cashflow) are still baked here pending a derived-series
+// rewrite — track in MASTER_PLAN.md §5.
 export const MOCK = {
-  user: dashboardSummaryData.user,
-  balance: dashboardSummaryData.balance,
-  monthSpent: dashboardSummaryData.monthSpent,
-  monthBudget: dashboardSummaryData.monthBudget,
-  monthIncome: dashboardSummaryData.monthIncome,
-  monthChange: dashboardSummaryData.monthChange,
-  monthlyChangeAmount: dashboardSummaryData.monthlyChangeAmount,
-
   accounts: accountsData,
   accountGroups: accountGroupsData,
   categories: categoriesData,
-  transactions: transactionsData,
-  subscriptions: subscriptionsData,
-  bills: billsData,
-  goals: goalsData,
-  daily: dailySpendingData,
   monthly: monthlySpendingData,
   cashflow: cashflowData,
-  insights: insightsData as { tone: 'pos' | 'warn' | 'neut'; icon: string; title: string; body: string }[],
-  aprVsMay: aprVsMayData as { name: string; a: number; b: number; d: number }[],
 };
 
 export const LEDGER = {
