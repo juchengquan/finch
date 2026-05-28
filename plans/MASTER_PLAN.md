@@ -271,10 +271,22 @@ Phases A–H are done — the design-doc SQLite schema is the live, server-backe
 layer; the core money flows run through it; and every entity has full CRUD with no
 remaining `app_state` shims. What's left:
 1. **Finish the last screens** on the DB — FX, System.
-2. **Cleanup pass** — retire `derive.ts` fallbacks + baked JSON totals, delete the
-   dead flat-schema `repo.ts`/`storage.ts`, resolve the redundant browser `DbProvider`.
+2. ✅ **Cleanup pass** — `derive.ts`, the flat-schema `repo.ts`/`storage.ts`, and
+   the redundant browser `DbProvider` were already gone. This pass removed the
+   remaining dead `MOCK` re-exports (15 fields incl. `user`/`balance`/`monthSpent`/
+   `transactions`/`subscriptions`/`goals`/`bills`/`daily`/`insights`/`aprVsMay`)
+   and deleted three orphan JSON files (`dashboard-summary.json`,
+   `daily-spending.json`, `bills.json`). The Insights page still consumes baked
+   `monthly` / `cashflow` series + `INSIGHTS` / `APR_VS_MAY` — replace with
+   derived series from live transactions in a later pass.
 3. Optional polish: balance-curve / net-worth charts; real FX conversion; the
    deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
+4. **Income + Adjustment transaction types** — Income is data-supported (Tx
+   `kind`, recurring/category `'income'` enums, positive amounts) but has no UI
+   entry point. Adjustment isn't represented anywhere (no enum, no UI). The
+   smallest income fix is generalising `/add` into "Add transaction" with an
+   expense/income toggle; adjustment needs a data model decision (likely a
+   transactions enum column) plus an account-detail "Reconcile balance" entry.
 
 Done since (Phase H follow-ups): recurring **split add/remove** UI on the template
 detail screen, and the **download backup** now streams the live server DB via
