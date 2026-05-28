@@ -26,6 +26,8 @@ export interface Tx {
   note?: string;
   pending?: boolean;
   recurring?: boolean;
+  /** Manual balance reconciliation (excluded from category spend / cash flow). */
+  isAdjustment?: boolean;
   kind?: string;
   ledgerId?: string;
   transferGroupId?: string;
@@ -104,6 +106,7 @@ interface FinanceState {
   scheduledItems: ScheduledItem[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
+  adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
   deleteTransaction: (id: string) => void;
   confirmPending: (id: string) => void;
@@ -196,6 +199,11 @@ export const useFinanceStore = create<FinanceState>()(
           status: tx.pending ? 'pending' : 'confirmed',
         });
         return id;
+      },
+
+      adjustAccountBalance: (accountId, targetBalance, note) => {
+        // The server rewrites/inserts the delta + recomputes; adopt the re-projection.
+        syncMutation('adjustAccountBalance', { accountId, targetBalance, note });
       },
 
       updateTransaction: (id, patch) => {

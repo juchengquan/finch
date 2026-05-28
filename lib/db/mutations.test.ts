@@ -479,3 +479,48 @@ test('addRecurringSplit / removeRecurringSplit manage splits + splits_enabled', 
 
   await expect(applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: '  ' })).rejects.toThrow();
 });
+
+test('adjustAccountBalance posts a marked delta and moves balance to the target', async () => {
+  const exec = await seeded();
+  const before = await balanceOf(exec, 'chk'); // 4218.50 seed
+  await applyMutation(exec, 'adjustAccountBalance', { accountId: 'chk', targetBalance: 5000, note: 'reconcile' });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(5000, 2);
+  const [adj] = await exec("SELECT amount_base, is_adjustment, description, notes FROM transactions WHERE account_id = 'chk' ORDER BY created_at DESC LIMIT 1");
+  expect(Number(adj.is_adjustment)).toBe(1);
+  expect(Number(adj.amount_base)).toBeCloseTo(5000 - before, 2);
+  expect(String(adj.description)).toBe('Balance adjustment');
+  expect(String(adj.notes)).toBe('reconcile');
+});
+
+test('adjustments are excluded from category spend, cash flow and budget progress', async () => {
+  const exec = await seeded();
+  const { categorySpend, monthlyByCategory } = await import('@/lib/db/queries/categories');
+  const { monthlyCashFlow, budgetProgress } = await import('@/lib/db/queries/reports');
+  const month = new Date().toISOString().slice(0, 7);
+  const spendBefore = await categorySpend(exec, 'personal');
+  const flowBefore = await monthlyCashFlow(exec, 'personal', month);
+  const budgetsBefore = await budgetProgress(exec, 'personal', month);
+
+  // Big negative adjustment on cc (would dwarf food spend if it counted).
+  await applyMutation(exec, 'adjustAccountBalance', { accountId: 'cc', targetBalance: -5000 });
+
+  const spendAfter = await categorySpend(exec, 'personal');
+  const flowAfter = await monthlyCashFlow(exec, 'personal', month);
+  const budgetsAfter = await budgetProgress(exec, 'personal', month);
+
+  expect(JSON.stringify(spendAfter)).toBe(JSON.stringify(spendBefore));
+  expect(flowAfter.income).toBeCloseTo(flowBefore.income, 2);
+  expect(flowAfter.expense).toBeCloseTo(flowBefore.expense, 2);
+  expect(flowAfter.net).toBeCloseTo(flowBefore.net, 2);
+  expect(JSON.stringify(budgetsAfter)).toBe(JSON.stringify(budgetsBefore));
+});
+
+test('income via addTransaction (positive amount) increases the account balance', async () => {
+  const exec = await seeded();
+  const before = await balanceOf(exec, 'chk');
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: 250, merchant: 'Side gig',
+    categoryId: null, date: '2026-05-29', status: 'confirmed',
+  });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(before + 250, 2);
+});

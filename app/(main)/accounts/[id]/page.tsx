@@ -44,6 +44,7 @@ export default function AccountDetailPage() {
   const accounts = useFinanceStore((s) => s.accounts);
   const updateAccount = useFinanceStore((s) => s.updateAccount);
   const archiveAccount = useFinanceStore((s) => s.archiveAccount);
+  const adjustAccountBalance = useFinanceStore((s) => s.adjustAccountBalance);
 
   // The projected DB row is the source of truth; the mock is a pre-hydration
   // fallback for structural fields (color, ledger).
@@ -59,6 +60,9 @@ export default function AccountDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState('');
+  const [reconcileNote, setReconcileNote] = useState('');
   const [draft, setDraft] = useState({ name: '', type: 'savings', last4: '', institution: '', routing: '' });
   const { openTransaction } = useTransactionSheet();
 
@@ -83,6 +87,24 @@ export default function AccountDetailPage() {
       routing: draft.routing.trim() || null,
     });
     toast.success('Account updated', { description: draft.name.trim() || name });
+  };
+
+  const openReconcile = () => {
+    setReconcileTarget(String(balance));
+    setReconcileNote('');
+    setReconcileOpen(true);
+  };
+  const submitReconcile = () => {
+    const target = parseFloat(reconcileTarget);
+    if (!Number.isFinite(target)) return void toast.error('Enter a target balance');
+    if (Math.abs(target - balance) < 0.005) {
+      toast.info('Already at this balance — nothing to adjust');
+      setReconcileOpen(false);
+      return;
+    }
+    adjustAccountBalance(accountId, target, reconcileNote.trim() || undefined);
+    toast.success('Balance reconciled', { description: `${name} → ${target.toLocaleString()}` });
+    setReconcileOpen(false);
   };
 
   const doArchive = () => {
@@ -152,6 +174,12 @@ export default function AccountDetailPage() {
               />
             </div>
           )}
+        </div>
+
+        <div className="mb-4 flex items-center justify-end">
+          <Button variant="outline" size="sm" onClick={openReconcile}>
+            <Icon name="sync" size={13} />Reconcile balance
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">
@@ -282,6 +310,50 @@ export default function AccountDetailPage() {
               <Button variant="outline">Cancel</Button>
             </DialogClose>
             <Button variant="destructive" onClick={doArchive}>Archive</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reconcileOpen} onOpenChange={setReconcileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reconcile {name}</DialogTitle>
+            <DialogDescription>
+              Set the actual balance — we&rsquo;ll record an adjustment for the difference.
+              Adjustments don&rsquo;t count toward spending or income.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Current balance</Label>
+              <div className="text-muted-foreground text-sm">{balance.toLocaleString()}</div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reconcile-target">Target balance</Label>
+              <Input
+                id="reconcile-target"
+                type="number"
+                inputMode="decimal"
+                value={reconcileTarget}
+                onChange={(e) => setReconcileTarget(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reconcile-note">Note (optional)</Label>
+              <Input
+                id="reconcile-note"
+                value={reconcileNote}
+                onChange={(e) => setReconcileNote(e.target.value)}
+                placeholder="e.g. Manual reconcile after bank statement"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={submitReconcile}>Adjust</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

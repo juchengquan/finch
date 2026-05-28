@@ -69,7 +69,7 @@ export async function categorySpend(exec: Exec, ledgerId: string): Promise<Recor
   const rows = await exec(
     `SELECT category_id AS id, SUM(amount_base * -1) AS spent
        FROM transactions
-      WHERE ledger_id = ? AND amount < 0 AND transfer_group_id IS NULL
+      WHERE ledger_id = ? AND amount < 0 AND transfer_group_id IS NULL AND is_adjustment = 0
         AND status = 'confirmed' AND category_id IS NOT NULL
       GROUP BY category_id`,
     [ledgerId],
@@ -85,7 +85,7 @@ export async function monthlyByCategory(exec: Exec, ledgerId: string, yearMonth:
     `SELECT c.id, c.name, SUM(t.amount_base * -1) AS spent
        FROM transactions t JOIN categories c ON t.category_id = c.id
       WHERE t.ledger_id = ? AND t.date LIKE ?
-        AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.status = 'confirmed'
+        AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.is_adjustment = 0 AND t.status = 'confirmed'
       GROUP BY c.id ORDER BY spent DESC`,
     [ledgerId, `${yearMonth}%`],
   );

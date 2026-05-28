@@ -239,6 +239,28 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'addTransaction':
       await qAdd(exec, args as unknown as AddInput);
       return;
+    case 'adjustAccountBalance': {
+      const accountId = str(args.accountId);
+      const target = Number(args.targetBalance);
+      if (!Number.isFinite(target)) throw new Error('Enter a target balance');
+      const [acct] = await exec('SELECT ledger_id, current_balance, currency FROM accounts WHERE id = ?', [accountId]);
+      if (!acct) throw new Error('Account not found');
+      const delta = r2(target - Number(acct.current_balance));
+      if (delta === 0) return; // already at target — no-op
+      await qAdd(exec, {
+        ledgerId: String(acct.ledger_id),
+        accountId,
+        amount: delta,
+        currency: String(acct.currency),
+        merchant: 'Balance adjustment',
+        categoryId: null,
+        date: args.date ? str(args.date) : new Date().toISOString().slice(0, 10),
+        note: args.note ? str(args.note) : undefined,
+        status: 'confirmed',
+        isAdjustment: true,
+      });
+      return;
+    }
     case 'updateTransaction':
       await qUpdate(exec, str(args.id), args.patch as Parameters<typeof qUpdate>[2]);
       await recomputeForTransaction(exec, str(args.id)); // an amount/date edit shifts balances

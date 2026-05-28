@@ -102,7 +102,7 @@ const weekdaySkew: Rule = (ctx) => {
   const totals = new Array(7).fill(0);
   let any = false;
   for (const t of ctx.transactions) {
-    if (ledgerOf(t) !== ctx.ledgerId || t.pending || t.amount >= 0 || t.transferGroupId) continue;
+    if (ledgerOf(t) !== ctx.ledgerId || t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
     totals[new Date(`${t.date}T00:00`).getDay()] += -t.amount;
     any = true;
   }

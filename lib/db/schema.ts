@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
   recurring          INTEGER NOT NULL DEFAULT 0,
+  is_adjustment      INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL
 );
 
@@ -379,8 +380,8 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 
 // Bump when the CREATE statements above change shape. Version 1 = the original
 // schema; 2 adds accounts.opening_balance; 3 adds account display columns;
-// 4 adds categories.hue.
-export const SCHEMA_VERSION = 4;
+// 4 adds categories.hue; 5 adds transactions.is_adjustment.
+export const SCHEMA_VERSION = 5;
 
 // MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
 // created DB already has the latest CREATE statements, so it skips these and is
@@ -403,6 +404,11 @@ const MIGRATIONS: Record<number, string[]> = {
   4: [
     // Category accent colour (hue 0–360), previously only in the static mock.
     'ALTER TABLE categories ADD COLUMN hue INTEGER',
+  ],
+  5: [
+    // Balance-reconciliation marker — distinguishes manual adjustments from
+    // real income/expense so they're excluded from category spend and cash flow.
+    'ALTER TABLE transactions ADD COLUMN is_adjustment INTEGER NOT NULL DEFAULT 0',
   ],
 };
 
