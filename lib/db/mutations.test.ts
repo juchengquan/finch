@@ -494,7 +494,7 @@ test('adjustAccountBalance posts a marked delta and moves balance to the target'
 
 test('adjustments are excluded from category spend, cash flow and budget progress', async () => {
   const exec = await seeded();
-  const { categorySpend, monthlyByCategory } = await import('@/lib/db/queries/categories');
+  const { categorySpend } = await import('@/lib/db/queries/categories');
   const { monthlyCashFlow, budgetProgress } = await import('@/lib/db/queries/reports');
   const month = new Date().toISOString().slice(0, 7);
   const spendBefore = await categorySpend(exec, 'personal');
@@ -523,4 +523,44 @@ test('income via addTransaction (positive amount) increases the account balance'
     categoryId: null, date: '2026-05-29', status: 'confirmed',
   });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(before + 250, 2);
+});
+
+test('setExchangeRate upserts on (date, currency); deleteExchangeRate removes it', async () => {
+  const exec = await seeded();
+  const { listExchangeRates } = await import('@/lib/db/queries/system');
+  // Insert.
+  await applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: 'JPY', rate: 0.0091, source: 'manual' });
+  let jpy = (await listExchangeRates(exec)).filter((r) => r.currency === 'JPY' && r.date === '2026-06-01');
+  expect(jpy).toHaveLength(1);
+  expect(jpy[0].rate).toBeCloseTo(0.0091, 6);
+  expect(jpy[0].source).toBe('manual');
+
+  // Upsert (same date+currency overwrites).
+  await applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: 'JPY', rate: 0.0093, source: 'ECB' });
+  jpy = (await listExchangeRates(exec)).filter((r) => r.currency === 'JPY' && r.date === '2026-06-01');
+  expect(jpy).toHaveLength(1);
+  expect(jpy[0].rate).toBeCloseTo(0.0093, 6);
+  expect(jpy[0].source).toBe('ECB');
+
+  // Delete.
+  await applyMutation(exec, 'deleteExchangeRate', { date: '2026-06-01', currency: 'JPY' });
+  jpy = (await listExchangeRates(exec)).filter((r) => r.currency === 'JPY' && r.date === '2026-06-01');
+  expect(jpy).toHaveLength(0);
+});
+
+test('setExchangeRate validation (currency required, rate > 0, ISO date)', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: '', rate: 0.01 })).rejects.toThrow(/currency/i);
+  await expect(applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: 'JPY', rate: 0 })).rejects.toThrow(/rate/i);
+  await expect(applyMutation(exec, 'setExchangeRate', { date: '2026/06/01', currency: 'JPY', rate: 0.01 })).rejects.toThrow(/date/i);
+});
+
+test('newly set rate is picked up by convertToBase for the same date', async () => {
+  const exec = await seeded();
+  const { convertToBase } = await import('@/lib/db/queries/rates');
+  await applyMutation(exec, 'setExchangeRate', { date: '2026-06-15', currency: 'JPY', rate: 0.01, source: 'manual' });
+  // JPY → SGD on that date: rate = rateToSgd(JPY)/rateToSgd(SGD) = 0.01/1 = 0.01.
+  const conv = await convertToBase(exec, 100, 'JPY', 'SGD', '2026-06-15');
+  expect(conv.rate).toBeCloseTo(0.01, 6);
+  expect(conv.amountBase).toBeCloseTo(1.0, 4);
 });
