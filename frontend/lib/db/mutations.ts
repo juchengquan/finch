@@ -44,6 +44,7 @@ import {
   type CounterpartyPatch,
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
+import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
 import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
@@ -519,6 +520,19 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'deleteCounterparty':
       await qDeleteCounterparty(exec, str(args.id));
+      return;
+    case 'setExchangeRate': {
+      const date = str(args.date);
+      const currency = str(args.currency).trim().toUpperCase();
+      const rate = Number(args.rate);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
+      if (!currency) throw new Error('Currency is required');
+      if (!(rate > 0)) throw new Error('Rate must be greater than 0');
+      await qSetExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
+      return;
+    }
+    case 'deleteExchangeRate':
+      await qDeleteExchangeRate(exec, str(args.date), str(args.currency).toUpperCase());
       return;
     case 'createScheduledItem': {
       const label = str(args.label).trim();

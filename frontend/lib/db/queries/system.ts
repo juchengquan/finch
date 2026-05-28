@@ -27,6 +27,21 @@ export async function listExchangeRates(exec: Exec): Promise<ExchangeRate[]> {
   }));
 }
 
+/** Upsert an exchange rate on (date, currency). `rate` is rate_to_sgd. */
+export async function setExchangeRate(
+  exec: Exec,
+  input: { date: string; currency: string; rate: number; source?: string | null },
+): Promise<void> {
+  await exec(
+    'INSERT OR REPLACE INTO exchange_rates (date, currency, rate_to_sgd, source) VALUES (?, ?, ?, ?)',
+    [input.date, input.currency, input.rate, input.source ?? null],
+  );
+}
+
+export async function deleteExchangeRate(exec: Exec, date: string, currency: string): Promise<void> {
+  await exec('DELETE FROM exchange_rates WHERE date = ? AND currency = ?', [date, currency]);
+}
+
 export async function listDevices(exec: Exec): Promise<Device[]> {
   const rows = await exec('SELECT device_id, device_name, last_sync_at, last_txn_id, is_current FROM sync_log ORDER BY is_current DESC, device_name');
   return rows.map((r) => ({
