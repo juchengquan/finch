@@ -10,11 +10,13 @@ import { fetchDbInfo } from '@/lib/api-client';
 interface BackupContextValue {
   serverPath: string | null;
   download: () => Promise<void>;
+  downloadCsv: () => Promise<void>;
 }
 
 const BackupContext = createContext<BackupContextValue>({
   serverPath: null,
   download: async () => {},
+  downloadCsv: async () => {},
 });
 
 export function useBackup(): BackupContextValue {
@@ -44,5 +46,13 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     downloadBytes(bytes);
   }, []);
 
-  return <BackupContext.Provider value={{ serverPath, download }}>{children}</BackupContext.Provider>;
+  const downloadCsv = useCallback(async () => {
+    const res = await fetch('/api/export/transactions');
+    if (!res.ok) throw new Error(`CSV export failed (${res.status})`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const { downloadBytes } = await import('@/lib/db/storage');
+    downloadBytes(bytes, 'finch-transactions.csv', 'text/csv;charset=utf-8');
+  }, []);
+
+  return <BackupContext.Provider value={{ serverPath, download, downloadCsv }}>{children}</BackupContext.Provider>;
 }
