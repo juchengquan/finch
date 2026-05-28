@@ -151,6 +151,8 @@ interface FinanceState {
   createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
   deleteCounterparty: (id: string) => void;
+  setExchangeRate: (input: { date: string; currency: string; rate: number; source?: string | null }) => void;
+  deleteExchangeRate: (date: string, currency: string) => void;
   reset: () => void;
 }
 
@@ -516,6 +518,22 @@ export const useFinanceStore = create<FinanceState>()(
       deleteCounterparty: (id) => {
         set((s) => ({ counterparties: s.counterparties.filter((c) => c.id !== id) }));
         syncMutation('deleteCounterparty', { id });
+      },
+
+      setExchangeRate: (input) => {
+        const currency = input.currency.trim().toUpperCase();
+        const source = input.source ?? null;
+        set((s) => {
+          const rest = s.exchangeRates.filter((r) => !(r.date === input.date && r.currency === currency));
+          return { exchangeRates: [...rest, { date: input.date, currency, rate: input.rate, source }] };
+        });
+        syncMutation('setExchangeRate', { date: input.date, currency, rate: input.rate, source });
+      },
+
+      deleteExchangeRate: (date, currency) => {
+        const upper = currency.toUpperCase();
+        set((s) => ({ exchangeRates: s.exchangeRates.filter((r) => !(r.date === date && r.currency === upper)) }));
+        syncMutation('deleteExchangeRate', { date, currency: upper });
       },
 
       reset: () => {
