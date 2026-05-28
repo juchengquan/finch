@@ -1,5 +1,0 @@
-[
-  { "tone": "pos",  "icon": "arrow-d", "title": "Entertainment cut by 71%", "body": "From $342 last month to $98 this month. You\u2019ve eaten out 6 fewer times." },
-  { "tone": "warn", "icon": "arrow-u", "title": "Shopping over budget",     "body": "At $312 of $300 with 7 days left. Pause for now?" },
-  { "tone": "neut", "icon": "sparkle", "title": "Fridays are spendy days",  "body": "You spend 2.3× more on Fridays. Mostly food & drinks." }
-]

@@ -3,15 +3,18 @@
 import { useState } from 'react';
 import { BarChart, AreaChart } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
-import { MOCK, INSIGHTS, APR_VS_MAY } from '@/lib/data';
+import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas } from '@/lib/select';
 import { cn } from '@/lib/utils';
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fullMonth = (ym: string) => (ym ? MONTH_LABELS[Number(ym.slice(5)) - 1] : '');
 
 const METRICS = [
   { id: 'spending', label: 'Spending' },
@@ -36,16 +39,17 @@ export default function InsightsPage() {
   const goals = useFinanceStore((s) => s.goals);
   const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
-  const monthly = MOCK.monthly.slice(-range);
-  const cashflow = MOCK.cashflow.slice(-range);
-
-  // Computed insights from the projected store; fall back to curated copy when
-  // the engine has nothing to say (cold/empty ledger).
+  // Live category mapping from the seed (still serves the budget lookup); the
+  // page now derives monthly/cashflow series and the category-deltas comparison
+  // straight from the projected transactions.
   const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
     .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget }));
   const month = currentMonth(transactions, activeId);
-  const computed = generateInsights({
+  const monthly = monthlySpending(transactions, activeId, month, range);
+  const cashflow = monthlyCashflow(transactions, activeId, month, range);
+  const categoryDeltas = topCategoryDeltas(transactions, activeId, month, ledgerCategories, 5);
+  const insights = generateInsights({
     transactions,
     categories: ledgerCategories,
     goals: goals.filter((g) => g.ledgerId === activeId),
@@ -54,7 +58,6 @@ export default function InsightsPage() {
     month,
     fmt: (n) => fmt(n),
   });
-  const insights = computed.length ? computed : INSIGHTS;
 
   // Month-over-month spending for the header (falls back to curated copy if there's
   // no prior-month data yet).
@@ -169,19 +172,27 @@ export default function InsightsPage() {
           )}
         </div>
 
-        <div className="md:grid md:grid-cols-3 md:gap-3">
-          {insights.map((ins) => (
-            <InsightCard key={ins.title} insight={ins} />
-          ))}
-        </div>
-
-        <div className="mt-[22px]">
-          <div className="mb-2.5 flex items-baseline justify-between">
-            <div className="font-serif text-lg italic">Apr vs May</div>
-            <span className="text-muted-foreground text-[11px]">Top changes</span>
+        {insights.length > 0 ? (
+          <div className="md:grid md:grid-cols-3 md:gap-3">
+            {insights.map((ins) => (
+              <InsightCard key={ins.title} insight={ins} />
+            ))}
           </div>
-          <AprVsMay data={APR_VS_MAY} />
-        </div>
+        ) : (
+          <div className="text-muted-foreground rounded-xl border border-dashed border-border py-8 text-center text-sm">
+            Add a few transactions to see insights.
+          </div>
+        )}
+
+        {categoryDeltas.length > 0 && (
+          <div className="mt-[22px]">
+            <div className="mb-2.5 flex items-baseline justify-between">
+              <div className="font-serif text-lg italic">{fullMonth(prevMonth(month))} vs {fullMonth(month)}</div>
+              <span className="text-muted-foreground text-[11px]">Top changes</span>
+            </div>
+            <AprVsMay data={categoryDeltas} />
+          </div>
+        )}
       </div>
     </MobilePage>
   );

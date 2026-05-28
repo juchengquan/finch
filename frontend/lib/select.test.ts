@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend } from '@/lib/select';
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas } from '@/lib/select';
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -63,4 +63,64 @@ test('categorySpend excludes pending, transfers, and income', () => {
     tx({ amount: 20, category: 'food' }),
   ];
   expect(categorySpend(txns, 'personal').food).toBe(10);
+});
+
+test('monthlySpending sums expenses per month (excludes transfers, adjustments, pending, income)', () => {
+  const txns = [
+    tx({ amount: -100, date: '2026-05-15' }),
+    tx({ amount: -40, date: '2026-05-18' }),
+    tx({ amount: -200, date: '2026-04-10' }),
+    tx({ amount: 1500, date: '2026-05-22' }), // income — skip
+    tx({ amount: -25, date: '2026-05-20', transferGroupId: 'tg-1' }), // transfer — skip
+    tx({ amount: -50, date: '2026-05-21', isAdjustment: true }), // adjustment — skip
+    tx({ amount: -30, date: '2026-05-23', pending: true }), // pending — skip
+  ];
+  const out = monthlySpending(txns, 'personal', '2026-05', 3);
+  expect(out.map((r) => r.m)).toEqual(['Mar', 'Apr', 'May']);
+  expect(out[0].v).toBe(0);
+  expect(out[1].v).toBeCloseTo(200, 2);
+  expect(out[2].v).toBeCloseTo(140, 2);
+});
+
+test('monthlyCashflow splits income vs expense per month (both positive)', () => {
+  const txns = [
+    tx({ amount: 1500, date: '2026-05-01' }), // income
+    tx({ amount: -200, date: '2026-05-02' }), // expense
+    tx({ amount: -50, date: '2026-04-15' }),
+    tx({ amount: 800, date: '2026-04-25' }),
+  ];
+  const out = monthlyCashflow(txns, 'personal', '2026-05', 2);
+  expect(out.map((r) => r.m)).toEqual(['Apr', 'May']);
+  expect(out[0].inc).toBeCloseTo(800, 2);
+  expect(out[0].exp).toBeCloseTo(50, 2);
+  expect(out[1].inc).toBeCloseTo(1500, 2);
+  expect(out[1].exp).toBeCloseTo(200, 2);
+});
+
+test('topCategoryDeltas: % change vs prev month, sorted by absolute delta', () => {
+  const txns = [
+    // Food: 100 → 150 (+50)
+    tx({ amount: -100, category: 'food', date: '2026-04-10' }),
+    tx({ amount: -150, category: 'food', date: '2026-05-10' }),
+    // Shopping: 50 → 200 (+150, bigger delta)
+    tx({ amount: -50, category: 'shop', date: '2026-04-05' }),
+    tx({ amount: -200, category: 'shop', date: '2026-05-05' }),
+    // Transport: 80 → 0 (-80)
+    tx({ amount: -80, category: 'trans', date: '2026-04-20' }),
+  ];
+  const cats = [
+    { id: 'food', name: 'Food' },
+    { id: 'shop', name: 'Shopping' },
+    { id: 'trans', name: 'Transport' },
+  ];
+  const out = topCategoryDeltas(txns, 'personal', '2026-05', cats, 5);
+  expect(out[0].name).toBe('Shopping'); // largest absolute delta
+  expect(out[0].a).toBe(50);
+  expect(out[0].b).toBe(200);
+  expect(out[0].d).toBe(300); // (200-50)/50 * 100
+  const food = out.find((r) => r.name === 'Food')!;
+  expect(food.d).toBe(50);
+  const trans = out.find((r) => r.name === 'Transport')!;
+  expect(trans.b).toBe(0);
+  expect(trans.d).toBe(-100);
 });

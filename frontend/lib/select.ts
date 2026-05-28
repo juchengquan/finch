@@ -66,6 +66,80 @@ export function prevMonth(month: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** YYYY-MM keys for the N months ending at (and including) `endMonth`, oldest first. */
+function monthsBack(endMonth: string, n: number): string[] {
+  if (!endMonth) return [];
+  const [y, m] = endMonth.split('-').map(Number);
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(y, m - 1 - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+/** Monthly expense totals (positive magnitude), oldest first. Mirrors MOCK.monthly. */
+export function monthlySpending(txns: Tx[], ledgerId: string, endMonth: string, n: number): { m: string; v: number }[] {
+  const months = monthsBack(endMonth, n);
+  const by = new Map<string, number>(months.map((mo) => [mo, 0]));
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    const mo = t.date.slice(0, 7);
+    if (!by.has(mo)) continue;
+    by.set(mo, (by.get(mo) ?? 0) + -t.amount);
+  }
+  return months.map((mo) => ({ m: MONTH_LABELS[Number(mo.slice(5)) - 1], v: r2(by.get(mo) ?? 0) }));
+}
+
+/** Income / expense totals per month (both positive). Mirrors MOCK.cashflow. */
+export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, n: number): { m: string; inc: number; exp: number }[] {
+  const months = monthsBack(endMonth, n);
+  const inc = new Map<string, number>(months.map((mo) => [mo, 0]));
+  const exp = new Map<string, number>(months.map((mo) => [mo, 0]));
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending || t.transferGroupId || t.isAdjustment) continue;
+    const mo = t.date.slice(0, 7);
+    if (!inc.has(mo)) continue;
+    if (t.amount > 0) inc.set(mo, (inc.get(mo) ?? 0) + t.amount);
+    else exp.set(mo, (exp.get(mo) ?? 0) + -t.amount);
+  }
+  return months.map((mo) => ({ m: MONTH_LABELS[Number(mo.slice(5)) - 1], inc: r2(inc.get(mo) ?? 0), exp: r2(exp.get(mo) ?? 0) }));
+}
+
+/**
+ * Top categories by absolute month-over-month spend delta. `a` = previous month,
+ * `b` = current month, `d` = percent change (mirrors the old APR_VS_MAY shape).
+ */
+export function topCategoryDeltas(
+  txns: Tx[],
+  ledgerId: string,
+  curMonth: string,
+  categories: { id: string; name: string }[],
+  count = 5,
+): { name: string; a: number; b: number; d: number }[] {
+  if (!curMonth) return [];
+  const prev = prevMonth(curMonth);
+  const cur = categorySpend(txns, ledgerId, curMonth);
+  const prv = categorySpend(txns, ledgerId, prev);
+  const nameById = new Map(categories.map((c) => [c.id, c.name]));
+  const seen = new Set<string>([...Object.keys(cur), ...Object.keys(prv)]);
+  return [...seen]
+    .map((id) => {
+      const a = r2(prv[id] ?? 0);
+      const b = r2(cur[id] ?? 0);
+      const d = a > 0 ? Math.round(((b - a) / a) * 100) : b > 0 ? 100 : 0;
+      return { name: nameById.get(id) ?? id, a, b, d };
+    })
+    .filter((r) => r.a > 0 || r.b > 0)
+    .sort((x, y) => Math.abs(y.b - y.a) - Math.abs(x.b - x.a))
+    .slice(0, count);
+}
+
 /** Balance of one account from the projected account rows. */
 export function accountBalance(accounts: AccountRow[], accountId: string): number {
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
