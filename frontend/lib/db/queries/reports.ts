@@ -16,7 +16,7 @@ export async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: s
        SUM(CASE WHEN amount < 0 THEN amount_base ELSE 0 END) AS expense,
        SUM(amount_base) AS net
      FROM transactions
-     WHERE ledger_id = ? AND date LIKE ? AND transfer_group_id IS NULL AND status = 'confirmed'`,
+     WHERE ledger_id = ? AND date LIKE ? AND transfer_group_id IS NULL AND is_adjustment = 0 AND status = 'confirmed'`,
     [ledgerId, `${yearMonth}%`],
   );
   const r = rows[0] ?? {};
@@ -53,7 +53,7 @@ export async function budgetProgress(exec: Exec, ledgerId: string, yearMonth: st
         `SELECT COALESCE(SUM(amount_base * -1), 0) AS spent
            FROM transactions
           WHERE ledger_id = ? AND date LIKE ? AND amount < 0
-            AND transfer_group_id IS NULL AND status = 'confirmed'
+            AND transfer_group_id IS NULL AND is_adjustment = 0 AND status = 'confirmed'
             AND category_id IN (${placeholders})`,
         [ledgerId, `${yearMonth}%`, ...catIds],
       );
