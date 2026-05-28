@@ -278,4 +278,7 @@ remaining `app_state` shims. What's left:
 
 Done since (Phase H follow-ups): recurring **split add/remove** UI on the template
 detail screen, and the **download backup** now streams the live server DB via
-`GET /api/export` (table edits included).
+`GET /api/export` (table edits included). **Readable export** — `GET
+/api/export/transactions` returns a transactions CSV (account/category names + tags
+resolved via joins); Settings has a "Download .csv" button. Multi-entity / XLSX is
+a possible later extension (CSV builder lives in `lib/csv.ts`).

@@ -119,6 +119,11 @@ export default function SettingsPage() {
             Download .db
           </Button>
         </Row>
+        <Row icon="doc" label="Export transactions">
+          <Button variant="outline" size="sm" onClick={() => void backup.downloadCsv()}>
+            Download .csv
+          </Button>
+        </Row>
         <Row icon="upload" label="Import database">
           <Button variant="outline" size="sm" disabled>
             Disabled
