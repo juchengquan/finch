@@ -8,7 +8,7 @@ export default function AddExpensePage() {
   const router = useRouter();
 
   return (
-    <MobilePage header={<ScreenHeader back backHref="/activity" title="Add expense" />}>
+    <MobilePage header={<ScreenHeader back backHref="/activity" title="Add transaction" />}>
       <AddExpenseForm className="pb-[120px]" onSaved={() => router.push('/activity')} />
     </MobilePage>
   );

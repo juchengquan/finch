@@ -43,7 +43,7 @@ export function categorySpend(txns: Tx[], ledgerId: string, month?: string): Rec
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (month && t.date.slice(0, 7) !== month) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || !t.category) continue;
+    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment || !t.category) continue;
     m[t.category] = (m[t.category] ?? 0) + -t.amount;
   }
   return m;

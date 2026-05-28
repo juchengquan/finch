@@ -57,6 +57,7 @@ export function AddExpenseForm({
   const { activeId } = useLedger();
   const { base } = useMoney();
 
+  const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('food');
@@ -96,16 +97,16 @@ export function AddExpenseForm({
       toast.error('Enter an amount');
       return;
     }
-    const native = -Math.abs(value);
+    const signed = type === 'income' ? Math.abs(value) : -Math.abs(value);
     // Store the ledger-base amount (drives balances) alongside the original currency.
     const baseAmount =
-      currency === base ? native : Math.round(convertAmount(native, currency, base) * 100) / 100;
+      currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
     const id = addTransaction({
-      merchant: merchant.trim() || 'Untitled',
+      merchant: merchant.trim() || (type === 'income' ? 'Income' : 'Untitled'),
       category,
       amount: baseAmount,
       currency,
-      nativeAmount: native,
+      nativeAmount: signed,
       account,
       date,
       time: new Date().toTimeString().slice(0, 5),
@@ -113,15 +114,31 @@ export function AddExpenseForm({
       pending: false,
       ledgerId: activeId,
     });
-    toast.success('Expense added', {
-      description: `${merchant.trim() || 'Untitled'} · ${fmtNative(Math.abs(value), currency)}`,
+    toast.success(type === 'income' ? 'Income added' : 'Expense added', {
+      description: `${merchant.trim() || (type === 'income' ? 'Income' : 'Untitled')} · ${fmtNative(Math.abs(value), currency)}`,
     });
     onSaved?.(id);
   };
 
   return (
     <div className={cn('flex flex-col gap-3.5 px-5 pt-4 pb-8', className)}>
-      <div className="pt-5 text-center">
+      <div className="flex justify-center pt-5">
+        <div role="tablist" aria-label="Transaction type" className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
+          {(['expense', 'income'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={type === t}
+              onClick={() => setType(t)}
+              className={cn('rounded-full px-4 py-1.5 capitalize transition-colors', type === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="text-center">
         <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">AMOUNT</div>
         <div className="flex items-baseline justify-center gap-1">
           <span className="text-muted-foreground font-serif text-[40px]">{currencySym}</span>
@@ -210,7 +227,7 @@ export function AddExpenseForm({
         onClick={save}
         className="bg-foreground text-background mt-2 flex h-[54px] cursor-pointer items-center justify-center rounded-[27px] text-base font-medium -tracking-[0.2px]"
       >
-        Save expense
+        {type === 'income' ? 'Save income' : 'Save expense'}
       </button>
     </div>
   );

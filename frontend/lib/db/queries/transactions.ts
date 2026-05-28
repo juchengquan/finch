@@ -33,6 +33,8 @@ export interface AddInput {
   time?: string;
   note?: string;
   status?: 'pending' | 'confirmed';
+  /** Manual balance-reconciliation flag; excluded from spend/cash-flow aggregates. */
+  isAdjustment?: boolean;
 }
 
 export function rowToTx(r: Record<string, unknown>): Tx {
@@ -54,6 +56,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     pending: String(r.status) === 'pending',
     recurring: !!Number(r.recurring),
     kind: amount > 0 ? 'income' : undefined,
+    isAdjustment: !!Number(r.is_adjustment),
     ledgerId: String(r.ledger_id),
     transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
   };
@@ -130,12 +133,12 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
        description,category_id,counterparty_id,transfer_group_id,status,confirmed_at,
-       balance_after,currency,notes,recurring,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
+       balance_after,currency,notes,recurring,is_adjustment,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
     [
       id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate, input.date,
       input.merchant, input.categoryId ?? null, null, null, status, status === 'confirmed' ? new Date().toISOString() : null,
-      balanceAfter, currency, input.note || null, 0,
+      balanceAfter, currency, input.note || null, 0, input.isAdjustment ? 1 : 0,
     ],
   );
   return id;

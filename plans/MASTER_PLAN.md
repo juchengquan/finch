@@ -281,12 +281,13 @@ remaining `app_state` shims. What's left:
    derived series from live transactions in a later pass.
 3. Optional polish: balance-curve / net-worth charts; real FX conversion; the
    deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
-4. **Income + Adjustment transaction types** — Income is data-supported (Tx
-   `kind`, recurring/category `'income'` enums, positive amounts) but has no UI
-   entry point. Adjustment isn't represented anywhere (no enum, no UI). The
-   smallest income fix is generalising `/add` into "Add transaction" with an
-   expense/income toggle; adjustment needs a data model decision (likely a
-   transactions enum column) plus an account-detail "Reconcile balance" entry.
+4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
+   with an income/expense toggle that signs the amount on save. Adjustments are
+   modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
+   and created via a new **"Reconcile balance"** dialog on the account-detail
+   screen — `adjustAccountBalance` posts a marked delta that moves the balance to
+   the target. Adjustments are excluded from category spend, cash flow, budget
+   progress and the insights spend heatmap (same places transfers are excluded).
 
 Done since (Phase H follow-ups): recurring **split add/remove** UI on the template
 detail screen, and the **download backup** now streams the live server DB via
