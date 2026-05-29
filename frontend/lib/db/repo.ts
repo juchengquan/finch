@@ -1,6 +1,7 @@
 import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { AccountGroupRow } from './queries/accountGroups';
+import type { BudgetRolloverInfo } from './queries/budgets';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
 import type { ExchangeRate, Device } from './queries/system';
@@ -26,6 +27,7 @@ export interface ProjectedState extends PersistState {
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
+  budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];

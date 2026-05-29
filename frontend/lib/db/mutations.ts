@@ -52,7 +52,12 @@ import {
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
 import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
-import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
+import {
+  setCategoryBudget as qSetCategoryBudget,
+  deleteCategoryBudget as qDeleteCategoryBudget,
+  setCategoryBudgetRollover as qSetCategoryBudgetRollover,
+  type BudgetRolloverPatch,
+} from './queries/budgets';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -294,6 +299,19 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteBudget':
       await qDeleteCategoryBudget(exec, str(args.categoryId));
       return;
+    case 'setBudgetRollover': {
+      const patch: BudgetRolloverPatch = {};
+      if (args.rollover !== undefined) patch.rollover = !!args.rollover;
+      if (args.rolloverLimit !== undefined) {
+        patch.rolloverLimit = args.rolloverLimit === null ? null : Number(args.rolloverLimit);
+        if (patch.rolloverLimit !== null && !(patch.rolloverLimit >= 0)) {
+          throw new Error('Rollover limit must be a non-negative number');
+        }
+      }
+      if (args.carryForward !== undefined) patch.carryForward = Number(args.carryForward);
+      await qSetCategoryBudgetRollover(exec, str(args.categoryId), patch);
+      return;
+    }
     case 'createAccount': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();

@@ -658,3 +658,46 @@ test('createAccountGroup rejects an empty name', async () => {
   const exec = await seeded();
   await expect(applyMutation(exec, 'createAccountGroup', { name: '   ' })).rejects.toThrow(/name/i);
 });
+
+test('setBudgetRollover toggles rollover + limit on an existing budget', async () => {
+  const exec = await seeded();
+  const { budgetRolloverByCategory } = await import('@/lib/db/queries/budgets');
+
+  // Seed already includes bud-food (Food). Toggle rollover + set a cap.
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rollover: true, rolloverLimit: 200 });
+  let info = (await budgetRolloverByCategory(exec)).food;
+  expect(info.rollover).toBe(true);
+  expect(info.rolloverLimit).toBe(200);
+  expect(info.carryForward).toBe(0);
+
+  // Clear the cap.
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: null });
+  info = (await budgetRolloverByCategory(exec)).food;
+  expect(info.rollover).toBe(true); // unchanged
+  expect(info.rolloverLimit).toBeNull();
+
+  // Set carry-forward, then budgetProgress reflects it in the total.
+  const { budgetProgress } = await import('@/lib/db/queries/reports');
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', carryForward: 150 });
+  const progress = await budgetProgress(exec, 'personal', '2026-05');
+  const foodBudget = progress.find((b) => b.id === 'bud-food')!;
+  // Original food amount is 700; carry-forward adds 150 to the period total.
+  expect(foodBudget.budget).toBe(850);
+});
+
+test('setBudgetRollover errors when the category has no budget yet', async () => {
+  const exec = await seeded();
+  // Create a fresh category with no budget row.
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Pets' });
+  const [{ id: petsId }] = await exec("SELECT id FROM categories WHERE name = 'Pets'");
+  await expect(
+    applyMutation(exec, 'setBudgetRollover', { categoryId: String(petsId), rollover: true }),
+  ).rejects.toThrow(/budget/i);
+});
+
+test('setBudgetRollover rejects a negative limit', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: -10 }),
+  ).rejects.toThrow(/limit/i);
+});

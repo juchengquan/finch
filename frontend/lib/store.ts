@@ -5,6 +5,7 @@ import transactionsData from '@/data/transactions.json';
 import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
+import type { BudgetRolloverInfo } from '@/lib/db/queries/budgets';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
@@ -115,6 +116,7 @@ interface FinanceState {
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
+  budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
@@ -133,6 +135,10 @@ interface FinanceState {
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
   deleteBudget: (categoryId: string) => void;
+  setBudgetRollover: (
+    categoryId: string,
+    patch: { rollover?: boolean; rolloverLimit?: number | null; carryForward?: number },
+  ) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
@@ -198,6 +204,7 @@ export const useFinanceStore = create<FinanceState>()(
       accounts: [],
       accountGroups: [],
       budgetByCategory: {},
+      budgetRolloverByCategory: {},
       categories: [],
       counterparties: [],
       exchangeRates: [],
@@ -270,9 +277,28 @@ export const useFinanceStore = create<FinanceState>()(
         set((s) => {
           const next = { ...s.budgetByCategory };
           delete next[categoryId];
-          return { budgetByCategory: next };
+          const nextRoll = { ...s.budgetRolloverByCategory };
+          delete nextRoll[categoryId];
+          return { budgetByCategory: next, budgetRolloverByCategory: nextRoll };
         });
         syncMutation('deleteBudget', { categoryId });
+      },
+
+      setBudgetRollover: (categoryId, patch) => {
+        set((s) => {
+          const prev = s.budgetRolloverByCategory[categoryId] ?? { rollover: false, rolloverLimit: null, carryForward: 0 };
+          return {
+            budgetRolloverByCategory: {
+              ...s.budgetRolloverByCategory,
+              [categoryId]: {
+                rollover: patch.rollover ?? prev.rollover,
+                rolloverLimit: patch.rolloverLimit === undefined ? prev.rolloverLimit : patch.rolloverLimit,
+                carryForward: patch.carryForward === undefined ? prev.carryForward : patch.carryForward,
+              },
+            },
+          };
+        });
+        syncMutation('setBudgetRollover', { categoryId, ...patch });
       },
 
       createAccount: (input) => {
