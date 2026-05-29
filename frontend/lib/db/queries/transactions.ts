@@ -17,6 +17,9 @@ export interface ListOptions {
   status?: 'pending' | 'confirmed';
   from?: string; // inclusive YYYY-MM-DD
   to?: string; // inclusive YYYY-MM-DD
+  /** Filter by absolute amount, magnitude in the ledger base currency. */
+  minAmount?: number;
+  maxAmount?: number;
   limit?: number;
   offset?: number;
 }
@@ -92,6 +95,14 @@ export async function listTransactions(exec: Exec, opts: ListOptions): Promise<T
   if (opts.to) {
     where.push('date <= ?');
     bind.push(opts.to);
+  }
+  if (opts.minAmount != null) {
+    where.push('ABS(amount_base) >= ?');
+    bind.push(opts.minAmount);
+  }
+  if (opts.maxAmount != null) {
+    where.push('ABS(amount_base) <= ?');
+    bind.push(opts.maxAmount);
   }
 
   let sql = `SELECT * FROM transactions WHERE ${where.join(' AND ')} ORDER BY date DESC, time DESC`;

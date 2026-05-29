@@ -4,6 +4,8 @@ import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
 import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
+import type { BudgetRolloverInfo } from '@/lib/db/queries/budgets';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
@@ -32,6 +34,23 @@ export interface Tx {
   ledgerId?: string;
   transferGroupId?: string;
   tags?: string[];
+  /** Ad-hoc category splits. When present, these override `category` /
+   * `amount` for category aggregations (categorySpend / budgets / etc.). */
+  splits?: TxSplit[];
+}
+
+export interface TxSplit {
+  id: string;
+  categoryId: string | null;
+  amount: number;       // signed, in the tx's native currency
+  amountBase: number;   // signed, in the ledger's base currency
+  description: string | null;
+}
+
+export interface TxSplitInput {
+  categoryId: string | null;
+  amount: number;
+  description?: string | null;
 }
 
 export interface TransferInput {
@@ -95,7 +114,9 @@ interface FinanceState {
   recurring: RecurringTemplate[];
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
+  accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
+  budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
@@ -114,9 +135,16 @@ interface FinanceState {
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
   deleteBudget: (categoryId: string) => void;
+  setBudgetRollover: (
+    categoryId: string,
+    patch: { rollover?: boolean; rolloverLimit?: number | null; carryForward?: number },
+  ) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
+  createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
+  updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
+  deleteAccountGroup: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   addRecurringSplit: (templateId: string, account: string, pct: number) => void;
   removeRecurringSplit: (templateId: string, index: number) => void;
@@ -135,6 +163,7 @@ interface FinanceState {
   deleteGoal: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
@@ -173,7 +202,9 @@ export const useFinanceStore = create<FinanceState>()(
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
       accounts: [],
+      accountGroups: [],
       budgetByCategory: {},
+      budgetRolloverByCategory: {},
       categories: [],
       counterparties: [],
       exchangeRates: [],
@@ -246,9 +277,28 @@ export const useFinanceStore = create<FinanceState>()(
         set((s) => {
           const next = { ...s.budgetByCategory };
           delete next[categoryId];
-          return { budgetByCategory: next };
+          const nextRoll = { ...s.budgetRolloverByCategory };
+          delete nextRoll[categoryId];
+          return { budgetByCategory: next, budgetRolloverByCategory: nextRoll };
         });
         syncMutation('deleteBudget', { categoryId });
+      },
+
+      setBudgetRollover: (categoryId, patch) => {
+        set((s) => {
+          const prev = s.budgetRolloverByCategory[categoryId] ?? { rollover: false, rolloverLimit: null, carryForward: 0 };
+          return {
+            budgetRolloverByCategory: {
+              ...s.budgetRolloverByCategory,
+              [categoryId]: {
+                rollover: patch.rollover ?? prev.rollover,
+                rolloverLimit: patch.rolloverLimit === undefined ? prev.rolloverLimit : patch.rolloverLimit,
+                carryForward: patch.carryForward === undefined ? prev.carryForward : patch.carryForward,
+              },
+            },
+          };
+        });
+        syncMutation('setBudgetRollover', { categoryId, ...patch });
       },
 
       createAccount: (input) => {
@@ -276,6 +326,34 @@ export const useFinanceStore = create<FinanceState>()(
       archiveAccount: (id) => {
         set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
         syncMutation('archiveAccount', { id });
+      },
+
+      createAccountGroup: (input) => {
+        const id = `ag-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const includeInNetWorth = input.includeInNetWorth ?? 1;
+        set((s) => ({
+          accountGroups: [
+            ...s.accountGroups,
+            { id, ledgerId, name: input.name, includeInNetWorth, sortOrder: s.accountGroups.length },
+          ],
+        }));
+        syncMutation('createAccountGroup', { id, ledgerId, name: input.name, includeInNetWorth });
+        return id;
+      },
+
+      updateAccountGroup: (id, patch) => {
+        set((s) => ({ accountGroups: s.accountGroups.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
+        syncMutation('updateAccountGroup', { id, patch });
+      },
+
+      deleteAccountGroup: (id) => {
+        set((s) => ({
+          accountGroups: s.accountGroups.filter((g) => g.id !== id),
+          // accounts.group_id is SET NULL by the FK; mirror that optimistically.
+          accounts: s.accounts.map((a) => (a.groupId === id ? { ...a, groupId: null, groupName: null } : a)),
+        }));
+        syncMutation('deleteAccountGroup', { id });
       },
 
       updateRecurringSplit: (templateId, index, pct) => {
@@ -406,6 +484,38 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.id === transactionId ? { ...t, tags: tagIds } : t)),
         }));
         syncMutation('setTransactionTags', { id: transactionId, tagIds });
+      },
+
+      setTransactionSplits: (transactionId, splits) => {
+        set((s) => ({
+          transactions: s.transactions.map((t) => {
+            if (t.id !== transactionId) return t;
+            if (!splits.length) {
+              const { splits: _drop, ...rest } = t;
+              void _drop;
+              return rest;
+            }
+            const ratio = t.amount !== 0 && t.nativeAmount != null && t.nativeAmount !== 0
+              ? t.amount / t.nativeAmount
+              : 1;
+            const optimistic: TxSplit[] = splits.map((sp, i) => ({
+              id: `${transactionId}-s-${i}`,
+              categoryId: sp.categoryId,
+              amount: sp.amount,
+              amountBase: Math.round(sp.amount * ratio * 100) / 100,
+              description: sp.description ?? null,
+            }));
+            return { ...t, splits: optimistic };
+          }),
+        }));
+        syncMutation('setTransactionSplits', {
+          id: transactionId,
+          splits: splits.map((s) => ({
+            categoryId: s.categoryId,
+            amount: s.amount,
+            description: s.description ?? null,
+          })),
+        });
       },
 
       updateTag: (id, patch) => {

@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
@@ -29,11 +32,21 @@ export default function ActivityPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [minAmt, setMinAmt] = useState('');
+  const [maxAmt, setMaxAmt] = useState('');
   const allTxns = useFinanceStore((s) => s.transactions);
   const allTags = useFinanceStore((s) => s.tags);
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
+
+  const minA = minAmt.trim() === '' ? null : Number(minAmt);
+  const maxA = maxAmt.trim() === '' ? null : Number(maxAmt);
+  const activeRangeCount =
+    (fromDate ? 1 : 0) + (toDate ? 1 : 0) + (minA != null && Number.isFinite(minA) ? 1 : 0) + (maxA != null && Number.isFinite(maxA) ? 1 : 0);
 
   const txns = allTxns.filter((t) => {
     if ((t.ledgerId ?? 'personal') !== activeId) return false;
@@ -41,8 +54,19 @@ export default function ActivityPage() {
     if (filter === 'out' && t.amount >= 0) return false;
     if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;
     if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false;
+    if (fromDate && t.date < fromDate) return false;
+    if (toDate && t.date > toDate) return false;
+    if (minA != null && Number.isFinite(minA) && Math.abs(t.amount) < minA) return false;
+    if (maxA != null && Number.isFinite(maxA) && Math.abs(t.amount) > maxA) return false;
     return true;
   });
+
+  const clearRangeFilters = () => {
+    setFromDate('');
+    setToDate('');
+    setMinAmt('');
+    setMaxAmt('');
+  };
 
   const groups: { date: string; items: typeof txns }[] = [];
   for (const t of txns) {
@@ -66,21 +90,86 @@ export default function ActivityPage() {
           />
         </div>
 
-        <div className="bg-secondary mb-4 flex gap-1 rounded-full p-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                'h-7 flex-1 rounded-full text-xs font-medium transition-colors',
-                filter === f.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="mb-4 flex items-center gap-2">
+          <div className="bg-secondary flex flex-1 gap-1 rounded-full p-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className={cn(
+                  'h-7 flex-1 rounded-full text-xs font-medium transition-colors',
+                  filter === f.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((o) => !o)}
+            aria-label="Toggle filters"
+            aria-expanded={filtersOpen}
+            className={cn(
+              'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
+              activeRangeCount > 0 ? 'border-primary text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <Icon name="filter" size={13} />
+            Filters{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
+          </button>
         </div>
+
+        {filtersOpen && (
+          <div className="bg-card border-border mb-4 flex flex-col gap-3 rounded-xl border p-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="filter-from" className="text-muted-foreground text-[11px]">From</Label>
+                <Input id="filter-from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-8 text-[12px]" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="filter-to" className="text-muted-foreground text-[11px]">To</Label>
+                <Input id="filter-to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-8 text-[12px]" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="filter-min" className="text-muted-foreground text-[11px]">Min amount</Label>
+                <Input
+                  id="filter-min"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  placeholder="0"
+                  value={minAmt}
+                  onChange={(e) => setMinAmt(e.target.value)}
+                  className="h-8 text-right font-mono text-[12px]"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="filter-max" className="text-muted-foreground text-[11px]">Max amount</Label>
+                <Input
+                  id="filter-max"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  placeholder="∞"
+                  value={maxAmt}
+                  onChange={(e) => setMaxAmt(e.target.value)}
+                  className="h-8 text-right font-mono text-[12px]"
+                />
+              </div>
+            </div>
+            {activeRangeCount > 0 && (
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" onClick={clearRangeFilters}>
+                  Clear
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {ledgerTags.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-1.5">

@@ -309,13 +309,13 @@ The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
 **Picked next:**
-1. **Transaction splits** ⭐ *(starting now)* — recurring templates already
-   support splits; ad-hoc transactions don't. Lets a Costco trip be split
-   across `groceries` + `household` so category spend is honest. Schema: one
-   new join table (`transaction_splits` with `transaction_id` FK + per-row
-   `category_id` + `amount`); UI mirrors the recurring detail's split editor.
-   Reports/insights that already filter by category should treat split rows as
-   the source of truth.
+1. **Transaction splits** ✅ *(done — see PR)* — ad-hoc category splits on any
+   confirmed transaction. New `transaction_splits` table (schema v6) holds the
+   per-row category + amount + locked `amount_base`; `categorySpend`,
+   `monthlyByCategory`, and `budgetProgress` LEFT JOIN with COALESCE so split
+   rows override the parent category. Transaction detail surfaces a multi-row
+   editor (Split button) with sum validation; the client `categorySpend`
+   selector mirrors the same override.
 
 **Other strong candidates (deferred, queued):**
 2. **Spending forecast / cash-flow projection** — extrapolate end-of-month
@@ -327,12 +327,19 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    categories, accounts, screens.
 
 **Smaller wins:**
-4. **Account-group CRUD** — `account_groups` is seed-only today; closes the last
-   admin-CRUD gap.
-5. **Budget rollover UI** — schema already has `carry_forward` / `rollover`; no
-   UI surfaces them. Small toggle + display in Budget detail.
-6. **Date / amount filters on Activity** — list has only the direction filter
-   today; date-range + amount-range would round it out.
+4. **Account-group CRUD** ✅ *(done — see PR)* — listAccountGroups / create /
+   update / delete wired through projection + store + mutations; /accounts page
+   surfaces a "New group" affordance + per-group rename/delete; orphan
+   accounts land in an "Ungrouped" bucket when their group is deleted.
+5. **Budget rollover UI** ✅ *(done — see PR)* — rollover toggle + optional cap
+   on the budget detail page, carry-forward shown in the header and folded
+   into the ring + remaining figure (matches budgetProgress). Automatic
+   month-end carry-over computation is a separate task.
+6. **Date / amount filters on Activity** ✅ *(done — see PR)* — `minAmount` /
+   `maxAmount` on ListOptions + selectTransactions (date range already wired
+   on the server, just unused). UI: collapsible "Filters" panel below the
+   direction control with date + amount-range inputs and an active-count
+   indicator.
 
 **Bigger / scope-expanding:**
 7. **Sankey diagram** of income → categories on Insights. Visually striking,
