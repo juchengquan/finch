@@ -291,8 +291,9 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    (PR #33: `monthlySpending` / `monthlyCashflow` / `topCategoryDeltas` selectors).
    The `AreaChart` primitive already existed and is in use; **balance-curve /
    net-worth** are sparkline-charted on the accounts list + detail. **Open**:
-   `CalendarHeatmap` (no concrete use site today) and **Receipt-attach** (still
-   a `toast('Receipt — coming soon')` stub on `transaction-detail.tsx:258`).
+   `CalendarHeatmap` (no concrete use site today). Receipt attachment is out
+   of scope for now — the `toast('Receipt — coming soon')` stub at
+   `transaction-detail.tsx:258` stays put.
 4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
    with an income/expense toggle that signs the amount on save. Adjustments are
    modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
@@ -302,36 +303,11 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    progress and the insights spend heatmap (same places transfers are excluded).
 
 ### Remaining work (honest list)
-- **Receipt attachment** — the one open user-visible feature. Scoped below.
 - **`CalendarHeatmap` primitive** — speculative; no screen needs it today. Build
   it only when a use site lands (e.g. a spending-calendar view).
 - **`/fx` in the ledger nav** — currently reachable via a System link only. Minor.
 - **Richer net-worth / balance trend charts** — today they're sparklines; could
   become dedicated trend pages. Polish, not a gap.
-
-### Scope — Receipt attachment
-Replace the stub with real receipt upload/view/delete on a transaction.
-
-- **Storage**: a new `transaction_receipts` table — `(id PK, transaction_id FK
-  ON DELETE CASCADE, filename TEXT, content_type TEXT, size INTEGER, bytes BLOB,
-  created_at)`. One receipt per transaction in v1 (FK `UNIQUE`). Keeping bytes in
-  the DB keeps the existing `/api/export` (.db) and CSV exports self-contained;
-  no on-disk file store to coordinate.
-- **Schema migration**: v6 adds the table.
-- **Server endpoints**: `POST /api/transactions/{id}/receipt` (multipart upload,
-  validate type ∈ {image/png, image/jpeg, image/webp, application/pdf} and size
-  ≤ 5 MB), `GET /api/transactions/{id}/receipt` (streams bytes + correct
-  Content-Type), `DELETE /api/transactions/{id}/receipt`.
-- **Projection**: `Tx.hasReceipt?: boolean` (cheap join on existence, not the
-  bytes themselves) so the list/detail can show a badge without dragging blobs
-  through `/api/state`.
-- **UI** (`components/transaction-detail.tsx`): replace the toast with a file
-  picker → upload, a thumbnail/inline view (image) or "Open PDF" link, and a
-  delete button. Persist `hasReceipt` optimistically; refetch via the existing
-  `syncMutation` round-trip.
-- **Tests**: a unit test for the validation (size + type) + a browser smoke
-  uploading a small PNG, fetching it back, and deleting.
-- **Out of scope (v1)**: multiple receipts per transaction; OCR; cloud storage.
 
 ### Done since (Phase H follow-ups)
 - Recurring **split add/remove** UI on the template detail screen.
