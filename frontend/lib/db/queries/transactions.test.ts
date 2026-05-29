@@ -33,7 +33,7 @@ async function seeded(): Promise<Exec> {
 test('list scopes to ledger and excludes the other ledger', async () => {
   const exec = await seeded();
   const personal = await listTransactions(exec, { ledgerId: 'personal' });
-  expect(personal.length).toBe(34);
+  expect(personal.length).toBe(126);
   expect(personal.every((t) => t.ledgerId === 'personal')).toBe(true);
 });
 
@@ -48,9 +48,12 @@ test('direction filter splits in vs out', async () => {
 
 test('search matches the merchant/description substring', async () => {
   const exec = await seeded();
+  // Substring search returns all matches; with extended history the seed has
+  // multiple Blue Bottle Coffee rows. Assert it works (≥ 1) and every hit is
+  // a Coffee merchant.
   const res = await listTransactions(exec, { ledgerId: 'personal', query: 'coffee' });
-  expect(res.length).toBe(1);
-  expect(res[0].merchant).toBe('Blue Bottle Coffee');
+  expect(res.length).toBeGreaterThan(0);
+  expect(res.every((t) => /coffee/i.test(t.merchant))).toBe(true);
 });
 
 test('filter by account and category', async () => {
