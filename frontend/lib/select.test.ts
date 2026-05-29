@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow } from "@/lib/select";
 import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { ScheduledItem } from '@/lib/db/queries/planning';
@@ -328,4 +328,57 @@ test('monthForecast for a past month: projection collapses to actuals (no run-ra
   expect(f!.scheduledRest).toBe(0);
   expect(f!.projected).toBeCloseTo(300, 2);
   expect(f!.daysRemaining).toBe(0);
+});
+
+test('incomeCategoryFlow: ranks top expense categories and surfaces savings', () => {
+  // 1000 income; expenses: food 200, shop 150, trans 50; net saved = 600.
+  const txns = [
+    tx({ amount: 1000, date: '2026-05-01', category: null }),
+    tx({ amount: -200, category: 'food', date: '2026-05-05' }),
+    tx({ amount: -150, category: 'shop', date: '2026-05-10' }),
+    tx({ amount: -50, category: 'trans', date: '2026-05-12' }),
+    // Excluded:
+    tx({ amount: -30, category: 'food', date: '2026-05-15', pending: true }),
+    tx({ amount: -50, category: 'food', date: '2026-04-15' }),
+  ];
+  const cats = [
+    { id: 'food', name: 'Food', hue: 12 },
+    { id: 'shop', name: 'Shopping', hue: 280 },
+    { id: 'trans', name: 'Transport', hue: 200 },
+  ];
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
+  expect(flow.income).toBeCloseTo(1000, 2);
+  expect(flow.categories.map((c) => c.id)).toEqual(['food', 'shop', 'trans']);
+  expect(flow.categories[0].spent).toBeCloseTo(200, 2);
+  expect(flow.saved).toBeCloseTo(600, 2);
+});
+
+test('incomeCategoryFlow: collapses overflow into an "Other" stub', () => {
+  const cats = [
+    { id: 'a', name: 'A', hue: 0 },
+    { id: 'b', name: 'B', hue: 0 },
+    { id: 'c', name: 'C', hue: 0 },
+    { id: 'd', name: 'D', hue: 0 },
+  ];
+  const txns = [
+    tx({ amount: 500, date: '2026-05-01' }),
+    tx({ amount: -100, category: 'a', date: '2026-05-02' }),
+    tx({ amount: -50, category: 'b', date: '2026-05-03' }),
+    tx({ amount: -30, category: 'c', date: '2026-05-04' }),
+    tx({ amount: -20, category: 'd', date: '2026-05-05' }),
+  ];
+  // topN = 2 → expect 'a', 'b', and an Other stub of 30 + 20 = 50.
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 2);
+  expect(flow.categories.map((c) => c.id)).toEqual(['a', 'b', '__other__']);
+  expect(flow.categories[2].spent).toBeCloseTo(50, 2);
+});
+
+test('incomeCategoryFlow: saved is floored at 0 when expenses exceed income', () => {
+  const cats = [{ id: 'a', name: 'A', hue: 0 }];
+  const txns = [
+    tx({ amount: 100, date: '2026-05-01' }),
+    tx({ amount: -200, category: 'a', date: '2026-05-02' }),
+  ];
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
+  expect(flow.saved).toBe(0);
 });

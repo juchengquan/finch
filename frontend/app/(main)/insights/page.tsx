@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart, AreaChart, CalendarHeatmap } from '@/components/primitives';
+import { BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
@@ -10,7 +10,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 import type { MonthForecast } from '@/lib/select';
@@ -67,9 +67,9 @@ export default function InsightsPage() {
   // Live category mapping from the seed (still serves the budget lookup); the
   // page now derives monthly/cashflow series and the category-deltas comparison
   // straight from the projected transactions.
-  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; ledger?: string }[])
+  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; hue?: number; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget }));
+    .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget, hue: c.hue ?? 200 }));
   const month = currentMonth(transactions, activeId);
   const lastDate = transactions.reduce(
     (d, t) => ((t.ledgerId ?? 'personal') === activeId && t.date > d ? t.date : d),
@@ -104,6 +104,9 @@ export default function InsightsPage() {
   const forecast = month ? monthForecast(transactions, recurring, scheduledItems, activeId, month, lastDate) : null;
   const forecastVsPrev =
     forecast && prevSpend > 0 ? Math.round(((forecast.projected - prevSpend) / prevSpend) * 100) : null;
+
+  // Income → categories flow for the Sankey card.
+  const flow = month ? incomeCategoryFlow(transactions, ledgerCategories, activeId, month, 6) : null;
 
   return (
     <MobilePage
@@ -272,6 +275,47 @@ export default function InsightsPage() {
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <span className="bg-secondary-foreground size-2 rounded-full" />
                   Scheduled · {fmt(forecast.scheduledRest)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {flow && flow.income > 0 && flow.categories.length > 0 && (
+          <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
+            <div className="mb-2 flex items-baseline justify-between">
+              <div className="text-sm font-semibold">Where {fullMonth(month)} income went</div>
+              <span className="text-muted-foreground text-[11px]">{fmt(flow.income)} in</span>
+            </div>
+            <div className="overflow-hidden">
+              <Sankey
+                left={[{ name: 'Income', value: flow.income, color: 'var(--success)' }]}
+                right={[
+                  ...flow.categories.map((c) => ({
+                    name: c.name,
+                    value: c.spent,
+                    color: `oklch(0.65 0.13 ${c.hue})`,
+                  })),
+                  ...(flow.saved > 0
+                    ? [{ name: 'Saved', value: flow.saved, color: 'var(--primary)' }]
+                    : []),
+                ]}
+                width={520}
+                height={180}
+                className="h-44 w-full"
+              />
+            </div>
+            <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px]">
+              {flow.categories.map((c) => (
+                <span key={c.id} className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full" style={{ background: `oklch(0.65 0.13 ${c.hue})` }} />
+                  {c.name} · {fmt(c.spent)}
+                </span>
+              ))}
+              {flow.saved > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <span className="bg-primary size-2 rounded-full" />
+                  Saved · {fmt(flow.saved)}
                 </span>
               )}
             </div>

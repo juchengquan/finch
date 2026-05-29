@@ -257,6 +257,48 @@ export function monthForecast(
   };
 }
 
+export interface IncomeFlow {
+  /** Total confirmed income for the month (positive). */
+  income: number;
+  /** Top expense categories by spend, oldest=first (sorted desc). */
+  categories: { id: string; name: string; spent: number; hue: number }[];
+  /** income − Σ categories' spent, floor 0. */
+  saved: number;
+}
+
+/**
+ * Aggregate income vs. confirmed expense categories for the month, ready for
+ * a Sankey "income → categories" chart. Caller passes the category lookup
+ * (id → { name, hue }) so the result is render-ready.
+ */
+export function incomeCategoryFlow(
+  txns: Tx[],
+  categories: { id: string; name: string; hue?: number }[],
+  ledgerId: string,
+  month: string,
+  topN = 6,
+): IncomeFlow {
+  let income = 0;
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending || t.amount <= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (month && t.date.slice(0, 7) !== month) continue;
+    income += t.amount;
+  }
+  const byCat = categorySpend(txns, ledgerId, month);
+  const lookup = new Map(categories.map((c) => [c.id, { name: c.name, hue: c.hue ?? 200 }]));
+  const ranked = Object.entries(byCat)
+    .map(([id, spent]) => ({ id, name: lookup.get(id)?.name ?? id, hue: lookup.get(id)?.hue ?? 200, spent }))
+    .filter((c) => c.spent > 0)
+    .sort((a, b) => b.spent - a.spent);
+  const top = ranked.slice(0, topN);
+  const restSpent = ranked.slice(topN).reduce((s, c) => s + c.spent, 0);
+  if (restSpent > 0) top.push({ id: '__other__', name: 'Other', hue: 0, spent: restSpent });
+  const spentTotal = ranked.reduce((s, c) => s + c.spent, 0);
+  const saved = Math.max(0, r2(income - spentTotal));
+  return { income: r2(income), categories: top.map((c) => ({ ...c, spent: r2(c.spent) })), saved };
+}
+
 /** Income / expense totals per month (both positive). Mirrors MOCK.cashflow. */
 export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, n: number): { m: string; inc: number; exp: number }[] {
   const months = monthsBack(endMonth, n);

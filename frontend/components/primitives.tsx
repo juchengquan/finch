@@ -278,6 +278,132 @@ interface CalendarHeatmapProps {
   className?: string;
 }
 
+interface SankeyNode {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+interface SankeyProps {
+  /** Source nodes (e.g. income sources). */
+  left: SankeyNode[];
+  /** Target nodes (e.g. expense categories + a "Remaining" stub for leftovers). */
+  right: SankeyNode[];
+  width?: number;
+  height?: number;
+  /** Width of the left + right "node" rectangles. */
+  nodeWidth?: number;
+  /** Vertical padding between nodes within each column. */
+  nodeGap?: number;
+  className?: string;
+}
+
+/**
+ * Single-source-to-many-targets Sankey. The left column is one stack of source
+ * nodes; flows fan out to the right column proportionally to the targets'
+ * values. When `left` has multiple nodes, flows are distributed pro-rata across
+ * sources (each left source contributes the same share to every right target).
+ *
+ * Designed for income → categories visualisations: `left` is income sources
+ * (or a single "Income" node) and `right` is expense categories, with the
+ * caller appending a stub like { name: "Saved", value: leftover } so widths
+ * sum across the canvas.
+ */
+export function Sankey({
+  left,
+  right,
+  width = 480,
+  height = 200,
+  nodeWidth = 8,
+  nodeGap = 4,
+  className,
+}: SankeyProps) {
+  const leftTotal = left.reduce((s, n) => s + n.value, 0);
+  const rightTotal = right.reduce((s, n) => s + n.value, 0);
+  if (leftTotal <= 0 || rightTotal <= 0) {
+    return <svg aria-hidden width={width} height={height} className={className} />;
+  }
+  const total = Math.max(leftTotal, rightTotal);
+  // Each pixel of vertical space represents `total / usableH` units of value.
+  const leftGaps = nodeGap * (left.length - 1);
+  const rightGaps = nodeGap * (right.length - 1);
+  const usableH = height - Math.max(leftGaps, rightGaps);
+
+  // Position each node's top + bottom edges. Each top is the cumulative sum of
+  // preceding heights + gaps.
+  const positionsFor = (nodes: SankeyNode[]) => {
+    const heights = nodes.map((n) => (n.value / total) * usableH);
+    return nodes.map((node, i) => {
+      const top = heights.slice(0, i).reduce((s, h) => s + h + nodeGap, 0);
+      return { top, bottom: top + heights[i], height: heights[i], node };
+    });
+  };
+  const leftPositions = positionsFor(left);
+  const rightPositions = positionsFor(right);
+
+  const leftEdge = nodeWidth;
+  const rightEdge = width - nodeWidth;
+  const midA = leftEdge + (width - 2 * nodeWidth) * 0.4;
+  const midB = leftEdge + (width - 2 * nodeWidth) * 0.6;
+
+  // Pro-rata distribution: flow_ij = (leftI / leftTotal) × rightJ-height.
+  // From the left side, each source bar is divided vertically by the right
+  // nodes' shares; from the right side, each target bar is divided by the
+  // left nodes' shares. Walking both cursors in the same (j, i) order keeps
+  // the ribbon corners aligned.
+  const ribbons: { lTop: number; lBot: number; rTop: number; rBot: number; color: string }[] = [];
+  const leftCursors = leftPositions.map((lp) => lp.top);
+  for (let j = 0; j < rightPositions.length; j++) {
+    const rp = rightPositions[j];
+    let rCursor = rp.top;
+    for (let i = 0; i < leftPositions.length; i++) {
+      const lp = leftPositions[i];
+      const flowH = lp.height * (rp.node.value / rightTotal);
+      const lTop = leftCursors[i];
+      const lBot = lTop + flowH;
+      const rTop = rCursor;
+      const rBot = rTop + flowH;
+      ribbons.push({ lTop, lBot, rTop, rBot, color: rp.node.color ?? 'var(--muted-foreground)' });
+      leftCursors[i] = lBot;
+      rCursor = rBot;
+    }
+  }
+
+  const ribbonPath = (r: { lTop: number; lBot: number; rTop: number; rBot: number }) =>
+    `M ${leftEdge} ${r.lTop.toFixed(2)} ` +
+    `C ${midA} ${r.lTop.toFixed(2)}, ${midB} ${r.rTop.toFixed(2)}, ${rightEdge} ${r.rTop.toFixed(2)} ` +
+    `L ${rightEdge} ${r.rBot.toFixed(2)} ` +
+    `C ${midB} ${r.rBot.toFixed(2)}, ${midA} ${r.lBot.toFixed(2)}, ${leftEdge} ${r.lBot.toFixed(2)} Z`;
+
+  return (
+    <svg aria-hidden width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className} preserveAspectRatio="none">
+      {ribbons.map((r, i) => (
+        <path key={i} d={ribbonPath(r)} style={{ fill: r.color, opacity: 0.32 }} />
+      ))}
+      {leftPositions.map((lp, i) => (
+        <rect
+          key={`l-${i}`}
+          x={0}
+          y={lp.top}
+          width={nodeWidth}
+          height={lp.height}
+          style={{ fill: lp.node.color ?? 'var(--foreground)' }}
+        />
+      ))}
+      {rightPositions.map((rp, i) => (
+        <rect
+          key={`r-${i}`}
+          x={width - nodeWidth}
+          y={rp.top}
+          width={nodeWidth}
+          height={rp.height}
+          style={{ fill: rp.node.color ?? 'var(--muted-foreground)' }}
+        />
+      ))}
+    </svg>
+  );
+}
+
 /**
  * GitHub-contribution-style heatmap: one cell per day, rows = day-of-week,
  * columns = week. Intensity scales linearly from `emptyColor` (value ≤ 0) to
