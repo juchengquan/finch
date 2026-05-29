@@ -221,9 +221,16 @@ The design-doc schema is now the app's live data layer. See
       ("Post now").
 - [x] **DB-backed admin screens** — Categories admin + Tags admin landed with full
       CRUD in Phase H (below).
-- [ ] **Remaining** — FX / System screens; balance-curve & net-worth charts; full
-      FX conversion; cleanup (retire `derive.ts` + baked JSON + dead
-      `repo.ts`/`storage.ts`; resolve the redundant browser `DbProvider`).
+- [x] **FX / System screens** — `/fx` is fully DB-backed (PR #29 onwards);
+      `/system` got exchange-rate add/delete CRUD in PR #32.
+- [x] **Real FX conversion** — `useMoney` now converts via the projected
+      `exchange_rates` table (PR #32). Write-side rate locking was already real.
+- [x] **Balance-curve / net-worth charts** — sparklines on the account-detail
+      and accounts-list pages, driven by `balanceSeries` / `netWorthSeries`.
+- [x] **Cleanup** — `derive.ts`, the flat-schema `repo.ts`/`storage.ts`, and the
+      redundant browser `DbProvider` are gone; dead `MOCK` re-exports + orphan
+      JSON files removed across PRs #30 and #33 (the Insights derived-series
+      rewrite). See `MASTER_PLAN.md §5` for the up-to-date open list.
 
 ### Phase H — Full CRUD parity ✅ _(done; see `plans/CRUD_PARITY_PLAN.md`)_
 Brought every user-facing entity to full Create / Update / Delete (or archive) and
