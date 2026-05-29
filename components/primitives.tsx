@@ -267,3 +267,58 @@ export function CatBar({ hue, className }: { hue: number; className?: string }) 
     />
   );
 }
+
+interface CalendarHeatmapProps {
+  /** Day buckets, oldest-first; each entry is one calendar day. */
+  values: { date: string; value: number }[];
+  cellSize?: number;
+  gap?: number;
+  emptyColor?: string;
+  color?: string;
+  className?: string;
+}
+
+/**
+ * GitHub-contribution-style heatmap: one cell per day, rows = day-of-week,
+ * columns = week. Intensity scales linearly from `emptyColor` (value ≤ 0) to
+ * fully-saturated `color` (value = max).
+ */
+export function CalendarHeatmap({
+  values,
+  cellSize = 11,
+  gap = 2,
+  emptyColor = 'var(--secondary)',
+  color = 'var(--primary)',
+  className,
+}: CalendarHeatmapProps) {
+  if (!values.length) return null;
+  const max = Math.max(...values.map((v) => v.value), 0);
+  const firstDow = new Date(`${values[0].date}T00:00`).getDay();
+  const cols = Math.ceil((firstDow + values.length) / 7);
+  const w = cols * (cellSize + gap) - gap;
+  const h = 7 * (cellSize + gap) - gap;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className={className} aria-hidden>
+      {values.map((v, i) => {
+        const idx = firstDow + i;
+        const x = Math.floor(idx / 7) * (cellSize + gap);
+        const y = (idx % 7) * (cellSize + gap);
+        const t = max > 0 && v.value > 0 ? Math.min(1, v.value / max) : 0;
+        return (
+          <rect
+            key={v.date}
+            x={x}
+            y={y}
+            width={cellSize}
+            height={cellSize}
+            rx={2}
+            fill={t === 0 ? emptyColor : color}
+            opacity={t === 0 ? 1 : 0.25 + 0.75 * t}
+          >
+            <title>{v.date}: {v.value.toFixed(2)}</title>
+          </rect>
+        );
+      })}
+    </svg>
+  );
+}

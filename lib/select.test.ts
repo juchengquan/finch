@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas } from '@/lib/select';
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending } from '@/lib/select';
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -123,4 +123,28 @@ test('topCategoryDeltas: % change vs prev month, sorted by absolute delta', () =
   const trans = out.find((r) => r.name === 'Transport')!;
   expect(trans.b).toBe(0);
   expect(trans.d).toBe(-100);
+});
+
+test('dailySpending buckets expenses per day, excludes non-expense rows', () => {
+  const txns = [
+    tx({ amount: -10, date: '2026-05-23' }),
+    tx({ amount: -5, date: '2026-05-23' }), // same day, sums
+    tx({ amount: -8, date: '2026-05-24' }),
+    tx({ amount: 1500, date: '2026-05-24' }), // income — skip
+    tx({ amount: -3, date: '2026-05-24', transferGroupId: 'tg1' }), // transfer — skip
+    tx({ amount: -7, date: '2026-05-22', isAdjustment: true }), // adjustment — skip
+    tx({ amount: -9, date: '2026-05-21', pending: true }), // pending — skip
+    tx({ amount: -2, date: '2026-04-30' }), // before window — skip
+  ];
+  // Window: 4 days ending 2026-05-24 → 21, 22, 23, 24.
+  const out = dailySpending(txns, 'personal', '2026-05-24', 4);
+  expect(out.map((r) => r.date)).toEqual(['2026-05-21', '2026-05-22', '2026-05-23', '2026-05-24']);
+  expect(out[0].value).toBe(0); // pending excluded
+  expect(out[1].value).toBe(0); // adjustment excluded
+  expect(out[2].value).toBeCloseTo(15, 2);
+  expect(out[3].value).toBeCloseTo(8, 2);
+});
+
+test('dailySpending returns [] when endDate is empty', () => {
+  expect(dailySpending([], 'personal', '', 7)).toEqual([]);
 });
