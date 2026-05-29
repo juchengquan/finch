@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
 import recurringData from '@/data/recurring-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
@@ -112,6 +113,7 @@ interface FinanceState {
   recurring: RecurringTemplate[];
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
+  accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
@@ -134,6 +136,9 @@ interface FinanceState {
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
+  createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
+  updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
+  deleteAccountGroup: (id: string) => void;
   updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
   addRecurringSplit: (templateId: string, account: string, pct: number) => void;
   removeRecurringSplit: (templateId: string, index: number) => void;
@@ -191,6 +196,7 @@ export const useFinanceStore = create<FinanceState>()(
       transactions: SEED_TX,
       recurring: SEED_RECURRING,
       accounts: [],
+      accountGroups: [],
       budgetByCategory: {},
       categories: [],
       counterparties: [],
@@ -294,6 +300,34 @@ export const useFinanceStore = create<FinanceState>()(
       archiveAccount: (id) => {
         set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
         syncMutation('archiveAccount', { id });
+      },
+
+      createAccountGroup: (input) => {
+        const id = `ag-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const includeInNetWorth = input.includeInNetWorth ?? 1;
+        set((s) => ({
+          accountGroups: [
+            ...s.accountGroups,
+            { id, ledgerId, name: input.name, includeInNetWorth, sortOrder: s.accountGroups.length },
+          ],
+        }));
+        syncMutation('createAccountGroup', { id, ledgerId, name: input.name, includeInNetWorth });
+        return id;
+      },
+
+      updateAccountGroup: (id, patch) => {
+        set((s) => ({ accountGroups: s.accountGroups.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
+        syncMutation('updateAccountGroup', { id, patch });
+      },
+
+      deleteAccountGroup: (id) => {
+        set((s) => ({
+          accountGroups: s.accountGroups.filter((g) => g.id !== id),
+          // accounts.group_id is SET NULL by the FK; mirror that optimistically.
+          accounts: s.accounts.map((a) => (a.groupId === id ? { ...a, groupId: null, groupName: null } : a)),
+        }));
+        syncMutation('deleteAccountGroup', { id });
       },
 
       updateRecurringSplit: (templateId, index, pct) => {

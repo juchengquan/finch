@@ -622,3 +622,39 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
   // The original category should once again include this tx.
   expect(restored[originalCat]).toBeGreaterThan(0);
 });
+
+test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-end', async () => {
+  const exec = await seeded();
+  const { listAccountGroups } = await import('@/lib/db/queries/accountGroups');
+
+  const before = await listAccountGroups(exec, 'personal');
+  expect(before.length).toBe(4); // seed: cash / credit / invest / loan
+
+  // Create.
+  await applyMutation(exec, 'createAccountGroup', { id: 'ag-new', ledgerId: 'personal', name: 'Crypto' });
+  const created = await listAccountGroups(exec, 'personal');
+  expect(created.find((g) => g.id === 'ag-new')?.name).toBe('Crypto');
+  expect(created.find((g) => g.id === 'ag-new')?.includeInNetWorth).toBe(1);
+
+  // Update (rename + toggle net-worth).
+  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets', includeInNetWorth: 0 } });
+  const updated = await listAccountGroups(exec, 'personal');
+  const u = updated.find((g) => g.id === 'ag-new')!;
+  expect(u.name).toBe('Digital Assets');
+  expect(u.includeInNetWorth).toBe(0);
+
+  // Assigning the group to an account, then deleting the group, sets accounts.group_id to NULL.
+  await applyMutation(exec, 'updateAccount', { id: 'cc', patch: { groupId: 'ag-new' } });
+  const [pre] = await exec("SELECT group_id FROM accounts WHERE id = 'cc'");
+  expect(String(pre.group_id)).toBe('ag-new');
+  await applyMutation(exec, 'deleteAccountGroup', { id: 'ag-new' });
+  const after = await listAccountGroups(exec, 'personal');
+  expect(after.find((g) => g.id === 'ag-new')).toBeUndefined();
+  const [post] = await exec("SELECT group_id FROM accounts WHERE id = 'cc'");
+  expect(post.group_id).toBeNull();
+});
+
+test('createAccountGroup rejects an empty name', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'createAccountGroup', { name: '   ' })).rejects.toThrow(/name/i);
+});

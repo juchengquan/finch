@@ -21,6 +21,12 @@ import {
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries/accounts';
+import {
+  createAccountGroup as qCreateAccountGroup,
+  updateAccountGroup as qUpdateAccountGroup,
+  deleteAccountGroup as qDeleteAccountGroup,
+  type AccountGroupPatch,
+} from './queries/accountGroups';
 import { deleteGoal as qDeleteGoal, updateGoal as qUpdateGoal, type GoalPatch } from './queries/goals';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
 import {
@@ -321,6 +327,26 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'deleteAccount':
       await qDeleteAccount(exec, str(args.id));
+      return;
+    case 'createAccountGroup': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Group name is required');
+      await qCreateAccountGroup(exec, {
+        id: str(args.id || newId('ag')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        includeInNetWorth: args.includeInNetWorth == null ? 1 : Number(args.includeInNetWorth),
+      });
+      return;
+    }
+    case 'updateAccountGroup': {
+      const patch = (args.patch ?? {}) as AccountGroupPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Group name is required');
+      await qUpdateAccountGroup(exec, str(args.id), patch);
+      return;
+    }
+    case 'deleteAccountGroup':
+      await qDeleteAccountGroup(exec, str(args.id));
       return;
     case 'updateRecurringSplit': {
       await exec(

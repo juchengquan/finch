@@ -14,6 +14,7 @@ import { applySchema, migrate } from './schema';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
+import { listAccountGroups } from './queries/accountGroups';
 import { listCategories } from './queries/categories';
 import { budgetByCategory } from './queries/budgets';
 import { listCounterparties } from './queries/counterparties';
@@ -44,9 +45,10 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [accounts, budgets, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
+  const [accounts, accountGroups, budgets, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
     await Promise.all([
       listAccounts(exec),
+      listAccountGroups(exec),
       budgetByCategory(exec),
       listCategories(exec),
       listCounterparties(exec),
@@ -77,6 +79,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   return {
     transactions,
     accounts,
+    accountGroups,
     budgetByCategory: budgets,
     categories,
     counterparties,
