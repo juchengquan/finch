@@ -1,28 +1,21 @@
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
 import categoriesData from '@/data/categories.json';
-import monthlySpendingData from '@/data/monthly-spending.json';
-import cashflowData from '@/data/cashflow.json';
 import ledgersData from '@/data/ledgers.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import counterpartiesData from '@/data/counterparties.json';
 import recurringTemplatesData from '@/data/recurring-templates.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import currenciesData from '@/data/currencies.json';
-import insightsData from '@/data/insights.json';
-import aprVsMayData from '@/data/apr-vs-may.json';
 import scheduledItemsData from '@/data/scheduled-items.json';
 
 // Static reference data used as a pre-hydration fallback by a handful of
-// screens. Live data comes from the projected DB via the store. Series used by
-// Insights (monthly, cashflow) are still baked here pending a derived-series
-// rewrite — track in MASTER_PLAN.md §5.
+// screens. Everything else (monthly spending, cashflow, insights, MoM deltas)
+// is derived from live transactions in lib/select.ts.
 export const MOCK = {
   accounts: accountsData,
   accountGroups: accountGroupsData,
   categories: categoriesData,
-  monthly: monthlySpendingData,
-  cashflow: cashflowData,
 };
 
 export const LEDGER = {
@@ -76,8 +69,6 @@ export function convertAmount(amount: number, from: string, to: string) {
   return usd * (RATE[to] ?? 1);
 }
 
-export const INSIGHTS = insightsData as { tone: 'pos' | 'warn' | 'neut'; icon: string; title: string; body: string }[];
-export const APR_VS_MAY = aprVsMayData as { name: string; a: number; b: number; d: number }[];
 export const SCHEDULED_ITEMS = scheduledItemsData;
 
 export const catById = (id: string | null) => MOCK.categories.find((c) => c.id === id) || { name: 'Uncategorized', hue: 0 };
