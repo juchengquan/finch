@@ -286,14 +286,15 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    `daily-spending.json`, `bills.json`, plus `monthly-spending.json` / `cashflow.json`
    / `insights.json` / `apr-vs-may.json` retired with the Insights derived-series
    rewrite).
-3. ✅ / **partial** — **real FX conversion** shipped (PR #32: `useMoney` converts
-   via the live `exchange_rates` table). **Insights derived series** shipped
-   (PR #33: `monthlySpending` / `monthlyCashflow` / `topCategoryDeltas` selectors).
-   The `AreaChart` primitive already existed and is in use; **balance-curve /
-   net-worth** are sparkline-charted on the accounts list + detail. **Open**:
-   `CalendarHeatmap` (no concrete use site today). Receipt attachment is out
-   of scope for now — the `toast('Receipt — coming soon')` stub at
-   `transaction-detail.tsx:258` stays put.
+3. ✅ — **real FX conversion** shipped (PR #32: `useMoney` converts via the live
+   `exchange_rates` table). **Insights derived series** shipped (PR #33:
+   `monthlySpending` / `monthlyCashflow` / `topCategoryDeltas` selectors).
+   **`CalendarHeatmap` primitive** + daily-spending use site on Insights shipped
+   (PR #38). **Richer net-worth trend** — fourth metric tab on Insights driven by
+   the new `netWorthByMonth` selector (PR #39). The accounts-list / detail
+   sparklines stay put as glanceable context. Receipt attachment is out of scope
+   — the `toast('Receipt — coming soon')` stub at `transaction-detail.tsx:258`
+   stays put.
 4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
    with an income/expense toggle that signs the amount on save. Adjustments are
    modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
@@ -302,12 +303,42 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    the target. Adjustments are excluded from category spend, cash flow, budget
    progress and the insights spend heatmap (same places transfers are excluded).
 
-### Remaining work (honest list)
-- **`CalendarHeatmap` primitive** — speculative; no screen needs it today. Build
-  it only when a use site lands (e.g. a spending-calendar view).
-- **`/fx` in the ledger nav** — currently reachable via a System link only. Minor.
-- **Richer net-worth / balance trend charts** — today they're sparklines; could
-  become dedicated trend pages. Polish, not a gap.
+### Future features (curated)
+
+The original plan list is closed. From a fresh audit, here's a curated list of
+real feature gaps — picks for the next phase, with the highest-value ones first.
+
+**Picked next:**
+1. **Transaction splits** ⭐ *(starting now)* — recurring templates already
+   support splits; ad-hoc transactions don't. Lets a Costco trip be split
+   across `groceries` + `household` so category spend is honest. Schema: one
+   new join table (`transaction_splits` with `transaction_id` FK + per-row
+   `category_id` + `amount`); UI mirrors the recurring detail's split editor.
+   Reports/insights that already filter by category should treat split rows as
+   the source of truth.
+
+**Other strong candidates (deferred, queued):**
+2. **Spending forecast / cash-flow projection** — extrapolate end-of-month
+   balance from MTD + recurring templates + a baseline run-rate. Uses existing
+   selectors (`netWorthByMonth`, `monthlyCashflow`) and recurring data.
+   Surfaces as a card on Insights or the Accounts page header.
+3. **Cmd-K command palette / global search** — unifies the per-screen searches
+   (Activity, Merchants) into one jump-to-anything panel: txns, merchants,
+   categories, accounts, screens.
+
+**Smaller wins:**
+4. **Account-group CRUD** — `account_groups` is seed-only today; closes the last
+   admin-CRUD gap.
+5. **Budget rollover UI** — schema already has `carry_forward` / `rollover`; no
+   UI surfaces them. Small toggle + display in Budget detail.
+6. **Date / amount filters on Activity** — list has only the direction filter
+   today; date-range + amount-range would round it out.
+
+**Bigger / scope-expanding:**
+7. **Sankey diagram** of income → categories on Insights. Visually striking,
+   medium effort.
+8. **Investment tracking** (holdings, gains) for the `invest` account type —
+   meaningful scope expansion.
 
 ### Done since (Phase H follow-ups)
 - Recurring **split add/remove** UI on the template detail screen.
@@ -322,4 +353,11 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 - **Insights derived series** — `monthlySpending` / `monthlyCashflow` /
   `topCategoryDeltas` selectors replace the last baked totals; the MoM header
   reads `{prev} vs {cur}` from the live data (PR #33).
+- **12-month seed history** — `data/transactions.json` extended back to Jun 2025
+  (~10 plausible txns/month, 92 new rows) so the 3M / 6M / 1Y ranges have real
+  data; balances unchanged via the opening-balance recompute (PR #36).
+- **`/fx` in the ledger sidebar** (PR #38).
+- **`CalendarHeatmap` primitive + daily-spending heatmap on Insights** (PR #38).
+- **Net worth metric tab on Insights** — `netWorthByMonth` selector + a fourth
+  tab next to Spending / Income / Cashflow (PR #39).
 
