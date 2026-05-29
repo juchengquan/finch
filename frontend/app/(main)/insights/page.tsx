@@ -10,11 +10,33 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast } from '@/lib/select';
 import { cn } from '@/lib/utils';
+
+import type { MonthForecast } from '@/lib/select';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fullMonth = (ym: string) => (ym ? MONTH_LABELS[Number(ym.slice(5)) - 1] : '');
+
+// Stacked horizontal bar that visualises the four forecast components
+// (mtd / unscheduled / recurring / scheduled) at their proportional widths.
+function ForecastBar({ forecast }: { forecast: MonthForecast }) {
+  const total = forecast.projected;
+  if (total <= 0) return null;
+  const segs = [
+    { v: forecast.mtdSpent, color: 'var(--primary)' },
+    { v: forecast.unscheduledRest, color: 'var(--muted-foreground)' },
+    { v: forecast.recurringRest, color: 'var(--warning)' },
+    { v: forecast.scheduledRest, color: 'var(--secondary-foreground)' },
+  ];
+  return (
+    <div className="bg-secondary flex h-2.5 w-full overflow-hidden rounded-full">
+      {segs.map((s, i) =>
+        s.v > 0 ? <span key={i} style={{ width: `${(s.v / total) * 100}%`, background: s.color }} /> : null,
+      )}
+    </div>
+  );
+}
 
 const METRICS = [
   { id: 'spending', label: 'Spending' },
@@ -38,6 +60,8 @@ export default function InsightsPage() {
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const goals = useFinanceStore((s) => s.goals);
+  const recurring = useFinanceStore((s) => s.recurring);
+  const scheduledItems = useFinanceStore((s) => s.scheduledItems);
   const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
   // Live category mapping from the seed (still serves the budget lookup); the
@@ -73,6 +97,13 @@ export default function InsightsPage() {
     ? Object.values(categorySpend(transactions, activeId, prevMonth(month))).reduce((s, v) => s + v, 0)
     : 0;
   const momPct = prevSpend > 0 ? Math.round(((curSpend - prevSpend) / prevSpend) * 100) : null;
+
+  // Spending forecast: project the rest of the current month from run-rate +
+  // upcoming recurring + scheduled. `lastDate` is the most-recent transaction
+  // for the ledger, which approximates "today" without a wall-clock dependency.
+  const forecast = month ? monthForecast(transactions, recurring, scheduledItems, activeId, month, lastDate) : null;
+  const forecastVsPrev =
+    forecast && prevSpend > 0 ? Math.round(((forecast.projected - prevSpend) / prevSpend) * 100) : null;
 
   return (
     <MobilePage
@@ -198,6 +229,54 @@ export default function InsightsPage() {
             </>
           )}
         </div>
+
+        {forecast && forecast.daysRemaining > 0 && (
+          <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
+            <div className="mb-2 flex items-baseline justify-between">
+              <div className="text-sm font-semibold">Spending forecast</div>
+              <span className="text-muted-foreground text-[11px]">
+                day {forecast.daysElapsed} of {forecast.daysInMonth}
+              </span>
+            </div>
+            <div className="mb-3 flex items-baseline gap-3">
+              <span className="font-serif text-3xl -tracking-[0.5px]">{fmt(forecast.projected)}</span>
+              <span className="text-muted-foreground text-xs">projected</span>
+              {forecastVsPrev != null && (
+                <span
+                  className={cn(
+                    'rounded-md px-1.5 py-0.5 text-[11px] font-medium',
+                    forecastVsPrev > 0 ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success',
+                  )}
+                >
+                  {forecastVsPrev > 0 ? '↑' : '↓'} {Math.abs(forecastVsPrev)}% vs {fullMonth(prevMonth(month))}
+                </span>
+              )}
+            </div>
+            <ForecastBar forecast={forecast} />
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="bg-primary size-2 rounded-full" />
+                Spent so far · {fmt(forecast.mtdSpent)}
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="bg-muted-foreground size-2 rounded-full" />
+                Run-rate rest · {fmt(forecast.unscheduledRest)}
+              </span>
+              {forecast.recurringRest > 0 && (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="bg-warning size-2 rounded-full" />
+                  Recurring · {fmt(forecast.recurringRest)}
+                </span>
+              )}
+              {forecast.scheduledRest > 0 && (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="bg-secondary-foreground size-2 rounded-full" />
+                  Scheduled · {fmt(forecast.scheduledRest)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {heatmap.some((d) => d.value > 0) && (
           <div className="bg-card border-border mb-4 rounded-xl border p-3.5">

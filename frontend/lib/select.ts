@@ -2,10 +2,11 @@
 // read queries in lib/db/queries/* so the read screens can compute from the
 // store (which mirrors the server DB) instead of a second in-browser query DB.
 
-import type { Tx } from '@/lib/store';
+import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
+import type { ScheduledItem } from '@/lib/db/queries/planning';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -157,6 +158,103 @@ export function netWorthByMonth(
     }
     return { m: MONTH_LABELS[Number(mo.slice(5)) - 1], v: r2(bal) };
   });
+}
+
+export interface MonthForecast {
+  /** Confirmed expenses month-to-date (positive magnitude). */
+  mtdSpent: number;
+  /** Run-rate projection for remaining unscheduled days (mtdSpent/daysElapsed × daysRemaining). */
+  unscheduledRest: number;
+  /** Recurring expense templates due later this month (matched by `dayOfMonth`). */
+  recurringRest: number;
+  /** Scheduled-items (calendar bills) due later this month. */
+  scheduledRest: number;
+  /** Total: mtdSpent + unscheduledRest + recurringRest + scheduledRest. */
+  projected: number;
+  daysElapsed: number;
+  daysRemaining: number;
+  daysInMonth: number;
+  /** Average daily spend MTD; 0 when no days elapsed. */
+  dailyRunRate: number;
+}
+
+/**
+ * Forecast the current month's total spending by combining month-to-date
+ * confirmed expenses, a daily run-rate projection for the rest of the month,
+ * and known upcoming costs (recurring templates + scheduled items).
+ *
+ * `today` is YYYY-MM-DD; if it falls outside `month`, the forecast collapses
+ * to whatever's already known (no projection, no upcoming).
+ */
+export function monthForecast(
+  txns: Tx[],
+  recurring: RecurringTemplate[],
+  scheduledItems: ScheduledItem[],
+  ledgerId: string,
+  month: string,
+  today: string,
+): MonthForecast | null {
+  if (!month) return null;
+  const [y, m] = month.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const inMonth = today.slice(0, 7) === month;
+  const dayOfMonth = inMonth ? Math.min(Number(today.slice(8, 10)), daysInMonth) : daysInMonth;
+  const daysElapsed = dayOfMonth;
+  const daysRemaining = Math.max(0, daysInMonth - dayOfMonth);
+
+  let mtdSpent = 0;
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.date.slice(0, 7) !== month) continue;
+    if (inMonth && t.date > today) continue;
+    mtdSpent += -t.amount;
+  }
+
+  // Upcoming recurring expenses for the rest of this month (templates with a
+  // known monthly amount whose day_of_month falls after today). Income is
+  // excluded so the figure is comparable to mtdSpent.
+  let recurringRest = 0;
+  if (inMonth) {
+    for (const rt of recurring) {
+      if (rt.type !== 'expense') continue;
+      if (rt.frequency !== 'monthly') continue;
+      if (rt.amount == null) continue;
+      if (rt.dayOfMonth <= dayOfMonth) continue;
+      if (rt.dayOfMonth > daysInMonth) continue;
+      recurringRest += Math.abs(rt.amount);
+    }
+  }
+
+  // Scheduled items use a 3-letter month label; only count rows for this
+  // month with a day still ahead.
+  const monthLabel = MONTH_LABELS[m - 1];
+  let scheduledRest = 0;
+  if (inMonth) {
+    for (const it of scheduledItems) {
+      if (it.ledgerId !== ledgerId) continue;
+      if (it.month !== monthLabel) continue;
+      if (it.day <= dayOfMonth) continue;
+      if (it.day > daysInMonth) continue;
+      scheduledRest += Math.abs(it.amount);
+    }
+  }
+
+  const dailyRunRate = daysElapsed > 0 ? mtdSpent / daysElapsed : 0;
+  const unscheduledRest = inMonth ? r2(dailyRunRate * daysRemaining) : 0;
+  const projected = r2(mtdSpent + unscheduledRest + recurringRest + scheduledRest);
+
+  return {
+    mtdSpent: r2(mtdSpent),
+    unscheduledRest,
+    recurringRest: r2(recurringRest),
+    scheduledRest: r2(scheduledRest),
+    projected,
+    daysElapsed,
+    daysRemaining,
+    daysInMonth,
+    dailyRunRate: r2(dailyRunRate),
+  };
 }
 
 /** Income / expense totals per month (both positive). Mirrors MOCK.cashflow. */
