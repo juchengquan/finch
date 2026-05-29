@@ -95,6 +95,29 @@ export function monthlySpending(txns: Tx[], ledgerId: string, endMonth: string, 
   return months.map((mo) => ({ m: MONTH_LABELS[Number(mo.slice(5)) - 1], v: r2(by.get(mo) ?? 0) }));
 }
 
+/** Daily expense totals (positive) for the N days ending at `endDate`, oldest first. */
+export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: number): { date: string; value: number }[] {
+  if (!endDate) return [];
+  const out: { date: string; value: number }[] = [];
+  const by = new Map<string, number>();
+  const end = new Date(`${endDate}T00:00`);
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(end);
+    d.setDate(end.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    by.set(key, 0);
+    out.push({ date: key, value: 0 });
+  }
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (!by.has(t.date)) continue;
+    by.set(t.date, (by.get(t.date) ?? 0) + -t.amount);
+  }
+  for (const row of out) row.value = r2(by.get(row.date) ?? 0);
+  return out;
+}
+
 /** Income / expense totals per month (both positive). Mirrors MOCK.cashflow. */
 export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, n: number): { m: string; inc: number; exp: number }[] {
   const months = monthsBack(endMonth, n);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart, AreaChart } from '@/components/primitives';
+import { BarChart, AreaChart, CalendarHeatmap } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
 import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
@@ -10,7 +10,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -46,8 +46,13 @@ export default function InsightsPage() {
     .filter((c) => (c.ledger ?? 'personal') === activeId)
     .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget }));
   const month = currentMonth(transactions, activeId);
+  const lastDate = transactions.reduce(
+    (d, t) => ((t.ledgerId ?? 'personal') === activeId && t.date > d ? t.date : d),
+    '',
+  );
   const monthly = monthlySpending(transactions, activeId, month, range);
   const cashflow = monthlyCashflow(transactions, activeId, month, range);
+  const heatmap = dailySpending(transactions, activeId, lastDate, 12 * 7); // 12 weeks
   const categoryDeltas = topCategoryDeltas(transactions, activeId, month, ledgerCategories, 5);
   const insights = generateInsights({
     transactions,
@@ -171,6 +176,18 @@ export default function InsightsPage() {
             </>
           )}
         </div>
+
+        {heatmap.some((d) => d.value > 0) && (
+          <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
+            <div className="mb-2 flex items-baseline justify-between">
+              <div className="text-sm font-semibold">Daily spending</div>
+              <span className="text-muted-foreground text-[11px]">last 12 weeks</span>
+            </div>
+            <div className="overflow-x-auto">
+              <CalendarHeatmap values={heatmap} />
+            </div>
+          </div>
+        )}
 
         {insights.length > 0 ? (
           <div className="md:grid md:grid-cols-3 md:gap-3">
