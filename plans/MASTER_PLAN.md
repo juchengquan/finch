@@ -269,18 +269,23 @@ retired the last `app_state` override shims. Delivered in phases on one branch:
 
 Phases A–H are done — the design-doc SQLite schema is the live, server-backed data
 layer; the core money flows run through it; and every entity has full CRUD with no
-remaining `app_state` shims. What's left:
-1. **Finish the last screens** on the DB — FX, System.
+remaining `app_state` shims. The original §5 list is now mostly complete:
+
+1. ✅ **Last screens on the DB** — `/fx` is DB-backed (reads `store.transactions`
+   + `store.exchangeRates`); `/system` got rate add/delete CRUD in PR #32.
 2. ✅ **Cleanup pass** — `derive.ts`, the flat-schema `repo.ts`/`storage.ts`, and
-   the redundant browser `DbProvider` were already gone. This pass removed the
-   remaining dead `MOCK` re-exports (15 fields incl. `user`/`balance`/`monthSpent`/
-   `transactions`/`subscriptions`/`goals`/`bills`/`daily`/`insights`/`aprVsMay`)
-   and deleted three orphan JSON files (`dashboard-summary.json`,
-   `daily-spending.json`, `bills.json`). The Insights page still consumes baked
-   `monthly` / `cashflow` series + `INSIGHTS` / `APR_VS_MAY` — replace with
-   derived series from live transactions in a later pass.
-3. Optional polish: balance-curve / net-worth charts; real FX conversion; the
-   deferred `CalendarHeatmap` / `AreaChart` primitives + Receipt-attach stub.
+   the redundant browser `DbProvider` were already gone. The cleanup pass removed
+   15 dead `MOCK` re-exports and four orphan JSON files (`dashboard-summary.json`,
+   `daily-spending.json`, `bills.json`, plus `monthly-spending.json` / `cashflow.json`
+   / `insights.json` / `apr-vs-may.json` retired with the Insights derived-series
+   rewrite).
+3. ✅ / **partial** — **real FX conversion** shipped (PR #32: `useMoney` converts
+   via the live `exchange_rates` table). **Insights derived series** shipped
+   (PR #33: `monthlySpending` / `monthlyCashflow` / `topCategoryDeltas` selectors).
+   The `AreaChart` primitive already existed and is in use; **balance-curve /
+   net-worth** are sparkline-charted on the accounts list + detail. **Open**:
+   `CalendarHeatmap` (no concrete use site today) and **Receipt-attach** (still
+   a `toast('Receipt — coming soon')` stub on `transaction-detail.tsx:258`).
 4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
    with an income/expense toggle that signs the amount on save. Adjustments are
    modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
@@ -289,9 +294,49 @@ remaining `app_state` shims. What's left:
    the target. Adjustments are excluded from category spend, cash flow, budget
    progress and the insights spend heatmap (same places transfers are excluded).
 
-Done since (Phase H follow-ups): recurring **split add/remove** UI on the template
-detail screen, and the **download backup** now streams the live server DB via
-`GET /api/export` (table edits included). **Readable export** — `GET
-/api/export/transactions` returns a transactions CSV (account/category names + tags
-resolved via joins); Settings has a "Download .csv" button. Multi-entity / XLSX is
-a possible later extension (CSV builder lives in `lib/csv.ts`).
+### Remaining work (honest list)
+- **Receipt attachment** — the one open user-visible feature. Scoped below.
+- **`CalendarHeatmap` primitive** — speculative; no screen needs it today. Build
+  it only when a use site lands (e.g. a spending-calendar view).
+- **`/fx` in the ledger nav** — currently reachable via a System link only. Minor.
+- **Richer net-worth / balance trend charts** — today they're sparklines; could
+  become dedicated trend pages. Polish, not a gap.
+
+### Scope — Receipt attachment
+Replace the stub with real receipt upload/view/delete on a transaction.
+
+- **Storage**: a new `transaction_receipts` table — `(id PK, transaction_id FK
+  ON DELETE CASCADE, filename TEXT, content_type TEXT, size INTEGER, bytes BLOB,
+  created_at)`. One receipt per transaction in v1 (FK `UNIQUE`). Keeping bytes in
+  the DB keeps the existing `/api/export` (.db) and CSV exports self-contained;
+  no on-disk file store to coordinate.
+- **Schema migration**: v6 adds the table.
+- **Server endpoints**: `POST /api/transactions/{id}/receipt` (multipart upload,
+  validate type ∈ {image/png, image/jpeg, image/webp, application/pdf} and size
+  ≤ 5 MB), `GET /api/transactions/{id}/receipt` (streams bytes + correct
+  Content-Type), `DELETE /api/transactions/{id}/receipt`.
+- **Projection**: `Tx.hasReceipt?: boolean` (cheap join on existence, not the
+  bytes themselves) so the list/detail can show a badge without dragging blobs
+  through `/api/state`.
+- **UI** (`components/transaction-detail.tsx`): replace the toast with a file
+  picker → upload, a thumbnail/inline view (image) or "Open PDF" link, and a
+  delete button. Persist `hasReceipt` optimistically; refetch via the existing
+  `syncMutation` round-trip.
+- **Tests**: a unit test for the validation (size + type) + a browser smoke
+  uploading a small PNG, fetching it back, and deleting.
+- **Out of scope (v1)**: multiple receipts per transaction; OCR; cloud storage.
+
+### Done since (Phase H follow-ups)
+- Recurring **split add/remove** UI on the template detail screen.
+- **Download backup** now streams the live server DB via `GET /api/export` (table
+  edits included).
+- **Readable export** — `GET /api/export/transactions` returns a transactions CSV
+  (account/category names + tags resolved via joins); Settings has a "Download
+  .csv" button. Multi-entity / XLSX is a possible later extension (CSV builder
+  lives in `lib/csv.ts`).
+- **Real FX** — `useMoney` converts via the live `exchange_rates` table; System
+  screen got rate add/delete CRUD (PR #32).
+- **Insights derived series** — `monthlySpending` / `monthlyCashflow` /
+  `topCategoryDeltas` selectors replace the last baked totals; the MoM header
+  reads `{prev} vs {cur}` from the live data (PR #33).
+
