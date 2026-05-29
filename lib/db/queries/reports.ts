@@ -50,11 +50,12 @@ export async function budgetProgress(exec: Exec, ledgerId: string, yearMonth: st
     if (catIds.length) {
       const placeholders = catIds.map(() => '?').join(',');
       const rows = await exec(
-        `SELECT COALESCE(SUM(amount_base * -1), 0) AS spent
-           FROM transactions
-          WHERE ledger_id = ? AND date LIKE ? AND amount < 0
-            AND transfer_group_id IS NULL AND is_adjustment = 0 AND status = 'confirmed'
-            AND category_id IN (${placeholders})`,
+        `SELECT COALESCE(SUM(COALESCE(ts.amount_base, t.amount_base) * -1), 0) AS spent
+           FROM transactions t
+           LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+          WHERE t.ledger_id = ? AND t.date LIKE ? AND t.amount < 0
+            AND t.transfer_group_id IS NULL AND t.is_adjustment = 0 AND t.status = 'confirmed'
+            AND COALESCE(ts.category_id, t.category_id) IN (${placeholders})`,
         [ledgerId, `${yearMonth}%`, ...catIds],
       );
       spent = Number(rows[0]?.spent ?? 0);

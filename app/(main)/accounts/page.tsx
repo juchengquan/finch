@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
@@ -28,6 +29,10 @@ type GroupWithAccounts = {
   accounts: { id: string; name: string; last4: string; color: string }[];
 };
 
+// Reserved id for the "ungrouped" bucket — accounts with no group_id.
+// Never collides with real group ids (which use the `ag-` prefix or the seed ids).
+const UNGROUPED_ID = '__ungrouped__';
+
 // Collapsible account groups, shared by the mobile column and the desktop
 // left column. Empty groups render a collapsible "Add account" affordance.
 function AccountGroupAccordion({
@@ -36,18 +41,23 @@ function AccountGroupAccordion({
   fmt,
   defaultOpen,
   onAddAccount,
+  onEditGroup,
+  onDeleteGroup,
 }: {
   groups: GroupWithAccounts[];
   balanceOf: (id: string) => number;
   fmt: (n: number) => string;
   defaultOpen: string[];
   onAddAccount: (groupId: string) => void;
+  onEditGroup?: (groupId: string) => void;
+  onDeleteGroup?: (groupId: string) => void;
 }) {
   return (
     <Accordion type="multiple" defaultValue={defaultOpen}>
       {groups.map((g) => {
         const groupTotal = g.accounts.reduce((s, a) => s + balanceOf(a.id), 0);
         const empty = g.accounts.length === 0;
+        const editable = g.id !== UNGROUPED_ID && onEditGroup && onDeleteGroup;
         return (
           <AccordionItem key={g.id} value={g.id}>
             <AccordionTrigger chevronSide="left">
@@ -56,6 +66,30 @@ function AccountGroupAccordion({
                 <span className={cn('font-mono text-[11px] tracking-[0.3px] tabular-nums', empty ? 'text-muted-foreground' : 'text-secondary-foreground')}>
                   {empty ? '—' : `${g.accounts.length} · ${groupTotal < 0 ? '−' : ''}${fmt(Math.abs(groupTotal))}`}
                 </span>
+                {editable && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`Group actions: ${g.name}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md"
+                      >
+                        <Icon name="dots" size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onSelect={() => onEditGroup!(g.id)}>
+                        <Icon name="edit" size={14} />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onSelect={() => onDeleteGroup!(g.id)}>
+                        <Icon name="x" size={14} />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </AccordionTrigger>
             <AccordionContent>
@@ -100,17 +134,31 @@ function AccountGroupAccordion({
 
 const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', openingBalance: '', last4: '', color: '#3a4a5f' };
 
+interface GroupDraft {
+  id: string | null; // null => create
+  name: string;
+  includeInNetWorth: boolean;
+}
+const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '', includeInNetWorth: true };
+
 export default function AccountsPage() {
   const { fmt } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
+  const accountGroups = useFinanceStore((s) => s.accountGroups);
   const createAccount = useFinanceStore((s) => s.createAccount);
+  const createAccountGroup = useFinanceStore((s) => s.createAccountGroup);
+  const updateAccountGroup = useFinanceStore((s) => s.updateAccountGroup);
+  const deleteAccountGroup = useFinanceStore((s) => s.deleteAccountGroup);
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [groupDraft, setGroupDraft] = useState<GroupDraft>(EMPTY_GROUP_DRAFT);
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
 
   const openCreate = (groupId?: string) => {
     setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash' });
@@ -146,10 +194,68 @@ export default function AccountsPage() {
         .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)
         .map((a) => ({ id: a.id, name: a.name, last4: a.last4, color: a.color, group: a.group }));
 
+  const ledgerGroups = accountGroups.filter((g) => g.ledgerId === activeId);
+  // Pre-hydration fallback so first paint still has the seed groups.
+  const groupShells: { id: string; name: string }[] = ledgerGroups.length
+    ? ledgerGroups.map((g) => ({ id: g.id, name: g.name }))
+    : MOCK.accountGroups.map((g) => ({ id: g.id, name: g.name }));
+
+  const openCreateGroup = () => {
+    setGroupDraft(EMPTY_GROUP_DRAFT);
+    setGroupDialogOpen(true);
+  };
+
+  const openEditGroup = (id: string) => {
+    const g = ledgerGroups.find((x) => x.id === id);
+    if (!g) return;
+    setGroupDraft({ id: g.id, name: g.name, includeInNetWorth: g.includeInNetWorth !== 0 });
+    setGroupDialogOpen(true);
+  };
+
+  const saveGroup = () => {
+    const name = groupDraft.name.trim();
+    if (!name) return;
+    if (groupDraft.id) {
+      updateAccountGroup(groupDraft.id, { name, includeInNetWorth: groupDraft.includeInNetWorth ? 1 : 0 });
+      toast.success('Group updated');
+    } else {
+      createAccountGroup({ name, includeInNetWorth: groupDraft.includeInNetWorth ? 1 : 0, ledgerId: activeId });
+      toast.success('Group created', { description: name });
+    }
+    setGroupDialogOpen(false);
+  };
+
+  const confirmDelete = () => {
+    if (!confirmDeleteGroupId) return;
+    deleteAccountGroup(confirmDeleteGroupId);
+    toast.success('Group deleted');
+    setConfirmDeleteGroupId(null);
+  };
+
   const trailing = (
     <div className="flex items-center gap-1">
       <IconButton icon="search" aria-label="Search" />
-      <IconButton icon="plus" aria-label="Add account" onClick={() => openCreate()} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Add"
+            className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
+          >
+            <Icon name="plus" size={16} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => openCreate()}>
+            <Icon name="wallet" size={14} />
+            New account
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openCreateGroup()}>
+            <Icon name="tags" size={14} />
+            New group
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 
@@ -180,7 +286,7 @@ export default function AccountsPage() {
               <Select value={draft.group} onValueChange={(v) => setDraft({ ...draft, group: v })}>
                 <SelectTrigger id="new-group" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MOCK.accountGroups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                  {groupShells.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -218,16 +324,59 @@ export default function AccountsPage() {
           No accounts linked in <span className="text-foreground font-medium">{active.name}</span> yet.
         </div>
         {createDialog}
+
+        <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
+              <DialogDescription>
+                {groupDraft.id ? 'Rename or toggle net-worth inclusion.' : `Added to ${active.name}.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="group-name-empty">Name</Label>
+                <Input
+                  id="group-name-empty"
+                  value={groupDraft.name}
+                  onChange={(e) => setGroupDraft({ ...groupDraft, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+              <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                <span>Count toward net worth</span>
+                <input
+                  type="checkbox"
+                  checked={groupDraft.includeInNetWorth}
+                  onChange={(e) => setGroupDraft({ ...groupDraft, includeInNetWorth: e.target.checked })}
+                  className="size-4 cursor-pointer"
+                />
+              </label>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={saveGroup} disabled={!groupDraft.name.trim()}>
+                {groupDraft.id ? 'Save' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </MobilePage>
     );
   }
 
   const total = ledgerAccounts.reduce((s, a) => s + balanceOf(a.id), 0);
   const nwSeries = netWorthSeries(allTxns, accounts, activeId);
-  const groupedAccounts = MOCK.accountGroups.map((g) => ({
-    ...g,
-    accounts: ledgerAccounts.filter((a) => a.group === g.id),
-  }));
+  const ungroupedAccts = ledgerAccounts.filter((a) => !a.group || !groupShells.some((g) => g.id === a.group));
+  const groupedAccounts = [
+    ...groupShells.map((g) => ({ id: g.id, name: g.name, accounts: ledgerAccounts.filter((a) => a.group === g.id) })),
+    ...(ungroupedAccts.length ? [{ id: UNGROUPED_ID, name: 'Ungrouped', accounts: ungroupedAccts }] : []),
+  ];
+
+  const deleteTarget = confirmDeleteGroupId ? ledgerGroups.find((g) => g.id === confirmDeleteGroupId) : null;
+  const deleteTargetAcctCount = deleteTarget ? ledgerAccounts.filter((a) => a.group === deleteTarget.id).length : 0;
 
   return (
     <MobilePage>
@@ -247,13 +396,13 @@ export default function AccountsPage() {
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">
-        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} />
+        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
         <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1.7fr_1fr]">
           <div className="min-w-0">
-            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} />
+            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
           </div>
 
           <aside className="min-w-0">
@@ -286,6 +435,65 @@ export default function AccountsPage() {
         </div>
       </div>
       {createDialog}
+
+      <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
+            <DialogDescription>
+              {groupDraft.id ? 'Rename or toggle net-worth inclusion.' : `Added to ${active.name}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="group-name">Name</Label>
+              <Input
+                id="group-name"
+                value={groupDraft.name}
+                onChange={(e) => setGroupDraft({ ...groupDraft, name: e.target.value })}
+                autoFocus
+              />
+            </div>
+            <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+              <span>Count toward net worth</span>
+              <input
+                type="checkbox"
+                checked={groupDraft.includeInNetWorth}
+                onChange={(e) => setGroupDraft({ ...groupDraft, includeInNetWorth: e.target.checked })}
+                className="size-4 cursor-pointer"
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={saveGroup} disabled={!groupDraft.name.trim()}>
+              {groupDraft.id ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmDeleteGroupId} onOpenChange={(o) => !o && setConfirmDeleteGroupId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete group?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.name}
+              {deleteTargetAcctCount > 0 && (
+                <> · {deleteTargetAcctCount} account{deleteTargetAcctCount === 1 ? '' : 's'} will move to Ungrouped.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }

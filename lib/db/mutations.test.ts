@@ -564,3 +564,140 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
   expect(conv.rate).toBeCloseTo(0.01, 6);
   expect(conv.amountBase).toBeCloseTo(1.0, 4);
 });
+
+test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits', async () => {
+  const exec = await seeded();
+  // Pick a confirmed expense from the seed so its category is known.
+  const [parent] = await exec(
+    "SELECT id, amount, amount_base, category_id FROM transactions WHERE ledger_id = 'personal' AND amount < 0 AND status = 'confirmed' AND transfer_group_id IS NULL AND is_adjustment = 0 LIMIT 1",
+  );
+  expect(parent).toBeDefined();
+  const txId = String(parent.id);
+  const amt = Number(parent.amount);
+  const half = Math.round((amt / 2) * 100) / 100;
+  const rest = Math.round((amt - half) * 100) / 100;
+  const originalCat = String(parent.category_id);
+
+  // < 2 rows is rejected.
+  await expect(
+    applyMutation(exec, 'setTransactionSplits', { id: txId, splits: [{ categoryId: 'food', amount: amt }] }),
+  ).rejects.toThrow(/two/i);
+
+  // Sum mismatch is rejected.
+  await expect(
+    applyMutation(exec, 'setTransactionSplits', {
+      id: txId,
+      splits: [{ categoryId: 'food', amount: amt / 2 }, { categoryId: 'trans', amount: amt / 3 }],
+    }),
+  ).rejects.toThrow(/sum/i);
+
+  // Two valid rows succeed; categorySpend reflects splits, not the parent.
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  await applyMutation(exec, 'setTransactionSplits', {
+    id: txId,
+    splits: [
+      { categoryId: 'food', amount: half },
+      { categoryId: 'trans', amount: rest },
+    ],
+  });
+  const after = await categorySpend(exec, 'personal');
+  // The parent's original category should no longer carry this tx's amount.
+  // Both splits' targets get a positive contribution (magnitude).
+  expect(after.food).toBeGreaterThan(0);
+  expect(after.trans).toBeGreaterThan(0);
+  // Sanity: per-row stored amount_base is derived from the parent's locked rate.
+  const splitRows = await exec(
+    'SELECT category_id, amount, amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    [txId],
+  );
+  expect(splitRows).toHaveLength(2);
+  const sumBase = splitRows.reduce((s, r) => s + Number(r.amount_base), 0);
+  expect(sumBase).toBeCloseTo(Number(parent.amount_base), 2);
+
+  // Clearing splits restores the parent's category.
+  await applyMutation(exec, 'setTransactionSplits', { id: txId, splits: [] });
+  const cleared = await exec('SELECT COUNT(*) AS n FROM transaction_splits WHERE transaction_id = ?', [txId]);
+  expect(Number(cleared[0].n)).toBe(0);
+  const restored = await categorySpend(exec, 'personal');
+  // The original category should once again include this tx.
+  expect(restored[originalCat]).toBeGreaterThan(0);
+});
+
+test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-end', async () => {
+  const exec = await seeded();
+  const { listAccountGroups } = await import('@/lib/db/queries/accountGroups');
+
+  const before = await listAccountGroups(exec, 'personal');
+  expect(before.length).toBe(4); // seed: cash / credit / invest / loan
+
+  // Create.
+  await applyMutation(exec, 'createAccountGroup', { id: 'ag-new', ledgerId: 'personal', name: 'Crypto' });
+  const created = await listAccountGroups(exec, 'personal');
+  expect(created.find((g) => g.id === 'ag-new')?.name).toBe('Crypto');
+  expect(created.find((g) => g.id === 'ag-new')?.includeInNetWorth).toBe(1);
+
+  // Update (rename + toggle net-worth).
+  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets', includeInNetWorth: 0 } });
+  const updated = await listAccountGroups(exec, 'personal');
+  const u = updated.find((g) => g.id === 'ag-new')!;
+  expect(u.name).toBe('Digital Assets');
+  expect(u.includeInNetWorth).toBe(0);
+
+  // Assigning the group to an account, then deleting the group, sets accounts.group_id to NULL.
+  await applyMutation(exec, 'updateAccount', { id: 'cc', patch: { groupId: 'ag-new' } });
+  const [pre] = await exec("SELECT group_id FROM accounts WHERE id = 'cc'");
+  expect(String(pre.group_id)).toBe('ag-new');
+  await applyMutation(exec, 'deleteAccountGroup', { id: 'ag-new' });
+  const after = await listAccountGroups(exec, 'personal');
+  expect(after.find((g) => g.id === 'ag-new')).toBeUndefined();
+  const [post] = await exec("SELECT group_id FROM accounts WHERE id = 'cc'");
+  expect(post.group_id).toBeNull();
+});
+
+test('createAccountGroup rejects an empty name', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'createAccountGroup', { name: '   ' })).rejects.toThrow(/name/i);
+});
+
+test('setBudgetRollover toggles rollover + limit on an existing budget', async () => {
+  const exec = await seeded();
+  const { budgetRolloverByCategory } = await import('@/lib/db/queries/budgets');
+
+  // Seed already includes bud-food (Food). Toggle rollover + set a cap.
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rollover: true, rolloverLimit: 200 });
+  let info = (await budgetRolloverByCategory(exec)).food;
+  expect(info.rollover).toBe(true);
+  expect(info.rolloverLimit).toBe(200);
+  expect(info.carryForward).toBe(0);
+
+  // Clear the cap.
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: null });
+  info = (await budgetRolloverByCategory(exec)).food;
+  expect(info.rollover).toBe(true); // unchanged
+  expect(info.rolloverLimit).toBeNull();
+
+  // Set carry-forward, then budgetProgress reflects it in the total.
+  const { budgetProgress } = await import('@/lib/db/queries/reports');
+  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', carryForward: 150 });
+  const progress = await budgetProgress(exec, 'personal', '2026-05');
+  const foodBudget = progress.find((b) => b.id === 'bud-food')!;
+  // Original food amount is 700; carry-forward adds 150 to the period total.
+  expect(foodBudget.budget).toBe(850);
+});
+
+test('setBudgetRollover errors when the category has no budget yet', async () => {
+  const exec = await seeded();
+  // Create a fresh category with no budget row.
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Pets' });
+  const [{ id: petsId }] = await exec("SELECT id FROM categories WHERE name = 'Pets'");
+  await expect(
+    applyMutation(exec, 'setBudgetRollover', { categoryId: String(petsId), rollover: true }),
+  ).rejects.toThrow(/budget/i);
+});
+
+test('setBudgetRollover rejects a negative limit', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: -10 }),
+  ).rejects.toThrow(/limit/i);
+});

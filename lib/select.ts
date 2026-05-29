@@ -23,6 +23,8 @@ export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
   if (opts.status) out = out.filter((t) => t.pending === (opts.status === 'pending'));
   if (opts.from) out = out.filter((t) => t.date >= opts.from!);
   if (opts.to) out = out.filter((t) => t.date <= opts.to!);
+  if (opts.minAmount != null) out = out.filter((t) => Math.abs(t.amount) >= opts.minAmount!);
+  if (opts.maxAmount != null) out = out.filter((t) => Math.abs(t.amount) <= opts.maxAmount!);
   out = [...out].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     const at = a.time ?? '';
@@ -37,14 +39,23 @@ export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
 }
 
 /** Confirmed expense total per category (positive magnitude). Pass `month`
- *  (YYYY-MM) to scope to a single month; omit for all-time. */
+ *  (YYYY-MM) to scope to a single month; omit for all-time. When a transaction
+ *  has splits, each split's category + amountBase contributes instead of the
+ *  parent's category/amount (mirrors the server's LEFT JOIN + COALESCE). */
 export function categorySpend(txns: Tx[], ledgerId: string, month?: string): Record<string, number> {
   const m: Record<string, number> = {};
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (month && t.date.slice(0, 7) !== month) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment || !t.category) continue;
-    m[t.category] = (m[t.category] ?? 0) + -t.amount;
+    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.splits && t.splits.length) {
+      for (const s of t.splits) {
+        if (!s.categoryId) continue;
+        m[s.categoryId] = (m[s.categoryId] ?? 0) + -s.amountBase;
+      }
+    } else if (t.category) {
+      m[t.category] = (m[t.category] ?? 0) + -t.amount;
+    }
   }
   return m;
 }

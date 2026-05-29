@@ -21,6 +21,12 @@ import {
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries/accounts';
+import {
+  createAccountGroup as qCreateAccountGroup,
+  updateAccountGroup as qUpdateAccountGroup,
+  deleteAccountGroup as qDeleteAccountGroup,
+  type AccountGroupPatch,
+} from './queries/accountGroups';
 import { deleteGoal as qDeleteGoal, updateGoal as qUpdateGoal, type GoalPatch } from './queries/goals';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
 import {
@@ -33,6 +39,7 @@ import {
   type ScheduledItemPatch,
 } from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
+import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
 import {
   deleteCounterparty as qDeleteCounterparty,
   updateCounterparty as qUpdateCounterparty,
@@ -45,7 +52,12 @@ import {
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
 import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
-import { setCategoryBudget as qSetCategoryBudget, deleteCategoryBudget as qDeleteCategoryBudget } from './queries/budgets';
+import {
+  setCategoryBudget as qSetCategoryBudget,
+  deleteCategoryBudget as qDeleteCategoryBudget,
+  setCategoryBudgetRollover as qSetCategoryBudgetRollover,
+  type BudgetRolloverPatch,
+} from './queries/budgets';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -287,6 +299,19 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteBudget':
       await qDeleteCategoryBudget(exec, str(args.categoryId));
       return;
+    case 'setBudgetRollover': {
+      const patch: BudgetRolloverPatch = {};
+      if (args.rollover !== undefined) patch.rollover = !!args.rollover;
+      if (args.rolloverLimit !== undefined) {
+        patch.rolloverLimit = args.rolloverLimit === null ? null : Number(args.rolloverLimit);
+        if (patch.rolloverLimit !== null && !(patch.rolloverLimit >= 0)) {
+          throw new Error('Rollover limit must be a non-negative number');
+        }
+      }
+      if (args.carryForward !== undefined) patch.carryForward = Number(args.carryForward);
+      await qSetCategoryBudgetRollover(exec, str(args.categoryId), patch);
+      return;
+    }
     case 'createAccount': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();
@@ -320,6 +345,26 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'deleteAccount':
       await qDeleteAccount(exec, str(args.id));
+      return;
+    case 'createAccountGroup': {
+      const name = str(args.name).trim();
+      if (!name) throw new Error('Group name is required');
+      await qCreateAccountGroup(exec, {
+        id: str(args.id || newId('ag')),
+        ledgerId: str(args.ledgerId || 'personal'),
+        name,
+        includeInNetWorth: args.includeInNetWorth == null ? 1 : Number(args.includeInNetWorth),
+      });
+      return;
+    }
+    case 'updateAccountGroup': {
+      const patch = (args.patch ?? {}) as AccountGroupPatch;
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Group name is required');
+      await qUpdateAccountGroup(exec, str(args.id), patch);
+      return;
+    }
+    case 'deleteAccountGroup':
+      await qDeleteAccountGroup(exec, str(args.id));
       return;
     case 'updateRecurringSplit': {
       await exec(
@@ -449,6 +494,20 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       for (const tagId of tagIds) {
         await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
       }
+      return;
+    }
+    case 'setTransactionSplits': {
+      const txId = str(args.id);
+      const raw = Array.isArray(args.splits) ? (args.splits as unknown[]) : [];
+      const splits: NewSplitInput[] = raw.map((s) => {
+        const o = s as Record<string, unknown>;
+        return {
+          categoryId: o.categoryId == null ? null : str(o.categoryId),
+          amount: Number(o.amount),
+          description: o.description == null ? null : str(o.description),
+        };
+      });
+      await qSetTransactionSplits(exec, txId, splits);
       return;
     }
     case 'createSubscription': {
