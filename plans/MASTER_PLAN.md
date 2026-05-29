@@ -327,12 +327,19 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    categories, accounts, screens.
 
 **Smaller wins:**
-4. **Account-group CRUD** — `account_groups` is seed-only today; closes the last
-   admin-CRUD gap.
-5. **Budget rollover UI** — schema already has `carry_forward` / `rollover`; no
-   UI surfaces them. Small toggle + display in Budget detail.
-6. **Date / amount filters on Activity** — list has only the direction filter
-   today; date-range + amount-range would round it out.
+4. **Account-group CRUD** ✅ *(done — see PR)* — listAccountGroups / create /
+   update / delete wired through projection + store + mutations; /accounts page
+   surfaces a "New group" affordance + per-group rename/delete; orphan
+   accounts land in an "Ungrouped" bucket when their group is deleted.
+5. **Budget rollover UI** ✅ *(done — see PR)* — rollover toggle + optional cap
+   on the budget detail page, carry-forward shown in the header and folded
+   into the ring + remaining figure (matches budgetProgress). Automatic
+   month-end carry-over computation is a separate task.
+6. **Date / amount filters on Activity** ✅ *(done — see PR)* — `minAmount` /
+   `maxAmount` on ListOptions + selectTransactions (date range already wired
+   on the server, just unused). UI: collapsible "Filters" panel below the
+   direction control with date + amount-range inputs and an active-count
+   indicator.
 
 **Bigger / scope-expanding:**
 7. **Sankey diagram** of income → categories on Insights. Visually striking,
