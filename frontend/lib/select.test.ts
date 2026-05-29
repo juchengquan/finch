@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions } from "@/lib/select";
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -209,4 +209,31 @@ test('netWorthByMonth ignores other ledgers and returns [] for empty endMonth', 
   const out = netWorthByMonth(txns, accounts, 'personal', '2026-05', 1);
   expect(out[0].v).toBeCloseTo(100, 2); // family txn ignored
   expect(netWorthByMonth([], accounts, 'personal', '', 3)).toEqual([]);
+});
+
+test('selectTransactions filters by date range (from / to inclusive)', () => {
+  const txns = [
+    tx({ id: 't1', amount: -10, date: '2026-05-01' }),
+    tx({ id: 't2', amount: -20, date: '2026-05-15' }),
+    tx({ id: 't3', amount: -30, date: '2026-06-02' }),
+  ];
+  const ranged = selectTransactions(txns, { ledgerId: 'personal', from: '2026-05-10', to: '2026-05-31' });
+  expect(ranged.map((t) => t.id)).toEqual(['t2']);
+  const openEnd = selectTransactions(txns, { ledgerId: 'personal', from: '2026-05-10' });
+  expect(openEnd.map((t) => t.id).sort()).toEqual(['t2', 't3']);
+});
+
+test('selectTransactions filters by absolute amount (min / max inclusive)', () => {
+  const txns = [
+    tx({ id: 'a', amount: -5 }),
+    tx({ id: 'b', amount: -50 }),
+    tx({ id: 'c', amount: -500 }),
+    tx({ id: 'd', amount: 200 }), // sign-agnostic
+  ];
+  const min = selectTransactions(txns, { ledgerId: 'personal', minAmount: 50 });
+  expect(min.map((t) => t.id).sort()).toEqual(['b', 'c', 'd']);
+  const max = selectTransactions(txns, { ledgerId: 'personal', maxAmount: 100 });
+  expect(max.map((t) => t.id).sort()).toEqual(['a', 'b']);
+  const both = selectTransactions(txns, { ledgerId: 'personal', minAmount: 50, maxAmount: 250 });
+  expect(both.map((t) => t.id).sort()).toEqual(['b', 'd']);
 });

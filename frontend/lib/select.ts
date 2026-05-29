@@ -23,6 +23,8 @@ export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
   if (opts.status) out = out.filter((t) => t.pending === (opts.status === 'pending'));
   if (opts.from) out = out.filter((t) => t.date >= opts.from!);
   if (opts.to) out = out.filter((t) => t.date <= opts.to!);
+  if (opts.minAmount != null) out = out.filter((t) => Math.abs(t.amount) >= opts.minAmount!);
+  if (opts.maxAmount != null) out = out.filter((t) => Math.abs(t.amount) <= opts.maxAmount!);
   out = [...out].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     const at = a.time ?? '';

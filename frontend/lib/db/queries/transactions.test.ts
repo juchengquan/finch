@@ -113,3 +113,15 @@ test('confirm flips a pending transaction and feeds the summary', async () => {
   const tx = await getTransaction(exec, 't03');
   expect(tx?.pending).toBe(false);
 });
+
+test('listTransactions filters by minAmount / maxAmount on absolute amount', async () => {
+  const exec = await seeded();
+  const all = await listTransactions(exec, { ledgerId: 'personal' });
+  const big = await listTransactions(exec, { ledgerId: 'personal', minAmount: 100 });
+  expect(big.every((t) => Math.abs(t.amount) >= 100)).toBe(true);
+  expect(big.length).toBeGreaterThan(0);
+  expect(big.length).toBeLessThan(all.length);
+
+  const window = await listTransactions(exec, { ledgerId: 'personal', minAmount: 20, maxAmount: 50 });
+  expect(window.every((t) => Math.abs(t.amount) >= 20 && Math.abs(t.amount) <= 50)).toBe(true);
+});
