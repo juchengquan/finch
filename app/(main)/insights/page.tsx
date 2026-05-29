@@ -10,7 +10,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -20,6 +20,7 @@ const METRICS = [
   { id: 'spending', label: 'Spending' },
   { id: 'income', label: 'Income' },
   { id: 'cashflow', label: 'Cashflow' },
+  { id: 'networth', label: 'Net worth' },
 ] as const;
 type Metric = (typeof METRICS)[number]['id'];
 
@@ -52,6 +53,7 @@ export default function InsightsPage() {
   );
   const monthly = monthlySpending(transactions, activeId, month, range);
   const cashflow = monthlyCashflow(transactions, activeId, month, range);
+  const networth = netWorthByMonth(transactions, accounts, activeId, month, range);
   const heatmap = dailySpending(transactions, activeId, lastDate, 12 * 7); // 12 weeks
   const categoryDeltas = topCategoryDeltas(transactions, activeId, month, ledgerCategories, 5);
   const insights = generateInsights({
@@ -171,6 +173,26 @@ export default function InsightsPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="bg-destructive size-2 rounded-full" />
                   Expense
+                </span>
+              </div>
+            </>
+          )}
+          {metric === 'networth' && (
+            <>
+              <AreaChart
+                series={[{ values: networth.map((n) => n.v), color: 'var(--primary)' }]}
+                labels={networth.map((n) => n.m)}
+                width={600}
+                height={150}
+                className="h-40 w-full"
+              />
+              <div className="text-muted-foreground mt-2 flex items-baseline justify-between text-[11px]">
+                <span>
+                  {networth[0] && `${networth[0].m}: ${fmt(networth[0].v)}`}
+                </span>
+                <span>
+                  {networth[networth.length - 1] &&
+                    `${networth[networth.length - 1].m}: ${fmt(networth[networth.length - 1].v)}`}
                 </span>
               </div>
             </>
