@@ -11,9 +11,13 @@ Status: **Phase A implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
   a computed header. Balances are unchanged (the opening-balance invariant pins
   `current_balance` to each account's known seed balance regardless of txn count);
   budgets/reports still show the current month.
-- ↩ **Remaining**: the 12-month charts (`monthly-spending`/`cashflow`) + the
-  Apr-vs-May panel still read aggregate JSON — deriving them from real history
-  needs a full year of seeded transactions (a much larger data effort).
+- ✅ **Derived series + extended history** — the 12-month charts and the
+  MoM-deltas panel now compute from live transactions (`monthlySpending` /
+  `monthlyCashflow` / `topCategoryDeltas` selectors, PR #33), and the seed
+  carries a full year of history (Jun 2025 → May 2026, 12 months × ~10 txns
+  each) so the 3M/6M/12M ranges have real data. Aggregate JSON files
+  (`monthly-spending.json`, `cashflow.json`, `apr-vs-may.json`, `insights.json`)
+  are retired.
 
 ## 1. Goal
 
