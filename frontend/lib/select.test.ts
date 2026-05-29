@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending } from '@/lib/select';
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth } from "@/lib/select";
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -147,4 +147,33 @@ test('dailySpending buckets expenses per day, excludes non-expense rows', () => 
 
 test('dailySpending returns [] when endDate is empty', () => {
   expect(dailySpending([], 'personal', '', 7)).toEqual([]);
+});
+
+
+test('netWorthByMonth ends at the current ledger total and walks back per month', () => {
+  // Final total = 100 (cc); txns across Apr and May:
+  // Apr: -10 + -20 = -30; May: -5 + -15 = -20. Opening = 100 - (-50) = 150.
+  // End of Apr = 150 + (-30) = 120. End of May = 120 + (-20) = 100.
+  const accounts = [acct({ id: 'cc', balance: 100 })];
+  const txns = [
+    tx({ amount: -10, date: '2026-04-05' }),
+    tx({ amount: -20, date: '2026-04-15' }),
+    tx({ amount: -5, date: '2026-05-10' }),
+    tx({ amount: -15, date: '2026-05-25' }),
+  ];
+  const out = netWorthByMonth(txns, accounts, 'personal', '2026-05', 2);
+  expect(out.map((r) => r.m)).toEqual(['Apr', 'May']);
+  expect(out[0].v).toBeCloseTo(120, 2);
+  expect(out[1].v).toBeCloseTo(100, 2);
+});
+
+test('netWorthByMonth ignores other ledgers and returns [] for empty endMonth', () => {
+  const accounts = [
+    acct({ id: 'cc', balance: 100 }),
+    acct({ id: 'x', ledgerId: 'family', balance: 999 }),
+  ];
+  const txns = [tx({ amount: 50, ledgerId: 'family', date: '2026-05-10' })];
+  const out = netWorthByMonth(txns, accounts, 'personal', '2026-05', 1);
+  expect(out[0].v).toBeCloseTo(100, 2); // family txn ignored
+  expect(netWorthByMonth([], accounts, 'personal', '', 3)).toEqual([]);
 });

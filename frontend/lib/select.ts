@@ -118,6 +118,36 @@ export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: 
   return out;
 }
 
+/**
+ * Net worth at the end of each of the last N months, oldest first. Computes the
+ * opening total (current_total − Σ all txns) and accumulates forward, snapshotting
+ * after every month. Uses string-prefix month comparison so it matches the
+ * lexicographic YYYY-MM-DD date format used everywhere else.
+ */
+export function netWorthByMonth(
+  txns: Tx[],
+  accounts: AccountRow[],
+  ledgerId: string,
+  endMonth: string,
+  n: number,
+): { m: string; v: number }[] {
+  if (!endMonth) return [];
+  const months = monthsBack(endMonth, n);
+  const total = accounts.filter((a) => a.ledgerId === ledgerId).reduce((s, a) => s + a.balance, 0);
+  const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId);
+  const sorted = [...ledgerTxns].sort(byDateAsc);
+  const opening = total - sorted.reduce((s, t) => s + t.amount, 0);
+  let bal = opening;
+  let i = 0;
+  return months.map((mo) => {
+    while (i < sorted.length && sorted[i].date.slice(0, 7) <= mo) {
+      bal += sorted[i].amount;
+      i++;
+    }
+    return { m: MONTH_LABELS[Number(mo.slice(5)) - 1], v: r2(bal) };
+  });
+}
+
 /** Income / expense totals per month (both positive). Mirrors MOCK.cashflow. */
 export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, n: number): { m: string; inc: number; exp: number }[] {
   const months = monthsBack(endMonth, n);
