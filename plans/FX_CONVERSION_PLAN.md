@@ -102,9 +102,13 @@ ledger's base currency, on (or before) the transaction date:
 - **Scope creep**: this only changes how `amount_base` is produced at write time;
   it must not alter already-stored rows.
 
-## 7. Open questions
+## 7. Open questions — resolved
 
-- Do we want a tiny **rate-admin** affordance (the System screen "Refresh" button
-  is currently a toast) to add/override a rate row, or keep rates seed-only?
-- Should `useMoney` display conversion unify on the table (introducing "as-of"
-  semantics for display), or stay a simple static map?
+- ✅ **Rate-admin affordance** — yes. The System screen got real exchange-rate
+  add/delete CRUD in PR #32 (`setExchangeRate` / `deleteExchangeRate` mutations,
+  upsert on `(date, currency)`, validated at the boundary).
+- ✅ **`useMoney` on the table** — yes; display conversion now uses the
+  projected `exchange_rates` (latest rate per currency, SGD-pivoted) via
+  `lib/fx.ts` + `latestRateMap` / `convertViaRates` (PR #32). It falls back to
+  the static map only when a currency has no row (pre-hydration / unseeded
+  currency).
