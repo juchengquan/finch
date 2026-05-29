@@ -64,14 +64,20 @@ export interface CategorySpend {
   spent: number; // positive magnitude of expenses
 }
 
-/** Confirmed expense total per category (all dates), as a {categoryId: spent} map. */
+/**
+ * Confirmed expense total per category. LEFT-JOINs `transaction_splits` so a
+ * tx with splits emits one row per split (its category + its amount), while a
+ * tx without splits falls back to the parent's category + amount via COALESCE.
+ */
 export async function categorySpend(exec: Exec, ledgerId: string): Promise<Record<string, number>> {
   const rows = await exec(
-    `SELECT category_id AS id, SUM(amount_base * -1) AS spent
-       FROM transactions
-      WHERE ledger_id = ? AND amount < 0 AND transfer_group_id IS NULL AND is_adjustment = 0
-        AND status = 'confirmed' AND category_id IS NOT NULL
-      GROUP BY category_id`,
+    `SELECT COALESCE(ts.category_id, t.category_id) AS id,
+            SUM(COALESCE(ts.amount_base, t.amount_base) * -1) AS spent
+       FROM transactions t
+       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+      WHERE t.ledger_id = ? AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.is_adjustment = 0
+        AND t.status = 'confirmed' AND COALESCE(ts.category_id, t.category_id) IS NOT NULL
+      GROUP BY COALESCE(ts.category_id, t.category_id)`,
     [ledgerId],
   );
   const m: Record<string, number> = {};
@@ -82,8 +88,10 @@ export async function categorySpend(exec: Exec, ledgerId: string): Promise<Recor
 /** Confirmed expense totals per category for a month (e.g. '2026-05'). */
 export async function monthlyByCategory(exec: Exec, ledgerId: string, yearMonth: string): Promise<CategorySpend[]> {
   const rows = await exec(
-    `SELECT c.id, c.name, SUM(t.amount_base * -1) AS spent
-       FROM transactions t JOIN categories c ON t.category_id = c.id
+    `SELECT c.id, c.name, SUM(COALESCE(ts.amount_base, t.amount_base) * -1) AS spent
+       FROM transactions t
+       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+       JOIN categories c ON c.id = COALESCE(ts.category_id, t.category_id)
       WHERE t.ledger_id = ? AND t.date LIKE ?
         AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.is_adjustment = 0 AND t.status = 'confirmed'
       GROUP BY c.id ORDER BY spent DESC`,

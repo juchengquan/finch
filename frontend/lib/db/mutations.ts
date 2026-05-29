@@ -33,6 +33,7 @@ import {
   type ScheduledItemPatch,
 } from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
+import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
 import {
   deleteCounterparty as qDeleteCounterparty,
   updateCounterparty as qUpdateCounterparty,
@@ -449,6 +450,20 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       for (const tagId of tagIds) {
         await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
       }
+      return;
+    }
+    case 'setTransactionSplits': {
+      const txId = str(args.id);
+      const raw = Array.isArray(args.splits) ? (args.splits as unknown[]) : [];
+      const splits: NewSplitInput[] = raw.map((s) => {
+        const o = s as Record<string, unknown>;
+        return {
+          categoryId: o.categoryId == null ? null : str(o.categoryId),
+          amount: Number(o.amount),
+          description: o.description == null ? null : str(o.description),
+        };
+      });
+      await qSetTransactionSplits(exec, txId, splits);
       return;
     }
     case 'createSubscription': {

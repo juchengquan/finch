@@ -20,6 +20,7 @@ import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
 import { listTags, transactionTagMap } from './queries/tags';
+import { splitsByTransaction } from './queries/transactionSplits';
 import { listSubscriptions, listScheduledItems } from './queries/planning';
 import { listRecurring } from './queries/recurring';
 import type { Exec, PersistState, ProjectedState } from './repo';
@@ -58,9 +59,20 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       listScheduledItems(exec),
       listRecurring(exec),
     ]);
+  const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
   for (const t of transactions) {
     const ids = tagMap[t.id];
     if (ids) t.tags = ids;
+    const splits = splitMap.get(t.id);
+    if (splits && splits.length) {
+      t.splits = splits.map((s) => ({
+        id: s.id,
+        categoryId: s.categoryId,
+        amount: s.amount,
+        amountBase: s.amountBase,
+        description: s.description,
+      }));
+    }
   }
   return {
     transactions,

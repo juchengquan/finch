@@ -309,13 +309,13 @@ The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
 **Picked next:**
-1. **Transaction splits** ⭐ *(starting now)* — recurring templates already
-   support splits; ad-hoc transactions don't. Lets a Costco trip be split
-   across `groceries` + `household` so category spend is honest. Schema: one
-   new join table (`transaction_splits` with `transaction_id` FK + per-row
-   `category_id` + `amount`); UI mirrors the recurring detail's split editor.
-   Reports/insights that already filter by category should treat split rows as
-   the source of truth.
+1. **Transaction splits** ✅ *(done — see PR)* — ad-hoc category splits on any
+   confirmed transaction. New `transaction_splits` table (schema v6) holds the
+   per-row category + amount + locked `amount_base`; `categorySpend`,
+   `monthlyByCategory`, and `budgetProgress` LEFT JOIN with COALESCE so split
+   rows override the parent category. Transaction detail surfaces a multi-row
+   editor (Split button) with sum validation; the client `categorySpend`
+   selector mirrors the same override.
 
 **Other strong candidates (deferred, queued):**
 2. **Spending forecast / cash-flow projection** — extrapolate end-of-month

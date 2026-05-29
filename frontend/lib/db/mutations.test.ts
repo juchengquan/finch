@@ -564,3 +564,61 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
   expect(conv.rate).toBeCloseTo(0.01, 6);
   expect(conv.amountBase).toBeCloseTo(1.0, 4);
 });
+
+test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits', async () => {
+  const exec = await seeded();
+  // Pick a confirmed expense from the seed so its category is known.
+  const [parent] = await exec(
+    "SELECT id, amount, amount_base, category_id FROM transactions WHERE ledger_id = 'personal' AND amount < 0 AND status = 'confirmed' AND transfer_group_id IS NULL AND is_adjustment = 0 LIMIT 1",
+  );
+  expect(parent).toBeDefined();
+  const txId = String(parent.id);
+  const amt = Number(parent.amount);
+  const half = Math.round((amt / 2) * 100) / 100;
+  const rest = Math.round((amt - half) * 100) / 100;
+  const originalCat = String(parent.category_id);
+
+  // < 2 rows is rejected.
+  await expect(
+    applyMutation(exec, 'setTransactionSplits', { id: txId, splits: [{ categoryId: 'food', amount: amt }] }),
+  ).rejects.toThrow(/two/i);
+
+  // Sum mismatch is rejected.
+  await expect(
+    applyMutation(exec, 'setTransactionSplits', {
+      id: txId,
+      splits: [{ categoryId: 'food', amount: amt / 2 }, { categoryId: 'trans', amount: amt / 3 }],
+    }),
+  ).rejects.toThrow(/sum/i);
+
+  // Two valid rows succeed; categorySpend reflects splits, not the parent.
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  await applyMutation(exec, 'setTransactionSplits', {
+    id: txId,
+    splits: [
+      { categoryId: 'food', amount: half },
+      { categoryId: 'trans', amount: rest },
+    ],
+  });
+  const after = await categorySpend(exec, 'personal');
+  // The parent's original category should no longer carry this tx's amount.
+  // Both splits' targets get a positive contribution (magnitude).
+  expect(after.food).toBeGreaterThan(0);
+  expect(after.trans).toBeGreaterThan(0);
+  // Sanity: per-row stored amount_base is derived from the parent's locked rate.
+  const splitRows = await exec(
+    'SELECT category_id, amount, amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    [txId],
+  );
+  expect(splitRows).toHaveLength(2);
+  const sumBase = splitRows.reduce((s, r) => s + Number(r.amount_base), 0);
+  expect(sumBase).toBeCloseTo(Number(parent.amount_base), 2);
+
+  // Clearing splits restores the parent's category.
+  await applyMutation(exec, 'setTransactionSplits', { id: txId, splits: [] });
+  const cleared = await exec('SELECT COUNT(*) AS n FROM transaction_splits WHERE transaction_id = ?', [txId]);
+  expect(Number(cleared[0].n)).toBe(0);
+  const restored = await categorySpend(exec, 'personal');
+  // The original category should once again include this tx.
+  expect(restored[originalCat]).toBeGreaterThan(0);
+});

@@ -125,6 +125,21 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at         TEXT NOT NULL
 );
 
+-- Ad-hoc category splits for one transaction. When a row has splits, the
+-- splits override the parent transaction's category in aggregations: the
+-- parent's category_id stays as a default but isn't used while splits exist.
+-- Splits' amounts (native + base) must sum to the parent's amount/amount_base.
+CREATE TABLE IF NOT EXISTS transaction_splits (
+  id             TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  category_id    TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  amount         REAL NOT NULL,
+  amount_base    REAL NOT NULL,
+  description    TEXT,
+  sort_order     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id);
+
 CREATE TABLE IF NOT EXISTS account_balance_snapshots (
   id         TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -380,8 +395,9 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 
 // Bump when the CREATE statements above change shape. Version 1 = the original
 // schema; 2 adds accounts.opening_balance; 3 adds account display columns;
-// 4 adds categories.hue; 5 adds transactions.is_adjustment.
-export const SCHEMA_VERSION = 5;
+// 4 adds categories.hue; 5 adds transactions.is_adjustment; 6 adds the
+// transaction_splits table.
+export const SCHEMA_VERSION = 6;
 
 // MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
 // created DB already has the latest CREATE statements, so it skips these and is
@@ -409,6 +425,21 @@ const MIGRATIONS: Record<number, string[]> = {
     // Balance-reconciliation marker — distinguishes manual adjustments from
     // real income/expense so they're excluded from category spend and cash flow.
     'ALTER TABLE transactions ADD COLUMN is_adjustment INTEGER NOT NULL DEFAULT 0',
+  ],
+  6: [
+    // Ad-hoc category splits for one transaction; same shape as the CREATE
+    // above. Existing rows have no splits → parent's category_id keeps owning
+    // its amount in aggregations.
+    `CREATE TABLE IF NOT EXISTS transaction_splits (
+       id             TEXT PRIMARY KEY,
+       transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+       category_id    TEXT REFERENCES categories(id) ON DELETE SET NULL,
+       amount         REAL NOT NULL,
+       amount_base    REAL NOT NULL,
+       description    TEXT,
+       sort_order     INTEGER NOT NULL DEFAULT 0
+     )`,
+    'CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id)',
   ],
 };
 

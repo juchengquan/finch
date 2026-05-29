@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, CatBar } from '@/components/primitives';
 import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
-import { useFinanceStore } from '@/lib/store';
+import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -100,6 +100,212 @@ export function TransactionActionsMenu({
   );
 }
 
+interface SplitRow {
+  key: string;
+  categoryId: string;
+  amount: string;
+  description: string;
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const nextKey = (() => {
+  let k = 0;
+  return () => `r-${++k}`;
+})();
+
+function rowsFromTx(tx: Tx, fallbackCategoryId: string): SplitRow[] {
+  if (tx.splits?.length) {
+    return tx.splits.map((s) => ({
+      key: s.id,
+      categoryId: s.categoryId ?? fallbackCategoryId,
+      amount: String(Math.abs(s.amount).toFixed(2)),
+      description: s.description ?? '',
+    }));
+  }
+  const targetAbs = Math.abs(tx.nativeAmount ?? tx.amount);
+  const half = r2(targetAbs / 2);
+  return [
+    { key: nextKey(), categoryId: tx.category ?? fallbackCategoryId, amount: half.toFixed(2), description: '' },
+    { key: nextKey(), categoryId: fallbackCategoryId, amount: r2(targetAbs - half).toFixed(2), description: '' },
+  ];
+}
+
+/**
+ * Edits ad-hoc category splits for one transaction. The trigger element is
+ * supplied as the child. Splits' magnitudes must sum to the parent's native
+ * amount; on save we re-apply the parent's sign and send to the store.
+ */
+function SplitEditorBody({
+  tx,
+  categoryOptions,
+  onClose,
+}: {
+  tx: Tx;
+  categoryOptions: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const setTransactionSplits = useFinanceStore((s) => s.setTransactionSplits);
+  const fallbackCategoryId = categoryOptions[0]?.id ?? '';
+  const targetAbs = useMemo(() => Math.abs(tx.nativeAmount ?? tx.amount), [tx]);
+  const sign = (tx.nativeAmount ?? tx.amount) < 0 ? -1 : 1;
+  const currency = tx.currency ?? '';
+  const [rows, setRows] = useState<SplitRow[]>(() => rowsFromTx(tx, fallbackCategoryId));
+
+  const update = (key: string, patch: Partial<SplitRow>) =>
+    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const remove = (key: string) => setRows((rs) => rs.filter((r) => r.key !== key));
+  const add = () => setRows((rs) => [...rs, { key: nextKey(), categoryId: fallbackCategoryId, amount: '0.00', description: '' }]);
+  const balanceLast = () => {
+    setRows((rs) => {
+      if (rs.length === 0) return rs;
+      const headSum = rs.slice(0, -1).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+      const rem = r2(targetAbs - headSum);
+      const last = rs[rs.length - 1];
+      return [...rs.slice(0, -1), { ...last, amount: rem.toFixed(2) }];
+    });
+  };
+
+  const parsedSum = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const diff = r2(targetAbs - parsedSum);
+  const invalidRow = rows.some((r) => !(parseFloat(r.amount) > 0) || !r.categoryId);
+  const tooFew = rows.length < 2;
+  const sumOff = Math.abs(diff) > 0.005;
+  const canSave = !tooFew && !invalidRow && !sumOff;
+
+  const save = () => {
+    const inputs: TxSplitInput[] = rows.map((r) => ({
+      categoryId: r.categoryId,
+      amount: sign * Math.abs(parseFloat(r.amount) || 0),
+      description: r.description.trim() ? r.description.trim() : null,
+    }));
+    try {
+      setTransactionSplits(tx.id, inputs);
+      toast.success('Splits saved');
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save splits');
+    }
+  };
+
+  const clearAll = () => {
+    setTransactionSplits(tx.id, []);
+    toast.success('Splits cleared');
+    onClose();
+  };
+
+  const fmtTarget = currency ? fmtNative(targetAbs, currency) : targetAbs.toFixed(2);
+  const fmtDiff = currency ? fmtNative(Math.abs(diff), currency) : Math.abs(diff).toFixed(2);
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit splits</DialogTitle>
+        <DialogDescription>
+          Allocate {fmtTarget} across categories. Splits must sum to the transaction amount.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto pr-1">
+        {rows.map((r) => (
+          <div key={r.key} className="grid grid-cols-[1fr_120px_32px] items-center gap-2">
+            <Select value={r.categoryId} onValueChange={(v) => update(r.key, { categoryId: v })}>
+              <SelectTrigger aria-label="Category" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categoryOptions.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              aria-label="Amount"
+              placeholder="0.00"
+              value={r.amount}
+              onChange={(e) => update(r.key, { amount: e.target.value })}
+              className="h-8 text-right font-mono text-[12px]"
+            />
+            <button
+              type="button"
+              onClick={() => remove(r.key)}
+              disabled={rows.length <= 1}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-30 flex h-8 w-8 items-center justify-center rounded-md"
+              aria-label="Remove split"
+            >
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" variant="outline" onClick={add} type="button">
+            <Icon name="plus" size={12} />
+            Add split
+          </Button>
+          <Button size="sm" variant="ghost" onClick={balanceLast} type="button">
+            Balance to total
+          </Button>
+        </div>
+      </div>
+      <div className="border-border mt-2 flex items-center justify-between border-t pt-3 text-[12px]">
+        <span className="text-muted-foreground">Target {fmtTarget}</span>
+        {sumOff ? (
+          <span className="text-warning">
+            {diff > 0 ? `Short ${fmtDiff}` : `Over ${fmtDiff}`}
+          </span>
+        ) : (
+          <span className="text-success">Balanced</span>
+        )}
+      </div>
+      <DialogFooter className="flex-row justify-between sm:justify-between">
+        <div>
+          {tx.splits?.length ? (
+            <Button variant="ghost" type="button" onClick={clearAll}>
+              Clear splits
+            </Button>
+          ) : null}
+        </div>
+        <div className="flex gap-2">
+          <DialogClose asChild>
+            <Button variant="outline" type="button">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button type="button" onClick={save} disabled={!canSave}>
+            Save
+          </Button>
+        </div>
+      </DialogFooter>
+    </>
+  );
+}
+
+function SplitEditorDialog({
+  tx,
+  categoryOptions,
+  children,
+}: {
+  tx: Tx;
+  categoryOptions: { id: string; name: string }[];
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        {open && (
+          <SplitEditorBody tx={tx} categoryOptions={categoryOptions} onClose={() => setOpen(false)} />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * The transaction detail body — hero, quick actions, and detail rows.
  * Rendered both inside the right-side sheet and on the standalone /tx route.
@@ -109,13 +315,10 @@ export function TransactionDetail({ txId }: { txId: string }) {
   const { fmt, base } = useMoney();
   const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
-  const addTransaction = useFinanceStore((s) => s.addTransaction);
   const storeCats = useFinanceStore((s) => s.categories);
   const storeTags = useFinanceStore((s) => s.tags);
   const createTag = useFinanceStore((s) => s.createTag);
   const setTransactionTags = useFinanceStore((s) => s.setTransactionTags);
-  const [splitAmt, setSplitAmt] = useState('');
-  const [splitCat, setSplitCat] = useState(MOCK.categories[0].id);
   const [newTag, setNewTag] = useState('');
 
   // Category options come from the projected store, scoped to this tx's ledger.
@@ -134,9 +337,6 @@ export function TransactionDetail({ txId }: { txId: string }) {
         .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === ledgerId)
         .map((c) => ({ id: c.id, name: c.name }));
 
-  // Keep the split-category selection valid as options load / the ledger changes.
-  if (!categoryOptions.some((o) => o.id === splitCat)) setSplitCat(categoryOptions[0].id);
-
   const cat = catById(tx.category);
   const acct = acctById(tx.account);
   const when = new Date(`${tx.date}T${tx.time ?? '00:00'}`);
@@ -148,29 +348,8 @@ export function TransactionDetail({ txId }: { txId: string }) {
     toast.success(tx.recurring ? 'Removed recurring' : 'Marked as recurring');
   };
 
-  const origAbs = Math.abs(tx.amount);
-  const sign = tx.amount < 0 ? -1 : 1;
-  const doSplit = () => {
-    const part = parseFloat(splitAmt);
-    if (!part || part <= 0 || part >= origAbs) {
-      toast.error(`Enter an amount between 0 and ${origAbs}`);
-      return;
-    }
-    updateTransaction(tx.id, { amount: sign * (origAbs - part) });
-    addTransaction({
-      merchant: tx.merchant,
-      category: splitCat,
-      amount: sign * part,
-      account: tx.account,
-      date: tx.date,
-      time: tx.time,
-      note: `Split from ${tx.merchant}`,
-      pending: tx.pending,
-      ledgerId: tx.ledgerId,
-    });
-    setSplitAmt('');
-    toast.success('Transaction split');
-  };
+  const splits = tx.splits ?? [];
+  const categoryNameById = new Map(categoryOptions.map((c) => [c.id, c.name]));
 
   return (
     <>
@@ -189,59 +368,18 @@ export function TransactionDetail({ txId }: { txId: string }) {
       </div>
 
       <div className="flex gap-2 pb-[22px]">
-        <Dialog>
-          <DialogTrigger asChild>
-            <button
-              type="button"
-              className="border-border text-foreground flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border"
-            >
-              <Icon name="split" size={18} />
-              <span className="text-[10px] font-medium">Split</span>
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Split transaction</DialogTitle>
-              <DialogDescription>
-                Move part of {fmt(origAbs)} into another category.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground font-serif text-xl">$</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  aria-label="Split amount"
-                  placeholder="0.00"
-                  value={splitAmt}
-                  onChange={(e) => setSplitAmt(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <Select value={splitCat} onValueChange={setSplitCat}>
-                <SelectTrigger aria-label="Split category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <DialogClose asChild>
-                <Button onClick={doSplit}>Split</Button>
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <SplitEditorDialog tx={tx} categoryOptions={categoryOptions}>
+          <button
+            type="button"
+            className={cn(
+              'flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border',
+              splits.length ? 'border-primary text-primary' : 'border-border text-foreground',
+            )}
+          >
+            <Icon name="split" size={18} />
+            <span className="text-[10px] font-medium">{splits.length ? `Split (${splits.length})` : 'Split'}</span>
+          </button>
+        </SplitEditorDialog>
         <button
           type="button"
           onClick={toggleRecurring}
@@ -266,24 +404,28 @@ export function TransactionDetail({ txId }: { txId: string }) {
       <div className="bg-card border-border rounded-[14px] border px-4 py-1">
         <div className="border-border flex items-center justify-between py-2 text-[13px]">
           <span className="text-muted-foreground">Category</span>
-          <Select
-            value={tx.category ?? 'uncategorized'}
-            onValueChange={(v) => {
-              updateTransaction(tx.id, { category: v === 'uncategorized' ? null : v });
-              toast.success('Category updated');
-            }}
-          >
-            <SelectTrigger size="sm" className="h-7 border-0 shadow-none">
-              <SelectValue placeholder="Uncategorized" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              {categoryOptions.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {splits.length ? (
+            <span className="text-muted-foreground text-[12px] italic">Split across {splits.length} categories</span>
+          ) : (
+            <Select
+              value={tx.category ?? 'uncategorized'}
+              onValueChange={(v) => {
+                updateTransaction(tx.id, { category: v === 'uncategorized' ? null : v });
+                toast.success('Category updated');
+              }}
+            >
+              <SelectTrigger size="sm" className="h-7 border-0 shadow-none">
+                <SelectValue placeholder="Uncategorized" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {categoryOptions.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         {[
           { l: 'Account', v: acctLabel },
@@ -300,6 +442,25 @@ export function TransactionDetail({ txId }: { txId: string }) {
           </div>
         ))}
       </div>
+
+      {splits.length > 0 && (
+        <div className="mt-4">
+          <div className="text-muted-foreground mb-2 px-1 font-mono text-[10px] tracking-wider uppercase">Splits</div>
+          <div className="bg-card border-border divide-border divide-y rounded-[14px] border px-4">
+            {splits.map((s) => (
+              <div key={s.id} className="flex items-center justify-between py-2.5 text-[13px]">
+                <div className="flex flex-col">
+                  <span>{s.categoryId ? categoryNameById.get(s.categoryId) ?? '—' : 'Uncategorized'}</span>
+                  {s.description && (
+                    <span className="text-muted-foreground text-[11px]">{s.description}</span>
+                  )}
+                </div>
+                <span className="font-mono">{fmt(Math.abs(s.amountBase))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(() => {
         const ledgerTags = storeTags.filter((t) => t.ledgerId === ledgerId);

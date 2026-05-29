@@ -65,6 +65,39 @@ test('categorySpend excludes pending, transfers, and income', () => {
   expect(categorySpend(txns, 'personal').food).toBe(10);
 });
 
+test('categorySpend uses splits when present (overrides parent category)', () => {
+  const txns = [
+    tx({
+      amount: -100,
+      category: 'food',
+      splits: [
+        { id: 's1', categoryId: 'food', amount: -60, amountBase: -60, description: null },
+        { id: 's2', categoryId: 'household', amount: -40, amountBase: -40, description: null },
+      ],
+    }),
+    tx({ amount: -20, category: 'food' }),
+  ];
+  const m = categorySpend(txns, 'personal');
+  expect(m.food).toBeCloseTo(80, 2);   // 60 (split) + 20 (unsplit)
+  expect(m.household).toBeCloseTo(40, 2);
+});
+
+test('categorySpend skips split rows with null category', () => {
+  const txns = [
+    tx({
+      amount: -100,
+      category: 'food',
+      splits: [
+        { id: 's1', categoryId: 'food', amount: -70, amountBase: -70, description: null },
+        { id: 's2', categoryId: null, amount: -30, amountBase: -30, description: null },
+      ],
+    }),
+  ];
+  const m = categorySpend(txns, 'personal');
+  expect(m.food).toBeCloseTo(70, 2);
+  expect(Object.keys(m)).toEqual(['food']);
+});
+
 test('monthlySpending sums expenses per month (excludes transfers, adjustments, pending, income)', () => {
   const txns = [
     tx({ amount: -100, date: '2026-05-15' }),

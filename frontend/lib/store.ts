@@ -32,6 +32,23 @@ export interface Tx {
   ledgerId?: string;
   transferGroupId?: string;
   tags?: string[];
+  /** Ad-hoc category splits. When present, these override `category` /
+   * `amount` for category aggregations (categorySpend / budgets / etc.). */
+  splits?: TxSplit[];
+}
+
+export interface TxSplit {
+  id: string;
+  categoryId: string | null;
+  amount: number;       // signed, in the tx's native currency
+  amountBase: number;   // signed, in the ledger's base currency
+  description: string | null;
+}
+
+export interface TxSplitInput {
+  categoryId: string | null;
+  amount: number;
+  description?: string | null;
 }
 
 export interface TransferInput {
@@ -135,6 +152,7 @@ interface FinanceState {
   deleteGoal: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
+  setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
@@ -406,6 +424,38 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.id === transactionId ? { ...t, tags: tagIds } : t)),
         }));
         syncMutation('setTransactionTags', { id: transactionId, tagIds });
+      },
+
+      setTransactionSplits: (transactionId, splits) => {
+        set((s) => ({
+          transactions: s.transactions.map((t) => {
+            if (t.id !== transactionId) return t;
+            if (!splits.length) {
+              const { splits: _drop, ...rest } = t;
+              void _drop;
+              return rest;
+            }
+            const ratio = t.amount !== 0 && t.nativeAmount != null && t.nativeAmount !== 0
+              ? t.amount / t.nativeAmount
+              : 1;
+            const optimistic: TxSplit[] = splits.map((sp, i) => ({
+              id: `${transactionId}-s-${i}`,
+              categoryId: sp.categoryId,
+              amount: sp.amount,
+              amountBase: Math.round(sp.amount * ratio * 100) / 100,
+              description: sp.description ?? null,
+            }));
+            return { ...t, splits: optimistic };
+          }),
+        }));
+        syncMutation('setTransactionSplits', {
+          id: transactionId,
+          splits: splits.map((s) => ({
+            categoryId: s.categoryId,
+            amount: s.amount,
+            description: s.description ?? null,
+          })),
+        });
       },
 
       updateTag: (id, patch) => {
