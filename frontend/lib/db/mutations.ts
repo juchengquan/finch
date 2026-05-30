@@ -54,9 +54,13 @@ import type { ScheduledTemplate } from '@/lib/store';
 import {
   createBudget as qCreateBudget,
   updateBudget as qUpdateBudget,
+  updateBudgetCycle as qUpdateBudgetCycle,
+  stageBudgetAmount as qStageBudgetAmount,
+  clearPendingAmount as qClearPendingAmount,
   deleteBudget as qDeleteBudget,
   contributeBudget as qContributeBudget,
   type BudgetPatch,
+  type BudgetCyclePatch,
   type BudgetType,
 } from './queries/budgets';
 import {
@@ -405,9 +409,34 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const patch = (args.patch ?? {}) as BudgetPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Budget name is required');
       if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Budget amount must be greater than 0');
+      // Amount-only edits on existing recurring budgets stage to
+      // pending_amount instead of writing the active amount — the next
+      // period boundary commits the change (BUDGET_CYCLES_PLAN §2).
+      const patchKeys = Object.keys(patch).filter((k) => (patch as Record<string, unknown>)[k] !== undefined);
+      const amountOnly = patchKeys.length === 1 && patchKeys[0] === 'amount';
+      if (amountOnly) {
+        const id = str(args.id);
+        const [row] = await exec('SELECT is_recurring FROM budgets WHERE id = ?', [id]);
+        if (row && Number(row.is_recurring) === 1) {
+          await qStageBudgetAmount(exec, id, Number(patch.amount));
+          return;
+        }
+      }
       await qUpdateBudget(exec, str(args.id), patch);
       return;
     }
+    case 'updateBudgetCycle': {
+      const patch = (args.patch ?? {}) as BudgetCyclePatch;
+      const validFreqs = ['daily','weekly','biweekly','monthly','quarterly','yearly'];
+      if (!validFreqs.includes(patch.frequency)) throw new Error(`Unknown frequency "${patch.frequency}"`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.startDate)) throw new Error('startDate must be YYYY-MM-DD');
+      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Budget amount must be greater than 0');
+      await qUpdateBudgetCycle(exec, str(args.id), patch);
+      return;
+    }
+    case 'clearPendingAmount':
+      await qClearPendingAmount(exec, str(args.id));
+      return;
     // Entity delete uses `removeBudget` to avoid colliding with the legacy
     // per-category `deleteBudget` action above.
     case 'removeBudget':

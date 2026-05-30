@@ -174,6 +174,11 @@ interface FinanceState {
   deleteAccountGroup: (id: string) => void;
   createBudget: (input: NewBudgetInput) => string;
   updateBudget: (id: string, patch: BudgetPatch) => void;
+  updateBudgetCycle: (
+    id: string,
+    patch: { frequency: string; startDate: string; amount?: number; endDate?: string | null },
+  ) => void;
+  clearPendingAmount: (id: string) => void;
   removeBudget: (id: string) => void;
   contributeBudget: (id: string, amount: number) => void;
   createBudgetGroup: (input: { name: string; ledgerId?: string }) => string;
@@ -379,6 +384,8 @@ export const useFinanceStore = create<FinanceState>()(
           isRecurring,
           rollover: input.rollover ? 1 : 0,
           rolloverLimit: input.rolloverLimit ?? null,
+          pendingAmount: null,
+          lastRolledPeriod: null,
           accountIds: input.accountIds ?? [],
           categoryIds: input.categoryIds ?? [],
           tagIds: input.tagIds ?? [],
@@ -408,8 +415,48 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       updateBudget: (id, patch) => {
-        set((s) => ({ budgets: s.budgets.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
+        set((s) => ({
+          budgets: s.budgets.map((b) => {
+            if (b.id !== id) return b;
+            // Mirror the server-side staging rule: amount-only patches on
+            // recurring budgets write to pendingAmount, not amount.
+            const keys = Object.keys(patch).filter(
+              (k) => (patch as Record<string, unknown>)[k] !== undefined,
+            );
+            const amountOnly = keys.length === 1 && keys[0] === 'amount';
+            if (amountOnly && b.isRecurring === 1) {
+              return { ...b, pendingAmount: Number(patch.amount) };
+            }
+            return { ...b, ...patch };
+          }),
+        }));
         syncMutation('updateBudget', { id, patch });
+      },
+
+      updateBudgetCycle: (id, patch) => {
+        set((s) => ({
+          budgets: s.budgets.map((b) => {
+            if (b.id !== id) return b;
+            const nextAmount = patch.amount ?? b.amount;
+            return {
+              ...b,
+              amount: nextAmount,
+              frequency: patch.frequency,
+              startDate: patch.startDate,
+              endDate: patch.endDate === undefined ? b.endDate : patch.endDate,
+              pendingAmount: null,
+              lastRolledPeriod: null,
+            };
+          }),
+        }));
+        syncMutation('updateBudgetCycle', { id, patch });
+      },
+
+      clearPendingAmount: (id) => {
+        set((s) => ({
+          budgets: s.budgets.map((b) => (b.id === id ? { ...b, pendingAmount: null } : b)),
+        }));
+        syncMutation('clearPendingAmount', { id });
       },
 
       removeBudget: (id) => {

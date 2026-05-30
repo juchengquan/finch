@@ -27,6 +27,8 @@ const budget = (p: Partial<BudgetRow>): BudgetRow => ({
   isRecurring: 1,
   rollover: 0,
   rolloverLimit: null,
+  pendingAmount: null,
+  lastRolledPeriod: null,
   accountIds: [],
   categoryIds: [],
   tagIds: [],

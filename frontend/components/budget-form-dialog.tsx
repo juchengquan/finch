@@ -18,7 +18,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore, type NewBudgetInput } from '@/lib/store';
+import { useMoney } from '@/components/use-money';
 import type { BudgetRow, BudgetType } from '@/lib/db/queries/budgets';
+import { periodLabel, nextPeriod, periodOf, type Frequency } from '@/lib/budgets/period';
 import { MOCK } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
@@ -81,11 +83,14 @@ function ChipMultiSelect({
 
 export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'expense' }: BudgetFormDialogProps) {
   const { active, activeId } = useLedger();
+  const { fmt } = useMoney();
   const accounts = useFinanceStore((s) => s.accounts);
   const storeCats = useFinanceStore((s) => s.categories);
   const budgetGroups = useFinanceStore((s) => s.budgetGroups);
   const createBudget = useFinanceStore((s) => s.createBudget);
   const updateBudget = useFinanceStore((s) => s.updateBudget);
+  const updateBudgetCycle = useFinanceStore((s) => s.updateBudgetCycle);
+  const clearPendingAmount = useFinanceStore((s) => s.clearPendingAmount);
 
   const editing = !!budget;
   const [name, setName] = useState(budget?.name ?? '');
@@ -116,27 +121,96 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
     setter(next);
   };
 
+  // What's actually changed vs the source row — drives the cycle-change /
+  // amount-staging routing per BUDGET_CYCLES_PLAN §4.
+  const cycleChanged = editing && budget != null
+    && (frequency !== budget.frequency || startDate !== budget.startDate);
+  const amountChanged = editing && budget != null
+    && parseFloat(amount || '0') !== budget.amount;
+  const recurringNow = editing ? (budget?.isRecurring === 1) : recurring;
+  const stagingPath = editing && !cycleChanged && amountChanged && recurringNow
+    && [name.trim()].every((v) => v === budget?.name) // only the amount differed
+    && groupId === (budget?.groupId ?? 'none')
+    && (recurring ? 1 : 0) === (budget?.isRecurring ?? 1)
+    && (type === 'expense' && rollover ? 1 : 0) === (budget?.rollover ?? 0)
+    && JSON.stringify([...accountIds].sort()) === JSON.stringify([...(budget?.accountIds ?? [])].sort())
+    && JSON.stringify([...categoryIds].sort()) === JSON.stringify([...(budget?.categoryIds ?? [])].sort())
+    && type === budget?.type;
+
+  // Period-label hint for "takes effect next period" / "applies now".
+  const nextPeriodLabel = editing && budget != null && recurringNow
+    ? (() => {
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const current = periodOf(today, budget.frequency as Frequency, budget.startDate);
+          const np = nextPeriod(current, budget.frequency as Frequency, budget.startDate);
+          return periodLabel(np, budget.frequency as Frequency, budget.startDate);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  const submitHint = !editing
+    ? null
+    : cycleChanged
+      ? 'Cycle change applies immediately.'
+      : stagingPath && nextPeriodLabel
+        ? `Amount change takes effect ${nextPeriodLabel}.`
+        : amountChanged || cycleChanged
+          ? 'Save changes immediately.'
+          : 'Save changes.';
+
   const submit = () => {
     const n = name.trim();
     const amt = parseFloat(amount);
     if (!n) return void toast.error('Enter a budget name');
     if (!(amt > 0)) return void toast.error(`Enter a ${type === 'income' ? 'target' : 'limit'} greater than 0`);
     const group = groupId === 'none' ? null : groupId;
+    const cats = [...categoryIds];
+    const accts = [...accountIds];
+    const rolloverInt = type === 'expense' && rollover && frequency !== 'daily' ? 1 : 0;
 
     if (editing && budget) {
-      updateBudget(budget.id, {
-        name: n,
-        type,
-        amount: amt,
-        groupId: group,
-        frequency,
-        startDate,
-        isRecurring: recurring ? 1 : 0,
-        rollover: type === 'expense' && rollover ? 1 : 0,
-        accountIds: [...accountIds],
-        categoryIds: [...categoryIds],
-      });
-      toast.success('Budget updated', { description: n });
+      if (cycleChanged) {
+        // Cycle change is immediate per §4a: amount carries over,
+        // pending_amount discarded, last_rolled_period reset.
+        updateBudgetCycle(budget.id, {
+          frequency,
+          startDate,
+          amount: amountChanged ? amt : undefined,
+        });
+        // Bundle any non-cycle edits through updateBudget; the server's
+        // amount-staging rule won't trigger because the patch isn't
+        // amount-only.
+        const sidePatch = {
+          name: n !== budget.name ? n : undefined,
+          type: type !== budget.type ? type : undefined,
+          groupId: group !== (budget.groupId ?? null) ? group : undefined,
+          isRecurring: (recurring ? 1 : 0) !== budget.isRecurring ? (recurring ? 1 : 0) : undefined,
+          rollover: rolloverInt !== budget.rollover ? rolloverInt : undefined,
+          accountIds: JSON.stringify(accts.sort()) !== JSON.stringify([...budget.accountIds].sort()) ? accts : undefined,
+          categoryIds: JSON.stringify(cats.sort()) !== JSON.stringify([...budget.categoryIds].sort()) ? cats : undefined,
+        };
+        const hasSide = Object.values(sidePatch).some((v) => v !== undefined);
+        if (hasSide) updateBudget(budget.id, sidePatch);
+        toast.success('Cycle updated', { description: `${n} · ${frequency}` });
+      } else {
+        updateBudget(budget.id, {
+          name: n,
+          type,
+          amount: amt,
+          groupId: group,
+          isRecurring: recurring ? 1 : 0,
+          rollover: rolloverInt,
+          accountIds: accts,
+          categoryIds: cats,
+        });
+        toast.success(
+          stagingPath ? 'Amount staged' : 'Budget updated',
+          { description: stagingPath && nextPeriodLabel ? `Takes effect ${nextPeriodLabel}` : n },
+        );
+      }
     } else {
       const input: NewBudgetInput = {
         name: n,
@@ -146,9 +220,9 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
         frequency,
         startDate,
         isRecurring: recurring,
-        rollover: type === 'expense' && rollover,
-        accountIds: [...accountIds],
-        categoryIds: [...categoryIds],
+        rollover: type === 'expense' && rollover && frequency !== 'daily',
+        accountIds: accts,
+        categoryIds: cats,
         ledgerId: activeId,
       };
       createBudget(input);
@@ -197,6 +271,21 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="b-amount">{type === 'income' ? 'Target' : 'Limit'}</Label>
               <Input id="b-amount" type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+              {budget?.pendingAmount != null && (
+                <div className="text-warning bg-warning/10 mt-0.5 flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px]">
+                  <span>
+                    <Icon name="clock" size={11} className="-mt-0.5 mr-1 inline" />
+                    {fmt(budget.pendingAmount)} pending{nextPeriodLabel ? ` · ${nextPeriodLabel}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => clearPendingAmount(budget.id)}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="b-group">Group</Label>
@@ -235,15 +324,30 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
           </label>
 
           {type === 'expense' && (
-            <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-              <span>Roll over unused budget</span>
-              <input type="checkbox" checked={rollover} onChange={(e) => setRollover(e.target.checked)} className="size-4 cursor-pointer" />
+            <label className={cn('flex items-center justify-between gap-3 text-sm', frequency === 'daily' ? 'opacity-50' : 'cursor-pointer')}>
+              <span>
+                Roll over unused budget
+                {frequency === 'daily' && (
+                  <span className="text-muted-foreground ml-2 text-[11px]">(not available for daily)</span>
+                )}
+              </span>
+              <input
+                type="checkbox"
+                checked={rollover && frequency !== 'daily'}
+                disabled={frequency === 'daily'}
+                onChange={(e) => setRollover(e.target.checked)}
+                className="size-4 cursor-pointer disabled:cursor-not-allowed"
+              />
             </label>
           )}
 
           <ChipMultiSelect label="Categories" options={ledgerCats} selected={categoryIds} onToggle={(id) => toggle(categoryIds, setCategoryIds, id)} />
           <ChipMultiSelect label="Accounts" options={ledgerAccounts} selected={accountIds} onToggle={(id) => toggle(accountIds, setAccountIds, id)} />
         </div>
+
+        {submitHint && (
+          <div className="text-muted-foreground mt-1 text-[11px]">{submitHint}</div>
+        )}
 
         <DialogFooter>
           <DialogClose asChild>
