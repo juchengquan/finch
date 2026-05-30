@@ -237,6 +237,10 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
   await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
   await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
   await exec('CREATE TABLE scheduled_templates (id TEXT PRIMARY KEY, ledger_id TEXT, type TEXT)');
+  // budgets is needed by datetime migrations after BOOTSTRAP — applySchema would
+  // have created it in real paths; mirror that here so the migration loop can
+  // ALTER it without exploding.
+  await exec('CREATE TABLE budgets (id TEXT PRIMARY KEY, ledger_id TEXT)');
   await exec(
     `CREATE TABLE db_metadata (
        id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -249,10 +253,11 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
   await migrate(exec, { fresh: false });
   const [a] = await exec("SELECT opening_balance FROM accounts WHERE id = 'x'");
   expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
-  // Pre-bootstrap files cross over to BOOTSTRAP_VERSION; only datetime
-  // migrations *after* it would push us further forward.
+  // Pre-bootstrap files cross over to BOOTSTRAP_VERSION first, then any
+  // datetime migrations are applied — landing on SCHEMA_VERSION.
   const meta = await readMetadata(exec);
-  expect(meta!.schemaVersion).toBe(BOOTSTRAP_VERSION);
+  expect(meta!.schemaVersion).toBe(SCHEMA_VERSION);
+  expect(meta!.schemaVersion >= BOOTSTRAP_VERSION).toBe(true);
 });
 
 test('deleteCategory uncategorizes its transactions', async () => {
