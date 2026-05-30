@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Icon } from './primitives';
 import { SearchButton } from './command-palette';
@@ -9,9 +10,13 @@ import { cn } from '@/lib/utils';
 
 export function ProfileChip() {
   return (
-    <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-full font-serif text-base italic">
+    <Link
+      href="/settings"
+      aria-label="Settings"
+      className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-full font-serif text-base italic"
+    >
       A
-    </div>
+    </Link>
   );
 }
 

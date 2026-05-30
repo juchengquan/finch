@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Ring } from '@/components/primitives';
-import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { Icon } from '@/components/primitives';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
@@ -10,6 +10,7 @@ import { useFinanceStore } from '@/lib/store';
 import { categorySpend, currentMonth } from '@/lib/select';
 import { MOCK } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
+import { cn } from '@/lib/utils';
 
 export default function BudgetsPage() {
   const { short } = useMoney();
@@ -48,18 +49,25 @@ export default function BudgetsPage() {
         />
       }
     >
-      <div className="px-5 pb-[22px]">
-        <PageHeader
-          label="Spent of budget"
-          value={<Ring value={totalSpent} max={totalBudget} size={120} stroke={10} color="var(--primary)" track="var(--secondary)">
-            <div className="text-center">
-              <div className="font-serif text-[28px] leading-none -tracking-[0.6px]">{pct}%</div>
-              <div className="text-muted-foreground mt-0.5 text-[9px] tracking-[1px]">USED</div>
-            </div>
-          </Ring>}
-          sublabel={<>of <span className="font-mono">{short(totalBudget)}</span></>}
-          trend={{ text: 'On track for May', icon: 'check', color: 'pos' }}
-        />
+      <div className="px-5 pt-1 pb-[22px]">
+        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Spent of budget</div>
+        <div className="mt-1.5 flex items-baseline justify-between gap-3">
+          <div className="font-serif text-4xl leading-none -tracking-[1px]">{short(totalSpent)}</div>
+          <div className="text-muted-foreground text-xs">
+            <span className="text-foreground font-medium">{pct}%</span> of{' '}
+            <span className="font-mono">{short(totalBudget)}</span>
+          </div>
+        </div>
+        <div className="bg-secondary relative mt-3 h-2 overflow-hidden rounded-full">
+          <div
+            className={cn('h-full rounded-full', pct > 100 ? 'bg-destructive' : 'bg-primary')}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
+        </div>
+        <div className="bg-success/10 text-success mt-2.5 inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-[11px] font-medium">
+          <Icon name="check" size={12} />
+          On track for May
+        </div>
       </div>
 
       <div className="hidden gap-3 px-5 pb-4 md:grid md:grid-cols-3">
