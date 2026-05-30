@@ -4,10 +4,9 @@ import categoriesData from '@/data/categories.json';
 import ledgersData from '@/data/ledgers.json';
 import transferGroupsData from '@/data/transfer-groups.json';
 import counterpartiesData from '@/data/counterparties.json';
-import recurringTemplatesData from '@/data/recurring-templates.json';
+import scheduledTemplatesData from '@/data/scheduled-templates.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import currenciesData from '@/data/currencies.json';
-import scheduledItemsData from '@/data/scheduled-items.json';
 
 // Static reference data used as a pre-hydration fallback by a handful of
 // screens. Everything else (monthly spending, cashflow, insights, MoM deltas)
@@ -23,7 +22,7 @@ export const LEDGER = {
   active: 'personal',
   transferGroups: transferGroupsData,
   counterparties: counterpartiesData,
-  recurringTemplates: recurringTemplatesData,
+  scheduledTemplates: scheduledTemplatesData,
   exchangeRates: exchangeRatesData,
   devices: [
     { id: 'iphone-15-pro', name: 'iPhone 15 Pro',  last: '2 min ago',  txn: 't01', current: 1 },
@@ -68,8 +67,6 @@ export function convertAmount(amount: number, from: string, to: string) {
   const usd = amount / (RATE[from] ?? 1);
   return usd * (RATE[to] ?? 1);
 }
-
-export const SCHEDULED_ITEMS = scheduledItemsData;
 
 export const catById = (id: string | null) => MOCK.categories.find((c) => c.id === id) || { name: 'Uncategorized', hue: 0 };
 export const acctById = (id: string) => MOCK.accounts.find((a) => a.id === id) || { name: '', last4: '' };

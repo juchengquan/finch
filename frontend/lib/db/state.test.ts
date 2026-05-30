@@ -39,7 +39,7 @@ test('store state round-trips through the relational schema', async () => {
   const cp04 = loaded.counterparties.find((c) => c.id === 'cp-04')!;
   expect(cp04.verified).toBe(false);
   expect(cp04.aliases).toContain('DON DONKI');
-  expect(loaded.recurring[0].splits?.[0].pct).toBe(60);
+  expect(loaded.scheduled[0].splits?.[0].pct).toBe(60);
 });
 
 test('projected state carries accounts / categories / counterparties', async () => {

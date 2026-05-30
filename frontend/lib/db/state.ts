@@ -22,8 +22,8 @@ import { listExchangeRates, listDevices } from './queries/system';
 import { listGoals } from './queries/goals';
 import { listTags, transactionTagMap } from './queries/tags';
 import { splitsByTransaction } from './queries/transactionSplits';
-import { listSubscriptions, listScheduledItems } from './queries/planning';
-import { listRecurring } from './queries/recurring';
+import { listSubscriptions } from './queries/planning';
+import { listScheduled } from './queries/scheduled';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
@@ -45,7 +45,7 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [accounts, accountGroups, budgets, budgetRollovers, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduledItems, recurring] =
+  const [accounts, accountGroups, budgets, budgetRollovers, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduled] =
     await Promise.all([
       listAccounts(exec),
       listAccountGroups(exec),
@@ -59,8 +59,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       listTags(exec),
       transactionTagMap(exec),
       listSubscriptions(exec),
-      listScheduledItems(exec),
-      listRecurring(exec),
+      listScheduled(exec),
     ]);
   const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
   for (const t of transactions) {
@@ -90,8 +89,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     goals,
     tags,
     subscriptions,
-    scheduledItems,
-    recurring,
+    scheduled,
   };
 }
 

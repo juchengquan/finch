@@ -60,11 +60,11 @@ test('createTransfer rejects same-account and zero amount', async () => {
   ).rejects.toThrow();
 });
 
-test('postRecurring posts a resolvable expense template as a transaction', async () => {
+test('postScheduled posts a resolvable expense template as a transaction', async () => {
   const exec = await seeded();
   // rt-spotify: $11.99 expense on "Amex Gold" → account cc.
   const ccBefore = await balanceOf(exec, 'cc');
-  await applyMutation(exec, 'postRecurring', { templateId: 'rt-spotify' });
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-spotify' });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 11.99, 2);
   const rows = await exec("SELECT * FROM transactions WHERE description = 'Spotify Premium'");
   expect(rows.length).toBe(1);
@@ -72,19 +72,19 @@ test('postRecurring posts a resolvable expense template as a transaction', async
   expect(Number(rows[0].recurring)).toBe(1);
 });
 
-test('postRecurring errors clearly when the account cannot be matched', async () => {
+test('postScheduled errors clearly when the account cannot be matched', async () => {
   const exec = await seeded();
   // rt-rent uses "UOB One", which has no matching real account.
-  await expect(applyMutation(exec, 'postRecurring', { templateId: 'rt-rent' })).rejects.toThrow(/match account/i);
+  await expect(applyMutation(exec, 'postScheduled', { templateId: 'rt-rent' })).rejects.toThrow(/match account/i);
 });
 
-test('postRecurring splits income across resolvable accounts', async () => {
+test('postScheduled splits income across resolvable accounts', async () => {
   const exec = await seeded();
   // rt-salary: $5800 income split 60/25/15 across UOB One / Marcus Savings / Fidelity.
   // "Marcus Savings"→sav and "Fidelity"→inv resolve; "UOB One" does not.
   const savBefore = await balanceOf(exec, 'sav');
   const invBefore = await balanceOf(exec, 'inv');
-  await applyMutation(exec, 'postRecurring', { templateId: 'rt-salary' });
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' });
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(savBefore + 5800 * 0.25, 2);
   expect(await balanceOf(exec, 'inv')).toBeCloseTo(invBefore + 5800 * 0.15, 2);
 });
@@ -146,10 +146,10 @@ test('createGoal rejects empty name or non-positive target', async () => {
   await expect(applyMutation(exec, 'createGoal', { name: 'X', target: 0 })).rejects.toThrow();
 });
 
-test('updateRecurringSplit updates the nth split by sort order', async () => {
+test('updateScheduledSplit updates the nth split by sort order', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'updateRecurringSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
-  const rows = await exec("SELECT amount_pct FROM recurring_splits WHERE template_id = 'rt-salary' ORDER BY sort_order");
+  await applyMutation(exec, 'updateScheduledSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
+  const rows = await exec("SELECT amount_pct FROM scheduled_splits WHERE template_id = 'rt-salary' ORDER BY sort_order");
   expect(Number(rows[0].amount_pct)).toBe(60); // unchanged
   expect(Number(rows[1].amount_pct)).toBe(30); // updated
 });
@@ -231,6 +231,7 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
   await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
   await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
   await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
+  await exec('CREATE TABLE scheduled_templates (id TEXT PRIMARY KEY, ledger_id TEXT, type TEXT)');
   await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
   await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
   await migrate(exec, { fresh: false });
@@ -259,12 +260,12 @@ test('deleteTag drops the tag and its assignments', async () => {
   expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBe(0);
 });
 
-test('deleteRecurring removes the template and cascades its splits', async () => {
+test('deleteScheduled removes the template and cascades its splits', async () => {
   const exec = await seeded();
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBeGreaterThan(0);
-  await applyMutation(exec, 'deleteRecurring', { id: 'rt-salary' });
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_templates WHERE id = 'rt-salary'"))[0].n)).toBe(0);
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM recurring_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBeGreaterThan(0);
+  await applyMutation(exec, 'deleteScheduled', { id: 'rt-salary' });
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_templates WHERE id = 'rt-salary'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
 });
 
 test('deleteGoal and deleteSubscription hard-delete the row', async () => {
@@ -348,10 +349,10 @@ test('updateTag and updateSubscription edit fields', async () => {
   expect(String(sub.next_date)).toBe('Jul 1');
 });
 
-test('updateRecurring and updateCounterparty edit fields', async () => {
+test('updateScheduled and updateCounterparty edit fields', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'updateRecurring', { id: 'rt-spotify', patch: { name: 'Spotify Duo', amount: 14.99, frequency: 'yearly', dayOfMonth: 5, autoPost: 0 } });
-  const [r] = await exec("SELECT name, amount, frequency, day_of_month, auto_post FROM recurring_templates WHERE id = 'rt-spotify'");
+  await applyMutation(exec, 'updateScheduled', { id: 'rt-spotify', patch: { name: 'Spotify Duo', amount: 14.99, frequency: 'yearly', dayOfMonth: 5, autoPost: 0 } });
+  const [r] = await exec("SELECT name, amount, frequency, day_of_month, auto_post FROM scheduled_templates WHERE id = 'rt-spotify'");
   expect(String(r.name)).toBe('Spotify Duo');
   expect(Number(r.amount)).toBeCloseTo(14.99, 2);
   expect(String(r.frequency)).toBe('yearly');
@@ -402,23 +403,6 @@ test('updateTransfer rewrites both legs and recomputes balances', async () => {
   expect(legs.every((l) => l.date === '2026-05-28' && l.notes === 'updated')).toBe(true);
 });
 
-test('scheduled items create / update / delete', async () => {
-  const exec = await seeded();
-  const { listScheduledItems } = await import('@/lib/db/queries/planning');
-  await applyMutation(exec, 'createScheduledItem', { id: 'sch-x', ledgerId: 'personal', day: 12, month: 'Jul', label: 'Insurance', amount: -120, type: 'Bill', color: '#abc' });
-  let item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
-  expect(item.label).toBe('Insurance');
-  expect(item.amount).toBeCloseTo(-120, 2);
-
-  await applyMutation(exec, 'updateScheduledItem', { id: 'sch-x', patch: { label: 'Car Insurance', amount: -130, day: 15 } });
-  item = (await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')!;
-  expect(item.label).toBe('Car Insurance');
-  expect(item.day).toBe(15);
-
-  await applyMutation(exec, 'deleteScheduledItem', { id: 'sch-x' });
-  expect((await listScheduledItems(exec, 'personal')).find((s) => s.id === 'sch-x')).toBeUndefined();
-});
-
 test('createCounterparty inserts an unverified merchant', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks', category: 'Food' });
@@ -430,54 +414,62 @@ test('createCounterparty inserts an unverified merchant', async () => {
   await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
 });
 
-test('createRecurring inserts a template that lists and posts', async () => {
+test('createScheduled inserts a template that lists and posts', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'createRecurring', {
+  await applyMutation(exec, 'createScheduled', {
     id: 'rt-new', ledgerId: 'personal', name: 'Netflix', type: 'expense',
-    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, account: 'Amex Gold', autoPost: true,
+    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, account: 'Amex Gold', autoPost: true, weekDay: null, color: null,
   });
-  const { listRecurring } = await import('@/lib/db/queries/recurring');
-  const t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-new')!;
+  const { listScheduled } = await import('@/lib/db/queries/scheduled');
+  const t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-new')!;
   expect(t.name).toBe('Netflix');
   expect(t.amount).toBeCloseTo(19.99, 2);
   expect(t.frequency).toBe('monthly');
   expect(t.account).toBe('Amex Gold');
-  // It resolves to a real account ("Amex Gold" → cc) and posts.
   const ccBefore = await balanceOf(exec, 'cc');
-  await applyMutation(exec, 'postRecurring', { templateId: 'rt-new' });
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-new' });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 19.99, 2);
 
-  await expect(applyMutation(exec, 'createRecurring', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
-  await expect(applyMutation(exec, 'createRecurring', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
+  // Reminder type doesn't need an account.
+  await applyMutation(exec, 'createScheduled', {
+    id: 'rt-rem', ledgerId: 'personal', name: 'Just a reminder', type: 'reminder',
+    amount: 50, frequency: 'monthly', dayOfMonth: 15, account: '', autoPost: false, weekDay: null, color: '#abc',
+  });
+  const r = (await listScheduled(exec, 'personal')).find((x) => x.id === 'rt-rem')!;
+  expect(r.name).toBe('Just a reminder');
+  expect(r.color).toBe('#abc');
+
+  await expect(applyMutation(exec, 'createScheduled', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createScheduled', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
 });
 
-test('addRecurringSplit / removeRecurringSplit manage splits + splits_enabled', async () => {
+test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', async () => {
   const exec = await seeded();
   // rt-spotify has no splits seeded.
-  const { listRecurring } = await import('@/lib/db/queries/recurring');
-  const flag = async () => Number((await exec("SELECT splits_enabled FROM recurring_templates WHERE id = 'rt-spotify'"))[0].splits_enabled);
+  const { listScheduled } = await import('@/lib/db/queries/scheduled');
+  const flag = async () => Number((await exec("SELECT splits_enabled FROM scheduled_templates WHERE id = 'rt-spotify'"))[0].splits_enabled);
   expect(await flag()).toBe(0);
 
-  await applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: 'Marcus Savings', pct: 40 });
-  await applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: 'Fidelity', pct: 60 });
-  let t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: 'Marcus Savings', pct: 40 });
+  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: 'Fidelity', pct: 60 });
+  let t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
   expect(t.splits?.map((s) => s.account)).toEqual(['Marcus Savings', 'Fidelity']);
   expect(t.splits?.map((s) => s.pct)).toEqual([40, 60]);
   expect(await flag()).toBe(1);
 
   // Remove the first split (by index/sort order).
-  await applyMutation(exec, 'removeRecurringSplit', { templateId: 'rt-spotify', index: 0 });
-  t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  await applyMutation(exec, 'removeScheduledSplit', { templateId: 'rt-spotify', index: 0 });
+  t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
   expect(t.splits?.map((s) => s.account)).toEqual(['Fidelity']);
   expect(await flag()).toBe(1);
 
   // Removing the last one clears the split-enabled flag.
-  await applyMutation(exec, 'removeRecurringSplit', { templateId: 'rt-spotify', index: 0 });
-  t = (await listRecurring(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
+  await applyMutation(exec, 'removeScheduledSplit', { templateId: 'rt-spotify', index: 0 });
+  t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
   expect(t.splits ?? []).toEqual([]);
   expect(await flag()).toBe(0);
 
-  await expect(applyMutation(exec, 'addRecurringSplit', { templateId: 'rt-spotify', account: '  ' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: '  ' })).rejects.toThrow();
 });
 
 test('adjustAccountBalance posts a marked delta and moves balance to the target', async () => {

@@ -1,6 +1,0 @@
-[
-  { "day": 30, "month": "May", "label": "ConEd Electric", "amount": -84, "type": "Bill", "color": "#c96442" },
-  { "day": 22, "month": "Jun", "label": "Spotify", "amount": -11.99, "type": "Sub", "color": "#e8a030" },
-  { "day": 15, "month": "Jun", "label": "Rent · Greene St.", "amount": -1850, "type": "Bill", "color": "#c96442" },
-  { "day": 25, "month": "Jun", "label": "Payday · Acme", "amount": 2900, "type": "Income", "color": "#4a8c5c" }
-]

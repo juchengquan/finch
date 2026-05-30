@@ -20,15 +20,14 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const fullMonth = (ym: string) => (ym ? MONTH_LABELS[Number(ym.slice(5)) - 1] : '');
 
 // Stacked horizontal bar that visualises the four forecast components
-// (mtd / unscheduled / recurring / scheduled) at their proportional widths.
+// (mtd / unscheduled / scheduled) at their proportional widths.
 function ForecastBar({ forecast }: { forecast: MonthForecast }) {
   const total = forecast.projected;
   if (total <= 0) return null;
   const segs = [
     { v: forecast.mtdSpent, color: 'var(--primary)' },
     { v: forecast.unscheduledRest, color: 'var(--muted-foreground)' },
-    { v: forecast.recurringRest, color: 'var(--warning)' },
-    { v: forecast.scheduledRest, color: 'var(--secondary-foreground)' },
+    { v: forecast.scheduledRest, color: 'var(--warning)' },
   ];
   return (
     <div className="bg-secondary flex h-2.5 w-full overflow-hidden rounded-full">
@@ -61,8 +60,7 @@ export default function InsightsPage() {
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const goals = useFinanceStore((s) => s.goals);
-  const recurring = useFinanceStore((s) => s.recurring);
-  const scheduledItems = useFinanceStore((s) => s.scheduledItems);
+  const scheduled = useFinanceStore((s) => s.scheduled);
   const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
   // Live category mapping from the seed (still serves the budget lookup); the
@@ -100,9 +98,9 @@ export default function InsightsPage() {
   const momPct = prevSpend > 0 ? Math.round(((curSpend - prevSpend) / prevSpend) * 100) : null;
 
   // Spending forecast: project the rest of the current month from run-rate +
-  // upcoming recurring + scheduled. `lastDate` is the most-recent transaction
+  // upcoming scheduled items. `lastDate` is the most-recent transaction
   // for the ledger, which approximates "today" without a wall-clock dependency.
-  const forecast = month ? monthForecast(transactions, recurring, scheduledItems, activeId, month, lastDate) : null;
+  const forecast = month ? monthForecast(transactions, scheduled, activeId, month, lastDate) : null;
   const forecastVsPrev =
     forecast && prevSpend > 0 ? Math.round(((forecast.projected - prevSpend) / prevSpend) * 100) : null;
 
@@ -266,15 +264,9 @@ export default function InsightsPage() {
                 <span className="bg-muted-foreground size-2 rounded-full" />
                 Run-rate rest · {fmt(forecast.unscheduledRest)}
               </span>
-              {forecast.recurringRest > 0 && (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="bg-warning size-2 rounded-full" />
-                  Recurring · {fmt(forecast.recurringRest)}
-                </span>
-              )}
               {forecast.scheduledRest > 0 && (
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="bg-secondary-foreground size-2 rounded-full" />
+                  <span className="bg-warning size-2 rounded-full" />
                   Scheduled · {fmt(forecast.scheduledRest)}
                 </span>
               )}
