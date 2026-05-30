@@ -56,9 +56,9 @@ export function LedgerSwitcher({
             </button>
           </DropdownMenuTrigger>
           <Link
-            href="/settings"
+            href="/settings/ledger"
             aria-label="Ledger settings"
-            title="Settings"
+            title="Ledger settings"
             className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-colors"
           >
             <Icon name="cog" size={15} />

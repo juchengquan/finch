@@ -6,15 +6,14 @@ import { usePathname } from 'next/navigation';
 
 import { Icon } from './primitives';
 import { Button } from '@/components/ui/button';
-import { ThemeMenuItem } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAddExpense } from '@/components/add-expense-sheet';
+import { useCommandPalette } from '@/components/command-palette';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -88,6 +87,7 @@ export function PageShell({
 }: PageShellProps) {
   const pathname = usePathname();
   const { openAddExpense } = useAddExpense();
+  const { open: openSearch } = useCommandPalette();
   const accounts = useFinanceStore((s) => s.accounts);
   const tabBarTabs = mobileTabs ?? tabs;
 
@@ -231,8 +231,6 @@ export function PageShell({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-[200px]">
-              <ThemeMenuItem />
-              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Icon name="cog" size={16} />
@@ -260,10 +258,13 @@ export function PageShell({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="bg-secondary text-muted-foreground flex h-9 w-60 items-center gap-2 rounded-full px-3.5 text-[13px]"
+              onClick={openSearch}
+              aria-label="Search"
+              className="bg-secondary text-muted-foreground hover:text-foreground flex h-9 w-60 items-center gap-2 rounded-full px-3.5 text-[13px] transition-colors"
             >
               <Icon name="search" size={14} />
-              Search transactions…
+              <span className="flex-1 text-left">Search transactions…</span>
+              <kbd className="font-mono text-[10px] tracking-wide">⌘K</kbd>
             </button>
             {showAdd && (
               <Button onClick={openAddExpense} size="icon" aria-label="Add expense" title="Add expense">
@@ -273,7 +274,7 @@ export function PageShell({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pb-24 [overscroll-behavior:contain] md:pb-0">
-          <div className="md:mx-auto md:w-full md:max-w-6xl">{children}</div>
+          <div className="md:mx-auto md:w-full md:max-w-6xl md:pt-6">{children}</div>
         </div>
       </main>
 
