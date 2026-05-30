@@ -93,18 +93,172 @@ export function _resetServerDbForTests(): void {
   _db = null;
 }
 
+// Process-local mutex around writes + imports so a mutation can't interleave
+// with a file swap. Single-process by design; multi-worker is out of scope.
+let _writeChain: Promise<unknown> = Promise.resolve();
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = _writeChain.then(fn, fn);
+  _writeChain = next.catch(() => {});
+  return next;
+}
+
+export interface ImportValidation {
+  ok: boolean;
+  reason?: string;
+  metadata?: import('./queries/metadata').DbMetadata;
+}
+
+/**
+ * Validate a candidate DB file in isolation (no swap). Returns ok + metadata
+ * when the file passes every check, otherwise ok=false with a human-readable
+ * reason. Checks, in order:
+ *   - SQLite magic header
+ *   - db_metadata.app_name = 'finch'
+ *   - schema_version <= SCHEMA_VERSION (older is fine; newer rejects)
+ *   - canonical tables exist
+ *   - PRAGMA foreign_key_check passes
+ *   - recorded checksum matches a freshly-computed one (catches tampering /
+ *     truncation; only when a checksum was stamped)
+ */
+export async function validateImportBytes(bytes: Uint8Array): Promise<ImportValidation> {
+  // The SQLite header magic is the literal ASCII "SQLite format 3" followed by
+  // a NUL byte. Decode the first 15 bytes as latin1 (1:1 byte→char) and check.
+  const header = Buffer.from(bytes.subarray(0, 15)).toString('latin1');
+  if (bytes.length < 16 || header !== 'SQLite format 3' || bytes[15] !== 0) {
+    return { ok: false, reason: "This doesn't look like a SQLite file." };
+  }
+  const sqlite3 = await getSqlite3();
+  const probe = new sqlite3.oo1.DB() as unknown as OO1DB;
+  try {
+    const p = sqlite3.wasm.allocFromTypedArray(bytes);
+    const rc = sqlite3.capi.sqlite3_deserialize(
+      probe.pointer!,
+      'main',
+      p,
+      bytes.length,
+      bytes.length,
+      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
+    );
+    if (rc) return { ok: false, reason: `Could not open the file (code ${rc}).` };
+    const exec = execFor(probe);
+
+    // applySchema is a no-op on tables that already exist; this lets us read
+    // db_metadata even on pre-bootstrap files so the validator can still
+    // produce a useful error.
+    await applySchema(exec);
+
+    const { readMetadata } = await import('./queries/metadata');
+    let meta = await readMetadata(exec);
+    if (!meta) {
+      // Pre-bootstrap file: run migrate to populate metadata, then re-read.
+      await migrate(exec, { fresh: false });
+      meta = await readMetadata(exec);
+    }
+    if (!meta) return { ok: false, reason: 'Could not read database metadata.' };
+    if (meta.appName !== 'finch') {
+      return { ok: false, reason: "This doesn't look like a Finch export." };
+    }
+    const { SCHEMA_VERSION } = await import('./schema');
+    if (meta.schemaVersion > SCHEMA_VERSION) {
+      return { ok: false, reason: `This backup is from a newer Finch (schema ${meta.schemaVersion}).` };
+    }
+
+    // Smoke-check that the canonical tables exist after migrate.
+    const requiredTables = ['ledgers', 'accounts', 'categories', 'transactions'];
+    for (const t of requiredTables) {
+      const info = await exec(`PRAGMA table_info(${t})`);
+      if (info.length === 0) return { ok: false, reason: `Required table missing: ${t}` };
+    }
+
+    // FK integrity post-migrate. PRAGMA foreign_key_check returns one row per
+    // violation; an empty result is the success case.
+    const fkRows = await exec('PRAGMA foreign_key_check');
+    if (fkRows.length > 0) return { ok: false, reason: 'Foreign-key check failed after migration.' };
+
+    // If the file carries a checksum, recompute and compare.
+    if (meta.checksum) {
+      const fresh = await computeChecksum(exec);
+      if (fresh !== meta.checksum) {
+        return { ok: false, reason: 'Checksum mismatch — file may be corrupted or tampered with.' };
+      }
+    }
+
+    return { ok: true, metadata: meta };
+  } finally {
+    probe.close();
+  }
+}
+
+function importMaxMb(): number {
+  const v = Number(process.env.FINCH_IMPORT_MAX_MB);
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : 50;
+}
+
+export interface ImportResult {
+  ok: true;
+  metadata: import('./queries/metadata').DbMetadata;
+  backupPath: string;
+}
+
+// Inner swap — assumes the caller already holds the write-chain mutex.
+async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
+  const cap = importMaxMb();
+  if (bytes.byteLength > cap * 1024 * 1024) {
+    throw new Error(`Upload too large (max ${cap} MB).`);
+  }
+  const v = await validateImportBytes(bytes);
+  if (!v.ok) throw new Error(v.reason ?? 'Invalid file');
+
+  const backup = await autoBackup({ minIntervalMs: 0 }); // always snapshot
+  const { full } = dbFile();
+  const incoming = `${full}.incoming`;
+  try {
+    await fs.writeFile(incoming, Buffer.from(bytes));
+    await fs.rename(incoming, full);
+  } catch (err) {
+    await fs.unlink(incoming).catch(() => {});
+    throw err;
+  }
+  // Drop the cached connection so the next request reopens against the new file.
+  _db = null;
+  return { ok: true, metadata: v.metadata!, backupPath: backup.path };
+}
+
+/**
+ * Atomically replace the live DB with `bytes`. autoBackup() runs first so
+ * the previous state is recoverable. Validation, backup, and swap are
+ * serialized via the write-chain mutex.
+ */
+export function importDbBytes(bytes: Uint8Array): Promise<ImportResult> {
+  return serialize(() => importDbBytesLocked(bytes));
+}
+
+/** Replace the live DB with the contents of a named backup file. */
+export function restoreBackup(name: string): Promise<ImportResult> {
+  return serialize(async () => {
+    const all = await listBackups();
+    const entry = all.find((b) => b.name === name);
+    if (!entry) throw new Error('Backup not found');
+    const bytes = new Uint8Array(await fs.readFile(entry.path));
+    return importDbBytesLocked(bytes);
+  });
+}
+
 /** Read the full app state from the server database. */
 export async function readState(): Promise<ProjectedState> {
   const { exec } = await getServerDb();
   return projectState(exec);
 }
 
-/** Run a write against the server database, persist to file, return new state. */
-export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
-  const db = await getServerDb();
-  await fn(db.exec);
-  await db.persist();
-  return projectState(db.exec);
+/** Run a write against the server database, persist to file, return new state.
+ *  Serialised against imports so a mutation can't interleave with a file swap. */
+export function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
+  return serialize(async () => {
+    const db = await getServerDb();
+    await fn(db.exec);
+    await db.persist();
+    return projectState(db.exec);
+  });
 }
 
 // Auto-backup configuration. Backups are siblings of the live DB file with
