@@ -35,13 +35,13 @@ type GroupWithAccounts = {
 const UNGROUPED_ID = '__ungrouped__';
 
 // Collapsible account groups, shared by the mobile column and the desktop
-// left column. Empty groups render a collapsible "Add account" affordance.
+// left column. Accounts are created via the header "New" menu; empty groups
+// just show a muted placeholder.
 function AccountGroupAccordion({
   groups,
   balanceOf,
   fmt,
   defaultOpen,
-  onAddAccount,
   onEditGroup,
   onDeleteGroup,
 }: {
@@ -49,7 +49,6 @@ function AccountGroupAccordion({
   balanceOf: (id: string) => number;
   fmt: (n: number) => string;
   defaultOpen: string[];
-  onAddAccount: (groupId: string) => void;
   onEditGroup?: (groupId: string) => void;
   onDeleteGroup?: (groupId: string) => void;
 }) {
@@ -98,9 +97,9 @@ function AccountGroupAccordion({
             </AccordionTrigger>
             <AccordionContent>
               {empty ? (
-                <button type="button" onClick={() => onAddAccount(g.id)} className="border-border text-muted-foreground hover:text-foreground flex h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed text-xs transition-colors">
-                  <Icon name="plus" size={14} />Add account
-                </button>
+                <div className="border-border text-muted-foreground flex h-[52px] w-full items-center justify-center rounded-xl border border-dashed text-xs">
+                  No accounts
+                </div>
               ) : (
                 <div className="bg-card border-border rounded-xl border">
                   {g.accounts.map((a, i) => {
@@ -123,9 +122,6 @@ function AccountGroupAccordion({
                       </Link>
                     );
                   })}
-                  <button type="button" onClick={() => onAddAccount(g.id)} className="border-border text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center justify-center gap-2 border-t-[0.5px] px-3.5 py-2.5 text-xs transition-colors">
-                    <Icon name="plus" size={13} />Add account
-                  </button>
                 </div>
               )}
             </AccordionContent>
@@ -394,7 +390,7 @@ export default function AccountsPage() {
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">
-        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
+        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
@@ -421,7 +417,7 @@ export default function AccountsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
+            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
           </div>
 
           <aside className="min-w-0">
