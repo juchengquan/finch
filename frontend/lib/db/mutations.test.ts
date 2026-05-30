@@ -386,21 +386,28 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   expect(String(cp.category)).toBe('shop');
 });
 
-test('setBudget upserts the budgets table; deleteBudget removes it', async () => {
+test('setBudget stages a pending amount on existing rows; inserts active on new', async () => {
   const exec = await seeded();
   const { budgetByCategory } = await import('@/lib/db/queries/budgets');
   expect((await budgetByCategory(exec)).food).toBe(700); // seeded
 
+  // Existing row → stages in pending_amount; the active amount is unchanged.
   await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: 950 });
-  expect((await budgetByCategory(exec)).food).toBe(950);
-  expect(Number((await exec("SELECT amount FROM budgets WHERE id = 'bud-food'"))[0].amount)).toBe(950);
+  expect((await budgetByCategory(exec)).food).toBe(700); // active unchanged
+  const [foodRow] = await exec("SELECT amount, pending_amount FROM budgets WHERE id = 'bud-food'");
+  expect(Number(foodRow.amount)).toBe(700);
+  expect(Number(foodRow.pending_amount)).toBe(950);
 
-  // Insert path: a category created without a budget gets a new row.
+  // New row (no existing budget) → amount goes in active immediately.
   await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel' });
   const travelId = String((await exec("SELECT id FROM categories WHERE name = 'Travel'"))[0].id);
   await applyMutation(exec, 'setBudget', { categoryId: travelId, amount: 300 });
   expect((await budgetByCategory(exec))[travelId]).toBe(300);
+  const [travelRow] = await exec('SELECT amount, pending_amount FROM budgets WHERE id = ?', [`bud-${travelId}`]);
+  expect(Number(travelRow.amount)).toBe(300);
+  expect(travelRow.pending_amount).toBeNull();
 
+  // Negative amount is still rejected at the mutation boundary.
   await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: -5 }).then(
     () => { throw new Error('should reject'); },
     () => {},
@@ -408,6 +415,46 @@ test('setBudget upserts the budgets table; deleteBudget removes it', async () =>
 
   await applyMutation(exec, 'deleteBudget', { categoryId: 'food' });
   expect((await budgetByCategory(exec)).food).toBeUndefined();
+});
+
+test('updateBudgetCycle applies the new frequency immediately, clears pending, resets last_rolled', async () => {
+  const exec = await seeded();
+  // Pre-fill pending_amount and last_rolled_period so we can verify the wipe.
+  await exec("UPDATE budgets SET pending_amount = 950, last_rolled_period = '2026-04', carry_forward = 80 WHERE id = 'bud-food'");
+
+  await applyMutation(exec, 'updateBudgetCycle', {
+    categoryId: 'food',
+    frequency: 'weekly',
+    startDate: '2026-05-04',
+    amount: 175,
+  });
+
+  const [row] = await exec("SELECT amount, frequency, start_date, pending_amount, last_rolled_period, carry_forward FROM budgets WHERE id = 'bud-food'");
+  expect(Number(row.amount)).toBe(175);             // applies immediately
+  expect(String(row.frequency)).toBe('weekly');
+  expect(String(row.start_date)).toBe('2026-05-04');
+  expect(row.pending_amount).toBeNull();            // discarded
+  expect(row.last_rolled_period).toBeNull();        // reset for the new cycle
+  expect(Number(row.carry_forward)).toBe(80);       // preserved
+});
+
+test('updateBudgetCycle rejects unknown frequency or malformed startDate', async () => {
+  const exec = await seeded();
+  await expect(applyMutation(exec, 'updateBudgetCycle', {
+    categoryId: 'food', frequency: 'fortnightly', startDate: '2026-05-04',
+  })).rejects.toThrow(/frequency/i);
+  await expect(applyMutation(exec, 'updateBudgetCycle', {
+    categoryId: 'food', frequency: 'weekly', startDate: '2026/05/04',
+  })).rejects.toThrow(/startDate|YYYY/i);
+});
+
+test('updateBudgetCycle errors when the category has no budget yet', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Coffee' });
+  const cid = String((await exec("SELECT id FROM categories WHERE name = 'Coffee'"))[0].id);
+  await expect(applyMutation(exec, 'updateBudgetCycle', {
+    categoryId: cid, frequency: 'weekly', startDate: '2026-05-04',
+  })).rejects.toThrow(/budget/i);
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {

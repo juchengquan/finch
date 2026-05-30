@@ -52,8 +52,10 @@ import {
   setCategoryBudget as qSetCategoryBudget,
   deleteCategoryBudget as qDeleteCategoryBudget,
   setCategoryBudgetRollover as qSetCategoryBudgetRollover,
+  updateBudgetCycle as qUpdateBudgetCycle,
   type BudgetRolloverPatch,
 } from './queries/budgets';
+import type { Frequency } from '@/lib/budgets/period';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -292,6 +294,17 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteBudget':
       await qDeleteCategoryBudget(exec, str(args.categoryId));
       return;
+    case 'updateBudgetCycle': {
+      const frequency = str(args.frequency) as Frequency;
+      const validFreqs: Frequency[] = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+      if (!validFreqs.includes(frequency)) throw new Error(`Unknown frequency "${frequency}"`);
+      const startDate = str(args.startDate);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error('startDate must be YYYY-MM-DD');
+      const amount = args.amount === undefined ? undefined : Number(args.amount);
+      if (amount !== undefined && !(amount > 0)) throw new Error('Budget must be greater than 0');
+      await qUpdateBudgetCycle(exec, str(args.categoryId), { frequency, startDate, amount });
+      return;
+    }
     case 'setBudgetRollover': {
       const patch: BudgetRolloverPatch = {};
       if (args.rollover !== undefined) patch.rollover = !!args.rollover;

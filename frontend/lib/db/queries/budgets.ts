@@ -74,12 +74,26 @@ export async function budgetRolloverByCategory(exec: Exec): Promise<Record<strin
   return map;
 }
 
-/** Upsert the monthly budget for a single category. */
+/**
+ * Set the per-category budget amount.
+ *
+ * - **No existing row** → create with `amount` active immediately, default
+ *   monthly cycle, anchor 2026-05-01.
+ * - **Existing row** → stage as `pending_amount`; the current period's
+ *   spend calculation keeps using the old `amount`. The rollover loop
+ *   commits the staged value to `amount` at the next period boundary.
+ *
+ * Use `updateBudgetCycle` when the user changes the frequency / start
+ * date — that path applies the amount immediately under the new cycle.
+ */
 export async function setCategoryBudget(exec: Exec, categoryId: string, amount: number): Promise<void> {
   const id = `bud-${categoryId}`;
   const existing = await exec('SELECT 1 AS x FROM budgets WHERE id = ?', [id]);
   if (existing.length) {
-    await exec("UPDATE budgets SET amount = ?, updated_at = datetime('now') WHERE id = ?", [amount, id]);
+    await exec(
+      "UPDATE budgets SET pending_amount = ?, updated_at = datetime('now') WHERE id = ?",
+      [amount, id],
+    );
     return;
   }
   const cat = await exec('SELECT ledger_id, name FROM categories WHERE id = ?', [categoryId]);
@@ -89,6 +103,37 @@ export async function setCategoryBudget(exec: Exec, categoryId: string, amount: 
        (id,ledger_id,name,type,amount,carry_forward,frequency,start_date,is_recurring,rollover,category_ids,warning_pct,created_at,updated_at)
      VALUES (?,?,?,'expense',?,0,'monthly','2026-05-01',1,0,?,80,datetime('now'),datetime('now'))`,
     [id, String(cat[0].ledger_id), String(cat[0].name), amount, JSON.stringify([categoryId])],
+  );
+}
+
+/**
+ * Change a budget's cycle (and optionally its amount in the same step).
+ * Cycle changes are immediate per BUDGET_CYCLES_PLAN §4a:
+ *   - `amount` becomes the new active limit (carried over from the prior
+ *     row if not supplied).
+ *   - `frequency` + `start_date` are written.
+ *   - `pending_amount` is discarded.
+ *   - `last_rolled_period` resets to NULL — period IDs from the old cycle
+ *     don't translate, so the next request's rollBudgetsIfDue starts the
+ *     new cycle's clock fresh.
+ *   - `carry_forward` and `rollover_limit` are preserved (absolute amounts).
+ */
+export async function updateBudgetCycle(
+  exec: Exec,
+  categoryId: string,
+  patch: { frequency: Frequency; startDate: string; amount?: number },
+): Promise<void> {
+  const id = `bud-${categoryId}`;
+  const existing = await exec('SELECT amount FROM budgets WHERE id = ?', [id]);
+  if (!existing.length) throw new Error('Set a budget for this category first');
+  const amount = patch.amount ?? Number(existing[0].amount);
+  await exec(
+    `UPDATE budgets
+       SET amount = ?, frequency = ?, start_date = ?,
+           pending_amount = NULL, last_rolled_period = NULL,
+           updated_at = datetime('now')
+     WHERE id = ?`,
+    [amount, patch.frequency, patch.startDate, id],
   );
 }
 
