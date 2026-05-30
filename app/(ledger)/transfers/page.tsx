@@ -161,7 +161,7 @@ export default function TransfersPage() {
                 </div>
               </div>
               <div className="text-muted-foreground mt-0.5 text-[11px]">
-                {tg.date.slice(5).replace('-', '/')}
+                {tg.date.replace(/-/g, '/')}
                 {tg.note ? ` · ${tg.note}` : ''}
               </div>
             </div>

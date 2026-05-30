@@ -268,7 +268,7 @@ export default function BudgetDetailPage() {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{t.merchant}</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
-                  {t.date.slice(5).replace('-', '/')} · {acctById(t.account).name}
+                  {t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''} · {acctById(t.account).name}
                 </div>
               </div>
               <Money value={t.amount} className="text-sm font-medium" />

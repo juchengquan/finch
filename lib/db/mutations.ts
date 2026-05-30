@@ -531,14 +531,14 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createScheduled': {
       const name = str(args.name).trim();
       if (!name) throw new Error('Template name is required');
-      const type = str(args.type || 'reminder');
-      if (!['income', 'expense', 'transfer', 'reminder'].includes(type)) throw new Error(`Unknown type "${type}"`);
+      const type = str(args.type || 'expense');
+      if (!['income', 'expense', 'transfer'].includes(type)) throw new Error(`Unknown type "${type}"`);
       const frequency = str(args.frequency || 'monthly');
-      if (!['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
+      if (!['once', 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
         throw new Error(`Unknown frequency "${frequency}"`);
       }
-      const account = type === 'reminder' ? '' : str(args.account ?? '').trim();
-      if (type !== 'reminder' && !account) throw new Error('An account is required');
+      const account = str(args.account ?? '').trim();
+      if (!account) throw new Error('An account is required');
       await qCreateScheduled(exec, {
         id: str(args.id || newId('sch')),
         ledgerId: str(args.ledgerId || 'personal'),
@@ -552,6 +552,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         from: type === 'transfer' && args.from ? str(args.from).trim() : null,
         autoPost: args.autoPost ? 1 : 0,
         color: args.color ? str(args.color) : null,
+        category: args.category ? str(args.category) : null,
+        startDate: args.startDate ? str(args.startDate) : new Date().toISOString().slice(0, 10),
+        endDate: args.endDate ? str(args.endDate) : null,
+        maxExecutions: args.maxExecutions != null ? Number(args.maxExecutions) : null,
       });
       return;
     }

@@ -274,7 +274,7 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
     rt({ amount: 50, dayOfMonth: 20, frequency: 'yearly' }), // wrong frequency
     rt({ amount: 30, dayOfMonth: 25, type: 'income' }), // income — excluded
     rt({ amount: null, dayOfMonth: 25 }), // variable — excluded
-    rt({ amount: 60, dayOfMonth: 22, type: 'reminder' }), // reminder — counted as upcoming
+    rt({ amount: 60, dayOfMonth: 22, type: 'expense' }), // second upcoming expense
   ];
 
   const f = monthForecast(txns, recurring, 'personal', '2026-05', '2026-05-10');
@@ -285,7 +285,7 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
   expect(f!.mtdSpent).toBeCloseTo(160, 2);
   expect(f!.dailyRunRate).toBeCloseTo(16, 2);
   expect(f!.unscheduledRest).toBeCloseTo(336, 2);
-  expect(f!.scheduledRest).toBeCloseTo(160, 2); // 100 (expense) + 60 (reminder)
+  expect(f!.scheduledRest).toBeCloseTo(160, 2); // 100 + 60
   expect(f!.projected).toBeCloseTo(160 + 336 + 160, 2);
 });
 
@@ -294,7 +294,7 @@ test('monthForecast for a past month: projection collapses to actuals (no run-ra
     tx({ amount: -100, date: '2026-04-05' }),
     tx({ amount: -200, date: '2026-04-25' }),
   ];
-  const recurring = [rt({ amount: 100, dayOfMonth: 15 }), rt({ amount: 60, dayOfMonth: 22, type: 'reminder' })];
+  const recurring = [rt({ amount: 100, dayOfMonth: 15 }), rt({ amount: 60, dayOfMonth: 22, type: 'expense' })];
   const f = monthForecast(txns, recurring, 'personal', '2026-04', '2026-05-10');
   expect(f).not.toBeNull();
   expect(f!.mtdSpent).toBeCloseTo(300, 2);

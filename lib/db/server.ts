@@ -71,8 +71,8 @@ async function open(): Promise<ServerDb> {
     // Bump the metadata row's updated_at *before* serialising so the file's
     // recorded timestamp matches the bytes on disk.
     await bumpUpdated(exec);
+    await fs.mkdir(dir, { recursive: true });
     const out = sqlite3.capi.sqlite3_js_db_export(db as never);
-    // Write atomically: temp file then rename, so a crash can't truncate the db.
     const tmp = `${full}.tmp`;
     await fs.writeFile(tmp, Buffer.from(out));
     await fs.rename(tmp, full);

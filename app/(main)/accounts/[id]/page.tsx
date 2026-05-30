@@ -201,7 +201,7 @@ export default function AccountDetailPage() {
                   <CatBar hue={cat.hue} />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium">{tx.merchant}</div>
-                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.slice(5).replace('-','/')} · {cat.name || 'Income'}</div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
                   </div>
                   <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')}/>
                 </button>
