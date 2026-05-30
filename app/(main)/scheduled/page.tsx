@@ -7,75 +7,144 @@ import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/M
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SCHEDULED_ITEMS } from '@/lib/data';
-import { ScheduledItem } from '@/components/ScheduledItem';
 import { RowActions } from '@/components/RowActions';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
+import type { ScheduledTemplate } from '@/lib/store';
+import { mutate } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+const TYPES = ['reminder', 'expense', 'income', 'transfer'];
+const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+
+interface DraftForm {
+  id: string;
+  name: string;
+  amount: string;
+  type: string;
+  frequency: string;
+  dayOfMonth: string;
+  weekDay: string;
+  account: string;
+  from: string;
+  autoPost: boolean;
+  color: string;
+}
+
+const EMPTY_DRAFT: DraftForm = {
+  id: '', name: '', amount: '', type: 'reminder', frequency: 'monthly',
+  dayOfMonth: '1', weekDay: '', account: '', from: '', autoPost: false, color: '#c96442',
+};
+
+function templateToDraft(t: ScheduledTemplate): DraftForm {
+  return {
+    id: t.id,
+    name: t.name,
+    amount: t.amount == null ? '' : String(t.amount),
+    type: t.type,
+    frequency: t.frequency,
+    dayOfMonth: String(t.dayOfMonth || 1),
+    weekDay: t.weekDay != null ? String(t.weekDay) : '',
+    account: t.account ?? '',
+    from: t.from ?? '',
+    autoPost: !!t.autoPost,
+    color: t.color ?? '#c96442',
+  };
+}
 
 export default function ScheduledPage() {
-  const [view, setView] = useState({ y: 2026, m: 5 }); // June 2026
+  const [view, setView] = useState({ y: 2026, m: 5 });
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const { activeId } = useLedger();
-  const storeItems = useFinanceStore((s) => s.scheduledItems);
-  const createScheduledItem = useFinanceStore((s) => s.createScheduledItem);
-  const updateScheduledItem = useFinanceStore((s) => s.updateScheduledItem);
-  const deleteScheduledItem = useFinanceStore((s) => s.deleteScheduledItem);
+  const scheduled = useFinanceStore((s) => s.scheduled);
+  const createScheduled = useFinanceStore((s) => s.createScheduled);
+  const updateScheduled = useFinanceStore((s) => s.updateScheduled);
+  const deleteScheduled = useFinanceStore((s) => s.deleteScheduled);
 
-  // Projected scheduled items for the active ledger; static data as SSR fallback.
-  const projected = storeItems.filter((i) => i.ledgerId === activeId).map((i) => ({ ...i, color: i.color ?? 'var(--primary)' }));
-  const items = projected.length ? projected : SCHEDULED_ITEMS;
-  const editable = projected.length > 0;
-
-  const EMPTY = { id: '', label: '', amount: '', day: '1', month: MONTHS[view.m], type: 'Bill', color: '#c96442' };
-  const [draft, setDraft] = useState<typeof EMPTY>(EMPTY);
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<DraftForm>(EMPTY_DRAFT);
   const [isNew, setIsNew] = useState(true);
 
-  const openCreate = () => { setIsNew(true); setDraft({ ...EMPTY, month: MONTHS[view.m] }); setOpen(true); };
-  const openEdit = (it: { id?: string; label: string; amount: number; day: number; month: string; type: string; color: string }) => {
+  const openCreate = () => { setIsNew(true); setDraft(EMPTY_DRAFT); setOpen(true); };
+
+  const openEdit = (t: ScheduledTemplate) => {
     setIsNew(false);
-    setDraft({ id: it.id ?? '', label: it.label, amount: String(it.amount), day: String(it.day), month: it.month, type: it.type, color: it.color.startsWith('#') ? it.color : '#c96442' });
+    setDraft(templateToDraft(t));
     setOpen(true);
   };
+
   const submit = () => {
-    const label = draft.label.trim();
-    if (!label) return void toast.error('Enter a label');
-    const fields = { label, amount: Number(draft.amount) || 0, day: Number(draft.day) || 1, month: draft.month, type: draft.type, color: draft.color };
+    const name = draft.name.trim();
+    if (!name) return void toast.error('Enter a name');
+    const amount = draft.amount.trim() === '' ? null : Number(draft.amount);
+    const dayOfMonth = Number(draft.dayOfMonth) || 1;
+    const weekDay = draft.weekDay !== '' ? Number(draft.weekDay) : undefined;
+    const type = draft.type;
     if (isNew) {
-      createScheduledItem({ ...fields, ledgerId: activeId });
-      toast.success('Scheduled item added', { description: label });
+      createScheduled({
+        name,
+        type,
+        amount,
+        frequency: draft.frequency,
+        dayOfMonth,
+        weekDay,
+        account: type === 'reminder' ? undefined : draft.account.trim(),
+        from: type === 'transfer' ? draft.from.trim() || undefined : undefined,
+        autoPost: draft.autoPost,
+        color: draft.color,
+        ledgerId: activeId,
+      });
+      toast.success('Scheduled item added', { description: name });
     } else {
-      updateScheduledItem(draft.id, fields);
-      toast.success('Scheduled item updated', { description: label });
+      updateScheduled(draft.id, {
+        name,
+        amount,
+        frequency: draft.frequency,
+        dayOfMonth,
+        weekDay,
+        autoPost: draft.autoPost ? 1 : 0,
+        color: draft.color,
+      });
+      toast.success('Scheduled item updated', { description: name });
     }
     setOpen(false);
   };
 
-  const totalOutgoing = items.filter((i) => i.amount < 0).reduce((s, i) => s + i.amount, 0);
-  const totalIncoming = items.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
+  const [posting, setPosting] = useState<string | null>(null);
+  const postNow = async (templateId: string, name: string) => {
+    setPosting(templateId);
+    try {
+      const state = await mutate('postScheduled', { templateId });
+      useFinanceStore.setState(state);
+      toast.success(`Posted "${name}"`, { description: 'Added to transactions.' });
+    } catch (err) {
+      toast.error((err as Error).message || 'Could not post');
+    } finally {
+      setPosting(null);
+    }
+  };
+
+  const totalOutgoing = scheduled
+    .filter((t) => t.type !== 'income' && t.amount != null)
+    .reduce((s, t) => s + (t.amount ?? 0), 0);
+  const totalIncoming = scheduled
+    .filter((t) => t.type === 'income' && t.amount != null)
+    .reduce((s, t) => s + (t.amount ?? 0), 0);
   const netTotal = totalIncoming + totalOutgoing;
 
   const firstDow = new Date(view.y, view.m, 1).getDay();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
 
-  const dotsByDay = new Map<number, string[]>();
-  for (const it of items) {
-    if (MONTHS.indexOf(it.month) !== view.m) continue;
-    const arr = dotsByDay.get(it.day) ?? [];
-    arr.push(it.color);
-    dotsByDay.set(it.day, arr);
-  }
+  const dotsByDay = buildDotsByDay(scheduled, view.y, view.m, daysInMonth);
 
   const shift = (delta: number) =>
     setView((v) => {
@@ -84,12 +153,7 @@ export default function ScheduledPage() {
       return { y: d.getFullYear(), m: d.getMonth() };
     });
 
-  // Items scoped to the currently-viewed month, sorted by day. When a day is
-  // selected we split into "on that day" + "after that day in the same month";
-  // otherwise the side panel shows the full month's list.
-  const monthItems = [...items]
-    .filter((i) => MONTHS.indexOf(i.month) === view.m)
-    .sort((a, b) => a.day - b.day);
+  const monthItems = daysForMonth(scheduled, view.y, view.m);
   const onSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day === selectedDay) : [];
   const afterSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day > selectedDay) : [];
 
@@ -99,7 +163,7 @@ export default function ScheduledPage() {
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
-          label="Next 30 days"
+          label="Upcoming"
           value={<Money value={netTotal} mono={false} className="font-serif" />}
           sublabel={
             <span className="text-success">
@@ -118,17 +182,13 @@ export default function ScheduledPage() {
             </div>
             <div className="flex items-center gap-1">
               <button
-                type="button"
-                aria-label="Previous month"
-                onClick={() => shift(-1)}
+                type="button" aria-label="Previous month" onClick={() => shift(-1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
                 <Icon name="chev-l" size={14} />
               </button>
               <button
-                type="button"
-                aria-label="Next month"
-                onClick={() => shift(1)}
+                type="button" aria-label="Next month" onClick={() => shift(1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
                 <Icon name="chev" size={14} />
@@ -136,14 +196,10 @@ export default function ScheduledPage() {
             </div>
           </div>
           <div className="text-muted-foreground mb-1 grid grid-cols-7 text-center font-mono text-[10px]">
-            {WEEKDAYS.map((d, i) => (
-              <div key={i}>{d}</div>
-            ))}
+            {WEEKDAYS.map((d, i) => <div key={i}>{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-y-1">
-            {Array.from({ length: firstDow }).map((_, i) => (
-              <div key={`b${i}`} />
-            ))}
+            {Array.from({ length: firstDow }).map((_, i) => <div key={`b${i}`} />)}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dots = dotsByDay.get(day);
@@ -151,9 +207,7 @@ export default function ScheduledPage() {
               return (
                 <button
                   key={day}
-                  type="button"
-                  aria-label={`${MONTH_NAMES[view.m]} ${day}`}
-                  aria-pressed={isSelected}
+                  type="button" aria-label={`${MONTH_NAMES[view.m]} ${day}`} aria-pressed={isSelected}
                   onClick={() => setSelectedDay((prev) => (prev === day ? null : day))}
                   className={cn(
                     'flex cursor-pointer flex-col items-center gap-1 rounded-md py-1 md:py-2.5',
@@ -162,8 +216,8 @@ export default function ScheduledPage() {
                 >
                   <span className="text-[13px] tabular-nums">{day}</span>
                   <span className="flex h-1.5 gap-0.5">
-                    {dots?.slice(0, 3).map((c, j) => (
-                      <span key={j} className="size-1.5 rounded-full" style={{ background: c }} />
+                    {dots?.slice(0, 3).map((d, j) => (
+                      <span key={j} className="size-1.5 rounded-full" style={{ background: d.color }} />
                     ))}
                   </span>
                 </button>
@@ -185,71 +239,63 @@ export default function ScheduledPage() {
         {selectedDay != null ? (
           <>
             {onSelectedDay.length > 0 ? (
-              onSelectedDay.map((item, i) => {
-                const id = (item as { id?: string }).id;
-                return (
-                  <ScheduledItem
-                    key={id ?? `sel-${i}`}
-                    item={item}
-                    actions={editable && id ? (
-                      <RowActions
-                        onEdit={() => openEdit(item)}
-                        onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
-                        confirmTitle={`Delete ${item.label}?`}
-                        confirmDescription="This removes the scheduled item from your calendar."
-                      />
-                    ) : undefined}
-                  />
-                );
-              })
+              onSelectedDay.map((item) => (
+                <ScheduledCard
+                  key={item.id}
+                  item={item}
+                  onEdit={openEdit}
+                  onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
+                  onPost={postNow}
+                  posting={posting === item.id}
+                />
+              ))
             ) : (
               <div className="text-muted-foreground rounded-xl border border-dashed border-border py-4 text-center text-[12px]">
-                Nothing scheduled on this day
+                Nothing on this day
               </div>
             )}
             {afterSelectedDay.length > 0 && (
               <>
-                <div className="text-muted-foreground mt-3 px-1 font-mono text-[10px] tracking-wider uppercase">
-                  Upcoming
-                </div>
-                {afterSelectedDay.map((item, i) => {
-                  const id = (item as { id?: string }).id;
-                  return (
-                    <ScheduledItem
-                      key={id ?? `up-${i}`}
-                      item={item}
-                      actions={editable && id ? (
-                        <RowActions
-                          onEdit={() => openEdit(item)}
-                          onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
-                          confirmTitle={`Delete ${item.label}?`}
-                          confirmDescription="This removes the scheduled item from your calendar."
-                        />
-                      ) : undefined}
-                    />
-                  );
-                })}
+                <div className="text-muted-foreground mt-3 px-1 font-mono text-[10px] tracking-wider uppercase">Upcoming</div>
+                {afterSelectedDay.map((item) => (
+                  <ScheduledCard
+                    key={item.id}
+                    item={item}
+                    onEdit={openEdit}
+                    onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
+                    onPost={postNow}
+                    posting={posting === item.id}
+                  />
+                ))}
               </>
             )}
           </>
         ) : (
-          items.map((item, i) => {
-            const id = (item as { id?: string }).id;
-            return (
-              <ScheduledItem
-                key={id ?? i}
-                item={item}
-                actions={editable && id ? (
-                  <RowActions
-                    onEdit={() => openEdit(item)}
-                    onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
-                    confirmTitle={`Delete ${item.label}?`}
-                    confirmDescription="This removes the scheduled item from your calendar."
-                  />
-                ) : undefined}
+          [...scheduled]
+            .sort((a, b) => (a.dayOfMonth || 0) - (b.dayOfMonth || 0))
+            .map((item) => (
+              <ScheduledCard
+                key={item.id}
+                item={{
+                  id: item.id,
+                  name: item.name,
+                  amount: item.amount,
+                  type: item.type,
+                  frequency: item.frequency,
+                  day: item.dayOfMonth || 0,
+                  dayOfMonth: item.dayOfMonth || 0,
+                  weekDay: item.weekDay,
+                  account: item.account ?? '',
+                  from: item.from,
+                  autoPost: item.autoPost,
+                  color: item.color ?? 'var(--primary)',
+                }}
+                onEdit={openEdit}
+                onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
+                onPost={postNow}
+                posting={posting === item.id}
               />
-            );
-          })
+            ))
         )}
       </div>
       </div>
@@ -258,41 +304,83 @@ export default function ScheduledPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{isNew ? 'New scheduled item' : 'Edit scheduled item'}</DialogTitle>
-            <DialogDescription>A recurring bill, subscription or payday on the calendar.</DialogDescription>
+            <DialogDescription>A scheduled bill, income, transfer or calendar reminder.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Label</Label>
-              <Input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Rent" autoFocus />
+              <Label>Name</Label>
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Rent" autoFocus />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label>Amount</Label>
-                <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="-0.00" />
+                <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Day</Label>
-                <Input type="number" inputMode="numeric" min={1} max={31} value={draft.day} onChange={(e) => setDraft({ ...draft, day: e.target.value })} />
+                <Label>Type</Label>
+                <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Month</Label>
-                <Select value={draft.month} onValueChange={(v) => setDraft({ ...draft, month: v })}>
+                <Label>Frequency</Label>
+                <Select value={draft.frequency} onValueChange={(v) => setDraft({ ...draft, frequency: v })}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MONTHS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Type</Label>
-                <Input value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })} placeholder="Bill" />
-              </div>
+              {(draft.frequency === 'weekly' || draft.frequency === 'biweekly') ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Day of week</Label>
+                  <Select value={draft.weekDay} onValueChange={(v) => setDraft({ ...draft, weekDay: v })}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      {WEEKDAY_LABELS.map((l, i) => <SelectItem key={i} value={String(i)}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Day of month</Label>
+                  <Input type="number" inputMode="numeric" min={1} max={31} value={draft.dayOfMonth} onChange={(e) => setDraft({ ...draft, dayOfMonth: e.target.value })} />
+                </div>
+              )}
             </div>
+            {draft.type === 'transfer' ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label>To account</Label>
+                  <Input value={draft.account} onChange={(e) => setDraft({ ...draft, account: e.target.value })} placeholder="e.g. Marcus Savings" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>From account</Label>
+                  <Input value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} placeholder="e.g. Chase Checking" />
+                </div>
+              </>
+            ) : draft.type !== 'reminder' ? (
+              <div className="flex flex-col gap-1.5">
+                <Label>Account</Label>
+                <Input value={draft.account} onChange={(e) => setDraft({ ...draft, account: e.target.value })} placeholder="e.g. Amex Gold" />
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
-              <Label htmlFor="sch-color">Color</Label>
-              <input id="sch-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border size-9 cursor-pointer rounded-md border bg-transparent" />
+              <div className="flex items-center gap-3">
+                <Label htmlFor="rt-color">Color</Label>
+                <input id="rt-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border size-9 cursor-pointer rounded-md border bg-transparent" />
+              </div>
+              {draft.type !== 'reminder' && (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="rt-autopost">Auto-post</Label>
+                  <Switch id="rt-autopost" checked={draft.autoPost} onCheckedChange={(v) => setDraft({ ...draft, autoPost: v })} />
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -304,5 +392,155 @@ export default function ScheduledPage() {
         </DialogContent>
       </Dialog>
     </MobilePage>
+  );
+}
+
+interface CalendarItem {
+  id: string;
+  name: string;
+  amount: number | null;
+  type: string;
+  frequency: string;
+  day: number;
+  dayOfMonth: number;
+  weekDay?: number;
+  account: string;
+  from?: string;
+  autoPost: number;
+  color: string;
+}
+
+function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: number): CalendarItem[] {
+  const result: CalendarItem[] = [];
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  for (const it of items) {
+    const base = {
+      id: it.id,
+      name: it.name,
+      amount: it.amount,
+      type: it.type,
+      frequency: it.frequency,
+      dayOfMonth: it.dayOfMonth || 0,
+      weekDay: it.weekDay,
+      account: it.account ?? '',
+      from: it.from,
+      autoPost: it.autoPost,
+      color: it.color ?? 'var(--primary)',
+    };
+    if (it.frequency === 'daily') {
+      for (let d = 1; d <= daysInMonth; d++) {
+        result.push({ ...base, day: d });
+      }
+    } else if (it.frequency === 'weekly' && it.weekDay != null) {
+      const d = new Date(viewYear, viewMonth, 1);
+      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
+      while (d.getMonth() === viewMonth) {
+        result.push({ ...base, day: d.getDate() });
+        d.setDate(d.getDate() + 7);
+      }
+    } else if (it.frequency === 'biweekly' && it.weekDay != null) {
+      const d = new Date(viewYear, viewMonth, 1);
+      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
+      const targetWeeks = [it.dayOfMonth || 1, (it.dayOfMonth || 1) + 2];
+      while (d.getMonth() === viewMonth) {
+        const currentWeek = Math.ceil(d.getDate() / 7);
+        if (targetWeeks.includes(currentWeek)) {
+          result.push({ ...base, day: d.getDate() });
+        }
+        d.setDate(d.getDate() + 14);
+      }
+    } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
+      result.push({ ...base, day: it.dayOfMonth });
+    }
+  }
+  return result;
+}
+
+function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth: number, daysInMonth: number) {
+  const map = new Map<number, { color: string }[]>();
+  for (const it of items) {
+    const color = it.color ?? 'var(--primary)';
+    if (it.frequency === 'daily') {
+      for (let d = 1; d <= daysInMonth; d++) {
+        const arr = map.get(d) ?? [];
+        arr.push({ color });
+        map.set(d, arr);
+      }
+    } else if (it.frequency === 'weekly' && it.weekDay != null) {
+      const d = new Date(viewYear, viewMonth, 1);
+      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
+      while (d.getMonth() === viewMonth) {
+        const arr = map.get(d.getDate()) ?? [];
+        arr.push({ color });
+        map.set(d.getDate(), arr);
+        d.setDate(d.getDate() + 7);
+      }
+    } else if (it.frequency === 'biweekly' && it.weekDay != null) {
+      const d = new Date(viewYear, viewMonth, 1);
+      while (d.getDay() !== it.weekDay) d.setDate(d.getDate() + 1);
+      const targetWeeks = [it.dayOfMonth || 1, (it.dayOfMonth || 1) + 2];
+      while (d.getMonth() === viewMonth) {
+        const currentWeek = Math.ceil(d.getDate() / 7);
+        if (targetWeeks.includes(currentWeek)) {
+          const arr = map.get(d.getDate()) ?? [];
+          arr.push({ color });
+          map.set(d.getDate(), arr);
+        }
+        d.setDate(d.getDate() + 14);
+      }
+    } else if (it.dayOfMonth >= 1 && it.dayOfMonth <= daysInMonth) {
+      const arr = map.get(it.dayOfMonth) ?? [];
+      arr.push({ color });
+      map.set(it.dayOfMonth, arr);
+    }
+  }
+  return map;
+}
+
+function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
+  item: CalendarItem;
+  onEdit: (t: ScheduledTemplate) => void;
+  onDelete: () => void;
+  onPost: (id: string, name: string) => void;
+  posting: boolean;
+}) {
+  const scheduled = useFinanceStore((s) => s.scheduled);
+  const isPostable = item.type !== 'reminder' && item.amount != null;
+  return (
+    <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
+      <div className="w-11 shrink-0 text-center">
+        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{item.frequency}</div>
+        <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{item.name}</div>
+        <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
+          <span className="size-1.5 rounded-full" style={{ background: item.color }} />
+          {item.type}
+          {item.account ? <> · {item.account}</> : null}
+          {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span> : null}
+        </div>
+      </div>
+      <Money
+        value={item.amount ?? 0}
+        className={cn('text-sm font-medium', (item.amount ?? 0) > 0 ? 'text-success' : 'text-foreground')}
+      />
+      <div className="flex items-center gap-0.5">
+        {isPostable && (
+          <Button variant="ghost" size="icon" className="size-8" onClick={() => onPost(item.id, item.name)} disabled={posting} aria-label={`Post ${item.name}`}>
+            <Icon name="plus" size={14} />
+          </Button>
+        )}
+        <RowActions
+          onEdit={() => {
+            const t = scheduled.find((r) => r.id === item.id);
+            if (t) onEdit(t);
+          }}
+          onDelete={onDelete}
+          confirmTitle={`Delete ${item.name}?`}
+          confirmDescription="This removes the scheduled item from your calendar."
+        />
+      </div>
+    </div>
   );
 }

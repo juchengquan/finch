@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
-import recurringData from '@/data/recurring-templates.json';
+import scheduledData from '@/data/scheduled-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
 import type { BudgetRolloverInfo } from '@/lib/db/queries/budgets';
@@ -11,7 +11,7 @@ import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 import type { Goal } from '@/lib/db/queries/goals';
 import type { Tag } from '@/lib/db/queries/tags';
-import type { Subscription, ScheduledItem } from '@/lib/db/queries/planning';
+import type { Subscription } from '@/lib/db/queries/planning';
 
 export interface Tx {
   id: string;
@@ -61,14 +61,14 @@ export interface TransferInput {
   note?: string;
 }
 
-export interface RecurringSplit {
+export interface ScheduledSplit {
   account: string;
   pct: number;
   abs: number | null;
   label: string;
 }
 
-export interface RecurringTemplate {
+export interface ScheduledTemplate {
   id: string;
   name: string;
   type: string;
@@ -76,12 +76,14 @@ export interface RecurringTemplate {
   varies?: number;
   frequency: string;
   dayOfMonth: number;
+  weekDay?: number;
   account: string;
   from?: string;
   autoPost: number;
   nextRun: string;
   lastRun: string;
-  splits?: RecurringSplit[];
+  color?: string | null;
+  splits?: ScheduledSplit[];
 }
 
 // Editable account fields, applied as a patch against the real accounts table.
@@ -107,11 +109,11 @@ export interface NewAccountInput {
 }
 
 const SEED_TX = transactionsData as Tx[];
-const SEED_RECURRING = recurringData as RecurringTemplate[];
+const SEED_SCHEDULED = scheduledData as ScheduledTemplate[];
 
 interface FinanceState {
   transactions: Tx[];
-  recurring: RecurringTemplate[];
+  scheduled: ScheduledTemplate[];
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
@@ -124,7 +126,6 @@ interface FinanceState {
   goals: Goal[];
   tags: Tag[];
   subscriptions: Subscription[];
-  scheduledItems: ScheduledItem[];
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
@@ -145,9 +146,9 @@ interface FinanceState {
   createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
   updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
   deleteAccountGroup: (id: string) => void;
-  updateRecurringSplit: (templateId: string, index: number, pct: number) => void;
-  addRecurringSplit: (templateId: string, account: string, pct: number) => void;
-  removeRecurringSplit: (templateId: string, index: number) => void;
+  updateScheduledSplit: (templateId: string, index: number, pct: number) => void;
+  addScheduledSplit: (templateId: string, account: string, pct: number) => void;
+  removeScheduledSplit: (templateId: string, index: number) => void;
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
   addAlias: (id: string, alias: string) => void;
@@ -169,14 +170,11 @@ interface FinanceState {
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
   updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
   deleteSubscription: (id: string) => void;
-  createRecurring: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; account: string; from?: string; autoPost?: boolean; ledgerId?: string }) => string;
-  updateRecurring: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; autoPost?: number }) => void;
-  deleteRecurring: (id: string) => void;
+  createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; ledgerId?: string }) => string;
+  updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null }) => void;
+  deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
-  createScheduledItem: (input: { label: string; amount: number; day: number; month: string; type?: string; color?: string; ledgerId?: string }) => void;
-  updateScheduledItem: (id: string, patch: { day?: number; month?: string; label?: string; amount?: number; type?: string; color?: string | null }) => void;
-  deleteScheduledItem: (id: string) => void;
   createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
   deleteCounterparty: (id: string) => void;
@@ -200,7 +198,7 @@ function syncMutation(action: string, args?: Record<string, unknown>): void {
 export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
-      recurring: SEED_RECURRING,
+      scheduled: SEED_SCHEDULED,
       accounts: [],
       accountGroups: [],
       budgetByCategory: {},
@@ -212,7 +210,6 @@ export const useFinanceStore = create<FinanceState>()(
       goals: [],
       tags: [],
       subscriptions: [],
-      scheduledItems: [],
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -356,33 +353,33 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteAccountGroup', { id });
       },
 
-      updateRecurringSplit: (templateId, index, pct) => {
+      updateScheduledSplit: (templateId, index, pct) => {
         set((s) => ({
-          recurring: s.recurring.map((t) =>
+          scheduled: s.scheduled.map((t) =>
             t.id === templateId && t.splits
               ? { ...t, splits: t.splits.map((sp, i) => (i === index ? { ...sp, pct } : sp)) }
               : t,
           ),
         }));
-        syncMutation('updateRecurringSplit', { templateId, index, pct });
+        syncMutation('updateScheduledSplit', { templateId, index, pct });
       },
 
-      addRecurringSplit: (templateId, account, pct) => {
+      addScheduledSplit: (templateId, account, pct) => {
         set((s) => ({
-          recurring: s.recurring.map((t) =>
+          scheduled: s.scheduled.map((t) =>
             t.id === templateId ? { ...t, splits: [...(t.splits ?? []), { account, pct, abs: null, label: '' }] } : t,
           ),
         }));
-        syncMutation('addRecurringSplit', { templateId, account, pct });
+        syncMutation('addScheduledSplit', { templateId, account, pct });
       },
 
-      removeRecurringSplit: (templateId, index) => {
+      removeScheduledSplit: (templateId, index) => {
         set((s) => ({
-          recurring: s.recurring.map((t) =>
+          scheduled: s.scheduled.map((t) =>
             t.id === templateId && t.splits ? { ...t, splits: t.splits.filter((_, i) => i !== index) } : t,
           ),
         }));
-        syncMutation('removeRecurringSplit', { templateId, index });
+        syncMutation('removeScheduledSplit', { templateId, index });
       },
 
       verifyCounterparty: (id) => {
@@ -414,8 +411,8 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       // Transfers are created on the server (multi-row / relational); the server
-      // response refreshes the store. (Recurring "post" is called directly from
-      // the recurring page so it can surface account-match errors.)
+      // response refreshes the store. (Scheduled "post" is called directly from
+      // the scheduled page so it can surface account-match errors.)
       createTransfer: (input) => {
         syncMutation('createTransfer', { ...input });
       },
@@ -552,32 +549,35 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('deleteSubscription', { id });
       },
 
-      createRecurring: (input) => {
-        const id = `rt-${Date.now().toString(36)}`;
+      createScheduled: (input) => {
+        const id = `sch-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const type = input.type ?? 'expense';
+        const type = input.type ?? 'reminder';
         const frequency = input.frequency ?? 'monthly';
         const dayOfMonth = input.dayOfMonth ?? 1;
+        const weekDay = input.weekDay;
         const autoPost = input.autoPost ? 1 : 0;
         const amount = input.amount ?? null;
+        const color = input.color ?? null;
+        const account = input.account ?? '';
         set((s) => ({
-          recurring: [
-            ...s.recurring,
-            { id, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from, autoPost, nextRun: '', lastRun: '' },
+          scheduled: [
+            ...s.scheduled,
+            { id, name: input.name, type, amount, frequency, dayOfMonth, weekDay, account, from: input.from, autoPost, nextRun: '', lastRun: '', color },
           ],
         }));
-        syncMutation('createRecurring', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, account: input.account, from: input.from ?? null, autoPost: !!input.autoPost });
+        syncMutation('createScheduled', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, account, from: input.from ?? null, autoPost: !!input.autoPost, color });
         return id;
       },
 
-      updateRecurring: (id, patch) => {
-        set((s) => ({ recurring: s.recurring.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
-        syncMutation('updateRecurring', { id, patch });
+      updateScheduled: (id, patch) => {
+        set((s) => ({ scheduled: s.scheduled.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+        syncMutation('updateScheduled', { id, patch });
       },
 
-      deleteRecurring: (id) => {
-        set((s) => ({ recurring: s.recurring.filter((t) => t.id !== id) }));
-        syncMutation('deleteRecurring', { id });
+      deleteScheduled: (id) => {
+        set((s) => ({ scheduled: s.scheduled.filter((t) => t.id !== id) }));
+        syncMutation('deleteScheduled', { id });
       },
 
       updateTransfer: (id, patch) => {
@@ -590,25 +590,6 @@ export const useFinanceStore = create<FinanceState>()(
         // A transfer is two transactions sharing a group id; drop both optimistically.
         set((s) => ({ transactions: s.transactions.filter((t) => t.transferGroupId !== id) }));
         syncMutation('deleteTransfer', { id });
-      },
-
-      createScheduledItem: (input) => {
-        const id = `sch-${Date.now().toString(36)}`;
-        const ledgerId = input.ledgerId ?? 'personal';
-        const type = input.type ?? 'bill';
-        const color = input.color ?? null;
-        set((s) => ({ scheduledItems: [...s.scheduledItems, { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color }] }));
-        syncMutation('createScheduledItem', { id, ledgerId, day: input.day, month: input.month, label: input.label, amount: input.amount, type, color });
-      },
-
-      updateScheduledItem: (id, patch) => {
-        set((s) => ({ scheduledItems: s.scheduledItems.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-        syncMutation('updateScheduledItem', { id, patch });
-      },
-
-      deleteScheduledItem: (id) => {
-        set((s) => ({ scheduledItems: s.scheduledItems.filter((x) => x.id !== id) }));
-        syncMutation('deleteScheduledItem', { id });
       },
 
       createCounterparty: (input) => {
@@ -649,7 +630,7 @@ export const useFinanceStore = create<FinanceState>()(
       reset: () => {
         set({
           transactions: SEED_TX,
-          recurring: SEED_RECURRING,
+          scheduled: SEED_SCHEDULED,
         });
         syncMutation('reset');
       },

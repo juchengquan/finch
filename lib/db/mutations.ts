@@ -1,18 +1,18 @@
 // Server-side handlers for every store action, operating on the same state
 // representation that projectState reads: transactions live in the transactions
-// table; pending/recurring/override slices live in app_state. Each handler is a
+// table; pending/scheduled/override slices live in app_state. Each handler is a
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
 import {
-  listRecurring,
-  deleteRecurring as qDeleteRecurring,
-  updateRecurring as qUpdateRecurring,
-  createRecurring as qCreateRecurring,
-  addRecurringSplit as qAddRecurringSplit,
-  removeRecurringSplit as qRemoveRecurringSplit,
-  type RecurringPatch,
-} from './queries/recurring';
+  listScheduled,
+  deleteScheduled as qDeleteScheduled,
+  updateScheduled as qUpdateScheduled,
+  createScheduled as qCreateScheduled,
+  addScheduledSplit as qAddScheduledSplit,
+  removeScheduledSplit as qRemoveScheduledSplit,
+  type ScheduledPatch,
+} from './queries/scheduled';
 import {
   recomputeForTransaction,
   createAccount as qCreateAccount,
@@ -33,10 +33,6 @@ import {
   deleteSubscription as qDeleteSubscription,
   updateSubscription as qUpdateSubscription,
   type SubscriptionPatch,
-  createScheduledItem as qCreateScheduledItem,
-  updateScheduledItem as qUpdateScheduledItem,
-  deleteScheduledItem as qDeleteScheduledItem,
-  type ScheduledItemPatch,
 } from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
 import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
@@ -77,9 +73,8 @@ const RESET_TABLES = [
   'ledger_summaries',
   'goals',
   'subscriptions',
-  'scheduled_items',
-  'recurring_splits',
-  'recurring_templates',
+  'scheduled_splits',
+  'scheduled_templates',
   'sync_log',
   'tags',
   'budgets',
@@ -170,13 +165,11 @@ async function postSingle(
   });
 }
 
-// Post a recurring template now: create the confirmed transaction(s) it implies.
-// Income templates with splits post one row per (resolvable) split.
-async function postRecurring(exec: Exec, args: Args): Promise<void> {
+async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const templateId = str(args.templateId);
   const ledgerId = 'personal';
-  const recurring = await listRecurring(exec, ledgerId);
-  const t = recurring.find((r) => r.id === templateId);
+  const scheduled = await listScheduled(exec, ledgerId);
+  const t = scheduled.find((r) => r.id === templateId);
   if (!t) throw new Error('Template not found');
   const date = new Date().toISOString().slice(0, 10);
 
@@ -366,22 +359,22 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteAccountGroup':
       await qDeleteAccountGroup(exec, str(args.id));
       return;
-    case 'updateRecurringSplit': {
+    case 'updateScheduledSplit': {
       await exec(
-        `UPDATE recurring_splits SET amount_pct = ?
-          WHERE id = (SELECT id FROM recurring_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
+        `UPDATE scheduled_splits SET amount_pct = ?
+          WHERE id = (SELECT id FROM scheduled_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
         [Number(args.pct), str(args.templateId), Number(args.index)],
       );
       return;
     }
-    case 'addRecurringSplit': {
+    case 'addScheduledSplit': {
       const account = str(args.account).trim();
       if (!account) throw new Error('A split needs an account');
-      await qAddRecurringSplit(exec, str(args.templateId), account, Number(args.pct) || 0);
+      await qAddScheduledSplit(exec, str(args.templateId), account, Number(args.pct) || 0);
       return;
     }
-    case 'removeRecurringSplit': {
-      await qRemoveRecurringSplit(exec, str(args.templateId), Number(args.index));
+    case 'removeScheduledSplit': {
+      await qRemoveScheduledSplit(exec, str(args.templateId), Number(args.index));
       return;
     }
     case 'verifyCounterparty':
@@ -447,10 +440,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await qUpdateSubscription(exec, str(args.id), patch);
       return;
     }
-    case 'updateRecurring': {
-      const patch = (args.patch ?? {}) as RecurringPatch;
+    case 'updateScheduled': {
+      const patch = (args.patch ?? {}) as ScheduledPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
-      await qUpdateRecurring(exec, str(args.id), patch);
+      await qUpdateScheduled(exec, str(args.id), patch);
       return;
     }
     case 'updateCounterparty': {
@@ -535,33 +528,35 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteSubscription':
       await qDeleteSubscription(exec, str(args.id));
       return;
-    case 'createRecurring': {
+    case 'createScheduled': {
       const name = str(args.name).trim();
       if (!name) throw new Error('Template name is required');
-      const type = str(args.type || 'expense');
-      if (!['income', 'expense', 'transfer'].includes(type)) throw new Error(`Unknown type "${type}"`);
+      const type = str(args.type || 'reminder');
+      if (!['income', 'expense', 'transfer', 'reminder'].includes(type)) throw new Error(`Unknown type "${type}"`);
       const frequency = str(args.frequency || 'monthly');
       if (!['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
         throw new Error(`Unknown frequency "${frequency}"`);
       }
-      const account = str(args.account).trim();
-      if (!account) throw new Error('An account is required');
-      await qCreateRecurring(exec, {
-        id: str(args.id || newId('rt')),
+      const account = type === 'reminder' ? '' : str(args.account ?? '').trim();
+      if (type !== 'reminder' && !account) throw new Error('An account is required');
+      await qCreateScheduled(exec, {
+        id: str(args.id || newId('sch')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
         type,
         amount: args.amount == null || args.amount === '' ? null : Number(args.amount),
         frequency,
         dayOfMonth: Number(args.dayOfMonth) || 1,
+        weekDay: args.weekDay != null ? Number(args.weekDay) : null,
         account,
         from: type === 'transfer' && args.from ? str(args.from).trim() : null,
         autoPost: args.autoPost ? 1 : 0,
+        color: args.color ? str(args.color) : null,
       });
       return;
     }
-    case 'deleteRecurring':
-      await qDeleteRecurring(exec, str(args.id));
+    case 'deleteScheduled':
+      await qDeleteScheduled(exec, str(args.id));
       return;
     case 'deleteTransfer':
       await qDeleteTransfer(exec, str(args.id));
@@ -593,32 +588,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteExchangeRate':
       await qDeleteExchangeRate(exec, str(args.date), str(args.currency).toUpperCase());
       return;
-    case 'createScheduledItem': {
-      const label = str(args.label).trim();
-      if (!label) throw new Error('Label is required');
-      await qCreateScheduledItem(exec, {
-        id: str(args.id || newId('sch')),
-        ledgerId: str(args.ledgerId || 'personal'),
-        day: Number(args.day) || 1,
-        month: str(args.month || 'Jan'),
-        label,
-        amount: Number(args.amount) || 0,
-        type: str(args.type || 'bill'),
-        color: args.color ? str(args.color) : null,
-      });
-      return;
-    }
-    case 'updateScheduledItem': {
-      const patch = (args.patch ?? {}) as ScheduledItemPatch;
-      if (patch.label !== undefined && !str(patch.label).trim()) throw new Error('Label is required');
-      await qUpdateScheduledItem(exec, str(args.id), patch);
-      return;
-    }
-    case 'deleteScheduledItem':
-      await qDeleteScheduledItem(exec, str(args.id));
-      return;
-    case 'postRecurring':
-      await postRecurring(exec, args);
+    case 'postScheduled':
+      await postScheduled(exec, args);
       return;
     case 'reset':
       await resetDb(exec);

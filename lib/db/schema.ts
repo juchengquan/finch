@@ -169,11 +169,11 @@ CREATE TABLE IF NOT EXISTS budgets (
   updated_at     TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS recurring_templates (
+CREATE TABLE IF NOT EXISTS scheduled_templates (
   id                   TEXT PRIMARY KEY,
   ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name                 TEXT,
-  type                 TEXT NOT NULL CHECK(type IN ('income','expense','transfer')),
+  type                 TEXT NOT NULL CHECK(type IN ('income','expense','transfer','reminder')),
   amount               REAL,
   amount_varies        INTEGER NOT NULL DEFAULT 0,
   splits_enabled       INTEGER NOT NULL DEFAULT 0,
@@ -197,13 +197,14 @@ CREATE TABLE IF NOT EXISTS recurring_templates (
   max_executions       INTEGER,
   last_executed_at     TEXT,
   notes                TEXT,
+  color                TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS recurring_splits (
+CREATE TABLE IF NOT EXISTS scheduled_splits (
   id           TEXT PRIMARY KEY,
-  template_id  TEXT NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  template_id  TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
   account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
   account_name TEXT,
   amount_pct   REAL,
@@ -249,17 +250,6 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS scheduled_items (
-  id         TEXT PRIMARY KEY,
-  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  day        INTEGER NOT NULL,
-  month      TEXT NOT NULL,
-  label      TEXT NOT NULL,
-  amount     REAL NOT NULL,
-  type       TEXT NOT NULL,
-  color      TEXT
-);
-
 CREATE TABLE IF NOT EXISTS ledger_summaries (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -287,7 +277,7 @@ CREATE TABLE IF NOT EXISTS sync_log (
   is_current   INTEGER NOT NULL DEFAULT 0
 );
 
--- Transitional store slices not yet migrated to real tables (pending, recurring,
+-- Transitional store slices not yet migrated to real tables (pending, scheduled,
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
 CREATE TABLE IF NOT EXISTS app_state (
@@ -311,12 +301,11 @@ CREATE INDEX IF NOT EXISTS idx_txntag_txn ON transaction_tags(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_snap_account_date ON account_balance_snapshots(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
-CREATE INDEX IF NOT EXISTS idx_recurring_ledger_active ON recurring_templates(ledger_id, is_active) WHERE is_active = 1;
+CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
 CREATE INDEX IF NOT EXISTS idx_goals_ledger ON goals(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_subs_ledger ON subscriptions(ledger_id);
-CREATE INDEX IF NOT EXISTS idx_sched_ledger ON scheduled_items(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 
@@ -397,7 +386,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // schema; 2 adds accounts.opening_balance; 3 adds account display columns;
 // 4 adds categories.hue; 5 adds transactions.is_adjustment; 6 adds the
 // transaction_splits table.
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
 // created DB already has the latest CREATE statements, so it skips these and is
@@ -427,9 +416,6 @@ const MIGRATIONS: Record<number, string[]> = {
     'ALTER TABLE transactions ADD COLUMN is_adjustment INTEGER NOT NULL DEFAULT 0',
   ],
   6: [
-    // Ad-hoc category splits for one transaction; same shape as the CREATE
-    // above. Existing rows have no splits → parent's category_id keeps owning
-    // its amount in aggregations.
     `CREATE TABLE IF NOT EXISTS transaction_splits (
        id             TEXT PRIMARY KEY,
        transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
@@ -440,6 +426,9 @@ const MIGRATIONS: Record<number, string[]> = {
        sort_order     INTEGER NOT NULL DEFAULT 0
      )`,
     'CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id)',
+  ],
+  7: [
+    'ALTER TABLE scheduled_templates ADD COLUMN color TEXT',
   ],
 };
 

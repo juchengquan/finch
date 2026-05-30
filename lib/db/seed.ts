@@ -6,7 +6,7 @@
 // from arbitrary store state:
 //   - seedReference: the static entity tables (ledgers/accounts/categories/…).
 //   - insertTransactions: rows from a Tx[] (seed JSON or live store).
-//   - seedAppStateDefaults: the transitional store slices (pending/recurring/…).
+//   - seedAppStateDefaults: the transitional store slices (pending/scheduled/…).
 
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
@@ -21,10 +21,9 @@ import exchangeRatesData from '@/data/exchange-rates.json';
 import devicesData from '@/data/devices.json';
 import goalsData from '@/data/goals.json';
 import subscriptionsData from '@/data/subscriptions.json';
-import scheduledItemsData from '@/data/scheduled-items.json';
 import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
-import recurringData from '@/data/recurring-templates.json';
+import scheduledData from '@/data/scheduled-templates.json';
 
 const SEED_TS = '2026-05-26T00:00:00';
 
@@ -187,29 +186,19 @@ export async function seedReference(exec: Exec): Promise<void> {
     );
   }
 
-  type SchedRow = { day: number; month: string; label: string; amount: number; type: string; color?: string; ledger?: string };
-  const sched = scheduledItemsData as SchedRow[];
-  for (let i = 0; i < sched.length; i++) {
-    const s = sched[i];
-    await exec(
-      'INSERT OR IGNORE INTO scheduled_items (id,ledger_id,day,month,label,amount,type,color) VALUES (?,?,?,?,?,?,?,?)',
-      [`sch-${i}`, s.ledger ?? 'personal', s.day, s.month, s.label, s.amount, s.type, s.color ?? null],
-    );
-  }
-
-  // Recurring templates live in their own tables. The mock references accounts by
+  // Scheduled templates live in their own tables. The mock references accounts by
   // display name (not all map to real accounts), so the names are stored verbatim
   // (account_id stays null) and resolved at post time; next/last run are display labels.
   type SplitSeed = { account: string; pct?: number; abs?: number | null; label?: string };
-  type RecurSeed = {
+  type SchedSeed = {
     id: string; name: string; type: string; amount?: number | null; varies?: number;
     frequency: string; dayOfMonth: number; account: string; from?: string; autoPost?: number;
     nextRun?: string; lastRun?: string; splits?: SplitSeed[]; ledger?: string;
   };
-  for (const r of recurringData as RecurSeed[]) {
+  for (const r of scheduledData as SchedSeed[]) {
     const ledgerId = r.ledger ?? 'personal';
     await exec(
-      `INSERT OR IGNORE INTO recurring_templates
+      `INSERT OR IGNORE INTO scheduled_templates
         (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
          from_account_id,from_account_name,category_id,frequency,day_of_month,start_date,
          next_run,last_run,auto_post,is_active,created_at,updated_at)
@@ -224,7 +213,7 @@ export async function seedReference(exec: Exec): Promise<void> {
     for (let i = 0; i < splits.length; i++) {
       const sp = splits[i];
       await exec(
-        'INSERT OR IGNORE INTO recurring_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,description,sort_order) VALUES (?,?,?,?,?,?,?,?)',
+        'INSERT OR IGNORE INTO scheduled_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,description,sort_order) VALUES (?,?,?,?,?,?,?,?)',
         [`${r.id}-s${i}`, r.id, null, sp.account, sp.pct ?? null, sp.abs ?? null, sp.label ?? null, i],
       );
     }

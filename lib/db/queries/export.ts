@@ -31,7 +31,7 @@ const COLUMNS: CsvColumn[] = [
   { key: 'currency', label: 'Currency' },
   { key: 'amountBase', label: 'Amount (base)' },
   { key: 'status', label: 'Status' },
-  { key: 'recurring', label: 'Recurring' },
+  { key: 'recurring', label: 'Scheduled' },
   { key: 'note', label: 'Note' },
   { key: 'tags', label: 'Tags' },
 ];

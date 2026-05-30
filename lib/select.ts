@@ -2,11 +2,10 @@
 // read queries in lib/db/queries/* so the read screens can compute from the
 // store (which mirrors the server DB) instead of a second in-browser query DB.
 
-import type { Tx, RecurringTemplate } from '@/lib/store';
+import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
-import type { ScheduledItem } from '@/lib/db/queries/planning';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -165,11 +164,9 @@ export interface MonthForecast {
   mtdSpent: number;
   /** Run-rate projection for remaining unscheduled days (mtdSpent/daysElapsed × daysRemaining). */
   unscheduledRest: number;
-  /** Recurring expense templates due later this month (matched by `dayOfMonth`). */
-  recurringRest: number;
-  /** Scheduled-items (calendar bills) due later this month. */
+  /** Scheduled expense/reminder templates due later this month (matched by `dayOfMonth`). */
   scheduledRest: number;
-  /** Total: mtdSpent + unscheduledRest + recurringRest + scheduledRest. */
+  /** Total: mtdSpent + unscheduledRest + scheduledRest. */
   projected: number;
   daysElapsed: number;
   daysRemaining: number;
@@ -181,15 +178,14 @@ export interface MonthForecast {
 /**
  * Forecast the current month's total spending by combining month-to-date
  * confirmed expenses, a daily run-rate projection for the rest of the month,
- * and known upcoming costs (recurring templates + scheduled items).
+ * and known upcoming costs (scheduled templates including reminders).
  *
  * `today` is YYYY-MM-DD; if it falls outside `month`, the forecast collapses
  * to whatever's already known (no projection, no upcoming).
  */
 export function monthForecast(
   txns: Tx[],
-  recurring: RecurringTemplate[],
-  scheduledItems: ScheduledItem[],
+  scheduled: ScheduledTemplate[],
   ledgerId: string,
   month: string,
   today: string,
@@ -211,43 +207,28 @@ export function monthForecast(
     mtdSpent += -t.amount;
   }
 
-  // Upcoming recurring expenses for the rest of this month (templates with a
-  // known monthly amount whose day_of_month falls after today). Income is
-  // excluded so the figure is comparable to mtdSpent.
-  let recurringRest = 0;
+  // Upcoming scheduled expenses + reminders for the rest of this month.
+  // Count monthly templates/reminders with a known amount and a day_of_month
+  // falling after today. Income and transfer types are excluded.
+  let scheduledRest = 0;
   if (inMonth) {
-    for (const rt of recurring) {
-      if (rt.type !== 'expense') continue;
+    for (const rt of scheduled) {
+      if (rt.type !== 'expense' && rt.type !== 'reminder') continue;
       if (rt.frequency !== 'monthly') continue;
       if (rt.amount == null) continue;
       if (rt.dayOfMonth <= dayOfMonth) continue;
       if (rt.dayOfMonth > daysInMonth) continue;
-      recurringRest += Math.abs(rt.amount);
-    }
-  }
-
-  // Scheduled items use a 3-letter month label; only count rows for this
-  // month with a day still ahead.
-  const monthLabel = MONTH_LABELS[m - 1];
-  let scheduledRest = 0;
-  if (inMonth) {
-    for (const it of scheduledItems) {
-      if (it.ledgerId !== ledgerId) continue;
-      if (it.month !== monthLabel) continue;
-      if (it.day <= dayOfMonth) continue;
-      if (it.day > daysInMonth) continue;
-      scheduledRest += Math.abs(it.amount);
+      scheduledRest += Math.abs(rt.amount);
     }
   }
 
   const dailyRunRate = daysElapsed > 0 ? mtdSpent / daysElapsed : 0;
   const unscheduledRest = inMonth ? r2(dailyRunRate * daysRemaining) : 0;
-  const projected = r2(mtdSpent + unscheduledRest + recurringRest + scheduledRest);
+  const projected = r2(mtdSpent + unscheduledRest + scheduledRest);
 
   return {
     mtdSpent: r2(mtdSpent),
     unscheduledRest,
-    recurringRest: r2(recurringRest),
     scheduledRest: r2(scheduledRest),
     projected,
     daysElapsed,

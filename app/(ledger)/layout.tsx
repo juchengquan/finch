@@ -8,7 +8,6 @@ const LEDGER_TABS = [
   { id: 'pending',   icon: 'doc',   label: 'Pending',   path: '/pending' },
   { id: 'transfers', icon: 'split', label: 'Transfers', path: '/transfers' },
   { id: 'merchants', icon: 'bag',   label: 'Merchants', path: '/merchants' },
-  { id: 'recurring', icon: 'sync',  label: 'Recurring', path: '/recurring' },
   { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
   { id: 'tags', icon: 'tags', label: 'Tags', path: '/tags' },
   { id: 'fx', icon: 'swap', label: 'FX', path: '/fx' },
@@ -19,7 +18,6 @@ const LEDGER_MOBILE_TABS = [
   { id: 'pending',   icon: 'doc',   label: 'Pending' },
   { id: 'transfers', icon: 'split', label: 'Transfers' },
   { id: 'merchants', icon: 'bag',   label: 'Merchants' },
-  { id: 'recurring', icon: 'sync',  label: 'Recurring' },
   { id: 'categories', icon: 'tag', label: 'Categories' },
 ];
 

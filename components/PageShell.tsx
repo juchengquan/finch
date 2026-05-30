@@ -46,7 +46,7 @@ const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) =>
   accounts: { label: 'Accounts', name: (id) => acctById(id).name || id },
   budgets: { label: 'Budgets', name: (id) => catById(id).name },
   transfers: { label: 'Transfers', name: (id) => id },
-  recurring: { label: 'Recurring', name: (id) => id },
+  scheduled: { label: 'Scheduled', name: (id) => id },
 };
 
 // Header titles for top-level routes that aren't represented in the nav, so

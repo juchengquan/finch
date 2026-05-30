@@ -1,4 +1,4 @@
-import type { Tx, RecurringTemplate } from '@/lib/store';
+import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { AccountGroupRow } from './queries/accountGroups';
 import type { BudgetRolloverInfo } from './queries/budgets';
@@ -7,7 +7,7 @@ import type { Counterparty } from './queries/counterparties';
 import type { ExchangeRate, Device } from './queries/system';
 import type { Goal } from './queries/goals';
 import type { Tag } from './queries/tags';
-import type { Subscription, ScheduledItem } from './queries/planning';
+import type { Subscription } from './queries/planning';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -35,6 +35,5 @@ export interface ProjectedState extends PersistState {
   goals: Goal[];
   tags: Tag[];
   subscriptions: Subscription[];
-  scheduledItems: ScheduledItem[];
-  recurring: RecurringTemplate[];
+  scheduled: ScheduledTemplate[];
 }
