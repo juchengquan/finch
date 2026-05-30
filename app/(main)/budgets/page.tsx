@@ -50,7 +50,15 @@ function BudgetCard({
     <Link href={`/budgets/${budget.id}`} className="mb-2 block">
       <div className="bg-card border-border rounded-xl border p-3.5">
         <div className="flex items-baseline justify-between gap-3">
-          <div className="truncate text-sm font-medium">{budget.name}</div>
+          <div className="flex min-w-0 items-baseline gap-2">
+            {budget.pendingAmount != null && (
+              <span
+                aria-label="Amount change pending"
+                className="bg-warning size-1.5 shrink-0 self-center rounded-full"
+              />
+            )}
+            <div className="truncate text-sm font-medium">{budget.name}</div>
+          </div>
           <div className={cn('shrink-0 font-mono text-[11px]', p.over ? 'text-destructive' : 'text-foreground')}>
             {fmt(p.used)} / {fmt(p.base)}
           </div>
