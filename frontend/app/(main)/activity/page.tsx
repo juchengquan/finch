@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Money, Icon, CatBar } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { SearchButton } from '@/components/command-palette';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +78,7 @@ export default function ActivityPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Activity" trailing={<IconButton icon="search" aria-label="Search" />} />}
+      header={<ScreenHeader title="Activity" trailing={<SearchButton />} />}
     >
       <div className="px-5 pb-[120px]">
         <div className="bg-secondary mb-3 flex h-9 items-center gap-2 rounded-full px-3.5">

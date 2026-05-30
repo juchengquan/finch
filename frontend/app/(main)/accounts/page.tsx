@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { SearchButton } from '@/components/command-palette';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -234,7 +235,7 @@ export default function AccountsPage() {
 
   const trailing = (
     <div className="flex items-center gap-1">
-      <IconButton icon="search" aria-label="Search" />
+      <SearchButton />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

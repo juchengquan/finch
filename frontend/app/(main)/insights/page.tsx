@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { SearchButton } from '@/components/command-palette';
 import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
@@ -110,7 +111,7 @@ export default function InsightsPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Insights" trailing={<IconButton icon="search" aria-label="Search" />} />}
+      header={<ScreenHeader title="Insights" trailing={<SearchButton />} />}
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
