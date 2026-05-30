@@ -148,26 +148,33 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
 CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id);
 
 CREATE TABLE IF NOT EXISTS budgets (
-  id             TEXT PRIMARY KEY,
-  ledger_id      TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  group_id       TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
-  name           TEXT,
-  type           TEXT NOT NULL CHECK(type IN ('income','expense')),
-  amount         REAL NOT NULL,
-  saved          REAL NOT NULL DEFAULT 0,
-  carry_forward  REAL NOT NULL DEFAULT 0,
-  frequency      TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-  start_date     TEXT NOT NULL,
-  end_date       TEXT,
-  is_recurring   INTEGER NOT NULL DEFAULT 1,
-  rollover       INTEGER NOT NULL DEFAULT 0,
-  rollover_limit REAL,
-  account_ids    TEXT,
-  category_ids   TEXT,
-  tag_ids        TEXT,
-  warning_pct    REAL NOT NULL DEFAULT 80,
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL
+  id                 TEXT PRIMARY KEY,
+  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  group_id           TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
+  name               TEXT,
+  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
+  amount             REAL NOT NULL,
+  saved              REAL NOT NULL DEFAULT 0,
+  carry_forward      REAL NOT NULL DEFAULT 0,
+  frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
+  start_date         TEXT NOT NULL,
+  end_date           TEXT,
+  is_recurring       INTEGER NOT NULL DEFAULT 1,
+  rollover           INTEGER NOT NULL DEFAULT 0,
+  rollover_limit     REAL,
+  -- Last period the auto-rollover has processed for this budget (e.g.
+  -- '2026-04', '2026-W17', '2026-Q2', 'BW-2026-04-13'). NULL = never rolled.
+  last_rolled_period TEXT,
+  -- Staged amount change activated at the next period boundary; NULL = no
+  -- pending change. Lets a mid-period amount edit affect only the next
+  -- cycle (BUDGET_CYCLES_PLAN §2).
+  pending_amount     REAL,
+  account_ids        TEXT,
+  category_ids       TEXT,
+  tag_ids            TEXT,
+  warning_pct        REAL NOT NULL DEFAULT 80,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS scheduled_templates (
@@ -306,6 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_txn_pending ON transactions(ledger_id, status) WH
 CREATE INDEX IF NOT EXISTS idx_txntag_txn ON transaction_tags(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
+CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
@@ -392,7 +400,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-05-31T00:00:00Z';
+export const SCHEMA_VERSION = '2026-05-31T18:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
