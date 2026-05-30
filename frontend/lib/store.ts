@@ -5,11 +5,11 @@ import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
-import type { BudgetMeta, BudgetRolloverInfo } from '@/lib/db/queries/budgets';
+import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/queries/budgets';
+import type { BudgetGroupRow } from '@/lib/db/queries/budgetGroups';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
-import type { Goal } from '@/lib/db/queries/goals';
 import type { Tag } from '@/lib/db/queries/tags';
 import type { Subscription } from '@/lib/db/queries/planning';
 
@@ -27,12 +27,13 @@ export interface Tx {
   time?: string;
   note?: string;
   pending?: boolean;
-  recurring?: boolean;
-  /** Manual balance reconciliation (excluded from category spend / cash flow). */
-  isAdjustment?: boolean;
-  kind?: string;
+  /** Classification. Optional only for the pre-hydration seed; the DB always sets
+   *  it. 'adjustment' = manual balance reconciliation (excluded from spend/flow). */
+  kind?: 'income' | 'expense' | 'transfer' | 'adjustment';
   ledgerId?: string;
   transferGroupId?: string;
+  /** The scheduled template this row was auto-generated from (if any). */
+  sourceTemplateId?: string;
   tags?: string[];
   /** Ad-hoc category splits. When present, these override `category` /
    * `amount` for category aggregations (categorySpend / budgets / etc.). */
@@ -94,6 +95,7 @@ export interface ScheduledTemplate {
 export interface AccountPatch {
   name?: string;
   type?: string;
+  currency?: string;
   last4?: string | null;
   institution?: string | null;
   routing?: string | null;
@@ -115,22 +117,45 @@ export interface NewAccountInput {
 const SEED_TX = transactionsData as Tx[];
 const SEED_SCHEDULED = scheduledData as ScheduledTemplate[];
 
+// Input for creating a named budget from the UI (booleans here, normalised to
+// the DB's 0/1 ints on the way out).
+export interface NewBudgetInput {
+  name: string;
+  type: BudgetType;
+  amount: number;
+  groupId?: string | null;
+  frequency?: string;
+  startDate?: string;
+  endDate?: string | null;
+  isRecurring?: boolean;
+  rollover?: boolean;
+  rolloverLimit?: number | null;
+  accountIds?: string[];
+  categoryIds?: string[];
+  tagIds?: string[];
+  warningPct?: number;
+  saved?: number;
+  ledgerId?: string;
+}
+
 interface FinanceState {
   transactions: Tx[];
   scheduled: ScheduledTemplate[];
   // Reference / derived data projected from the server DB (read-only mirror).
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
-  budgetByCategory: Record<string, number>;
-  budgetMetaByCategory: Record<string, BudgetMeta>;
-  budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
+  budgets: BudgetRow[];
+  budgetGroups: BudgetGroupRow[];
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   devices: Device[];
-  goals: Goal[];
   tags: Tag[];
   subscriptions: Subscription[];
+  /** Ordered section ids for the mobile bottom bar (empty = client default). */
+  mobileTabIds: string[];
+  /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
+  displayCurrencyByLedger: Record<string, string>;
 
   addTransaction: (tx: Omit<Tx, 'id'>) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
@@ -139,22 +164,21 @@ interface FinanceState {
   confirmPending: (id: string) => void;
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
-  setBudget: (categoryId: string, amount: number) => void;
-  deleteBudget: (categoryId: string) => void;
-  updateBudgetCycle: (
-    categoryId: string,
-    patch: { frequency: BudgetMeta['frequency']; startDate: string; amount?: number },
-  ) => void;
-  setBudgetRollover: (
-    categoryId: string,
-    patch: { rollover?: boolean; rolloverLimit?: number | null; carryForward?: number },
-  ) => void;
+  setMobileTabIds: (ids: string[]) => void;
+  setDisplayCurrency: (ledgerId: string, currency: string) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
   createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
   updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
   deleteAccountGroup: (id: string) => void;
+  createBudget: (input: NewBudgetInput) => string;
+  updateBudget: (id: string, patch: BudgetPatch) => void;
+  removeBudget: (id: string) => void;
+  contributeBudget: (id: string, amount: number) => void;
+  createBudgetGroup: (input: { name: string; ledgerId?: string }) => string;
+  updateBudgetGroup: (id: string, patch: { name?: string }) => void;
+  deleteBudgetGroup: (id: string) => void;
   updateScheduledSplit: (templateId: string, index: number, pct: number) => void;
   addScheduledSplit: (templateId: string, account: string, pct: number) => void;
   removeScheduledSplit: (templateId: string, index: number) => void;
@@ -167,10 +191,6 @@ interface FinanceState {
   renameCategory: (id: string, name: string) => void;
   updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; hue?: number | null }) => void;
   deleteCategory: (id: string) => void;
-  createGoal: (input: { name: string; target: number; eta?: string; hue?: number; ledgerId?: string }) => void;
-  contributeGoal: (id: string, amount: number) => void;
-  updateGoal: (id: string, patch: { name?: string; target?: number; eta?: string | null }) => void;
-  deleteGoal: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
@@ -210,16 +230,26 @@ export const useFinanceStore = create<FinanceState>()(
       scheduled: SEED_SCHEDULED,
       accounts: [],
       accountGroups: [],
-      budgetByCategory: {},
-      budgetMetaByCategory: {},
-      budgetRolloverByCategory: {},
+      budgets: [],
+      budgetGroups: [],
       categories: [],
       counterparties: [],
       exchangeRates: [],
       devices: [],
-      goals: [],
       tags: [],
       subscriptions: [],
+      mobileTabIds: [],
+      displayCurrencyByLedger: {},
+
+      setMobileTabIds: (ids) => {
+        set({ mobileTabIds: ids });
+        syncMutation('setMobileTabIds', { ids });
+      },
+
+      setDisplayCurrency: (ledgerId, currency) => {
+        set((s) => ({ displayCurrencyByLedger: { ...s.displayCurrencyByLedger, [ledgerId]: currency } }));
+        syncMutation('setDisplayCurrency', { ledgerId, currency });
+      },
 
       addTransaction: (tx) => {
         const id = `t-${Date.now().toString(36)}`;
@@ -275,100 +305,6 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('confirmAllPending');
       },
 
-      setBudget: (categoryId, amount) => {
-        set((s) => {
-          const existing = s.budgetMetaByCategory[categoryId];
-          if (!existing) {
-            // First-time create — amount is active immediately. Mirror the
-            // server's default cycle (monthly, '2026-05-01' anchor) so the
-            // UI doesn't blank out between optimistic + reproject.
-            return {
-              budgetByCategory: { ...s.budgetByCategory, [categoryId]: amount },
-              budgetMetaByCategory: {
-                ...s.budgetMetaByCategory,
-                [categoryId]: {
-                  id: `bud-${categoryId}`,
-                  amount,
-                  frequency: 'monthly',
-                  startDate: '2026-05-01',
-                  pendingAmount: null,
-                },
-              },
-            };
-          }
-          // Subsequent edits stage the new amount; the active limit only
-          // changes at the next period boundary (BUDGET_CYCLES_PLAN §4b).
-          return {
-            budgetMetaByCategory: {
-              ...s.budgetMetaByCategory,
-              [categoryId]: { ...existing, pendingAmount: amount },
-            },
-          };
-        });
-        syncMutation('setBudget', { categoryId, amount });
-      },
-
-      deleteBudget: (categoryId) => {
-        set((s) => {
-          const next = { ...s.budgetByCategory };
-          delete next[categoryId];
-          const nextMeta = { ...s.budgetMetaByCategory };
-          delete nextMeta[categoryId];
-          const nextRoll = { ...s.budgetRolloverByCategory };
-          delete nextRoll[categoryId];
-          return {
-            budgetByCategory: next,
-            budgetMetaByCategory: nextMeta,
-            budgetRolloverByCategory: nextRoll,
-          };
-        });
-        syncMutation('deleteBudget', { categoryId });
-      },
-
-      updateBudgetCycle: (categoryId, patch) => {
-        set((s) => {
-          const existing = s.budgetMetaByCategory[categoryId];
-          if (!existing) return s;
-          const nextAmount = patch.amount ?? existing.amount;
-          return {
-            budgetByCategory: { ...s.budgetByCategory, [categoryId]: nextAmount },
-            budgetMetaByCategory: {
-              ...s.budgetMetaByCategory,
-              [categoryId]: {
-                ...existing,
-                amount: nextAmount,
-                frequency: patch.frequency,
-                startDate: patch.startDate,
-                pendingAmount: null,
-              },
-            },
-          };
-        });
-        syncMutation('updateBudgetCycle', {
-          categoryId,
-          frequency: patch.frequency,
-          startDate: patch.startDate,
-          amount: patch.amount,
-        });
-      },
-
-      setBudgetRollover: (categoryId, patch) => {
-        set((s) => {
-          const prev = s.budgetRolloverByCategory[categoryId] ?? { rollover: false, rolloverLimit: null, carryForward: 0 };
-          return {
-            budgetRolloverByCategory: {
-              ...s.budgetRolloverByCategory,
-              [categoryId]: {
-                rollover: patch.rollover ?? prev.rollover,
-                rolloverLimit: patch.rolloverLimit === undefined ? prev.rolloverLimit : patch.rolloverLimit,
-                carryForward: patch.carryForward === undefined ? prev.carryForward : patch.carryForward,
-              },
-            },
-          };
-        });
-        syncMutation('setBudgetRollover', { categoryId, ...patch });
-      },
-
       createAccount: (input) => {
         const id = `acct-${Date.now().toString(36)}`;
         syncMutation('createAccount', {
@@ -422,6 +358,94 @@ export const useFinanceStore = create<FinanceState>()(
           accounts: s.accounts.map((a) => (a.groupId === id ? { ...a, groupId: null, groupName: null } : a)),
         }));
         syncMutation('deleteAccountGroup', { id });
+      },
+
+      createBudget: (input) => {
+        const id = `bgt-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const isRecurring = input.isRecurring != null ? (input.isRecurring ? 1 : 0) : input.type === 'income' ? 0 : 1;
+        const row: BudgetRow = {
+          id,
+          ledgerId,
+          groupId: input.groupId ?? null,
+          name: input.name,
+          type: input.type,
+          amount: input.amount,
+          saved: input.saved ?? 0,
+          carryForward: 0,
+          frequency: input.frequency ?? 'monthly',
+          startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
+          endDate: input.endDate ?? null,
+          isRecurring,
+          rollover: input.rollover ? 1 : 0,
+          rolloverLimit: input.rolloverLimit ?? null,
+          accountIds: input.accountIds ?? [],
+          categoryIds: input.categoryIds ?? [],
+          tagIds: input.tagIds ?? [],
+          warningPct: input.warningPct ?? 80,
+        };
+        set((s) => ({ budgets: [...s.budgets, row] }));
+        syncMutation('createBudget', {
+          id,
+          ledgerId,
+          groupId: row.groupId,
+          name: row.name,
+          type: row.type,
+          amount: row.amount,
+          saved: row.saved,
+          frequency: row.frequency,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          isRecurring: row.isRecurring,
+          rollover: row.rollover,
+          rolloverLimit: row.rolloverLimit,
+          accountIds: row.accountIds,
+          categoryIds: row.categoryIds,
+          tagIds: row.tagIds,
+          warningPct: row.warningPct,
+        });
+        return id;
+      },
+
+      updateBudget: (id, patch) => {
+        set((s) => ({ budgets: s.budgets.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
+        syncMutation('updateBudget', { id, patch });
+      },
+
+      removeBudget: (id) => {
+        set((s) => ({ budgets: s.budgets.filter((b) => b.id !== id) }));
+        syncMutation('removeBudget', { id });
+      },
+
+      contributeBudget: (id, amount) => {
+        set((s) => ({
+          budgets: s.budgets.map((b) => (b.id === id ? { ...b, saved: Math.max(0, b.saved + amount) } : b)),
+        }));
+        syncMutation('contributeBudget', { id, amount });
+      },
+
+      createBudgetGroup: (input) => {
+        const id = `bgg-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        set((s) => ({
+          budgetGroups: [...s.budgetGroups, { id, ledgerId, name: input.name, sortOrder: s.budgetGroups.length }],
+        }));
+        syncMutation('createBudgetGroup', { id, ledgerId, name: input.name });
+        return id;
+      },
+
+      updateBudgetGroup: (id, patch) => {
+        set((s) => ({ budgetGroups: s.budgetGroups.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
+        syncMutation('updateBudgetGroup', { id, patch });
+      },
+
+      deleteBudgetGroup: (id) => {
+        set((s) => ({
+          budgetGroups: s.budgetGroups.filter((g) => g.id !== id),
+          // budgets.group_id is SET NULL by the FK; mirror that optimistically.
+          budgets: s.budgets.map((b) => (b.groupId === id ? { ...b, groupId: null } : b)),
+        }));
+        syncMutation('deleteBudgetGroup', { id });
       },
 
       updateScheduledSplit: (templateId, index, pct) => {
@@ -511,31 +535,6 @@ export const useFinanceStore = create<FinanceState>()(
       deleteCategory: (id) => {
         set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
         syncMutation('deleteCategory', { id });
-      },
-
-      createGoal: (input) => {
-        const ledgerId = input.ledgerId ?? 'personal';
-        const id = `goal-${Date.now().toString(36)}`;
-        const hue = input.hue ?? 200;
-        set((s) => ({
-          goals: [...s.goals, { id, ledgerId, name: input.name, target: input.target, saved: 0, eta: input.eta ?? null, hue }],
-        }));
-        syncMutation('createGoal', { ledgerId, name: input.name, target: input.target, eta: input.eta ?? null, hue });
-      },
-
-      contributeGoal: (id, amount) => {
-        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, saved: g.saved + amount } : g)) }));
-        syncMutation('contributeGoal', { id, amount });
-      },
-
-      updateGoal: (id, patch) => {
-        set((s) => ({ goals: s.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) }));
-        syncMutation('updateGoal', { id, patch });
-      },
-
-      deleteGoal: (id) => {
-        set((s) => ({ goals: s.goals.filter((g) => g.id !== id) }));
-        syncMutation('deleteGoal', { id });
       },
 
       createTag: (input) => {

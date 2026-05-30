@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { Icon } from '@/components/primitives';
 import { useLedger } from '@/components/ledger-provider';
+import { useCurrency } from '@/components/currency-provider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,9 @@ export function LedgerSwitcher({
   className?: string;
 }) {
   const { ledgers, active, activeId, setActiveId } = useLedger();
+  // The active chip shows the display currency (what amounts are shown in); the
+  // dropdown list shows each ledger's own base currency.
+  const { currency } = useCurrency();
 
   return (
     <DropdownMenu>
@@ -45,7 +49,7 @@ export function LedgerSwitcher({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{active.name}</span>
                 <span className="text-muted-foreground block font-mono text-[10px]">
-                  {active.base}
+                  {currency}
                 </span>
               </span>
               <Icon

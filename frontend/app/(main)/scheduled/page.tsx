@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Money, Icon } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +11,10 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RowActions } from '@/components/RowActions';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import type { ScheduledTemplate } from '@/lib/store';
-import { mutate } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -77,6 +77,7 @@ export default function ScheduledPage() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const { activeId } = useLedger();
   const scheduled = useFinanceStore((s) => s.scheduled);
+  const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const categories = useFinanceStore((s) => s.categories);
   const createScheduled = useFinanceStore((s) => s.createScheduled);
@@ -144,20 +145,6 @@ export default function ScheduledPage() {
     setOpen(false);
   };
 
-  const [posting, setPosting] = useState<string | null>(null);
-  const postNow = async (templateId: string, name: string) => {
-    setPosting(templateId);
-    try {
-      const state = await mutate('postScheduled', { templateId });
-      useFinanceStore.setState(state);
-      toast.success(`Posted "${name}"`, { description: 'Added to transactions.' });
-    } catch (err) {
-      toast.error((err as Error).message || 'Could not post');
-    } finally {
-      setPosting(null);
-    }
-  };
-
   const totalOutgoing = scheduled
     .filter((t) => t.type !== 'income' && t.amount != null)
     .reduce((s, t) => s + (t.amount ?? 0), 0);
@@ -178,32 +165,81 @@ export default function ScheduledPage() {
       return { y: d.getFullYear(), m: d.getMonth() };
     });
 
+  const goTo = (y: number, m: number) => {
+    setSelectedDay(null);
+    setView({ y, m });
+  };
+  // A range centered on the current view year so the selected value is always present.
+  const YEARS = Array.from({ length: 13 }, (_, i) => view.y - 6 + i);
+
   const monthItems = daysForMonth(scheduled, view.y, view.m);
   const onSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day === selectedDay) : [];
   const afterSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day > selectedDay) : [];
+
+  // Status of an occurrence = the status of its auto-generated transaction
+  // (linked by sourceTemplateId + date). Not-yet-generated → "upcoming".
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const isoOf = (day: number) => `${view.y}-${pad(view.m + 1)}-${pad(day)}`;
+  const occPending = new Map<string, boolean>();
+  for (const t of allTxns) {
+    if (t.sourceTemplateId) occPending.set(`${t.sourceTemplateId}|${t.date}`, !!t.pending);
+  }
+  const occStatus = (templateId: string, day: number): 'pending' | 'done' | 'upcoming' => {
+    const v = occPending.get(`${templateId}|${isoOf(day)}`);
+    return v === undefined ? 'upcoming' : v ? 'pending' : 'done';
+  };
 
   return (
     <MobilePage
       header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="plus" aria-label="New scheduled item" onClick={openCreate} />} />}
     >
       <div className="px-5 pb-[22px]">
-        <PageHeader
-          label="Upcoming"
-          value={<Money value={netTotal} mono={false} className="font-serif" />}
-          sublabel={
-            <span className="text-success">
-              +<Money value={totalIncoming} /> incoming
-            </span>
-          }
-        />
+        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Upcoming</div>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <Money
+            value={netTotal}
+            mono={false}
+            className="font-serif text-4xl leading-none font-normal -tracking-[1.5px] sm:text-5xl sm:-tracking-[2px]"
+          />
+          <span className="text-success text-xs whitespace-nowrap">
+            + <Money value={totalIncoming} /> incoming
+          </span>
+        </div>
       </div>
 
       <div className="md:grid md:grid-cols-[1.6fr_1fr] md:items-start md:gap-6 md:px-8">
       <div className="px-5 pb-5 md:px-0">
         <div className="bg-card border-border rounded-xl border p-4 md:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <div className="font-serif text-base italic">
-              {MONTH_NAMES[view.m]} {view.y}
+            <div className="-ml-1.5 flex items-center gap-0.5">
+              <Select value={String(view.m)} onValueChange={(v) => goTo(view.y, Number(v))}>
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Month"
+                  className="h-7 gap-1 border-0 bg-transparent px-1.5 font-serif text-base italic shadow-none focus-visible:ring-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(view.y)} onValueChange={(v) => goTo(Number(v), view.m)}>
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Year"
+                  className="h-7 gap-1 border-0 bg-transparent px-1.5 font-serif text-base italic shadow-none focus-visible:ring-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {YEARS.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -239,7 +275,7 @@ export default function ScheduledPage() {
                     isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary',
                   )}
                 >
-                  <span className="text-[13px] tabular-nums">{day}</span>
+                  <span className="text-[15px] tabular-nums">{day}</span>
                   <span className="flex h-1.5 gap-0.5">
                     {dots?.slice(0, 3).map((d, j) => (
                       <span key={j} className="size-1.5 rounded-full" style={{ background: d.color }} />
@@ -268,10 +304,9 @@ export default function ScheduledPage() {
                 <ScheduledCard
                   key={item.id}
                   item={item}
+                  status={occStatus(item.id, item.day)}
                   onEdit={openEdit}
                   onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
-                  onPost={postNow}
-                  posting={posting === item.id}
                 />
               ))
             ) : (
@@ -286,10 +321,9 @@ export default function ScheduledPage() {
                   <ScheduledCard
                     key={item.id}
                     item={item}
+                    status={occStatus(item.id, item.day)}
                     onEdit={openEdit}
                     onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
-                    onPost={postNow}
-                    posting={posting === item.id}
                   />
                 ))}
               </>
@@ -316,10 +350,9 @@ export default function ScheduledPage() {
                   color: item.color ?? 'var(--primary)',
                   category: item.category ?? null,
                 }}
+                status={occStatus(item.id, item.dayOfMonth || 0)}
                 onEdit={openEdit}
                 onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
-                onPost={postNow}
-                posting={posting === item.id}
               />
             ))
         )}
@@ -590,16 +623,14 @@ function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth:
   return map;
 }
 
-function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
+function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
   item: CalendarItem;
+  status?: 'pending' | 'done' | 'upcoming';
   onEdit: (t: ScheduledTemplate) => void;
   onDelete: () => void;
-  onPost: (id: string, name: string) => void;
-  posting: boolean;
 }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
   const categories = useFinanceStore((s) => s.categories);
-  const isPostable = item.amount != null;
   return (
     <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
       <div className="w-11 shrink-0 text-center">
@@ -607,7 +638,10 @@ function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
         <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">{item.name}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{item.name}</span>
+          <StatusBadge status={status} />
+        </div>
         <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="size-1.5 rounded-full" style={{ background: item.color }} />
           {item.type}
@@ -621,11 +655,6 @@ function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
         className={cn('text-sm font-medium', (item.amount ?? 0) > 0 ? 'text-success' : 'text-foreground')}
       />
       <div className="flex items-center gap-0.5">
-        {isPostable && (
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => onPost(item.id, item.name)} disabled={posting} aria-label={`Post ${item.name}`}>
-            <Icon name="plus" size={14} />
-          </Button>
-        )}
         <RowActions
           onEdit={() => {
             const t = scheduled.find((r) => r.id === item.id);

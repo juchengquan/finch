@@ -47,12 +47,6 @@ test('balance trigger leaves each account at its known seed balance', async () =
   expect(Number(chk[0].b)).toBeCloseTo(4218.5, 2);
 });
 
-test('balance snapshots are recorded by trigger', async () => {
-  const exec = await seeded();
-  const n = num(await exec('SELECT count(*) AS n FROM account_balance_snapshots'));
-  expect(n).toBeGreaterThan(0);
-});
-
 test('ledger_summaries aggregate confirmed transactions only', async () => {
   const exec = await seeded();
   // Pending Lyft (t03) must NOT be in the expense summary.

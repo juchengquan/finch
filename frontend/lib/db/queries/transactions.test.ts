@@ -7,7 +7,7 @@ import {
   listTransactions,
   addTransaction,
   updateTransaction,
-  cancelTransaction,
+  deleteTransactionRow,
   confirmTransaction,
   getTransaction,
 } from '@/lib/db/queries/transactions';
@@ -96,11 +96,14 @@ test('update edits fields', async () => {
   expect(tx?.note).toBe('updated');
 });
 
-test('cancel hides a transaction from the list', async () => {
+test('delete removes a transaction from the list', async () => {
   const exec = await seeded();
-  await cancelTransaction(exec, 't01');
+  const acctId = await deleteTransactionRow(exec, 't01');
+  expect(acctId).toBeTruthy();
   const list = await listTransactions(exec, { ledgerId: 'personal' });
   expect(list.find((t) => t.id === 't01')).toBeUndefined();
+  // The row is really gone (hard delete), not just hidden.
+  expect((await exec("SELECT COUNT(*) AS n FROM transactions WHERE id = 't01'"))[0].n).toBe(0);
 });
 
 test('confirm flips a pending transaction and feeds the summary', async () => {

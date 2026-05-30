@@ -1,11 +1,12 @@
 import { test, expect } from 'bun:test';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate, SCHEMA_VERSION, BOOTSTRAP_VERSION } from '@/lib/db/schema';
+import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
 import { seedDatabase } from '@/lib/db/seed';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
+import { convertToBase } from '@/lib/db/queries/rates';
 import type { Exec } from '@/lib/db/repo';
 
 const initSqlite = sqlite3InitModule as unknown as (
@@ -70,7 +71,7 @@ test('postScheduled posts a resolvable expense template as a transaction', async
   const rows = await exec("SELECT * FROM transactions WHERE description = 'Spotify Premium'");
   expect(rows.length).toBe(1);
   expect(Number(rows[0].amount)).toBeCloseTo(-11.99, 2);
-  expect(Number(rows[0].recurring)).toBe(1);
+  expect(String(rows[0].kind)).toBe('expense');
 });
 
 test('postScheduled errors clearly when the account cannot be matched', async () => {
@@ -129,24 +130,6 @@ test('renameCategory updates the name', async () => {
   expect(String(rows[0].name)).toBe('Food & Drink');
 });
 
-test('createGoal inserts and contributeGoal adds to saved (clamped at 0)', async () => {
-  const exec = await seeded();
-  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'New car', target: 5000, eta: 'Dec 2026' });
-  const created = await exec("SELECT id, saved FROM goals WHERE name = 'New car'");
-  expect(created.length).toBe(1);
-  const id = String(created[0].id);
-  await applyMutation(exec, 'contributeGoal', { id, amount: 250 });
-  expect(Number((await exec('SELECT saved FROM goals WHERE id = ?', [id]))[0].saved)).toBe(250);
-  await applyMutation(exec, 'contributeGoal', { id, amount: -1000 });
-  expect(Number((await exec('SELECT saved FROM goals WHERE id = ?', [id]))[0].saved)).toBe(0);
-});
-
-test('createGoal rejects empty name or non-positive target', async () => {
-  const exec = await seeded();
-  await expect(applyMutation(exec, 'createGoal', { name: '', target: 100 })).rejects.toThrow();
-  await expect(applyMutation(exec, 'createGoal', { name: 'X', target: 0 })).rejects.toThrow();
-});
-
 test('updateScheduledSplit updates the nth split by sort order', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateScheduledSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
@@ -185,13 +168,80 @@ test('createTransfer converts the incoming leg across currencies', async () => {
   expect(eur).toBeCloseTo(100 * (1.3412 / 1.4592), 2);
   const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
   expect(Number(tg[0].r)).toBeCloseTo(1.3412 / 1.4592, 4);
+  // listTransfers surfaces both legs' native amounts + currencies for the UI.
+  const [t] = await listTransfers(exec, 'personal');
+  expect(t.fromCurrency).toBe('USD');
+  expect(t.toCurrency).toBe('EUR');
+  expect(t.amount).toBeCloseTo(100, 2); // sent (USD, native)
+  expect(t.toAmount).toBeCloseTo(100 * (1.3412 / 1.4592), 2); // received (EUR, native)
+});
+
+test('addTransaction on a foreign-currency account: native balance, ledger-base amount_base', async () => {
+  const exec = await seeded();
+  // A JPY account inside the personal (USD) ledger — account currency ≠ ledger base.
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+  );
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY',
+    merchant: 'Konbini', date: '2026-05-13', status: 'confirmed',
+  });
+  // The balance moves in the ACCOUNT's currency (¥), un-converted.
+  expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-10000, 2);
+  const [row] = await exec("SELECT amount, amount_base, currency FROM transactions WHERE account_id='jpyw'");
+  expect(Number(row.amount)).toBeCloseTo(-10000, 2); // native (¥)
+  expect(String(row.currency)).toBe('JPY');
+  // amount_base is the LEDGER base (USD) figure for cross-account reporting.
+  const expected = await convertToBase(exec, -10000, 'JPY', 'USD', '2026-05-13');
+  expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
+  // ¥ → $ shrinks the magnitude ~150×, so base ≠ native (proves they're distinct).
+  expect(Math.abs(Number(row.amount_base))).toBeLessThan(Math.abs(Number(row.amount)));
+});
+
+test('recompute keeps a foreign-currency account balance in its own currency', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+  );
+  const add = (amount: number, date: string) =>
+    applyMutation(exec, 'addTransaction', {
+      ledgerId: 'personal', accountId: 'jpyw', amount, currency: 'JPY', merchant: 'Konbini', date, status: 'confirmed',
+    });
+  await add(-10000, '2026-05-13');
+  await add(-5000, '2026-05-14');
+  expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-15000, 2); // ¥, summed natively
+  // Cancelling routes through recomputeAccount — it must reverse in ¥, not USD.
+  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw' AND amount=-5000");
+  await applyMutation(exec, 'deleteTransaction', { id: String(id) });
+  expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-10000, 2);
+});
+
+test('editing a foreign-currency transaction amount reconverts amount_base to ledger base', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+  );
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY', merchant: 'Konbini', date: '2026-05-13', status: 'confirmed',
+  });
+  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw'");
+  await applyMutation(exec, 'updateTransaction', { id: String(id), patch: { amount: -20000 } });
+  // The balance reflects the new ¥ amount (native), summed in the account currency.
+  expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-20000, 2);
+  const [row] = await exec('SELECT amount, amount_base FROM transactions WHERE id = ?', [String(id)]);
+  expect(Number(row.amount)).toBeCloseTo(-20000, 2); // native (¥)
+  // amount_base is re-derived in USD (ledger base), not left as the native ¥ figure.
+  const expected = await convertToBase(exec, -20000, 'JPY', 'USD', '2026-05-13');
+  expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
+  expect(Math.abs(Number(row.amount_base))).toBeLessThan(Math.abs(Number(row.amount)));
 });
 
 test('seed records each account opening balance and balances reconcile', async () => {
   const exec = await seeded();
   const [a] = await exec("SELECT opening_balance, current_balance FROM accounts WHERE id = 'cc'");
+  // Only confirmed rows move the balance; pending (unconfirmed) ones are excluded.
   const sum = Number(
-    (await exec("SELECT COALESCE(SUM(amount_base),0) AS s FROM transactions WHERE account_id='cc' AND status!='cancelled'"))[0].s,
+    (await exec("SELECT COALESCE(SUM(amount_base),0) AS s FROM transactions WHERE account_id='cc' AND status='confirmed'"))[0].s,
   );
   expect(Number(a.current_balance)).toBeCloseTo(Number(a.opening_balance) + sum, 2);
   expect(Number(a.current_balance)).toBeCloseTo(-842.18, 2);
@@ -221,44 +271,6 @@ test('migrate stamps the schema version in db_metadata', async () => {
   expect(meta!.appName).toBe('finch');
 });
 
-test('migrate adds + backfills opening_balance on a pre-versioning db', async () => {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  // Minimal pre-versioning shape: accounts without opening_balance (plus the other
-  // tables later migrations alter, sans their added columns — applySchema would
-  // have created these in real paths before migrate runs). db_metadata is also
-  // created by applySchema in real paths; we add it here so migrate can stamp it.
-  await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
-  await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
-  await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
-  await exec('CREATE TABLE scheduled_templates (id TEXT PRIMARY KEY, ledger_id TEXT, type TEXT)');
-  // budgets is needed by datetime migrations after BOOTSTRAP — applySchema would
-  // have created it in real paths; mirror that here so the migration loop can
-  // ALTER it without exploding.
-  await exec('CREATE TABLE budgets (id TEXT PRIMARY KEY, ledger_id TEXT)');
-  await exec(
-    `CREATE TABLE db_metadata (
-       id INTEGER PRIMARY KEY CHECK (id = 1),
-       app_name TEXT NOT NULL, schema_version TEXT NOT NULL, app_version TEXT NOT NULL,
-       created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-       exported_at TEXT, exported_from TEXT, row_counts TEXT, checksum TEXT)`,
-  );
-  await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
-  await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
-  await migrate(exec, { fresh: false });
-  const [a] = await exec("SELECT opening_balance FROM accounts WHERE id = 'x'");
-  expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
-  // Pre-bootstrap files cross over to BOOTSTRAP_VERSION first, then any
-  // datetime migrations are applied — landing on SCHEMA_VERSION.
-  const meta = await readMetadata(exec);
-  expect(meta!.schemaVersion).toBe(SCHEMA_VERSION);
-  expect(meta!.schemaVersion >= BOOTSTRAP_VERSION).toBe(true);
-});
 
 test('deleteCategory uncategorizes its transactions', async () => {
   const exec = await seeded();
@@ -288,13 +300,8 @@ test('deleteScheduled removes the template and cascades its splits', async () =>
   expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
 });
 
-test('deleteGoal and deleteSubscription hard-delete the row', async () => {
+test('deleteSubscription hard-deletes the row', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Boat', target: 9000 });
-  const goalId = String((await exec("SELECT id FROM goals WHERE name = 'Boat'"))[0].id);
-  await applyMutation(exec, 'deleteGoal', { id: goalId });
-  expect(Number((await exec('SELECT COUNT(*) AS n FROM goals WHERE id = ?', [goalId]))[0].n)).toBe(0);
-
   const subId = String((await exec("SELECT id FROM subscriptions LIMIT 1"))[0].id);
   await applyMutation(exec, 'deleteSubscription', { id: subId });
   expect(Number((await exec('SELECT COUNT(*) AS n FROM subscriptions WHERE id = ?', [subId]))[0].n)).toBe(0);
@@ -342,18 +349,6 @@ test('createCategory persists icon + hue, and listCategories returns hue', async
   expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
 });
 
-test('updateGoal edits fields and rejects a non-positive target', async () => {
-  const exec = await seeded();
-  await applyMutation(exec, 'createGoal', { ledgerId: 'personal', name: 'Trip', target: 1000 });
-  const id = String((await exec("SELECT id FROM goals WHERE name = 'Trip'"))[0].id);
-  await applyMutation(exec, 'updateGoal', { id, patch: { name: 'Big Trip', target: 2500, eta: 'Dec 2026' } });
-  const [g] = await exec('SELECT name, target, eta FROM goals WHERE id = ?', [id]);
-  expect(String(g.name)).toBe('Big Trip');
-  expect(Number(g.target)).toBe(2500);
-  expect(String(g.eta)).toBe('Dec 2026');
-  await expect(applyMutation(exec, 'updateGoal', { id, patch: { target: 0 } })).rejects.toThrow();
-});
-
 test('updateTag and updateSubscription edit fields', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
@@ -384,77 +379,6 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   const [cp] = await exec('SELECT standardized_name, category FROM counterparties WHERE id = ?', [cpId]);
   expect(String(cp.standardized_name)).toBe('Renamed Co');
   expect(String(cp.category)).toBe('shop');
-});
-
-test('setBudget stages a pending amount on existing rows; inserts active on new', async () => {
-  const exec = await seeded();
-  const { budgetByCategory } = await import('@/lib/db/queries/budgets');
-  expect((await budgetByCategory(exec)).food).toBe(700); // seeded
-
-  // Existing row → stages in pending_amount; the active amount is unchanged.
-  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: 950 });
-  expect((await budgetByCategory(exec)).food).toBe(700); // active unchanged
-  const [foodRow] = await exec("SELECT amount, pending_amount FROM budgets WHERE id = 'bud-food'");
-  expect(Number(foodRow.amount)).toBe(700);
-  expect(Number(foodRow.pending_amount)).toBe(950);
-
-  // New row (no existing budget) → amount goes in active immediately.
-  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel' });
-  const travelId = String((await exec("SELECT id FROM categories WHERE name = 'Travel'"))[0].id);
-  await applyMutation(exec, 'setBudget', { categoryId: travelId, amount: 300 });
-  expect((await budgetByCategory(exec))[travelId]).toBe(300);
-  const [travelRow] = await exec('SELECT amount, pending_amount FROM budgets WHERE id = ?', [`bud-${travelId}`]);
-  expect(Number(travelRow.amount)).toBe(300);
-  expect(travelRow.pending_amount).toBeNull();
-
-  // Negative amount is still rejected at the mutation boundary.
-  await applyMutation(exec, 'setBudget', { categoryId: 'food', amount: -5 }).then(
-    () => { throw new Error('should reject'); },
-    () => {},
-  );
-
-  await applyMutation(exec, 'deleteBudget', { categoryId: 'food' });
-  expect((await budgetByCategory(exec)).food).toBeUndefined();
-});
-
-test('updateBudgetCycle applies the new frequency immediately, clears pending, resets last_rolled', async () => {
-  const exec = await seeded();
-  // Pre-fill pending_amount and last_rolled_period so we can verify the wipe.
-  await exec("UPDATE budgets SET pending_amount = 950, last_rolled_period = '2026-04', carry_forward = 80 WHERE id = 'bud-food'");
-
-  await applyMutation(exec, 'updateBudgetCycle', {
-    categoryId: 'food',
-    frequency: 'weekly',
-    startDate: '2026-05-04',
-    amount: 175,
-  });
-
-  const [row] = await exec("SELECT amount, frequency, start_date, pending_amount, last_rolled_period, carry_forward FROM budgets WHERE id = 'bud-food'");
-  expect(Number(row.amount)).toBe(175);             // applies immediately
-  expect(String(row.frequency)).toBe('weekly');
-  expect(String(row.start_date)).toBe('2026-05-04');
-  expect(row.pending_amount).toBeNull();            // discarded
-  expect(row.last_rolled_period).toBeNull();        // reset for the new cycle
-  expect(Number(row.carry_forward)).toBe(80);       // preserved
-});
-
-test('updateBudgetCycle rejects unknown frequency or malformed startDate', async () => {
-  const exec = await seeded();
-  await expect(applyMutation(exec, 'updateBudgetCycle', {
-    categoryId: 'food', frequency: 'fortnightly', startDate: '2026-05-04',
-  })).rejects.toThrow(/frequency/i);
-  await expect(applyMutation(exec, 'updateBudgetCycle', {
-    categoryId: 'food', frequency: 'weekly', startDate: '2026/05/04',
-  })).rejects.toThrow(/startDate|YYYY/i);
-});
-
-test('updateBudgetCycle errors when the category has no budget yet', async () => {
-  const exec = await seeded();
-  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Coffee' });
-  const cid = String((await exec("SELECT id FROM categories WHERE name = 'Coffee'"))[0].id);
-  await expect(applyMutation(exec, 'updateBudgetCycle', {
-    categoryId: cid, frequency: 'weekly', startDate: '2026-05-04',
-  })).rejects.toThrow(/budget/i);
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
@@ -535,35 +459,31 @@ test('adjustAccountBalance posts a marked delta and moves balance to the target'
   const before = await balanceOf(exec, 'chk'); // 4218.50 seed
   await applyMutation(exec, 'adjustAccountBalance', { accountId: 'chk', targetBalance: 5000, note: 'reconcile' });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(5000, 2);
-  const [adj] = await exec("SELECT amount_base, is_adjustment, description, notes FROM transactions WHERE account_id = 'chk' ORDER BY created_at DESC LIMIT 1");
-  expect(Number(adj.is_adjustment)).toBe(1);
+  const [adj] = await exec("SELECT amount_base, kind, description, notes FROM transactions WHERE account_id = 'chk' ORDER BY created_at DESC LIMIT 1");
+  expect(String(adj.kind)).toBe('adjustment');
   expect(Number(adj.amount_base)).toBeCloseTo(5000 - before, 2);
   expect(String(adj.description)).toBe('Balance adjustment');
   expect(String(adj.notes)).toBe('reconcile');
 });
 
-test('adjustments are excluded from category spend, cash flow and budget progress', async () => {
+test('adjustments are excluded from category spend and cash flow', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
-  const { monthlyCashFlow, budgetProgress } = await import('@/lib/db/queries/reports');
-  const today = new Date().toISOString().slice(0, 10);
-  const month = today.slice(0, 7);
+  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
+  const month = new Date().toISOString().slice(0, 7);
   const spendBefore = await categorySpend(exec, 'personal');
   const flowBefore = await monthlyCashFlow(exec, 'personal', month);
-  const budgetsBefore = await budgetProgress(exec, "personal", today);
 
   // Big negative adjustment on cc (would dwarf food spend if it counted).
   await applyMutation(exec, 'adjustAccountBalance', { accountId: 'cc', targetBalance: -5000 });
 
   const spendAfter = await categorySpend(exec, 'personal');
   const flowAfter = await monthlyCashFlow(exec, 'personal', month);
-  const budgetsAfter = await budgetProgress(exec, "personal", today);
 
   expect(JSON.stringify(spendAfter)).toBe(JSON.stringify(spendBefore));
   expect(flowAfter.income).toBeCloseTo(flowBefore.income, 2);
   expect(flowAfter.expense).toBeCloseTo(flowBefore.expense, 2);
   expect(flowAfter.net).toBeCloseTo(flowBefore.net, 2);
-  expect(JSON.stringify(budgetsAfter)).toBe(JSON.stringify(budgetsBefore));
 });
 
 test('income via addTransaction (positive amount) increases the account balance', async () => {
@@ -620,7 +540,7 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
   const exec = await seeded();
   // Pick a confirmed expense from the seed so its category is known.
   const [parent] = await exec(
-    "SELECT id, amount, amount_base, category_id FROM transactions WHERE ledger_id = 'personal' AND amount < 0 AND status = 'confirmed' AND transfer_group_id IS NULL AND is_adjustment = 0 LIMIT 1",
+    "SELECT id, amount, amount_base, category_id FROM transactions WHERE ledger_id = 'personal' AND kind = 'expense' AND status = 'confirmed' LIMIT 1",
   );
   expect(parent).toBeDefined();
   const txId = String(parent.id);
@@ -710,45 +630,37 @@ test('createAccountGroup rejects an empty name', async () => {
   await expect(applyMutation(exec, 'createAccountGroup', { name: '   ' })).rejects.toThrow(/name/i);
 });
 
-test('setBudgetRollover toggles rollover + limit on an existing budget', async () => {
+test('pending transactions are excluded from the balance until confirmed', async () => {
   const exec = await seeded();
-  const { budgetRolloverByCategory } = await import('@/lib/db/queries/budgets');
-
-  // Seed already includes bud-food (Food). Toggle rollover + set a cap.
-  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rollover: true, rolloverLimit: 200 });
-  let info = (await budgetRolloverByCategory(exec)).food;
-  expect(info.rollover).toBe(true);
-  expect(info.rolloverLimit).toBe(200);
-  expect(info.carryForward).toBe(0);
-
-  // Clear the cap.
-  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: null });
-  info = (await budgetRolloverByCategory(exec)).food;
-  expect(info.rollover).toBe(true); // unchanged
-  expect(info.rolloverLimit).toBeNull();
-
-  // Set carry-forward, then budgetProgress reflects it in the total.
-  const { budgetProgress } = await import('@/lib/db/queries/reports');
-  await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', carryForward: 150 });
-  const progress = await budgetProgress(exec, "personal", "2026-05-15");
-  const foodBudget = progress.find((b) => b.id === 'bud-food')!;
-  // Original food amount is 700; carry-forward adds 150 to the period total.
-  expect(foodBudget.budget).toBe(850);
+  const b0 = await balanceOf(exec, 'chk');
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -50, merchant: 'Hold', date: '2026-05-28', status: 'pending',
+  });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(b0, 2); // pending → no balance change
+  const [row] = await exec("SELECT id FROM transactions WHERE description = 'Hold' AND status = 'pending'");
+  await applyMutation(exec, 'confirmTransaction', { id: String(row.id) });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(b0 - 50, 2); // confirming pulls it in
 });
 
-test('setBudgetRollover errors when the category has no budget yet', async () => {
+test('generateDueScheduled materializes due occurrences as pending, idempotently', async () => {
   const exec = await seeded();
-  // Create a fresh category with no budget row.
-  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Pets' });
-  const [{ id: petsId }] = await exec("SELECT id FROM categories WHERE name = 'Pets'");
-  await expect(
-    applyMutation(exec, 'setBudgetRollover', { categoryId: String(petsId), rollover: true }),
-  ).rejects.toThrow(/budget/i);
-});
+  const cc0 = await balanceOf(exec, 'cc');
 
-test('setBudgetRollover rejects a negative limit', async () => {
-  const exec = await seeded();
-  await expect(
-    applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', rolloverLimit: -10 }),
-  ).rejects.toThrow(/limit/i);
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  // rt-spotify (Amex Gold, day 22) + rt-icloud (Amex Gold, day 8); rent/sweep/coned/salary
+  // are skipped (unresolved account / transfer / variable / split).
+  const gen = await exec("SELECT id, status, source_template_id AS t FROM transactions WHERE source_template_id IS NOT NULL ORDER BY date");
+  expect(gen.length).toBe(2);
+  expect(gen.every((r) => String(r.status) === 'pending')).toBe(true);
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0, 2); // pending → balance unchanged
+
+  // Idempotent: a second run adds nothing (dedup via source_template_id + date).
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  const again = await exec("SELECT id FROM transactions WHERE source_template_id IS NOT NULL");
+  expect(again.length).toBe(2);
+
+  // Confirming one (Spotify, 11.99 expense) pulls it into the balance.
+  const spotify = gen.find((r) => String(r.t) === 'rt-spotify')!;
+  await applyMutation(exec, 'confirmTransaction', { id: String(spotify.id) });
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0 - 11.99, 2);
 });

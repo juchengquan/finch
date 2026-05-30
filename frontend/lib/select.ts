@@ -6,8 +6,14 @@ import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
+import type { BudgetRow } from '@/lib/db/queries/budgets';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
+
+/** A transaction's kind, with a fallback for pre-hydration seed rows that
+ *  predate the `kind` column (derived from the transfer link + amount sign). */
+export const kindOf = (t: Tx): 'income' | 'expense' | 'transfer' | 'adjustment' =>
+  t.kind ?? (t.transferGroupId ? 'transfer' : t.amount > 0 ? 'income' : 'expense');
 
 /** Mirrors listTransactions(): filter + sort an in-memory Tx list. */
 export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
@@ -47,7 +53,7 @@ export function categorySpend(txns: Tx[], ledgerId: string, month?: string): Rec
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (month && t.date.slice(0, 7) !== month) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) !== 'expense') continue;
     if (t.splits && t.splits.length) {
       for (const s of t.splits) {
         if (!s.categoryId) continue;
@@ -98,7 +104,7 @@ export function monthlySpending(txns: Tx[], ledgerId: string, endMonth: string, 
   const by = new Map<string, number>(months.map((mo) => [mo, 0]));
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) !== 'expense') continue;
     const mo = t.date.slice(0, 7);
     if (!by.has(mo)) continue;
     by.set(mo, (by.get(mo) ?? 0) + -t.amount);
@@ -121,7 +127,7 @@ export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: 
   }
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) !== 'expense') continue;
     if (!by.has(t.date)) continue;
     by.set(t.date, (by.get(t.date) ?? 0) + -t.amount);
   }
@@ -129,11 +135,20 @@ export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: 
   return out;
 }
 
+/** Re-express an amount in `currency` into the ledger base currency. Net-worth
+ *  selectors take one so mixed-currency account balances sum in a single currency;
+ *  callers build it from the live rate map (`useMoney().toBase`). */
+export type ToBase = (amount: number, currency: string) => number;
+const identityBase: ToBase = (amount) => amount;
+
 /**
  * Net worth at the end of each of the last N months, oldest first. Computes the
  * opening total (current_total − Σ all txns) and accumulates forward, snapshotting
  * after every month. Uses string-prefix month comparison so it matches the
  * lexicographic YYYY-MM-DD date format used everywhere else.
+ *
+ * `toBase` re-expresses each account's native balance in the ledger base (default
+ * identity — a no-op when every account is already in the ledger base).
  */
 export function netWorthByMonth(
   txns: Tx[],
@@ -141,11 +156,15 @@ export function netWorthByMonth(
   ledgerId: string,
   endMonth: string,
   n: number,
+  toBase: ToBase = identityBase,
 ): { m: string; v: number }[] {
   if (!endMonth) return [];
   const months = monthsBack(endMonth, n);
-  const total = accounts.filter((a) => a.ledgerId === ledgerId).reduce((s, a) => s + a.balance, 0);
-  const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId);
+  const total = accounts
+    .filter((a) => a.ledgerId === ledgerId)
+    .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
+  // Pending (unconfirmed) txns aren't in the balance total, so exclude them here too.
+  const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId && !t.pending);
   const sorted = [...ledgerTxns].sort(byDateAsc);
   const opening = total - sorted.reduce((s, t) => s + t.amount, 0);
   let bal = opening;
@@ -201,7 +220,7 @@ export function monthForecast(
   let mtdSpent = 0;
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) !== 'expense') continue;
     if (t.date.slice(0, 7) !== month) continue;
     if (inMonth && t.date > today) continue;
     mtdSpent += -t.amount;
@@ -262,7 +281,7 @@ export function incomeCategoryFlow(
   let income = 0;
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || t.amount <= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) !== 'income') continue;
     if (month && t.date.slice(0, 7) !== month) continue;
     income += t.amount;
   }
@@ -287,7 +306,7 @@ export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, 
   const exp = new Map<string, number>(months.map((mo) => [mo, 0]));
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || t.transferGroupId || t.isAdjustment) continue;
+    if (t.pending || kindOf(t) === 'transfer' || kindOf(t) === 'adjustment') continue;
     const mo = t.date.slice(0, 7);
     if (!inc.has(mo)) continue;
     if (t.amount > 0) inc.set(mo, (inc.get(mo) ?? 0) + t.amount);
@@ -339,32 +358,50 @@ const byDateAsc = (a: Tx, b: Tx) => {
 
 // Reconstruct the running-balance curve from a transaction set whose final value
 // is `endValue`: opening = end − Σamounts, then accumulate per transaction.
-function runningSeries(txns: Tx[], endValue: number): number[] {
+function runningSeries(txns: Tx[], endValue: number, amountOf: (t: Tx) => number = (t) => t.amount): number[] {
   const rows = [...txns].sort(byDateAsc);
-  const opening = endValue - rows.reduce((s, t) => s + t.amount, 0);
+  const opening = endValue - rows.reduce((s, t) => s + amountOf(t), 0);
   const out = [opening];
   let bal = opening;
   for (const t of rows) {
-    bal += t.amount;
+    bal += amountOf(t);
     out.push(bal);
   }
   return out;
 }
 
-/** Balance-over-time series for one account (ends at its current balance). */
+/** Balance-over-time series for one account (ends at its current balance).
+ *  Pending (unconfirmed) txns are excluded so the curve matches the balance.
+ *  The curve is in the ACCOUNT's currency — walk the native amount so it ends at
+ *  the native `current_balance`, not the ledger-base `Tx.amount`. */
 export function balanceSeries(txns: Tx[], accountId: string, currentBalance: number): number[] {
-  return runningSeries(txns.filter((t) => t.account === accountId), currentBalance);
+  return runningSeries(
+    txns.filter((t) => t.account === accountId && !t.pending),
+    currentBalance,
+    (t) => t.nativeAmount ?? t.amount,
+  );
 }
 
-/** Net-worth-over-time series for a ledger (ends at the current total). */
-export function netWorthSeries(txns: Tx[], accounts: AccountRow[], ledgerId: string): number[] {
-  const total = accounts.filter((a) => a.ledgerId === ledgerId).reduce((s, a) => s + a.balance, 0);
-  return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId), total);
+/** Net-worth-over-time series for a ledger (ends at the current total). `toBase`
+ *  re-expresses each account's native balance in the ledger base so mixed-currency
+ *  accounts sum correctly; it defaults to identity (no-op when account == base). */
+export function netWorthSeries(
+  txns: Tx[],
+  accounts: AccountRow[],
+  ledgerId: string,
+  toBase: ToBase = identityBase,
+): number[] {
+  const total = accounts
+    .filter((a) => a.ledgerId === ledgerId)
+    .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
+  return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId && !t.pending), total);
 }
 
 /** Mirrors listTransfers(): reconstruct transfers by grouping on transferGroupId. */
 export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: string): Transfer[] {
-  const nameById = new Map(accounts.filter((a) => a.ledgerId === ledgerId).map((a) => [a.id, a.name]));
+  const ledgerAccounts = accounts.filter((a) => a.ledgerId === ledgerId);
+  const nameById = new Map(ledgerAccounts.map((a) => [a.id, a.name]));
+  const curById = new Map(ledgerAccounts.map((a) => [a.id, a.currency]));
   const groups = new Map<string, Tx[]>();
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId || !t.transferGroupId) continue;
@@ -380,10 +417,15 @@ export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: st
     const note = rows.map((r) => r.note).find((n) => n != null) ?? null;
     const fromId = out_?.account ?? null;
     const toId = in_?.account ?? null;
+    // Amounts are native (each leg's own currency) so a cross-currency transfer
+    // shows the real sent/received figures, not the ledger-base equivalents.
     out.push({
       id,
       date,
-      amount: out_ ? -out_.amount : 0,
+      amount: out_ ? Math.abs(out_.nativeAmount ?? out_.amount) : 0,
+      toAmount: in_ ? Math.abs(in_.nativeAmount ?? in_.amount) : 0,
+      fromCurrency: (fromId ? curById.get(fromId) : undefined) ?? out_?.currency ?? 'USD',
+      toCurrency: (toId ? curById.get(toId) : undefined) ?? in_?.currency ?? 'USD',
       fromAccountId: fromId,
       toAccountId: toId,
       fromName: fromId == null ? null : nameById.get(fromId) ?? null,
@@ -392,4 +434,143 @@ export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: st
     });
   }
   return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+// ---------------------------------------------------------------------------
+// Named budgets — cycle windows and progress (spent vs limit / earned vs target)
+// ---------------------------------------------------------------------------
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const fromYmd = (s: string) => {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+const addDays = (d: Date, n: number) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
+// Month add that clamps the day to the target month's length (Jan 31 +1mo → Feb 28).
+const addMonths = (d: Date, n: number) => {
+  const day = d.getDate();
+  const t = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const lastDay = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+  t.setDate(Math.min(day, lastDay));
+  return t;
+};
+const advance = (d: Date, frequency: string): Date => {
+  switch (frequency) {
+    case 'daily': return addDays(d, 1);
+    case 'weekly': return addDays(d, 7);
+    case 'biweekly': return addDays(d, 14);
+    case 'quarterly': return addMonths(d, 3);
+    case 'yearly': return addMonths(d, 12);
+    case 'monthly':
+    default: return addMonths(d, 1);
+  }
+};
+
+export interface CycleWindow {
+  /** Inclusive first day of the active period (YYYY-MM-DD). */
+  from: string;
+  /** Inclusive last day of the active period (YYYY-MM-DD). */
+  to: string;
+}
+
+/**
+ * The active cycle window containing `today`, stepping from `startDate` by
+ * `frequency`. Non-recurring budgets have a single window [startDate, endDate or
+ * today]. Dates are compared as YYYY-MM-DD strings everywhere else, so the bounds
+ * are returned that way too.
+ */
+export function cycleWindow(
+  frequency: string,
+  startDate: string,
+  today: string,
+  endDate: string | null = null,
+  isRecurring = 1,
+): CycleWindow {
+  const start = fromYmd(startDate);
+  const now = fromYmd(today);
+
+  if (!isRecurring) {
+    return { from: toYmd(start), to: endDate ? endDate.slice(0, 10) : (now < start ? toYmd(start) : today.slice(0, 10)) };
+  }
+
+  // Today before the first period → clamp to the first period.
+  if (now < start) {
+    return { from: toYmd(start), to: toYmd(addDays(advance(start, frequency), -1)) };
+  }
+
+  // Walk forward until the period end passes `now`. Bounded for safety.
+  let s = start;
+  let e = advance(s, frequency);
+  for (let guard = 0; e <= now && guard < 5000; guard++) {
+    s = e;
+    e = advance(e, frequency);
+  }
+  return { from: toYmd(s), to: toYmd(addDays(e, -1)) };
+}
+
+export interface BudgetProgress extends CycleWindow {
+  /** Limit (expense) or target (income), incl. expense carry-forward. */
+  base: number;
+  /** Spent (expense) or earned/saved (income) in the window. */
+  used: number;
+  /** base − used (can be negative when over). */
+  remaining: number;
+  pct: number;
+  over: boolean;
+}
+
+// Whether/how much of a transaction counts for a category filter, honouring
+// splits. Returns the signed base-currency amount that matches `categoryIds`
+// (empty set = whole transaction matches).
+function matchedAmount(t: Tx, categoryIds: string[]): number {
+  if (categoryIds.length === 0) return t.amount;
+  const set = new Set(categoryIds);
+  if (t.splits && t.splits.length) {
+    let sum = 0;
+    for (const s of t.splits) if (s.categoryId && set.has(s.categoryId)) sum += s.amountBase;
+    return sum;
+  }
+  return t.category != null && set.has(t.category) ? t.amount : 0;
+}
+
+/**
+ * Progress for one named budget over its active cycle. Expense budgets sum
+ * matching outflows; recurring income budgets sum matching inflows; one-shot
+ * income/goal budgets use the manual `saved` accumulator (hybrid model).
+ */
+export function budgetProgress(budget: BudgetRow, txns: Tx[], today: string): BudgetProgress {
+  const win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring);
+  const accountSet = budget.accountIds.length ? new Set(budget.accountIds) : null;
+
+  let used = 0;
+  const oneShotIncome = budget.type === 'income' && budget.isRecurring === 0;
+  if (oneShotIncome) {
+    used = budget.saved;
+  } else {
+    for (const t of txns) {
+      if (ledgerOf(t) !== budget.ledgerId) continue;
+      if (t.pending || kindOf(t) === 'transfer' || kindOf(t) === 'adjustment') continue;
+      if (t.date < win.from || t.date > win.to) continue;
+      if (accountSet && !accountSet.has(t.account)) continue;
+      const amt = matchedAmount(t, budget.categoryIds);
+      if (budget.type === 'expense') {
+        if (amt < 0) used += -amt;
+      } else if (amt > 0) {
+        used += amt;
+      }
+    }
+  }
+
+  const base = round2(budget.amount + (budget.type === 'expense' ? budget.carryForward : 0));
+  used = round2(used);
+  const remaining = round2(base - used);
+  const pct = base ? Math.round((used / base) * 100) : 0;
+  const over = budget.type === 'expense' && used > base;
+  return { ...win, base, used, remaining, pct, over };
 }

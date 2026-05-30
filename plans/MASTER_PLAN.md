@@ -351,6 +351,19 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    Insights flows income → top-N expense categories + a "Saved" stub.
 8. **Investment tracking** (holdings, gains) for the `invest` account type —
    meaningful scope expansion.
+9. **Multi-currency accounts** ✅ *(Phases 1–3 done — see `plans/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* —
+   per-account currency is a stored/editable property. **Phase 1 (storage):**
+   writes true ledger-base `amount_base` and accumulates the account-currency delta
+   into balances. **Phase 2 (read/display):** `useMoney.toBase`/`fmtFrom`;
+   `balanceSeries` walks the native amount; net-worth selectors sum mixed currencies
+   in the ledger base via a `ToBase`; account detail shows native + "≈ display".
+   **Phase 3 (entry UX):** add-expense currency follows the selected account;
+   `updateTransaction` reconverts `amount_base` on an amount edit. **Phase 4
+   (partial):** cross-currency transfer UX — `selectTransfers`/`listTransfers`
+   return both legs' native amounts + currencies; the transfers list shows
+   "sent → received @ rate". All no-ops on existing account == base data, with
+   divergent-account tests. Deferred: unrealized FX gain/loss (needs opening-balance
+   cost basis) and a base-currency-change recompute tool (heavy/rare).
 
 ### Done since (Phase H follow-ups)
 - Recurring **split add/remove** UI on the template detail screen.

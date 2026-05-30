@@ -15,7 +15,7 @@ export interface TxExportRow {
   currency: string;
   amountBase: number;
   status: string;
-  recurring: string;
+  kind: string;
   note: string;
   tags: string;
 }
@@ -31,24 +31,23 @@ const COLUMNS: CsvColumn[] = [
   { key: 'currency', label: 'Currency' },
   { key: 'amountBase', label: 'Amount (base)' },
   { key: 'status', label: 'Status' },
-  { key: 'recurring', label: 'Scheduled' },
+  { key: 'kind', label: 'Type' },
   { key: 'note', label: 'Note' },
   { key: 'tags', label: 'Tags' },
 ];
 
-/** Non-cancelled transactions with account/category names + tag list, newest first. */
+/** Transactions with account/category names + tag list, newest first. */
 export async function transactionExportRows(exec: Exec): Promise<TxExportRow[]> {
   const rows = await exec(
     `SELECT t.date, t.time, t.ledger_id AS ledger,
             a.name AS account, t.description AS merchant, c.name AS category,
-            t.amount, t.currency, t.amount_base AS amountBase, t.status, t.recurring, t.notes AS note,
+            t.amount, t.currency, t.amount_base AS amountBase, t.status, t.kind, t.notes AS note,
             (SELECT GROUP_CONCAT(tg.name, '; ')
                FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id
               WHERE tt.transaction_id = t.id) AS tags
        FROM transactions t
        LEFT JOIN accounts a ON t.account_id = a.id
        LEFT JOIN categories c ON t.category_id = c.id
-      WHERE t.status != 'cancelled'
       ORDER BY t.date DESC, t.time DESC, t.created_at DESC`,
   );
   return rows.map((r) => ({
@@ -62,7 +61,7 @@ export async function transactionExportRows(exec: Exec): Promise<TxExportRow[]> 
     currency: String(r.currency ?? ''),
     amountBase: Number(r.amountBase ?? 0),
     status: String(r.status ?? ''),
-    recurring: Number(r.recurring) ? 'yes' : 'no',
+    kind: String(r.kind ?? ''),
     note: r.note == null ? '' : String(r.note),
     tags: r.tags == null ? '' : String(r.tags),
   }));

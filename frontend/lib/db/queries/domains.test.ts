@@ -3,10 +3,10 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
 import { applySchema } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
-import { listAccounts, netWorth, accountBalanceSeries, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
+import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty, addAlias } from '@/lib/db/queries/counterparties';
-import { monthlyCashFlow, budgetProgress } from '@/lib/db/queries/reports';
+import { monthlyCashFlow } from '@/lib/db/queries/reports';
 import type { Exec } from '@/lib/db/repo';
 
 const initSqlite = sqlite3InitModule as unknown as (
@@ -37,9 +37,6 @@ test('accounts: list, net worth, balance series, edit', async () => {
   // Net worth excludes the credit card group (-842.18), so it's assets only.
   const nw = await netWorth(exec, 'personal');
   expect(nw).toBeCloseTo(4218.5 + 8120 + 21430, 2);
-
-  const series = await accountBalanceSeries(exec, 'cc');
-  expect(series.length).toBeGreaterThan(0);
 
   // Display columns are seeded from data/accounts.json (no more override shim).
   expect(cc.last4).toBe('1009');
@@ -101,46 +98,10 @@ test('counterparties: list, search, verify, alias', async () => {
   expect(after.aliases).toContain('DONKI JURONG');
 });
 
-test('reports: cash flow + budget progress', async () => {
+test('reports: monthly cash flow', async () => {
   const exec = await seeded();
   const cf = await monthlyCashFlow(exec, 'personal', '2026-05');
   expect(cf.income).toBeCloseTo(2900, 2);
   expect(cf.expense).toBeLessThan(0);
   expect(cf.net).toBeCloseTo(cf.income + cf.expense, 2);
-
-  const budgets = await budgetProgress(exec, 'personal', '2026-05-15');
-  const food = budgets.find((b) => b.id === 'bud-food')!;
-  expect(food.budget).toBe(700);
-  expect(food.spent).toBeGreaterThan(0);
-  expect(food.remaining).toBeCloseTo(food.budget - food.spent, 2);
-});
-
-test('budgetProgress derives each budget\'s own period from its frequency', async () => {
-  const exec = await seeded();
-  // Convert the seeded `food` budget to weekly so we can verify per-budget
-  // period derivation drives the spend window.
-  await exec("UPDATE budgets SET frequency = 'weekly', start_date = '2026-05-04' WHERE id = 'bud-food'");
-  // Two confirmed food expenses in May, in different ISO weeks.
-  await exec(
-    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,exchange_rate_date,description,category_id,status,balance_after,currency,created_at)
-     VALUES ('t-w1','personal','chk','2026-05-04',-50,-50,1,'2026-05-04','Coffee','food','confirmed',0,'USD','2026-05-04'),
-            ('t-w2','personal','chk','2026-05-13',-30,-30,1,'2026-05-13','Lunch','food','confirmed',0,'USD','2026-05-13')`,
-  );
-  // Today is 2026-05-13 (Wed of ISO W20). Weekly food budget's period
-  // spans 2026-05-11 to 2026-05-17.
-  const out = await budgetProgress(exec, 'personal', '2026-05-13');
-  const food = out.find((b) => b.id === 'bud-food')!;
-  expect(food.frequency).toBe('weekly');
-  expect(food.period).toBe('2026-W20');
-  expect(food.periodFrom).toBe('2026-05-11');
-  expect(food.periodTo).toBe('2026-05-17');
-  // Spent contains at least our inserted $30 (plus any seed txns the week
-  // happens to cover) and is strictly less than the full month's food total
-  // — proving the spend filter is scoped to the period, not the month.
-  expect(food.spent).toBeGreaterThanOrEqual(30);
-  expect(food.spent).toBeLessThan(6.75 + 84.32 + 42.18 + 14.2 + 29.84 + 30);
-  // Other budgets stay monthly + carry their own period.
-  const trans = out.find((b) => b.id === 'bud-trans')!;
-  expect(trans.frequency).toBe('monthly');
-  expect(trans.period).toBe('2026-05');
 });

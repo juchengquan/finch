@@ -11,7 +11,6 @@ const tx = (over: Partial<Tx>): Tx => ({
   account: 'cc',
   date: '2026-05-01',
   pending: false,
-  recurring: false,
   ledgerId: 'personal',
   ...over,
 });
@@ -53,6 +52,31 @@ test('netWorthSeries ends at the ledger total and ignores other ledgers', () => 
   const txns = [tx({ amount: -10 }), tx({ amount: 50, ledgerId: 'family' })];
   const s = netWorthSeries(txns, accounts, 'personal');
   expect(s[s.length - 1]).toBe(100);
+});
+
+test('balanceSeries walks the native (account-currency) amount when present', () => {
+  // A ¥ account: the native amounts differ from the ledger-base Tx.amount.
+  const txns = [
+    tx({ amount: -65, nativeAmount: -10000, currency: 'JPY', date: '2026-05-01' }),
+    tx({ amount: -33, nativeAmount: -5000, currency: 'JPY', date: '2026-05-02' }),
+  ];
+  const s = balanceSeries(txns, 'cc', -15000); // current balance in ¥
+  expect(s[0]).toBe(0); // opening = −15000 − (−15000 native)
+  expect(s[s.length - 1]).toBe(-15000); // ends at the native balance, not the base sum
+});
+
+const toJpyBase = (amount: number, cur: string) => (cur === 'JPY' ? amount * 0.0065 : amount);
+
+test('netWorthSeries sums mixed-currency balances in the ledger base via toBase', () => {
+  const accounts = [acct({ id: 'usd', currency: 'USD', balance: 100 }), acct({ id: 'jpy', currency: 'JPY', balance: 10000 })];
+  const s = netWorthSeries([], accounts, 'personal', toJpyBase);
+  expect(s[s.length - 1]).toBeCloseTo(100 + 10000 * 0.0065, 2); // ¥ converted, $ passed through
+});
+
+test('netWorthByMonth anchors the total in the ledger base via toBase', () => {
+  const accounts = [acct({ id: 'jpy', currency: 'JPY', balance: 10000 })];
+  const r = netWorthByMonth([], accounts, 'personal', '2026-05', 1, toJpyBase);
+  expect(r[r.length - 1].v).toBeCloseTo(65, 2);
 });
 
 test('categorySpend excludes pending, transfers, and income', () => {
@@ -105,7 +129,7 @@ test('monthlySpending sums expenses per month (excludes transfers, adjustments, 
     tx({ amount: -200, date: '2026-04-10' }),
     tx({ amount: 1500, date: '2026-05-22' }), // income — skip
     tx({ amount: -25, date: '2026-05-20', transferGroupId: 'tg-1' }), // transfer — skip
-    tx({ amount: -50, date: '2026-05-21', isAdjustment: true }), // adjustment — skip
+    tx({ amount: -50, date: '2026-05-21', kind: 'adjustment' }), // adjustment — skip
     tx({ amount: -30, date: '2026-05-23', pending: true }), // pending — skip
   ];
   const out = monthlySpending(txns, 'personal', '2026-05', 3);
@@ -165,7 +189,7 @@ test('dailySpending buckets expenses per day, excludes non-expense rows', () => 
     tx({ amount: -8, date: '2026-05-24' }),
     tx({ amount: 1500, date: '2026-05-24' }), // income — skip
     tx({ amount: -3, date: '2026-05-24', transferGroupId: 'tg1' }), // transfer — skip
-    tx({ amount: -7, date: '2026-05-22', isAdjustment: true }), // adjustment — skip
+    tx({ amount: -7, date: '2026-05-22', kind: 'adjustment' }), // adjustment — skip
     tx({ amount: -9, date: '2026-05-21', pending: true }), // pending — skip
     tx({ amount: -2, date: '2026-04-30' }), // before window — skip
   ];
@@ -265,7 +289,7 @@ test('monthForecast: in-month projection = MTD + run-rate × days-left + upcomin
     tx({ amount: -200, date: '2026-04-15' }),
     tx({ amount: -30, date: '2026-05-08', pending: true }),
     tx({ amount: -25, date: '2026-05-09', transferGroupId: 'tg-1' }),
-    tx({ amount: -15, date: '2026-05-09', isAdjustment: true }),
+    tx({ amount: -15, date: '2026-05-09', kind: 'adjustment' }),
     tx({ amount: 5000, date: '2026-05-01' }),
   ];
   const recurring = [

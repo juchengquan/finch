@@ -55,13 +55,13 @@ The desktop top bar shows `headerTitle`, except on detail routes (`/<section>/<i
 Amounts are stored in the **active ledger's base currency**. To display, convert to the user's chosen display currency — don't print raw amounts:
 - `useMoney()` (`components/use-money.ts`) returns `fmt` (full) and `short` (compact), already converting active-ledger-base → display currency. Use this for store/MOCK amounts.
 - `fmtNative` / `fmtNativeShort` (`lib/data.ts`) format an amount **already denominated in its own currency** (e.g. ledger FX rows) — no conversion.
-- Active ledger comes from `useLedger()` (`components/ledger-provider.tsx`); display currency from `useCurrency()` (`components/currency-provider.tsx`).
+- Active ledger comes from `useLedger()` (`components/ledger-provider.tsx`); display currency from `useCurrency()` (`components/currency-provider.tsx`). Display currency is **per-ledger** — `useCurrency()` returns the active ledger's choice (DB-backed via the store's `displayCurrencyByLedger`), defaulting to that ledger's base until the user picks one in Settings › Ledger.
 
 ### Theming & styling
 Design tokens are **shadcn CSS variables in `app/globals.css`** (light = "warm editorial", dark = "noir"); toggled by `next-themes` (`ThemeProvider`, `class` attribute). There is no `lib/theme.ts` or `styles/tokens.css` — those were removed in the rewrite. Style with semantic Tailwind classes that map to tokens: `bg-card`, `text-muted-foreground`, `border-border`, and the finance-semantic `text-success` / `text-warning`. `components/primitives.tsx` is a lucide-backed `Icon` shim (icons referenced by string name, e.g. `<Icon name="wallet"/>`) plus `Money` and SVG charts (sparkline/bar/donut/ring) that read the token CSS variables.
 
 ### Provider order
-`app/layout.tsx` wraps the tree: `ThemeProvider` → `CurrencyProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`.
+`app/layout.tsx` wraps the tree: `ThemeProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`. (Display currency is no longer a provider — `useCurrency()` derives the active ledger's display currency from `useLedger()` + the store; see Money & currencies.)
 
 ## Conventions
 - Import alias `@/*` → `frontend/` root; TypeScript `strict` is on.

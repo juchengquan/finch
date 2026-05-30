@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,16 +27,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { MOCK, catById } from '@/lib/data';
+import { MOCK, catById, CURRENCIES, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
-  const { display } = useMoney();
+  const { active } = useLedger();
+  const { display, fmtFrom } = useMoney();
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
@@ -45,6 +48,8 @@ export default function AccountDetailPage() {
   const updateAccount = useFinanceStore((s) => s.updateAccount);
   const archiveAccount = useFinanceStore((s) => s.archiveAccount);
   const adjustAccountBalance = useFinanceStore((s) => s.adjustAccountBalance);
+  const confirmPending = useFinanceStore((s) => s.confirmPending);
+  const cancelPending = useFinanceStore((s) => s.cancelPending);
 
   // The projected DB row is the source of truth; the mock is a pre-hydration
   // fallback for structural fields (color, ledger).
@@ -53,7 +58,10 @@ export default function AccountDetailPage() {
   const cardColor = row?.color ?? mock.color;
 
   // Transaction list and live balance come from the projected store state.
-  const txs = selectTransactions(allTxns, { ledgerId, accountId });
+  // The posted list is confirmed-only; unconfirmed (pending) rows surface in a
+  // separate "To confirm" section and don't affect the balance until confirmed.
+  const txs = selectTransactions(allTxns, { ledgerId, accountId, status: 'confirmed' });
+  const toConfirm = selectTransactions(allTxns, { ledgerId, accountId, status: 'pending' });
   const balance = row ? accountBalance(accounts, accountId) : mock.balance;
   const series = balanceSeries(allTxns, accountId, balance);
 
@@ -63,17 +71,18 @@ export default function AccountDetailPage() {
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileTarget, setReconcileTarget] = useState('');
   const [reconcileNote, setReconcileNote] = useState('');
-  const [draft, setDraft] = useState({ name: '', type: 'savings', last4: '', institution: '', routing: '' });
+  const [draft, setDraft] = useState({ name: '', type: 'savings', currency: '', last4: '', institution: '', routing: '' });
   const { openTransaction } = useTransactionSheet();
 
   const name = row?.name ?? mock.name;
   const type = row?.type ?? toDbType(mock.type);
+  const currency = row?.currency ?? active.base;
   const last4 = row?.last4 ?? mock.last4 ?? '';
   const institution = row?.institution ?? '';
   const routing = row?.routing ?? '';
 
   const openEdit = () => {
-    setDraft({ name, type, last4, institution, routing });
+    setDraft({ name, type, currency, last4, institution, routing });
     setDetailsOpen(false);
     setEditOpen(true);
   };
@@ -82,6 +91,7 @@ export default function AccountDetailPage() {
     updateAccount(accountId, {
       name: draft.name.trim(),
       type: draft.type,
+      currency: draft.currency,
       last4: draft.last4.trim() || null,
       institution: draft.institution.trim() || null,
       routing: draft.routing.trim() || null,
@@ -120,7 +130,7 @@ export default function AccountDetailPage() {
     ['Number', `•••• ${last4 || '----'}`],
     ['Routing', routing || '—'],
     ['Institution', institution || '—'],
-    ['Currency', display],
+    ['Currency', currency],
     ['Last sync', '2 min ago'],
     ['Linked since', 'Jan 2024'],
   ];
@@ -141,8 +151,15 @@ export default function AccountDetailPage() {
         <div className="relative mb-6 overflow-hidden rounded-2xl px-7 py-5 text-white" style={{ background: cardColor }}>
           <div className="absolute -top-[60px] -right-20 size-60 rounded-full bg-white/5"/>
           <div className="relative flex items-center justify-between gap-4">
-            <div className="min-w-0 font-serif text-[40px] leading-none -tracking-[1.5px]">
-              <Money value={balance} mono={false} className="font-serif"/>
+            <div className="min-w-0">
+              {/* Primary balance is in the account's own currency; the secondary
+                  line converts to the display currency (hidden when they match). */}
+              <div className="font-serif text-[40px] leading-none -tracking-[1.5px] tabular-nums">
+                {fmtNative(balance, currency)}
+              </div>
+              {currency !== display && (
+                <div className="mt-1.5 text-sm text-white/70 tabular-nums">≈ {fmtFrom(balance, currency)}</div>
+              )}
             </div>
             {/* Mobile: single entry — opens the details sheet, which holds the Edit button. */}
             <button
@@ -181,6 +198,49 @@ export default function AccountDetailPage() {
             <Icon name="sync" size={13} />Reconcile balance
           </Button>
         </div>
+
+        {toConfirm.length > 0 && (
+          <div className="border-warning/30 bg-warning/5 mb-4 overflow-hidden rounded-[14px] border">
+            <div className="border-warning/20 flex items-center justify-between border-b px-[18px] py-3.5">
+              <div className="text-sm font-semibold">To confirm · {toConfirm.length}</div>
+              <span className="text-muted-foreground text-[11px]">Not in your balance yet</span>
+            </div>
+            {toConfirm.map((tx, i) => {
+              const cat = catById(tx.category);
+              const inc = tx.amount > 0;
+              return (
+                <div
+                  key={tx.id}
+                  className={cn('flex items-center gap-3 px-[18px] py-3', i && 'border-border border-t-[0.5px]')}
+                >
+                  <CatBar hue={cat.hue} />
+                  <button type="button" onClick={() => openTransaction(tx.id)} className="min-w-0 flex-1 cursor-pointer text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[13px] font-medium">{tx.merchant}</span>
+                      <StatusBadge status="pending" />
+                    </div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
+                  </button>
+                  <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')} />
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      size="icon" variant="ghost" className="size-8" aria-label={`Confirm ${tx.merchant}`}
+                      onClick={() => { confirmPending(tx.id); toast.success(`Confirmed ${tx.merchant}`); }}
+                    >
+                      <Icon name="check" size={14} stroke={2} />
+                    </Button>
+                    <Button
+                      size="icon" variant="ghost" className="size-8" aria-label={`Void ${tx.merchant}`}
+                      onClick={() => { cancelPending(tx.id); toast(`Voided ${tx.merchant}`); }}
+                    >
+                      <Icon name="x" size={14} />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">
           <div className="bg-card border-border overflow-hidden rounded-[14px] border">
@@ -259,14 +319,25 @@ export default function AccountDetailPage() {
               <Label htmlFor="acct-name">Name</Label>
               <Input id="acct-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="acct-type">Type</Label>
-              <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
-                <SelectTrigger id="acct-type" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="acct-type">Type</Label>
+                <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
+                  <SelectTrigger id="acct-type" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="acct-currency">Currency</Label>
+                <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
+                  <SelectTrigger id="acct-currency" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(CURRENCIES).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="acct-last4">Number (last 4)</Label>

@@ -11,7 +11,6 @@ const tx = (over: Partial<Tx>): Tx => ({
   account: 'cc',
   date: '2026-05-01',
   pending: false,
-  recurring: false,
   ledgerId: 'personal',
   ...over,
 });

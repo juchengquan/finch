@@ -8,7 +8,6 @@ import { SettingsItem } from '@/components/SettingsItem';
 import { MobileTabsEditor } from '@/components/MobileTabsEditor';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { useCurrency, type Currency } from '@/components/currency-provider';
 import { useBackup, type BackupEntry, type ImportResult, type DbMetadataView } from '@/components/sqlite-backup-provider';
 import { useFinanceStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -37,8 +36,6 @@ const fmtBytes = (n: number) => {
 };
 const fmtDate = (iso: string) => new Date(iso).toLocaleString();
 
-const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'JPY', 'SGD', 'CNY'];
-
 function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
     <div className="border-border flex items-center gap-3.5 border-b py-3.5">
@@ -52,7 +49,6 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
 }
 
 export default function AccountSettingsPage() {
-  const { currency, setCurrency } = useCurrency();
   const reset = useFinanceStore((s) => s.reset);
   const backup = useBackup();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,20 +168,6 @@ export default function AccountSettingsPage() {
         </div>
         <Row icon="sparkle" label="Theme">
           <ThemeToggle />
-        </Row>
-        <Row icon="wallet" label="Display currency">
-          <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
-            <SelectTrigger size="sm" className="w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CURRENCIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </Row>
 
         <div className="md:hidden">

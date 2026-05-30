@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate, SCHEMA_VERSION, BOOTSTRAP_VERSION } from '@/lib/db/schema';
+import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
 import { readMetadata, rowCounts, stampExport } from '@/lib/db/queries/metadata';
 import { computeChecksum } from '@/lib/db/checksum';
@@ -25,14 +25,12 @@ async function fresh(): Promise<Exec> {
   return exec;
 }
 
-test('fresh DB carries a db_metadata row stamped with the latest schema version', async () => {
+test('fresh DB carries a db_metadata row stamped with the schema version', async () => {
   const exec = await fresh();
   const meta = await readMetadata(exec);
   expect(meta).not.toBeNull();
   expect(meta!.appName).toBe('finch');
   expect(meta!.schemaVersion).toBe(SCHEMA_VERSION);
-  // SCHEMA_VERSION is BOOTSTRAP_VERSION-or-later (sort lexicographically).
-  expect(meta!.schemaVersion >= BOOTSTRAP_VERSION).toBe(true);
   expect(meta!.exportedAt).toBeNull();
   expect(meta!.checksum).toBeNull();
   // ISO 8601 — string is sortable and reversible.

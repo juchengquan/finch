@@ -56,19 +56,17 @@ export default function InsightsPage() {
   const [metric, setMetric] = useState<Metric>('spending');
   const [range, setRange] = useState<number>(12);
   const { activeId } = useLedger();
-  const { fmt } = useMoney();
+  const { fmt, toBase } = useMoney();
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
-  const goals = useFinanceStore((s) => s.goals);
+  const budgets = useFinanceStore((s) => s.budgets);
   const scheduled = useFinanceStore((s) => s.scheduled);
-  const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
 
-  // Live category mapping from the seed (still serves the budget lookup); the
-  // page now derives monthly/cashflow series and the category-deltas comparison
-  // straight from the projected transactions.
+  // Category reference (name + static seed budget) for the deltas comparison; the
+  // page derives monthly/cashflow series straight from the projected transactions.
   const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; hue?: number; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, budget: budgetByCategory[c.id] ?? c.budget, hue: c.hue ?? 200 }));
+    .map((c) => ({ id: c.id, name: c.name, budget: c.budget, hue: c.hue ?? 200 }));
   const month = currentMonth(transactions, activeId);
   const lastDate = transactions.reduce(
     (d, t) => ((t.ledgerId ?? 'personal') === activeId && t.date > d ? t.date : d),
@@ -76,13 +74,16 @@ export default function InsightsPage() {
   );
   const monthly = monthlySpending(transactions, activeId, month, range);
   const cashflow = monthlyCashflow(transactions, activeId, month, range);
-  const networth = netWorthByMonth(transactions, accounts, activeId, month, range);
+  const networth = netWorthByMonth(transactions, accounts, activeId, month, range, toBase);
   const heatmap = dailySpending(transactions, activeId, lastDate, 12 * 7); // 12 weeks
   const categoryDeltas = topCategoryDeltas(transactions, activeId, month, ledgerCategories, 5);
   const insights = generateInsights({
     transactions,
     categories: ledgerCategories,
-    goals: goals.filter((g) => g.ledgerId === activeId),
+    // "Goals" insights now run off income budgets (Goals were merged into Budgets).
+    goals: budgets
+      .filter((b) => b.ledgerId === activeId && b.type === 'income')
+      .map((b) => ({ id: b.id, name: b.name, target: b.amount, saved: b.saved })),
     accounts,
     ledgerId: activeId,
     month,

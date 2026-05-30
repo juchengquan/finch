@@ -19,16 +19,26 @@ export function useMoney() {
   const base = active.base;
 
   const rateMap = useMemo(() => latestRateMap(rates), [rates]);
-  const convert = (amount: number) => {
-    if (base === display) return amount;
-    const v = convertViaRates(amount, base, display, rateMap);
-    return v != null ? v : convertAmount(amount, base, display);
+  // Convert between any two currencies via the projected rate map, with the
+  // static map as a pre-hydration fallback so a value is always produced.
+  const convertCur = (amount: number, from: string, to: string) => {
+    if (from === to) return amount;
+    const v = convertViaRates(amount, from, to, rateMap);
+    return v != null ? v : convertAmount(amount, from, to);
   };
+  const convert = (amount: number) => convertCur(amount, base, display);
 
   return {
     display,
     base,
+    // Ledger-base → display (use for store/MOCK amounts already in the ledger base).
     fmt: (amount: number, opts?: { signed?: boolean }) => fmtNative(convert(amount), display, opts),
     short: (amount: number) => fmtNativeShort(convert(amount), display),
+    // Re-express an account-currency amount into the ledger base (for cross-account
+    // sums like net worth) or into the display currency (for an "≈" secondary line).
+    toBase: (amount: number, from: string) => convertCur(amount, from, base),
+    fmtFrom: (amount: number, from: string, opts?: { signed?: boolean }) =>
+      fmtNative(convertCur(amount, from, display), display, opts),
+    shortFrom: (amount: number, from: string) => fmtNativeShort(convertCur(amount, from, display), display),
   };
 }

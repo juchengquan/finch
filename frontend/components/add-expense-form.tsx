@@ -62,21 +62,8 @@ export function AddExpenseForm({
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('food');
   const [account, setAccount] = useState('cc');
-  const [currency, setCurrency] = useState(base);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState('');
-
-  // Default the entry currency to the active ledger's base, and follow a ledger
-  // switch — adjusting state during render (the React-recommended alternative to
-  // a setState-in-effect) so the picker resets when `base` changes.
-  const [prevBase, setPrevBase] = useState(base);
-  if (prevBase !== base) {
-    setPrevBase(base);
-    setCurrency(base);
-  }
-
-  const currencyOptions = Object.keys(CURRENCIES);
-  const currencySym = CURRENCIES[currency as keyof typeof CURRENCIES]?.sym ?? '$';
 
   // Category/account options come from the projected store, scoped to the active
   // ledger; fall back to MOCK until the store is hydrated.
@@ -91,6 +78,12 @@ export function AddExpenseForm({
   if (categoryOptions.length && !categoryOptions.some((o) => o.id === category)) setCategory(categoryOptions[0].id);
   if (accountOptions.length && !accountOptions.some((o) => o.id === account)) setAccount(accountOptions[0].id);
 
+  // The entry currency follows the selected account (an account holds one
+  // currency); foreign spend is modelled via a dedicated fx account, not a
+  // foreign entry here. Falls back to the ledger base pre-hydration.
+  const accountCurrency = storeAccts.find((a) => a.id === account)?.currency ?? base;
+  const currencySym = CURRENCIES[accountCurrency as keyof typeof CURRENCIES]?.sym ?? '$';
+
   const save = () => {
     const value = parseFloat(amount);
     if (!value || Number.isNaN(value)) {
@@ -98,14 +91,15 @@ export function AddExpenseForm({
       return;
     }
     const signed = type === 'income' ? Math.abs(value) : -Math.abs(value);
-    // Store the ledger-base amount (drives balances) alongside the original currency.
+    // The entry is in the account's currency. Provide an optimistic ledger-base
+    // figure for immediate display; the server re-derives + locks it on sync.
     const baseAmount =
-      currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
+      accountCurrency === base ? signed : Math.round(convertAmount(signed, accountCurrency, base) * 100) / 100;
     const id = addTransaction({
       merchant: merchant.trim() || (type === 'income' ? 'Income' : 'Untitled'),
       category,
       amount: baseAmount,
-      currency,
+      currency: accountCurrency,
       nativeAmount: signed,
       account,
       date,
@@ -115,7 +109,7 @@ export function AddExpenseForm({
       ledgerId: activeId,
     });
     toast.success(type === 'income' ? 'Income added' : 'Expense added', {
-      description: `${merchant.trim() || (type === 'income' ? 'Income' : 'Untitled')} · ${fmtNative(Math.abs(value), currency)}`,
+      description: `${merchant.trim() || (type === 'income' ? 'Income' : 'Untitled')} · ${fmtNative(Math.abs(value), accountCurrency)}`,
     });
     onSaved?.(id);
   };
@@ -155,18 +149,7 @@ export function AddExpenseForm({
 
       <div>
         <Field icon="coins" label="Currency">
-          <Select value={currency} onValueChange={setCurrency}>
-            <SelectTrigger size="sm" className="border-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencyOptions.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <span className="text-muted-foreground text-[15px]" title="Follows the selected account">{accountCurrency}</span>
         </Field>
         <Field icon="tag" label="Merchant">
           <input
