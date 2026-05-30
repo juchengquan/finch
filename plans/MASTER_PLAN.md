@@ -323,9 +323,12 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    run-rate × days-remaining + upcoming recurring templates + scheduled
    items. Surfaces as a card on Insights with a stacked bar of the four
    components and a vs-prev-month chip. Past months collapse to actuals.
-3. **Cmd-K command palette / global search** — unifies the per-screen searches
-   (Activity, Merchants) into one jump-to-anything panel: txns, merchants,
-   categories, accounts, screens.
+3. **Cmd-K command palette / global search** ✅ *(done — see PR)* — global
+   ⌘K / Ctrl+K opens a single jump-to-anything palette: pages, transactions
+   (by merchant or note), merchants, categories, accounts, tags — all
+   scoped to the active ledger. Hand-rolled (no `cmdk` dep) on top of the
+   existing Dialog + a SearchButton that replaces the placeholder header
+   affordance app-wide.
 
 **Smaller wins:**
 4. **Account-group CRUD** ✅ *(done — see PR)* — listAccountGroups / create /

@@ -1,7 +1,8 @@
 'use client';
 
 import { Icon, MerchantGlyph } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { SearchButton } from '@/components/command-palette';
 import { SettingsItem } from '@/components/SettingsItem';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
@@ -39,7 +40,7 @@ export default function SettingsPage() {
 
   return (
     <MobilePage>
-      <ScreenHeader title="Settings" trailing={<IconButton icon="search" aria-label="Search" />} />
+      <ScreenHeader title="Settings" trailing={<SearchButton />} />
 
       <div className="flex items-center gap-3.5 px-5 pb-[22px]">
         <MerchantGlyph name="Alex Morgan" size={64} bg="var(--primary)" fg="var(--primary-foreground)" />
