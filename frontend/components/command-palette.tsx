@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
@@ -113,6 +113,10 @@ function CommandPaletteDialog({
         showCloseButton={false}
         className="top-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0 sm:rounded-2xl"
       >
+        <DialogTitle className="sr-only">Search and commands</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search transactions, accounts, and categories, or jump to a page.
+        </DialogDescription>
         {open && <PaletteBody close={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
