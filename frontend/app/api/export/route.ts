@@ -1,16 +1,17 @@
 import { exportDbBytes } from '@/lib/db/server';
 
-// Streams the authoritative server DB file so the downloaded copy is the live
-// data (not a rebuild from the store cache).
+// Streams a stamped copy of the authoritative server DB. Metadata
+// (exported_at, exported_from, row_counts, checksum) is applied to a clone so
+// the live DB never carries stale "exported at X" stamps.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const bytes = await exportDbBytes();
+  const { bytes, filename } = await exportDbBytes();
   return new Response(bytes as BodyInit, {
     headers: {
       'Content-Type': 'application/x-sqlite3',
-      'Content-Disposition': 'attachment; filename="finch.sqlite3"',
+      'Content-Disposition': `attachment; filename="${filename}"`,
     },
   });
 }

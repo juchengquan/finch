@@ -1,9 +1,12 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { getSqlite3, execFor, type OO1DB } from './sqlite';
 import { applySchema, migrate } from './schema';
 import { seedDatabase } from './seed';
 import { projectState } from './state';
+import { bumpUpdated, rowCounts, stampExport } from './queries/metadata';
+import { computeChecksum } from './checksum';
 import type { Exec, ProjectedState } from './repo';
 
 // The authoritative database: a single in-memory SQLite connection held by the
@@ -65,6 +68,9 @@ async function open(): Promise<ServerDb> {
 
   const exec = execFor(db);
   const persist = async () => {
+    // Bump the metadata row's updated_at *before* serialising so the file's
+    // recorded timestamp matches the bytes on disk.
+    await bumpUpdated(exec);
     const out = sqlite3.capi.sqlite3_js_db_export(db as never);
     // Write atomically: temp file then rename, so a crash can't truncate the db.
     const tmp = `${full}.tmp`;
@@ -95,10 +101,50 @@ export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<Proj
   return projectState(db.exec);
 }
 
-/** Current bytes of the authoritative DB file (for the download backup). */
-export async function exportDbBytes(): Promise<Uint8Array> {
+function includeHostname(): boolean {
+  // Opt-out switch — set FINCH_EXPORT_INCLUDE_HOST=0 to omit hostname from
+  // exported files (privacy in shared contexts).
+  return process.env.FINCH_EXPORT_INCLUDE_HOST !== '0';
+}
+
+/**
+ * Export a copy of the DB with provenance stamped into db_metadata
+ * (exported_at, exported_from, row_counts, checksum). The live DB is not
+ * mutated — stamps are applied to a fresh in-memory clone built from the
+ * just-persisted bytes, then re-serialised.
+ */
+export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
   const db = await getServerDb();
-  await db.persist(); // flush in-memory state to the file so the copy is current
-  const buf = await fs.readFile(db.file);
-  return new Uint8Array(buf);
+  await db.persist();
+  const liveBytes = new Uint8Array(await fs.readFile(db.file));
+
+  // Open a throwaway clone to stamp metadata without touching the live DB.
+  const sqlite3 = await getSqlite3();
+  const clone = new sqlite3.oo1.DB() as unknown as OO1DB;
+  try {
+    const p = sqlite3.wasm.allocFromTypedArray(liveBytes);
+    const rc = sqlite3.capi.sqlite3_deserialize(
+      clone.pointer!,
+      'main',
+      p,
+      liveBytes.length,
+      liveBytes.length,
+      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
+    );
+    if (rc) throw new Error(`Could not clone DB for export (code ${rc})`);
+    const cloneExec = execFor(clone);
+    const counts = await rowCounts(cloneExec);
+    const checksum = await computeChecksum(cloneExec);
+    await stampExport(cloneExec, {
+      exportedAt: new Date().toISOString(),
+      exportedFrom: includeHostname() ? os.hostname() : null,
+      rowCounts: counts,
+      checksum,
+    });
+    const stamped = sqlite3.capi.sqlite3_js_db_export(clone as never);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
+    return { bytes: new Uint8Array(stamped), filename: `finch-${ts}.sqlite3` };
+  } finally {
+    clone.close();
+  }
 }
