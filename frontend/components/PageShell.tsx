@@ -136,7 +136,9 @@ export function PageShell({
               onClick={onSidebarToggle}
               className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-md px-2.5 py-2 transition-colors"
             >
-              <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
+              <span className="flex h-7 shrink-0 items-center">
+                <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
+              </span>
               {sidebarOpen && (
                 <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
                   {brand?.label ?? 'Finch'}
