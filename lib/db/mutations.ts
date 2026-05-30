@@ -52,8 +52,11 @@ import {
   setCategoryBudget as qSetCategoryBudget,
   deleteCategoryBudget as qDeleteCategoryBudget,
   setCategoryBudgetRollover as qSetCategoryBudgetRollover,
+  updateBudgetCycle as qUpdateBudgetCycle,
   type BudgetRolloverPatch,
 } from './queries/budgets';
+import type { Frequency } from '@/lib/budgets/period';
+import { invalidateRollover } from '@/lib/budgets/rollover';
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase } from './queries/rates';
 import {
@@ -240,11 +243,38 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   });
 }
 
+// Read a transaction's date + every category it references (parent +
+// transaction_splits), returning null when the row is missing. Used by the
+// tx-mutation cases to capture old / new state for invalidateRollover().
+async function txTouches(exec: Exec, id: string): Promise<{ date: string; categoryIds: string[] } | null> {
+  const [tx] = await exec('SELECT date, category_id FROM transactions WHERE id = ?', [id]);
+  if (!tx) return null;
+  const splits = await exec('SELECT category_id FROM transaction_splits WHERE transaction_id = ?', [id]);
+  const categoryIds = new Set<string>();
+  if (tx.category_id) categoryIds.add(String(tx.category_id));
+  for (const s of splits) if (s.category_id) categoryIds.add(String(s.category_id));
+  return { date: String(tx.date), categoryIds: [...categoryIds] };
+}
+
+function mergeTouches(
+  a: { date: string; categoryIds: string[] } | null,
+  b: { date: string; categoryIds: string[] } | null,
+): { earliestDate: string; categoryIds: string[] } | null {
+  if (!a && !b) return null;
+  const dates = [a?.date, b?.date].filter((d): d is string => Boolean(d));
+  const earliestDate = dates.sort()[0];
+  const cats = new Set<string>([...(a?.categoryIds ?? []), ...(b?.categoryIds ?? [])]);
+  return { earliestDate, categoryIds: [...cats] };
+}
+
 export async function applyMutation(exec: Exec, action: string, args: Args): Promise<void> {
   switch (action) {
-    case 'addTransaction':
-      await qAdd(exec, args as unknown as AddInput);
+    case 'addTransaction': {
+      const id = await qAdd(exec, args as unknown as AddInput);
+      const touches = await txTouches(exec, id);
+      if (touches) await invalidateRollover(exec, touches.categoryIds, touches.date);
       return;
+    }
     case 'adjustAccountBalance': {
       const accountId = str(args.accountId);
       const target = Number(args.targetBalance);
@@ -267,14 +297,24 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       });
       return;
     }
-    case 'updateTransaction':
-      await qUpdate(exec, str(args.id), args.patch as Parameters<typeof qUpdate>[2]);
-      await recomputeForTransaction(exec, str(args.id)); // an amount/date edit shifts balances
+    case 'updateTransaction': {
+      const id = str(args.id);
+      const before = await txTouches(exec, id);
+      await qUpdate(exec, id, args.patch as Parameters<typeof qUpdate>[2]);
+      await recomputeForTransaction(exec, id); // an amount/date edit shifts balances
+      const after = await txTouches(exec, id);
+      const merged = mergeTouches(before, after);
+      if (merged) await invalidateRollover(exec, merged.categoryIds, merged.earliestDate);
       return;
-    case 'deleteTransaction':
-      await qCancel(exec, str(args.id));
-      await recomputeForTransaction(exec, str(args.id)); // cancelling must reverse the balance
+    }
+    case 'deleteTransaction': {
+      const id = str(args.id);
+      const before = await txTouches(exec, id);
+      await qCancel(exec, id);
+      await recomputeForTransaction(exec, id); // cancelling must reverse the balance
+      if (before) await invalidateRollover(exec, before.categoryIds, before.date);
       return;
+    }
     case 'confirmTransaction':
       await qConfirm(exec, str(args.id));
       return;
@@ -292,6 +332,17 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteBudget':
       await qDeleteCategoryBudget(exec, str(args.categoryId));
       return;
+    case 'updateBudgetCycle': {
+      const frequency = str(args.frequency) as Frequency;
+      const validFreqs: Frequency[] = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+      if (!validFreqs.includes(frequency)) throw new Error(`Unknown frequency "${frequency}"`);
+      const startDate = str(args.startDate);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error('startDate must be YYYY-MM-DD');
+      const amount = args.amount === undefined ? undefined : Number(args.amount);
+      if (amount !== undefined && !(amount > 0)) throw new Error('Budget must be greater than 0');
+      await qUpdateBudgetCycle(exec, str(args.categoryId), { frequency, startDate, amount });
+      return;
+    }
     case 'setBudgetRollover': {
       const patch: BudgetRolloverPatch = {};
       if (args.rollover !== undefined) patch.rollover = !!args.rollover;
@@ -500,7 +551,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           description: o.description == null ? null : str(o.description),
         };
       });
+      const before = await txTouches(exec, txId);
       await qSetTransactionSplits(exec, txId, splits);
+      const after = await txTouches(exec, txId);
+      const merged = mergeTouches(before, after);
+      if (merged) await invalidateRollover(exec, merged.categoryIds, merged.earliestDate);
       return;
     }
     case 'createSubscription': {

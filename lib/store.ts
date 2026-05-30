@@ -5,7 +5,7 @@ import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
-import type { BudgetRolloverInfo } from '@/lib/db/queries/budgets';
+import type { BudgetMeta, BudgetRolloverInfo } from '@/lib/db/queries/budgets';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
@@ -122,6 +122,7 @@ interface FinanceState {
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
+  budgetMetaByCategory: Record<string, BudgetMeta>;
   budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
@@ -140,6 +141,10 @@ interface FinanceState {
   confirmAllPending: () => void;
   setBudget: (categoryId: string, amount: number) => void;
   deleteBudget: (categoryId: string) => void;
+  updateBudgetCycle: (
+    categoryId: string,
+    patch: { frequency: BudgetMeta['frequency']; startDate: string; amount?: number },
+  ) => void;
   setBudgetRollover: (
     categoryId: string,
     patch: { rollover?: boolean; rolloverLimit?: number | null; carryForward?: number },
@@ -206,6 +211,7 @@ export const useFinanceStore = create<FinanceState>()(
       accounts: [],
       accountGroups: [],
       budgetByCategory: {},
+      budgetMetaByCategory: {},
       budgetRolloverByCategory: {},
       categories: [],
       counterparties: [],
@@ -270,7 +276,35 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       setBudget: (categoryId, amount) => {
-        set((s) => ({ budgetByCategory: { ...s.budgetByCategory, [categoryId]: amount } }));
+        set((s) => {
+          const existing = s.budgetMetaByCategory[categoryId];
+          if (!existing) {
+            // First-time create — amount is active immediately. Mirror the
+            // server's default cycle (monthly, '2026-05-01' anchor) so the
+            // UI doesn't blank out between optimistic + reproject.
+            return {
+              budgetByCategory: { ...s.budgetByCategory, [categoryId]: amount },
+              budgetMetaByCategory: {
+                ...s.budgetMetaByCategory,
+                [categoryId]: {
+                  id: `bud-${categoryId}`,
+                  amount,
+                  frequency: 'monthly',
+                  startDate: '2026-05-01',
+                  pendingAmount: null,
+                },
+              },
+            };
+          }
+          // Subsequent edits stage the new amount; the active limit only
+          // changes at the next period boundary (BUDGET_CYCLES_PLAN §4b).
+          return {
+            budgetMetaByCategory: {
+              ...s.budgetMetaByCategory,
+              [categoryId]: { ...existing, pendingAmount: amount },
+            },
+          };
+        });
         syncMutation('setBudget', { categoryId, amount });
       },
 
@@ -278,11 +312,44 @@ export const useFinanceStore = create<FinanceState>()(
         set((s) => {
           const next = { ...s.budgetByCategory };
           delete next[categoryId];
+          const nextMeta = { ...s.budgetMetaByCategory };
+          delete nextMeta[categoryId];
           const nextRoll = { ...s.budgetRolloverByCategory };
           delete nextRoll[categoryId];
-          return { budgetByCategory: next, budgetRolloverByCategory: nextRoll };
+          return {
+            budgetByCategory: next,
+            budgetMetaByCategory: nextMeta,
+            budgetRolloverByCategory: nextRoll,
+          };
         });
         syncMutation('deleteBudget', { categoryId });
+      },
+
+      updateBudgetCycle: (categoryId, patch) => {
+        set((s) => {
+          const existing = s.budgetMetaByCategory[categoryId];
+          if (!existing) return s;
+          const nextAmount = patch.amount ?? existing.amount;
+          return {
+            budgetByCategory: { ...s.budgetByCategory, [categoryId]: nextAmount },
+            budgetMetaByCategory: {
+              ...s.budgetMetaByCategory,
+              [categoryId]: {
+                ...existing,
+                amount: nextAmount,
+                frequency: patch.frequency,
+                startDate: patch.startDate,
+                pendingAmount: null,
+              },
+            },
+          };
+        });
+        syncMutation('updateBudgetCycle', {
+          categoryId,
+          frequency: patch.frequency,
+          startDate: patch.startDate,
+          amount: patch.amount,
+        });
       },
 
       setBudgetRollover: (categoryId, patch) => {

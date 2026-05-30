@@ -7,24 +7,50 @@ import { SearchButton } from '@/components/command-palette';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
-import { categorySpend, currentMonth } from '@/lib/select';
 import { MOCK } from '@/lib/data';
 import { CategoryRow } from '@/components/CategoryRow';
+import { periodOf, periodRange, type Frequency } from '@/lib/budgets/period';
 import { cn } from '@/lib/utils';
+
+const DEFAULT_ANCHOR = '2026-05-01';
 
 export default function BudgetsPage() {
   const { short } = useMoney();
   const { active, activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgetByCategory = useFinanceStore((s) => s.budgetByCategory);
+  const budgetMetaByCategory = useFinanceStore((s) => s.budgetMetaByCategory);
 
-  // Confirmed expense per category for the current month.
-  const spentById = categorySpend(allTxns, activeId, currentMonth(allTxns, activeId));
-  const spentOf = (id: string) => spentById[id] ?? 0;
+  // Each category's "spent" is now scoped to ITS budget's current period —
+  // weekly budgets show week-to-date, quarterly show quarter-to-date, and
+  // unbudgeted categories fall back to month-to-date.
+  const today = new Date().toISOString().slice(0, 10);
+  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
+  const spentOf = (categoryId: string, freq: Frequency, anchor: string) => {
+    const period = periodOf(today, freq, anchor);
+    const { from, to } = periodRange(period, freq);
+    let total = 0;
+    for (const t of ledgerTxns) {
+      if (t.category !== categoryId) continue;
+      if (t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+      if (t.date < from || t.date > to) continue;
+      total += -t.amount;
+    }
+    return total;
+  };
 
   const categories = MOCK.categories
     .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
-    .map((c) => ({ ...c, spent: spentOf(c.id), budget: budgetByCategory[c.id] ?? c.budget }));
+    .map((c) => {
+      const meta = budgetMetaByCategory[c.id];
+      const freq: Frequency = meta?.frequency ?? 'monthly';
+      const anchor = meta?.startDate ?? DEFAULT_ANCHOR;
+      return {
+        ...c,
+        spent: spentOf(c.id, freq, anchor),
+        budget: budgetByCategory[c.id] ?? c.budget,
+      };
+    });
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
   const totalBudget = categories.reduce((s, c) => s + c.budget, 0);
   const pct = totalBudget ? Math.round((totalSpent / totalBudget) * 100) : 0;
