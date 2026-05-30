@@ -445,15 +445,6 @@ test('createScheduled inserts a template that lists and posts', async () => {
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-new' });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 19.99, 2);
 
-  // Reminder type doesn't need an account.
-  await applyMutation(exec, 'createScheduled', {
-    id: 'rt-rem', ledgerId: 'personal', name: 'Just a reminder', type: 'reminder',
-    amount: 50, frequency: 'monthly', dayOfMonth: 15, account: '', autoPost: false, weekDay: null, color: '#abc',
-  });
-  const r = (await listScheduled(exec, 'personal')).find((x) => x.id === 'rt-rem')!;
-  expect(r.name).toBe('Just a reminder');
-  expect(r.color).toBe('#abc');
-
   await expect(applyMutation(exec, 'createScheduled', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
   await expect(applyMutation(exec, 'createScheduled', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
 });

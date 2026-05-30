@@ -260,7 +260,7 @@ export default function ActivityPage() {
                       className="border-border hover:bg-secondary/40 cursor-pointer border-t first:border-t-0"
                     >
                       <td className="text-muted-foreground px-4 py-2.5 font-mono text-xs whitespace-nowrap">
-                        {t.date.slice(5).replace('-', '/')}
+                        {t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2.5">

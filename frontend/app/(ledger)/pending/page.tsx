@@ -80,7 +80,7 @@ export default function PendingPage() {
                         </div>
                       </div>
                       <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
-                        {acctById(p.account).name} · {p.date.slice(5).replace('-', '/')} · {cat.name}
+                        {acctById(p.account).name} · {p.date.replace(/-/g, '/')}{p.time ? ' ' + p.time.slice(0, 5) : ''} · {cat.name}
                         {isFx && <span className="text-warning font-mono text-[10px]">· FX</span>}
                       </div>
                       {p.note && (

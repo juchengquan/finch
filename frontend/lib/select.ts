@@ -213,7 +213,7 @@ export function monthForecast(
   let scheduledRest = 0;
   if (inMonth) {
     for (const rt of scheduled) {
-      if (rt.type !== 'expense' && rt.type !== 'reminder') continue;
+      if (rt.type !== 'expense') continue;
       if (rt.frequency !== 'monthly') continue;
       if (rt.amount == null) continue;
       if (rt.dayOfMonth <= dayOfMonth) continue;

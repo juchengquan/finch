@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RowActions } from '@/components/RowActions';
 import { useLedger } from '@/components/ledger-provider';
@@ -23,7 +23,7 @@ const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
-const TYPES = ['reminder', 'expense', 'income', 'transfer'];
+const TYPES = ['expense', 'income', 'transfer'];
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
 
 interface DraftForm {
@@ -38,11 +38,17 @@ interface DraftForm {
   from: string;
   autoPost: boolean;
   color: string;
+  category: string;
+  startDate: string;
+  endDate: string;
+  maxExecutions: string;
+  isRecurring: boolean;
 }
 
 const EMPTY_DRAFT: DraftForm = {
-  id: '', name: '', amount: '', type: 'reminder', frequency: 'monthly',
+  id: '', name: '', amount: '', type: 'expense', frequency: 'monthly',
   dayOfMonth: '1', weekDay: '', account: '', from: '', autoPost: false, color: '#c96442',
+  category: '', startDate: new Date().toISOString().slice(0, 16), endDate: '', maxExecutions: '', isRecurring: true,
 };
 
 function templateToDraft(t: ScheduledTemplate): DraftForm {
@@ -58,6 +64,11 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
     from: t.from ?? '',
     autoPost: !!t.autoPost,
     color: t.color ?? '#c96442',
+    category: t.category ?? '',
+    startDate: t.startDate ?? new Date().toISOString().slice(0, 16),
+    endDate: t.endDate ?? '',
+    maxExecutions: t.maxExecutions != null ? String(t.maxExecutions) : '',
+    isRecurring: t.frequency !== 'once',
   };
 }
 
@@ -66,6 +77,8 @@ export default function ScheduledPage() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const { activeId } = useLedger();
   const scheduled = useFinanceStore((s) => s.scheduled);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const categories = useFinanceStore((s) => s.categories);
   const createScheduled = useFinanceStore((s) => s.createScheduled);
   const updateScheduled = useFinanceStore((s) => s.updateScheduled);
   const deleteScheduled = useFinanceStore((s) => s.deleteScheduled);
@@ -89,18 +102,27 @@ export default function ScheduledPage() {
     const dayOfMonth = Number(draft.dayOfMonth) || 1;
     const weekDay = draft.weekDay !== '' ? Number(draft.weekDay) : undefined;
     const type = draft.type;
+    const frequency = draft.isRecurring ? draft.frequency : 'once';
+    const category = draft.category || null;
+    const startDate = draft.startDate || undefined;
+    const endDate = draft.endDate || null;
+    const maxExecutions = draft.maxExecutions ? Number(draft.maxExecutions) : null;
     if (isNew) {
       createScheduled({
         name,
         type,
         amount,
-        frequency: draft.frequency,
+        frequency,
         dayOfMonth,
         weekDay,
-        account: type === 'reminder' ? undefined : draft.account.trim(),
+        account: draft.account.trim(),
         from: type === 'transfer' ? draft.from.trim() || undefined : undefined,
         autoPost: draft.autoPost,
         color: draft.color,
+        category,
+        startDate,
+        endDate,
+        maxExecutions,
         ledgerId: activeId,
       });
       toast.success('Scheduled item added', { description: name });
@@ -108,11 +130,14 @@ export default function ScheduledPage() {
       updateScheduled(draft.id, {
         name,
         amount,
-        frequency: draft.frequency,
+        frequency,
         dayOfMonth,
         weekDay,
         autoPost: draft.autoPost ? 1 : 0,
         color: draft.color,
+        category,
+        endDate,
+        maxExecutions,
       });
       toast.success('Scheduled item updated', { description: name });
     }
@@ -289,6 +314,7 @@ export default function ScheduledPage() {
                   from: item.from,
                   autoPost: item.autoPost,
                   color: item.color ?? 'var(--primary)',
+                  category: item.category ?? null,
                 }}
                 onEdit={openEdit}
                 onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
@@ -304,78 +330,127 @@ export default function ScheduledPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{isNew ? 'New scheduled item' : 'Edit scheduled item'}</DialogTitle>
-            <DialogDescription>A scheduled bill, income, transfer or calendar reminder.</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5">
+              {TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, type: t })}
+                  className={cn(
+                    'flex-1 rounded-md py-1.5 text-[13px] font-medium transition-colors capitalize',
+                    draft.type === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
+              <Label>Description</Label>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Rent" autoFocus />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Amount</Label>
-                <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Type</Label>
-                <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Frequency</Label>
-                <Select value={draft.frequency} onValueChange={(v) => setDraft({ ...draft, frequency: v })}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {(draft.frequency === 'weekly' || draft.frequency === 'biweekly') ? (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Day of week</Label>
-                  <Select value={draft.weekDay} onValueChange={(v) => setDraft({ ...draft, weekDay: v })}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      {WEEKDAY_LABELS.map((l, i) => <SelectItem key={i} value={String(i)}>{l}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Day of month</Label>
-                  <Input type="number" inputMode="numeric" min={1} max={31} value={draft.dayOfMonth} onChange={(e) => setDraft({ ...draft, dayOfMonth: e.target.value })} />
-                </div>
-              )}
+            <div className="flex flex-col gap-1.5">
+              <Label>Amount</Label>
+              <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" />
             </div>
             {draft.type === 'transfer' ? (
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label>To account</Label>
-                  <Input value={draft.account} onChange={(e) => setDraft({ ...draft, account: e.target.value })} placeholder="e.g. Marcus Savings" />
+                  <Select value={draft.account} onValueChange={(v) => setDraft({ ...draft, account: v })}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>From account</Label>
-                  <Input value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} placeholder="e.g. Chase Checking" />
+                  <Select value={draft.from} onValueChange={(v) => setDraft({ ...draft, from: v })}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
-            ) : draft.type !== 'reminder' ? (
+            ) : (
               <div className="flex flex-col gap-1.5">
                 <Label>Account</Label>
-                <Input value={draft.account} onChange={(e) => setDraft({ ...draft, account: e.target.value })} placeholder="e.g. Amex Gold" />
+                <Select value={draft.account} onValueChange={(v) => setDraft({ ...draft, account: v })}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : null}
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label>Category</Label>
+              <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  {categories.filter(c => c.type === 'expense' || c.type === 'income').map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Date</Label>
+              <Input type="datetime-local" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="sch-recurring">Recurring</Label>
+              <Switch id="sch-recurring" checked={draft.isRecurring} onCheckedChange={(v) => setDraft({ ...draft, isRecurring: v })} />
+            </div>
+            {draft.isRecurring && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Frequency</Label>
+                    <Select value={draft.frequency} onValueChange={(v) => setDraft({ ...draft, frequency: v })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(draft.frequency === 'weekly' || draft.frequency === 'biweekly') ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Day of week</Label>
+                      <Select value={draft.weekDay} onValueChange={(v) => setDraft({ ...draft, weekDay: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          {WEEKDAY_LABELS.map((l, i) => <SelectItem key={i} value={String(i)}>{l}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Day of month</Label>
+                      <Input type="number" inputMode="numeric" min={1} max={31} value={draft.dayOfMonth} onChange={(e) => setDraft({ ...draft, dayOfMonth: e.target.value })} />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Repeat</Label>
+                    <Input type="number" inputMode="numeric" min={1} value={draft.maxExecutions} onChange={(e) => setDraft({ ...draft, maxExecutions: e.target.value })} placeholder="Infinite" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Until date</Label>
+                    <Input type="datetime-local" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
+                  </div>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Label htmlFor="rt-color">Color</Label>
                 <input id="rt-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border size-9 cursor-pointer rounded-md border bg-transparent" />
               </div>
-              {draft.type !== 'reminder' && (
+              {draft.type !== 'transfer' && (
                 <div className="flex items-center gap-2">
                   <Label htmlFor="rt-autopost">Auto-post</Label>
                   <Switch id="rt-autopost" checked={draft.autoPost} onCheckedChange={(v) => setDraft({ ...draft, autoPost: v })} />
@@ -408,6 +483,7 @@ interface CalendarItem {
   from?: string;
   autoPost: number;
   color: string;
+  category?: string | null;
 }
 
 function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: number): CalendarItem[] {
@@ -419,15 +495,23 @@ function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: n
       name: it.name,
       amount: it.amount,
       type: it.type,
-      frequency: it.frequency,
+      frequency: it.frequency === 'once' ? 'once' : it.frequency,
       dayOfMonth: it.dayOfMonth || 0,
       weekDay: it.weekDay,
       account: it.account ?? '',
       from: it.from,
       autoPost: it.autoPost,
       color: it.color ?? 'var(--primary)',
+      category: it.category ?? null,
     };
-    if (it.frequency === 'daily') {
+    if (it.frequency === 'once') {
+      if (it.startDate) {
+        const d = new Date(it.startDate + 'T00:00');
+        if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
+          result.push({ ...base, day: d.getDate() });
+        }
+      }
+    } else if (it.frequency === 'daily') {
       for (let d = 1; d <= daysInMonth; d++) {
         result.push({ ...base, day: d });
       }
@@ -460,7 +544,16 @@ function buildDotsByDay(items: ScheduledTemplate[], viewYear: number, viewMonth:
   const map = new Map<number, { color: string }[]>();
   for (const it of items) {
     const color = it.color ?? 'var(--primary)';
-    if (it.frequency === 'daily') {
+    if (it.frequency === 'once') {
+      if (it.startDate) {
+        const d = new Date(it.startDate + 'T00:00');
+        if (d.getFullYear() === viewYear && d.getMonth() === viewMonth) {
+          const arr = map.get(d.getDate()) ?? [];
+          arr.push({ color });
+          map.set(d.getDate(), arr);
+        }
+      }
+    } else if (it.frequency === 'daily') {
       for (let d = 1; d <= daysInMonth; d++) {
         const arr = map.get(d) ?? [];
         arr.push({ color });
@@ -505,11 +598,12 @@ function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
   posting: boolean;
 }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
-  const isPostable = item.type !== 'reminder' && item.amount != null;
+  const categories = useFinanceStore((s) => s.categories);
+  const isPostable = item.amount != null;
   return (
     <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
       <div className="w-11 shrink-0 text-center">
-        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{item.frequency}</div>
+        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{item.frequency === 'once' ? 'once' : item.frequency}</div>
         <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
       </div>
       <div className="min-w-0 flex-1">
@@ -517,6 +611,7 @@ function ScheduledCard({ item, onEdit, onDelete, onPost, posting }: {
         <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="size-1.5 rounded-full" style={{ background: item.color }} />
           {item.type}
+          {item.category ? <> · {categories.find(c => c.id === item.category)?.name ?? item.category}</> : null}
           {item.account ? <> · {item.account}</> : null}
           {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span> : null}
         </div>

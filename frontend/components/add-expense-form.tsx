@@ -63,7 +63,7 @@ export function AddExpenseForm({
   const [category, setCategory] = useState('food');
   const [account, setAccount] = useState('cc');
   const [currency, setCurrency] = useState(base);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState('');
 
   // Default the entry currency to the active ledger's base, and follow a ledger
@@ -206,7 +206,7 @@ export function AddExpenseForm({
         </Field>
         <Field icon="calendar" label="Date">
           <input
-            type="date" aria-label="Date"
+            type="datetime-local" aria-label="Date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="bg-transparent text-right text-[15px] outline-none"

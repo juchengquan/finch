@@ -42,6 +42,10 @@ export async function listScheduled(exec: Exec, ledgerId?: string): Promise<Sche
       nextRun: String(r.next_run ?? ''),
       lastRun: String(r.last_run ?? ''),
       color: r.color == null ? null : String(r.color),
+      category: r.category_id == null ? null : String(r.category_id),
+      startDate: r.start_date == null ? undefined : String(r.start_date),
+      endDate: r.end_date == null ? null : String(r.end_date),
+      maxExecutions: r.max_executions == null ? null : Number(r.max_executions),
       ...(splits ? { splits } : {}),
     };
   });
@@ -56,12 +60,16 @@ export interface ScheduledPatch {
   autoPost?: number;
   color?: string | null;
   type?: string;
+  category?: string | null;
+  endDate?: string | null;
+  maxExecutions?: number | null;
 }
 
 export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPatch): Promise<void> {
   const cols: Record<string, string> = {
     name: 'name', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month',
     weekDay: 'day_of_week', autoPost: 'auto_post', color: 'color', type: 'type',
+    category: 'category_id', endDate: 'end_date', maxExecutions: 'max_executions',
   };
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
@@ -89,6 +97,10 @@ export interface NewScheduled {
   from: string | null;
   autoPost: number;
   color: string | null;
+  category: string | null;
+  startDate: string;
+  endDate: string | null;
+  maxExecutions: number | null;
 }
 
 export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void> {
@@ -96,9 +108,9 @@ export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void
     `INSERT INTO scheduled_templates
        (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
         from_account_id,from_account_name,category_id,frequency,day_of_month,day_of_week,start_date,
-        next_run,last_run,auto_post,color,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,0,0,NULL,?,NULL,?,NULL,?,?,?,date('now'),NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
-    [t.id, t.ledgerId, t.name, t.type, t.amount, t.account, t.from, t.frequency, t.dayOfMonth, t.weekDay, t.autoPost, t.color],
+        end_date,max_executions,next_run,last_run,auto_post,color,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,0,0,NULL,?,NULL,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
+    [t.id, t.ledgerId, t.name, t.type, t.amount, t.account, t.from, t.category, t.frequency, t.dayOfMonth, t.weekDay, t.startDate, t.endDate, t.maxExecutions, t.autoPost, t.color],
   );
 }
 

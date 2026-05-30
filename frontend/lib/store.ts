@@ -83,6 +83,10 @@ export interface ScheduledTemplate {
   nextRun: string;
   lastRun: string;
   color?: string | null;
+  category?: string | null;
+  startDate?: string;
+  endDate?: string | null;
+  maxExecutions?: number | null;
   splits?: ScheduledSplit[];
 }
 
@@ -170,8 +174,8 @@ interface FinanceState {
   createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
   updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
   deleteSubscription: (id: string) => void;
-  createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; ledgerId?: string }) => string;
-  updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null }) => void;
+  createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
+  updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
@@ -552,7 +556,7 @@ export const useFinanceStore = create<FinanceState>()(
       createScheduled: (input) => {
         const id = `sch-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const type = input.type ?? 'reminder';
+        const type = input.type ?? 'expense';
         const frequency = input.frequency ?? 'monthly';
         const dayOfMonth = input.dayOfMonth ?? 1;
         const weekDay = input.weekDay;
@@ -560,13 +564,17 @@ export const useFinanceStore = create<FinanceState>()(
         const amount = input.amount ?? null;
         const color = input.color ?? null;
         const account = input.account ?? '';
+        const category = input.category ?? null;
+        const startDate = input.startDate ?? '';
+        const endDate = input.endDate ?? null;
+        const maxExecutions = input.maxExecutions ?? null;
         set((s) => ({
           scheduled: [
             ...s.scheduled,
-            { id, name: input.name, type, amount, frequency, dayOfMonth, weekDay, account, from: input.from, autoPost, nextRun: '', lastRun: '', color },
+            { id, name: input.name, type, amount, frequency, dayOfMonth, weekDay, account, from: input.from, autoPost, nextRun: '', lastRun: '', color, category, startDate, endDate, maxExecutions },
           ],
         }));
-        syncMutation('createScheduled', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, account, from: input.from ?? null, autoPost: !!input.autoPost, color });
+        syncMutation('createScheduled', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, account, from: input.from ?? null, autoPost: !!input.autoPost, color, category, startDate, endDate, maxExecutions });
         return id;
       },
 
