@@ -16,14 +16,15 @@ import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listAccountGroups } from './queries/accountGroups';
 import { listCategories } from './queries/categories';
-import { budgetByCategory, budgetMetaByCategory, budgetRolloverByCategory } from './queries/budgets';
+import { listBudgets } from './queries/budgets';
+import { listBudgetGroups } from './queries/budgetGroups';
 import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
-import { listGoals } from './queries/goals';
 import { listTags, transactionTagMap } from './queries/tags';
 import { splitsByTransaction } from './queries/transactionSplits';
 import { listSubscriptions } from './queries/planning';
 import { listScheduled } from './queries/scheduled';
+import { getAppState } from './queries/appState';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
 
@@ -43,25 +44,25 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 
 /** Read the full app state (reference/derived data + the live transactions). */
 export async function projectState(exec: Exec): Promise<ProjectedState> {
-  const txRows = await exec("SELECT * FROM transactions WHERE status != 'cancelled' ORDER BY date DESC, time DESC");
+  const txRows = await exec('SELECT * FROM transactions ORDER BY date DESC, time DESC');
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [accounts, accountGroups, budgets, budgetMeta, budgetRollovers, categories, counterparties, exchangeRates, devices, goals, tags, tagMap, subscriptions, scheduled] =
+  const [accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, devices, tags, tagMap, subscriptions, scheduled] =
     await Promise.all([
       listAccounts(exec),
       listAccountGroups(exec),
-      budgetByCategory(exec),
-      budgetMetaByCategory(exec),
-      budgetRolloverByCategory(exec),
+      listBudgets(exec),
+      listBudgetGroups(exec),
       listCategories(exec),
       listCounterparties(exec),
       listExchangeRates(exec),
       listDevices(exec),
-      listGoals(exec),
       listTags(exec),
       transactionTagMap(exec),
       listSubscriptions(exec),
       listScheduled(exec),
     ]);
+  const mobileTabIds = await readMobileTabIds(exec);
+  const displayCurrencyByLedger = await readDisplayCurrencyByLedger(exec);
   const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
   for (const t of transactions) {
     const ids = tagMap[t.id];
@@ -81,18 +82,50 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     transactions,
     accounts,
     accountGroups,
-    budgetByCategory: budgets,
-    budgetMetaByCategory: budgetMeta,
-    budgetRolloverByCategory: budgetRollovers,
+    budgets: namedBudgets,
+    budgetGroups,
     categories,
     counterparties,
     exchangeRates,
     devices,
-    goals,
     tags,
     subscriptions,
     scheduled,
+    mobileTabIds,
+    displayCurrencyByLedger,
   };
+}
+
+// The mobile bottom-bar section ids, stored as a JSON array in app_state. Returns
+// [] when unset/malformed; the client applies its own default.
+async function readMobileTabIds(exec: Exec): Promise<string[]> {
+  const raw = await getAppState(exec, 'mobileTabs');
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// Per-ledger display currency, stored as a JSON object (ledgerId → currency) in
+// app_state. Returns {} when unset/malformed; the client falls back to each
+// ledger's base currency.
+async function readDisplayCurrencyByLedger(exec: Exec): Promise<Record<string, string>> {
+  const raw = await getAppState(exec, 'displayCurrencyByLedger');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'string') out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 /** Serialise store state into portable relational `.db` bytes. */

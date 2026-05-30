@@ -72,6 +72,7 @@ async function baseOfTx(exec: Exec, t: Tx): Promise<{ amountBase: number; rate: 
 async function seedOpeningByAccount(exec: Exec): Promise<Map<string, number>> {
   const deltaByAccount = new Map<string, number>();
   for (const t of transactionsData as Tx[]) {
+    if (t.pending) continue; // pending rows don't move the balance
     const { amountBase } = await baseOfTx(exec, t);
     deltaByAccount.set(t.account, (deltaByAccount.get(t.account) ?? 0) + amountBase);
   }
@@ -128,15 +129,6 @@ export async function seedReference(exec: Exec): Promise<void> {
     );
   }
 
-  for (const c of categories) {
-    if (!c.budget) continue;
-    const ledgerId = c.ledger ?? 'personal';
-    await exec(
-      'INSERT INTO budgets (id,ledger_id,name,type,amount,carry_forward,frequency,start_date,is_recurring,rollover,category_ids,warning_pct,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [`bud-${c.id}`, ledgerId, c.name, 'expense', c.budget, 0, 'monthly', '2026-05-01', 1, 0, JSON.stringify([c.id]), 80, SEED_TS, SEED_TS],
-    );
-  }
-
   for (const tg of transferGroupsData as TransferRow[]) {
     await exec(
       'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
@@ -159,13 +151,15 @@ export async function seedReference(exec: Exec): Promise<void> {
     );
   }
 
+  // Goals were merged into Budgets as one-shot income budgets ('bud-goal-' ids),
+  // shown on the Budgets › Income tab. (The standalone goals table was removed.)
   type GoalRow = { id: string; name: string; target: number; saved: number; eta?: string; hue?: number; ledger?: string };
-  const goals = goalsData as GoalRow[];
-  for (let i = 0; i < goals.length; i++) {
-    const g = goals[i];
+  for (const g of goalsData as GoalRow[]) {
     await exec(
-      'INSERT OR IGNORE INTO goals (id,ledger_id,name,target,saved,eta,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [g.id, g.ledger ?? 'personal', g.name, g.target, g.saved ?? 0, g.eta ?? null, g.hue ?? 200, i, SEED_TS],
+      `INSERT OR IGNORE INTO budgets
+         (id,ledger_id,group_id,name,type,amount,saved,carry_forward,frequency,start_date,end_date,is_recurring,rollover,warning_pct,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [`bud-goal-${g.id}`, g.ledger ?? 'personal', null, g.name, 'income', g.target, g.saved ?? 0, 0, 'monthly', '2026-05-01', null, 0, 0, 80, SEED_TS, SEED_TS],
     );
   }
 
@@ -255,22 +249,23 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       ordered.map(async (t) => ({ t, ledgerId: t.ledgerId ?? 'personal', ...(await baseOfTx(exec, t)) })),
     );
     const open = opening.get(accountId) ?? accounts.find((a) => a.id === accountId)?.balance ?? 0;
-    // Record the true opening so balances can be recomputed after edits/deletes.
-    await exec('UPDATE accounts SET opening_balance = ? WHERE id = ?', [open, accountId]);
-    let running = open;
+    // Start current_balance at the true opening; the insert trigger then moves it
+    // by each confirmed row's delta, ending at the known seed balance. opening_balance
+    // is recorded so recomputeAccount can rebuild after edits/deletes.
+    await exec('UPDATE accounts SET opening_balance = ?, current_balance = ? WHERE id = ?', [open, open, accountId]);
     for (const r of resolved) {
-      running = Math.round((running + r.amountBase) * 100) / 100;
       const t = r.t;
+      const kind = t.transferGroupId ? 'transfer' : r.amountBase > 0 ? 'income' : 'expense';
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-           description,category_id,counterparty_id,transfer_group_id,status,confirmed_at,
-           balance_after,currency,notes,recurring,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+           currency,notes,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate, t.date,
-          t.merchant, t.category, null, t.transferGroupId ?? null, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          running, r.currency, t.note || null, t.recurring ? 1 : 0, SEED_TS,
+          t.merchant, t.category, null, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
+          r.currency, t.note || null, SEED_TS,
         ],
       );
     }

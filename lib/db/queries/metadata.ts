@@ -73,13 +73,11 @@ export const CANONICAL_TABLES = [
   'transaction_splits',
   'transfer_groups',
   'budgets',
-  'goals',
   'tags',
   'subscriptions',
   'scheduled_templates',
   'scheduled_splits',
   'exchange_rates',
-  'account_balance_snapshots',
   'app_state',
 ];
 

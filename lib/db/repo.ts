@@ -1,11 +1,11 @@
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from './queries/accounts';
 import type { AccountGroupRow } from './queries/accountGroups';
-import type { BudgetMeta, BudgetRolloverInfo } from './queries/budgets';
+import type { BudgetRow } from './queries/budgets';
+import type { BudgetGroupRow } from './queries/budgetGroups';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
 import type { ExchangeRate, Device } from './queries/system';
-import type { Goal } from './queries/goals';
 import type { Tag } from './queries/tags';
 import type { Subscription } from './queries/planning';
 
@@ -26,15 +26,18 @@ export interface PersistState {
 export interface ProjectedState extends PersistState {
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
-  budgetByCategory: Record<string, number>;
-  budgetMetaByCategory: Record<string, BudgetMeta>;
-  budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
+  /** Named budgets (expense limits / income targets). */
+  budgets: BudgetRow[];
+  budgetGroups: BudgetGroupRow[];
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   devices: Device[];
-  goals: Goal[];
   tags: Tag[];
   subscriptions: Subscription[];
   scheduled: ScheduledTemplate[];
+  /** Ordered section ids for the mobile bottom bar. Empty = use the client default. */
+  mobileTabIds: string[];
+  /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
+  displayCurrencyByLedger: Record<string, string>;
 }

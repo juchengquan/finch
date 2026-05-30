@@ -36,8 +36,9 @@ export interface AddInput {
   time?: string;
   note?: string;
   status?: 'pending' | 'confirmed';
-  /** Manual balance-reconciliation flag; excluded from spend/cash-flow aggregates. */
-  isAdjustment?: boolean;
+  /** Explicit classification; defaults to income/expense by amount sign.
+   *  'adjustment' is the manual balance-reconciliation kind. */
+  kind?: 'income' | 'expense' | 'transfer' | 'adjustment';
 }
 
 export function rowToTx(r: Record<string, unknown>): Tx {
@@ -57,17 +58,16 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     time: r.time == null ? undefined : String(r.time),
     note: r.notes == null ? undefined : String(r.notes),
     pending: String(r.status) === 'pending',
-    recurring: !!Number(r.recurring),
-    kind: amount > 0 ? 'income' : undefined,
-    isAdjustment: !!Number(r.is_adjustment),
+    kind: String(r.kind) as Tx['kind'],
     ledgerId: String(r.ledger_id),
     transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
+    sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
   };
 }
 
-/** List transactions for a ledger with optional search / filters. Excludes cancelled. */
+/** List transactions for a ledger with optional search / filters. */
 export async function listTransactions(exec: Exec, opts: ListOptions): Promise<Tx[]> {
-  const where: string[] = ['ledger_id = ?', "status != 'cancelled'"];
+  const where: string[] = ['ledger_id = ?'];
   const bind: (string | number | null)[] = [opts.ledgerId];
 
   if (opts.direction === 'in') where.push('amount > 0');
@@ -125,31 +125,38 @@ function newId(): string {
   return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Insert a transaction; computes balance_after from the account's current balance. */
+/** Insert a transaction; confirmed rows move the account balance via the insert trigger. */
 export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
   const id = newId();
   const status = input.status ?? 'confirmed';
-  const acct = await exec('SELECT current_balance, currency FROM accounts WHERE id = ?', [input.accountId]);
-  const currentBalance = Number(acct[0]?.current_balance ?? 0);
-  const baseCurrency = String(acct[0]?.currency ?? 'USD');
-  const currency = input.currency ?? baseCurrency;
-  // `amount` is native (in `currency`); `amount_base` is the ledger-base figure
-  // that drives balances/reports. Convert via the exchange_rates table and lock
-  // the rate + date on the row.
-  const conv = await convertToBase(exec, input.amount, currency, baseCurrency, input.date);
+  const acct = await exec(
+    `SELECT a.currency, l.base_currency
+       FROM accounts a JOIN ledgers l ON l.id = a.ledger_id
+      WHERE a.id = ?`,
+    [input.accountId],
+  );
+  const accountCurrency = String(acct[0]?.currency ?? 'USD');
+  const ledgerBase = String(acct[0]?.base_currency ?? accountCurrency);
+  const currency = input.currency ?? accountCurrency;
+  // `amount` is native (in `currency`); `amount_base` is the LEDGER-base figure
+  // that drives cross-account reports — convert native → ledger base + lock the
+  // rate. The account balance is moved by the insert trigger (confirmed rows
+  // only), using the account-currency delta. (A three-currency row — entry ≠
+  // account ≠ base — is unsupported; the entry currency tracks the account's.)
+  const conv = await convertToBase(exec, input.amount, currency, ledgerBase, input.date);
   const amountBase = conv.amountBase;
   const exchangeRate = conv.rate;
-  const balanceAfter = Math.round((currentBalance + amountBase) * 100) / 100;
+  const kind = input.kind ?? (amountBase > 0 ? 'income' : 'expense');
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-       description,category_id,counterparty_id,transfer_group_id,status,confirmed_at,
-       balance_after,currency,notes,recurring,is_adjustment,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
+       description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+       currency,notes,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
     [
       id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate, input.date,
-      input.merchant, input.categoryId ?? null, null, null, status, status === 'confirmed' ? new Date().toISOString() : null,
-      balanceAfter, currency, input.note || null, 0, input.isAdjustment ? 1 : 0,
+      input.merchant, input.categoryId ?? null, null, null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
+      currency, input.note || null,
     ],
   );
   return id;
@@ -164,18 +171,38 @@ export async function updateTransaction(
   const bind: (string | number | null)[] = [];
   if (patch.merchant !== undefined) { sets.push('description = ?'); bind.push(patch.merchant); }
   if (patch.category !== undefined) { sets.push('category_id = ?'); bind.push(patch.category); }
-  if (patch.amount !== undefined) { sets.push('amount = ?', 'amount_base = ?'); bind.push(patch.amount, patch.amount); }
   if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
   if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }
   if (patch.note !== undefined) { sets.push('notes = ?'); bind.push(patch.note ?? null); }
+  if (patch.amount !== undefined) {
+    // `amount` is native (the transaction's own currency). Re-derive the
+    // ledger-base figure + lock the rate, using the (possibly edited) date for
+    // the rate lookup — so an edit stays correct when account currency ≠ base.
+    const [row] = await exec(
+      `SELECT t.currency, t.date, l.base_currency
+         FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN ledgers l ON l.id = a.ledger_id
+        WHERE t.id = ?`,
+      [id],
+    );
+    const currency = String(row?.currency ?? 'USD');
+    const ledgerBase = String(row?.base_currency ?? currency);
+    const rateDate = patch.date ?? String(row?.date ?? '');
+    const conv = await convertToBase(exec, patch.amount, currency, ledgerBase, rateDate);
+    sets.push('amount = ?', 'amount_base = ?', 'exchange_rate = ?', 'exchange_rate_date = ?');
+    bind.push(patch.amount, conv.amountBase, conv.rate, rateDate);
+  }
   if (!sets.length) return;
   bind.push(id);
   await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
-/** Void a transaction (soft delete) — keeps history, drops it from reports. */
-export async function cancelTransaction(exec: Exec, id: string): Promise<void> {
-  await exec("UPDATE transactions SET status = 'cancelled' WHERE id = ?", [id]);
+/** Hard-delete a transaction (tags/splits cascade). Returns its account_id so the
+ *  caller can recompute that account's balance afterward. */
+export async function deleteTransactionRow(exec: Exec, id: string): Promise<string | null> {
+  const rows = await exec('SELECT account_id FROM transactions WHERE id = ?', [id]);
+  if (!rows.length) return null;
+  await exec('DELETE FROM transactions WHERE id = ?', [id]);
+  return String(rows[0].account_id);
 }
 
 /** Confirm a pending transaction so it counts in reports. */

@@ -31,6 +31,15 @@ CREATE TABLE IF NOT EXISTS account_groups (
   updated_at           TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS budget_groups (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS accounts (
   id                   TEXT PRIMARY KEY,
   ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -113,15 +122,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
   counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
-  status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed','cancelled')),
+  kind               TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment')),
+  status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
   confirmed_at       TEXT,
   source_template_id TEXT,
   source_split_id    TEXT,
-  balance_after      REAL NOT NULL,
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
-  recurring          INTEGER NOT NULL DEFAULT 0,
-  is_adjustment      INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL
 );
 
@@ -140,40 +147,27 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
 );
 CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id);
 
-CREATE TABLE IF NOT EXISTS account_balance_snapshots (
-  id         TEXT PRIMARY KEY,
-  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  date       TEXT NOT NULL,
-  balance    REAL NOT NULL,
-  UNIQUE(account_id, date)
-);
-
 CREATE TABLE IF NOT EXISTS budgets (
-  id                 TEXT PRIMARY KEY,
-  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name               TEXT,
-  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
-  amount             REAL NOT NULL,
-  carry_forward      REAL NOT NULL DEFAULT 0,
-  frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-  start_date         TEXT NOT NULL,
-  end_date           TEXT,
-  is_recurring       INTEGER NOT NULL DEFAULT 1,
-  rollover           INTEGER NOT NULL DEFAULT 0,
-  rollover_limit     REAL,
-  -- Last period the auto-rollover has processed for this budget (e.g.
-  -- '2026-04', '2026-W17', '2026-Q2'). NULL = never rolled.
-  last_rolled_period TEXT,
-  -- Staged amount change activated at the next period boundary; NULL = no
-  -- pending change. Lets a mid-period amount edit affect "the next cycle"
-  -- without retroactively shifting the current period's spent-of-budget.
-  pending_amount     REAL,
-  account_ids        TEXT,
-  category_ids       TEXT,
-  tag_ids            TEXT,
-  warning_pct        REAL NOT NULL DEFAULT 80,
-  created_at         TEXT NOT NULL,
-  updated_at         TEXT NOT NULL
+  id             TEXT PRIMARY KEY,
+  ledger_id      TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  group_id       TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
+  name           TEXT,
+  type           TEXT NOT NULL CHECK(type IN ('income','expense')),
+  amount         REAL NOT NULL,
+  saved          REAL NOT NULL DEFAULT 0,
+  carry_forward  REAL NOT NULL DEFAULT 0,
+  frequency      TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
+  start_date     TEXT NOT NULL,
+  end_date       TEXT,
+  is_recurring   INTEGER NOT NULL DEFAULT 1,
+  rollover       INTEGER NOT NULL DEFAULT 0,
+  rollover_limit REAL,
+  account_ids    TEXT,
+  category_ids   TEXT,
+  tag_ids        TEXT,
+  warning_pct    REAL NOT NULL DEFAULT 80,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS scheduled_templates (
@@ -231,18 +225,6 @@ CREATE TABLE IF NOT EXISTS net_worth_snapshots (
   total_debt       REAL,
   notes            TEXT,
   UNIQUE(ledger_id, date)
-);
-
-CREATE TABLE IF NOT EXISTS goals (
-  id         TEXT PRIMARY KEY,
-  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  target     REAL NOT NULL,
-  saved      REAL NOT NULL DEFAULT 0,
-  eta        TEXT,
-  hue        INTEGER NOT NULL DEFAULT 200,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -309,6 +291,7 @@ CREATE TABLE IF NOT EXISTS db_metadata (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ag_ledger ON account_groups(ledger_id);
+CREATE INDEX IF NOT EXISTS idx_budget_groups_ledger ON budget_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
 CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id);
@@ -322,33 +305,29 @@ CREATE INDEX IF NOT EXISTS idx_txn_transfer_group ON transactions(transfer_group
 CREATE INDEX IF NOT EXISTS idx_txn_pending ON transactions(ledger_id, status) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_txntag_txn ON transaction_tags(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
-CREATE INDEX IF NOT EXISTS idx_snap_account_date ON account_balance_snapshots(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
-CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
-CREATE INDEX IF NOT EXISTS idx_goals_ledger ON goals(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_subs_ledger ON subscriptions(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 
+-- Confirmed inserts move the account balance by their delta (in the account's
+-- currency: the native amount when the entry is in that currency, else the
+-- ledger-base figure for a foreign entry on a base-currency account). Pending
+-- rows don't move it; recomputeAccount() handles confirm/edit/delete.
 CREATE TRIGGER IF NOT EXISTS tr_update_account_balance
 AFTER INSERT ON transactions
 FOR EACH ROW
+WHEN NEW.status = 'confirmed'
 BEGIN
   UPDATE accounts
-  SET current_balance = NEW.balance_after, updated_at = datetime('now')
+  SET current_balance = ROUND(current_balance +
+        (CASE WHEN NEW.currency = (SELECT currency FROM accounts WHERE id = NEW.account_id)
+              THEN NEW.amount ELSE NEW.amount_base END), 2),
+      updated_at = datetime('now')
   WHERE id = NEW.account_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS tr_snapshot_balance
-AFTER INSERT ON transactions
-FOR EACH ROW
-WHEN NEW.balance_after IS NOT NULL
-BEGIN
-  INSERT OR IGNORE INTO account_balance_snapshots (id, account_id, date, balance)
-  VALUES (lower(hex(randomblob(16))), NEW.account_id, NEW.date, NEW.balance_after);
 END;
 
 CREATE TRIGGER IF NOT EXISTS tr_update_ledger_summary
@@ -406,78 +385,21 @@ export async function applySchema(exec: (sql: string, bind?: (string | number | 
 
 type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record<string, unknown>[]>;
 
-// Versioning model
-// -----------------
-// Schema versions are ISO 8601 UTC datetime strings (second precision). They
-// sort chronologically by simple lex order, so MIGRATIONS can stay a plain
-// object iterated via Object.keys().sort().
-//
-// History note: versions 1..7 were integers and remain so in `LEGACY_MIGRATIONS`
-// for backwards-compat opening older files. The first datetime version is
-// BOOTSTRAP_VERSION — it introduces the db_metadata table and is the line that
-// older integer-versioned files cross into the new scheme.
-//
-// SCHEMA_VERSION is whatever we've shipped most recently; bump it (with a new
-// MIGRATIONS entry) whenever the canonical CREATE statements change shape.
-const LEGACY_LATEST = 7;
-export const BOOTSTRAP_VERSION = '2026-05-30T08:15:30Z';
-export const SCHEMA_VERSION = '2026-05-30T14:00:00Z';
+// Versioning
+// ----------
+// A single ISO 8601 UTC datetime stamped into db_metadata. This project is
+// pre-release with no databases to preserve, so there is no legacy / backward-
+// compat machinery — fresh databases are created directly from the canonical
+// SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
+// entry to carry forward databases created after this baseline.
+export const SCHEMA_VERSION = '2026-05-31T00:00:00Z';
 export const APP_NAME = 'finch';
 
-const LEGACY_MIGRATIONS: Record<number, string[]> = {
-  2: [
-    'ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0',
-    // Backfill from the (assumed-correct) current balance and the live txn set.
-    `UPDATE accounts SET opening_balance = ROUND(current_balance - COALESCE(
-       (SELECT SUM(amount_base) FROM transactions
-         WHERE transactions.account_id = accounts.id AND status != 'cancelled'), 0), 2)`,
-  ],
-  3: [
-    // Display fields previously held in the accountOverrides app_state shim.
-    'ALTER TABLE accounts ADD COLUMN color TEXT',
-    'ALTER TABLE accounts ADD COLUMN last4 TEXT',
-    'ALTER TABLE accounts ADD COLUMN institution TEXT',
-    'ALTER TABLE accounts ADD COLUMN routing TEXT',
-  ],
-  4: [
-    // Category accent colour (hue 0–360), previously only in the static mock.
-    'ALTER TABLE categories ADD COLUMN hue INTEGER',
-  ],
-  5: [
-    // Balance-reconciliation marker — distinguishes manual adjustments from
-    // real income/expense so they're excluded from category spend and cash flow.
-    'ALTER TABLE transactions ADD COLUMN is_adjustment INTEGER NOT NULL DEFAULT 0',
-  ],
-  6: [
-    `CREATE TABLE IF NOT EXISTS transaction_splits (
-       id             TEXT PRIMARY KEY,
-       transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-       category_id    TEXT REFERENCES categories(id) ON DELETE SET NULL,
-       amount         REAL NOT NULL,
-       amount_base    REAL NOT NULL,
-       description    TEXT,
-       sort_order     INTEGER NOT NULL DEFAULT 0
-     )`,
-    'CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id)',
-  ],
-  7: [
-    'ALTER TABLE scheduled_templates ADD COLUMN color TEXT',
-  ],
-};
-
-// Datetime-keyed migrations applied above BOOTSTRAP_VERSION. The bootstrap step
-// itself (creating db_metadata + seeding its row) is handled inline by migrate()
-// because it transitions the file from the integer scheme to the datetime one.
+// Schema changes made after the baseline, keyed by the version they upgrade TO.
+// Applied in lex (== chronological) order for versions strictly greater than a
+// database's recorded schema_version. Empty at the baseline.
 const MIGRATIONS: Record<string, string[]> = {
-  // Budget cycles + automatic period rollover groundwork (see
-  // plans/BUDGET_CYCLES_PLAN.md). Two new columns + an index on the
-  // catch-up marker — no behavioural change until later commits wire the
-  // rollover loop and cycle-aware reads.
-  '2026-05-30T14:00:00Z': [
-    'ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT',
-    'ALTER TABLE budgets ADD COLUMN pending_amount REAL',
-    'CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period)',
-  ],
+  // '2026-06-15T12:00:00Z': ['ALTER TABLE accounts ADD COLUMN preferred_rate TEXT'],
 };
 
 // Read the package version once so the metadata row reports it on import.
@@ -510,48 +432,22 @@ async function ensureMetadataRow(exec: ExecFn, schemaVersion: string): Promise<v
 }
 
 /**
- * Bring a database up to SCHEMA_VERSION. `fresh` means the file was just created
- * (CREATE statements are already current → only stamp the version + create the
- * metadata row). An existing file is detected by whether it has a db_metadata
- * row: if it doesn't, it predates the datetime scheme and gets the legacy
- * integer migrations replayed before being bootstrapped to BOOTSTRAP_VERSION.
- * Either way, datetime migrations strictly newer than the current
- * schema_version are then applied in lex order.
+ * Stamp/upgrade a database to SCHEMA_VERSION. `fresh` files were just created
+ * from the canonical SCHEMA, so this only records the metadata row. Existing
+ * files replay any MIGRATIONS newer than their recorded schema_version, then
+ * re-stamp. (No legacy/bootstrap handling — see the Versioning note above.)
  */
 export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<void> {
   if (opts.fresh) {
     await ensureMetadataRow(exec, SCHEMA_VERSION);
-    // Stamp user_version too as a defence-in-depth legacy probe.
-    await exec(`PRAGMA user_version = ${LEGACY_LATEST}`);
     return;
   }
-
-  // db_metadata presence is the cleanest signal that a file has crossed the
-  // bootstrap line. We probe with a best-effort SELECT so the absence of the
-  // table doesn't blow up here — applySchema is expected to have just run.
-  const metaRows = await exec('SELECT schema_version FROM db_metadata WHERE id = 1');
-  if (metaRows.length === 0) {
-    // Pre-bootstrap file. Replay the integer migrations through LEGACY_LATEST.
-    const v = await exec('PRAGMA user_version');
-    const from = Number(v[0]?.user_version ?? 0) || 1;
-    for (let i = from + 1; i <= LEGACY_LATEST; i++) {
-      for (const sql of LEGACY_MIGRATIONS[i] ?? []) await exec(sql);
-    }
-    await exec(`PRAGMA user_version = ${LEGACY_LATEST}`);
-    await ensureMetadataRow(exec, BOOTSTRAP_VERSION);
-  }
-
-  // Walk datetime migrations strictly greater than the recorded version.
   const cur = String(
-    (await exec('SELECT schema_version FROM db_metadata WHERE id = 1'))[0]?.schema_version ?? BOOTSTRAP_VERSION,
+    (await exec('SELECT schema_version FROM db_metadata WHERE id = 1'))[0]?.schema_version ?? '',
   );
-  const ordered = Object.keys(MIGRATIONS).sort();
-  for (const version of ordered) {
+  for (const version of Object.keys(MIGRATIONS).sort()) {
     if (version <= cur) continue;
     for (const sql of MIGRATIONS[version] ?? []) await exec(sql);
   }
-
-  if (ordered.length > 0 || cur !== SCHEMA_VERSION) {
-    await ensureMetadataRow(exec, SCHEMA_VERSION);
-  }
+  await ensureMetadataRow(exec, SCHEMA_VERSION);
 }

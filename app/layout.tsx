@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
-import { CurrencyProvider } from '@/components/currency-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
@@ -50,21 +49,19 @@ export default function RootLayout({
     >
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <CurrencyProvider>
-            <LedgerProvider>
-              <StoreHydration />
-              <SqliteBackupProvider>
-                <TransactionSheetProvider>
-                  <AddExpenseSheetProvider>
-                    <CommandPaletteProvider>
-                      {children}
-                      <Toaster />
-                    </CommandPaletteProvider>
-                  </AddExpenseSheetProvider>
-                </TransactionSheetProvider>
-              </SqliteBackupProvider>
-            </LedgerProvider>
-          </CurrencyProvider>
+          <LedgerProvider>
+            <StoreHydration />
+            <SqliteBackupProvider>
+              <TransactionSheetProvider>
+                <AddExpenseSheetProvider>
+                  <CommandPaletteProvider>
+                    {children}
+                    <Toaster />
+                  </CommandPaletteProvider>
+                </AddExpenseSheetProvider>
+              </TransactionSheetProvider>
+            </SqliteBackupProvider>
+          </LedgerProvider>
         </ThemeProvider>
       </body>
     </html>

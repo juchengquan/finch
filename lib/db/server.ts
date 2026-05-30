@@ -7,7 +7,6 @@ import { seedDatabase } from './seed';
 import { projectState } from './state';
 import { bumpUpdated, rowCounts, stampExport } from './queries/metadata';
 import { computeChecksum } from './checksum';
-import { rollBudgetsIfDue } from '@/lib/budgets/rollover';
 import type { Exec, ProjectedState } from './repo';
 
 // The authoritative database: a single in-memory SQLite connection held by the
@@ -245,29 +244,18 @@ export function restoreBackup(name: string): Promise<ImportResult> {
   });
 }
 
-const todayUtc = () => new Date().toISOString().slice(0, 10);
-
-/** Read the full app state from the server database. Catches up any due
- *  budget rollovers (idempotent — no-op when no period boundary has passed
- *  since the last call) before projecting. */
+/** Read the full app state from the server database. */
 export async function readState(): Promise<ProjectedState> {
-  return serialize(async () => {
-    const db = await getServerDb();
-    const { rolled } = await rollBudgetsIfDue(db.exec, todayUtc());
-    if (rolled > 0) await db.persist();
-    return projectState(db.exec);
-  });
+  const { exec } = await getServerDb();
+  return projectState(exec);
 }
 
 /** Run a write against the server database, persist to file, return new state.
- *  Serialised against imports so a mutation can't interleave with a file swap.
- *  Runs the rollover catch-up before projecting so the response is consistent
- *  with what /api/state would return immediately afterwards. */
+ *  Serialised against imports so a mutation can't interleave with a file swap. */
 export function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
   return serialize(async () => {
     const db = await getServerDb();
     await fn(db.exec);
-    await rollBudgetsIfDue(db.exec, todayUtc());
     await db.persist();
     return projectState(db.exec);
   });

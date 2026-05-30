@@ -286,11 +286,6 @@ export function TransactionDetail({
   const whenStr = `${when.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
   const acctLabel = acct.last4 ? `${acct.name} · ${acct.last4}` : acct.name;
 
-  const toggleRecurring = () => {
-    updateTransaction(tx.id, { recurring: !tx.recurring });
-    toast.success(tx.recurring ? 'Removed recurring' : 'Marked as recurring');
-  };
-
   const remove = () => {
     deleteTransaction(tx.id);
     toast.success('Transaction deleted');
@@ -330,17 +325,6 @@ export function TransactionDetail({
             <span className="text-[10px] font-medium">{splits.length ? `Split (${splits.length})` : 'Split'}</span>
           </button>
         </SplitEditorDialog>
-        <button
-          type="button"
-          onClick={toggleRecurring}
-          className={cn(
-            'flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border',
-            tx.recurring ? 'border-primary text-primary' : 'border-border text-foreground',
-          )}
-        >
-          <Icon name="sync" size={18} />
-          <span className="text-[10px] font-medium">Recurring</span>
-        </button>
         <button
           type="button"
           onClick={() => setConfirmDeleteOpen(true)}
@@ -384,7 +368,6 @@ export function TransactionDetail({
             : []),
           { l: 'Status', v: tx.pending ? 'Pending' : 'Posted' },
           { l: 'Note', v: tx.note || '—' },
-          { l: 'Recurring', v: tx.recurring ? 'Yes' : 'No' },
         ].map((r) => (
           <div key={r.l} className="border-border flex items-center justify-between border-t-[0.5px] py-3 text-[13px]">
             <span className="text-muted-foreground">{r.l}</span>

@@ -4,7 +4,7 @@ import type { PersistState } from '@/lib/db/repo';
 
 const sample: PersistState = {
   transactions: [
-    { id: 't01', merchant: 'Blue Bottle', category: 'food', amount: -6.75, account: 'cc', date: '2026-05-24', time: '08:14', note: 'Cortado', pending: false, recurring: false },
+    { id: 't01', merchant: 'Blue Bottle', category: 'food', amount: -6.75, account: 'cc', date: '2026-05-24', time: '08:14', note: 'Cortado', pending: false },
     { id: 't03', merchant: 'Lyft', category: 'trans', amount: -18.4, account: 'cc', date: '2026-05-23', time: '14:01', pending: true },
     { id: 't05', merchant: 'Acme Payroll', category: null, amount: 2900, account: 'chk', date: '2026-05-22', time: '00:00', pending: false, kind: 'income' },
     { id: 'f01', merchant: 'FairPrice', category: 'f-grocery', amount: -128.4, account: 'f-dbs', date: '2026-05-24', pending: false, ledgerId: 'family' },
@@ -33,8 +33,8 @@ test('store state round-trips through the relational schema', async () => {
 
   expect(loaded.transactions.find((t) => t.id === 'f01')!.ledgerId).toBe('family');
 
-  // Budgets are seeded per-category and projected as a categoryId → amount map.
-  expect(loaded.budgetByCategory.food).toBe(700);
+  // Seeded goals project as one-shot income budgets.
+  expect(loaded.budgets.some((b) => b.type === 'income')).toBe(true);
   // Counterparty verify/alias state now lives on the table (no app_state shim).
   const cp04 = loaded.counterparties.find((c) => c.id === 'cp-04')!;
   expect(cp04.verified).toBe(false);
@@ -109,6 +109,70 @@ test('counterparty verify + alias edits write the table (no app_state shim)', as
   donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(false);
   expect(donki.aliases).not.toContain('DONKI JURONG');
+});
+
+test('mobile bottom-bar tab ids round-trip through app_state', async () => {
+  const { applySchema } = await import('@/lib/db/schema');
+  const { seedDatabase } = await import('@/lib/db/seed');
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { projectState } = await import('@/lib/db/state');
+  const init = (await import('@sqlite.org/sqlite-wasm')).default as unknown as (
+    o?: unknown,
+  ) => Promise<{ oo1: { DB: new (s?: string) => { exec: (o: unknown) => void } } }>;
+  const sqlite3 = await init({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec = async (sql: string, bind?: (string | number | null)[]) => {
+    const rows: Record<string, unknown>[] = [];
+    db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  await applySchema(exec);
+  await seedDatabase(exec);
+
+  // Unset → projects as empty (the client applies its own default).
+  expect((await projectState(exec)).mobileTabIds).toEqual([]);
+
+  // Set → persists and projects back in order; non-string entries are dropped.
+  await applyMutation(exec, 'setMobileTabIds', { ids: ['insights', 'goals', 'budgets', 7] });
+  expect((await projectState(exec)).mobileTabIds).toEqual(['insights', 'goals', 'budgets']);
+
+  // Overwrite replaces the prior value (single app_state row).
+  await applyMutation(exec, 'setMobileTabIds', { ids: ['reports'] });
+  expect((await projectState(exec)).mobileTabIds).toEqual(['reports']);
+});
+
+test('per-ledger display currency round-trips through app_state', async () => {
+  const { applySchema } = await import('@/lib/db/schema');
+  const { seedDatabase } = await import('@/lib/db/seed');
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { projectState } = await import('@/lib/db/state');
+  const init = (await import('@sqlite.org/sqlite-wasm')).default as unknown as (
+    o?: unknown,
+  ) => Promise<{ oo1: { DB: new (s?: string) => { exec: (o: unknown) => void } } }>;
+  const sqlite3 = await init({ print() {}, printErr() {} });
+  const db = new sqlite3.oo1.DB(':memory:');
+  const exec = async (sql: string, bind?: (string | number | null)[]) => {
+    const rows: Record<string, unknown>[] = [];
+    db.exec({ sql, bind: bind ?? [], rowMode: 'object', resultRows: rows });
+    return rows;
+  };
+  await applySchema(exec);
+  await seedDatabase(exec);
+
+  // Unset → projects as an empty map (the client falls back to each ledger's base).
+  expect((await projectState(exec)).displayCurrencyByLedger).toEqual({});
+
+  // Setting one ledger persists just that entry.
+  await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'personal', currency: 'EUR' });
+  expect((await projectState(exec)).displayCurrencyByLedger).toEqual({ personal: 'EUR' });
+
+  // A second ledger merges in without clobbering the first.
+  await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'family', currency: 'JPY' });
+  expect((await projectState(exec)).displayCurrencyByLedger).toEqual({ personal: 'EUR', family: 'JPY' });
+
+  // Re-setting an existing ledger overwrites only that entry.
+  await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'personal', currency: 'GBP' });
+  expect((await projectState(exec)).displayCurrencyByLedger).toEqual({ personal: 'GBP', family: 'JPY' });
 });
 
 test('cancelled transactions are dropped on projection', async () => {

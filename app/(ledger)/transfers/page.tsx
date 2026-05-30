@@ -157,11 +157,14 @@ export default function TransfersPage() {
                   {tg.fromName ?? '—'} → {tg.toName ?? '—'}
                 </div>
                 <div className="font-sans text-[15px] font-medium tabular-nums">
-                  {fmtNative(tg.amount, active.base)}
+                  {fmtNative(tg.amount, tg.fromCurrency)}
                 </div>
               </div>
               <div className="text-muted-foreground mt-0.5 text-[11px]">
                 {tg.date.replace(/-/g, '/')}
+                {tg.fromCurrency !== tg.toCurrency && tg.amount > 0
+                  ? ` · → ${fmtNative(tg.toAmount, tg.toCurrency)} @ ${(tg.toAmount / tg.amount).toFixed(4)}`
+                  : ''}
                 {tg.note ? ` · ${tg.note}` : ''}
               </div>
             </div>

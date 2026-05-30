@@ -14,6 +14,12 @@ function fallbackToSgd(currency: string): number {
   return perUsd ? RATE_PER_USD.SGD / perUsd : 1;
 }
 
+/** The base currency a ledger's `amount_base` figures are expressed in. */
+export async function ledgerBaseCurrency(exec: Exec, ledgerId: string): Promise<string> {
+  const rows = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [ledgerId]);
+  return rows.length ? String(rows[0].base_currency) : 'USD';
+}
+
 /** rate_to_sgd for a currency, nearest row on or before `date`; SGD → 1; else fallback. */
 export async function rateToSgd(exec: Exec, currency: string, date: string): Promise<number> {
   if (currency === 'SGD') return 1;

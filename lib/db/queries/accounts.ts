@@ -4,22 +4,27 @@
 import type { Exec } from '@/lib/db/repo';
 
 /**
- * Recompute an account's running balances from its opening balance forward.
- * The balance trigger only fires on INSERT, so any edit/cancel/delete that
- * changes the amount or membership of the live txn set must call this to keep
- * balance_after (per row) and current_balance correct.
+ * Recompute an account's current_balance from its opening balance + confirmed
+ * transactions. The insert trigger moves the balance for new confirmed rows, so
+ * any edit/confirm/delete that changes the confirmed set must call this.
+ *
+ * Only `confirmed` rows move the balance: `pending` (unconfirmed) transactions
+ * are excluded so they don't affect accounts until confirmed. The delta is taken
+ * in the account's currency (native amount when the entry is in that currency,
+ * else the ledger-base figure for a foreign entry on a base-currency account).
  */
 export async function recomputeAccount(exec: Exec, accountId: string): Promise<void> {
-  const acc = await exec('SELECT opening_balance FROM accounts WHERE id = ?', [accountId]);
+  const acc = await exec('SELECT opening_balance, currency FROM accounts WHERE id = ?', [accountId]);
   if (!acc.length) return;
+  const accountCurrency = String(acc[0].currency ?? 'USD');
   let running = Number(acc[0].opening_balance ?? 0);
   const rows = await exec(
-    "SELECT id, amount_base FROM transactions WHERE account_id = ? AND status != 'cancelled' ORDER BY date, time, created_at",
+    "SELECT amount, amount_base, currency FROM transactions WHERE account_id = ? AND status = 'confirmed'",
     [accountId],
   );
   for (const r of rows) {
-    running = Math.round((running + Number(r.amount_base)) * 100) / 100;
-    await exec('UPDATE transactions SET balance_after = ? WHERE id = ?', [running, String(r.id)]);
+    const delta = String(r.currency) === accountCurrency ? Number(r.amount) : Number(r.amount_base);
+    running = Math.round((running + delta) * 100) / 100;
   }
   await exec("UPDATE accounts SET current_balance = ?, updated_at = datetime('now') WHERE id = ?", [running, accountId]);
 }
@@ -87,22 +92,10 @@ export async function netWorth(exec: Exec, ledgerId: string): Promise<number> {
   return Number(rows[0]?.total ?? 0);
 }
 
-export interface BalancePoint {
-  date: string;
-  balance: number;
-}
-
-export async function accountBalanceSeries(exec: Exec, accountId: string): Promise<BalancePoint[]> {
-  const rows = await exec(
-    'SELECT date, balance FROM account_balance_snapshots WHERE account_id = ? ORDER BY date',
-    [accountId],
-  );
-  return rows.map((r) => ({ date: String(r.date), balance: Number(r.balance) }));
-}
-
 export interface AccountPatch {
   name?: string;
   type?: string;
+  currency?: string;
   notes?: string | null;
   color?: string | null;
   last4?: string | null;
@@ -114,6 +107,7 @@ export interface AccountPatch {
 const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   name: 'name',
   type: 'type',
+  currency: 'currency',
   notes: 'notes',
   color: 'color',
   last4: 'last4',

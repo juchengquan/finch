@@ -1,27 +1,22 @@
 'use client';
 
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { useLedger } from '@/components/ledger-provider';
+import { useFinanceStore } from '@/lib/store';
 
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'SGD' | 'CNY';
 
-interface CurrencyContextValue {
-  currency: Currency;
-  setCurrency: (c: Currency) => void;
-}
-
-const CurrencyContext = createContext<CurrencyContextValue | null>(null);
-
-export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrency] = useState<Currency>('USD');
-  return (
-    <CurrencyContext.Provider value={{ currency, setCurrency }}>
-      {children}
-    </CurrencyContext.Provider>
-  );
-}
-
+// Display currency is per-ledger: the currency a ledger's amounts are converted
+// to for viewing. The choice is persisted in the synced store (DB-backed), so it
+// follows the user across devices. Until a ledger has an explicit choice, it
+// shows its own base currency. Reads useLedger, so callers must be within
+// LedgerProvider (all app content is).
 export function useCurrency() {
-  const ctx = useContext(CurrencyContext);
-  if (!ctx) throw new Error('useCurrency must be used within CurrencyProvider');
-  return ctx;
+  const { activeId, active } = useLedger();
+  const byLedger = useFinanceStore((s) => s.displayCurrencyByLedger);
+  const setDisplayCurrency = useFinanceStore((s) => s.setDisplayCurrency);
+
+  const currency = (byLedger[activeId] ?? active.base) as Currency;
+  const setCurrency = (c: Currency) => setDisplayCurrency(activeId, c);
+
+  return { currency, setCurrency };
 }

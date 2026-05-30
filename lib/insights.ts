@@ -4,7 +4,7 @@
 
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
-import { categorySpend, netWorthSeries, prevMonth } from '@/lib/select';
+import { categorySpend, netWorthSeries, prevMonth, kindOf } from '@/lib/select';
 
 export interface Insight {
   tone: 'pos' | 'warn' | 'neut';
@@ -102,7 +102,7 @@ const weekdaySkew: Rule = (ctx) => {
   const totals = new Array(7).fill(0);
   let any = false;
   for (const t of ctx.transactions) {
-    if (ledgerOf(t) !== ctx.ledgerId || t.pending || t.amount >= 0 || t.transferGroupId || t.isAdjustment) continue;
+    if (ledgerOf(t) !== ctx.ledgerId || t.pending || kindOf(t) !== 'expense') continue;
     totals[new Date(`${t.date}T00:00`).getDay()] += -t.amount;
     any = true;
   }

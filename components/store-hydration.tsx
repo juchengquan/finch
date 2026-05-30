@@ -2,7 +2,13 @@
 
 import { useEffect } from 'react';
 import { useFinanceStore } from '@/lib/store';
-import { fetchState } from '@/lib/api-client';
+import { fetchState, mutate } from '@/lib/api-client';
+
+// Today as a local 'YYYY-MM-DD' so "due" matches the user's calendar day.
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // The store starts from seed data so server and first-client render match.
 // After mount we load the authoritative state from the server database and
@@ -30,7 +36,20 @@ export function StoreHydration() {
         });
     };
 
-    sync();
+    // First load: materialize any due scheduled occurrences (idempotent), which
+    // returns the full projected state. Fall back to a plain read on failure.
+    inFlight = true;
+    void mutate('generateDueScheduled', { today: localToday() })
+      .then((state) => {
+        if (!cancelled) useFinanceStore.setState(state);
+      })
+      .catch((err) => {
+        console.error('Could not generate scheduled items', err);
+        if (!cancelled) sync();
+      })
+      .finally(() => {
+        inFlight = false;
+      });
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') sync();

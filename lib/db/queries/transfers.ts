@@ -8,7 +8,10 @@ import { recomputeAccount } from './accounts';
 export interface Transfer {
   id: string; // transfer_group_id
   date: string;
-  amount: number; // positive magnitude
+  amount: number; // positive magnitude sent, in `fromCurrency` (native)
+  toAmount: number; // positive magnitude received, in `toCurrency` (native)
+  fromCurrency: string;
+  toCurrency: string;
   fromAccountId: string | null;
   toAccountId: string | null;
   fromName: string | null;
@@ -22,11 +25,14 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
        t.transfer_group_id AS id,
        MAX(t.date) AS date,
        MAX(CASE WHEN t.amount < 0 THEN -t.amount END) AS amount,
+       MAX(CASE WHEN t.amount > 0 THEN t.amount END) AS toAmount,
+       MAX(CASE WHEN t.amount < 0 THEN t.currency END) AS fromCurrency,
+       MAX(CASE WHEN t.amount > 0 THEN t.currency END) AS toCurrency,
        MAX(CASE WHEN t.amount < 0 THEN t.account_id END) AS fromId,
        MAX(CASE WHEN t.amount > 0 THEN t.account_id END) AS toId,
        MAX(t.notes) AS note
      FROM transactions t
-     WHERE t.ledger_id = ? AND t.transfer_group_id IS NOT NULL AND t.status != 'cancelled'
+     WHERE t.ledger_id = ? AND t.transfer_group_id IS NOT NULL
      GROUP BY t.transfer_group_id
      ORDER BY date DESC`,
     [ledgerId],
@@ -39,6 +45,9 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
     id: String(r.id),
     date: String(r.date),
     amount: Number(r.amount ?? 0),
+    toAmount: Number(r.toAmount ?? 0),
+    fromCurrency: r.fromCurrency == null ? 'USD' : String(r.fromCurrency),
+    toCurrency: r.toCurrency == null ? 'USD' : String(r.toCurrency),
     fromAccountId: r.fromId == null ? null : String(r.fromId),
     toAccountId: r.toId == null ? null : String(r.toId),
     fromName: r.fromId == null ? null : nameById.get(String(r.fromId)) ?? null,

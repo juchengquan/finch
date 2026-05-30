@@ -17,9 +17,8 @@ import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { useFinanceStore } from '@/lib/store';
-import { MOCK, catById } from '@/lib/data';
+import { MOCK, catById, CURRENCIES } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
-import { accountBalance } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
@@ -132,7 +131,9 @@ function AccountGroupAccordion({
   );
 }
 
-const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', openingBalance: '', last4: '', color: '#3a4a5f' };
+const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', currency: '', openingBalance: '', last4: '', color: '#3a4a5f' };
+
+const CURRENCY_CODES = Object.keys(CURRENCIES);
 
 interface GroupDraft {
   id: string | null; // null => create
@@ -142,7 +143,7 @@ interface GroupDraft {
 const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '', includeInNetWorth: true };
 
 export default function AccountsPage() {
-  const { fmt } = useMoney();
+  const { fmt, toBase } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const allTxns = useFinanceStore((s) => s.transactions);
@@ -152,7 +153,9 @@ export default function AccountsPage() {
   const createAccountGroup = useFinanceStore((s) => s.createAccountGroup);
   const updateAccountGroup = useFinanceStore((s) => s.updateAccountGroup);
   const deleteAccountGroup = useFinanceStore((s) => s.deleteAccountGroup);
-  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId);
+  // Recent activity shows confirmed transactions only; unconfirmed (pending)
+  // items live in the per-account "To confirm" section and the Pending screen.
+  const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === activeId && !t.pending);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
@@ -161,7 +164,7 @@ export default function AccountsPage() {
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
 
   const openCreate = (groupId?: string) => {
-    setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash' });
+    setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash', currency: active.base });
     setCreateOpen(true);
   };
 
@@ -171,7 +174,7 @@ export default function AccountsPage() {
     createAccount({
       name,
       type: draft.type,
-      currency: active.base,
+      currency: draft.currency || active.base,
       groupId: draft.group,
       openingBalance: Number(draft.openingBalance) || 0,
       color: draft.color,
@@ -186,7 +189,13 @@ export default function AccountsPage() {
   // DB rows; the static mock is only a pre-hydration fallback so first paint
   // isn't empty.
   const ledgerAccountRows = accounts.filter((a) => a.ledgerId === activeId);
-  const balanceOf = (id: string) => accountBalance(ledgerAccountRows, id);
+  // Balances are stored in each account's own currency; re-express them in the
+  // ledger base so group subtotals and net worth (which sum across accounts) and
+  // the base→display `fmt` are all valid. A no-op when account currency == base.
+  const balanceOf = (id: string) => {
+    const a = ledgerAccountRows.find((r) => r.id === id);
+    return a ? toBase(a.balance, a.currency) : 0;
+  };
 
   const ledgerAccounts = ledgerAccountRows.length
     ? ledgerAccountRows.map((a) => ({ id: a.id, name: a.name, last4: a.last4 ?? '', color: a.color ?? '#6b7280', group: a.groupId ?? '' }))
@@ -293,17 +302,28 @@ export default function AccountsPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-balance">Opening balance ({active.base})</Label>
+              <Label htmlFor="new-currency">Currency</Label>
+              <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
+                <SelectTrigger id="new-currency" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_CODES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-balance">Opening balance ({draft.currency || active.base})</Label>
               <Input id="new-balance" inputMode="decimal" value={draft.openingBalance} onChange={(e) => setDraft({ ...draft, openingBalance: e.target.value })} placeholder="0.00" />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="new-last4">Number (last 4)</Label>
               <Input id="new-last4" inputMode="numeric" maxLength={4} value={draft.last4} onChange={(e) => setDraft({ ...draft, last4: e.target.value })} />
             </div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="new-color">Card color</Label>
-            <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="size-9 cursor-pointer rounded-md border border-border bg-transparent" />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-color">Card color</Label>
+              <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border h-9 w-full cursor-pointer rounded-md border bg-transparent" />
+            </div>
           </div>
         </div>
         <DialogFooter>

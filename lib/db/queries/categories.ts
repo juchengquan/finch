@@ -75,7 +75,7 @@ export async function categorySpend(exec: Exec, ledgerId: string): Promise<Recor
             SUM(COALESCE(ts.amount_base, t.amount_base) * -1) AS spent
        FROM transactions t
        LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-      WHERE t.ledger_id = ? AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.is_adjustment = 0
+      WHERE t.ledger_id = ? AND t.kind = 'expense'
         AND t.status = 'confirmed' AND COALESCE(ts.category_id, t.category_id) IS NOT NULL
       GROUP BY COALESCE(ts.category_id, t.category_id)`,
     [ledgerId],
@@ -93,7 +93,7 @@ export async function monthlyByCategory(exec: Exec, ledgerId: string, yearMonth:
        LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
        JOIN categories c ON c.id = COALESCE(ts.category_id, t.category_id)
       WHERE t.ledger_id = ? AND t.date LIKE ?
-        AND t.amount < 0 AND t.transfer_group_id IS NULL AND t.is_adjustment = 0 AND t.status = 'confirmed'
+        AND t.kind = 'expense' AND t.status = 'confirmed'
       GROUP BY c.id ORDER BY spent DESC`,
     [ledgerId, `${yearMonth}%`],
   );

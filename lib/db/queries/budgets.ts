@@ -1,173 +1,175 @@
-// Budgets live in the `budgets` table (a budget targets one or more categories
-// via category_ids). The app's UI models a per-category limit at one of six
-// cycles (daily/weekly/biweekly/monthly/quarterly/yearly); we project a
-// categoryId → amount map (currently-active limit) plus a richer
-// per-category metadata projection for the cycle + pending-amount UI.
+// Named budgets — the only budget model. A budget tracks a set of accounts +
+// categories over a cycle, files into a budget group, and is either an expense
+// limit or an income target (Goals are income budgets). Legacy per-category
+// budgets and the goals table were removed in the budgets redesign.
 
 import type { Exec } from '@/lib/db/repo';
-import type { Frequency } from '@/lib/budgets/period';
 
-/** Map of categoryId → currently-active budget amount (regardless of cycle). */
-export async function budgetByCategory(exec: Exec): Promise<Record<string, number>> {
-  const rows = await exec('SELECT amount, category_ids FROM budgets');
-  const map: Record<string, number> = {};
-  for (const r of rows) {
-    const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
-    for (const id of ids) map[id] = Number(r.amount);
-  }
-  return map;
-}
+export type BudgetType = 'expense' | 'income';
 
-export interface BudgetMeta {
-  /** Budget id (matches `bud-<categoryId>` for per-category budgets). */
+export interface BudgetRow {
   id: string;
+  ledgerId: string;
+  groupId: string | null;
+  name: string;
+  type: BudgetType;
   amount: number;
-  frequency: Frequency;
-  /** Cycle anchor — only meaningful for biweekly; ignored for other cycles. */
-  startDate: string;
-  /** Staged amount change activated at the next period boundary; NULL = none. */
-  pendingAmount: number | null;
-}
-
-/** Map of categoryId → budget metadata (cycle + amount + pending). */
-export async function budgetMetaByCategory(exec: Exec): Promise<Record<string, BudgetMeta>> {
-  const rows = await exec(
-    'SELECT id, amount, frequency, start_date, pending_amount, category_ids FROM budgets',
-  );
-  const map: Record<string, BudgetMeta> = {};
-  for (const r of rows) {
-    const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
-    const meta: BudgetMeta = {
-      id: String(r.id),
-      amount: Number(r.amount),
-      frequency: String(r.frequency) as Frequency,
-      startDate: String(r.start_date),
-      pendingAmount: r.pending_amount == null ? null : Number(r.pending_amount),
-    };
-    for (const id of ids) map[id] = meta;
-  }
-  return map;
-}
-
-export interface BudgetRolloverInfo {
-  /** Whether unused budget should roll into the next period. */
-  rollover: boolean;
-  /** Optional cap on the rolled-forward balance. */
-  rolloverLimit: number | null;
-  /** Current carry-forward balance (added to `amount` in budgetProgress). */
+  /** Manual progress accumulator for one-shot income/goal budgets. */
+  saved: number;
   carryForward: number;
+  frequency: string;
+  startDate: string;
+  endDate: string | null;
+  isRecurring: number;
+  rollover: number;
+  rolloverLimit: number | null;
+  accountIds: string[];
+  categoryIds: string[];
+  tagIds: string[];
+  warningPct: number;
 }
 
-/** Map of categoryId → rollover config + current carry-forward amount. */
-export async function budgetRolloverByCategory(exec: Exec): Promise<Record<string, BudgetRolloverInfo>> {
-  const rows = await exec('SELECT rollover, rollover_limit, carry_forward, category_ids FROM budgets');
-  const map: Record<string, BudgetRolloverInfo> = {};
-  for (const r of rows) {
-    const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
-    const info: BudgetRolloverInfo = {
-      rollover: Number(r.rollover) === 1,
-      rolloverLimit: r.rollover_limit == null ? null : Number(r.rollover_limit),
-      carryForward: Number(r.carry_forward ?? 0),
-    };
-    for (const id of ids) map[id] = info;
+const parseIds = (v: unknown): string[] => {
+  if (v == null) return [];
+  try {
+    const arr = JSON.parse(String(v));
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
   }
-  return map;
+};
+
+function rowToBudget(r: Record<string, unknown>): BudgetRow {
+  return {
+    id: String(r.id),
+    ledgerId: String(r.ledger_id),
+    groupId: r.group_id == null ? null : String(r.group_id),
+    name: r.name == null ? '' : String(r.name),
+    type: String(r.type) === 'income' ? 'income' : 'expense',
+    amount: Number(r.amount),
+    saved: Number(r.saved ?? 0),
+    carryForward: Number(r.carry_forward ?? 0),
+    frequency: String(r.frequency),
+    startDate: String(r.start_date),
+    endDate: r.end_date == null ? null : String(r.end_date),
+    isRecurring: Number(r.is_recurring ?? 1),
+    rollover: Number(r.rollover ?? 0),
+    rolloverLimit: r.rollover_limit == null ? null : Number(r.rollover_limit),
+    accountIds: parseIds(r.account_ids),
+    categoryIds: parseIds(r.category_ids),
+    tagIds: parseIds(r.tag_ids),
+    warningPct: Number(r.warning_pct ?? 80),
+  };
 }
 
-/**
- * Set the per-category budget amount.
- *
- * - **No existing row** → create with `amount` active immediately, default
- *   monthly cycle, anchor 2026-05-01.
- * - **Existing row** → stage as `pending_amount`; the current period's
- *   spend calculation keeps using the old `amount`. The rollover loop
- *   commits the staged value to `amount` at the next period boundary.
- *
- * Use `updateBudgetCycle` when the user changes the frequency / start
- * date — that path applies the amount immediately under the new cycle.
- */
-export async function setCategoryBudget(exec: Exec, categoryId: string, amount: number): Promise<void> {
-  const id = `bud-${categoryId}`;
-  const existing = await exec('SELECT 1 AS x FROM budgets WHERE id = ?', [id]);
-  if (existing.length) {
-    await exec(
-      "UPDATE budgets SET pending_amount = ?, updated_at = datetime('now') WHERE id = ?",
-      [amount, id],
-    );
-    return;
-  }
-  const cat = await exec('SELECT ledger_id, name FROM categories WHERE id = ?', [categoryId]);
-  if (!cat.length) throw new Error('Category not found');
+/** List all named budgets, optionally scoped to a ledger. */
+export async function listBudgets(exec: Exec, ledgerId?: string): Promise<BudgetRow[]> {
+  const rows = await exec(
+    ledgerId
+      ? 'SELECT * FROM budgets WHERE ledger_id = ? ORDER BY created_at'
+      : 'SELECT * FROM budgets ORDER BY ledger_id, created_at',
+    ledgerId ? [ledgerId] : [],
+  );
+  return rows.map(rowToBudget);
+}
+
+export interface NewBudget {
+  id: string;
+  ledgerId: string;
+  groupId?: string | null;
+  name: string;
+  type: BudgetType;
+  amount: number;
+  saved?: number;
+  frequency: string;
+  startDate: string;
+  endDate?: string | null;
+  isRecurring?: number;
+  rollover?: number;
+  rolloverLimit?: number | null;
+  accountIds?: string[];
+  categoryIds?: string[];
+  tagIds?: string[];
+  warningPct?: number;
+}
+
+const idsToJson = (ids?: string[]): string | null => (ids && ids.length ? JSON.stringify(ids) : null);
+
+/** Insert a named budget. */
+export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
   await exec(
     `INSERT INTO budgets
-       (id,ledger_id,name,type,amount,carry_forward,frequency,start_date,is_recurring,rollover,category_ids,warning_pct,created_at,updated_at)
-     VALUES (?,?,?,'expense',?,0,'monthly','2026-05-01',1,0,?,80,datetime('now'),datetime('now'))`,
-    [id, String(cat[0].ledger_id), String(cat[0].name), amount, JSON.stringify([categoryId])],
+       (id, ledger_id, group_id, name, type, amount, saved, carry_forward,
+        frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
+        account_ids, category_ids, tag_ids, warning_pct, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+    [
+      b.id,
+      b.ledgerId,
+      b.groupId ?? null,
+      b.name,
+      b.type,
+      b.amount,
+      b.saved ?? 0,
+      b.frequency,
+      b.startDate,
+      b.endDate ?? null,
+      b.isRecurring ?? (b.type === 'income' ? 0 : 1),
+      b.rollover ?? 0,
+      b.rolloverLimit ?? null,
+      idsToJson(b.accountIds),
+      idsToJson(b.categoryIds),
+      idsToJson(b.tagIds),
+      b.warningPct ?? 80,
+    ],
   );
 }
 
-/**
- * Change a budget's cycle (and optionally its amount in the same step).
- * Cycle changes are immediate per BUDGET_CYCLES_PLAN §4a:
- *   - `amount` becomes the new active limit (carried over from the prior
- *     row if not supplied).
- *   - `frequency` + `start_date` are written.
- *   - `pending_amount` is discarded.
- *   - `last_rolled_period` resets to NULL — period IDs from the old cycle
- *     don't translate, so the next request's rollBudgetsIfDue starts the
- *     new cycle's clock fresh.
- *   - `carry_forward` and `rollover_limit` are preserved (absolute amounts).
- */
-export async function updateBudgetCycle(
-  exec: Exec,
-  categoryId: string,
-  patch: { frequency: Frequency; startDate: string; amount?: number },
-): Promise<void> {
-  const id = `bud-${categoryId}`;
-  const existing = await exec('SELECT amount FROM budgets WHERE id = ?', [id]);
-  if (!existing.length) throw new Error('Set a budget for this category first');
-  const amount = patch.amount ?? Number(existing[0].amount);
-  await exec(
-    `UPDATE budgets
-       SET amount = ?, frequency = ?, start_date = ?,
-           pending_amount = NULL, last_rolled_period = NULL,
-           updated_at = datetime('now')
-     WHERE id = ?`,
-    [amount, patch.frequency, patch.startDate, id],
-  );
-}
-
-export interface BudgetRolloverPatch {
-  rollover?: boolean;
-  /** null clears the cap (uncapped roll-over). */
+export interface BudgetPatch {
+  groupId?: string | null;
+  name?: string;
+  type?: BudgetType;
+  amount?: number;
+  frequency?: string;
+  startDate?: string;
+  endDate?: string | null;
+  isRecurring?: number;
+  rollover?: number;
   rolloverLimit?: number | null;
-  /** Manually set the current carry-forward balance (auto month-end carry-over is a separate task). */
-  carryForward?: number;
+  accountIds?: string[];
+  categoryIds?: string[];
+  tagIds?: string[];
+  warningPct?: number;
 }
 
-/** Update rollover settings (and optionally the current carry-forward) for the
- * `bud-<categoryId>` row. Throws if no budget exists for the category yet. */
-export async function setCategoryBudgetRollover(
-  exec: Exec,
-  categoryId: string,
-  patch: BudgetRolloverPatch,
-): Promise<void> {
-  const id = `bud-${categoryId}`;
-  const existing = await exec('SELECT 1 AS x FROM budgets WHERE id = ?', [id]);
-  if (!existing.length) throw new Error('Set a budget for this category first');
+const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
+  groupId: 'group_id',
+  name: 'name',
+  type: 'type',
+  amount: 'amount',
+  frequency: 'frequency',
+  startDate: 'start_date',
+  endDate: 'end_date',
+  isRecurring: 'is_recurring',
+  rollover: 'rollover',
+  rolloverLimit: 'rollover_limit',
+  accountIds: 'account_ids',
+  categoryIds: 'category_ids',
+  tagIds: 'tag_ids',
+  warningPct: 'warning_pct',
+};
+
+const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set(['accountIds', 'categoryIds', 'tagIds']);
+
+export async function updateBudget(exec: Exec, id: string, patch: BudgetPatch): Promise<void> {
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
-  if (patch.rollover !== undefined) {
-    sets.push('rollover = ?');
-    bind.push(patch.rollover ? 1 : 0);
-  }
-  if (patch.rolloverLimit !== undefined) {
-    sets.push('rollover_limit = ?');
-    bind.push(patch.rolloverLimit);
-  }
-  if (patch.carryForward !== undefined) {
-    sets.push('carry_forward = ?');
-    bind.push(patch.carryForward);
+  for (const key of Object.keys(patch) as (keyof BudgetPatch)[]) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    sets.push(`${BUDGET_PATCH_COLUMNS[key]} = ?`);
+    if (ARRAY_PATCH_KEYS.has(key)) bind.push(idsToJson(value as string[]));
+    else bind.push(value as string | number | null);
   }
   if (!sets.length) return;
   sets.push("updated_at = datetime('now')");
@@ -175,7 +177,15 @@ export async function setCategoryBudgetRollover(
   await exec(`UPDATE budgets SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
-/** Remove a category's monthly budget row. */
-export async function deleteCategoryBudget(exec: Exec, categoryId: string): Promise<void> {
-  await exec('DELETE FROM budgets WHERE id = ?', [`bud-${categoryId}`]);
+/** Add to (or subtract from) an income/goal budget's manual `saved`, clamped at 0. */
+export async function contributeBudget(exec: Exec, id: string, amount: number): Promise<void> {
+  await exec(
+    "UPDATE budgets SET saved = MAX(0, saved + ?), updated_at = datetime('now') WHERE id = ?",
+    [amount, id],
+  );
+}
+
+/** Hard-delete a named budget. */
+export async function deleteBudget(exec: Exec, id: string): Promise<void> {
+  await exec('DELETE FROM budgets WHERE id = ?', [id]);
 }
