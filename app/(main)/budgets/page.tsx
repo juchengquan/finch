@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { Ring } from '@/components/primitives';
-import { ScreenHeader, MobilePage, IconButton, PageHeader } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { SearchButton } from '@/components/command-palette';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
@@ -30,7 +31,7 @@ export default function BudgetsPage() {
   if (categories.length === 0) {
     return (
       <MobilePage>
-        <ScreenHeader title="Budgets" trailing={<IconButton icon="search" aria-label="Search" />} />
+        <ScreenHeader title="Budgets" trailing={<SearchButton />} />
         <div className="text-muted-foreground px-5 pt-16 text-center text-sm">
           No budgets in <span className="text-foreground font-medium">{active.name}</span> yet.
         </div>
@@ -43,7 +44,7 @@ export default function BudgetsPage() {
       header={
         <ScreenHeader
           title="Budgets"
-          trailing={<IconButton icon="search" aria-label="Search" />}
+          trailing={<SearchButton />}
         />
       }
     >

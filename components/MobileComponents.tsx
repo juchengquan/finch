@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Icon } from './primitives';
+import { SearchButton } from './command-palette';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -50,11 +51,7 @@ export function ScreenHeader({ title, back = false, backHref, leading, trailing 
             {title}
           </h1>
           <div className="flex min-h-9 items-center gap-2 justify-self-end">
-            {trailing ?? (
-              <Button variant="outline" size="icon" aria-label="Search">
-                <Icon name="search" size={16} />
-              </Button>
-            )}
+            {trailing ?? <SearchButton />}
           </div>
         </div>
       </header>
