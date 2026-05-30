@@ -61,25 +61,21 @@ function AccountGroupAccordion({
         const editable = g.id !== UNGROUPED_ID && onEditGroup && onDeleteGroup;
         return (
           <AccordionItem key={g.id} value={g.id}>
-            <AccordionTrigger chevronSide="left">
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <div className="flex-1 font-serif text-lg italic -tracking-[0.2px]">{g.name}</div>
-                <span className={cn('font-mono text-[11px] tracking-[0.3px] tabular-nums', empty ? 'text-muted-foreground' : 'text-secondary-foreground')}>
-                  {empty ? '—' : `${g.accounts.length} · ${groupTotal < 0 ? '−' : ''}${fmt(Math.abs(groupTotal))}`}
-                </span>
-                {editable && (
+            <AccordionTrigger
+              chevronSide="left"
+              action={
+                editable ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
                         aria-label={`Group actions: ${g.name}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md"
+                        className="text-muted-foreground hover:text-foreground ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md"
                       >
                         <Icon name="dots" size={14} />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => onEditGroup!(g.id)}>
                         <Icon name="edit" size={14} />
                         Rename
@@ -90,7 +86,14 @@ function AccountGroupAccordion({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                )}
+                ) : undefined
+              }
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <div className="flex-1 font-serif text-lg italic -tracking-[0.2px]">{g.name}</div>
+                <span className={cn('font-mono text-[11px] tracking-[0.3px] tabular-nums', empty ? 'text-muted-foreground' : 'text-secondary-foreground')}>
+                  {empty ? '—' : `${g.accounts.length} · ${groupTotal < 0 ? '−' : ''}${fmt(Math.abs(groupTotal))}`}
+                </span>
               </div>
             </AccordionTrigger>
             <AccordionContent>

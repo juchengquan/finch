@@ -27,15 +27,20 @@ function AccordionTrigger({
   className,
   children,
   chevronSide = 'right',
+  action,
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Trigger> & {
   chevronSide?: 'left' | 'right';
+  // Rendered as a sibling of the trigger button (not a child), so interactive
+  // controls like a dropdown menu don't nest a <button> inside the trigger's
+  // <button> — invalid HTML that breaks hydration.
+  action?: React.ReactNode;
 }) {
   const chevron = (
     <ChevronDownIcon className="text-muted-foreground pointer-events-none size-4 shrink-0 translate-y-0.5 transition-transform duration-200" />
   );
   return (
-    <AccordionPrimitive.Header className="flex">
+    <AccordionPrimitive.Header className="flex items-center">
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
@@ -48,6 +53,7 @@ function AccordionTrigger({
         {children}
         {chevronSide === 'right' && chevron}
       </AccordionPrimitive.Trigger>
+      {action}
     </AccordionPrimitive.Header>
   );
 }
