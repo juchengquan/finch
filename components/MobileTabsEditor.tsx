@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useMobileTabs } from '@/components/mobile-tabs-provider';
+import { useMobileTabs } from '@/components/mobile-tabs';
 
 // Mobile-only editor for the bottom tab bar: each slot picks one section
 // (sections already used elsewhere are disabled) and can be reordered with the

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
-import { MAIN_TAB_CATALOG, useMobileTabs } from '@/components/mobile-tabs-provider';
+import { MAIN_TAB_CATALOG, useMobileTabs } from '@/components/mobile-tabs';
 
 const BOTTOM_LINKS = [
   { icon: 'bell',   label: 'Pending',   path: '/pending',  warnDot: true },

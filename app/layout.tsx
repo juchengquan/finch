@@ -9,7 +9,6 @@ import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
 import { TransactionSheetProvider } from '@/components/transaction-sheet';
 import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
 import { CommandPaletteProvider } from '@/components/command-palette';
-import { MobileTabsProvider } from '@/components/mobile-tabs-provider';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
@@ -58,10 +57,8 @@ export default function RootLayout({
                 <TransactionSheetProvider>
                   <AddExpenseSheetProvider>
                     <CommandPaletteProvider>
-                      <MobileTabsProvider>
-                        {children}
-                        <Toaster />
-                      </MobileTabsProvider>
+                      {children}
+                      <Toaster />
                     </CommandPaletteProvider>
                   </AddExpenseSheetProvider>
                 </TransactionSheetProvider>
