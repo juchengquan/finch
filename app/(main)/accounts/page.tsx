@@ -400,6 +400,27 @@ export default function AccountsPage() {
       <div className="hidden px-8 pb-12 md:block">
         <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1.7fr_1fr]">
           <div className="min-w-0">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="font-serif text-lg italic">All accounts</div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Icon name="plus" size={14} />
+                    New
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => openCreate()}>
+                    <Icon name="wallet" size={14} />
+                    New account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => openCreateGroup()}>
+                    <Icon name="tags" size={14} />
+                    New group
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onAddAccount={openCreate} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
           </div>
 
