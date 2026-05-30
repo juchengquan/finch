@@ -75,15 +75,18 @@ auto-rollover has processed for this budget. NULL = never rolled.
 
 ### 1. Schema change (datetime version `2026-06-XX…`)
 
-One new column on `budgets`, plus a corresponding index:
+Two new columns on `budgets`, plus a corresponding index:
 
 ```sql
 ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT;
+ALTER TABLE budgets ADD COLUMN pending_amount    REAL;
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 ```
 
-That's it for schema. `frequency` / `start_date` / `carry_forward` /
-`rollover_limit` already exist.
+- `last_rolled_period` — the latest period the auto-rollover has
+  processed for this budget. NULL = never rolled.
+- `pending_amount` — staged amount change that activates at the next
+  period boundary. NULL = no change pending. See §4b.
 
 A second migration step backfills `start_date` for existing rows — today
 every row uses the hard-coded `'2026-05-01'`. For now that stays fine
@@ -138,26 +141,57 @@ and the anchor is ignored. The anchor is just `budgets.start_date`.
 - Client `categorySpend(txns, ledgerId, month?)` is unchanged for now;
   the budget detail page calls a new period-shaped variant.
 
-### 4. Cycle-change behaviour (design choice — surfaced)
+### 4a. Cycle-change behaviour — immediate, amount carries over
 
-When the user changes a budget's frequency, what happens to the amount?
-Three options:
+When the user changes a budget's frequency:
 
-- **(A) Keep amount, prompt user** — modal: "Switching $700 monthly to
-  weekly. Keep $700 as the weekly limit, or pro-rate to $175?" Pick.
-- **(B) Pro-rate silently** — every cycle has a per-day rate; convert.
-  Silent, occasionally surprising.
-- **(C) Reset and force re-enter** — clears `amount`, opens the edit
-  dialog.
+- The **same number stays as the `amount`**, just attached to the new
+  unit. Monthly $700 → weekly $700/week. No pro-rate, no prompt.
+- The cycle change is **immediate**: the new cycle's first period
+  starts at the current `today`'s slot under the new frequency
+  (e.g., switching to weekly on a Wednesday → the current week's
+  period under weekly is now active).
+- `last_rolled_period` is **reset to NULL**. Period IDs from the old
+  cycle don't translate to the new cycle, so rollover starts fresh
+  on the new unit. The next request's `rollBudgetsIfDue` advances
+  it to the period *just before* the current one — no spurious
+  retroactive carry-forward.
+- `carry_forward` is **preserved**. It's an absolute dollar amount;
+  it doesn't depend on the cycle unit. The first period under the new
+  cycle inherits whatever was already accumulated.
+- `pending_amount`, if any, is **discarded** (the user implicitly chose
+  the cycle change as the new active state).
+- `rollover_limit` is **preserved** for the same reason as
+  `carry_forward`: it's an absolute dollar cap.
 
-**Recommendation: A.** Most explicit, no surprises. Pro-rate is
-computed as `amount * (newDays / oldDays)` using the canonical
-days-per-cycle map (`daily=1, weekly=7, biweekly=14, monthly=30.42,
-quarterly=91.25, yearly=365.25`).
+This collapses the cycle-change dialog into a single confirmation
+("This will change Groceries from monthly to weekly. The $700 limit
+becomes a weekly limit starting now.").
 
-Either way: when the cycle changes, **`last_rolled_period` is reset to
-NULL** and **`carry_forward` is reset to 0**. Rolling over a budget
-across a unit change isn't well-defined; clean slate is the honest move.
+### 4b. Amount-change behaviour — staged, takes effect next period
+
+When the user changes only the amount on a budget (no cycle change):
+
+- The new amount is **staged in `pending_amount`** rather than
+  overwriting `amount`. The current period's "spent of budget"
+  calculation continues to use the existing `amount` — fair, since
+  the user might already be mid-period.
+- `rollBudgetsIfDue`, when advancing the period boundary, **commits
+  `pending_amount` to `amount` and clears `pending_amount`** as the
+  *first* step (before computing rollover). So the new period starts
+  with the new limit immediately.
+- If the user edits the amount again before the next period
+  boundary, `pending_amount` is overwritten — only the latest staged
+  value applies.
+- If the user wants to undo a pending change, they re-enter the
+  current `amount`; `pending_amount` is cleared.
+
+If a user changes **both** cycle and amount in the same edit:
+
+- Treat as a cycle change with `amount = newAmount` applied
+  immediately. (§4a wins; `pending_amount` is irrelevant because the
+  edit is fundamentally a unit change.) The dialog's confirm text
+  mirrors this: "Groceries becomes $500/week starting now."
 
 ### 5. Automatic carry-forward — auto-on-load + targeted recompute
 
@@ -187,12 +221,25 @@ while lastRolled < target:
   leftover  = max(0, effective - spent)
   newCF     = rollover_limit == null ? leftover : min(leftover, rollover_limit)
 
-  carry_forward     = newCF
+  carry_forward      = newCF
   last_rolled_period = rollFrom
+
+  // Apply any staged amount change as the NEW period (the one we just rolled
+  // INTO) begins. This is what makes amount edits affect "the following cycle"
+  // as required by §4b. Done after computing rollover so the period we just
+  // closed used the in-effect amount.
+  if pending_amount != NULL:
+    amount         = pending_amount
+    pending_amount = NULL
 ```
 
 So the loop catches up cleanly if the app's been closed for a few
 months. Bounded — only the missing periods get processed.
+
+**Budgets with `rollover = 0`** still need the period-advance step so
+their `pending_amount` gets activated on schedule. The function runs
+the same loop but skips the carry-forward arithmetic — only the
+`last_rolled_period` and `pending_amount` updates happen.
 
 #### When `last_rolled_period` is NULL on a never-rolled budget
 
@@ -222,7 +269,18 @@ between the edit's date and today.
 ### 7. UI changes
 
 - **Budget detail edit dialog**: add a cycle selector (daily through
-  yearly). Changing the cycle pops the cycle-change dialog from §4.
+  yearly) alongside the existing amount field.
+  - On submit, derive what changed:
+    - **Cycle changed** (with or without amount change) → confirm
+      dialog: "Groceries becomes $X/{unit} starting now." On OK,
+      cycle change applies immediately per §4a. `pending_amount` is
+      cleared.
+    - **Amount changed only** → stage in `pending_amount` (§4b). No
+      confirmation needed; toast: "New limit takes effect on
+      {next-period-label}."
+- **Pending-amount indicator**: when `pending_amount != NULL`, the
+  budget header shows a small chip "$800 next {period}" next to the
+  active "$700/mo" line.
 - **Budget detail header**: show the current period ("Q2 2026 ·
   Apr 1 – Jun 30") + the cycle.
 - **Budget list / category row**: show the period unit next to the
@@ -239,6 +297,16 @@ between the edit's date and today.
 - **Cycle change mid-period**: the budget's new "first period" is the
   period containing `today` under the new frequency. We don't try to
   reconstruct rollover history under the new cycle (would be ambiguous).
+- **Multiple amount edits in one period**: only the most-recent
+  `pending_amount` survives — earlier ones are overwritten before the
+  next period boundary.
+- **Pending amount + cycle change in the same edit**: the cycle change
+  wins. `pending_amount` is discarded; the new `amount` (as entered
+  in the dialog) becomes the active limit under the new cycle.
+- **Pending amount when rollover is OFF**: still gets activated at the
+  period boundary by the same `rollBudgetsIfDue` pass — that function
+  always advances `last_rolled_period` and swaps `pending_amount`,
+  even when carry-forward arithmetic is skipped.
 - **`start_date` in the future**: budget is dormant — `currentPeriod`
   resolves to `null` until the date is reached; `rollBudgetsIfDue`
   skips dormant budgets.
@@ -266,7 +334,14 @@ between the edit's date and today.
 - `rolloverLimit` caps the carry-forward.
 - Backdated edit invalidates `last_rolled_period` and the next call
   replays correctly.
-- Cycle change resets `last_rolled_period` + `carry_forward`.
+- Cycle change resets `last_rolled_period` to NULL, **preserves**
+  `carry_forward`, **discards** `pending_amount`.
+- Setting `pending_amount` and waiting for the next period activates
+  it as the new `amount`.
+- Setting `pending_amount` twice in the same period keeps only the
+  latest.
+- Rollover OFF + `pending_amount` set: the next period boundary still
+  activates the pending amount.
 
 ---
 
@@ -274,7 +349,7 @@ between the edit's date and today.
 
 | Path | Change |
 |---|---|
-| `lib/db/schema.ts` | New datetime migration: `ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT` + index. |
+| `lib/db/schema.ts` | New datetime migration: `ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT` + `pending_amount REAL` + index. |
 | `lib/budgets/period.ts` *(new)* | `periodOf`, `periodRange`, `nextPeriod`, `prevPeriod`, `periodLabel`. |
 | `lib/budgets/period.test.ts` *(new)* | Unit tests over every frequency. |
 | `lib/budgets/rollover.ts` *(new)* | `rollBudgetsIfDue(exec)`, `recomputeRolloverFor(exec, txnDate, categoryIds)`. |
