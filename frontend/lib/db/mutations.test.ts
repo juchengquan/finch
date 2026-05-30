@@ -499,17 +499,18 @@ test('adjustments are excluded from category spend, cash flow and budget progres
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
   const { monthlyCashFlow, budgetProgress } = await import('@/lib/db/queries/reports');
-  const month = new Date().toISOString().slice(0, 7);
+  const today = new Date().toISOString().slice(0, 10);
+  const month = today.slice(0, 7);
   const spendBefore = await categorySpend(exec, 'personal');
   const flowBefore = await monthlyCashFlow(exec, 'personal', month);
-  const budgetsBefore = await budgetProgress(exec, 'personal', month);
+  const budgetsBefore = await budgetProgress(exec, "personal", today);
 
   // Big negative adjustment on cc (would dwarf food spend if it counted).
   await applyMutation(exec, 'adjustAccountBalance', { accountId: 'cc', targetBalance: -5000 });
 
   const spendAfter = await categorySpend(exec, 'personal');
   const flowAfter = await monthlyCashFlow(exec, 'personal', month);
-  const budgetsAfter = await budgetProgress(exec, 'personal', month);
+  const budgetsAfter = await budgetProgress(exec, "personal", today);
 
   expect(JSON.stringify(spendAfter)).toBe(JSON.stringify(spendBefore));
   expect(flowAfter.income).toBeCloseTo(flowBefore.income, 2);
@@ -682,7 +683,7 @@ test('setBudgetRollover toggles rollover + limit on an existing budget', async (
   // Set carry-forward, then budgetProgress reflects it in the total.
   const { budgetProgress } = await import('@/lib/db/queries/reports');
   await applyMutation(exec, 'setBudgetRollover', { categoryId: 'food', carryForward: 150 });
-  const progress = await budgetProgress(exec, 'personal', '2026-05');
+  const progress = await budgetProgress(exec, "personal", "2026-05-15");
   const foodBudget = progress.find((b) => b.id === 'bud-food')!;
   // Original food amount is 700; carry-forward adds 150 to the period total.
   expect(foodBudget.budget).toBe(850);

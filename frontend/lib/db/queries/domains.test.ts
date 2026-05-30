@@ -108,9 +108,39 @@ test('reports: cash flow + budget progress', async () => {
   expect(cf.expense).toBeLessThan(0);
   expect(cf.net).toBeCloseTo(cf.income + cf.expense, 2);
 
-  const budgets = await budgetProgress(exec, 'personal', '2026-05');
+  const budgets = await budgetProgress(exec, 'personal', '2026-05-15');
   const food = budgets.find((b) => b.id === 'bud-food')!;
   expect(food.budget).toBe(700);
   expect(food.spent).toBeGreaterThan(0);
   expect(food.remaining).toBeCloseTo(food.budget - food.spent, 2);
+});
+
+test('budgetProgress derives each budget\'s own period from its frequency', async () => {
+  const exec = await seeded();
+  // Convert the seeded `food` budget to weekly so we can verify per-budget
+  // period derivation drives the spend window.
+  await exec("UPDATE budgets SET frequency = 'weekly', start_date = '2026-05-04' WHERE id = 'bud-food'");
+  // Two confirmed food expenses in May, in different ISO weeks.
+  await exec(
+    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,exchange_rate_date,description,category_id,status,balance_after,currency,created_at)
+     VALUES ('t-w1','personal','chk','2026-05-04',-50,-50,1,'2026-05-04','Coffee','food','confirmed',0,'USD','2026-05-04'),
+            ('t-w2','personal','chk','2026-05-13',-30,-30,1,'2026-05-13','Lunch','food','confirmed',0,'USD','2026-05-13')`,
+  );
+  // Today is 2026-05-13 (Wed of ISO W20). Weekly food budget's period
+  // spans 2026-05-11 to 2026-05-17.
+  const out = await budgetProgress(exec, 'personal', '2026-05-13');
+  const food = out.find((b) => b.id === 'bud-food')!;
+  expect(food.frequency).toBe('weekly');
+  expect(food.period).toBe('2026-W20');
+  expect(food.periodFrom).toBe('2026-05-11');
+  expect(food.periodTo).toBe('2026-05-17');
+  // Spent contains at least our inserted $30 (plus any seed txns the week
+  // happens to cover) and is strictly less than the full month's food total
+  // — proving the spend filter is scoped to the period, not the month.
+  expect(food.spent).toBeGreaterThanOrEqual(30);
+  expect(food.spent).toBeLessThan(6.75 + 84.32 + 42.18 + 14.2 + 29.84 + 30);
+  // Other budgets stay monthly + carry their own period.
+  const trans = out.find((b) => b.id === 'bud-trans')!;
+  expect(trans.frequency).toBe('monthly');
+  expect(trans.period).toBe('2026-05');
 });

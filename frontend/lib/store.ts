@@ -5,7 +5,7 @@ import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
-import type { BudgetRolloverInfo } from '@/lib/db/queries/budgets';
+import type { BudgetMeta, BudgetRolloverInfo } from '@/lib/db/queries/budgets';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
@@ -122,6 +122,7 @@ interface FinanceState {
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   budgetByCategory: Record<string, number>;
+  budgetMetaByCategory: Record<string, BudgetMeta>;
   budgetRolloverByCategory: Record<string, BudgetRolloverInfo>;
   categories: CategoryRow[];
   counterparties: Counterparty[];
@@ -206,6 +207,7 @@ export const useFinanceStore = create<FinanceState>()(
       accounts: [],
       accountGroups: [],
       budgetByCategory: {},
+      budgetMetaByCategory: {},
       budgetRolloverByCategory: {},
       categories: [],
       counterparties: [],

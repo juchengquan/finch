@@ -1,13 +1,15 @@
 // Budgets live in the `budgets` table (a budget targets one or more categories
-// via category_ids). The app's UI models a per-category monthly limit, so we
-// project a categoryId → amount map and upsert a per-category budget row keyed
-// `bud-<categoryId>` — replacing the old budgetOverrides app_state shim.
+// via category_ids). The app's UI models a per-category limit at one of six
+// cycles (daily/weekly/biweekly/monthly/quarterly/yearly); we project a
+// categoryId → amount map (currently-active limit) plus a richer
+// per-category metadata projection for the cycle + pending-amount UI.
 
 import type { Exec } from '@/lib/db/repo';
+import type { Frequency } from '@/lib/budgets/period';
 
-/** Map of categoryId → monthly budget amount. */
+/** Map of categoryId → currently-active budget amount (regardless of cycle). */
 export async function budgetByCategory(exec: Exec): Promise<Record<string, number>> {
-  const rows = await exec("SELECT amount, category_ids FROM budgets WHERE frequency = 'monthly'");
+  const rows = await exec('SELECT amount, category_ids FROM budgets');
   const map: Record<string, number> = {};
   for (const r of rows) {
     const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
@@ -16,8 +18,39 @@ export async function budgetByCategory(exec: Exec): Promise<Record<string, numbe
   return map;
 }
 
+export interface BudgetMeta {
+  /** Budget id (matches `bud-<categoryId>` for per-category budgets). */
+  id: string;
+  amount: number;
+  frequency: Frequency;
+  /** Cycle anchor — only meaningful for biweekly; ignored for other cycles. */
+  startDate: string;
+  /** Staged amount change activated at the next period boundary; NULL = none. */
+  pendingAmount: number | null;
+}
+
+/** Map of categoryId → budget metadata (cycle + amount + pending). */
+export async function budgetMetaByCategory(exec: Exec): Promise<Record<string, BudgetMeta>> {
+  const rows = await exec(
+    'SELECT id, amount, frequency, start_date, pending_amount, category_ids FROM budgets',
+  );
+  const map: Record<string, BudgetMeta> = {};
+  for (const r of rows) {
+    const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
+    const meta: BudgetMeta = {
+      id: String(r.id),
+      amount: Number(r.amount),
+      frequency: String(r.frequency) as Frequency,
+      startDate: String(r.start_date),
+      pendingAmount: r.pending_amount == null ? null : Number(r.pending_amount),
+    };
+    for (const id of ids) map[id] = meta;
+  }
+  return map;
+}
+
 export interface BudgetRolloverInfo {
-  /** Whether unused budget should roll into next month. */
+  /** Whether unused budget should roll into the next period. */
   rollover: boolean;
   /** Optional cap on the rolled-forward balance. */
   rolloverLimit: number | null;
@@ -27,9 +60,7 @@ export interface BudgetRolloverInfo {
 
 /** Map of categoryId → rollover config + current carry-forward amount. */
 export async function budgetRolloverByCategory(exec: Exec): Promise<Record<string, BudgetRolloverInfo>> {
-  const rows = await exec(
-    "SELECT rollover, rollover_limit, carry_forward, category_ids FROM budgets WHERE frequency = 'monthly'",
-  );
+  const rows = await exec('SELECT rollover, rollover_limit, carry_forward, category_ids FROM budgets');
   const map: Record<string, BudgetRolloverInfo> = {};
   for (const r of rows) {
     const ids = r.category_ids ? (JSON.parse(String(r.category_ids)) as string[]) : [];
