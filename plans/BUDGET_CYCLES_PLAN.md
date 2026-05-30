@@ -1,463 +1,459 @@
-# Budget cycles + automatic period rollover — plan
+# Budget cycles + automatic period rollover — reimplementation plan
 
-> **Status (2026-05-31).** Shipped in **PR #48** (`66cff5f`) against the *legacy
-> per-category* budget model (`budgetByCategory` maps, `bud-<categoryId>` rows).
-> That model was then **superseded by the named-budgets redesign**
-> (`plans/budgets_redesign.md`), merged into `feat/frontend` in the clean-slate-DB
-> squash (`bdd6f47`), which **dropped #48's engine** — `lib/budgets/period.ts`,
-> `lib/budgets/rollover.ts`, and the `last_rolled_period` / `pending_amount`
-> columns are no longer in the tree.
->
-> This doc is now the **re-application spec**. The period arithmetic and rollover
-> semantics (§2, §4, §5, §6, §8) are still correct and model-agnostic; the
-> *per-category* plumbing (§3 reads, the §1 schema notes, the file-touch list)
-> must be re-expressed against **named budget entities**. See **§10** for the
-> concrete mapping. The original code is recoverable from `66cff5f`:
-> `lib/budgets/period.ts` is pure and reusable verbatim; `rollover.ts` needs
-> adapting to named budgets.
+The original engine shipped in PR #48 against the legacy
+per-category-amount-map model. The "clean-slate DB + named-budgets"
+redesign (`bdd6f47`) dropped that engine and rebuilt budgets as named
+entity rows organized in groups. This doc is the spec for putting
+cycles + auto-rollover back, against the new model.
 
-Two related changes, designed together because they touch the same
-queries / mutations / UI:
+The user-facing semantics from the original plan are unchanged:
 
-1. **Budget cycles become first-class.** Today `frequency` exists in the
-   schema (`daily | weekly | biweekly | monthly | quarterly | yearly`)
-   but the entire app pretends every budget is monthly. Users can't
-   pick a cycle, can't change one, and every read query filters
-   `WHERE frequency = 'monthly'`.
-2. **Automatic carry-forward at the end of each period.** Today
-   `carry_forward` is just a manual number on the row; nothing actually
-   moves last period's leftover into the next one.
+- **Cycle change is immediate, amount carries over** (no pro-rate, no
+  prompt).
+- **Amount change is staged** and applies at the next period boundary.
+- **Combined cycle+amount edit** treated as cycle change; new amount
+  applied immediately under the new cycle.
 
 ---
 
-## Current state
+## Current state (post-redesign, what already exists)
 
 ### Schema (`lib/db/schema.ts`)
+- `budgets` row carries `id`, `ledger_id`, `group_id`, `name`, `type`
+  (`income`/`expense`), `amount`, `saved`, `carry_forward`, `frequency`
+  (daily/weekly/biweekly/monthly/quarterly/yearly), `start_date`,
+  `end_date`, `is_recurring`, `rollover`, `rollover_limit`,
+  `account_ids` / `category_ids` / `tag_ids` (JSON arrays), `warning_pct`,
+  timestamps.
+- `budget_groups` row: `id`, `ledger_id`, `name`, `sort_order`,
+  timestamps.
+- `SCHEMA_VERSION = '2026-05-31T00:00:00Z'`. **No migration framework** —
+  clean-slate model expects fresh DBs born complete; columns are added
+  directly to the canonical CREATE.
+- **Missing:** `last_rolled_period TEXT`, `pending_amount REAL`. (Both
+  are nullable.)
 
-The fields are mostly there already:
-
-```sql
-CREATE TABLE budgets (
-  id              TEXT PRIMARY KEY,
-  ledger_id       TEXT NOT NULL,
-  name            TEXT,
-  type            TEXT CHECK(type IN ('income','expense')),
-  amount          REAL NOT NULL,
-  carry_forward   REAL NOT NULL DEFAULT 0,
-  frequency       TEXT CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-  start_date      TEXT NOT NULL,
-  end_date        TEXT,
-  is_recurring    INTEGER NOT NULL DEFAULT 1,
-  rollover        INTEGER NOT NULL DEFAULT 0,
-  rollover_limit  REAL,
-  category_ids    TEXT,
-  ...
-);
-```
-
-So `frequency` + `start_date` already exist. What's missing structurally
-is one new column: **`last_rolled_period TEXT`** — the latest period the
-auto-rollover has processed for this budget. NULL = never rolled.
-
-### Read queries (`lib/db/queries/budgets.ts`, `reports.ts`)
-
-- `budgetByCategory` filters `WHERE frequency = 'monthly'`.
-- `budgetRolloverByCategory` — same.
-- `budgetProgress` takes a `yearMonth` string and matches `date LIKE
-  '2026-05%'`. Hard-coded to month-shaped periods.
-- `monthlyByCategory`, the client `categorySpend` — same assumption.
-
-### Mutations (`lib/db/mutations.ts`, `lib/db/queries/budgets.ts`)
-
-- `setCategoryBudget(exec, categoryId, amount)` hardcodes
-  `frequency = 'monthly'`, `start_date = '2026-05-01'`. No way to
-  specify cycle.
-- `setCategoryBudgetRollover` lets a user manually nudge `carry_forward`
-  — that's the only path it ever changes.
-
-### UI (`app/(main)/budgets/[id]/page.tsx`)
-
-- Edit dialog only edits the amount. No cycle picker.
-- Header shows "monthly limit". No "current period" indicator.
+### Queries (`lib/db/queries/budgets.ts`, `lib/db/queries/budgetGroups.ts`)
+- `BudgetRow` type mirrors the schema; `listBudgets`, `createBudget`,
+  `updateBudget(id, patch)`, `contributeBudget(id, amount)`,
+  `deleteBudget(id)`.
+- Group CRUD lives in `queries/budgetGroups.ts`.
+- **No cycle / rollover logic anywhere on the server.**
 
 ### Selectors (`lib/select.ts`)
+- **`cycleWindow(frequency, startDate, today, endDate?, isRecurring?)`**
+  → `{ from, to }` (lines 488–515). Handles all six frequencies, DST-free
+  UTC math, day-of-month clamping for short months, non-recurring single
+  windows. Already covers everything `periodOf` would need.
+- **`budgetProgress(budget, txns, today)`** → `{ from, to, base, used,
+  remaining, pct, over }` (lines 547–576). Period-aware; sums tx amounts
+  whose date falls inside the current cycle window, honouring
+  `accountIds` / `categoryIds` filters and tx splits.
+- Already includes `carry_forward` in `base` for expense budgets.
 
-- `categorySpend(txns, ledgerId, month?)` slices by `YYYY-MM`. No
-  concept of a non-month period.
+### State / store (`lib/store.ts`)
+- `budgets: BudgetRow[]`, `budgetGroups: BudgetGroupRow[]`.
+- Actions: `createBudget`, `updateBudget`, `removeBudget`,
+  `contributeBudget`, plus group CRUD. No `setBudget`-style amount-only
+  shortcut.
+
+### Mutations (`lib/db/mutations.ts`)
+- `createBudget`, `updateBudget`, `removeBudget`, `contributeBudget`,
+  and group CRUD. `updateBudget` takes a generic patch and writes it
+  through unchanged. **No `updateBudgetCycle`** — the form blasts the
+  whole patch at one mutation.
+
+### UI
+- `components/budget-form-dialog.tsx`: flat form. Has frequency
+  selector + rollover toggle, but no cycle-change-specific path; no
+  pending-amount chip; no "takes effect next period" feedback.
+- `/budgets/page.tsx`: list of cards grouped by `budgetGroups`. Each
+  card shows `{p.from.slice(5)}–{p.to.slice(5)}` (period window).
+- `/budgets/[id]/page.tsx`: ring + window range + "left/over". No
+  pending-amount indicator.
+
+### Tests
+- `lib/select-budgets.test.ts` covers `cycleWindow` across every
+  frequency + edge cases, plus `budgetProgress` (filter combinations,
+  carry-forward inclusion, splits). **No rollover, no staging.**
+- `lib/db/budgets-entity.test.ts` covers create/update/delete
+  round-trips + group cascade behaviour.
+
+---
+
+## Goal
+
+Put the four behaviours from the original plan back on top of the new
+named-budget model:
+
+1. **Cycle change is immediate, amount carries over** — same dollar
+   number, new unit. `last_rolled_period` resets to NULL.
+   `pending_amount` discarded. `carry_forward` + `rollover_limit`
+   preserved (cycle-agnostic absolute amounts).
+2. **Amount change is staged** in a new `pending_amount` column. The
+   current period's `budgetProgress.base` keeps using the existing
+   `amount`. The rollover loop commits `pending_amount → amount` as
+   the first step of advancing the period boundary.
+3. **Automatic carry-forward** — when an expense budget with
+   `rollover = 1` crosses a period boundary, last period's leftover
+   (capped at `rollover_limit`) becomes `carry_forward`.
+4. **Backdated-edit invalidation** — when a transaction edit affects a
+   period that was already rolled, reset that budget's rollover state
+   so the next request replays cleanly.
 
 ---
 
 ## Plan
 
-### 1. Schema change (datetime version `2026-06-XX…`)
-
-Two new columns on `budgets`, plus a corresponding index:
+### 1. Schema additions (no migration; canonical CREATE only)
 
 ```sql
-ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT;
-ALTER TABLE budgets ADD COLUMN pending_amount    REAL;
+-- inside CREATE TABLE budgets ...
+last_rolled_period TEXT,
+pending_amount     REAL,
+```
+
+Add the corresponding index:
+
+```sql
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 ```
 
-- `last_rolled_period` — the latest period the auto-rollover has
-  processed for this budget. NULL = never rolled.
-- `pending_amount` — staged amount change that activates at the next
-  period boundary. NULL = no change pending. See §4b.
+Bump `SCHEMA_VERSION` to a fresh datetime (`'2026-05-31T18:00:00Z'`
+or similar) so older exports get rejected by the import validator.
+No migration block — clean-slate DBs are born complete.
 
-A second migration step backfills `start_date` for existing rows — today
-every row uses the hard-coded `'2026-05-01'`. For now that stays fine
-since they're all monthly (calendar-aligned, no anchor matters).
+### 2. Period arithmetic — extract a module
 
-### 2. Period arithmetic — new `lib/budgets/period.ts`
-
-Pure helpers with no DB dependency:
+Factor the inlined helpers in `lib/select.ts` into
+`lib/budgets/period.ts`:
 
 ```ts
 export type Frequency = 'daily'|'weekly'|'biweekly'|'monthly'|'quarterly'|'yearly';
 
-/**
- * Canonical id for the period containing `date`. Stable string keys that
- * sort chronologically:
- *   periodOf('2026-04-15', 'monthly',   anchor)      → '2026-04'
- *   periodOf('2026-04-15', 'quarterly', anchor)      → '2026-Q2'
- *   periodOf('2026-04-15', 'yearly',    anchor)      → '2026'
- *   periodOf('2026-04-15', 'weekly',    '2026-01-05') → '2026-W16'
- *   periodOf('2026-04-15', 'biweekly',  '2026-01-05') → '2026-BW08'
- *   periodOf('2026-04-15', 'daily',     anchor)      → '2026-04-15'
- */
+/** Canonical period id for the period containing `date`. Sortable by
+ *  lex compare. `anchor` = budget.start_date (matters for biweekly). */
 export function periodOf(date: string, frequency: Frequency, anchor: string): string;
 
-/** Inclusive YYYY-MM-DD bounds of the named period. */
+/** Inclusive YYYY-MM-DD bounds of the period. */
 export function periodRange(period: string, frequency: Frequency, anchor: string): { from: string; to: string };
 
-/** Next / previous period id (chronologically). */
-export function nextPeriod(period: string, frequency: Frequency): string;
-export function prevPeriod(period: string, frequency: Frequency): string;
+/** Adjacent periods chronologically. */
+export function nextPeriod(period: string, frequency: Frequency, anchor: string): string;
+export function prevPeriod(period: string, frequency: Frequency, anchor: string): string;
 
-/** Human-readable label for headers ("April 2026", "Q2 2026", "Week of Apr 13"). */
+/** Human-readable header label. */
 export function periodLabel(period: string, frequency: Frequency): string;
 ```
 
-Anchor matters for `weekly` / `biweekly` (otherwise "what day is the
-week boundary?" is undefined). For everything else it's calendar-aligned
-and the anchor is ignored. The anchor is just `budgets.start_date`.
+Period-id formats (sortable by lex compare):
+- daily `2026-04-15`
+- weekly `2026-W16` (ISO 8601)
+- biweekly `BW-2026-04-13` (Monday of the bucket's first week — anchor
+  picks the phasing)
+- monthly `2026-04`
+- quarterly `2026-Q2`
+- yearly `2026`
 
-### 3. Read queries become period-aware
+`cycleWindow` stays in `lib/select.ts` as-is for `budgetProgress`'s
+consumption — both modules can share the underlying date helpers, but
+we don't need to rewrite the working selector. The rollover loop
+(server-side) uses the new period module; the UI display continues to
+go through `budgetProgress` which uses `cycleWindow`.
 
-- `budgetByCategory()` drops the `WHERE frequency = 'monthly'`. Returns
-  `Record<categoryId, { amount, frequency, startDate }>` so the UI can
-  display the right unit.
-- `budgetProgress()` switches from `(ledgerId, yearMonth)` to
-  `(ledgerId)` and, for each budget, computes its **own** current period
-  via `periodOf(today, freq, start_date)`, builds a date filter from
-  `periodRange(...)`, and sums spend.
-- `monthlyByCategory()` stays month-shaped (it's used by the monthly
-  report card). We add a parallel `categorySpendForPeriod()` that takes
-  the period.
-- Client `categorySpend(txns, ledgerId, month?)` is unchanged for now;
-  the budget detail page calls a new period-shaped variant.
+### 3. Rollover module — `lib/budgets/rollover.ts`
 
-### 4a. Cycle-change behaviour — immediate, amount carries over
+```ts
+/** Idempotent catch-up. Walks each budget from its last_rolled_period
+ *  up to the most-recent already-closed period. Per period: rollover
+ *  (if on) computes leftover → cap → new carry_forward; either way,
+ *  any pending_amount → amount. Returns the number of period
+ *  transitions applied. No-op when nothing's due. */
+export async function rollBudgetsIfDue(exec: Exec, today: string): Promise<{ rolled: number }>;
 
-When the user changes a budget's frequency:
-
-- The **same number stays as the `amount`**, just attached to the new
-  unit. Monthly $700 → weekly $700/week. No pro-rate, no prompt.
-- The cycle change is **immediate**: the new cycle's first period
-  starts at the current `today`'s slot under the new frequency
-  (e.g., switching to weekly on a Wednesday → the current week's
-  period under weekly is now active).
-- `last_rolled_period` is **reset to NULL**. Period IDs from the old
-  cycle don't translate to the new cycle, so rollover starts fresh
-  on the new unit. The next request's `rollBudgetsIfDue` advances
-  it to the period *just before* the current one — no spurious
-  retroactive carry-forward.
-- `carry_forward` is **preserved**. It's an absolute dollar amount;
-  it doesn't depend on the cycle unit. The first period under the new
-  cycle inherits whatever was already accumulated.
-- `pending_amount`, if any, is **discarded** (the user implicitly chose
-  the cycle change as the new active state).
-- `rollover_limit` is **preserved** for the same reason as
-  `carry_forward`: it's an absolute dollar cap.
-
-This collapses the cycle-change dialog into a single confirmation
-("This will change Groceries from monthly to weekly. The $700 limit
-becomes a weekly limit starting now.").
-
-### 4b. Amount-change behaviour — staged, takes effect next period
-
-When the user changes only the amount on a budget (no cycle change):
-
-- The new amount is **staged in `pending_amount`** rather than
-  overwriting `amount`. The current period's "spent of budget"
-  calculation continues to use the existing `amount` — fair, since
-  the user might already be mid-period.
-- `rollBudgetsIfDue`, when advancing the period boundary, **commits
-  `pending_amount` to `amount` and clears `pending_amount`** as the
-  *first* step (before computing rollover). So the new period starts
-  with the new limit immediately.
-- If the user edits the amount again before the next period
-  boundary, `pending_amount` is overwritten — only the latest staged
-  value applies.
-- If the user wants to undo a pending change, they re-enter the
-  current `amount`; `pending_amount` is cleared.
-
-If a user changes **both** cycle and amount in the same edit:
-
-- Treat as a cycle change with `amount = newAmount` applied
-  immediately. (§4a wins; `pending_amount` is irrelevant because the
-  edit is fundamentally a unit change.) The dialog's confirm text
-  mirrors this: "Groceries becomes $500/week starting now."
-
-### 5. Automatic carry-forward — auto-on-load + targeted recompute
-
-#### When it runs
-
-A new helper `rollBudgetsIfDue(exec)` runs:
-
-- Once per request, near the top of `/api/state` (and `/api/mutate`'s
-  return-projection step). It's idempotent — a no-op when nothing's due
-  — so calling it on every request is fine.
-- Triggered explicitly after backdated edits (see below).
-
-#### What it does, per budget with `rollover = 1`
-
-```
-today        = current date (YYYY-MM-DD)
-currentP     = periodOf(today, freq, start_date)
-lastRolled   = budget.last_rolled_period           // may be NULL
-target       = prevPeriod(currentP, freq)          // the period to roll INTO currentP
-
-while lastRolled < target:
-  rollFrom = lastRolled == NULL ? periodOf(start_date, freq, start_date) : nextPeriod(lastRolled, freq)
-  range    = periodRange(rollFrom, freq, start_date)
-  spent    = SUM(amount_base) for confirmed expenses in budget's category_ids
-             whose date is in [range.from, range.to]
-  effective = amount + carry_forward
-  leftover  = max(0, effective - spent)
-  newCF     = rollover_limit == null ? leftover : min(leftover, rollover_limit)
-
-  carry_forward      = newCF
-  last_rolled_period = rollFrom
-
-  // Apply any staged amount change as the NEW period (the one we just rolled
-  // INTO) begins. This is what makes amount edits affect "the following cycle"
-  // as required by §4b. Done after computing rollover so the period we just
-  // closed used the in-effect amount.
-  if pending_amount != NULL:
-    amount         = pending_amount
-    pending_amount = NULL
+/** Resets last_rolled_period to NULL and carry_forward to 0 for every
+ *  budget whose category/account filter overlaps `affected` and whose
+ *  last_rolled_period covers earliestDate. The next rollBudgetsIfDue
+ *  replays from start_date forward. */
+export async function invalidateRollover(
+  exec: Exec,
+  affected: { categoryIds: string[]; accountIds: string[] },
+  earliestDate: string,
+): Promise<{ invalidated: number }>;
 ```
 
-So the loop catches up cleanly if the app's been closed for a few
-months. Bounded — only the missing periods get processed.
+Implementation notes:
 
-**Budgets with `rollover = 0`** still need the period-advance step so
-their `pending_amount` gets activated on schedule. The function runs
-the same loop but skips the carry-forward arithmetic — only the
-`last_rolled_period` and `pending_amount` updates happen.
+- **Rollover is for `is_recurring = 1` only.** One-shot budgets
+  (`is_recurring = 0`) skip the loop entirely — they don't have
+  repeating period boundaries.
+- **Past `end_date`?** Skip — the budget is closed.
+- **`start_date` in the future?** Skip — dormant.
+- **Rollover off but `pending_amount` set?** Still walk forward so
+  `pending_amount → amount` activates at the boundary. Skip the
+  carry-forward arithmetic.
+- **Filter overlap for invalidation:**
+  - `categoryIds = []` on a budget = "matches every category" → that
+    budget is always overlapped by any tx with a category.
+  - Same for `accountIds = []`.
+  - Otherwise: intersect with the affected tx's category + account.
+- **Spent in a period:** reuse the same SQL idiom `budgetProgress` uses
+  (LEFT JOIN `transaction_splits` + COALESCE so splits override the
+  parent category) but scope by the period's date range +
+  account/category filter.
 
-#### When `last_rolled_period` is NULL on a never-rolled budget
+### 4. Mutation cases
 
-It starts at `start_date`'s period — i.e., the budget doesn't try to
-roll periods that pre-date itself.
+The form is one dialog; the mutation router needs to detect what
+changed. Two paths:
 
-### 6. Backdated edits invalidate the cache
+**Path A — cycle / start_date changed (immediate):**
 
-Same prior-art the app already uses for `recomputeAccount`. After every
-mutation that affects a transaction (`addTransaction`,
-`updateTransaction`, `cancelTransaction`, `setTransactionSplits`):
-
+```ts
+case 'updateBudgetCycle': {
+  // patch may include frequency, startDate, amount (all three optional;
+  // at least frequency or startDate must differ from the row).
+  // Reads the row, computes the next state:
+  //   amount         = patch.amount ?? row.amount
+  //   frequency      = patch.frequency ?? row.frequency
+  //   start_date     = patch.startDate ?? row.start_date
+  //   pending_amount = NULL              (discard)
+  //   last_rolled_period = NULL          (new cycle's clock starts fresh)
+  // carry_forward + rollover_limit preserved.
+}
 ```
-affectedCategories = {tx.category, ...tx.splits.map(s => s.categoryId)}
-affectedPeriod     = periodOf(tx.date, ...)
 
-for each budget that includes one of affectedCategories:
-  if affectedPeriod <= budget.last_rolled_period:
-    budget.last_rolled_period = prevPeriod(affectedPeriod, freq)
-    // bound: never go before the budget's start period
+**Path B — only `amount` changed (staged):**
+
+We have two reasonable shapes:
+
+- **Reuse `updateBudget` with a staging convention** — when the patch
+  contains *only* `amount` (no frequency / start_date / recurring /
+  rollover / filters), the handler writes to `pending_amount` instead
+  of `amount`. Otherwise it patches `amount` directly.
+- **OR add `setBudgetAmount` as a distinct case.**
+
+Recommendation: **the first**. Keeps the client-side patch surface
+unchanged. The store action stays one mutation; the form just calls
+`updateBudget(patch)` and the server figures out whether to stage.
+
+**One subtlety:** if the patch touches `category_ids` /
+`account_ids` / `tag_ids` / `name` / `warning_pct` (filter or display
+edits), the amount still patches through immediately — staging only
+applies when the *amount* field is the only material change.
+
+The form's UI logic derives whether to call `updateBudgetCycle` or
+`updateBudget` based on the diff:
+
+| Field changed | Route |
+|---|---|
+| frequency or startDate | `updateBudgetCycle` (carries amount if also changed) |
+| amount only | `updateBudget` (stages via the above rule) |
+| amount + filter / name / etc. | `updateBudget` (amount applies immediately because the patch isn't amount-only) |
+| filter / name / etc. only | `updateBudget` (no amount staging) |
+
+Document this decision in the dialog's description text so the user
+sees what's about to happen ("Amount change takes effect next period" /
+"Cycle change applies now").
+
+**Other mutation cases that need adjustment:**
+
+- `removeBudget` — no change.
+- `contributeBudget` — no change (one-shot income flow).
+- `createBudget` — no change. New budgets start with `pending_amount =
+  NULL`, `last_rolled_period = NULL`. The first
+  `rollBudgetsIfDue` after creation starts the clock.
+
+### 5. Wiring
+
+**`lib/db/server.ts`:**
+
+```ts
+// Inside the existing serialize() write-chain mutex.
+export async function readState(): Promise<ProjectedState> {
+  return serialize(async () => {
+    const db = await getServerDb();
+    const { rolled } = await rollBudgetsIfDue(db.exec, todayUtc());
+    if (rolled > 0) await db.persist();
+    return projectState(db.exec);
+  });
+}
+
+export function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
+  return serialize(async () => {
+    const db = await getServerDb();
+    await fn(db.exec);
+    await rollBudgetsIfDue(db.exec, todayUtc());
+    await db.persist();
+    return projectState(db.exec);
+  });
+}
 ```
 
-The next request to `rollBudgetsIfDue` will replay rollover forward
-from there. Cheap — the recompute walks at most the number of periods
-between the edit's date and today.
+**`lib/db/mutations.ts`:**
 
-### 7. UI changes
+In every transaction-touching case (`addTransaction`,
+`updateTransaction`, `deleteTransaction`, `setTransactionSplits`),
+collect `{ categoryIds, accountIds, earliestDate }` from the affected
+row (before + after for updates) and call `invalidateRollover`.
 
-- **Budget detail edit dialog**: add a cycle selector (daily through
-  yearly) alongside the existing amount field.
-  - On submit, derive what changed:
-    - **Cycle changed** (with or without amount change) → confirm
-      dialog: "Groceries becomes $X/{unit} starting now." On OK,
-      cycle change applies immediately per §4a. `pending_amount` is
-      cleared.
-    - **Amount changed only** → stage in `pending_amount` (§4b). No
-      confirmation needed; toast: "New limit takes effect on
-      {next-period-label}."
-- **Pending-amount indicator**: when `pending_amount != NULL`, the
-  budget header shows a small chip "$800 next {period}" next to the
-  active "$700/mo" line.
-- **Budget detail header**: show the current period ("Q2 2026 ·
-  Apr 1 – Jun 30") + the cycle.
-- **Budget list / category row**: show the period unit next to the
-  amount (e.g. "$700/mo", "$175/wk").
-- **Rollover dialog**: disable the rollover toggle when frequency =
-  daily (carry-forward at daily resolution is nonsensical for budgets).
+Helper:
+```ts
+async function txTouches(exec, id): Promise<{ date, accountId, categoryIds: string[] } | null>
+```
 
-### 8. Edge cases
+### 6. UI
 
-- **New budget mid-period**: rollover is a no-op until the period the
-  budget was created in ends.
-- **Toggling rollover ON mid-period**: no retroactive carry-forward;
-  the next period boundary picks it up.
-- **Cycle change mid-period**: the budget's new "first period" is the
-  period containing `today` under the new frequency. We don't try to
-  reconstruct rollover history under the new cycle (would be ambiguous).
-- **Multiple amount edits in one period**: only the most-recent
-  `pending_amount` survives — earlier ones are overwritten before the
-  next period boundary.
-- **Pending amount + cycle change in the same edit**: the cycle change
-  wins. `pending_amount` is discarded; the new `amount` (as entered
-  in the dialog) becomes the active limit under the new cycle.
-- **Pending amount when rollover is OFF**: still gets activated at the
-  period boundary by the same `rollBudgetsIfDue` pass — that function
-  always advances `last_rolled_period` and swaps `pending_amount`,
-  even when carry-forward arithmetic is skipped.
-- **`start_date` in the future**: budget is dormant — `currentPeriod`
-  resolves to `null` until the date is reached; `rollBudgetsIfDue`
-  skips dormant budgets.
-- **`end_date` set and passed**: `currentPeriod` returns `null` after
-  end; rollover stops accumulating.
-- **Daily rollover**: schema-allowed but blocked at the mutation
-  boundary (`setCategoryBudgetRollover` throws when frequency = daily).
-- **Bi-weekly anchor**: the period id includes the anchor's week-of-year
-  parity so weekly and biweekly don't collide.
-- **Multiple budgets sharing a category**: each budget's rollover is
-  computed independently from its own `last_rolled_period`; same spend
-  decrements both effective totals.
-- **DST / timezone**: dates are YYYY-MM-DD strings — no DST math
-  needed. We treat day boundaries as local calendar days (matching
-  every other date filter in the app).
+**`components/budget-form-dialog.tsx`:**
 
-### 9. Tests
+- Compute the diff between the form draft and the source `BudgetRow`
+  on submit; route to `updateBudgetCycle` vs `updateBudget`
+  accordingly.
+- Render a small descriptive line above the Save button that mirrors
+  the routing decision:
+  - "Cycle change applies immediately."
+  - "Amount change takes effect on {next-period-label}."
+  - default "Save changes."
+- Surface the staged pending amount: when `row.pendingAmount != null`,
+  show a chip ("$800 starting {next-period-label}") near the amount
+  field with a small "Clear pending" button (calls `updateBudget` with
+  the original `amount`, which detects the diff as "amount only" and
+  stages the prior value — wait, this round-trips back to staging.
+  Cleaner: a dedicated `clearPendingAmount` mutation that sets
+  `pending_amount = NULL` directly).
 
-- `periodOf` round-trips through every frequency at quarter, year,
-  week, and biweek boundaries (including the anchor edge case).
-- `periodRange(periodOf(date)).contains(date)` for every frequency.
-- `rollBudgetsIfDue` on a fresh budget never runs (`last_rolled` =
-  null, immediately advances to `currentPeriod - 1`'s start).
-- `rollBudgetsIfDue` catches up multiple missed periods.
-- `rolloverLimit` caps the carry-forward.
-- Backdated edit invalidates `last_rolled_period` and the next call
-  replays correctly.
-- Cycle change resets `last_rolled_period` to NULL, **preserves**
-  `carry_forward`, **discards** `pending_amount`.
-- Setting `pending_amount` and waiting for the next period activates
-  it as the new `amount`.
-- Setting `pending_amount` twice in the same period keeps only the
-  latest.
-- Rollover OFF + `pending_amount` set: the next period boundary still
-  activates the pending amount.
+**`/budgets/[id]/page.tsx`:**
+
+- Add a "Period" line under the existing window range that uses
+  `periodLabel(periodOf(today, ...), ...)` for a human-readable header
+  (e.g., "April 2026", "Q2 2026").
+- When `row.pendingAmount != null`, show the same staged-amount chip as
+  the form.
+- When `carryForward > 0`, the existing display already includes it in
+  `base`; add a small italic note "(+$X carried forward)".
+
+**`/budgets/page.tsx` (list):**
+
+- Card unchanged structurally. Add a small badge dot on cards with
+  `pendingAmount != null` so the list signals staged changes.
+
+### 7. Edge cases
+
+- **One-shot (`is_recurring = 0`):** never rolls, never stages. Amount
+  edit takes effect immediately via `updateBudget`. Cycle edit doesn't
+  apply (the form should disable the frequency selector for one-shot
+  income).
+- **Dormant (`start_date > today`):** rollover loop skips.
+- **Past `end_date`:** rollover loop skips. The budget shows
+  "ended {date}" in the header.
+- **`category_ids = []`:** budget matches any tx — `invalidateRollover`
+  treats this as "always overlapping".
+- **`account_ids = []`:** same.
+- **`rollover_limit = NULL`:** uncapped — leftover rolls in full.
+- **Backdated cancel:** `deleteTransaction` reads the row before
+  cancel; if any covered budget is affected, invalidation runs.
+- **Combined edit (cycle + amount + filters):** all routed through
+  `updateBudgetCycle`. The cycle path writes amount + frequency +
+  start_date in one shot. Filters / name patched in the same mutation
+  before the cycle reset.
+- **Negative `pending_amount` or zero amount:** mutation-boundary
+  validation rejects.
+- **`carry_forward` after a backdated edit invalidation:** reset to 0
+  alongside `last_rolled_period`; the replay rebuilds it from
+  start_date forward.
+
+### 8. Tests
+
+`lib/budgets/period.test.ts` (new):
+- `periodOf` for every frequency including year-boundary edge cases.
+- `periodRange(periodOf(date)).contains(date)` round-trip.
+- Known monthly / quarterly / leap-month bounds.
+- Biweekly bucket alignment.
+- `nextPeriod` / `prevPeriod` chronological + invertible.
+
+`lib/budgets/rollover.test.ts` (new):
+- No-op when nothing's due.
+- Single closed period: rollover off → advances marker only.
+- Single closed period: rollover on → April leftover becomes May
+  carry-forward.
+- `rollover_limit` caps the carry-forward.
+- Catches up multiple missed periods.
+- `pending_amount` activates at the boundary (with rollover both on
+  and off).
+- `invalidateRollover` resets state for backdated edits affecting a
+  rolled period.
+- `invalidateRollover` skips edits in periods not yet rolled.
+- Filter overlap: empty `categoryIds` is treated as "matches all".
+- One-shot budget (`is_recurring = 0`) is skipped entirely.
+- Idempotent second call rolls 0.
+
+`lib/db/budgets-entity.test.ts` (extend):
+- `updateBudgetCycle` applies immediately, clears `pending_amount`,
+  resets `last_rolled_period`, preserves `carry_forward`.
+- `updateBudget` with amount-only patch stages to `pending_amount`.
+- `updateBudget` with amount + filters patches amount immediately.
+
+`lib/db/mutations.test.ts` (extend):
+- Transaction backdated into a rolled period → matching budget's
+  `last_rolled_period` reset.
+- Transaction in the current period → no invalidation.
+
+---
+
+## Suggested commit split
+
+1. **Schema + period module + tests.** Add the two columns + index to
+   the canonical CREATE, bump `SCHEMA_VERSION`, ship
+   `lib/budgets/period.ts` with the five exports + the unit test file.
+   No behaviour change in the live app.
+2. **Rollover module + tests.** Ship `lib/budgets/rollover.ts` with
+   `rollBudgetsIfDue` + `invalidateRollover` + the unit test file. Not
+   wired into the live app yet.
+3. **Mutation routing + cycle/amount split + UI feedback.** Add the
+   `updateBudgetCycle` case + the amount-only staging rule in
+   `updateBudget`; teach `budget-form-dialog.tsx` to route based on the
+   diff; surface the pending-amount chip + period header. Extend
+   `budgets-entity.test.ts`.
+4. **Wiring + backdated-edit invalidation.** Call `rollBudgetsIfDue` in
+   `readState` / `withWrite`; call `invalidateRollover` from the four
+   tx mutation handlers. Extend `mutations.test.ts`.
+
+Each commit is independently green.
 
 ---
 
 ## File touch list
 
-| Path | Change |
-|---|---|
-| `lib/db/schema.ts` | New datetime migration: `ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT` + `pending_amount REAL` + index. |
-| `lib/budgets/period.ts` *(new)* | `periodOf`, `periodRange`, `nextPeriod`, `prevPeriod`, `periodLabel`. |
-| `lib/budgets/period.test.ts` *(new)* | Unit tests over every frequency. |
-| `lib/budgets/rollover.ts` *(new)* | `rollBudgetsIfDue(exec)`, `recomputeRolloverFor(exec, txnDate, categoryIds)`. |
-| `lib/budgets/rollover.test.ts` *(new)* | Catch-up, cap, backdated-edit recompute. |
-| `lib/db/queries/budgets.ts` | `setCategoryBudget` takes `frequency` + `startDate`; new `updateBudgetCycle`; period-shaped read queries. |
-| `lib/db/queries/reports.ts` | `budgetProgress` switches from `yearMonth` to per-budget current-period derivation. |
-| `lib/db/mutations.ts` | New cases: `updateBudgetCycle`, `setCategoryBudgetWithCycle`. Call `recomputeRolloverFor` from the existing tx-mutation handlers. |
-| `app/api/state/route.ts` | Call `rollBudgetsIfDue(exec)` before projecting. |
-| `app/api/mutate/route.ts` | Same — after applying the mutation, before re-projection. |
-| `app/(main)/budgets/[id]/page.tsx` | Cycle selector + cycle-change dialog + period header. |
-| `app/(main)/budgets/page.tsx` | Show cycle next to amount in the list. |
-| `lib/store.ts` | Carry `frequency` + `startDate` per category on the projected map. |
-| `lib/select.ts` | `categorySpendForPeriod(txns, ledgerId, from, to)` + period helpers re-exported for client. |
-| `plans/MASTER_PLAN.md` | Strike "automatic month-end carry-forward" once shipped. |
-
-**Suggested commit split**:
-
-1. **Schema migration + period arithmetic** (`schema.ts`, `lib/budgets/period.ts`, tests). No behaviour change yet; everything still uses monthly.
-2. **Period-aware reads** (`budgets.ts`, `reports.ts`, `state.ts`,
-   `mutations.ts` for the read side). Still no auto-rollover, but
-   non-monthly budgets render correctly.
-3. **Cycle-change UI + mutation** (`budgets/[id]/page.tsx`,
-   `mutations.ts`, cycle-change dialog).
-4. **`rollBudgetsIfDue` + backdated-edit recompute** (`rollover.ts`,
-   wired into `/api/state` and `/api/mutate`).
-
----
-
-## 10. Re-application onto named budgets
-
-The named-budgets redesign (`plans/budgets_redesign.md`) already makes each budget
-a **row with its own cycle** — `frequency`, `start_date`, `end_date`,
-`is_recurring`, `rollover`, `rollover_limit`, `carry_forward` are all per-budget
-columns, and the watch set is `account_ids[]` + `category_ids[]` (+ `tag_ids[]`).
-That's a *better* fit than the per-category map: each budget row is already the
-unit the rollover loop iterates, so no `bud-<categoryId>` indirection.
-
-**Reusable verbatim (recover from `66cff5f`)**
-- `lib/budgets/period.ts` — `periodOf` / `periodRange` / `nextPeriod` /
-  `prevPeriod` / `periodLabel` / `Frequency`. Pure, no DB dependency, model-
-  agnostic. Drop in as-is, plus `period.test.ts`.
-
-**Schema — add to the clean baseline `SCHEMA` (no migration; pre-release)**
-- `budgets.last_rolled_period TEXT`, `budgets.pending_amount REAL`, and
-  `idx_budget_last_rolled`. Add them straight to the canonical `CREATE TABLE
-  budgets` — the clean-slate DB has **no migration framework**, so fresh DBs are
-  born with them (bump `SCHEMA_VERSION` only if you want the baseline restamped).
-
-**Engine (`lib/budgets/rollover.ts`) — adapt per-category → per-budget**
-- `rollBudgetsIfDue(exec, today)` (signature unchanged): iterate **budget rows**
-  instead of categories. Each `rollover`-eligible **expense** budget uses its own
-  `frequency` + `start_date` as the period anchor; a period's spend sums confirmed
-  `kind='expense'` rows (parent + splits) whose `(account_id, category_id, date)`
-  fall inside the budget's `account_ids`/`category_ids` filter and `periodRange`.
-  The `carry_forward` / `rollover_limit` / `pending_amount` / `last_rolled_period`
-  arithmetic from §5 is unchanged. Income-type budgets are skipped.
-- `invalidateRollover(exec, earliestDate, {accountIds, categoryIds})` (§6): reset
-  `last_rolled_period` for any budget whose filter intersects the edited txn and
-  whose rolled range covers `earliestDate`. **Clean-slate caveat:** spend is
-  `kind='expense'` confirmed rows, and delete is now a **hard DELETE** — the
-  delete handler must capture the removed row's account/category/date *before*
-  deleting so invalidation can still run.
-
-**Reads / projection**
-- The redesign projects `budgets: BudgetRow[]` (not the old `budgetByCategory` /
-  `budgetRolloverByCategory` maps), so "current period · spent · remaining" is
-  computed **per budget** in `queries/budgets.ts` + `reports.ts` via
-  `periodOf(today, b.frequency, b.start_date)` → `periodRange`. The §3 changes,
-  written for the maps, are obsolete; the §2 period helpers they call are not.
-
-**Wiring (unchanged from #48)**
-- Call `rollBudgetsIfDue(exec, todayUtc())` in the server read/mutate path
-  (`lib/db/server.ts`), persisting when `rolled > 0`. Call `invalidateRollover`
-  from the tx mutation handlers (`addTransaction`, `updateTransaction`,
-  `deleteTransaction`, `setTransactionSplits`).
-
-**UI**
-- Cycle selector + cycle-change-vs-amount-change semantics (§4a/§4b), the
-  pending-amount chip, and the period header (§7) move onto the named-budget
-  detail page (`app/(main)/budgets/[id]/page.tsx`), the create/edit dialog
-  (`components/budget-form-dialog.tsx`), and the budget list rows.
+| Path | Status | Change |
+|---|---|---|
+| `lib/db/schema.ts` | edit | `+ last_rolled_period TEXT`, `+ pending_amount REAL`, `+ idx_budget_last_rolled` index; bump `SCHEMA_VERSION` |
+| `lib/budgets/period.ts` | new | `periodOf`, `periodRange`, `nextPeriod`, `prevPeriod`, `periodLabel` |
+| `lib/budgets/period.test.ts` | new | Unit tests across every frequency |
+| `lib/budgets/rollover.ts` | new | `rollBudgetsIfDue`, `invalidateRollover` |
+| `lib/budgets/rollover.test.ts` | new | Catch-up, cap, backdated-edit, idempotency |
+| `lib/db/queries/budgets.ts` | edit | `BudgetRow` carries `lastRolledPeriod` + `pendingAmount`; `updateBudget(patch)` stages amount when patch is amount-only; new `updateBudgetCycle(id, patch)` |
+| `lib/db/mutations.ts` | edit | `updateBudgetCycle` case; `invalidateRollover` call in the 4 tx cases; `txTouches` helper |
+| `lib/db/server.ts` | edit | `readState` / `withWrite` call `rollBudgetsIfDue` |
+| `lib/store.ts` | edit | `updateBudgetCycle` store action; expose `pendingAmount` on `BudgetRow` |
+| `lib/select.ts` | edit | `budgetProgress` UI display can show pending-amount (no logic change to the active base) |
+| `components/budget-form-dialog.tsx` | edit | Detect cycle vs amount-only diff on submit; route accordingly; descriptive text; pending-amount chip + "Clear pending" |
+| `app/(main)/budgets/[id]/page.tsx` | edit | Period header (`periodLabel`); pending-amount chip; "+$X carried forward" note when applicable |
+| `app/(main)/budgets/page.tsx` | edit | Small badge dot on cards with `pendingAmount != null` |
+| `lib/db/budgets-entity.test.ts` | edit | New tests for cycle change + amount staging |
+| `lib/db/mutations.test.ts` | edit | New tests for backdated-edit invalidation |
+| `plans/BUDGET_CYCLES_PLAN.md` | rewrite | this file |
 
 ---
 
 ## Out of scope
 
-- ❌ Per-account budgets (the `account_ids` column exists but is unused
-  app-wide; not in this PR).
-- ❌ Per-tag budgets (same — `tag_ids` exists, unused).
-- ❌ Rollover for non-`rollover_limit`-capped overflows that *grow* via
-  income (we only roll under-spend, not over-income).
-- ❌ Showing historical carry-forward per period (we keep only "current
-  carry_forward + last_rolled_period"; reconstructing the timeline is a
-  separate feature).
-- ❌ Daily-rolling daily budgets — schema-allowed, mutation-blocked.
+- ❌ Restoring the legacy per-category amount-map model. The new
+  named-budget shape stays.
+- ❌ Cycle / rollover on `is_recurring = 0` (one-shot) budgets.
+- ❌ Per-account-only or per-tag-only budgets with no category filter
+  — the rollover spend SQL already handles these via the category
+  filter being empty, but no UI affordance is added in this PR.
+- ❌ Historical carry-forward visualisation per period. Only the
+  current carry-forward + `last_rolled_period` are stored.
+- ❌ Manual "close out this period now" button — the period boundary
+  trigger is purely time-based.

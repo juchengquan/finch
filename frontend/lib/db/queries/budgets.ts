@@ -23,6 +23,11 @@ export interface BudgetRow {
   isRecurring: number;
   rollover: number;
   rolloverLimit: number | null;
+  /** Staged amount change; activated at the next period boundary by
+   *  rollBudgetsIfDue. null = no pending change. */
+  pendingAmount: number | null;
+  /** Catch-up marker for the rollover engine. null = never rolled. */
+  lastRolledPeriod: string | null;
   accountIds: string[];
   categoryIds: string[];
   tagIds: string[];
@@ -55,6 +60,8 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     isRecurring: Number(r.is_recurring ?? 1),
     rollover: Number(r.rollover ?? 0),
     rolloverLimit: r.rollover_limit == null ? null : Number(r.rollover_limit),
+    pendingAmount: r.pending_amount == null ? null : Number(r.pending_amount),
+    lastRolledPeriod: r.last_rolled_period == null ? null : String(r.last_rolled_period),
     accountIds: parseIds(r.account_ids),
     categoryIds: parseIds(r.category_ids),
     tagIds: parseIds(r.tag_ids),
@@ -175,6 +182,63 @@ export async function updateBudget(exec: Exec, id: string, patch: BudgetPatch): 
   sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE budgets SET ${sets.join(', ')} WHERE id = ?`, bind);
+}
+
+/**
+ * Stage an amount change to be applied at the next period boundary. Writes
+ * `pending_amount` rather than `amount` so the current period's spend
+ * calculation keeps using the in-effect limit (BUDGET_CYCLES_PLAN §2).
+ *
+ * Use this for amount-only edits on existing recurring budgets. Cycle changes
+ * and the initial amount on a fresh budget go through their own paths.
+ */
+export async function stageBudgetAmount(exec: Exec, id: string, amount: number): Promise<void> {
+  await exec(
+    "UPDATE budgets SET pending_amount = ?, updated_at = datetime('now') WHERE id = ?",
+    [amount, id],
+  );
+}
+
+/** Clear a staged pending amount without affecting the active `amount`. */
+export async function clearPendingAmount(exec: Exec, id: string): Promise<void> {
+  await exec(
+    "UPDATE budgets SET pending_amount = NULL, updated_at = datetime('now') WHERE id = ?",
+    [id],
+  );
+}
+
+export interface BudgetCyclePatch {
+  frequency: string;
+  startDate: string;
+  /** When omitted, the current `amount` carries over unchanged. */
+  amount?: number;
+  /** Optional end-date adjustment alongside the cycle change. */
+  endDate?: string | null;
+}
+
+/**
+ * Apply a cycle change immediately. Writes amount + frequency + start_date
+ * in one shot, **discards** pending_amount, **resets** last_rolled_period
+ * to NULL (the new cycle's periods don't share IDs with the old). Preserves
+ * carry_forward and rollover_limit (absolute amounts, cycle-agnostic).
+ */
+export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyclePatch): Promise<void> {
+  const existing = await exec('SELECT amount, end_date FROM budgets WHERE id = ?', [id]);
+  if (!existing.length) throw new Error('Budget not found');
+  const amount = patch.amount ?? Number(existing[0].amount);
+  // undefined preserves the existing end_date; explicit null clears it; a
+  // string sets it.
+  const endDate = patch.endDate === undefined
+    ? (existing[0].end_date == null ? null : String(existing[0].end_date))
+    : patch.endDate;
+  await exec(
+    `UPDATE budgets
+       SET amount = ?, frequency = ?, start_date = ?, end_date = ?,
+           pending_amount = NULL, last_rolled_period = NULL,
+           updated_at = datetime('now')
+     WHERE id = ?`,
+    [amount, patch.frequency, patch.startDate, endDate, id],
+  );
 }
 
 /** Add to (or subtract from) an income/goal budget's manual `saved`, clamped at 0. */

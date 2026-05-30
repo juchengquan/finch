@@ -11,6 +11,7 @@ import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
 import { budgetProgress, kindOf } from '@/lib/select';
 import { BudgetFormDialog } from '@/components/budget-form-dialog';
+import { periodLabel, nextPeriod, type Frequency } from '@/lib/budgets/period';
 import type { BudgetRow } from '@/lib/db/queries/budgets';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { Button } from '@/components/ui/button';
@@ -98,10 +99,26 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
             </div>
             <div className="text-muted-foreground mt-1 text-xs">
               of <Money value={p.base} /> · <span className="capitalize">{budget.frequency}</span>
+              {budget.carryForward > 0 && (
+                <span className="text-success">
+                  {' '}(+<Money value={budget.carryForward} /> carried)
+                </span>
+              )}
             </div>
             <div className="text-muted-foreground mt-0.5 text-[11px]">
-              {p.from.replace(/-/g, '/')} – {p.to.replace(/-/g, '/')}
+              {periodLabel(p.from, budget.frequency as Frequency, budget.startDate)} · {p.from.replace(/-/g, '/')}–{p.to.replace(/-/g, '/')}
             </div>
+            {budget.pendingAmount != null && (
+              <div className="text-warning bg-warning/10 mt-1.5 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px]">
+                <Icon name="clock" size={11} />
+                <Money value={budget.pendingAmount} /> from{' '}
+                {periodLabel(
+                  nextPeriod(p.from, budget.frequency as Frequency, budget.startDate),
+                  budget.frequency as Frequency,
+                  budget.startDate,
+                )}
+              </div>
+            )}
             <div
               className={cn(
                 'mt-2 inline-flex items-center rounded-[10px] px-2.5 py-1 text-[11px] font-medium',
