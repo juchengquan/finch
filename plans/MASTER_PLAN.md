@@ -318,10 +318,11 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    selector mirrors the same override.
 
 **Other strong candidates (deferred, queued):**
-2. **Spending forecast / cash-flow projection** — extrapolate end-of-month
-   balance from MTD + recurring templates + a baseline run-rate. Uses existing
-   selectors (`netWorthByMonth`, `monthlyCashflow`) and recurring data.
-   Surfaces as a card on Insights or the Accounts page header.
+2. **Spending forecast / cash-flow projection** ✅ *(done — see PR)* —
+   `monthForecast` selector projects month-end spend from MTD + a daily
+   run-rate × days-remaining + upcoming recurring templates + scheduled
+   items. Surfaces as a card on Insights with a stacked bar of the four
+   components and a vs-prev-month chip. Past months collapse to actuals.
 3. **Cmd-K command palette / global search** — unifies the per-screen searches
    (Activity, Merchants) into one jump-to-anything panel: txns, merchants,
    categories, accounts, screens.
@@ -342,8 +343,9 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    indicator.
 
 **Bigger / scope-expanding:**
-7. **Sankey diagram** of income → categories on Insights. Visually striking,
-   medium effort.
+7. **Sankey diagram** ✅ *(done — see PR)* — new `Sankey` SVG primitive +
+   `incomeCategoryFlow` selector; "Where {Month} income went" card on
+   Insights flows income → top-N expense categories + a "Saved" stub.
 8. **Investment tracking** (holdings, gains) for the `invest` account type —
    meaningful scope expansion.
 

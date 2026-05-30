@@ -1,7 +1,8 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions } from "@/lib/select";
-import type { Tx } from '@/lib/store';
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow } from "@/lib/select";
+import type { Tx, RecurringTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { ScheduledItem } from '@/lib/db/queries/planning';
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: Math.random().toString(36).slice(2),
@@ -236,4 +237,148 @@ test('selectTransactions filters by absolute amount (min / max inclusive)', () =
   expect(max.map((t) => t.id).sort()).toEqual(['a', 'b']);
   const both = selectTransactions(txns, { ledgerId: 'personal', minAmount: 50, maxAmount: 250 });
   expect(both.map((t) => t.id).sort()).toEqual(['b', 'd']);
+});
+
+const rt = (over: Partial<RecurringTemplate>): RecurringTemplate => ({
+  id: Math.random().toString(36).slice(2),
+  name: 'rent',
+  type: 'expense',
+  amount: 100,
+  frequency: 'monthly',
+  dayOfMonth: 1,
+  account: 'chk',
+  autoPost: 0,
+  nextRun: '',
+  lastRun: '',
+  ...over,
+});
+
+const sched = (over: Partial<ScheduledItem>): ScheduledItem => ({
+  id: Math.random().toString(36).slice(2),
+  ledgerId: 'personal',
+  day: 1,
+  month: 'May',
+  label: 'bill',
+  amount: 0,
+  type: 'bill',
+  color: null,
+  ...over,
+});
+
+test('monthForecast returns null when month is empty', () => {
+  expect(monthForecast([], [], [], 'personal', '', '2026-05-15')).toBeNull();
+});
+
+test('monthForecast: in-month projection = MTD + run-rate × days-left + upcoming', () => {
+  // May has 31 days. Today is the 10th → 10 days elapsed, 21 days remaining.
+  const txns = [
+    tx({ amount: -100, date: '2026-05-01' }),
+    tx({ amount: -50, date: '2026-05-05' }),
+    tx({ amount: -10, date: '2026-05-10' }),
+    // Excluded — future date in the same month.
+    tx({ amount: -999, date: '2026-05-20' }),
+    // Excluded — other month.
+    tx({ amount: -200, date: '2026-04-15' }),
+    // Excluded — pending / transfer / adjustment / income.
+    tx({ amount: -30, date: '2026-05-08', pending: true }),
+    tx({ amount: -25, date: '2026-05-09', transferGroupId: 'tg-1' }),
+    tx({ amount: -15, date: '2026-05-09', isAdjustment: true }),
+    tx({ amount: 5000, date: '2026-05-01' }),
+  ];
+  const recurring = [
+    rt({ amount: 100, dayOfMonth: 15 }), // upcoming
+    rt({ amount: 80, dayOfMonth: 3 }), // already past — excluded
+    rt({ amount: 50, dayOfMonth: 20, frequency: 'yearly' }), // wrong frequency
+    rt({ amount: 30, dayOfMonth: 25, type: 'income' }), // income — excluded
+    rt({ amount: null, dayOfMonth: 25 }), // variable — excluded
+  ];
+  const scheduled = [
+    sched({ day: 22, month: 'May', amount: 60 }), // upcoming
+    sched({ day: 4, month: 'May', amount: 40 }), // past — excluded
+    sched({ day: 22, month: 'Jun', amount: 80 }), // other month — excluded
+    sched({ day: 22, month: 'May', amount: 25, ledgerId: 'family' }), // other ledger — excluded
+  ];
+
+  const f = monthForecast(txns, recurring, scheduled, 'personal', '2026-05', '2026-05-10');
+  expect(f).not.toBeNull();
+  expect(f!.daysInMonth).toBe(31);
+  expect(f!.daysElapsed).toBe(10);
+  expect(f!.daysRemaining).toBe(21);
+  expect(f!.mtdSpent).toBeCloseTo(160, 2);
+  expect(f!.dailyRunRate).toBeCloseTo(16, 2);
+  expect(f!.unscheduledRest).toBeCloseTo(336, 2); // 16 × 21
+  expect(f!.recurringRest).toBeCloseTo(100, 2);
+  expect(f!.scheduledRest).toBeCloseTo(60, 2);
+  expect(f!.projected).toBeCloseTo(160 + 336 + 100 + 60, 2);
+});
+
+test('monthForecast for a past month: projection collapses to actuals (no run-rate, no upcoming)', () => {
+  const txns = [
+    tx({ amount: -100, date: '2026-04-05' }),
+    tx({ amount: -200, date: '2026-04-25' }),
+  ];
+  const recurring = [rt({ amount: 100, dayOfMonth: 15 })];
+  const scheduled = [sched({ day: 22, month: 'Apr', amount: 60 })];
+  // `today` is in May, so April is a fully-past month.
+  const f = monthForecast(txns, recurring, scheduled, 'personal', '2026-04', '2026-05-10');
+  expect(f).not.toBeNull();
+  expect(f!.mtdSpent).toBeCloseTo(300, 2);
+  expect(f!.unscheduledRest).toBe(0);
+  expect(f!.recurringRest).toBe(0);
+  expect(f!.scheduledRest).toBe(0);
+  expect(f!.projected).toBeCloseTo(300, 2);
+  expect(f!.daysRemaining).toBe(0);
+});
+
+test('incomeCategoryFlow: ranks top expense categories and surfaces savings', () => {
+  // 1000 income; expenses: food 200, shop 150, trans 50; net saved = 600.
+  const txns = [
+    tx({ amount: 1000, date: '2026-05-01', category: null }),
+    tx({ amount: -200, category: 'food', date: '2026-05-05' }),
+    tx({ amount: -150, category: 'shop', date: '2026-05-10' }),
+    tx({ amount: -50, category: 'trans', date: '2026-05-12' }),
+    // Excluded:
+    tx({ amount: -30, category: 'food', date: '2026-05-15', pending: true }),
+    tx({ amount: -50, category: 'food', date: '2026-04-15' }),
+  ];
+  const cats = [
+    { id: 'food', name: 'Food', hue: 12 },
+    { id: 'shop', name: 'Shopping', hue: 280 },
+    { id: 'trans', name: 'Transport', hue: 200 },
+  ];
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
+  expect(flow.income).toBeCloseTo(1000, 2);
+  expect(flow.categories.map((c) => c.id)).toEqual(['food', 'shop', 'trans']);
+  expect(flow.categories[0].spent).toBeCloseTo(200, 2);
+  expect(flow.saved).toBeCloseTo(600, 2);
+});
+
+test('incomeCategoryFlow: collapses overflow into an "Other" stub', () => {
+  const cats = [
+    { id: 'a', name: 'A', hue: 0 },
+    { id: 'b', name: 'B', hue: 0 },
+    { id: 'c', name: 'C', hue: 0 },
+    { id: 'd', name: 'D', hue: 0 },
+  ];
+  const txns = [
+    tx({ amount: 500, date: '2026-05-01' }),
+    tx({ amount: -100, category: 'a', date: '2026-05-02' }),
+    tx({ amount: -50, category: 'b', date: '2026-05-03' }),
+    tx({ amount: -30, category: 'c', date: '2026-05-04' }),
+    tx({ amount: -20, category: 'd', date: '2026-05-05' }),
+  ];
+  // topN = 2 → expect 'a', 'b', and an Other stub of 30 + 20 = 50.
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 2);
+  expect(flow.categories.map((c) => c.id)).toEqual(['a', 'b', '__other__']);
+  expect(flow.categories[2].spent).toBeCloseTo(50, 2);
+});
+
+test('incomeCategoryFlow: saved is floored at 0 when expenses exceed income', () => {
+  const cats = [{ id: 'a', name: 'A', hue: 0 }];
+  const txns = [
+    tx({ amount: 100, date: '2026-05-01' }),
+    tx({ amount: -200, category: 'a', date: '2026-05-02' }),
+  ];
+  const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
+  expect(flow.saved).toBe(0);
 });
