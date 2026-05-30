@@ -1,61 +1,118 @@
-# Finch — frontend
+# Finch
 
-Personal expense tracker and money-management UI. Multi-currency,
-multi-ledger, mobile-first with a responsive desktop shell.
-
-> Preliminary frontend. All data is mock JSON in `data/`; there is no
-> backend wired up yet.
+Personal finance tracker — multi-currency, multi-ledger, mobile-first with a responsive desktop shell.
 
 ## Stack
 
 - **Next.js 16** (App Router, Turbopack) + **React 19**
-- **TypeScript**
-- **Tailwind CSS v4** + **shadcn/ui** (Radix-based components in `components/ui`)
-- **lucide-react** icons, **next-themes** for light/dark
-- **Bun** for install / lockfile (`bun.lock`)
+- **TypeScript** (strict)
+- **Tailwind CSS v4** + **shadcn/ui** (Radix-based components)
+- **zustand** for client-side state (persisted to localStorage)
+- **SQLite** (WASM) for durable backup / export, mirrored from the store into OPFS
+- **lucide-react** icons, **next-themes** (light/dark), **sonner** (toasts)
+- **Bun** for package manager and test runner
 
 ## Getting started
 
 ```bash
 bun install
-bun run dev      # http://localhost:3000
+bun dev                    # http://localhost:3000
 ```
 
-Scripts:
+## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `bun run dev` | Start the dev server |
+| Command | Purpose |
+|---|---|
+| `bun dev` | Start the dev server |
 | `bun run build` | Production build |
-| `bun run start` | Serve the production build |
-| `bun run lint` | ESLint |
+| `bun run start` | Serve the production build (defaults to port 3000) |
+| `bun run lint` | ESLint (flat config) |
 | `bun run typecheck` | `tsc --noEmit` |
+| `bun test lib` | Unit tests (Bun test runner) |
+| `bun run test:e2e` | Playwright end-to-end tests |
 
 ## Architecture
 
-- `app/(main)` — the consumer app (accounts, budgets, scheduled,
-  insights, settings, …).
-- `app/(ledger)` — the ledger-admin views (pending, transfers,
-  merchants, recurring).
-- `components/PageShell.tsx` — the single responsive shell: a sidebar +
-  desktop header on ≥768px, a bottom tab bar on mobile. Page content
-  renders once; breakpoint chrome is toggled with CSS.
-- `components/MobileComponents.tsx` — shared page chrome (`MobilePage`,
-  `ScreenHeader`, `PageHeader`, `IconButton`, …).
-- `components/ui/*` — shadcn/ui components (button, card, dialog, select,
-  switch, dropdown-menu, avatar, tooltip, progress, …).
-- `components/primitives.tsx` — the lucide-backed `Icon` shim, money
-  formatting, and SVG charts (sparkline, bar, donut, ring) that default to
-  the theme token CSS variables.
-- `lib/data.ts` — mock data loaders and money formatters. `fmtMoney`
-  converts a USD base amount into the chosen display currency; `fmtNative`
-  formats an amount already denominated in its own currency (ledger data).
+```
+app/
+├── (main)/          # Consumer app — accounts, budgets, scheduled, insights, goals…
+│   ├── layout.tsx   # Sidebar tabs + mobile bottom bar via PageShell
+│   └── scheduled/   # Unified calendar + list for recurring bills, income, reminders
+└── (ledger)/        # Ledger admin — pending, transfers, merchants, categories…
+components/
+├── PageShell.tsx     # Single responsive shell (sidebar≥768px / bottom tab on mobile)
+├── MobileComponents.tsx  # Shared page chrome (ScreenHeader, PageHeader, …)
+├── primitives.tsx    # Icon shim, Money formatter, SVG charts
+├── ui/               # shadcn/ui components
+├── sqlite-backup-provider.tsx  # Auto-mirrors store state into SQLite
+└── store-hydration.tsx  # Hydrates zustand store from server on load
+lib/
+├── store.ts          # zustand store — all mutable state + actions
+├── select.ts         # Pure selectors over transactions (balance, spend, forecast)
+├── derive.ts         # Derived computations from store
+├── data.ts           # Static reference data + money formatters
+├── api-client.ts     # Client ↔ server state sync (fetch / mutate)
+└── db/               # SQLite layer — schema, seed, queries, mutations, state projection
+```
+
+### Data layers
+
+1. **Static reference** (`data/*.json` + `lib/data.ts`) — accounts, categories, ledgers, seed scheduled templates.
+2. **Live mutable state** (`lib/store.ts`) — zustand store for transactions, scheduled templates, budgets, goals. Persisted to localStorage via `persist` middleware.
+3. **Durable backup** (`lib/db/`) — SQLite (in-browser WASM + OPFS) mirrors the store for export/backup. Not the live read path — the store is the source of truth.
+
+### Money & currencies
+
+Amounts are stored in the active ledger's base currency. Use `useMoney()` to display (auto-converts to user's chosen display currency). Use `fmtNative()` / `fmtNativeShort()` from `lib/data.ts` for amounts already denominated in their own currency.
+
+## Remote access via Tailscale Serve
+
+To expose the app at `https://your-hostname.ts.net/finch`:
+
+```bash
+# Production build (must use production — dev mode + basePath + Turbopack don't mix)
+bun run build && bun run start
+
+# Start Tailscale Serve (in another terminal)
+tailscale serve --bg --set-path /finch http://127.0.0.1:3000
+```
+
+### How it works
+
+- `next.config.ts` sets `basePath: '/finch'` so Next.js prefixes all links and asset URLs.
+- `proxy.ts` (Next.js proxy, formerly middleware) prepends `/finch` to requests where Tailscale stripped it, so routing works.
+- Both are disabled in dev mode (`NODE_ENV === 'development'`) — dev runs bare at `localhost:3000`.
+
+### Changing the path prefix
+
+Set `NEXT_PUBLIC_BASE_PATH` and rebuild:
+
+```bash
+NEXT_PUBLIC_BASE_PATH=/myapp bun run build && bun run start
+tailscale serve --bg --set-path /myapp http://127.0.0.1:3000
+```
+
+The default is `/finch`. Change `next.config.ts`, `proxy.ts`, `lib/api-client.ts`, and `components/sqlite-backup-provider.tsx` only if you change the default itself.
+
+### Dev vs production
+
+| Mode | Command | URL | basePath | Proxy |
+|---|---|---|---|---|
+| Dev | `bun dev` | `localhost:3000` | `''` | no-op |
+| Prod | `build && start` | `host.ts.net/finch` | `/finch` | active |
+
+Run them on different ports to keep both available:
+
+```bash
+bun dev                          # :3000 — local development
+bun run build && bun run start -p 3001  # :3001 — Tailscale remote
+tailscale serve --bg --set-path /finch http://127.0.0.1:3001
+```
 
 ## Theming
 
-Design tokens live in `app/globals.css` using the shadcn CSS-variable
-convention. The light theme is the "warm editorial" palette and the dark
-theme is "noir"; toggle with the theme control (powered by `next-themes`).
-Finance-semantic tokens `--success` / `--warning` supplement the standard
-shadcn set. Display currency is switchable in **Settings** via
-`CurrencyProvider`.
+CSS variables in `app/globals.css` — light "warm editorial" / dark "noir". Toggle via theme control (next-themes). Finance-semantic tokens `--success` / `--warning` supplement the shadcn set. Display currency switchable in Settings via `CurrencyProvider`.
+
+## Provider order
+
+`app/layout.tsx`: `ThemeProvider` → `CurrencyProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`

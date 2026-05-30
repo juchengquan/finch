@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetchDbInfo } from '@/lib/api-client';
 
+const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
+
 // The server owns the authoritative SQLite file (see lib/db/server.ts), synced
 // on every change. This provider surfaces where that file lives and downloads a
 // point-in-time copy by streaming the live server file (so table edits — renamed
@@ -39,7 +41,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const download = useCallback(async () => {
-    const res = await fetch('/api/export');
+    const res = await fetch(`${base}/api/export`);
     if (!res.ok) throw new Error(`Export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('@/lib/db/storage');
@@ -47,7 +49,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const downloadCsv = useCallback(async () => {
-    const res = await fetch('/api/export/transactions');
+    const res = await fetch(`${base}/api/export/transactions`);
     if (!res.ok) throw new Error(`CSV export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('@/lib/db/storage');
