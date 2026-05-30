@@ -220,3 +220,61 @@ test('clearPendingAmount drops the staged value without touching active amount',
   expect(Number(row.amount)).toBe(700);
   expect(row.pending_amount).toBeNull();
 });
+
+test('addTransaction backdated into a rolled period invalidates that budget', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createBudget', {
+    id: 'bgt-inv-1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 700,
+    frequency: 'monthly', startDate: '2026-04-01', categoryIds: ['food'], rollover: 1,
+  });
+  // Pretend we already rolled April.
+  await exec("UPDATE budgets SET last_rolled_period = '2026-04-01', carry_forward = 300 WHERE id = 'bgt-inv-1'");
+
+  // Backdated April food tx → invalidate.
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -50, currency: 'USD',
+    merchant: 'late entry', categoryId: 'food', date: '2026-04-10',
+  });
+
+  const [row] = await exec("SELECT last_rolled_period, carry_forward FROM budgets WHERE id = 'bgt-inv-1'");
+  expect(row.last_rolled_period).toBeNull();
+  expect(Number(row.carry_forward)).toBe(0);
+});
+
+test('addTransaction in the current period leaves rolled state untouched', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createBudget', {
+    id: 'bgt-inv-2', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 700,
+    frequency: 'monthly', startDate: '2026-04-01', categoryIds: ['food'], rollover: 1,
+  });
+  await exec("UPDATE budgets SET last_rolled_period = '2026-04-01', carry_forward = 300 WHERE id = 'bgt-inv-2'");
+
+  // A May tx (current period, not yet rolled) doesn't invalidate.
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -30, currency: 'USD',
+    merchant: 'current month', categoryId: 'food', date: '2026-05-15',
+  });
+
+  const [row] = await exec("SELECT last_rolled_period, carry_forward FROM budgets WHERE id = 'bgt-inv-2'");
+  expect(String(row.last_rolled_period)).toBe('2026-04-01');
+  expect(Number(row.carry_forward)).toBe(300);
+});
+
+test('deleteTransaction backdated into a rolled period invalidates', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createBudget', {
+    id: 'bgt-inv-3', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 700,
+    frequency: 'monthly', startDate: '2026-04-01', categoryIds: ['food'], rollover: 1,
+  });
+  // Add an April tx, mark budget as rolled, then delete the tx (backdated effect).
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -100, currency: 'USD',
+    merchant: 'X', categoryId: 'food', date: '2026-04-10',
+  });
+  const [tx] = await exec("SELECT id FROM transactions WHERE description = 'X' LIMIT 1");
+  const txId = String(tx.id);
+  await exec("UPDATE budgets SET last_rolled_period = '2026-04-01', carry_forward = 200 WHERE id = 'bgt-inv-3'");
+  await applyMutation(exec, 'deleteTransaction', { id: txId });
+  const [row] = await exec("SELECT last_rolled_period FROM budgets WHERE id = 'bgt-inv-3'");
+  expect(row.last_rolled_period).toBeNull();
+});
