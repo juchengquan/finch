@@ -149,24 +149,31 @@ CREATE TABLE IF NOT EXISTS account_balance_snapshots (
 );
 
 CREATE TABLE IF NOT EXISTS budgets (
-  id             TEXT PRIMARY KEY,
-  ledger_id      TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name           TEXT,
-  type           TEXT NOT NULL CHECK(type IN ('income','expense')),
-  amount         REAL NOT NULL,
-  carry_forward  REAL NOT NULL DEFAULT 0,
-  frequency      TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-  start_date     TEXT NOT NULL,
-  end_date       TEXT,
-  is_recurring   INTEGER NOT NULL DEFAULT 1,
-  rollover       INTEGER NOT NULL DEFAULT 0,
-  rollover_limit REAL,
-  account_ids    TEXT,
-  category_ids   TEXT,
-  tag_ids        TEXT,
-  warning_pct    REAL NOT NULL DEFAULT 80,
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL
+  id                 TEXT PRIMARY KEY,
+  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name               TEXT,
+  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
+  amount             REAL NOT NULL,
+  carry_forward      REAL NOT NULL DEFAULT 0,
+  frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
+  start_date         TEXT NOT NULL,
+  end_date           TEXT,
+  is_recurring       INTEGER NOT NULL DEFAULT 1,
+  rollover           INTEGER NOT NULL DEFAULT 0,
+  rollover_limit     REAL,
+  -- Last period the auto-rollover has processed for this budget (e.g.
+  -- '2026-04', '2026-W17', '2026-Q2'). NULL = never rolled.
+  last_rolled_period TEXT,
+  -- Staged amount change activated at the next period boundary; NULL = no
+  -- pending change. Lets a mid-period amount edit affect "the next cycle"
+  -- without retroactively shifting the current period's spent-of-budget.
+  pending_amount     REAL,
+  account_ids        TEXT,
+  category_ids       TEXT,
+  tag_ids            TEXT,
+  warning_pct        REAL NOT NULL DEFAULT 80,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS scheduled_templates (
@@ -317,6 +324,7 @@ CREATE INDEX IF NOT EXISTS idx_txntag_txn ON transaction_tags(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_snap_account_date ON account_balance_snapshots(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
+CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
 CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
@@ -413,7 +421,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // MIGRATIONS entry) whenever the canonical CREATE statements change shape.
 const LEGACY_LATEST = 7;
 export const BOOTSTRAP_VERSION = '2026-05-30T08:15:30Z';
-export const SCHEMA_VERSION = BOOTSTRAP_VERSION;
+export const SCHEMA_VERSION = '2026-05-30T14:00:00Z';
 export const APP_NAME = 'finch';
 
 const LEGACY_MIGRATIONS: Record<number, string[]> = {
@@ -461,9 +469,15 @@ const LEGACY_MIGRATIONS: Record<number, string[]> = {
 // itself (creating db_metadata + seeding its row) is handled inline by migrate()
 // because it transitions the file from the integer scheme to the datetime one.
 const MIGRATIONS: Record<string, string[]> = {
-  // future entries — sorted lexicographically (== chronologically) and applied
-  // strictly greater than the current schema_version. Example:
-  // '2026-06-15T12:00:00Z': ['ALTER TABLE accounts ADD COLUMN preferred_rate TEXT'],
+  // Budget cycles + automatic period rollover groundwork (see
+  // plans/BUDGET_CYCLES_PLAN.md). Two new columns + an index on the
+  // catch-up marker — no behavioural change until later commits wire the
+  // rollover loop and cycle-aware reads.
+  '2026-05-30T14:00:00Z': [
+    'ALTER TABLE budgets ADD COLUMN last_rolled_period TEXT',
+    'ALTER TABLE budgets ADD COLUMN pending_amount REAL',
+    'CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period)',
+  ],
 };
 
 // Read the package version once so the metadata row reports it on import.

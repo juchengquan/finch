@@ -25,13 +25,14 @@ async function fresh(): Promise<Exec> {
   return exec;
 }
 
-test('fresh DB carries a db_metadata row stamped with the bootstrap version', async () => {
+test('fresh DB carries a db_metadata row stamped with the latest schema version', async () => {
   const exec = await fresh();
   const meta = await readMetadata(exec);
   expect(meta).not.toBeNull();
   expect(meta!.appName).toBe('finch');
   expect(meta!.schemaVersion).toBe(SCHEMA_VERSION);
-  expect(meta!.schemaVersion).toBe(BOOTSTRAP_VERSION); // currently the same
+  // SCHEMA_VERSION is BOOTSTRAP_VERSION-or-later (sort lexicographically).
+  expect(meta!.schemaVersion >= BOOTSTRAP_VERSION).toBe(true);
   expect(meta!.exportedAt).toBeNull();
   expect(meta!.checksum).toBeNull();
   // ISO 8601 — string is sortable and reversible.

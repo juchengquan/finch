@@ -1,6 +1,7 @@
 // DB-backed reporting interactions: monthly cash flow and budget progress.
 
 import type { Exec } from '@/lib/db/repo';
+import { periodOf, periodRange, periodLabel, type Frequency } from '@/lib/budgets/period';
 
 export interface CashFlow {
   income: number; // positive
@@ -31,19 +32,36 @@ export interface BudgetProgress {
   remaining: number;
   pct: number;
   over: boolean;
+  frequency: Frequency;
+  /** Period id the spend window represents (e.g. '2026-04', '2026-Q2'). */
+  period: string;
+  /** Human-readable label for the period — UI header copy. */
+  periodLabel: string;
+  /** Inclusive YYYY-MM-DD bounds of the period. */
+  periodFrom: string;
+  periodTo: string;
 }
 
 /**
- * Per-budget spend for the budget's period (monthly budgets), honouring the
- * category_ids filter. Accounts/tags filters arrive with their phases.
+ * Per-budget spend over the current period. Each budget's period is derived
+ * from its own `frequency` + `start_date`, so a weekly budget reports its
+ * current week and a quarterly budget reports its current quarter — no more
+ * implicit "monthly" assumption.
+ *
+ * `today` is the reference date (YYYY-MM-DD) used to pick the current period.
  */
-export async function budgetProgress(exec: Exec, ledgerId: string, yearMonth: string): Promise<BudgetProgress[]> {
+export async function budgetProgress(exec: Exec, ledgerId: string, today: string): Promise<BudgetProgress[]> {
   const budgets = await exec(
-    "SELECT id, name, amount, carry_forward, category_ids, warning_pct FROM budgets WHERE ledger_id = ? AND frequency = 'monthly'",
+    'SELECT id, name, amount, carry_forward, frequency, start_date, category_ids, warning_pct FROM budgets WHERE ledger_id = ?',
     [ledgerId],
   );
   const result: BudgetProgress[] = [];
   for (const b of budgets) {
+    const frequency = String(b.frequency) as Frequency;
+    const startDate = String(b.start_date);
+    const period = periodOf(today, frequency, startDate);
+    const { from, to } = periodRange(period, frequency);
+
     const total = Number(b.amount) + Number(b.carry_forward ?? 0);
     const catIds = b.category_ids ? (JSON.parse(String(b.category_ids)) as string[]) : [];
     let spent = 0;
@@ -53,10 +71,10 @@ export async function budgetProgress(exec: Exec, ledgerId: string, yearMonth: st
         `SELECT COALESCE(SUM(COALESCE(ts.amount_base, t.amount_base) * -1), 0) AS spent
            FROM transactions t
            LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-          WHERE t.ledger_id = ? AND t.date LIKE ? AND t.amount < 0
+          WHERE t.ledger_id = ? AND t.date BETWEEN ? AND ? AND t.amount < 0
             AND t.transfer_group_id IS NULL AND t.is_adjustment = 0 AND t.status = 'confirmed'
             AND COALESCE(ts.category_id, t.category_id) IN (${placeholders})`,
-        [ledgerId, `${yearMonth}%`, ...catIds],
+        [ledgerId, from, to, ...catIds],
       );
       spent = Number(rows[0]?.spent ?? 0);
     }
@@ -69,6 +87,11 @@ export async function budgetProgress(exec: Exec, ledgerId: string, yearMonth: st
       remaining: Math.round((total - spent) * 100) / 100,
       pct,
       over: total > 0 && spent / total >= Number(b.warning_pct ?? 80) / 100,
+      frequency,
+      period,
+      periodLabel: periodLabel(period, frequency),
+      periodFrom: from,
+      periodTo: to,
     });
   }
   return result;
