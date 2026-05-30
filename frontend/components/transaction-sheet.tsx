@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { TransactionDetail, TransactionActionsMenu } from '@/components/transaction-detail';
+import { TransactionDetail } from '@/components/transaction-detail';
 import { useIsDesktop } from '@/components/use-is-desktop';
 import { cn } from '@/lib/utils';
 
@@ -56,14 +56,9 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
             View and edit the selected transaction.
           </SheetDescription>
           {txId && (
-            <>
-              <div className="flex items-center justify-between p-4 pr-12">
-                <TransactionActionsMenu txId={txId} onDeleted={close} />
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
-                <TransactionDetail txId={txId} />
-              </div>
-            </>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-8 pb-8">
+              <TransactionDetail txId={txId} onDeleted={close} />
+            </div>
           )}
         </SheetContent>
       </Sheet>

@@ -1151,7 +1151,6 @@ These features are planned but not in the current schema. If you're implementing
 
 | Feature | Description |
 |---------|-------------|
-| Transaction attachments | `transaction_attachments` table — store receipt/PDF files for transactions |
 | Investment holdings | `holdings` table — track stock positions (symbol, shares, cost basis) linked to `net_worth_snapshots` |
 | Installment tracking | Add `installment_total` and `installment_paid` to `recurring_templates` for tracking payment progress |
 | Bill calendar | Recurring template due-date reminders via cron + Telegram notification |

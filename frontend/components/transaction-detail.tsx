@@ -33,73 +33,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
-/**
- * The "more actions" dropdown (mark recurring / delete) shared by the
- * standalone /tx route header and the transaction sheet header.
- */
-export function TransactionActionsMenu({
-  txId,
-  onDeleted,
-}: {
-  txId: string;
-  onDeleted?: () => void;
-}) {
-  const { fmt } = useMoney();
-  const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
-  const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  if (!tx) return null;
-
-  const remove = () => {
-    deleteTransaction(tx.id);
-    toast.success('Transaction deleted');
-    setConfirmOpen(false);
-    onDeleted?.();
-  };
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="More actions"
-            className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
-          >
-            <Icon name="dots" size={16} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem variant="destructive" onSelect={() => setConfirmOpen(true)}>
-            <Icon name="x" size={14} />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete transaction?</DialogTitle>
-            <DialogDescription>
-              {tx.merchant} · {fmt(Math.abs(tx.amount))} will be permanently removed. This can’t be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button variant="destructive" onClick={remove}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 interface SplitRow {
   key: string;
   categoryId: string;
@@ -311,15 +244,25 @@ function SplitEditorDialog({
  * Rendered both inside the right-side sheet and on the standalone /tx route.
  * Contains no page chrome (header/back/padding); the consumer supplies that.
  */
-export function TransactionDetail({ txId }: { txId: string }) {
+export function TransactionDetail({
+  txId,
+  onDeleted,
+}: {
+  txId: string;
+  /** Called after the transaction is deleted, so the host can close the sheet
+   *  or navigate away (the detail body would otherwise show "not found"). */
+  onDeleted?: () => void;
+}) {
   const { fmt, base } = useMoney();
   const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
+  const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
   const storeCats = useFinanceStore((s) => s.categories);
   const storeTags = useFinanceStore((s) => s.tags);
   const createTag = useFinanceStore((s) => s.createTag);
   const setTransactionTags = useFinanceStore((s) => s.setTransactionTags);
   const [newTag, setNewTag] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // Category options come from the projected store, scoped to this tx's ledger.
   const ledgerId = tx?.ledgerId ?? 'personal';
@@ -346,6 +289,13 @@ export function TransactionDetail({ txId }: { txId: string }) {
   const toggleRecurring = () => {
     updateTransaction(tx.id, { recurring: !tx.recurring });
     toast.success(tx.recurring ? 'Removed recurring' : 'Marked as recurring');
+  };
+
+  const remove = () => {
+    deleteTransaction(tx.id);
+    toast.success('Transaction deleted');
+    setConfirmDeleteOpen(false);
+    onDeleted?.();
   };
 
   const splits = tx.splits ?? [];
@@ -393,11 +343,11 @@ export function TransactionDetail({ txId }: { txId: string }) {
         </button>
         <button
           type="button"
-          onClick={() => toast('Receipt — coming soon')}
-          className="border-border text-foreground flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border"
+          onClick={() => setConfirmDeleteOpen(true)}
+          className="border-border text-destructive hover:border-destructive flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
         >
-          <Icon name="cam" size={18} />
-          <span className="text-[10px] font-medium">Receipt</span>
+          <Icon name="x" size={18} />
+          <span className="text-[10px] font-medium">Delete</span>
         </button>
       </div>
 
@@ -531,6 +481,25 @@ export function TransactionDetail({ txId }: { txId: string }) {
           </div>
         );
       })()}
+
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete transaction?</DialogTitle>
+            <DialogDescription>
+              {tx.merchant} · {fmt(Math.abs(tx.amount))} will be permanently removed. This can’t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={remove}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

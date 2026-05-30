@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { ScreenHeader } from '@/components/MobileComponents';
-import { TransactionDetail, TransactionActionsMenu } from '@/components/transaction-detail';
+import { TransactionDetail } from '@/components/transaction-detail';
 
 export default function TxDetailPage() {
   const params = useParams();
@@ -11,13 +11,8 @@ export default function TxDetailPage() {
 
   return (
     <div className="px-5 pb-[120px]">
-      <ScreenHeader
-        title=""
-        back
-        backHref="/activity"
-        trailing={<TransactionActionsMenu txId={txId} onDeleted={() => router.back()} />}
-      />
-      <TransactionDetail txId={txId} />
+      <ScreenHeader title="" back backHref="/activity" />
+      <TransactionDetail txId={txId} onDeleted={() => router.back()} />
     </div>
   );
 }

@@ -292,9 +292,9 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    **`CalendarHeatmap` primitive** + daily-spending use site on Insights shipped
    (PR #38). **Richer net-worth trend** — fourth metric tab on Insights driven by
    the new `netWorthByMonth` selector (PR #39). The accounts-list / detail
-   sparklines stay put as glanceable context. Receipt attachment is out of scope
-   — the `toast('Receipt — coming soon')` stub at `transaction-detail.tsx:258`
-   stays put.
+   sparklines stay put as glanceable context. Receipt attachment is dropped
+   from scope entirely — the old "Receipt — coming soon" quick-action stub on
+   the transaction detail was replaced with a **Delete** action.
 4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
    with an income/expense toggle that signs the amount on save. Adjustments are
    modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
