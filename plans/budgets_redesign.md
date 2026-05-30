@@ -1,6 +1,9 @@
 # Budgets redesign — named budgets, groups, cycles, and Goals merge
 
-Status: **proposed** (planning only — no code yet)
+Status: **implemented & merged** (named budgets + groups, Goals → income budgets)
+on `feat/frontend` via the clean-slate-DB squash (`bdd6f47`). **Automatic period
+rollover is a follow-up** — see `plans/BUDGET_CYCLES_PLAN.md` §10 (the #48 engine
+was superseded by this redesign and needs re-applying onto named budgets).
 Author: design notes for the budgets overhaul
 Scope: `frontend/` (server-backed SQLite app) + `plans/` doc updates
 
@@ -142,6 +145,17 @@ Progress:
 - **Income (transaction-driven):** `earned = Σ matched inflow`.
 - **Income (manual / goal):** `saved` accumulator (old Goals behaviour). The two
   income modes are reconciled in **Decision D2** below.
+
+### 3.4 Automatic period rollover — separate follow-up
+
+§3.2–3.3 cover the **current-period read** (which window is active, what counts).
+They do **not** cover **automatic carry-forward at each period boundary**
+(leftover → `carry_forward`, capped by `rollover_limit`) or **staged amount
+changes** (`pending_amount` activated next cycle). That engine — period
+arithmetic (`lib/budgets/period.ts`), `rollBudgetsIfDue`, backdated-edit
+invalidation, and the two extra columns (`last_rolled_period`, `pending_amount`)
+— is specced in **`plans/BUDGET_CYCLES_PLAN.md`** (see its §10 for the mapping
+onto these named-budget entities). It is **not yet re-applied** after the merge.
 
 ---
 

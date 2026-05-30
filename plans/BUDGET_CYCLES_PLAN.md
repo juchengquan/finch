@@ -1,5 +1,21 @@
 # Budget cycles + automatic period rollover — plan
 
+> **Status (2026-05-31).** Shipped in **PR #48** (`66cff5f`) against the *legacy
+> per-category* budget model (`budgetByCategory` maps, `bud-<categoryId>` rows).
+> That model was then **superseded by the named-budgets redesign**
+> (`plans/budgets_redesign.md`), merged into `feat/frontend` in the clean-slate-DB
+> squash (`bdd6f47`), which **dropped #48's engine** — `lib/budgets/period.ts`,
+> `lib/budgets/rollover.ts`, and the `last_rolled_period` / `pending_amount`
+> columns are no longer in the tree.
+>
+> This doc is now the **re-application spec**. The period arithmetic and rollover
+> semantics (§2, §4, §5, §6, §8) are still correct and model-agnostic; the
+> *per-category* plumbing (§3 reads, the §1 schema notes, the file-touch list)
+> must be re-expressed against **named budget entities**. See **§10** for the
+> concrete mapping. The original code is recoverable from `66cff5f`:
+> `lib/budgets/period.ts` is pure and reusable verbatim; `rollover.ts` needs
+> adapting to named budgets.
+
 Two related changes, designed together because they touch the same
 queries / mutations / UI:
 
@@ -375,6 +391,62 @@ between the edit's date and today.
    `mutations.ts`, cycle-change dialog).
 4. **`rollBudgetsIfDue` + backdated-edit recompute** (`rollover.ts`,
    wired into `/api/state` and `/api/mutate`).
+
+---
+
+## 10. Re-application onto named budgets
+
+The named-budgets redesign (`plans/budgets_redesign.md`) already makes each budget
+a **row with its own cycle** — `frequency`, `start_date`, `end_date`,
+`is_recurring`, `rollover`, `rollover_limit`, `carry_forward` are all per-budget
+columns, and the watch set is `account_ids[]` + `category_ids[]` (+ `tag_ids[]`).
+That's a *better* fit than the per-category map: each budget row is already the
+unit the rollover loop iterates, so no `bud-<categoryId>` indirection.
+
+**Reusable verbatim (recover from `66cff5f`)**
+- `lib/budgets/period.ts` — `periodOf` / `periodRange` / `nextPeriod` /
+  `prevPeriod` / `periodLabel` / `Frequency`. Pure, no DB dependency, model-
+  agnostic. Drop in as-is, plus `period.test.ts`.
+
+**Schema — add to the clean baseline `SCHEMA` (no migration; pre-release)**
+- `budgets.last_rolled_period TEXT`, `budgets.pending_amount REAL`, and
+  `idx_budget_last_rolled`. Add them straight to the canonical `CREATE TABLE
+  budgets` — the clean-slate DB has **no migration framework**, so fresh DBs are
+  born with them (bump `SCHEMA_VERSION` only if you want the baseline restamped).
+
+**Engine (`lib/budgets/rollover.ts`) — adapt per-category → per-budget**
+- `rollBudgetsIfDue(exec, today)` (signature unchanged): iterate **budget rows**
+  instead of categories. Each `rollover`-eligible **expense** budget uses its own
+  `frequency` + `start_date` as the period anchor; a period's spend sums confirmed
+  `kind='expense'` rows (parent + splits) whose `(account_id, category_id, date)`
+  fall inside the budget's `account_ids`/`category_ids` filter and `periodRange`.
+  The `carry_forward` / `rollover_limit` / `pending_amount` / `last_rolled_period`
+  arithmetic from §5 is unchanged. Income-type budgets are skipped.
+- `invalidateRollover(exec, earliestDate, {accountIds, categoryIds})` (§6): reset
+  `last_rolled_period` for any budget whose filter intersects the edited txn and
+  whose rolled range covers `earliestDate`. **Clean-slate caveat:** spend is
+  `kind='expense'` confirmed rows, and delete is now a **hard DELETE** — the
+  delete handler must capture the removed row's account/category/date *before*
+  deleting so invalidation can still run.
+
+**Reads / projection**
+- The redesign projects `budgets: BudgetRow[]` (not the old `budgetByCategory` /
+  `budgetRolloverByCategory` maps), so "current period · spent · remaining" is
+  computed **per budget** in `queries/budgets.ts` + `reports.ts` via
+  `periodOf(today, b.frequency, b.start_date)` → `periodRange`. The §3 changes,
+  written for the maps, are obsolete; the §2 period helpers they call are not.
+
+**Wiring (unchanged from #48)**
+- Call `rollBudgetsIfDue(exec, todayUtc())` in the server read/mutate path
+  (`lib/db/server.ts`), persisting when `rolled > 0`. Call `invalidateRollover`
+  from the tx mutation handlers (`addTransaction`, `updateTransaction`,
+  `deleteTransaction`, `setTransactionSplits`).
+
+**UI**
+- Cycle selector + cycle-change-vs-amount-change semantics (§4a/§4b), the
+  pending-amount chip, and the period header (§7) move onto the named-budget
+  detail page (`app/(main)/budgets/[id]/page.tsx`), the create/edit dialog
+  (`components/budget-form-dialog.tsx`), and the budget list rows.
 
 ---
 

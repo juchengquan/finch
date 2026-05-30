@@ -48,7 +48,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Scheduled (month calendar grid + upcoming list) | ✅ | Month nav + per-day dots |
 | Main | Transaction detail | ✅ | Dots `DropdownMenu` (recurring/delete), inline recategorize `Select`, recurring toggle |
 | Main | Settings | 🟡 | Theme + currency + Data + **Database** (shows server file path, Export, Import disabled); missing grouped sections + **tab-layout editor** |
-| Main | Goals | ✅ | Aggregate progress + per-goal Ring cards |
+| Main | Goals | ✅ | Now **folded into Budgets** as the *income* budget type (named-budgets redesign); standalone Goals page removed |
 | Main | Subscriptions | ✅ | Monthly + annualized totals + list |
 | Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, **SQL search/filter** via the live DB |
 | Main | Reports | ✅ | Spending donut + breakdown, **DB-derived** category spend, ledger-scoped |
@@ -338,7 +338,9 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
 5. **Budget rollover UI** ✅ *(done — see PR)* — rollover toggle + optional cap
    on the budget detail page, carry-forward shown in the header and folded
    into the ring + remaining figure (matches budgetProgress). Automatic
-   month-end carry-over computation is a separate task.
+   period rollover (carry-over computation) was built in **PR #48** but
+   **superseded by the named-budgets redesign**; re-application onto named
+   budgets is specced in `plans/BUDGET_CYCLES_PLAN.md` §10 (pending).
 6. **Date / amount filters on Activity** ✅ *(done — see PR)* — `minAmount` /
    `maxAmount` on ListOptions + selectTransactions (date range already wired
    on the server, just unused). UI: collapsible "Filters" panel below the
