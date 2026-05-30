@@ -87,6 +87,12 @@ export function getServerDb(): Promise<ServerDb> {
   return _db;
 }
 
+/** Test-only: drop the cached connection so the next getServerDb() reopens
+ *  against (possibly-changed) FINCH_DB_DIR. Never call from app code. */
+export function _resetServerDbForTests(): void {
+  _db = null;
+}
+
 /** Read the full app state from the server database. */
 export async function readState(): Promise<ProjectedState> {
   const { exec } = await getServerDb();
@@ -99,6 +105,100 @@ export async function withWrite(fn: (exec: Exec) => Promise<void>): Promise<Proj
   await fn(db.exec);
   await db.persist();
   return projectState(db.exec);
+}
+
+// Auto-backup configuration. Backups are siblings of the live DB file with
+// timestamped names; retention keeps the most recent N. Tunable via env so a
+// deployment can dial up retention without a code change.
+const BACKUP_SUFFIX = '.sqlite3.bak';
+const BACKUP_PREFIX = 'finch-';
+function backupRetention(): number {
+  const v = Number(process.env.FINCH_BACKUP_KEEP);
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : 14;
+}
+function defaultMinInterval(): number {
+  const v = Number(process.env.FINCH_BACKUP_MIN_INTERVAL_MS);
+  return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 60 * 60 * 1000; // 1h
+}
+
+function fsSafeTimestamp(d: Date = new Date()): string {
+  // ISO 8601 with colons / dots swapped for filesystem-friendly chars; ends
+  // in 'Z' so backups sort chronologically by filename.
+  return d.toISOString().replace(/[:.]/g, '-').replace(/-(\d{3})Z$/, 'Z');
+}
+
+export interface BackupEntry {
+  /** Absolute path to the backup file. */
+  path: string;
+  /** Just the filename, for display. */
+  name: string;
+  /** Bytes on disk. */
+  size: number;
+  /** ISO 8601 mtime. */
+  createdAt: string;
+}
+
+/** List existing backup files in the data dir, newest first. */
+export async function listBackups(): Promise<BackupEntry[]> {
+  const { dir } = dbFile();
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+  const backups = entries.filter((n) => n.startsWith(BACKUP_PREFIX) && n.endsWith(BACKUP_SUFFIX));
+  const out: BackupEntry[] = [];
+  for (const name of backups) {
+    const full = path.join(dir, name);
+    try {
+      const st = await fs.stat(full);
+      out.push({ path: full, name, size: st.size, createdAt: st.mtime.toISOString() });
+    } catch {
+      // race: file vanished between readdir and stat — skip
+    }
+  }
+  out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return out;
+}
+
+async function pruneBackups(keep: number): Promise<void> {
+  const all = await listBackups();
+  if (all.length <= keep) return;
+  for (const old of all.slice(keep)) {
+    await fs.unlink(old.path).catch(() => {});
+  }
+}
+
+/**
+ * Copy the live server DB file to a timestamped sibling in the same directory:
+ *   <FINCH_DB_DIR>/finch-YYYY-MM-DDTHH-MM-SSZ.sqlite3.bak
+ *
+ * Throttled: if the most-recent backup is younger than `minIntervalMs`
+ * (default 1h, env FINCH_BACKUP_MIN_INTERVAL_MS), this returns that path
+ * instead of writing a new one — keeps the disk from filling up when called
+ * from a hot path. Retention prunes the oldest backups beyond
+ * `FINCH_BACKUP_KEEP` (default 14).
+ */
+export async function autoBackup(opts?: { minIntervalMs?: number }): Promise<{ path: string }> {
+  const minInterval = opts?.minIntervalMs ?? defaultMinInterval();
+  const existing = await listBackups();
+  if (existing.length > 0 && minInterval > 0) {
+    const newest = existing[0];
+    const ageMs = Date.now() - new Date(newest.createdAt).getTime();
+    if (ageMs < minInterval) return { path: newest.path };
+  }
+  const db = await getServerDb();
+  await db.persist(); // make sure the file on disk reflects the in-memory state
+  const { dir } = dbFile();
+  await fs.mkdir(dir, { recursive: true });
+  const target = path.join(dir, `${BACKUP_PREFIX}${fsSafeTimestamp()}${BACKUP_SUFFIX}`);
+  // Write to a .tmp then rename so a crash mid-copy doesn't leave a partial file.
+  const tmp = `${target}.tmp`;
+  await fs.copyFile(db.file, tmp);
+  await fs.rename(tmp, target);
+  await pruneBackups(backupRetention());
+  return { path: target };
 }
 
 function includeHostname(): boolean {
