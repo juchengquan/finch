@@ -285,6 +285,22 @@ CREATE TABLE IF NOT EXISTS app_state (
   value TEXT
 );
 
+-- Single-row table describing the database itself: what produced it, what
+-- schema version it carries, when it was last written, and (after an export)
+-- the row counts + checksum a reimport uses to detect corruption / tampering.
+CREATE TABLE IF NOT EXISTS db_metadata (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),
+  app_name        TEXT NOT NULL,
+  schema_version  TEXT NOT NULL,
+  app_version     TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  exported_at     TEXT,
+  exported_from   TEXT,
+  row_counts      TEXT,
+  checksum        TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_ag_ledger ON account_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
@@ -382,16 +398,25 @@ export async function applySchema(exec: (sql: string, bind?: (string | number | 
 
 type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record<string, unknown>[]>;
 
-// Bump when the CREATE statements above change shape. Version 1 = the original
-// schema; 2 adds accounts.opening_balance; 3 adds account display columns;
-// 4 adds categories.hue; 5 adds transactions.is_adjustment; 6 adds the
-// transaction_splits table.
-export const SCHEMA_VERSION = 7;
+// Versioning model
+// -----------------
+// Schema versions are ISO 8601 UTC datetime strings (second precision). They
+// sort chronologically by simple lex order, so MIGRATIONS can stay a plain
+// object iterated via Object.keys().sort().
+//
+// History note: versions 1..7 were integers and remain so in `LEGACY_MIGRATIONS`
+// for backwards-compat opening older files. The first datetime version is
+// BOOTSTRAP_VERSION — it introduces the db_metadata table and is the line that
+// older integer-versioned files cross into the new scheme.
+//
+// SCHEMA_VERSION is whatever we've shipped most recently; bump it (with a new
+// MIGRATIONS entry) whenever the canonical CREATE statements change shape.
+const LEGACY_LATEST = 7;
+export const BOOTSTRAP_VERSION = '2026-05-30T08:15:30Z';
+export const SCHEMA_VERSION = BOOTSTRAP_VERSION;
+export const APP_NAME = 'finch';
 
-// MIGRATIONS[v] upgrades an existing database from version v-1 to v. A freshly
-// created DB already has the latest CREATE statements, so it skips these and is
-// just stamped with SCHEMA_VERSION.
-const MIGRATIONS: Record<number, string[]> = {
+const LEGACY_MIGRATIONS: Record<number, string[]> = {
   2: [
     'ALTER TABLE accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0',
     // Backfill from the (assumed-correct) current balance and the live txn set.
@@ -432,19 +457,87 @@ const MIGRATIONS: Record<number, string[]> = {
   ],
 };
 
+// Datetime-keyed migrations applied above BOOTSTRAP_VERSION. The bootstrap step
+// itself (creating db_metadata + seeding its row) is handled inline by migrate()
+// because it transitions the file from the integer scheme to the datetime one.
+const MIGRATIONS: Record<string, string[]> = {
+  // future entries — sorted lexicographically (== chronologically) and applied
+  // strictly greater than the current schema_version. Example:
+  // '2026-06-15T12:00:00Z': ['ALTER TABLE accounts ADD COLUMN preferred_rate TEXT'],
+};
+
+// Read the package version once so the metadata row reports it on import.
+function appVersion(): string {
+  try {
+    // The package.json is at the import root via the @/* alias.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pkg = require('@/package.json') as { version?: string };
+    return String(pkg.version ?? '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
+
+async function ensureMetadataRow(exec: ExecFn, schemaVersion: string): Promise<void> {
+  const rows = await exec('SELECT id FROM db_metadata WHERE id = 1');
+  const now = new Date().toISOString();
+  if (rows.length === 0) {
+    await exec(
+      `INSERT INTO db_metadata (id, app_name, schema_version, app_version, created_at, updated_at)
+       VALUES (1, ?, ?, ?, ?, ?)`,
+      [APP_NAME, schemaVersion, appVersion(), now, now],
+    );
+  } else {
+    await exec(
+      `UPDATE db_metadata SET schema_version = ?, app_version = ?, updated_at = ? WHERE id = 1`,
+      [schemaVersion, appVersion(), now],
+    );
+  }
+}
+
 /**
  * Bring a database up to SCHEMA_VERSION. `fresh` means the file was just created
- * (CREATE statements are already current → only stamp the version). An existing
- * file gets the ordered migrations for each version above its current one; a
- * pre-versioning file reports version 0 and is treated as version 1.
+ * (CREATE statements are already current → only stamp the version + create the
+ * metadata row). An existing file is detected by whether it has a db_metadata
+ * row: if it doesn't, it predates the datetime scheme and gets the legacy
+ * integer migrations replayed before being bootstrapped to BOOTSTRAP_VERSION.
+ * Either way, datetime migrations strictly newer than the current
+ * schema_version are then applied in lex order.
  */
 export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<void> {
-  if (!opts.fresh) {
-    const rows = await exec('PRAGMA user_version');
-    const from = Number(rows[0]?.user_version ?? 0) || 1;
-    for (let v = from + 1; v <= SCHEMA_VERSION; v++) {
-      for (const sql of MIGRATIONS[v] ?? []) await exec(sql);
-    }
+  if (opts.fresh) {
+    await ensureMetadataRow(exec, SCHEMA_VERSION);
+    // Stamp user_version too as a defence-in-depth legacy probe.
+    await exec(`PRAGMA user_version = ${LEGACY_LATEST}`);
+    return;
   }
-  await exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+
+  // db_metadata presence is the cleanest signal that a file has crossed the
+  // bootstrap line. We probe with a best-effort SELECT so the absence of the
+  // table doesn't blow up here — applySchema is expected to have just run.
+  const metaRows = await exec('SELECT schema_version FROM db_metadata WHERE id = 1');
+  if (metaRows.length === 0) {
+    // Pre-bootstrap file. Replay the integer migrations through LEGACY_LATEST.
+    const v = await exec('PRAGMA user_version');
+    const from = Number(v[0]?.user_version ?? 0) || 1;
+    for (let i = from + 1; i <= LEGACY_LATEST; i++) {
+      for (const sql of LEGACY_MIGRATIONS[i] ?? []) await exec(sql);
+    }
+    await exec(`PRAGMA user_version = ${LEGACY_LATEST}`);
+    await ensureMetadataRow(exec, BOOTSTRAP_VERSION);
+  }
+
+  // Walk datetime migrations strictly greater than the recorded version.
+  const cur = String(
+    (await exec('SELECT schema_version FROM db_metadata WHERE id = 1'))[0]?.schema_version ?? BOOTSTRAP_VERSION,
+  );
+  const ordered = Object.keys(MIGRATIONS).sort();
+  for (const version of ordered) {
+    if (version <= cur) continue;
+    for (const sql of MIGRATIONS[version] ?? []) await exec(sql);
+  }
+
+  if (ordered.length > 0 || cur !== SCHEMA_VERSION) {
+    await ensureMetadataRow(exec, SCHEMA_VERSION);
+  }
 }

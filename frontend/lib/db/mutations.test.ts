@@ -1,7 +1,8 @@
 import { test, expect } from 'bun:test';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
+import { applySchema, migrate, SCHEMA_VERSION, BOOTSTRAP_VERSION } from '@/lib/db/schema';
+import { readMetadata } from '@/lib/db/queries/metadata';
 import { seedDatabase } from '@/lib/db/seed';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
@@ -211,10 +212,13 @@ test('cancelling a transaction reverses its effect on the balance', async () => 
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(before + 6.75, 2);
 });
 
-test('migrate stamps the schema version', async () => {
+test('migrate stamps the schema version in db_metadata', async () => {
   const exec = await seeded();
   await migrate(exec, { fresh: true });
-  expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
+  const meta = await readMetadata(exec);
+  expect(meta).not.toBeNull();
+  expect(meta!.schemaVersion).toBe(SCHEMA_VERSION);
+  expect(meta!.appName).toBe('finch');
 });
 
 test('migrate adds + backfills opening_balance on a pre-versioning db', async () => {
@@ -227,17 +231,28 @@ test('migrate adds + backfills opening_balance on a pre-versioning db', async ()
   };
   // Minimal pre-versioning shape: accounts without opening_balance (plus the other
   // tables later migrations alter, sans their added columns — applySchema would
-  // have created these in real paths before migrate runs).
+  // have created these in real paths before migrate runs). db_metadata is also
+  // created by applySchema in real paths; we add it here so migrate can stamp it.
   await exec('CREATE TABLE accounts (id TEXT PRIMARY KEY, current_balance REAL NOT NULL DEFAULT 0)');
   await exec('CREATE TABLE transactions (id TEXT PRIMARY KEY, account_id TEXT, amount_base REAL, status TEXT)');
   await exec('CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT)');
   await exec('CREATE TABLE scheduled_templates (id TEXT PRIMARY KEY, ledger_id TEXT, type TEXT)');
+  await exec(
+    `CREATE TABLE db_metadata (
+       id INTEGER PRIMARY KEY CHECK (id = 1),
+       app_name TEXT NOT NULL, schema_version TEXT NOT NULL, app_version TEXT NOT NULL,
+       created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+       exported_at TEXT, exported_from TEXT, row_counts TEXT, checksum TEXT)`,
+  );
   await exec("INSERT INTO accounts (id,current_balance) VALUES ('x', 100)");
   await exec("INSERT INTO transactions (id,account_id,amount_base,status) VALUES ('t1','x',-30,'confirmed'),('t2','x',-10,'cancelled')");
   await migrate(exec, { fresh: false });
   const [a] = await exec("SELECT opening_balance FROM accounts WHERE id = 'x'");
   expect(Number(a.opening_balance)).toBeCloseTo(130, 2); // 100 − (−30); cancelled t2 excluded
-  expect(Number((await exec('PRAGMA user_version'))[0].user_version)).toBe(SCHEMA_VERSION);
+  // Pre-bootstrap files cross over to BOOTSTRAP_VERSION; only datetime
+  // migrations *after* it would push us further forward.
+  const meta = await readMetadata(exec);
+  expect(meta!.schemaVersion).toBe(BOOTSTRAP_VERSION);
 });
 
 test('deleteCategory uncategorizes its transactions', async () => {
