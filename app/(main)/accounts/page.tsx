@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
-import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { Icon, Money, CatBar } from '@/components/primitives';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { useTransactionSheet } from '@/components/transaction-sheet';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
-import { accountBalance, netWorthSeries } from '@/lib/select';
+import { accountBalance } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
@@ -372,7 +372,6 @@ export default function AccountsPage() {
   }
 
   const total = ledgerAccounts.reduce((s, a) => s + balanceOf(a.id), 0);
-  const nwSeries = netWorthSeries(allTxns, accounts, activeId);
   const ungroupedAccts = ledgerAccounts.filter((a) => !a.group || !groupShells.some((g) => g.id === a.group));
   const groupedAccounts = [
     ...groupShells.map((g) => ({ id: g.id, name: g.name, accounts: ledgerAccounts.filter((a) => a.group === g.id) })),
@@ -387,16 +386,11 @@ export default function AccountsPage() {
       <ScreenHeader title="Accounts" trailing={trailing} />
 
       <div className="px-5 pb-[22px]">
-        <PageHeader
-          label="Net worth · all accounts"
-          value={<Money value={total} mono={false} className="font-serif" />}
-          sublabel={<span className="text-success">+ <Money value={812} /> this month</span>}
-        />
-        {nwSeries.length > 2 && (
-          <div className="mt-3">
-            <Sparkline values={nwSeries} width={320} height={48} color="var(--primary)" fillOpacity={0.1} />
-          </div>
-        )}
+        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Net worth · all accounts</div>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <Money value={total} mono={false} className="font-serif text-4xl leading-none font-normal -tracking-[1.5px] sm:text-5xl sm:-tracking-[2px]" />
+          <span className="text-success text-xs whitespace-nowrap">+ <Money value={812} /> this month</span>
+        </div>
       </div>
 
       <div className="px-5 pb-[120px] md:hidden">
