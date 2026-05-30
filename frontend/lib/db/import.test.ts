@@ -62,7 +62,7 @@ test('round-trip: export then import on a fresh process restores identical state
   // The reopened DB has the same row counts the export stamped.
   const db = await getServerDb();
   const [{ n }] = await db.exec('SELECT COUNT(*) AS n FROM transactions');
-  expect(Number(n)).toBe(result.metadata.rowCounts?.transactions);
+  expect(Number(n)).toBe(result.metadata.rowCounts?.transactions ?? -1);
 });
 
 test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {
@@ -72,16 +72,17 @@ test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {
   const { bytes } = await exportDbBytes();
   const { getSqlite3, execFor } = await import('./sqlite');
   const sqlite3 = await getSqlite3();
-  type DB = { pointer?: number; close: () => void };
-  const db = new sqlite3.oo1.DB() as unknown as DB;
+  const db = new sqlite3.oo1.DB();
   try {
     const p = sqlite3.wasm.allocFromTypedArray(bytes);
     const rc = sqlite3.capi.sqlite3_deserialize(
-      db.pointer!, 'main', p, bytes.length, bytes.length,
+      // The OO1DB shape from sqlite.ts is more constrained than the runtime
+      // value; cast through unknown for the typed-but-unused fields.
+      (db as unknown as { pointer: number }).pointer, 'main', p, bytes.length, bytes.length,
       sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
     );
     expect(rc).toBe(0);
-    const exec = execFor(db);
+    const exec = execFor(db as never);
     await exec("UPDATE accounts SET name = 'tampered' WHERE id = 'chk'");
     const tampered = new Uint8Array(sqlite3.capi.sqlite3_js_db_export(db as never));
     await expect(importDbBytes(tampered)).rejects.toThrow(/checksum|corrupted|tamper/i);
