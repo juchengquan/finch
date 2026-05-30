@@ -14,6 +14,7 @@ import { ScheduledItem } from '@/components/ScheduledItem';
 import { RowActions } from '@/components/RowActions';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
+import { cn } from '@/lib/utils';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -24,6 +25,7 @@ const MONTH_NAMES = [
 
 export default function ScheduledPage() {
   const [view, setView] = useState({ y: 2026, m: 5 }); // June 2026
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const { activeId } = useLedger();
   const storeItems = useFinanceStore((s) => s.scheduledItems);
   const createScheduledItem = useFinanceStore((s) => s.createScheduledItem);
@@ -78,8 +80,18 @@ export default function ScheduledPage() {
   const shift = (delta: number) =>
     setView((v) => {
       const d = new Date(v.y, v.m + delta, 1);
+      setSelectedDay(null);
       return { y: d.getFullYear(), m: d.getMonth() };
     });
+
+  // Items scoped to the currently-viewed month, sorted by day. When a day is
+  // selected we split into "on that day" + "after that day in the same month";
+  // otherwise the side panel shows the full month's list.
+  const monthItems = [...items]
+    .filter((i) => MONTHS.indexOf(i.month) === view.m)
+    .sort((a, b) => a.day - b.day);
+  const onSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day === selectedDay) : [];
+  const afterSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day > selectedDay) : [];
 
   return (
     <MobilePage
@@ -101,25 +113,27 @@ export default function ScheduledPage() {
       <div className="px-5 pb-5 md:px-0">
         <div className="bg-card border-border rounded-xl border p-4 md:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <button
-              type="button"
-              aria-label="Previous month"
-              onClick={() => shift(-1)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Icon name="chev-l" size={16} />
-            </button>
             <div className="font-serif text-base italic">
               {MONTH_NAMES[view.m]} {view.y}
             </div>
-            <button
-              type="button"
-              aria-label="Next month"
-              onClick={() => shift(1)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Icon name="chev" size={16} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Previous month"
+                onClick={() => shift(-1)}
+                className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
+              >
+                <Icon name="chev-l" size={14} />
+              </button>
+              <button
+                type="button"
+                aria-label="Next month"
+                onClick={() => shift(1)}
+                className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
+              >
+                <Icon name="chev" size={14} />
+              </button>
+            </div>
           </div>
           <div className="text-muted-foreground mb-1 grid grid-cols-7 text-center font-mono text-[10px]">
             {WEEKDAYS.map((d, i) => (
@@ -133,15 +147,26 @@ export default function ScheduledPage() {
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dots = dotsByDay.get(day);
+              const isSelected = day === selectedDay;
               return (
-                <div key={day} className="flex flex-col items-center gap-1 py-1 md:py-2.5">
+                <button
+                  key={day}
+                  type="button"
+                  aria-label={`${MONTH_NAMES[view.m]} ${day}`}
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedDay((prev) => (prev === day ? null : day))}
+                  className={cn(
+                    'flex cursor-pointer flex-col items-center gap-1 rounded-md py-1 md:py-2.5',
+                    isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary',
+                  )}
+                >
                   <span className="text-[13px] tabular-nums">{day}</span>
                   <span className="flex h-1.5 gap-0.5">
                     {dots?.slice(0, 3).map((c, j) => (
                       <span key={j} className="size-1.5 rounded-full" style={{ background: c }} />
                     ))}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -151,29 +176,81 @@ export default function ScheduledPage() {
       <div className="flex flex-col gap-2.5 px-5 pb-[120px] md:px-0 md:pb-12">
         <div className="flex items-center justify-between px-1">
           <div className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
-            Upcoming
+            {selectedDay != null ? `${MONTH_NAMES[view.m]} ${selectedDay}` : 'Upcoming'}
           </div>
           <Button variant="outline" size="sm" className="h-7" onClick={openCreate}>
             <Icon name="plus" size={13} />New
           </Button>
         </div>
-        {items.map((item, i) => {
-          const id = (item as { id?: string }).id;
-          return (
-            <ScheduledItem
-              key={id ?? i}
-              item={item}
-              actions={editable && id ? (
-                <RowActions
-                  onEdit={() => openEdit(item)}
-                  onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
-                  confirmTitle={`Delete ${item.label}?`}
-                  confirmDescription="This removes the scheduled item from your calendar."
-                />
-              ) : undefined}
-            />
-          );
-        })}
+        {selectedDay != null ? (
+          <>
+            {onSelectedDay.length > 0 ? (
+              onSelectedDay.map((item, i) => {
+                const id = (item as { id?: string }).id;
+                return (
+                  <ScheduledItem
+                    key={id ?? `sel-${i}`}
+                    item={item}
+                    actions={editable && id ? (
+                      <RowActions
+                        onEdit={() => openEdit(item)}
+                        onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
+                        confirmTitle={`Delete ${item.label}?`}
+                        confirmDescription="This removes the scheduled item from your calendar."
+                      />
+                    ) : undefined}
+                  />
+                );
+              })
+            ) : (
+              <div className="text-muted-foreground rounded-xl border border-dashed border-border py-4 text-center text-[12px]">
+                Nothing scheduled on this day
+              </div>
+            )}
+            {afterSelectedDay.length > 0 && (
+              <>
+                <div className="text-muted-foreground mt-3 px-1 font-mono text-[10px] tracking-wider uppercase">
+                  Upcoming
+                </div>
+                {afterSelectedDay.map((item, i) => {
+                  const id = (item as { id?: string }).id;
+                  return (
+                    <ScheduledItem
+                      key={id ?? `up-${i}`}
+                      item={item}
+                      actions={editable && id ? (
+                        <RowActions
+                          onEdit={() => openEdit(item)}
+                          onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
+                          confirmTitle={`Delete ${item.label}?`}
+                          confirmDescription="This removes the scheduled item from your calendar."
+                        />
+                      ) : undefined}
+                    />
+                  );
+                })}
+              </>
+            )}
+          </>
+        ) : (
+          items.map((item, i) => {
+            const id = (item as { id?: string }).id;
+            return (
+              <ScheduledItem
+                key={id ?? i}
+                item={item}
+                actions={editable && id ? (
+                  <RowActions
+                    onEdit={() => openEdit(item)}
+                    onDelete={() => { deleteScheduledItem(id); toast.success('Scheduled item deleted', { description: item.label }); }}
+                    confirmTitle={`Delete ${item.label}?`}
+                    confirmDescription="This removes the scheduled item from your calendar."
+                  />
+                ) : undefined}
+              />
+            );
+          })
+        )}
       </div>
       </div>
 
