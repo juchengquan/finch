@@ -193,7 +193,6 @@ interface FinanceState {
   unverifyCounterparty: (id: string) => void;
   createTransfer: (input: TransferInput) => void;
   createCategory: (input: { name: string; type?: string; icon?: string; color?: string; ledgerId?: string }) => void;
-  renameCategory: (id: string, name: string) => void;
   updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; color?: string | null }) => void;
   deleteCategory: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
@@ -543,11 +542,6 @@ export const useFinanceStore = create<FinanceState>()(
         const color = input.color ?? null;
         set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, color }] }));
         syncMutation('createCategory', { ledgerId, name: input.name, type, icon, color });
-      },
-
-      renameCategory: (id, name) => {
-        set((s) => ({ categories: s.categories.map((c) => (c.id === id ? { ...c, name } : c)) }));
-        syncMutation('renameCategory', { id, name });
       },
 
       updateCategory: (id, patch) => {
