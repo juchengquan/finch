@@ -66,6 +66,9 @@ export interface TransferInput {
    *  from the mid-rate); the rate becomes `toAmount / fromAmount`. */
   toAmount?: number;
   date: string;
+  /** Time-of-day "HH:MM" stamped on both legs, mirroring a normal entry. When
+   *  omitted the legs carry a null time (e.g. scheduled posts). */
+  time?: string;
   note?: string;
 }
 

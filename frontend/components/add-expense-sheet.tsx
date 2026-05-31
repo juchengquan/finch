@@ -39,8 +39,8 @@ export function AddExpenseSheetProvider({ children }: { children: React.ReactNod
           className={cn('gap-0 p-0', isDesktop ? 'w-full sm:max-w-md' : 'h-[92dvh] rounded-t-2xl')}
         >
           <SheetHeader className="border-border border-b px-5 py-4">
-            <SheetTitle className="font-serif text-xl italic">Add expense</SheetTitle>
-            <SheetDescription className="sr-only">Record a new expense.</SheetDescription>
+            <SheetTitle className="font-serif text-xl italic">Add</SheetTitle>
+            <SheetDescription className="sr-only">Record an expense, income, or transfer.</SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* Only mount while open so the form starts blank on each open. */}
