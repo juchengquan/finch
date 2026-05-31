@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
+import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -251,7 +252,10 @@ export default function AccountDetailPage() {
                 >
                   <CatBar color={cat.color} />
                   <div className="flex-1">
-                    <div className="text-[13px] font-medium">{tx.merchant}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-medium">{tx.merchant}</span>
+                      {tx.kind === 'refund' && <RefundBadge />}
+                    </div>
                     <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
                   </div>
                   <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')}/>

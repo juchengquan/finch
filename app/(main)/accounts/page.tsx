@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar } from '@/components/primitives';
+import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
@@ -440,7 +441,10 @@ export default function AccountsPage() {
                     >
                       <CatBar color={cat.color} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">{t.merchant}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium">{t.merchant}</span>
+                          {t.kind === 'refund' && <RefundBadge />}
+                        </div>
                         <div className="text-muted-foreground text-xs">{t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''} · {cat.name}</div>
                       </div>
                       <Money value={t.amount} signed={inc} className={cn('shrink-0 font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')} />
