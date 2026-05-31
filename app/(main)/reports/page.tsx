@@ -20,7 +20,7 @@ export default function ReportsPage() {
     .map((c) => ({ ...c, spent: spentById[c.id] ?? 0 }))
     .sort((a, b) => b.spent - a.spent);
   const total = cats.reduce((s, c) => s + c.spent, 0);
-  const slices = cats.map((c) => ({ value: c.spent, color: `oklch(0.65 0.13 ${c.hue})` }));
+  const slices = cats.map((c) => ({ value: c.spent, color: c.color ?? '#9ca3af' }));
 
   return (
     <MobilePage
@@ -57,7 +57,7 @@ export default function ReportsPage() {
               >
                 <span
                   className="size-2.5 shrink-0 rounded-full"
-                  style={{ background: `oklch(0.65 0.13 ${c.hue})` }}
+                  style={{ background: c.color ?? '#9ca3af' }}
                 />
                 <div className="flex-1 truncate text-sm">{c.name}</div>
                 <div className="text-muted-foreground w-9 text-right font-mono text-xs">{pct}%</div>

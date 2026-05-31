@@ -8,7 +8,8 @@ export interface CategoryRow {
   name: string;
   type: string;
   icon: string | null;
-  hue: number | null;
+  /** Hex `#rrggbb`. Use lib/colors `categoryHex(hue)` to generate from a palette hue. */
+  color: string | null;
 }
 
 /** List categories; pass a ledgerId to scope, or omit for all ledgers. */
@@ -25,7 +26,7 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
     name: String(r.name),
     type: String(r.type),
     icon: r.icon == null ? null : String(r.icon),
-    hue: r.hue == null ? null : Number(r.hue),
+    color: r.color == null ? null : String(r.color),
   }));
 }
 
@@ -33,12 +34,12 @@ export interface CategoryPatch {
   name?: string;
   type?: string;
   icon?: string | null;
-  hue?: number | null;
+  color?: string | null;
 }
 
 /** Update a category's editable fields. */
 export async function updateCategory(exec: Exec, id: string, patch: CategoryPatch): Promise<void> {
-  const cols: Record<keyof CategoryPatch, string> = { name: 'name', type: 'type', icon: 'icon', hue: 'hue' };
+  const cols: Record<keyof CategoryPatch, string> = { name: 'name', type: 'type', icon: 'icon', color: 'color' };
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
   for (const key of Object.keys(patch) as (keyof CategoryPatch)[]) {
@@ -47,6 +48,7 @@ export async function updateCategory(exec: Exec, id: string, patch: CategoryPatc
     bind.push(patch[key] ?? null);
   }
   if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE categories SET ${sets.join(', ')} WHERE id = ?`, bind);
 }

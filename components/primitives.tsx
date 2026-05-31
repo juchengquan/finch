@@ -233,37 +233,40 @@ export function Ring({ value, max = 100, size = 48, stroke = 5, color = 'var(--p
 interface MerchantGlyphProps {
   name: string;
   size?: number;
-  hue?: number;
-  bg?: string;
+  /** Background colour. Hex (`#xxxxxx`), CSS colour string, or omitted for a
+   *  deterministic per-name fallback. */
+  color?: string | null;
   fg?: string;
 }
 
-export function MerchantGlyph({ name, size = 36, hue, bg, fg = 'var(--foreground)' }: MerchantGlyphProps) {
+export function MerchantGlyph({ name, size = 36, color, fg = 'var(--foreground)' }: MerchantGlyphProps) {
   const letter = (name || '?').trim().charAt(0).toUpperCase();
-  const _hue = hue ?? (name ? (name.charCodeAt(0) * 7) % 360 : 30);
-  const _bg = bg || `oklch(0.9 0.05 ${_hue})`;
+  const fallbackHue = name ? (name.charCodeAt(0) * 7) % 360 : 30;
+  const bg = color || `oklch(0.9 0.05 ${fallbackHue})`;
 
   return (
     <div
       className="flex shrink-0 items-center justify-center rounded-full font-medium"
-      style={{ width: size, height: size, background: _bg, color: fg, fontSize: size * 0.42 }}
+      style={{ width: size, height: size, background: bg, color: fg, fontSize: size * 0.42 }}
     >
       {letter}
     </div>
   );
 }
 
-export function CatDot({ hue, size = 8 }: { hue: number; size?: number }) {
-  return <span className="inline-block rounded-full" style={{ width: size, height: size, background: `oklch(0.65 0.13 ${hue})` }} />;
+const FALLBACK_CAT_COLOR = '#9ca3af';
+
+export function CatDot({ color, size = 8 }: { color: string | null | undefined; size?: number }) {
+  return <span className="inline-block rounded-full" style={{ width: size, height: size, background: color || FALLBACK_CAT_COLOR }} />;
 }
 
 // Vertical category-colored accent bar, used as the leading element of transaction rows.
-export function CatBar({ hue, className }: { hue: number; className?: string }) {
+export function CatBar({ color, className }: { color: string | null | undefined; className?: string }) {
   return (
     <span
       aria-hidden
       className={cn('w-1 shrink-0 self-stretch rounded-full', className)}
-      style={{ background: `oklch(0.65 0.13 ${hue})` }}
+      style={{ background: color || FALLBACK_CAT_COLOR }}
     />
   );
 }

@@ -130,7 +130,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     ]);
 
     const newRate = sameCurrency ? 1 : r2(newTo / newFrom * 1e6) / 1e6;
-    await exec('UPDATE transfer_groups SET amount_base = ?, exchange_rate = ? WHERE id = ?', [
+    await exec("UPDATE transfer_groups SET amount_base = ?, exchange_rate = ?, updated_at = datetime('now') WHERE id = ?", [
       r2(newFrom),
       newRate,
       groupId,
@@ -141,7 +141,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   }
   if (patch.note !== undefined) {
     await exec('UPDATE transactions SET notes = ? WHERE transfer_group_id = ?', [patch.note ?? null, groupId]);
-    await exec('UPDATE transfer_groups SET notes = ? WHERE id = ?', [patch.note ?? null, groupId]);
+    await exec("UPDATE transfer_groups SET notes = ?, updated_at = datetime('now') WHERE id = ?", [patch.note ?? null, groupId]);
   }
 
   for (const r of new Set(legs.map((l) => String(l.account_id)))) {

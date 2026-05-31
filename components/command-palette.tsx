@@ -59,7 +59,8 @@ interface Result {
   label: string;
   hint?: string;
   icon: string;
-  iconHue?: number;
+  /** Hex `#rrggbb` to tint the icon chip. Omitted = neutral chip. */
+  iconColor?: string;
   run: () => void;
 }
 
@@ -178,7 +179,7 @@ function PaletteBody({ close }: { close: () => void }) {
       // Merchants (counterparties).
       const cpMatches = counterparties
         .filter((c) => c.ledgerId === activeId)
-        .filter((c) => matches(q, c.name) || c.aliases.some((a) => matches(q, a)))
+        .filter((c) => matches(q, c.name))
         .slice(0, 5);
       for (const c of cpMatches) {
         out.push({
@@ -203,9 +204,8 @@ function PaletteBody({ close }: { close: () => void }) {
           key: `cat:${c.id}`,
           group: 'Categories',
           label: c.name,
-          hint: c.hue == null ? undefined : `hue ${c.hue}`,
           icon: c.icon ?? 'tags',
-          iconHue: c.hue ?? undefined,
+          iconColor: c.color ?? undefined,
           run: () => {
             router.push(`/budgets/${c.id}`);
             close();
@@ -216,14 +216,13 @@ function PaletteBody({ close }: { close: () => void }) {
       // Accounts.
       const acctMatches = accounts
         .filter((a) => a.ledgerId === activeId)
-        .filter((a) => matches(q, a.name) || (a.last4 ? matches(q, a.last4) : false))
+        .filter((a) => matches(q, a.name))
         .slice(0, 5);
       for (const a of acctMatches) {
         out.push({
           key: `acct:${a.id}`,
           group: 'Accounts',
           label: a.name,
-          hint: a.last4 ? `•••• ${a.last4}` : undefined,
           icon: 'wallet',
           run: () => {
             router.push(`/accounts/${a.id}`);
@@ -342,8 +341,8 @@ function PaletteBody({ close }: { close: () => void }) {
                     <span
                       className="flex size-7 items-center justify-center rounded-md"
                       style={
-                        r.iconHue != null
-                          ? { background: `oklch(0.92 0.05 ${r.iconHue})`, color: `oklch(0.40 0.13 ${r.iconHue})` }
+                        r.iconColor
+                          ? { background: r.iconColor, color: 'white' }
                           : { background: 'var(--secondary)' }
                       }
                     >

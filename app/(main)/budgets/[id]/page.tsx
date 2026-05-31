@@ -173,7 +173,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
               onClick={() => openTransaction(t.id)}
               className={cn('hover:bg-secondary/40 flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
             >
-              <CatBar hue={catById(t.category).hue} />
+              <CatBar color={catById(t.category).color} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{t.merchant}</div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">

@@ -35,6 +35,7 @@ export async function updateTag(exec: Exec, id: string, patch: TagPatch): Promis
   if (patch.name !== undefined) { sets.push('name = ?'); bind.push(patch.name); }
   if (patch.color !== undefined) { sets.push('color = ?'); bind.push(patch.color ?? null); }
   if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE tags SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
