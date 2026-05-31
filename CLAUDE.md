@@ -36,11 +36,9 @@ Next.js 16 has breaking changes. Before writing routing/server code, read the re
 Tailwind CSS v4 + **shadcn/ui** (Radix-based components in `components/ui/*`), **zustand** for state, **lucide-react** icons, **next-themes** for light/dark, **sonner** for toasts. Fonts are loaded via `next/font` in `app/layout.tsx` and exposed as CSS variables.
 
 ### Routing & the shell
-`app/` has two App Router route groups, each with its own `layout.tsx` that renders the shared **`components/PageShell.tsx`** with a different tab/brand config:
-- `(main)/` — the consumer app (accounts, budgets, scheduled, insights, goals, …).
-- `(ledger)/` — the "Ledger admin" surface (pending, transfers, merchants, recurring, categories, system).
+`app/` has a single App Router route group, `(main)/`, whose `layout.tsx` renders the shared **`components/PageShell.tsx`**. It holds both the consumer sections (accounts, budgets, scheduled, insights, reports, activity, goals, …) and the former "Ledger admin" pages (pending, transfers, merchants, categories, tags, fx, system). The consumer sections are the primary `tabs`; the ledger-admin pages are passed as a labeled **`navGroups`** entry ("Ledger") so they render as their own group in the desktop sidebar. (They previously lived in a separate `(ledger)/` group with its own shell; route groups don't affect URLs, so the merge left every path unchanged.)
 
-`PageShell` is a **single-render responsive shell**: page content renders once, and the chrome switches by CSS at the `md` (768px) breakpoint — a sidebar + desktop top bar on `md+`, a fixed bottom tab bar on mobile. There is no dual mobile/desktop render. Pages are mostly `'use client'`.
+`PageShell` is a **single-render responsive shell**: page content renders once, and the chrome switches by CSS at the `md` (768px) breakpoint — a sidebar + desktop top bar on `md+`, a fixed bottom tab bar on mobile. There is no dual mobile/desktop render. Pages are mostly `'use client'`. The ledger-admin pages appear only in the desktop sidebar (via `navGroups`), not the mobile bottom bar — reach them on mobile via the command palette (⌘K) or in-content links.
 
 The desktop top bar shows `headerTitle`, except on detail routes (`/<section>/<id>`) where `PageShell` derives an "Section › Name" **breadcrumb** from the path via `BREADCRUMB_SECTIONS` (accounts/budgets/transfers/recurring). Detail pages keep their own in-content breadcrumb but mark it `md:hidden` so it doesn't duplicate the header one.
 

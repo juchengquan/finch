@@ -5,9 +5,19 @@ import { usePathname } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
 import { MAIN_TAB_CATALOG, useMobileTabs } from '@/components/mobile-tabs';
+import { useLedger } from '@/components/ledger-provider';
+import { useFinanceStore } from '@/lib/store';
 
-const BOTTOM_LINKS = [
-  { icon: 'bell',   label: 'Pending',   path: '/pending',  warnDot: true },
+// The ledger-admin sections, previously a separate "Ledger admin" shell, now
+// surfaced as a labeled group in the main sidebar (desktop). URLs are unchanged.
+const LEDGER_TABS = [
+  { id: 'pending', icon: 'doc', label: 'Pending', path: '/pending' },
+  { id: 'transfers', icon: 'split', label: 'Transfers', path: '/transfers' },
+  { id: 'merchants', icon: 'bag', label: 'Merchants', path: '/merchants' },
+  { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
+  { id: 'tags', icon: 'tags', label: 'Tags', path: '/tags' },
+  { id: 'fx', icon: 'swap', label: 'FX', path: '/fx' },
+  { id: 'system', icon: 'cog', label: 'System', path: '/system' },
 ];
 
 // The pinned center button opens the add-expense sheet (see PageShell) rather
@@ -18,8 +28,17 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { tabs: mobileSections } = useMobileTabs();
+  const { activeId } = useLedger();
+  const hasPending = useFinanceStore((s) =>
+    s.transactions.some((t) => t.pending && (t.ledgerId ?? 'personal') === activeId),
+  );
 
   const activeTab = pathname.split('/')[1] || 'accounts';
+
+  const ledgerGroup = {
+    label: 'Ledger',
+    tabs: LEDGER_TABS.map((t) => (t.id === 'pending' ? { ...t, warnDot: hasPending } : t)),
+  };
 
   // Add sits in the middle of the bar, flanked by the chosen sections.
   const mid = Math.ceil(mobileSections.length / 2);
@@ -29,9 +48,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <PageShell
       brand={{ glyph: 'F', label: 'Finch', toggleable: true }}
       tabs={MAIN_TAB_CATALOG}
+      navGroups={[ledgerGroup]}
       mobileTabs={mobileTabs}
       activeTab={activeTab}
-      bottomLinks={BOTTOM_LINKS}
       user={{ name: 'Alex Morgan', label: 'Personal' }}
       sidebarOpen={sidebarOpen}
       onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
