@@ -52,7 +52,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   -- source of truth for the starting point.
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
-  notes                TEXT,
   color                TEXT,
   last4                TEXT,
   institution          TEXT,
@@ -70,14 +69,13 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE TABLE IF NOT EXISTS categories (
-  id          TEXT PRIMARY KEY,
-  ledger_id   TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name        TEXT NOT NULL,
-  parent_name TEXT,
-  type        TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
-  icon        TEXT,
-  hue         INTEGER,
-  sort_order  INTEGER NOT NULL DEFAULT 0
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
+  icon       TEXT,
+  hue        INTEGER,
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -99,7 +97,6 @@ CREATE TABLE IF NOT EXISTS counterparties (
   standardized_name TEXT NOT NULL,
   aliases           TEXT,
   category          TEXT,
-  logo_url          TEXT,
   is_verified       INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL
 );
@@ -123,11 +120,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   time               TEXT,
   amount             REAL NOT NULL,
   amount_base        REAL NOT NULL,
+  -- Rate used to derive amount_base from amount at txn time; locked so a later
+  -- rates-table edit doesn't reshape history. The rate's effective date is the
+  -- txn's own date column — we don't carry a separate exchange_rate_date.
   exchange_rate      REAL NOT NULL,
-  exchange_rate_date TEXT,
   description        TEXT,
   category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
-  counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
   kind               TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment')),
   status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
@@ -206,7 +204,6 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   auto_post            INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
   max_executions       INTEGER,
-  notes                TEXT,
   color                TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
@@ -333,7 +330,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T01:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T02:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

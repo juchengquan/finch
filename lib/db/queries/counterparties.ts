@@ -77,8 +77,8 @@ export interface NewCounterparty {
 /** Insert a new (unverified) merchant. */
 export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
   await exec(
-    "INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,logo_url,is_verified,created_at) VALUES (?,?,?,?,?,?,0,datetime('now'))",
-    [c.id, c.ledgerId, c.name, JSON.stringify([]), c.category, null],
+    "INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,is_verified,created_at) VALUES (?,?,?,?,?,0,datetime('now'))",
+    [c.id, c.ledgerId, c.name, JSON.stringify([]), c.category],
   );
 }
 
@@ -102,7 +102,9 @@ export async function updateCounterparty(exec: Exec, id: string, patch: Counterp
   await exec(`UPDATE counterparties SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
-/** Hard delete a merchant; transactions.counterparty_id becomes NULL via the FK. */
+/** Hard delete a merchant. (No FK link from transactions — counterparty data
+ *  lives entirely in this table; transaction display uses the description
+ *  field.) */
 export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM counterparties WHERE id = ?', [id]);
 }
