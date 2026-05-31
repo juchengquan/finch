@@ -10,7 +10,7 @@ import { latestRateMap, convertViaRates } from '@/lib/fx';
 // Amounts are stored in the active ledger's base currency. `useMoney` converts
 // them into the user's chosen display currency and formats them. Conversion
 // goes through the projected exchange_rates table (latest rate per currency,
-// SGD-pivoted) and falls back to the static units-per-USD map only when the
+// USD-pivoted) and falls back to the static units-per-USD map only when the
 // table has no row for a currency (pre-hydration / unseeded currency).
 export function useMoney() {
   const { active } = useLedger();
