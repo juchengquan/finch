@@ -101,9 +101,6 @@ export interface AccountPatch {
   name?: string;
   type?: string;
   currency?: string;
-  last4?: string | null;
-  institution?: string | null;
-  routing?: string | null;
   color?: string | null;
   groupId?: string | null;
   /** Per-account net-worth flag (0/1). Defaulted from `type` at create time. */
@@ -117,7 +114,6 @@ export interface NewAccountInput {
   groupId?: string | null;
   openingBalance?: number;
   color?: string | null;
-  last4?: string | null;
   ledgerId?: string;
 }
 
@@ -323,7 +319,6 @@ export const useFinanceStore = create<FinanceState>()(
           groupId: input.groupId ?? null,
           openingBalance: input.openingBalance ?? 0,
           color: input.color ?? null,
-          last4: input.last4 ?? null,
         });
         return id;
       },

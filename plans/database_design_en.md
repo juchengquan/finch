@@ -346,9 +346,6 @@ CREATE TABLE accounts (
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
   color                TEXT,
-  last4                TEXT,
-  institution          TEXT,
-  routing              TEXT,
   sort_order           INTEGER NOT NULL DEFAULT 0,
   include_in_net_worth INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
@@ -363,15 +360,12 @@ CREATE TABLE accounts (
 | `id` | TEXT PK | App-stable id (`chk`, `cc`, `acct-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `group_id` | TEXT FK → `account_groups.id` · SET NULL | Optional grouping. NULL = "Ungrouped". |
-| `name` | TEXT NOT NULL | Display name. |
+| `name` | TEXT NOT NULL | Display name. Users encode any disambiguator (e.g. last-4) directly here — there is no separate column. |
 | `type` | TEXT NOT NULL · CHECK | `savings` / `credit_card` / `investment` / `cash` / `fx` / `virtual`. |
 | `currency` | TEXT NOT NULL · default `SGD` | ISO 4217 — currency the account holds. |
 | `current_balance` | REAL NOT NULL · default 0 | **Cached.** Kept in sync by `recomputeAccount()` after txn writes. |
 | `opening_balance` | REAL NOT NULL · default 0 | Balance before the first tracked transaction. `current = opening + Σ amount_base` (in account currency). |
-| `color` | TEXT | Card / accent colour for the UI. |
-| `last4` | TEXT | Last 4 of the account number — display only. |
-| `institution` | TEXT | Bank / brokerage name — display only. |
-| `routing` | TEXT | Routing number — display only. |
+| `color` | TEXT | Hex card / accent colour. Drives the avatar chip on the Accounts screen and the per-row badge in transaction lists. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the group. |
 | `include_in_net_worth` | INTEGER NOT NULL · default 1 | 0 / 1. Defaulted from `type` at create (credit_card → 0, else 1); flippable per account. |
 | `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. `0` hides from active lists; history is kept. |

@@ -548,7 +548,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         groupId: args.groupId ? str(args.groupId) : null,
         openingBalance: Number(args.openingBalance ?? 0),
         color: args.color ? str(args.color) : null,
-        last4: args.last4 ? str(args.last4) : null,
       });
       return;
     }

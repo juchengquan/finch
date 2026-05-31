@@ -216,14 +216,13 @@ function PaletteBody({ close }: { close: () => void }) {
       // Accounts.
       const acctMatches = accounts
         .filter((a) => a.ledgerId === activeId)
-        .filter((a) => matches(q, a.name) || (a.last4 ? matches(q, a.last4) : false))
+        .filter((a) => matches(q, a.name))
         .slice(0, 5);
       for (const a of acctMatches) {
         out.push({
           key: `acct:${a.id}`,
           group: 'Accounts',
           label: a.name,
-          hint: a.last4 ? `•••• ${a.last4}` : undefined,
           icon: 'wallet',
           run: () => {
             router.push(`/accounts/${a.id}`);

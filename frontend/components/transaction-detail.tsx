@@ -284,7 +284,7 @@ export function TransactionDetail({
   const acct = acctById(tx.account);
   const when = new Date(`${tx.date}T${tx.time ?? '00:00'}`);
   const whenStr = `${when.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
-  const acctLabel = acct.last4 ? `${acct.name} · ${acct.last4}` : acct.name;
+  const acctLabel = acct.name;
 
   const remove = () => {
     deleteTransaction(tx.id);

@@ -52,9 +52,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
   color                TEXT,
-  last4                TEXT,
-  institution          TEXT,
-  routing              TEXT,
   -- Sort order within the account group (and within "ungrouped"). Smaller
   -- values come first.
   sort_order           INTEGER NOT NULL DEFAULT 0,
@@ -320,7 +317,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T05:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T06:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

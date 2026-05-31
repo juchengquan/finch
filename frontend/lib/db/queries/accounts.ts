@@ -47,9 +47,6 @@ export interface AccountRow {
   groupName: string | null;
   includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
   color: string | null;
-  last4: string | null;
-  institution: string | null;
-  routing: string | null;
   sortOrder: number;
 }
 
@@ -58,7 +55,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 1' : 'WHERE a.is_active = 1';
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
-            a.group_id AS groupId, g.name AS groupName, a.color, a.last4, a.institution, a.routing,
+            a.group_id AS groupId, g.name AS groupName, a.color,
             a.sort_order AS sortOrder, a.include_in_net_worth AS inw
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
       ${where}
@@ -76,9 +73,6 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     groupName: r.groupName == null ? null : String(r.groupName),
     includeInNetWorth: Number(r.inw),
     color: r.color == null ? null : String(r.color),
-    last4: r.last4 == null ? null : String(r.last4),
-    institution: r.institution == null ? null : String(r.institution),
-    routing: r.routing == null ? null : String(r.routing),
     sortOrder: Number(r.sortOrder ?? 0),
   }));
 }
@@ -99,9 +93,6 @@ export interface AccountPatch {
   type?: string;
   currency?: string;
   color?: string | null;
-  last4?: string | null;
-  institution?: string | null;
-  routing?: string | null;
   groupId?: string | null;
   /** Per-account net-worth flag. Defaulted from `type` on create; flippable. */
   includeInNetWorth?: number;
@@ -112,9 +103,6 @@ const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   type: 'type',
   currency: 'currency',
   color: 'color',
-  last4: 'last4',
-  institution: 'institution',
-  routing: 'routing',
   groupId: 'group_id',
   includeInNetWorth: 'include_in_net_worth',
 };
@@ -144,7 +132,6 @@ export interface NewAccount {
   groupId: string | null;
   openingBalance: number;
   color: string | null;
-  last4: string | null;
 }
 
 /** Insert a new account; current_balance starts at the opening balance.
@@ -161,9 +148,9 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   const inw = defaultIncludeInNetWorth(a.type);
   await exec(
     `INSERT INTO accounts
-       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, a.last4, sortOrder, inw],
+       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, sortOrder, inw],
   );
 }
 

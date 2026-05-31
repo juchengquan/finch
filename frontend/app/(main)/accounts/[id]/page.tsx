@@ -71,18 +71,15 @@ export default function AccountDetailPage() {
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileTarget, setReconcileTarget] = useState('');
   const [reconcileNote, setReconcileNote] = useState('');
-  const [draft, setDraft] = useState({ name: '', type: 'savings', currency: '', last4: '', institution: '', routing: '' });
+  const [draft, setDraft] = useState({ name: '', type: 'savings', currency: '' });
   const { openTransaction } = useTransactionSheet();
 
   const name = row?.name ?? mock.name;
   const type = row?.type ?? toDbType(mock.type);
   const currency = row?.currency ?? active.base;
-  const last4 = row?.last4 ?? mock.last4 ?? '';
-  const institution = row?.institution ?? '';
-  const routing = row?.routing ?? '';
 
   const openEdit = () => {
-    setDraft({ name, type, currency, last4, institution, routing });
+    setDraft({ name, type, currency });
     setDetailsOpen(false);
     setEditOpen(true);
   };
@@ -92,9 +89,6 @@ export default function AccountDetailPage() {
       name: draft.name.trim(),
       type: draft.type,
       currency: draft.currency,
-      last4: draft.last4.trim() || null,
-      institution: draft.institution.trim() || null,
-      routing: draft.routing.trim() || null,
     });
     toast.success('Account updated', { description: draft.name.trim() || name });
   };
@@ -127,9 +121,6 @@ export default function AccountDetailPage() {
 
   const details: [string, string][] = [
     ['Type', accountTypeLabel(type)],
-    ['Number', `•••• ${last4 || '----'}`],
-    ['Routing', routing || '—'],
-    ['Institution', institution || '—'],
     ['Currency', currency],
     ['Last sync', '2 min ago'],
     ['Linked since', 'Jan 2024'],
@@ -338,18 +329,6 @@ export default function AccountDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="acct-last4">Number (last 4)</Label>
-              <Input id="acct-last4" inputMode="numeric" maxLength={4} value={draft.last4} onChange={(e) => setDraft({ ...draft, last4: e.target.value })} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="acct-institution">Institution</Label>
-              <Input id="acct-institution" value={draft.institution} onChange={(e) => setDraft({ ...draft, institution: e.target.value })} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="acct-routing">Routing</Label>
-              <Input id="acct-routing" inputMode="numeric" value={draft.routing} onChange={(e) => setDraft({ ...draft, routing: e.target.value })} />
             </div>
           </div>
           <DialogFooter className="sm:justify-between">

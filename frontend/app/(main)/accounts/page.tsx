@@ -26,7 +26,7 @@ const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
 type GroupWithAccounts = {
   id: string;
   name: string;
-  accounts: { id: string; name: string; last4: string; color: string }[];
+  accounts: { id: string; name: string; color: string }[];
 };
 
 // Reserved id for the "ungrouped" bucket — accounts with no group_id.
@@ -105,10 +105,9 @@ function AccountGroupAccordion({
                     const bal = balanceOf(a.id);
                     return (
                       <Link key={a.id} href={`/accounts/${a.id}`} className={cn('flex cursor-pointer items-center gap-3 p-3.5 text-inherit no-underline', i && 'border-border border-t-[0.5px]')}>
-                        <div className="flex size-[38px] shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold tracking-[0.5px] text-white" style={{ background: a.color }}>{a.last4.slice(-2)}</div>
+                        <div className="size-[38px] shrink-0 rounded-lg" style={{ background: a.color }} />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">{a.name}</div>
-                          <div className="text-muted-foreground mt-0.5 font-mono text-[10px] tracking-[0.5px]">•••• {a.last4}</div>
                         </div>
                         <div className="flex items-center gap-2.5">
                           <div className="min-w-[70px] text-right">
@@ -131,7 +130,7 @@ function AccountGroupAccordion({
   );
 }
 
-const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', currency: '', openingBalance: '', last4: '', color: '#3a4a5f' };
+const EMPTY_DRAFT = { name: '', type: 'savings', group: 'cash', currency: '', openingBalance: '', color: '#3a4a5f' };
 
 const CURRENCY_CODES = Object.keys(CURRENCIES);
 
@@ -177,14 +176,13 @@ export default function AccountsPage() {
       groupId: draft.group,
       openingBalance: Number(draft.openingBalance) || 0,
       color: draft.color,
-      last4: draft.last4.trim() || null,
       ledgerId: activeId,
     });
     toast.success('Account created', { description: name });
     setCreateOpen(false);
   };
 
-  // Accounts (name/last4/color/group) and balances now come from the projected
+  // Accounts (name/color/group) and balances now come from the projected
   // DB rows; the static mock is only a pre-hydration fallback so first paint
   // isn't empty.
   const ledgerAccountRows = accounts.filter((a) => a.ledgerId === activeId);
@@ -197,10 +195,10 @@ export default function AccountsPage() {
   };
 
   const ledgerAccounts = ledgerAccountRows.length
-    ? ledgerAccountRows.map((a) => ({ id: a.id, name: a.name, last4: a.last4 ?? '', color: a.color ?? '#6b7280', group: a.groupId ?? '' }))
+    ? ledgerAccountRows.map((a) => ({ id: a.id, name: a.name, color: a.color ?? '#6b7280', group: a.groupId ?? '' }))
     : MOCK.accounts
         .filter((a) => ((a as { ledger?: string }).ledger ?? 'personal') === activeId)
-        .map((a) => ({ id: a.id, name: a.name, last4: a.last4, color: a.color, group: a.group }));
+        .map((a) => ({ id: a.id, name: a.name, color: a.color, group: a.group }));
 
   const ledgerGroups = accountGroups.filter((g) => g.ledgerId === activeId);
   // Pre-hydration fallback so first paint still has the seed groups.
@@ -314,15 +312,9 @@ export default function AccountsPage() {
               <Input id="new-balance" inputMode="decimal" value={draft.openingBalance} onChange={(e) => setDraft({ ...draft, openingBalance: e.target.value })} placeholder="0.00" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-last4">Number (last 4)</Label>
-              <Input id="new-last4" inputMode="numeric" maxLength={4} value={draft.last4} onChange={(e) => setDraft({ ...draft, last4: e.target.value })} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-color">Card color</Label>
-              <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border h-9 w-full cursor-pointer rounded-md border bg-transparent" />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-color">Card color</Label>
+            <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border h-9 w-full cursor-pointer rounded-md border bg-transparent" />
           </div>
         </div>
         <DialogFooter>

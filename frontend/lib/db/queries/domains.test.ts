@@ -38,23 +38,21 @@ test('accounts: list, net worth, balance series, edit', async () => {
   const nw = await netWorth(exec, 'personal');
   expect(nw).toBeCloseTo(4218.5 + 8120 + 21430, 2);
 
-  // Display columns are seeded from data/accounts.json (no more override shim).
-  expect(cc.last4).toBe('1009');
+  // Display columns are seeded from data/accounts.json.
+  expect(cc.name).toBe('Amex Gold');
   expect(cc.color).toBe('#3a2d1f');
 
-  await updateAccount(exec, 'cc', { name: 'Amex Platinum', last4: '9999', institution: 'American Express' });
+  await updateAccount(exec, 'cc', { name: 'Amex Platinum' });
   const updated = await listAccounts(exec, 'personal');
   const ccu = updated.find((a) => a.id === 'cc')!;
   expect(ccu.name).toBe('Amex Platinum');
-  expect(ccu.last4).toBe('9999');
-  expect(ccu.institution).toBe('American Express');
 });
 
 test('accounts: create, then archive removes from the active list', async () => {
   const exec = await seeded();
   await createAccount(exec, {
     id: 'acct-new', ledgerId: 'personal', name: 'Wise USD', type: 'cash',
-    currency: 'USD', groupId: 'cash', openingBalance: 500, color: '#123456', last4: '0001',
+    currency: 'USD', groupId: 'cash', openingBalance: 500, color: '#123456',
   });
   let accts = await listAccounts(exec, 'personal');
   const created = accts.find((a) => a.id === 'acct-new')!;
@@ -75,11 +73,11 @@ test('accounts: createAccount assigns an incrementing sort_order within the same
   const exec = await seeded();
   await createAccount(exec, {
     id: 'acct-a', ledgerId: 'personal', name: 'A', type: 'cash',
-    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null, last4: null,
+    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null,
   });
   await createAccount(exec, {
     id: 'acct-b', ledgerId: 'personal', name: 'B', type: 'cash',
-    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null, last4: null,
+    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null,
   });
   const accts = await listAccounts(exec, 'personal');
   const a = accts.find((x) => x.id === 'acct-a')!;
