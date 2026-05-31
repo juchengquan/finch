@@ -27,8 +27,8 @@ const PAGES: { label: string; href: string; icon: string; keywords: string[] }[]
   { label: 'Scheduled', href: '/scheduled', icon: 'sync', keywords: ['templates'] },
   { label: 'Categories', href: '/categories', icon: 'tags', keywords: [] },
   { label: 'Tags', href: '/tags', icon: 'tag', keywords: [] },
-  { label: 'FX', href: '/fx', icon: 'coins', keywords: ['exchange', 'rates', 'currency'] },
-  { label: 'System', href: '/system', icon: 'cog', keywords: ['devices', 'sync'] },
+  { label: 'Exchange rates', href: '/settings/ledger', icon: 'coins', keywords: ['fx', 'exchange', 'rates', 'currency'] },
+  { label: 'Devices', href: '/settings/devices', icon: 'cog', keywords: ['sync', 'system'] },
 ];
 
 interface CommandPaletteValue {

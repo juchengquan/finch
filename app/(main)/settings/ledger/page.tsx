@@ -6,6 +6,7 @@ import { SearchButton } from '@/components/command-palette';
 import { SettingsItem } from '@/components/SettingsItem';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
+import { ExchangeRates } from '@/components/exchange-rates';
 import { useCurrency, type Currency } from '@/components/currency-provider';
 import {
   Select,
@@ -67,6 +68,11 @@ export default function LedgerSettingsPage() {
           </Select>
         </Row>
         <SettingsItem item={{ label: 'Categories', value: '8 active', icon: 'tag' }} />
+
+        <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
+          Exchange rates
+        </div>
+        <ExchangeRates />
       </div>
     </MobilePage>
   );

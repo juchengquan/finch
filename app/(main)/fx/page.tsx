@@ -20,7 +20,7 @@ export default function FxTransactionPage() {
 
   if (!fx) {
     return (
-      <MobilePage header={<ScreenHeader back backHref="/system" title="FX transaction" />}>
+      <MobilePage header={<ScreenHeader back backHref="/settings/ledger" title="FX transaction" />}>
         <div className="text-muted-foreground px-5 pt-16 text-center text-sm">
           No foreign-currency transactions yet.
         </div>
@@ -49,11 +49,11 @@ export default function FxTransactionPage() {
   ];
 
   return (
-    <MobilePage header={<ScreenHeader back backHref="/system" title="FX transaction" />}>
+    <MobilePage header={<ScreenHeader back backHref="/settings/ledger" title="FX transaction" />}>
       <div className="px-5 pb-[120px]">
         <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs">
-          <Link href="/system" className="text-muted-foreground">
-            System
+          <Link href="/settings/ledger" className="text-muted-foreground">
+            Exchange rates
           </Link>
           <Icon name="chev" size={11} />
           <span className="text-foreground">FX transaction</span>
