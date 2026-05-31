@@ -498,10 +498,10 @@ CREATE TABLE transfer_groups (
 | `id` | TEXT PK | `tg-<random>`; the matching value on both transactions' `transfer_group_id`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `created_at` | TEXT NOT NULL | When the transfer was recorded. |
-| `amount_base` | REAL NOT NULL | Sending-leg amount in the ledger's base currency. |
+| `amount_base` | REAL NOT NULL | Sending-leg magnitude in the from-account's currency (re-recorded on edits). |
 | `from_currency` | TEXT NOT NULL | Source account's currency. |
 | `to_currency` | TEXT NOT NULL | Destination account's currency. |
-| `exchange_rate` | REAL | Locked from→to rate at the moment of transfer. NULL when same currency. |
+| `exchange_rate` | REAL | Effective `to_currency` per 1 `from_currency` — derived from the two legs' magnitudes (`toAmount / fromAmount`). When the user pins both sides on a cross-currency edit, this is rewritten to match the bank's actual conversion. |
 | `notes` | TEXT | User memo. |
 
 ---

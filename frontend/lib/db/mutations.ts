@@ -190,7 +190,7 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
     const fromId = await resolveAccountId(exec, ledgerId, t.from ?? '');
     const toId = await resolveAccountId(exec, ledgerId, t.account);
     if (!fromId || !toId) throw new Error(`Couldn't match the accounts for "${t.name}"`);
-    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, amount: t.amount ?? 0, date, note: t.name });
+    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, fromAmount: t.amount ?? 0, date, note: t.name });
     return;
   }
 
@@ -221,10 +221,11 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
 async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const fromId = str(args.fromAccountId);
   const toId = str(args.toAccountId);
-  const amount = Math.abs(Number(args.amount));
+  const fromAmount = Math.abs(Number(args.fromAmount));
+  const explicitToAmount = args.toAmount != null ? Math.abs(Number(args.toAmount)) : null;
   const date = str(args.date);
   const note = args.note ? str(args.note) : null;
-  if (!amount) throw new Error('Transfer amount must be greater than 0');
+  if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
   if (fromId === toId) throw new Error('Pick two different accounts');
 
   const [from] = await exec('SELECT ledger_id, currency, name FROM accounts WHERE id = ?', [fromId]);
@@ -234,17 +235,29 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const ledgerId = String(from.ledger_id);
   const fromCurrency = String(from.currency);
   const toCurrency = String(to.currency);
-  // `amount` is in the from-account's currency; convert it to the to-account's
-  // currency for the incoming leg (no-op when the currencies match).
-  const conv = await convertToBase(exec, amount, fromCurrency, toCurrency, date);
-  const toAmount = conv.amountBase;
+  // When `toAmount` isn't supplied, derive it (and the rate) from the rates
+  // table. When the caller pins it, use it verbatim and recompute the rate.
+  let toAmount: number;
+  let rate: number;
+  if (explicitToAmount != null) {
+    if (!(explicitToAmount > 0)) throw new Error('Received amount must be greater than 0');
+    if (fromCurrency === toCurrency && Math.abs(explicitToAmount - fromAmount) > 0.005) {
+      throw new Error('Same-currency transfer amounts must match');
+    }
+    toAmount = explicitToAmount;
+    rate = fromCurrency === toCurrency ? 1 : Math.round((toAmount / fromAmount) * 1e6) / 1e6;
+  } else {
+    const conv = await convertToBase(exec, fromAmount, fromCurrency, toCurrency, date);
+    toAmount = conv.amountBase;
+    rate = conv.rate;
+  }
   const tgId = newId('tg');
   await exec(
     'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, date, amount, fromCurrency, toCurrency, conv.rate, note],
+    [tgId, ledgerId, date, fromAmount, fromCurrency, toCurrency, rate, note],
   );
   await insertTxRow(exec, {
-    ledgerId, accountId: fromId, date, amount: -amount, description: `Transfer to ${String(to.name)}`,
+    ledgerId, accountId: fromId, date, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
     currency: fromCurrency, transferGroupId: tgId, note, kind: 'transfer',
   });
   await insertTxRow(exec, {

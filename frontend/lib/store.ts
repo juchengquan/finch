@@ -56,7 +56,13 @@ export interface TxSplitInput {
 export interface TransferInput {
   fromAccountId: string;
   toAccountId: string;
-  amount: number;
+  /** Sent magnitude, in the from-account's currency. */
+  fromAmount: number;
+  /** Optional received magnitude, in the to-account's currency. When omitted,
+   *  derived from the rates table at `date`. Set this to pin both sides
+   *  (e.g. matching a bank statement where the actual conversion differs
+   *  from the mid-rate); the rate becomes `toAmount / fromAmount`. */
+  toAmount?: number;
   date: string;
   note?: string;
 }
@@ -204,7 +210,7 @@ interface FinanceState {
   createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
-  updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
+  updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
   createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
