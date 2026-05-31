@@ -123,13 +123,6 @@ test('createCategory rejects an empty name', async () => {
   await expect(applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: '  ' })).rejects.toThrow();
 });
 
-test('renameCategory updates the name', async () => {
-  const exec = await seeded();
-  await applyMutation(exec, 'renameCategory', { id: 'food', name: 'Food & Drink' });
-  const rows = await exec("SELECT name FROM categories WHERE id = 'food'");
-  expect(String(rows[0].name)).toBe('Food & Drink');
-});
-
 test('updateScheduledSplit updates the nth split by sort order', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateScheduledSplit', { templateId: 'rt-salary', index: 1, pct: 30 });

@@ -120,7 +120,6 @@ All check constraints are documented here. If you add a new enum value, update b
 |-------|---------|---------------------|
 | `pending` | Awaiting user confirmation | No |
 | `confirmed` | Verified, should be counted | Yes |
-| `cancelled` | Voided, should be ignored | No |
 
 ### 4.2 Account Types (`accounts.type`)
 
@@ -140,7 +139,8 @@ All check constraints are documented here. If you add a new enum value, update b
 | `expense` | Money leaving your account |
 | `income` | Money entering your account |
 | `transfer` | Internal transfer (usually between your own accounts) |
-| `refund` | A refund (treated as income) |
+
+Refund-shaped transactions don't get their own category type — they use the **original expense's category** with `transactions.kind = 'refund'` so reports net them against the right line. See §6.10 *Kinds*.
 
 ### 4.4 Template Types (`recurring_templates.type`)
 
@@ -383,7 +383,7 @@ CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
+  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -397,7 +397,7 @@ CREATE TABLE categories (
 | `id` | TEXT PK | App-stable id (`food`, `rent`, `cat-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display name. |
-| `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer` / `refund`. |
+| `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer`. |
 | `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
 | `color` | TEXT | Hex `#rrggbb`. The Categories edit page offers a curated swatch picker; new picks come from `lib/colors.categoryHex(hue)`. Used directly as CSS. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the ledger. |
@@ -509,6 +509,8 @@ CREATE TABLE transfer_groups (
 ### 6.10 `transactions` — the core money-movement rows ⭐
 
 The heart of the schema. Every confirmed insert moves the account balance via a trigger.
+
+> 🚧 **Refund design — not yet in `schema.ts`.** The `refunded_transaction_id` self-FK and `kind='refund'` enum value below were committed as a **design proposal** (PR #57). The live schema still has `kind IN ('income','expense','transfer','adjustment')` and no `refunded_transaction_id` column. Implementation is queued in `MASTER_PLAN.md` §3 (curated #9). Both blocks remain here as the agreed shape for the next migration.
 
 ```sql
 CREATE TABLE transactions (
@@ -1241,6 +1243,8 @@ VALUES
 
 These are the non-obvious decisions made during schema design, with explanations of why we chose this approach. If you're wondering "why does it work this way?", the answer is here.
 
+> Some entries describe **design** that's ahead of the live `schema.ts`. Where that's the case, the entry is marked 🚧.
+
 | # | Decision | Rationale |
 |---|----------|------------|
 | 1 | All primary keys are UUID TEXT | Our sync model has multiple devices creating records independently. Auto-increment integers would collide. UUIDs are safe for distributed generation. |
@@ -1255,7 +1259,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 10 | `category_id` ON DELETE SET NULL | Deleting a category shouldn't delete the transactions — that's your financial history. The category field becomes NULL and the transaction shows as "uncategorized". |
 | 11 | `account_id` ON DELETE RESTRICT | An account with transaction history cannot be deleted. This prevents accidental data loss. To "close" an account, set `is_active = 0`. |
 | 12 | `balance_after` stored on transactions | Every transaction records what the balance was after it posted. This enables the balance curve chart without querying the snapshot table in reverse. The trigger keeps `accounts.current_balance` in sync automatically. |
-| 13 | Refunds are their own `kind`, linked back via `refunded_transaction_id` | Treating a refund as `income` is wrong for reports: a $50 grocery refund should make "Groceries" show $150 net, not $200 spent + $50 income. The `kind='refund'` marker lets the spend selectors include refunds in their original category as a negative offset, while income totals stay clean. The optional `refunded_transaction_id` FK captures the user's intent (this $50 came back from the $200 May-12 Whole Foods purchase), survives the original expense being deleted (SET NULL), and supports partial / multiple refunds against one expense via many-to-one. We don't enforce sign or sum-≤-|original| in SQL — both get awkward fast across currencies, and the UI handles those validations. |
+| 13 🚧 | Refunds are their own `kind`, linked back via `refunded_transaction_id` | Treating a refund as `income` is wrong for reports: a $50 grocery refund should make "Groceries" show $150 net, not $200 spent + $50 income. The `kind='refund'` marker lets the spend selectors include refunds in their original category as a negative offset, while income totals stay clean. The optional `refunded_transaction_id` FK captures the user's intent (this $50 came back from the $200 May-12 Whole Foods purchase), survives the original expense being deleted (SET NULL), and supports partial / multiple refunds against one expense via many-to-one. We don't enforce sign or sum-≤-|original| in SQL — both get awkward fast across currencies, and the UI handles those validations. |
 
 ---
 

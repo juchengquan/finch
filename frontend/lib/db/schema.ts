@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
+  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -277,7 +277,6 @@ CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
 CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_tags_ledger ON tags(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_counterparty_ledger ON counterparties(ledger_id);
-CREATE INDEX IF NOT EXISTS idx_counterparty_verified ON counterparties(is_verified);
 CREATE INDEX IF NOT EXISTS idx_txn_ledger_date ON transactions(ledger_id, date);
 CREATE INDEX IF NOT EXISTS idx_txn_account_date ON transactions(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
@@ -324,7 +323,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T08:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T09:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
