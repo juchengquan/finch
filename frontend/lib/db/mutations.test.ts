@@ -159,6 +159,50 @@ test('deleting the refunded expense orphans the refund (SET NULL); the refund su
   expect(ref.refunded_transaction_id).toBeNull(); // link nulled, not cascaded
 });
 
+test('converting an income to a refund reclassifies it: nets category spend, drops from income, balance unchanged', async () => {
+  const exec = await seeded();
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
+
+  // A $200 grocery expense to offset against.
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'Whole Foods',
+    categoryId: 'food', date: '2026-05-12', kind: 'expense',
+  });
+  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'Whole Foods'");
+  const food1 = (await categorySpend(exec, 'personal'))['food'] ?? 0;
+
+  // A $50 income (mis-recorded; really money back on the groceries).
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: 50, merchant: 'Mystery deposit',
+    categoryId: 'misc', date: '2026-05-20', kind: 'income',
+  });
+  const [inc] = await exec("SELECT id FROM transactions WHERE description = 'Mystery deposit'");
+  const balAfterIncome = await balanceOf(exec, 'chk');
+  const cfIncome = await monthlyCashFlow(exec, 'personal', '2026-05');
+
+  // Convert it: kind→refund, link to the expense, adopt its category.
+  await applyMutation(exec, 'updateTransaction', {
+    id: String(inc.id),
+    patch: { kind: 'refund', refundedTransactionId: String(exp.id), category: 'food' },
+  });
+
+  const [row] = await exec("SELECT kind, refunded_transaction_id AS r, category_id AS c FROM transactions WHERE id = ?", [String(inc.id)]);
+  expect(String(row.kind)).toBe('refund');
+  expect(String(row.r)).toBe(String(exp.id));
+  expect(String(row.c)).toBe('food');
+
+  // Now nets food spend by 50 (200 − 50 = 150).
+  expect(((await categorySpend(exec, 'personal'))['food'] ?? 0)).toBeCloseTo(food1 - 50, 2);
+  // Balance is unchanged — income and refund are both stored positive.
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(balAfterIncome, 2);
+  // It no longer counts as income; as a positive refund row it lifts the
+  // (negative) expense total by +50 instead.
+  const cfRefund = await monthlyCashFlow(exec, 'personal', '2026-05');
+  expect(cfRefund.income).toBeCloseTo(cfIncome.income - 50, 2);
+  expect(cfRefund.expense).toBeCloseTo(cfIncome.expense + 50, 2);
+});
+
 test('createCategory inserts a ledger-scoped category', async () => {
   const exec = await seeded();
   const before = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
