@@ -255,8 +255,10 @@ Each writer fetches the **ledger's `base_currency`** (via the account's
     return both legs' **native** amounts + currencies (`amount`/`fromCurrency`,
     `toAmount`/`toCurrency`); the transfers list shows the sent figure in the
     from-account currency and, when the legs differ, "→ received @ rate". (The
-    transfers **detail** page still reads `LEDGER.transferGroups` mock data — a
-    pre-existing wiring gap, not multi-currency-specific; left as a separate task.)
+    transfers **detail** page is now **DB-wired** too (`selectTransfers`), so it
+    shows the real sent/received legs, derived locked rate, names, time, and
+    notes — the former `LEDGER.transferGroups` mock read is gone. See
+    `SETTINGS_AND_TRANSFERS_PLAN.md` §4.)
     **Create:** the Add sheet now has a `transfer` type — From/To accounts and,
     when the currencies differ, a **Received** field whose amount locks the rate
     (`createTransfer({ toAmount })`). See `SETTINGS_AND_TRANSFERS_PLAN.md`.

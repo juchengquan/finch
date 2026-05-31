@@ -70,8 +70,19 @@ export default function ActivityPage() {
     setMaxAmt('');
   };
 
+  // Sort newest-first (date, then time) before grouping: the consecutive-run
+  // grouping below assumes same-date rows are adjacent, but the store's order
+  // isn't guaranteed date-contiguous (pre-hydration seed order, optimistic
+  // prepends). Without this, one date can land in several groups → duplicate
+  // `key={group.date}` React warnings.
+  const sorted = [...txns].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const at = a.time ?? '';
+    const bt = b.time ?? '';
+    return at < bt ? 1 : at > bt ? -1 : 0;
+  });
   const groups: { date: string; items: typeof txns }[] = [];
-  for (const t of txns) {
+  for (const t of sorted) {
     const last = groups[groups.length - 1];
     if (last && last.date === t.date) last.items.push(t);
     else groups.push({ date: t.date, items: [t] });
