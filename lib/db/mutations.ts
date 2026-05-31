@@ -237,8 +237,8 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const tgId = newId('tg');
   const ts = new Date().toISOString();
   await exec(
-    'INSERT INTO transfer_groups (id,ledger_id,amount_base,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, fromAmount, fromCurrency, toCurrency, rate, note, ts, ts],
+    'INSERT INTO transfer_groups (id,ledger_id,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',
+    [tgId, ledgerId, fromCurrency, toCurrency, rate, note, ts, ts],
   );
   await insertTxRow(exec, {
     ledgerId, accountId: fromId, date, time, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
