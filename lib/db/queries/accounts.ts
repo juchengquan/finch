@@ -49,6 +49,7 @@ export interface AccountRow {
   last4: string | null;
   institution: string | null;
   routing: string | null;
+  sortOrder: number;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
@@ -57,10 +58,11 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
             a.group_id AS groupId, g.name AS groupName, a.color, a.last4, a.institution, a.routing,
+            a.sort_order AS sortOrder,
             COALESCE(a.include_in_net_worth, g.include_in_net_worth, 1) AS inw
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
       ${where}
-      ORDER BY g.sort_order, a.name`,
+      ORDER BY g.sort_order, a.sort_order, a.name`,
     ledgerId ? [ledgerId] : [],
   );
   return rows.map((r) => ({
@@ -77,6 +79,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     last4: r.last4 == null ? null : String(r.last4),
     institution: r.institution == null ? null : String(r.institution),
     routing: r.routing == null ? null : String(r.routing),
+    sortOrder: Number(r.sortOrder ?? 0),
   }));
 }
 
@@ -144,19 +147,40 @@ export interface NewAccount {
   last4: string | null;
 }
 
-/** Insert a new account; current_balance starts at the opening balance. */
+/** Insert a new account; current_balance starts at the opening balance.
+ *  Sort_order is appended after the existing rows in the same group (or
+ *  ungrouped bucket) so new accounts land at the bottom of the list. */
 export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
+  const rows = await exec(
+    a.groupId == null
+      ? 'SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM accounts WHERE ledger_id = ? AND group_id IS NULL'
+      : 'SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM accounts WHERE ledger_id = ? AND group_id = ?',
+    a.groupId == null ? [a.ledgerId] : [a.ledgerId, a.groupId],
+  );
+  const sortOrder = Number(rows[0]?.n ?? 0);
   await exec(
     `INSERT INTO accounts
-       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, a.last4, null],
+       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, a.last4, sortOrder, null],
   );
 }
 
-/** Soft-delete: keep transaction history, drop the account from the active list. */
+/** Soft-delete: keep transaction history, drop the account from the active list.
+ *  Stamps archived_at so the UI can surface "archived <date>" later. */
 export async function archiveAccount(exec: Exec, id: string): Promise<void> {
-  await exec("UPDATE accounts SET is_active = 0, updated_at = datetime('now') WHERE id = ?", [id]);
+  await exec(
+    "UPDATE accounts SET is_active = 0, archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+    [id],
+  );
+}
+
+/** Reverse archive — restore an archived account to the active list and clear archived_at. */
+export async function unarchiveAccount(exec: Exec, id: string): Promise<void> {
+  await exec(
+    "UPDATE accounts SET is_active = 1, archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
+    [id],
+  );
 }
 
 /** Hard delete — only safe when the account has no transactions (FK is RESTRICT). */

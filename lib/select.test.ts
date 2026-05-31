@@ -29,6 +29,7 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   last4: null,
   institution: null,
   routing: null,
+  sortOrder: 0,
   ...over,
 });
 
