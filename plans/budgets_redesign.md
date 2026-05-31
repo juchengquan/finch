@@ -1,9 +1,23 @@
 # Budgets redesign — named budgets, groups, cycles, and Goals merge
 
-Status: **implemented & merged** (named budgets + groups, Goals → income budgets)
-on `feat/frontend` via the clean-slate-DB squash (`bdd6f47`). **Automatic period
-rollover is a follow-up** — see `plans/BUDGET_CYCLES_PLAN.md` §10 (the #48 engine
-was superseded by this redesign and needs re-applying onto named budgets).
+Status: **implemented & merged** on `feat/frontend`. This document has been
+**reconciled to the as-built code** (2026-06-01): the original forward-plan prose
+is kept below for context, annotated where the build diverged. The headline
+differences from the first draft:
+
+- **Automatic period rollover is implemented**, not a follow-up — `lib/budgets/
+  period.ts` + `rollover.ts` (both with tests), driven by `rollBudgetsIfDue()` in
+  `lib/db/server.ts`; the `last_rolled_period` / `pending_amount` columns exist.
+- **Legacy per-category budgets were dropped, not kept.** The redesign replaced
+  them entirely with named budget entities — there is no `budgetByCategory` map
+  and no `bud-<categoryId>` rows. The "keep them first as legacy" instruction was
+  superseded.
+- **No `ALTER` / `MIGRATIONS` were used.** The schema is pre-release with no
+  backward-compat machinery: changes edit the canonical `SCHEMA` in `schema.ts`,
+  bump `SCHEMA_VERSION`, and the dev DB is reset (see §2.4 / §4).
+- **Goals → income budgets** is complete: the `goals` table was **removed** (goals
+  seed as `bud-goal-*` income budgets) and `/goals` redirects to `/budgets`.
+
 Author: design notes for the budgets overhaul
 Scope: `frontend/` (server-backed SQLite app) + `plans/` doc updates
 
@@ -38,10 +52,16 @@ Requested behaviour (verbatim, expanded):
 `lib/db/schema.ts` already defines a capable table, but the app only uses a
 sliver of it:
 
+> **Naming:** the income/expense discriminator column is **`kind`** (renamed
+> from `type` so it matches `categories.kind` / `transactions.kind` — see
+> `database_design_en.md` §6 / changelog #14). The TS projection still exposes
+> it as `BudgetRow.type`, and the create/patch API + UI toggle keep the field
+> name `type`; only the SQL column is `kind`.
+
 ```sql
 CREATE TABLE budgets (
   id, ledger_id, name,
-  type           CHECK(type IN ('income','expense')),
+  kind           CHECK(kind IN ('income','expense')),
   amount, carry_forward,
   frequency      CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
   start_date, end_date, is_recurring,
@@ -62,12 +82,14 @@ projected to the client as two **maps**, not entities:
 - Store actions: `setBudget`, `deleteBudget`, `setBudgetRollover`.
 - Mutations (`lib/db/mutations.ts`): `setBudget`, `deleteBudget`, `setBudgetRollover`.
 
-What the schema is **missing** for the redesign:
-- No **budget group** concept (no `budget_groups` table, no `budgets.group_id`).
-- No **progress accumulator** for income/goal-style budgets (goals' `saved`).
+What the schema was missing at draft time — **all since added** (directly in the
+canonical `CREATE TABLE`s, not via migration):
+- ✅ **budget group** concept — `budget_groups` table + `budgets.group_id`.
+- ✅ **progress accumulator** — `budgets.saved` for income/goal budgets.
+- ✅ rollover state — `budgets.last_rolled_period` + `pending_amount` (see §3.4).
 
-> Note: `accounts` already has an unused `primary_budget_id TEXT` column — a
-> pre-existing hook for account↔budget linkage we can ignore for v1.
+> Historical note: an earlier draft mentioned an unused `accounts.primary_budget_id`
+> hook. No such column exists in the current schema — ignore.
 
 ### 2.2 Goals — a separate, manual feature
 
@@ -78,6 +100,10 @@ What the schema is **missing** for the redesign:
   contributions accumulate `saved`; `eta` is free text like "Dec 2026").
 - Goals are **not** tied to transactions, accounts, categories, or a cycle.
 
+> ✅ As-built: this standalone feature is gone — the `goals` table was **removed**
+> and each goal became a one-shot `kind='income'` budget (`bud-goal-*`). `/goals`
+> redirects to `/budgets`.
+
 ### 2.3 Frontend budgets pages
 
 - `app/(main)/budgets/page.tsx` — header totals + a flat list of category rows
@@ -85,20 +111,20 @@ What the schema is **missing** for the redesign:
 - `app/(main)/budgets/[id]/page.tsx` — keys off `MOCK.categories` by id; shows a
   ring, spent/limit, edit-budget + rollover dialogs, and matching transactions.
 
-### 2.4 Migration mechanism
+### 2.4 Migration mechanism (as-built)
 
-`lib/db/schema.ts`:
-- Fresh DBs are built from the `CREATE TABLE` statements at `BOOTSTRAP_VERSION`
-  (ISO-8601 datetime string); `SCHEMA_VERSION = BOOTSTRAP_VERSION`.
-- Existing DBs run `MIGRATIONS: Record<datetime, string[]>` — every key strictly
-  greater than the stored `schema_version`, applied in lexicographic (=chrono)
-  order, recorded in `db_metadata`.
-- **To ship a schema change:** (a) edit the `CREATE TABLE` statements so new DBs
-  are born correct, (b) add a `MIGRATIONS['<new-datetime>']` entry of `ALTER`/
-  `CREATE`/`INSERT` SQL for existing DBs, (c) bump `BOOTSTRAP_VERSION` &
-  `SCHEMA_VERSION` to that datetime. Keep migration SQL idempotent
-  (`IF NOT EXISTS`, guarded inserts). SQLite `ALTER TABLE ADD COLUMN` allows a
-  nullable `... REFERENCES ...` FK and `NOT NULL DEFAULT <const>`.
+`lib/db/schema.ts` is **pre-release with no backward-compat machinery** (per its
+own header comment). There is no `BOOTSTRAP_VERSION`, and the `MIGRATIONS` map is
+**empty**. Fresh databases are built directly from the canonical `SCHEMA` string;
+`SCHEMA_VERSION` is a single ISO-8601 datetime.
+
+**To ship a schema change:** edit the `CREATE TABLE` statements in `SCHEMA` so new
+DBs are born correct, bump `SCHEMA_VERSION`, and **reset the dev DB** — the server
+reseeds on next boot. There are no databases to preserve, so there is no `ALTER`/
+migration step; `MIGRATIONS` stays empty until the first release that must carry
+real user data forward. This redesign shipped exactly that way — `budget_groups`
+and the new `budgets` columns were added to the canonical `CREATE TABLE`s, never
+via `ALTER`.
 
 ---
 
@@ -111,7 +137,7 @@ A budget is a named tracker with:
 | Field | Meaning |
 |-------|---------|
 | `name` | User label (e.g. "Groceries", "Salary", "New car"). |
-| `type` | `expense` (spend vs limit) or `income` (progress vs target — the old Goals). |
+| `kind` *(TS `type`)* | `expense` (spend vs limit) or `income` (progress vs target — the old Goals). |
 | `group_id` | One budget group (nullable → "Ungrouped"). Mirrors accounts. |
 | `amount` | The limit (expense) or target (income/goal). |
 | `frequency` + `start_date` + `end_date` + `is_recurring` | The **cycle**. |
@@ -137,7 +163,7 @@ when **all** of:
 - (`account_ids` empty **or** `tx.account` ∈ `account_ids`), **and**
 - (`category_ids` empty **or** `tx.category` ∈ `category_ids` — honour splits like
   `categorySpend` does), **and**
-- sign matches type: `expense` → outflow (`amount < 0`); `income` → inflow
+- sign matches `kind`: `expense` → outflow (`amount < 0`); `income` → inflow
   (`amount > 0`).
 
 Progress:
@@ -146,7 +172,7 @@ Progress:
 - **Income (manual / goal):** `saved` accumulator (old Goals behaviour). The two
   income modes are reconciled in **Decision D2** below.
 
-### 3.4 Automatic period rollover — separate follow-up
+### 3.4 Automatic period rollover — ✅ implemented
 
 §3.2–3.3 cover the **current-period read** (which window is active, what counts).
 They do **not** cover **automatic carry-forward at each period boundary**
@@ -155,14 +181,19 @@ changes** (`pending_amount` activated next cycle). That engine — period
 arithmetic (`lib/budgets/period.ts`), `rollBudgetsIfDue`, backdated-edit
 invalidation, and the two extra columns (`last_rolled_period`, `pending_amount`)
 — is specced in **`plans/BUDGET_CYCLES_PLAN.md`** (see its §10 for the mapping
-onto these named-budget entities). It is **not yet re-applied** after the merge.
+onto these named-budget entities). ✅ **As-built: this is implemented** —
+`lib/budgets/period.ts` + `rollover.ts` (with tests), run via `rollBudgetsIfDue()`
+in `lib/db/server.ts`; the `last_rolled_period` + `pending_amount` columns are live.
 
 ---
 
-## 4. Schema changes (DB)
+## 4. Schema changes (DB) — shipped
 
-New migration key, e.g. `MIGRATIONS['2026-06-01T00:00:00Z']` (pick the real ship
-datetime), plus matching edits to the bootstrap `CREATE TABLE`s.
+> ✅ As-built: everything below is live in the canonical `SCHEMA` in `schema.ts`,
+> added to the `CREATE TABLE`s directly — **no `ALTER`, no `MIGRATIONS` entry**
+> (see §2.4). The live `budgets` table also carries the rollover columns
+> `last_rolled_period` + `pending_amount` (§3.4). The SQL below is kept as the
+> design reference.
 
 ### 4.1 New table: `budget_groups` (mirror of `account_groups`)
 
@@ -178,22 +209,22 @@ CREATE TABLE IF NOT EXISTS budget_groups (
 CREATE INDEX IF NOT EXISTS idx_budget_groups_ledger ON budget_groups(ledger_id);
 ```
 
-### 4.2 Alter `budgets`
+### 4.2 `budgets` columns
+
+`group_id` and `saved` were added straight into `CREATE TABLE budgets` (not via
+`ALTER`):
 
 ```sql
-ALTER TABLE budgets ADD COLUMN group_id TEXT REFERENCES budget_groups(id) ON DELETE SET NULL;
-ALTER TABLE budgets ADD COLUMN saved    REAL NOT NULL DEFAULT 0;   -- income/goal progress
+group_id TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
+saved    REAL NOT NULL DEFAULT 0,   -- income/goal progress
 ```
-
-(Add the same two columns to the bootstrap `CREATE TABLE budgets` so fresh DBs
-match.)
 
 ### 4.3 Data migration: Goals → income budgets
 
 For every `goals` row, insert a `budgets` row:
 
 ```sql
-INSERT INTO budgets (id, ledger_id, name, type, amount, saved, carry_forward,
+INSERT INTO budgets (id, ledger_id, name, kind, amount, saved, carry_forward,
                      frequency, start_date, end_date, is_recurring,
                      rollover, account_ids, category_ids, tag_ids,
                      warning_pct, created_at, updated_at)
@@ -204,21 +235,29 @@ FROM goals g
 WHERE NOT EXISTS (SELECT 1 FROM budgets b WHERE b.id = 'bud-goal-' || g.id);
 ```
 
-- `eta` (free text like "Dec 2026") can't be mapped cleanly to `end_date`; store
-  it best-effort or drop it (see **Decision D3**).
-- **Keep the `goals` table intact** (legacy, read path turned off) so the change
-  is reversible; remove in a later cleanup migration once the income-budget UI is
-  trusted. This mirrors the "keep category budgets first" instruction.
+- `eta` (free text like "Dec 2026") wasn't mapped to `end_date` — dropped (D3).
+- **As-built:** there is no `INSERT … SELECT FROM goals` migration and the `goals`
+  table was **removed**, not kept. `lib/db/seed.ts` seeds each goal directly as a
+  `bud-goal-*` income budget (the SQL above shows the row shape, not the live
+  path).
 
-### 4.4 Legacy category budgets
+### 4.4 Legacy category budgets — removed
 
-No schema change. The existing `bud-<categoryId>` rows keep working through the
-existing `budgetByCategory` projection. New named budgets get their own ids
-(`bud-<rand>`), so the two coexist without collision.
+> ✅ As-built deviation: the legacy `bud-<categoryId>` rows and the
+> `budgetByCategory` projection were **removed**, not kept alongside. Every budget
+> is now a named entity. The original plan to retain a legacy category section
+> (D1, §6.1.2) did not ship.
 
 ---
 
 ## 5. Query / projection / store changes
+
+> ✅ Shipped. The entity + group APIs, the `budgets`/`budgetGroups` projection,
+> the store state/actions, and the selectors below are all live. Action names
+> resolved per the §5.4 caution — `createBudget` / `updateBudget` / `removeBudget`
+> / `contributeBudget` (+ `updateBudgetCycle`, `stageBudgetAmount`,
+> `clearPendingAmount` for rollover) and the budget-group actions; the legacy
+> category-budget functions were removed rather than kept (see §4.4).
 
 ### 5.1 New queries — `lib/db/queries/budgets.ts`
 
@@ -293,6 +332,11 @@ clash with the legacy category `deleteBudget`; rename legacy to
 
 ## 6. Frontend changes
 
+> ✅ Shipped, with one deviation: the **legacy "Categories" section (§6.1.2) was
+> not built** — category budgets were removed wholesale (§4.4), so the list is
+> just Expense/Income tabs of named budgets grouped by budget group. Goals are
+> fully merged (§6.4) and `/goals` redirects to `/budgets`.
+
 ### 6.1 Budgets list — `app/(main)/budgets/page.tsx`
 
 Redesign into sections:
@@ -366,17 +410,23 @@ Resolved (locked):
   becomes a redirect to `/budgets` (Income tab); drop the Goals nav entry. See
   §6.4.
 
-Still open (recommendations stand; confirm during build):
+Resolved as-built (were open at draft time):
 
-- **D1 — legacy vs named split:** recommend "named = `name IS NOT NULL`" (§5.1).
-- **D3 — goal `eta`:** drop the free-text eta, or parse best-effort into
-  `end_date`? Recommend storing nothing structured in v1.
-- **D6 — match overlap:** if a transaction matches multiple budgets, it counts
-  toward each independently (no exclusivity). Confirm that's acceptable.
+- **D1 — legacy vs named split:** moot — legacy category budgets were **removed**
+  entirely (§4.4), so there's no coexistence to disambiguate. All budgets are
+  named entities.
+- **D3 — goal `eta`:** dropped (no structured `end_date` mapping).
+- **D6 — match overlap:** shipped as "counts toward each matching budget
+  independently" (no exclusivity).
 
 ---
 
 ## 8. Suggested phasing (each phase ships green: typecheck + lint + build)
+
+> ✅ Phases 1–5 shipped. Phase 6 "cleanup" effectively happened up front rather
+> than later — the legacy category-budget path and the `goals` table were removed
+> as part of the merge, not deferred. Automatic rollover (called a follow-up in
+> the original §3.4) is also implemented (`lib/budgets/`).
 
 1. **Schema + migration** — `budget_groups`, `budgets.group_id` + `saved`, goals→
    income-budget data migration; bump versions. No UI yet. Verify projection.
