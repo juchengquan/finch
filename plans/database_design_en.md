@@ -228,536 +228,652 @@ erDiagram
 
 ## 6. Schema Definitions
 
-### 6.1 `ledgers` — The Top Level
+Reference for every table in the live schema (`frontend/lib/db/schema.ts`).
+Each section gives a one-line purpose, the canonical `CREATE TABLE` block,
+and a column reference table.
 
-**What it does:** Represents a complete, isolated set of books. Everything else in the database belongs to a ledger. You might have a "Personal" ledger and a "Family Business" ledger — they share no data.
+**Tables, in declaration order:**
 
-**In plain English:** A ledger is like a separate filing cabinet. All your financial data lives inside one cabinet, and you can have multiple cabinets for different purposes.
+1. [`ledgers`](#61-ledgers--top-level-books)
+2. [`account_groups`](#62-account_groups--account-buckets-on-the-accounts-screen)
+3. [`budget_groups`](#63-budget_groups--budget-buckets-on-the-budgets-screen)
+4. [`accounts`](#64-accounts--individual-money-accounts)
+5. [`categories`](#65-categories--spendingincome-categories)
+6. [`tags`](#66-tags--user-defined-transaction-tags)
+7. [`transaction_tags`](#67-transaction_tags--manymany-link-between-transactions-and-tags)
+8. [`counterparties`](#68-counterparties--merchantpayee-catalog)
+9. [`transfer_groups`](#69-transfer_groups--metadata-for-a-paired-transfer)
+10. [`transactions`](#610-transactions--the-core-money-movement-rows-)
+11. [`transaction_splits`](#611-transaction_splits--multi-category-allocations-for-one-tx)
+12. [`budgets`](#612-budgets--named-spendingincome-targets)
+13. [`scheduled_templates`](#613-scheduled_templates--recurring-transaction-blueprints)
+14. [`scheduled_splits`](#614-scheduled_splits--multi-account-splits-for-a-template)
+15. [`subscriptions`](#615-subscriptions--display-only-list-of-recurring-bills)
+16. [`exchange_rates`](#616-exchange_rates--locked-historical-fx-rates)
+17. [`sync_log`](#617-sync_log--per-device-sync-marker)
+18. [`app_state`](#618-app_state--transitional-keyvalue-bag)
+19. [`db_metadata`](#619-db_metadata--single-row-self-description-of-the-file)
+
+---
+
+### 6.1 `ledgers` — top-level books
+
+A complete, isolated set of books. Everything else FKs into a ledger.
 
 ```sql
 CREATE TABLE ledgers (
-    id              TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    base_currency   TEXT NOT NULL DEFAULT 'SGD',
-    is_default      INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  base_currency TEXT NOT NULL DEFAULT 'SGD',
+  is_default    INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `base_currency` | All `amount_base` values in this ledger are expressed in this currency. If you change this, you must recalculate ALL `amount_base` fields. |
-| `is_default` | Only one ledger should be `1`. This is the ledger new users start in. |
-
-> **⚠️ Changing `base_currency`:**
-> This is a significant operation. You must recompute every `amount_base` in every transaction by applying the new exchange rate. The historical data will lose perfect precision (old rates may not be recoverable). Document this operation and consider requiring a confirmation dialog in the UI.
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id, e.g. `personal`, `family`. |
+| `name` | TEXT NOT NULL | Display name. |
+| `base_currency` | TEXT NOT NULL · default `SGD` | ISO 4217. All `amount_base` values in this ledger are denominated in it. |
+| `is_default` | INTEGER NOT NULL · default 0 | `1` for the ledger new users start in. At most one row should be `1`. |
+| `created_at` | TEXT NOT NULL | ISO 8601 UTC. |
+| `updated_at` | TEXT NOT NULL | ISO 8601 UTC, bumped on every patch. |
 
 ---
 
-### 6.2 `account_groups` — Grouping Accounts
+### 6.2 `account_groups` — account buckets on the Accounts screen
 
-**What it does:** Organizes accounts into logical groups like "Savings", "Credit Cards", "Investments". Used for net worth calculations and UI grouping.
-
-**In plain English:** Imagine grouping your bank accounts by their type. All your savings accounts go in one group, all your credit cards in another. The group has a setting that says "include in net worth calculation" — and individual accounts can override this.
+Visual / functional groupings (Cash & Banking, Credit Cards, Investments, Loans). Carries the default `include_in_net_worth` for the accounts in the group.
 
 ```sql
 CREATE TABLE account_groups (
-    id                   TEXT PRIMARY KEY,
-    ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    name                 TEXT NOT NULL,
-    include_in_net_worth INTEGER NOT NULL DEFAULT 1,
-    sort_order           INTEGER NOT NULL DEFAULT 0,
-    created_at           TEXT NOT NULL,
-    updated_at           TEXT NOT NULL
+  id                   TEXT PRIMARY KEY,
+  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name                 TEXT NOT NULL,
+  include_in_net_worth INTEGER NOT NULL DEFAULT 1,
+  sort_order           INTEGER NOT NULL DEFAULT 0,
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `include_in_net_worth` | `1` = accounts in this group count toward your net worth by default. `0` = excluded (e.g., credit cards are liabilities, some users exclude them). Individual accounts can override this. |
-| `sort_order` | UI display order within the group list |
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id (`cash`, `credit`, `invest`, …). |
+| `ledger_id` | TEXT NOT NULL FK → `ledgers.id` · CASCADE | Owning ledger. |
+| `name` | TEXT NOT NULL | Display label. |
+| `include_in_net_worth` | INTEGER NOT NULL · default 1 | Group-level default; accounts can override per-row. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order on the Accounts screen. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.3 `accounts` — Individual Accounts
+### 6.3 `budget_groups` — budget buckets on the Budgets screen
 
-**What it does:** Represents a single financial account (bank account, credit card, investment account, etc.). Every transaction belongs to exactly one account.
+Folders for named budgets ("Bills", "Lifestyle", etc).
 
-**In plain English:** This is the basic building block — one row per bank account or card. Your "UOB One savings account" is one row. Your "UOB LADY credit card" is another.
+```sql
+CREATE TABLE budget_groups (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `bgg-<random>` typically. |
+| `ledger_id` | TEXT NOT NULL FK → `ledgers.id` · CASCADE | Owning ledger. |
+| `name` | TEXT NOT NULL | Display label. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
+
+---
+
+### 6.4 `accounts` — individual money accounts
+
+One row per real-world account (bank, card, wallet, brokerage).
 
 ```sql
 CREATE TABLE accounts (
-    id                   TEXT PRIMARY KEY,
-    ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    group_id             TEXT REFERENCES account_groups(id) ON DELETE SET NULL,
-    name                 TEXT NOT NULL,
-    type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
-    currency             TEXT NOT NULL DEFAULT 'SGD',
-    current_balance      REAL NOT NULL DEFAULT 0,
-    credit_limit         REAL,
-    notes                TEXT,
-    primary_budget_id    TEXT REFERENCES budgets(id) ON DELETE SET NULL,
-    include_in_net_worth INTEGER,
-    is_active            INTEGER NOT NULL DEFAULT 1,
-    created_at           TEXT NOT NULL,
-    updated_at           TEXT NOT NULL
+  id                   TEXT PRIMARY KEY,
+  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  group_id             TEXT REFERENCES account_groups(id) ON DELETE SET NULL,
+  name                 TEXT NOT NULL,
+  type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
+  currency             TEXT NOT NULL DEFAULT 'SGD',
+  current_balance      REAL NOT NULL DEFAULT 0,
+  opening_balance      REAL NOT NULL DEFAULT 0,
+  color                TEXT,
+  last4                TEXT,
+  institution          TEXT,
+  routing              TEXT,
+  sort_order           INTEGER NOT NULL DEFAULT 0,
+  include_in_net_worth INTEGER,
+  is_active            INTEGER NOT NULL DEFAULT 1,
+  archived_at          TEXT,
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `group_id` | Which group this account belongs to. NULL means "ungrouped". |
-| `current_balance` | The running balance after the most recent transaction. Updated automatically by a trigger when new transactions are inserted. |
-| `credit_limit` | Only filled for `credit_card` type. The credit limit (e.g., 10,000 SGD). |
-| `include_in_net_worth` | Override the group's default. NULL = "inherit from group". `0` or `1` = explicit override. |
-| `primary_budget_id` | If set, this account is associated with one main budget. The budget will track spending on this account specifically. |
-
-> **Net Worth Logic:**
-> ```
-> IF account.include_in_net_worth IS NOT NULL
->     THEN use account.include_in_net_worth
->     ELSE use account_groups.include_in_net_worth
-> ```
-> A credit card with a negative balance (you owe money) still counts as a liability in net worth calculations.
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id (`chk`, `cc`, `acct-<random>`). |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `group_id` | TEXT FK → `account_groups.id` · SET NULL | Optional grouping. NULL = "Ungrouped". |
+| `name` | TEXT NOT NULL | Display name. |
+| `type` | TEXT NOT NULL · CHECK | `savings` / `credit_card` / `investment` / `cash` / `fx` / `virtual`. |
+| `currency` | TEXT NOT NULL · default `SGD` | ISO 4217 — currency the account holds. |
+| `current_balance` | REAL NOT NULL · default 0 | **Cached.** Kept in sync by `recomputeAccount()` after txn writes. |
+| `opening_balance` | REAL NOT NULL · default 0 | Balance before the first tracked transaction. `current = opening + Σ amount_base` (in account currency). |
+| `color` | TEXT | Card / accent colour for the UI. |
+| `last4` | TEXT | Last 4 of the account number — display only. |
+| `institution` | TEXT | Bank / brokerage name — display only. |
+| `routing` | TEXT | Routing number — display only. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order within the group. |
+| `include_in_net_worth` | INTEGER (nullable; 0 / 1 / NULL) | Per-account override of the group default. NULL = inherit. |
+| `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. `0` hides from active lists; history is kept. |
+| `archived_at` | TEXT | ISO 8601 UTC stamped when `is_active` flips to 0. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.4 `categories` — Spending/Income Categories
+### 6.5 `categories` — spending/income categories
 
-**What it does:** Organizes transactions into types. "Food", "Transport", "Salary". Supports two levels: a parent category (e.g., "Food") and subcategories (e.g., "Food > Restaurants", "Food > Groceries").
-
-**In plain English:** When you spend money, you tag it with a category. Categories are hierarchical — you can have "Food" as a parent and "Restaurants" and "Groceries" as children. The parent_name field points to the parent's ID (or NULL for top-level categories).
+One row per category. Used on transactions, transaction_splits, and budgets.
 
 ```sql
 CREATE TABLE categories (
-    id          TEXT PRIMARY KEY,
-    ledger_id   TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    parent_name TEXT,
-    type        TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
-    icon        TEXT,
-    sort_order  INTEGER NOT NULL DEFAULT 0
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
+  icon       TEXT,
+  hue        INTEGER,
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `parent_name` | NULL for top-level categories. For subcategories, this is the parent's `name` field (not ID — note this is a design quirk, the parent row's `name` is used as reference). |
-| `type` | Controls which transactions can use this category. An `income` category should not be used for an expense transaction. |
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id (`food`, `rent`, `cat-<random>`). |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `name` | TEXT NOT NULL | Display name. |
+| `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer` / `refund`. |
+| `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
+| `hue` | INTEGER | OKLCH hue 0–360; renders the accent colour. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order within the ledger. |
 
 ---
 
-### 6.5 `tags` — Custom Tags
+### 6.6 `tags` — user-defined transaction tags
 
-**What it does:** Provides an extra dimension for labeling transactions beyond categories. A transaction can have multiple tags. Unlike categories, tags do not imply type (any transaction can use any tag).
-
-**In plain English:** Think of tags like Gmail labels. "Travel", "Business Trip", "Medical". You can filter your transactions by tag. Tags are global within a ledger — renaming a tag updates every transaction that uses it.
+Free-form labels attached to transactions via `transaction_tags`.
 
 ```sql
 CREATE TABLE tags (
-    id          TEXT PRIMARY KEY,
-    ledger_id   TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    color       TEXT
+  id        TEXT PRIMARY KEY,
+  ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name      TEXT NOT NULL,
+  color     TEXT
 );
 ```
 
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id (`tag-business`, `tag-<random>`). |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `name` | TEXT NOT NULL | Display label. |
+| `color` | TEXT | OKLCH hue (as string) for the chip — optional. |
+
 ---
 
-### 6.6 `transaction_tags` — Tag-to-Transaction Association
-
-**What it does:** A many-to-many join table. One transaction can have multiple tags. One tag can be applied to many transactions.
-
-**In plain English:** This table just holds pairs of (transaction_id, tag_id). It's a classic junction table. The combination is unique — you can't tag the same transaction with the same tag twice.
+### 6.7 `transaction_tags` — many↔many link between transactions and tags
 
 ```sql
 CREATE TABLE transaction_tags (
-    transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-    tag_id         TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (transaction_id, tag_id)
+  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  tag_id         TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (transaction_id, tag_id)
 );
 ```
 
-> **Note:** We don't need `ledger_id` here because `tag_id` already carries the ledger (via the `tags` table). Ledger isolation is achieved through the transaction's own `ledger_id`.
+| Column | Type | Description |
+|---|---|---|
+| `transaction_id` | TEXT NOT NULL FK · CASCADE | Tagged transaction. |
+| `tag_id` | TEXT NOT NULL FK · CASCADE | Applied tag. |
+| (PK) | — | Composite — a tag may appear at most once per transaction. |
 
 ---
 
-### 6.7 `counterparties` — Merchant/Payee Database
+### 6.8 `counterparties` — merchant/payee catalog
 
-**What it does:** Standardizes merchant names so the same vendor doesn't appear as multiple variants in reports. When importing a CSV, the system tries to match the raw description against this table before creating a new entry.
-
-**In plain English:** "7-Eleven" might appear in your bank statement as "7-Eleven", "7-11", "seven eleven", or "SEVEN ELEVEN". We store one canonical name and all its variants as aliases. When importing, we match against aliases first, then mark as "unverified" if it's a new match so the user can confirm.
+A standalone catalog of merchant names + aliases. **Not linked back from transactions today** — transactions display their own `description`. Used by the `/merchants` admin screen.
 
 ```sql
 CREATE TABLE counterparties (
-    id                 TEXT PRIMARY KEY,
-    ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    standardized_name  TEXT NOT NULL,
-    aliases            TEXT,
-    category           TEXT,
-    logo_url           TEXT,
-    is_verified        INTEGER NOT NULL DEFAULT 0,
-    created_at        TEXT NOT NULL
+  id                TEXT PRIMARY KEY,
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  standardized_name TEXT NOT NULL,
+  aliases           TEXT,
+  category          TEXT,
+  is_verified       INTEGER NOT NULL DEFAULT 0,
+  created_at        TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `aliases` | JSON array of alternate spellings. `["7-11", "7Eleven", "seven eleven"]` |
-| `is_verified` | `0` = auto-matched, needs user confirmation. `1` = user has confirmed this is correct. |
-
-**Match priority during CSV import:**
-1. Exact match on `standardized_name`
-2. Case-insensitive match on `standardized_name`
-3. Fuzzy match against `aliases` JSON array
-4. No match → create new entry with `is_verified = 0` (goes to a "pending review" queue)
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `cp-<n>`. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `standardized_name` | TEXT NOT NULL | Canonical display name ("Starbucks"). |
+| `aliases` | TEXT | JSON array of raw merchant strings that should map to this name. |
+| `category` | TEXT | Suggested category id for txns from this merchant. |
+| `is_verified` | INTEGER NOT NULL · default 0 | User-confirmed entry (true) vs. auto-suggested (false). |
+| `created_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.8 `transfer_groups` — Transfer Metadata
+### 6.9 `transfer_groups` — metadata for a paired transfer
 
-**What it does:** Records the metadata for a money transfer (within same ledger or across ledgers). When you transfer $100 from Account A to Account B, both transaction records point to the same `transfer_group_id`.
-
-**In plain English:** This table groups the two sides of a transfer together. It stores what currency you transferred, the exchange rate used, and the base currency amount. For cross-ledger transfers, this is the single source of truth that connects the two ledgers' views of the same transfer.
+Links the two transactions of a transfer (out leg + in leg) under one id so they reconcile and stop double-counting.
 
 ```sql
 CREATE TABLE transfer_groups (
-    id              TEXT PRIMARY KEY,
-    ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    created_at      TEXT NOT NULL,
-    amount_base     REAL NOT NULL,
-    from_currency   TEXT NOT NULL,
-    to_currency     TEXT NOT NULL,
-    exchange_rate   REAL,
-    notes           TEXT
+  id            TEXT PRIMARY KEY,
+  ledger_id     TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  created_at    TEXT NOT NULL,
+  amount_base   REAL NOT NULL,
+  from_currency TEXT NOT NULL,
+  to_currency   TEXT NOT NULL,
+  exchange_rate REAL,
+  notes         TEXT
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `ledger_id` | The ledger that initiated this transfer. Used for filtering in the ledger where the transfer started. |
-| `amount_base` | The amount expressed in the initiating ledger's base currency. Both sides of the transfer share this value (converted on the receiving side). |
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `tg-<random>`; the matching value on both transactions' `transfer_group_id`. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `created_at` | TEXT NOT NULL | When the transfer was recorded. |
+| `amount_base` | REAL NOT NULL | Sending-leg amount in the ledger's base currency. |
+| `from_currency` | TEXT NOT NULL | Source account's currency. |
+| `to_currency` | TEXT NOT NULL | Destination account's currency. |
+| `exchange_rate` | REAL | Locked from→to rate at the moment of transfer. NULL when same currency. |
+| `notes` | TEXT | User memo. |
 
 ---
 
-### 6.9 `transactions` — The Core Table ⭐
+### 6.10 `transactions` — the core money-movement rows ⭐
 
-**What it does:** Every single financial event is stored here. Deposits, purchases, transfers, refunds — everything. This is the biggest, most important table in the system.
-
-**In plain English:** This is where all the money data lives. Each row is one transaction — one debit or credit to one account. The `amount` field is the raw amount in the original currency. The `amount_base` field is the same amount converted to the ledger's base currency, locked at the time of import.
+The heart of the schema. Every confirmed insert moves the account balance via a trigger.
 
 ```sql
 CREATE TABLE transactions (
-    id                      TEXT PRIMARY KEY,
-    ledger_id               TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    account_id              TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    date                    TEXT NOT NULL,
-    time                    TEXT,
-    amount                  REAL NOT NULL,
-    amount_base             REAL NOT NULL,
-    exchange_rate           REAL NOT NULL,
-    exchange_rate_date      TEXT,
-    description             TEXT,
-    category_id             TEXT REFERENCES categories(id) ON DELETE SET NULL,
-    counterparty_id         TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
-    transfer_group_id      TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
-    status                  TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed','cancelled')),
-    confirmed_at            TEXT,
-    source_template_id      TEXT REFERENCES recurring_templates(id) ON DELETE SET NULL,
-    source_split_id         TEXT REFERENCES recurring_splits(id) ON DELETE SET NULL,
-    balance_after           REAL NOT NULL,
-    currency                TEXT NOT NULL DEFAULT 'SGD',
-    notes                   TEXT,
-    created_at              TEXT NOT NULL,
-    UNIQUE(account_id, date, time, amount, description)
+  id                 TEXT PRIMARY KEY,
+  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  account_id         TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  date               TEXT NOT NULL,
+  time               TEXT,
+  amount             REAL NOT NULL,
+  amount_base        REAL NOT NULL,
+  exchange_rate      REAL NOT NULL,
+  description        TEXT,
+  category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
+  kind               TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment')),
+  status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
+  confirmed_at       TEXT,
+  source_template_id TEXT,
+  currency           TEXT NOT NULL DEFAULT 'SGD',
+  notes              TEXT,
+  created_at         TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `amount` | Positive = money in (income / transfer received). Negative = money out (expense / transfer sent). |
-| `amount_base` | `amount` converted to the ledger's base currency, **locked at import time**. This never changes, even if exchange rates change later. Use this for all cross-currency aggregations. |
-| `exchange_rate` | The rate used to convert `amount` to `amount_base`. E.g., if you spend JPY 10,000 and the rate was 0.0092, `amount_base` = 10,000 × 0.0092 = 92 SGD. |
-| `exchange_rate_date` | Which date's exchange rate was used |
-| `transfer_group_id` | NULL = normal transaction. Non-NULL = this is one side of a transfer. Two transactions with the same `transfer_group_id` = a linked transfer pair. |
-| `status` | `pending` (not yet confirmed), `confirmed` (normal), `cancelled` (voided). Only `confirmed` transactions count in reports. |
-| `confirmed_at` | When the user confirmed a `pending` transaction |
-| `source_template_id` | If this transaction came from a recurring template, this points to the template |
-| `source_split_id` | If this transaction is from a split (分摊) rule, this points to the split |
-| `balance_after` | The account balance AFTER this transaction. Updated by trigger. Used for the balance curve chart. |
-| `UNIQUE` constraint | Prevents accidental duplicate imports of the same transaction |
-
-> **⚠️ `ON DELETE RESTRICT` on `account_id`:**
-> You cannot delete an account that has transactions. This is a safety measure — deleting an account would destroy your financial history. If you really need to close an account, mark it `is_active = 0` instead.
-
-> **Multi-currency Example:**
-> You buy something for JPY 10,000 on May 13, 2026.
-> - `currency` = `JPY`
-> - `amount` = `-10000`
-> - `exchange_rate` = `0.0092` (1 JPY = 0.0092 SGD on that date)
-> - `amount_base` = `-92` (SGD equivalent, locked)
->
-> Next month JPY strengthens. Your ledger base is still SGD.
-> The `amount_base` stays at `-92` — it does NOT change. Your historical reports remain accurate.
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `t-<random>`. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `account_id` | TEXT NOT NULL FK → `accounts.id` · RESTRICT | The account this hits. Accounts with txns can't be hard-deleted. |
+| `date` | TEXT NOT NULL | `YYYY-MM-DD`. Also acts as the rate's effective date. |
+| `time` | TEXT | Optional `HH:MM` for ordering same-day rows. |
+| `amount` | REAL NOT NULL | Signed amount in `currency` (the account's currency, normally). |
+| `amount_base` | REAL NOT NULL | Same delta expressed in the ledger's `base_currency`. Locked at insert. |
+| `exchange_rate` | REAL NOT NULL | Rate used to derive `amount_base`. Locked so future rate edits don't reshape history. |
+| `description` | TEXT | Free-text merchant / memo line. |
+| `category_id` | TEXT FK → `categories.id` · SET NULL | Parent category. Overridden per-row by `transaction_splits` when splits exist. |
+| `transfer_group_id` | TEXT FK → `transfer_groups.id` · SET NULL | Set on both legs of a transfer. |
+| `kind` | TEXT NOT NULL · default `expense` · CHECK | `income` / `expense` / `transfer` / `adjustment`. |
+| `status` | TEXT NOT NULL · default `confirmed` · CHECK | `pending` (excluded from reports + balances) / `confirmed`. |
+| `confirmed_at` | TEXT | ISO 8601 UTC stamped on pending → confirmed transition. |
+| `source_template_id` | TEXT | Link back to `scheduled_templates.id` for auto-posted occurrences (no FK — soft link). |
+| `currency` | TEXT NOT NULL · default `SGD` | Native currency the row was entered in. |
+| `notes` | TEXT | User memo. |
+| `created_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.10 `account_balance_snapshots` — Daily Balance History
+### 6.11 `transaction_splits` — multi-category allocations for one tx
 
-**What it does:** Stores one snapshot of each account's balance per day. Used to draw the balance trend chart in the UI.
-
-**In plain English:** Every time a transaction is inserted, a trigger automatically records the new balance for that day. If a snapshot for that day already exists, it's ignored (`INSERT OR IGNORE`). The result is a clean daily time series — one row per account per day.
+When present, splits override the parent's `category_id` in spend aggregations. The sum of split amounts must equal the parent's amount.
 
 ```sql
-CREATE TABLE account_balance_snapshots (
-    id          TEXT PRIMARY KEY,
-    account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    date        TEXT NOT NULL,
-    balance     REAL NOT NULL,
-    UNIQUE(account_id, date)
+CREATE TABLE transaction_splits (
+  id             TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  category_id    TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  amount         REAL NOT NULL,
+  amount_base    REAL NOT NULL,
+  description    TEXT,
+  sort_order     INTEGER NOT NULL DEFAULT 0
 );
 ```
 
-> **Performance note:** This table grows by ~365 rows per account per year. For 10 accounts over 5 years, that's ~18,000 rows — perfectly fine for SQLite. Queries for balance charts should use this table, NOT compute from transactions directly (that would be slow on large datasets).
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `<txn>-s-<n>` etc. |
+| `transaction_id` | TEXT NOT NULL FK → `transactions.id` · CASCADE | Parent tx. |
+| `category_id` | TEXT FK → `categories.id` · SET NULL | Override category for this allocation. |
+| `amount` | REAL NOT NULL | Signed, native (parent's `currency`). |
+| `amount_base` | REAL NOT NULL | Signed, ledger base. |
+| `description` | TEXT | Per-split memo. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order in the editor. |
 
 ---
 
-### 6.11 `budgets` — Budget Tracking
+### 6.12 `budgets` — named spending/income targets
 
-**What it does:** Sets spending or income targets per period. Supports rollover (unused budget from last month carries forward), filters (budget applies only to certain accounts/categories/tags), and warning alerts.
-
-**In plain English:** "I want to spend at most SGD 500 on food this month." That's a budget. You can also say "track only my UOB card for food, not my cash". If you have leftover budget at the end of the month and `rollover = 1`, the leftover carries forward to next month.
+Each row is an independent budget (e.g. "Groceries", "Holiday fund"). Filters by category / account / tag arrays.
 
 ```sql
 CREATE TABLE budgets (
-    id              TEXT PRIMARY KEY,
-    ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    name            TEXT,
-    type            TEXT NOT NULL CHECK(type IN ('income', 'expense')),
-    amount          REAL NOT NULL,
-    carry_forward   REAL NOT NULL DEFAULT 0,
-    frequency       TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-    start_date      TEXT NOT NULL,
-    end_date        TEXT,
-    is_recurring    INTEGER NOT NULL DEFAULT 1,
-    rollover        INTEGER NOT NULL DEFAULT 0,
-    rollover_limit  REAL,
-    account_ids     TEXT,
-    category_ids    TEXT,
-    tag_ids         TEXT,
-    warning_pct     REAL NOT NULL DEFAULT 80,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
-    UNIQUE(ledger_id, name, frequency, start_date)
+  id                 TEXT PRIMARY KEY,
+  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  group_id           TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
+  name               TEXT,
+  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
+  amount             REAL NOT NULL,
+  saved              REAL NOT NULL DEFAULT 0,
+  carry_forward      REAL NOT NULL DEFAULT 0,
+  frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
+  start_date         TEXT NOT NULL,
+  end_date           TEXT,
+  is_recurring       INTEGER NOT NULL DEFAULT 1,
+  rollover           INTEGER NOT NULL DEFAULT 0,
+  rollover_limit     REAL,
+  last_rolled_period TEXT,
+  pending_amount     REAL,
+  account_ids        TEXT,
+  category_ids       TEXT,
+  tag_ids            TEXT,
+  warning_pct        REAL NOT NULL DEFAULT 80,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `amount` | The budget amount for one period, in the ledger's base currency |
-| `carry_forward` | Amount brought forward from the previous period. Updated automatically at period end. |
-| `rollover` | `1` = unused budget carries to next period. `0` = budget resets each period. |
-| `rollover_limit` | Maximum amount that can be carried forward. Prevents runaway rollover from very large unused budgets. NULL = no limit. |
-| `account_ids` / `category_ids` / `tag_ids` | JSON arrays. If NULL or empty, the budget applies to ALL matching transactions. If set, only transactions matching at least one of the listed items count. All three are AND-combined (must match all non-empty filters). |
-| `warning_pct` | Alert threshold. Default 80% — send warning when 80% of budget is spent. |
-| `is_recurring` | `1` = automatically repeat this budget at period end. `0` = one-shot budget. |
-
-**Filter Logic (important):**
-```sql
--- A transaction matches a budget IF:
---   (account_ids is null/empty OR account_id is in the list)  AND
---   (category_ids is null/empty OR category_id is in the list) AND
---   (tag_ids is null/empty OR transaction has one of the listed tags)
-```
-
-**Rollover Logic (at period end):**
-```
-closing_balance = amount + carry_forward - actual_spent
-if rollover = 1 AND closing_balance > 0 AND closing_balance <= rollover_limit:
-    carry_forward = closing_balance
-else:
-    carry_forward = 0
-```
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `bgt-<random>`. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `group_id` | TEXT FK → `budget_groups.id` · SET NULL | Optional grouping. |
+| `name` | TEXT | Display label. |
+| `type` | TEXT NOT NULL · CHECK | `expense` (limit) or `income` (target). |
+| `amount` | REAL NOT NULL | Current-period limit/target in the ledger base. |
+| `saved` | REAL NOT NULL · default 0 | Manual accumulator for one-shot income goals. |
+| `carry_forward` | REAL NOT NULL · default 0 | Unused budget rolled in from the prior period (expense + rollover only). |
+| `frequency` | TEXT NOT NULL · CHECK | Cycle length: `daily`/`weekly`/`biweekly`/`monthly`/`quarterly`/`yearly`. |
+| `start_date` | TEXT NOT NULL | `YYYY-MM-DD`. Anchors the cycle. |
+| `end_date` | TEXT | Optional close-out date. |
+| `is_recurring` | INTEGER NOT NULL · default 1 | `1` repeats every cycle; `0` is one-shot (single window). |
+| `rollover` | INTEGER NOT NULL · default 0 | Roll under-spend forward as `carry_forward` at period boundary. |
+| `rollover_limit` | REAL | Optional cap on the rolled-forward balance. NULL = uncapped. |
+| `last_rolled_period` | TEXT | Catch-up marker for `rollBudgetsIfDue()`. NULL = never rolled. |
+| `pending_amount` | REAL | Staged amount change activated at the next period boundary. NULL = none. |
+| `account_ids` | TEXT | JSON array of account ids (empty = match every account). |
+| `category_ids` | TEXT | JSON array of category ids (empty = match every category). |
+| `tag_ids` | TEXT | JSON array of tag ids (empty = no tag filter). |
+| `warning_pct` | REAL NOT NULL · default 80 | Spend threshold that flips the "over" indicator. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.12 `recurring_templates` — Recurring Transaction Templates
+### 6.13 `scheduled_templates` — recurring transaction blueprints
 
-**What it does:** Defines automated transactions that repeat on a schedule (daily, weekly, monthly, etc.). Can auto-post (create a `confirmed` transaction immediately) or create a `pending` transaction for user review first.
-
-**In plain English:** "Pay rent of SGD 2,000 on the 1st of every month from my DBS account." That's a recurring template. When it's time to execute, the system either creates the transaction automatically or asks you to confirm first.
+Plans for transactions that recur (salary, rent, subscriptions). Auto-posting fills `transactions` with `source_template_id` set back to the template.
 
 ```sql
-CREATE TABLE recurring_templates (
-    id                      TEXT PRIMARY KEY,
-    ledger_id               TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    name                    TEXT,
-    type                    TEXT NOT NULL CHECK(type IN ('income','expense','transfer')),
-    amount                  REAL,
-    amount_varies           INTEGER NOT NULL DEFAULT 0,
-    splits_enabled          INTEGER NOT NULL DEFAULT 0,
-    account_id              TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-    from_account_id         TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-    category_id             TEXT REFERENCES categories(id) ON DELETE RESTRICT,
-    frequency               TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
-    day_of_month            INTEGER,
-    day_of_week             INTEGER,
-    nth_weekday             INTEGER,
-    start_date              TEXT NOT NULL,
-    end_date                TEXT,
-    auto_post               INTEGER NOT NULL DEFAULT 1,
-    reminder_days_before    INTEGER NOT NULL DEFAULT 3,
-    is_active               INTEGER NOT NULL DEFAULT 1,
-    is_archived             INTEGER NOT NULL DEFAULT 0,
-    max_executions          INTEGER,
-    last_executed_at        TEXT,
-    notes                   TEXT,
-    created_at              TEXT NOT NULL,
-    updated_at              TEXT NOT NULL
+CREATE TABLE scheduled_templates (
+  id                TEXT PRIMARY KEY,
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name              TEXT,
+  type              TEXT NOT NULL CHECK(type IN ('income','expense','transfer')),
+  amount            REAL,
+  amount_varies     INTEGER NOT NULL DEFAULT 0,
+  splits_enabled    INTEGER NOT NULL DEFAULT 0,
+  account_id        TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  account_name      TEXT,
+  from_account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  from_account_name TEXT,
+  category_id       TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  frequency         TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
+  day_of_month      INTEGER,
+  day_of_week       INTEGER,
+  start_date        TEXT NOT NULL,
+  end_date          TEXT,
+  next_run          TEXT,
+  last_run          TEXT,
+  auto_post         INTEGER NOT NULL DEFAULT 1,
+  is_active         INTEGER NOT NULL DEFAULT 1,
+  max_executions    INTEGER,
+  color             TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `amount` | The amount. NULL means "figure it out from the previous actual amount" (useful for variable expenses like electricity bills). |
-| `amount_varies` | `1` = amount is not fixed, always use last actual amount. `0` = use the `amount` field. |
-| `splits_enabled` | `1` = split this income across multiple accounts (see `recurring_splits`). Used for salary splitting. |
-| `account_id` | For income: the account receiving money. For expense: the account paying. For transfer: the destination account. |
-| `from_account_id` | For transfers only: the source account. Leave NULL for income/expense. |
-| `auto_post` | `1` = auto-create a `confirmed` transaction when due. `0` = create a `pending` transaction and notify the user to confirm. |
-| `reminder_days_before` | How many days before the due date to send a reminder (e.g., "rent is due in 3 days") |
-| `is_archived` | `1` = this template is done/closed. It no longer appears in the active templates list. |
-| `max_executions` | NULL = run forever. A number = stop after this many executions. When reached, the cron job sets `is_archived = 1`. |
-| `last_executed_at` | Timestamp of the last time this template ran. Used to compute the next execution date. |
-
-**Required fields by type:**
-| Type | Required fields |
-|------|----------------|
-| `income` | `account_id` (destination), `category_id` |
-| `expense` | `account_id` (source), `category_id` |
-| `transfer` | `from_account_id` (source), `account_id` (destination) |
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `rt-<random>` typically. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `name` | TEXT | Display label ("Spotify Premium"). |
+| `type` | TEXT NOT NULL · CHECK | `income` / `expense` / `transfer`. |
+| `amount` | REAL | Default amount per occurrence. NULL when `amount_varies = 1`. |
+| `amount_varies` | INTEGER NOT NULL · default 0 | `1` = user enters amount per occurrence. |
+| `splits_enabled` | INTEGER NOT NULL · default 0 | `1` = use `scheduled_splits` for fan-out (income templates only). |
+| `account_id` | TEXT FK → `accounts.id` · RESTRICT | Resolved account id. Match by name when null. |
+| `account_name` | TEXT | Plain-text account name from the seed (kept for re-resolution). |
+| `from_account_id` | TEXT FK → `accounts.id` · RESTRICT | For transfers: the source account. |
+| `from_account_name` | TEXT | Plain-text source account name. |
+| `category_id` | TEXT FK → `categories.id` · RESTRICT | Default category for the posted tx. |
+| `frequency` | TEXT NOT NULL · CHECK | `once` / `daily` / `weekly` / `biweekly` / `monthly` / `quarterly` / `yearly`. |
+| `day_of_month` | INTEGER | 1–31 for monthly+ frequencies. Day 31 clamps to month-end. |
+| `day_of_week` | INTEGER | 0–6 (Sun–Sat) for weekly/biweekly. |
+| `start_date` | TEXT NOT NULL | `YYYY-MM-DD`. First eligible occurrence. |
+| `end_date` | TEXT | Optional stop date. |
+| `next_run` | TEXT | Cached next occurrence (display hint). |
+| `last_run` | TEXT | Cached last posted occurrence. |
+| `auto_post` | INTEGER NOT NULL · default 1 | `1` = post automatically; `0` = surface as a pending suggestion. |
+| `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. |
+| `max_executions` | INTEGER | Optional cap on lifetime occurrences. |
+| `color` | TEXT | Display tint for the calendar / list. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.13 `recurring_splits` — Income Splitting Rules
+### 6.14 `scheduled_splits` — multi-account splits for a template
 
-**What it does:** When enabled, splits one recurring income (like a salary) across multiple target accounts by percentage or fixed amount. E.g., "60% to savings, 40% to investment".
-
-**In plain English:** You get paid SGD 5,000. You want SGD 3,000 to go to your savings account and SGD 2,000 to your investment account. You configure one template with `splits_enabled = 1` and two split rules. When the template executes, two transaction records are created instead of one.
+For income templates: paycheck → split N ways across accounts. Each row contributes a percentage or absolute amount.
 
 ```sql
-CREATE TABLE recurring_splits (
-    id              TEXT PRIMARY KEY,
-    template_id     TEXT NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
-    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    amount_pct      REAL,
-    amount_abs      REAL,
-    category_id     TEXT REFERENCES categories(id) ON DELETE RESTRICT,
-    description     TEXT,
-    sort_order      INTEGER NOT NULL DEFAULT 0,
-    CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
+CREATE TABLE scheduled_splits (
+  id           TEXT PRIMARY KEY,
+  template_id  TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
+  account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  account_name TEXT,
+  amount_pct   REAL,
+  amount_abs   REAL,
+  category_id  TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  description  TEXT,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `amount_pct` | Percentage (0–100). `50` means 50%. Cannot mix with `amount_abs` in the same row. |
-| `amount_abs` | Fixed amount in the ledger's base currency. `2000` means SGD 2,000. Cannot mix with `amount_pct` in the same row. |
-
-> **Constraint:** Each row must have either `amount_pct` OR `amount_abs`, not both. The CHECK constraint enforces this.
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `<template>-s<n>`. |
+| `template_id` | TEXT NOT NULL FK → `scheduled_templates.id` · CASCADE | Parent template. |
+| `account_id` | TEXT FK → `accounts.id` · RESTRICT | Destination account (when resolved). |
+| `account_name` | TEXT | Plain-text fallback for name matching at post time. |
+| `amount_pct` | REAL | Percentage of the parent template's amount (0–100). |
+| `amount_abs` | REAL | Or an absolute amount in the template's currency. |
+| `category_id` | TEXT FK → `categories.id` · RESTRICT | Override category for this leg. |
+| `description` | TEXT | Per-split memo. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display + processing order. |
+| (CHECK) | — | At least one of `amount_pct` / `amount_abs` must be set. |
 
 ---
 
-### 6.14 `net_worth_snapshots` — Wealth Over Time
+### 6.15 `subscriptions` — display-only list of recurring bills
 
-**What it does:** Stores periodic snapshots of the ledger's net worth (total assets minus total liabilities), broken down by category (investment assets, total debt).
-
-**In plain English:** On the last day of each month, the system records: "Your net worth is SGD 87,432. Of that, SGD 50,000 is investments, SGD 10,000 is debt." This is how your wealth trends over months and years.
+Surfaces on the Subscriptions screen; not auto-posting (use `scheduled_templates` for that).
 
 ```sql
-CREATE TABLE net_worth_snapshots (
-    id              TEXT PRIMARY KEY,
-    ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    date            TEXT NOT NULL,
-    total_base      REAL,
-    total_investment REAL,
-    total_debt      REAL,
-    notes           TEXT,
-    UNIQUE(ledger_id, date)
+CREATE TABLE subscriptions (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  amount     REAL NOT NULL,
+  cadence    TEXT NOT NULL DEFAULT 'monthly',
+  next_date  TEXT,
+  hue        INTEGER NOT NULL DEFAULT 200,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
 );
 ```
 
-> **How net worth is computed:**
-> For each account with `include_in_net_worth = 1` (or inheriting from group):
-> - If `current_balance` is positive → counts as asset
-> - If `current_balance` is negative (credit card) → counts as liability
-> Sum all assets - sum all liabilities = `total_base`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | `sub-<random>`. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `name` | TEXT NOT NULL | Display name. |
+| `amount` | REAL NOT NULL | Per-cycle cost in the ledger base. |
+| `cadence` | TEXT NOT NULL · default `monthly` | Free-text label (`monthly`, `yearly`, …). |
+| `next_date` | TEXT | Optional `YYYY-MM-DD` for the next renewal hint. |
+| `hue` | INTEGER NOT NULL · default 200 | OKLCH hue for the chip / row accent. |
+| `sort_order` | INTEGER NOT NULL · default 0 | Display order. |
+| `created_at` | TEXT NOT NULL | Audit. |
 
 ---
 
-### 6.15 `ledger_summaries` — Pre-Aggregated Monthly Reports
+### 6.16 `exchange_rates` — locked historical FX rates
 
-**What it does:** Stores pre-computed monthly totals by category (income/expense/transfer_in/transfer_out). This table is updated automatically by triggers whenever transactions are inserted or modified.
-
-**In plain English:** Instead of scanning all transactions every time you view a monthly report, we pre-compute and store the totals here. Every time a transaction is confirmed, the trigger adds that amount to the right bucket. Reports just read from this table — it's fast.
-
-This table also **solves the cross-ledger transfer double-counting problem**: when money moves between ledgers, the initiating ledger records it as `transfer_out` and the receiving ledger records it as `transfer_in`. When computing global totals, we only count `income` + `expense` + `transfer_out` (NOT `transfer_in`, because that would count the same money twice).
-
-```sql
-CREATE TABLE ledger_summaries (
-    id                  TEXT PRIMARY KEY,
-    ledger_id           TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    year_month          TEXT NOT NULL,
-    type                TEXT NOT NULL CHECK(type IN ('income','expense','transfer_in','transfer_out')),
-    total_base          REAL NOT NULL,
-    transaction_count   INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(ledger_id, year_month, type)
-);
-```
-
-> **⚠️ Do not modify this table manually.** It is maintained entirely by triggers. If you need to correct a summary, fix the underlying transaction(s) — the trigger will recalculate automatically.
-
----
-
-### 6.16 `exchange_rates` — Historical Exchange Rates
-
-**What it does:** Stores daily exchange rates for all currencies relative to SGD. Used during CSV import to convert transaction amounts to the ledger's base currency.
-
-**In plain English:** When you import a transaction in JPY, the system looks up the JPY/SGD rate for that date here. If not found, it calls an external API. The rate is stored alongside the transaction and never changes.
+One row per (date, currency). Used by `convertToBase` when stamping `amount_base` on a transaction. SGD is the canonical hub.
 
 ```sql
 CREATE TABLE exchange_rates (
-    date        TEXT NOT NULL,
-    currency    TEXT NOT NULL,
-    rate_to_sgd REAL NOT NULL,
-    source      TEXT,
-    PRIMARY KEY (date, currency)
+  date        TEXT NOT NULL,
+  currency    TEXT NOT NULL,
+  rate_to_sgd REAL NOT NULL,
+  source      TEXT,
+  PRIMARY KEY (date, currency)
 );
 ```
 
-| Column | What it means |
-|--------|--------------|
-| `rate_to_sgd` | 1 unit of `currency` = `rate_to_sgd` SGD. E.g., `rate_to_sgd = 0.0092` for JPY means ¥1 = SGD 0.0092. |
-| `source` | Where the rate came from: `" ECB"`, `" Yahoo Finance"`, `" manual"` |
+| Column | Type | Description |
+|---|---|---|
+| `date` | TEXT NOT NULL · PK part | `YYYY-MM-DD` the rate applies to. |
+| `currency` | TEXT NOT NULL · PK part | ISO 4217 currency code. |
+| `rate_to_sgd` | REAL NOT NULL | 1 unit of `currency` = N SGD. |
+| `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). |
+| (PK) | — | `(date, currency)` composite. |
 
 ---
 
-### 6.17 `sync_log` — Multi-Device Sync Metadata
+### 6.17 `sync_log` — per-device sync marker
 
-**What it does:** Tracks the last synchronization state for each device per ledger. Used for incremental sync — when a device syncs, it only downloads transactions newer than `last_txn_id`.
-
-**In plain English:** Your phone and laptop both use the same ledger. Each device has a device ID. When your phone syncs, we record what the latest transaction was at that moment. Next time your phone syncs, we only fetch transactions after that ID.
+Records the last sync state per device. Read by the System / Devices screen.
 
 ```sql
 CREATE TABLE sync_log (
-    device_id       TEXT PRIMARY KEY,
-    ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-    last_sync_at    TEXT NOT NULL,
-    last_txn_id     TEXT
+  device_id    TEXT PRIMARY KEY,
+  ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  device_name  TEXT NOT NULL,
+  last_sync_at TEXT NOT NULL,
+  last_txn_id  TEXT,
+  is_current   INTEGER NOT NULL DEFAULT 0
 );
 ```
 
+| Column | Type | Description |
+|---|---|---|
+| `device_id` | TEXT PK | Stable id for the device. |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Ledger this sync row applies to. |
+| `device_name` | TEXT NOT NULL | Display label ("iPhone 15 Pro"). |
+| `last_sync_at` | TEXT NOT NULL | ISO 8601 UTC of the last sync. |
+| `last_txn_id` | TEXT | Most recent `transactions.id` known to this device. |
+| `is_current` | INTEGER NOT NULL · default 0 | `1` for the device currently using the app. |
+
+---
+
+### 6.18 `app_state` — transitional key/value bag
+
+Generic JSON-value storage for slices that haven't been moved to dedicated tables yet (pending state, scheduled-occurrence cache, etc.). Each later phase moves a key out of here into its own table.
+
+```sql
+CREATE TABLE app_state (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `key` | TEXT PK | Slice name (`scheduled.occurrences`, etc.). |
+| `value` | TEXT | JSON-encoded payload. |
+
+---
+
+### 6.19 `db_metadata` — single-row self-description of the file
+
+Describes the file itself: what wrote it, what schema version it carries, when it was last written, and (after an export) provenance + a SHA-256 checksum for tamper detection on import.
+
+```sql
+CREATE TABLE db_metadata (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),
+  app_name        TEXT NOT NULL,
+  schema_version  TEXT NOT NULL,
+  app_version     TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  exported_at     TEXT,
+  exported_from   TEXT,
+  row_counts      TEXT,
+  checksum        TEXT
+);
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER PK · CHECK (id = 1) | Singleton — only one row allowed. |
+| `app_name` | TEXT NOT NULL | Magic value `finch`; rejected on import if it doesn't match. |
+| `schema_version` | TEXT NOT NULL | ISO 8601 datetime stamp (`2026-06-01T02:00:00Z`). Source of truth for migration ordering. |
+| `app_version` | TEXT NOT NULL | App `package.json` version that wrote the row. |
+| `created_at` | TEXT NOT NULL | When the file was first initialised. |
+| `updated_at` | TEXT NOT NULL | Bumped on every `persist()`. |
+| `exported_at` | TEXT | ISO 8601 UTC stamped by `GET /api/export` (on a clone, not the live row). |
+| `exported_from` | TEXT | Hostname that produced the export. Suppressed when `FINCH_EXPORT_INCLUDE_HOST=0`. |
+| `row_counts` | TEXT | JSON `{ transactions: N, accounts: N, … }` at export time. |
+| `checksum` | TEXT | SHA-256 over a deterministic dump of the canonical tables. Verified on import. |
+
+---
 ---
 
 ## 7. Indexes
