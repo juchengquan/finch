@@ -85,12 +85,24 @@ UI** (`app/(main)/transfers/page.tsx` shows the time, edits it via a
 > `time` (shown in the chip and a `time` row). Verified at desktop + mobile with
 > live transfers (same- and cross-currency).
 >
-> **Bug found + fixed during verification:** `createTransfer` 500'd on **every**
-> transfer — its `transfer_groups` INSERT had dropped the `amount_base` column
-> (a `NOT NULL`) during a `created_at/updated_at` refactor, so
-> `SQLITE_CONSTRAINT_NOTNULL` fired before any leg was written. Restored the
-> column (`mutations.ts` ~240). A production build can't catch this — it's a
-> runtime SQL constraint, only surfaced by actually creating a transfer.
+> **`transfer_groups.amount_base` — corrected narrative.** Commit `6390c93`
+> dropped `transfer_groups.amount_base` from the schema (it was redundant). The
+> `createTransfer` INSERT must therefore **not** reference that column. Two ways
+> this bit during verification:
+> - **Unit tests** (in-memory DB built from the current `schema.ts`, which has no
+>   `amount_base`) fail with `no column named amount_base` if the INSERT still
+>   lists it. → The INSERT must omit `amount_base` (`mutations.ts` ~240).
+> - **Runtime** `createTransfer` 500'd with `NOT NULL: transfer_groups.amount_base`
+>   — a **stale dev-DB** artifact: the dev `finch.sqlite3` predated `6390c93`, so
+>   its `transfer_groups` still had the old `amount_base NOT NULL` column.
+>   `CREATE TABLE IF NOT EXISTS` never alters an existing table, so the column
+>   lingered. → **Reset the dev DB** (move `.data/finch.sqlite3` aside; it
+>   regenerates from the current schema). Same stale-DB trap as the `kind` /
+>   refund resets earlier in the session.
+>
+> Net: keep the INSERT free of `amount_base`, and reset the dev DB. The build
+> can't catch either — one is a test-only schema mismatch, the other a runtime
+> constraint against a stale file.
 
 ## 5. Open questions / things to verify
 
@@ -143,7 +155,9 @@ Checked = confirmed in committed code / typecheck; unchecked = still to verify.
 - [x] Lint + build green on the batch (`bun run lint`, `bun run build`).
 - [x] `transfers/[id]` detail DB-wired (`selectTransfers`); verified desktop +
   mobile with live same- and cross-currency transfers.
-- [x] Fixed `createTransfer` `amount_base` `NOT NULL` regression (`mutations.ts`);
-  transfer creation now returns 200.
+- [x] `createTransfer` INSERT omits the dropped `transfer_groups.amount_base`
+  column (matches `schema.ts` per `6390c93`); **unit tests 205 pass / 0 fail**.
+- [x] Stale dev DB reset (it predated the `amount_base` drop) so runtime
+  `createTransfer` works against the current schema.
 - [x] Downstream plan docs updated (§6) — `MASTER_PLAN.md`, `FX_CONVERSION_PLAN.md`,
   `MULTI_CURRENCY_ACCOUNTS_PLAN.md`, `CRUD_PARITY_PLAN.md`.
