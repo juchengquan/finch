@@ -63,9 +63,10 @@ async function spentInRange(
   const where: string[] = [
     't.ledger_id = ?',
     't.date BETWEEN ? AND ?',
-    't.amount < 0',
+    // expense + refund both count (refund's positive amount_base nets the spend
+    // down via the * -1 in the SUM below); income/transfer/adjustment excluded.
+    "t.kind IN ('expense','refund')",
     't.transfer_group_id IS NULL',
-    "t.kind != 'adjustment'",
     "t.status = 'confirmed'",
   ];
   const bind: (string | number)[] = [budget.ledger_id, from, to];

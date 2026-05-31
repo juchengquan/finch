@@ -12,8 +12,12 @@ const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
 /** A transaction's kind, with a fallback for pre-hydration seed rows that
  *  predate the `kind` column (derived from the transfer link + amount sign). */
-export const kindOf = (t: Tx): 'income' | 'expense' | 'transfer' | 'adjustment' =>
+export const kindOf = (t: Tx): 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund' =>
   t.kind ?? (t.transferGroupId ? 'transfer' : t.amount > 0 ? 'income' : 'expense');
+
+/** Kinds that count toward category spend: expenses plus refunds. A refund's
+ *  amount is positive, so `-amount` nets it back against its category. */
+const isSpend = (t: Tx): boolean => kindOf(t) === 'expense' || kindOf(t) === 'refund';
 
 /** Mirrors listTransactions(): filter + sort an in-memory Tx list. */
 export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
@@ -53,7 +57,7 @@ export function categorySpend(txns: Tx[], ledgerId: string, month?: string): Rec
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
     if (month && t.date.slice(0, 7) !== month) continue;
-    if (t.pending || kindOf(t) !== 'expense') continue;
+    if (t.pending || !isSpend(t)) continue;
     if (t.splits && t.splits.length) {
       for (const s of t.splits) {
         if (!s.categoryId) continue;
@@ -104,7 +108,7 @@ export function monthlySpending(txns: Tx[], ledgerId: string, endMonth: string, 
   const by = new Map<string, number>(months.map((mo) => [mo, 0]));
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || kindOf(t) !== 'expense') continue;
+    if (t.pending || !isSpend(t)) continue;
     const mo = t.date.slice(0, 7);
     if (!by.has(mo)) continue;
     by.set(mo, (by.get(mo) ?? 0) + -t.amount);
@@ -127,7 +131,7 @@ export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: 
   }
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || kindOf(t) !== 'expense') continue;
+    if (t.pending || !isSpend(t)) continue;
     if (!by.has(t.date)) continue;
     by.set(t.date, (by.get(t.date) ?? 0) + -t.amount);
   }
@@ -220,7 +224,7 @@ export function monthForecast(
   let mtdSpent = 0;
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || kindOf(t) !== 'expense') continue;
+    if (t.pending || !isSpend(t)) continue;
     if (t.date.slice(0, 7) !== month) continue;
     if (inMonth && t.date > today) continue;
     mtdSpent += -t.amount;
@@ -308,10 +312,13 @@ export function monthlyCashflow(txns: Tx[], ledgerId: string, endMonth: string, 
   const exp = new Map<string, number>(months.map((mo) => [mo, 0]));
   for (const t of txns) {
     if (ledgerOf(t) !== ledgerId) continue;
-    if (t.pending || kindOf(t) === 'transfer' || kindOf(t) === 'adjustment') continue;
+    const k = kindOf(t);
+    if (t.pending || k === 'transfer' || k === 'adjustment') continue;
     const mo = t.date.slice(0, 7);
     if (!inc.has(mo)) continue;
-    if (t.amount > 0) inc.set(mo, (inc.get(mo) ?? 0) + t.amount);
+    // Income by kind; everything else here (expense + refund) nets into expense
+    // — a refund's positive amount reduces the month's expense, not income.
+    if (k === 'income') inc.set(mo, (inc.get(mo) ?? 0) + t.amount);
     else exp.set(mo, (exp.get(mo) ?? 0) + -t.amount);
   }
   return months.map((mo) => ({ m: MONTH_LABELS[Number(mo.slice(5)) - 1], inc: r2(inc.get(mo) ?? 0), exp: r2(exp.get(mo) ?? 0) }));
