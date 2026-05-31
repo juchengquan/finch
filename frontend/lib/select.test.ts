@@ -338,9 +338,9 @@ test('incomeCategoryFlow: ranks top expense categories and surfaces savings', ()
     tx({ amount: -50, category: 'food', date: '2026-04-15' }),
   ];
   const cats = [
-    { id: 'food', name: 'Food', hue: 12 },
-    { id: 'shop', name: 'Shopping', hue: 280 },
-    { id: 'trans', name: 'Transport', hue: 200 },
+    { id: 'food', name: 'Food' },
+    { id: 'shop', name: 'Shopping' },
+    { id: 'trans', name: 'Transport' },
   ];
   const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
   expect(flow.income).toBeCloseTo(1000, 2);
@@ -351,10 +351,10 @@ test('incomeCategoryFlow: ranks top expense categories and surfaces savings', ()
 
 test('incomeCategoryFlow: collapses overflow into an "Other" stub', () => {
   const cats = [
-    { id: 'a', name: 'A', hue: 0 },
-    { id: 'b', name: 'B', hue: 0 },
-    { id: 'c', name: 'C', hue: 0 },
-    { id: 'd', name: 'D', hue: 0 },
+    { id: 'a', name: 'A' },
+    { id: 'b', name: 'B' },
+    { id: 'c', name: 'C' },
+    { id: 'd', name: 'D' },
   ];
   const txns = [
     tx({ amount: 500, date: '2026-05-01' }),
@@ -370,7 +370,7 @@ test('incomeCategoryFlow: collapses overflow into an "Other" stub', () => {
 });
 
 test('incomeCategoryFlow: saved is floored at 0 when expenses exceed income', () => {
-  const cats = [{ id: 'a', name: 'A', hue: 0 }];
+  const cats = [{ id: 'a', name: 'A' }];
   const txns = [
     tx({ amount: 100, date: '2026-05-01' }),
     tx({ amount: -200, category: 'a', date: '2026-05-02' }),
