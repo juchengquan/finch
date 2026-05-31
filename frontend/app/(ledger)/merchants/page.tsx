@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RowActions } from '@/components/RowActions';
 import { LEDGER } from '@/lib/data';
+import { oklchToHex } from '@/lib/colors';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -18,41 +19,28 @@ const CP_LEDGER = 'personal';
 interface MerchantData {
   id: string;
   name: string;
-  category: string | null;
   verified: boolean;
-  aliases: string[];
-  hue: number;
+  color: string;
   txCount: number | null;
 }
 
-// Decorative-only fields (hue/txCount) the table doesn't store — fall back to the
-// static seed by id, deriving a stable hue for merchants created in-app.
+// Decorative-only fields (color/txCount) the table doesn't store — fall back
+// to the static seed by id, deriving a stable hue→hex for merchants created
+// in-app.
 const MOCK_BY_ID = new Map(LEDGER.counterparties.map((c) => [c.id, c]));
-const hueFor = (id: string, name: string) =>
-  MOCK_BY_ID.get(id)?.hue ?? [...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+const colorFor = (id: string, name: string): string => {
+  const hue = MOCK_BY_ID.get(id)?.hue ?? [...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+  return oklchToHex(0.65, 0.2, hue);
+};
 
 function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border: boolean; onEdit: () => void; onDelete: () => void }) {
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
-  const addAlias = useFinanceStore((s) => s.addAlias);
-  const removeAlias = useFinanceStore((s) => s.removeAlias);
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  const submitAlias = () => {
-    const a = draft.trim();
-    if (a) {
-      addAlias(c.id, a);
-      toast.success(`Alias added to ${c.name}`);
-    }
-    setDraft('');
-    setAdding(false);
-  };
 
   return (
     <div className={cn('flex items-start gap-3 py-3.5', border && 'border-border border-t')}>
       <div
         className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold text-white"
-        style={{ background: `oklch(0.65 0.2 ${c.hue})` }}
+        style={{ background: c.color }}
       >
         {c.name.slice(0, 2).toUpperCase()}
       </div>
@@ -75,47 +63,6 @@ function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border:
               confirmDescription="The merchant is removed; transactions that referenced it are left untouched."
             />
           </div>
-        </div>
-        <div className="text-muted-foreground mt-1 text-[11px]">
-          {c.category ?? 'Uncategorised'} <span className="mx-[5px]">·</span>
-          <span className="text-secondary-foreground font-mono text-[10px]">aliases:</span>
-        </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {c.aliases.map((a) => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => removeAlias(c.id, a)}
-              title="Remove alias"
-              className="bg-secondary text-secondary-foreground hover:text-destructive flex items-center gap-1 rounded px-[7px] py-0.5 font-mono text-[10px] tracking-[0.2px]"
-            >
-              {a}
-              <Icon name="x" size={9} />
-            </button>
-          ))}
-          {adding ? (
-            <span className="flex items-center gap-1">
-              <Input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submitAlias()}
-                aria-label="New alias" placeholder="ALIAS"
-                autoFocus
-                className="h-6 w-28 px-2 font-mono text-[10px]"
-              />
-              <Button size="sm" className="h-6 px-2 text-[10px]" onClick={submitAlias}>
-                Add
-              </Button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="text-muted-foreground hover:text-foreground rounded border border-dashed px-[7px] py-0.5 font-mono text-[10px]"
-            >
-              + alias
-            </button>
-          )}
         </div>
         {!c.verified && (
           <Button
@@ -147,32 +94,30 @@ export default function MerchantsPage() {
   // seed only until the store hydrates so the first paint isn't empty.
   const projected = counterparties.filter((c) => c.ledgerId === CP_LEDGER);
   const rows: MerchantData[] = projected.length
-    ? projected.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified, aliases: c.aliases, hue: hueFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
-    : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified === 1, aliases: c.aliases, hue: c.hue, txCount: c.txCount }));
+    ? projected.map((c) => ({ id: c.id, name: c.name, verified: c.verified, color: colorFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
+    : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, verified: c.verified === 1, color: oklchToHex(0.65, 0.2, c.hue), txCount: c.txCount }));
 
   const q = query.toLowerCase();
-  const list = rows.filter((c) => !q || c.name.toLowerCase().includes(q) || c.aliases.some((a) => a.toLowerCase().includes(q)));
+  const list = rows.filter((c) => !q || c.name.toLowerCase().includes(q));
   const unverified = rows.filter((c) => !c.verified).length;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newCategory, setNewCategory] = useState('');
   const submitCreate = () => {
     const name = newName.trim();
     if (!name) return void toast.error('Enter a merchant name');
-    createCounterparty({ name, category: newCategory.trim() || null, ledgerId: CP_LEDGER });
+    createCounterparty({ name, ledgerId: CP_LEDGER });
     toast.success('Merchant added', { description: name });
     setNewName('');
-    setNewCategory('');
     setCreateOpen(false);
   };
 
-  const [editing, setEditing] = useState<{ id: string; name: string; category: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const submitEdit = () => {
     if (!editing) return;
     const name = editing.name.trim();
     if (!name) return void toast.error('Enter a merchant name');
-    updateCounterparty(editing.id, { name, category: editing.category.trim() || null });
+    updateCounterparty(editing.id, { name });
     toast.success('Merchant updated', { description: name });
     setEditing(null);
   };
@@ -202,7 +147,7 @@ export default function MerchantsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search merchants" placeholder="Search merchants &amp; aliases…"
+            aria-label="Search merchants" placeholder="Search merchants…"
             className="placeholder:text-muted-foreground w-full bg-transparent outline-none"
           />
         </div>
@@ -213,7 +158,7 @@ export default function MerchantsPage() {
               key={c.id}
               c={c}
               border={i > 0}
-              onEdit={() => setEditing({ id: c.id, name: c.name, category: c.category ?? '' })}
+              onEdit={() => setEditing({ id: c.id, name: c.name })}
               onDelete={() => { deleteCounterparty(c.id); toast.success('Merchant deleted', { description: c.name }); }}
             />
           ))}
@@ -234,10 +179,6 @@ export default function MerchantsPage() {
               <Label>Name</Label>
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Starbucks" autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Category (optional)</Label>
-              <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Food" />
-            </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -252,17 +193,13 @@ export default function MerchantsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit merchant</DialogTitle>
-            <DialogDescription>Rename or recategorise this merchant.</DialogDescription>
+            <DialogDescription>Rename this merchant.</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label>Name</Label>
                 <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Category</Label>
-                <Input value={editing.category} onChange={(e) => setEditing((p) => (p ? { ...p, category: e.target.value } : p))} placeholder="e.g. Food" />
               </div>
             </div>
           )}

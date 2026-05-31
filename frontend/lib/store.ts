@@ -101,9 +101,6 @@ export interface AccountPatch {
   name?: string;
   type?: string;
   currency?: string;
-  last4?: string | null;
-  institution?: string | null;
-  routing?: string | null;
   color?: string | null;
   groupId?: string | null;
   /** Per-account net-worth flag (0/1). Defaulted from `type` at create time. */
@@ -117,7 +114,6 @@ export interface NewAccountInput {
   groupId?: string | null;
   openingBalance?: number;
   color?: string | null;
-  last4?: string | null;
   ledgerId?: string;
 }
 
@@ -195,12 +191,10 @@ interface FinanceState {
   removeScheduledSplit: (templateId: string, index: number) => void;
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
-  addAlias: (id: string, alias: string) => void;
-  removeAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
-  createCategory: (input: { name: string; type?: string; icon?: string; hue?: number; ledgerId?: string }) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; color?: string; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
-  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; hue?: number | null }) => void;
+  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; color?: string | null }) => void;
   deleteCategory: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
@@ -212,8 +206,8 @@ interface FinanceState {
   deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
-  createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
-  updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
+  createCounterparty: (input: { name: string; ledgerId?: string }) => string;
+  updateCounterparty: (id: string, patch: { name?: string }) => void;
   deleteCounterparty: (id: string) => void;
   setExchangeRate: (input: { date: string; currency: string; rate: number; source?: string | null }) => void;
   deleteExchangeRate: (date: string, currency: string) => void;
@@ -323,7 +317,6 @@ export const useFinanceStore = create<FinanceState>()(
           groupId: input.groupId ?? null,
           openingBalance: input.openingBalance ?? 0,
           color: input.color ?? null,
-          last4: input.last4 ?? null,
         });
         return id;
       },
@@ -535,24 +528,6 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('unverifyCounterparty', { id });
       },
 
-      addAlias: (id, alias) => {
-        set((s) => ({
-          counterparties: s.counterparties.map((c) =>
-            c.id === id && !c.aliases.includes(alias) ? { ...c, aliases: [...c.aliases, alias] } : c,
-          ),
-        }));
-        syncMutation('addAlias', { id, alias });
-      },
-
-      removeAlias: (id, alias) => {
-        set((s) => ({
-          counterparties: s.counterparties.map((c) =>
-            c.id === id ? { ...c, aliases: c.aliases.filter((a) => a !== alias) } : c,
-          ),
-        }));
-        syncMutation('removeAlias', { id, alias });
-      },
-
       // Transfers are created on the server (multi-row / relational); the server
       // response refreshes the store. (Scheduled "post" is called directly from
       // the scheduled page so it can surface account-match errors.)
@@ -565,9 +540,9 @@ export const useFinanceStore = create<FinanceState>()(
         const id = `cat-${Date.now().toString(36)}`;
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
-        const hue = input.hue ?? null;
-        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, hue }] }));
-        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, hue });
+        const color = input.color ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, color }] }));
+        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, color });
       },
 
       renameCategory: (id, name) => {
@@ -696,9 +671,8 @@ export const useFinanceStore = create<FinanceState>()(
       createCounterparty: (input) => {
         const id = `cp-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const category = input.category ?? null;
-        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, aliases: [], category, verified: false }] }));
-        syncMutation('createCounterparty', { id, ledgerId, name: input.name, category });
+        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, verified: false }] }));
+        syncMutation('createCounterparty', { id, ledgerId, name: input.name });
         return id;
       },
 

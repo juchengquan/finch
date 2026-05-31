@@ -346,9 +346,6 @@ CREATE TABLE accounts (
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
   color                TEXT,
-  last4                TEXT,
-  institution          TEXT,
-  routing              TEXT,
   sort_order           INTEGER NOT NULL DEFAULT 0,
   include_in_net_worth INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
@@ -363,15 +360,12 @@ CREATE TABLE accounts (
 | `id` | TEXT PK | App-stable id (`chk`, `cc`, `acct-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `group_id` | TEXT FK → `account_groups.id` · SET NULL | Optional grouping. NULL = "Ungrouped". |
-| `name` | TEXT NOT NULL | Display name. |
+| `name` | TEXT NOT NULL | Display name. Users encode any disambiguator (e.g. last-4) directly here — there is no separate column. |
 | `type` | TEXT NOT NULL · CHECK | `savings` / `credit_card` / `investment` / `cash` / `fx` / `virtual`. |
 | `currency` | TEXT NOT NULL · default `SGD` | ISO 4217 — currency the account holds. |
 | `current_balance` | REAL NOT NULL · default 0 | **Cached.** Kept in sync by `recomputeAccount()` after txn writes. |
 | `opening_balance` | REAL NOT NULL · default 0 | Balance before the first tracked transaction. `current = opening + Σ amount_base` (in account currency). |
-| `color` | TEXT | Card / accent colour for the UI. |
-| `last4` | TEXT | Last 4 of the account number — display only. |
-| `institution` | TEXT | Bank / brokerage name — display only. |
-| `routing` | TEXT | Routing number — display only. |
+| `color` | TEXT | Hex card / accent colour. Drives the avatar chip on the Accounts screen and the per-row badge in transaction lists. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the group. |
 | `include_in_net_worth` | INTEGER NOT NULL · default 1 | 0 / 1. Defaulted from `type` at create (credit_card → 0, else 1); flippable per account. |
 | `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. `0` hides from active lists; history is kept. |
@@ -391,8 +385,10 @@ CREATE TABLE categories (
   name       TEXT NOT NULL,
   type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon       TEXT,
-  hue        INTEGER,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  color      TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -403,8 +399,9 @@ CREATE TABLE categories (
 | `name` | TEXT NOT NULL | Display name. |
 | `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer` / `refund`. |
 | `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
-| `hue` | INTEGER | OKLCH hue 0–360; renders the accent colour. |
+| `color` | TEXT | Hex `#rrggbb`. The Categories edit page offers a curated swatch picker; new picks come from `lib/colors.categoryHex(hue)`. Used directly as CSS. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the ledger. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -414,10 +411,12 @@ Free-form labels attached to transactions via `transaction_tags`.
 
 ```sql
 CREATE TABLE tags (
-  id        TEXT PRIMARY KEY,
-  ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name      TEXT NOT NULL,
-  color     TEXT
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  color      TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -426,7 +425,8 @@ CREATE TABLE tags (
 | `id` | TEXT PK | App-stable id (`tag-business`, `tag-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display label. |
-| `color` | TEXT | OKLCH hue (as string) for the chip — optional. |
+| `color` | TEXT | Hex `#rrggbb` for the chip — optional. Curated swatch picker; new picks come from `lib/colors.tagHex(hue)`. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -450,29 +450,28 @@ CREATE TABLE transaction_tags (
 
 ### 6.8 `counterparties` — merchant/payee catalog
 
-A standalone catalog of merchant names + aliases. **Not linked back from transactions today** — transactions display their own `description`. Used by the `/merchants` admin screen.
+A standalone catalog of canonical merchant names. **Not linked back from transactions today** — transactions display their own `description`. Used by the `/merchants` admin screen.
 
 ```sql
 CREATE TABLE counterparties (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   standardized_name TEXT NOT NULL,
-  aliases           TEXT,
-  category          TEXT,
   is_verified       INTEGER NOT NULL DEFAULT 0,
-  created_at        TEXT NOT NULL
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
 );
 ```
+
+A pure catalog of canonical merchant names. There is **no FK** from `transactions` to this table — the link is informational only. Category is intentionally absent: the same merchant (Amazon, etc.) can have transactions in multiple categories, so category lives on the transaction. Display disambiguators (alternative spellings) belong in the canonical `standardized_name` itself.
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | `cp-<n>`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `standardized_name` | TEXT NOT NULL | Canonical display name ("Starbucks"). |
-| `aliases` | TEXT | JSON array of raw merchant strings that should map to this name. |
-| `category` | TEXT | Suggested category id for txns from this merchant. |
 | `is_verified` | INTEGER NOT NULL · default 0 | User-confirmed entry (true) vs. auto-suggested (false). |
-| `created_at` | TEXT NOT NULL | Audit. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -484,12 +483,13 @@ Links the two transactions of a transfer (out leg + in leg) under one id so they
 CREATE TABLE transfer_groups (
   id            TEXT PRIMARY KEY,
   ledger_id     TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  created_at    TEXT NOT NULL,
   amount_base   REAL NOT NULL,
   from_currency TEXT NOT NULL,
   to_currency   TEXT NOT NULL,
   exchange_rate REAL,
-  notes         TEXT
+  notes         TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
 );
 ```
 
@@ -497,12 +497,12 @@ CREATE TABLE transfer_groups (
 |---|---|---|
 | `id` | TEXT PK | `tg-<random>`; the matching value on both transactions' `transfer_group_id`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `created_at` | TEXT NOT NULL | When the transfer was recorded. |
 | `amount_base` | REAL NOT NULL | Sending-leg magnitude in the from-account's currency (re-recorded on edits). |
 | `from_currency` | TEXT NOT NULL | Source account's currency. |
 | `to_currency` | TEXT NOT NULL | Destination account's currency. |
 | `exchange_rate` | REAL | Effective `to_currency` per 1 `from_currency` — derived from the two legs' magnitudes (`toAmount / fromAmount`). When the user pins both sides on a cross-currency edit, this is rewritten to match the bank's actual conversion. |
 | `notes` | TEXT | User memo. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -529,7 +529,8 @@ CREATE TABLE transactions (
   source_template_id TEXT,
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
-  created_at         TEXT NOT NULL
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 ```
 
@@ -552,7 +553,7 @@ CREATE TABLE transactions (
 | `source_template_id` | TEXT | Link back to `scheduled_templates.id` for auto-posted occurrences (no FK — soft link). |
 | `currency` | TEXT NOT NULL · default `SGD` | Native currency the row was entered in. |
 | `notes` | TEXT | User memo. |
-| `created_at` | TEXT NOT NULL | Audit. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -801,8 +802,10 @@ Generic JSON-value storage for slices that haven't been moved to dedicated table
 
 ```sql
 CREATE TABLE app_state (
-  key   TEXT PRIMARY KEY,
-  value TEXT
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -810,6 +813,7 @@ CREATE TABLE app_state (
 |---|---|---|
 | `key` | TEXT PK | Slice name (`scheduled.occurrences`, etc.). |
 | `value` | TEXT | JSON-encoded payload. |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
 ---
 
@@ -1223,7 +1227,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 3 | `transfer_group_id` unifies all transfers | Both same-ledger and cross-ledger transfers use the same mechanism. The initiating ledger's `transfer_group` record is the authoritative source. |
 | 4 | `ledger_summaries` is pre-aggregated | Scanning thousands of transactions for every monthly report would be slow. Pre-aggregation (updated by trigger on every write) makes reports instant. |
 | 5 | Tags use a junction table, not JSON | If you rename a tag, the junction table approach updates it in one place (the `tags` row). A JSON array approach would require scanning and updating every transaction record that contains the tag. |
-| 6 | `counterparties` has a `aliases` JSON field | Bank statements spell merchant names dozens of different ways. A single `aliases` array lets us match all variants without creating duplicate merchant records. |
+| 6 | `counterparties` is a pure name catalog | Earlier versions carried `aliases` (JSON array) and `category`. Aliases were UI-search aid only — there's no FK from transactions, so they never drove deduplication. Users who want alternate-name searchability can encode it directly in the canonical name. Category was always wrong by construction: the same merchant (Amazon, etc.) can have purchases in many categories, so category lives on the transaction. |
 | 7 | Budgets have no `transfer` type | Transfers don't change net worth — money leaving one account just enters another. They don't need budget tracking. |
 | 8 | Per-account `include_in_net_worth` | Users disagree about whether credit cards should count in net worth. The flag is defaulted by `account.type` at create (credit_card → 0, else 1) and stays flippable per account. We tried a group-level default with an account-level override (three-state nullable) but it made the COALESCE join the most confusing piece of the read path; the type-based default covers the common case without the complexity. |
 | 9 | Three JSON filter arrays in budgets | Some users want a budget for "dining out" (category filter). Others want "UOB card only" (account filter). The three arrays can combine: "UOB card + dining out + business trips". All three must match. |

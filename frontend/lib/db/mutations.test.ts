@@ -321,25 +321,25 @@ test('deleteTransfer removes both legs and restores balances', async () => {
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0, 2);
 });
 
-test('updateCategory edits name/type/icon/hue', async () => {
+test('updateCategory edits name/type/icon/color', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', hue: 280 } });
-  const [c] = await exec("SELECT name, type, icon, hue FROM categories WHERE id = 'food'");
+  await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', color: '#8085dc' } });
+  const [c] = await exec("SELECT name, type, icon, color FROM categories WHERE id = 'food'");
   expect(String(c.name)).toBe('Food & Drink');
   expect(String(c.type)).toBe('income');
   expect(String(c.icon)).toBe('coins');
-  expect(Number(c.hue)).toBe(280);
+  expect(String(c.color)).toBe('#8085dc');
 });
 
-test('createCategory persists icon + hue, and listCategories returns hue', async () => {
+test('createCategory persists icon + color, and listCategories returns color', async () => {
   const exec = await seeded();
   const { listCategories } = await import('@/lib/db/queries/categories');
-  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'car', hue: 200 });
+  await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'car', color: '#00a6ae' });
   const cat = (await listCategories(exec, 'personal')).find((c) => c.name === 'Travel')!;
   expect(cat.icon).toBe('car');
-  expect(cat.hue).toBe(200);
-  // Seeded categories keep their JSON hue too.
-  expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
+  expect(cat.color).toBe('#00a6ae');
+  // Seeded categories keep their JSON color too.
+  expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.color).toBe('#d16b7a');
 });
 
 test('updateTag edits fields', async () => {
@@ -361,10 +361,9 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   expect(Number(r.auto_post)).toBe(0);
 
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
-  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co', category: 'shop' } });
-  const [cp] = await exec('SELECT standardized_name, category FROM counterparties WHERE id = ?', [cpId]);
+  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co' } });
+  const [cp] = await exec('SELECT standardized_name FROM counterparties WHERE id = ?', [cpId]);
   expect(String(cp.standardized_name)).toBe('Renamed Co');
-  expect(String(cp.category)).toBe('shop');
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
@@ -423,11 +422,10 @@ test('updateTransfer with both amounts rewrites the rate on cross-currency', asy
 
 test('createCounterparty inserts an unverified merchant', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks', category: 'Food' });
+  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks' });
   const { listCounterparties } = await import('@/lib/db/queries/counterparties');
   const cp = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-new')!;
   expect(cp.name).toBe('Starbucks');
-  expect(cp.category).toBe('Food');
   expect(cp.verified).toBe(false);
   await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
 });

@@ -10,24 +10,25 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { RowActions } from '@/components/RowActions';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
+import { tagHex, DEFAULT_TAG_HEX } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
-const HUE_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320];
-const DEFAULT_HUE = 280;
-const dot = (color: string | null) => `oklch(0.65 0.18 ${color && /^\d+$/.test(color) ? color : DEFAULT_HUE})`;
+// Curated palette of tag colours, precomputed from the legacy hue list at the
+// standard tag lightness/chroma so the picker keeps its palette feel.
+const COLOR_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320].map(tagHex);
 
-function HuePicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {HUE_CHOICES.map((h) => (
+      {COLOR_CHOICES.map((c) => (
         <button
-          key={h}
+          key={c}
           type="button"
-          aria-label={`hue ${h}`}
-          aria-pressed={value === h}
-          onClick={() => onChange(h)}
-          className={cn('size-7 rounded-full border-2 transition-transform', value === h ? 'border-foreground scale-110' : 'border-transparent')}
-          style={{ background: `oklch(0.65 0.18 ${h})` }}
+          aria-label={`color ${c}`}
+          aria-pressed={value === c}
+          onClick={() => onChange(c)}
+          className={cn('size-7 rounded-full border-2 transition-transform', value === c ? 'border-foreground scale-110' : 'border-transparent')}
+          style={{ background: c }}
         />
       ))}
     </div>
@@ -45,23 +46,23 @@ export default function TagsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
-  const [hue, setHue] = useState(DEFAULT_HUE);
+  const [color, setColor] = useState(DEFAULT_TAG_HEX);
   const submitCreate = () => {
     const n = name.trim();
     if (!n) return void toast.error('Enter a tag name');
-    createTag({ name: n, color: String(hue), ledgerId: activeId });
+    createTag({ name: n, color, ledgerId: activeId });
     toast.success('Tag created', { description: n });
     setName('');
-    setHue(DEFAULT_HUE);
+    setColor(DEFAULT_TAG_HEX);
     setCreateOpen(false);
   };
 
-  const [editing, setEditing] = useState<{ id: string; name: string; hue: number } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; name: string; color: string } | null>(null);
   const submitEdit = () => {
     if (!editing) return;
     const n = editing.name.trim();
     if (!n) return void toast.error('Enter a tag name');
-    updateTag(editing.id, { name: n, color: String(editing.hue) });
+    updateTag(editing.id, { name: n, color: editing.color });
     toast.success('Tag updated', { description: n });
     setEditing(null);
   };
@@ -89,12 +90,12 @@ export default function TagsPage() {
 
         {list.map((t) => (
           <div key={t.id} className="border-border bg-card mb-2.5 flex w-full items-center gap-3 rounded-[14px] border p-4">
-            <button type="button" onClick={() => setEditing({ id: t.id, name: t.name, hue: t.color && /^\d+$/.test(t.color) ? Number(t.color) : DEFAULT_HUE })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-              <span className="size-4 shrink-0 rounded-full" style={{ background: dot(t.color) }} />
+            <button type="button" onClick={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <span className="size-4 shrink-0 rounded-full" style={{ background: t.color ?? DEFAULT_TAG_HEX }} />
               <div className="min-w-0 flex-1 text-sm font-medium">{t.name}</div>
             </button>
             <RowActions
-              onEdit={() => setEditing({ id: t.id, name: t.name, hue: t.color && /^\d+$/.test(t.color) ? Number(t.color) : DEFAULT_HUE })}
+              onEdit={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })}
               onDelete={() => { deleteTag(t.id); toast.success('Tag deleted', { description: t.name }); }}
               confirmTitle={`Delete ${t.name}?`}
               confirmDescription="The tag is removed from every transaction it's on. This can't be undone."
@@ -116,7 +117,7 @@ export default function TagsPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Color</Label>
-              <HuePicker value={hue} onChange={setHue} />
+              <ColorPicker value={color} onChange={setColor} />
             </div>
           </div>
           <DialogFooter>
@@ -142,7 +143,7 @@ export default function TagsPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Color</Label>
-                <HuePicker value={editing.hue} onChange={(v) => setEditing((p) => (p ? { ...p, hue: v } : p))} />
+                <ColorPicker value={editing.color} onChange={(v) => setEditing((p) => (p ? { ...p, color: v } : p))} />
               </div>
             </div>
           )}

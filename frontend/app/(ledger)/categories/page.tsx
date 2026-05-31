@@ -27,12 +27,14 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
-import { MOCK } from '@/lib/data';
+import { categoryHex, DEFAULT_CATEGORY_HEX } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
 const TYPES = ['expense', 'income', 'transfer'] as const;
 const ICON_CHOICES = ['fork', 'home', 'car', 'bag', 'film', 'heart', 'sync', 'tag', 'coins', 'wallet', 'chart', 'doc'];
-const HUE_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320];
+// Curated palette of category colours, precomputed from the legacy hue list at
+// the standard category lightness/chroma so the picker keeps its palette feel.
+const COLOR_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320].map(categoryHex);
 
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -56,25 +58,25 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function HuePicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {HUE_CHOICES.map((h) => (
+      {COLOR_CHOICES.map((c) => (
         <button
-          key={h}
+          key={c}
           type="button"
-          aria-label={`hue ${h}`}
-          aria-pressed={value === h}
-          onClick={() => onChange(h)}
-          className={cn('size-7 rounded-full border-2 transition-transform', value === h ? 'border-foreground scale-110' : 'border-transparent')}
-          style={{ background: `oklch(0.65 0.13 ${h})` }}
+          aria-label={`color ${c}`}
+          aria-pressed={value === c}
+          onClick={() => onChange(c)}
+          className={cn('size-7 rounded-full border-2 transition-transform', value === c ? 'border-foreground scale-110' : 'border-transparent')}
+          style={{ background: c }}
         />
       ))}
     </div>
   );
 }
 
-type CatEdit = { id: string; name: string; type: string; icon: string; hue: number };
+type CatEdit = { id: string; name: string; type: string; icon: string; color: string };
 
 export default function CategoriesPage() {
   const { active, activeId } = useLedger();
@@ -84,17 +86,16 @@ export default function CategoriesPage() {
   const deleteCategory = useFinanceStore((s) => s.deleteCategory);
 
   const list = categories.filter((c) => c.ledgerId === activeId);
-  const hueById = new Map(MOCK.categories.map((c) => [c.id, c.hue]));
-  const hueOf = (c: (typeof list)[number]) => c.hue ?? hueById.get(c.id) ?? 220;
+  const colorOf = (c: (typeof list)[number]) => c.color ?? DEFAULT_CATEGORY_HEX;
 
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('expense');
   const [icon, setIcon] = useState('tag');
-  const [hue, setHue] = useState(220);
+  const [color, setColor] = useState(DEFAULT_CATEGORY_HEX);
   const [editing, setEditing] = useState<CatEdit | null>(null);
 
   const openEdit = (c: (typeof list)[number]) =>
-    setEditing({ id: c.id, name: c.name, type: c.type, icon: c.icon ?? 'tag', hue: hueOf(c) });
+    setEditing({ id: c.id, name: c.name, type: c.type, icon: c.icon ?? 'tag', color: colorOf(c) });
 
   const submitCreate = () => {
     const n = name.trim();
@@ -102,12 +103,12 @@ export default function CategoriesPage() {
       toast.error('Enter a category name');
       return;
     }
-    createCategory({ name: n, type, icon, hue, ledgerId: activeId });
+    createCategory({ name: n, type, icon, color, ledgerId: activeId });
     toast.success('Category created', { description: n });
     setName('');
     setType('expense');
     setIcon('tag');
-    setHue(220);
+    setColor(DEFAULT_CATEGORY_HEX);
   };
 
   const submitEdit = () => {
@@ -116,7 +117,7 @@ export default function CategoriesPage() {
       toast.error('Enter a category name');
       return;
     }
-    updateCategory(editing.id, { name: n, type: editing.type, icon: editing.icon, hue: editing.hue });
+    updateCategory(editing.id, { name: n, type: editing.type, icon: editing.icon, color: editing.color });
     toast.success('Category updated', { description: n });
     setEditing(null);
   };
@@ -159,7 +160,7 @@ export default function CategoriesPage() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Color</Label>
-            <HuePicker value={hue} onChange={setHue} />
+            <ColorPicker value={color} onChange={setColor} />
           </div>
         </div>
         <DialogFooter>
@@ -205,7 +206,7 @@ export default function CategoriesPage() {
             >
               <div
                 className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-                style={{ background: `oklch(0.65 0.13 ${hueOf(c)})` }}
+                style={{ background: colorOf(c) }}
               >
                 <Icon name={c.icon ?? 'tag'} size={16} />
               </div>
@@ -258,7 +259,7 @@ export default function CategoriesPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Color</Label>
-                <HuePicker value={editing.hue} onChange={(v) => setEditing((prev) => (prev ? { ...prev, hue: v } : prev))} />
+                <ColorPicker value={editing.color} onChange={(v) => setEditing((prev) => (prev ? { ...prev, color: v } : prev))} />
               </div>
             </div>
           )}

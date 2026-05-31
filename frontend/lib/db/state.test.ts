@@ -35,10 +35,9 @@ test('store state round-trips through the relational schema', async () => {
 
   // Seeded goals project as one-shot income budgets.
   expect(loaded.budgets.some((b) => b.type === 'income')).toBe(true);
-  // Counterparty verify/alias state now lives on the table (no app_state shim).
+  // Counterparty verify state lives on the table (no app_state shim).
   const cp04 = loaded.counterparties.find((c) => c.id === 'cp-04')!;
   expect(cp04.verified).toBe(false);
-  expect(cp04.aliases).toContain('DON DONKI');
   expect(loaded.scheduled[0].splits?.[0].pct).toBe(60);
 });
 
@@ -97,18 +96,13 @@ test('counterparty verify + alias edits write the table (no app_state shim)', as
   };
   await applySchema(exec);
   await seedDatabase(exec);
-  // cp-04 (Don Don Donki) is seeded unverified; verify it + add an alias.
+  // cp-04 (Don Don Donki) is seeded unverified; flip it.
   await applyMutation(exec, 'verifyCounterparty', { id: 'cp-04' });
-  await applyMutation(exec, 'addAlias', { id: 'cp-04', alias: 'DONKI JURONG' });
   let donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(true);
-  expect(donki.aliases).toContain('DONKI JURONG');
-  // Unverify + removeAlias reverse it.
   await applyMutation(exec, 'unverifyCounterparty', { id: 'cp-04' });
-  await applyMutation(exec, 'removeAlias', { id: 'cp-04', alias: 'DONKI JURONG' });
   donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(false);
-  expect(donki.aliases).not.toContain('DONKI JURONG');
 });
 
 test('mobile bottom-bar tab ids round-trip through app_state', async () => {

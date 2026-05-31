@@ -64,9 +64,9 @@ export default function InsightsPage() {
 
   // Category reference (name + static seed budget) for the deltas comparison; the
   // page derives monthly/cashflow series straight from the projected transactions.
-  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; hue?: number; ledger?: string }[])
+  const ledgerCategories = (MOCK.categories as { id: string; name: string; budget: number; color?: string; ledger?: string }[])
     .filter((c) => (c.ledger ?? 'personal') === activeId)
-    .map((c) => ({ id: c.id, name: c.name, budget: c.budget, hue: c.hue ?? 200 }));
+    .map((c) => ({ id: c.id, name: c.name, budget: c.budget, color: c.color ?? '#9ca3af' }));
   const month = currentMonth(transactions, activeId);
   const lastDate = transactions.reduce(
     (d, t) => ((t.ledgerId ?? 'personal') === activeId && t.date > d ? t.date : d),
@@ -288,7 +288,7 @@ export default function InsightsPage() {
                   ...flow.categories.map((c) => ({
                     name: c.name,
                     value: c.spent,
-                    color: `oklch(0.65 0.13 ${c.hue})`,
+                    color: c.color,
                   })),
                   ...(flow.saved > 0
                     ? [{ name: 'Saved', value: flow.saved, color: 'var(--primary)' }]
@@ -302,7 +302,7 @@ export default function InsightsPage() {
             <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px]">
               {flow.categories.map((c) => (
                 <span key={c.id} className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full" style={{ background: `oklch(0.65 0.13 ${c.hue})` }} />
+                  <span className="size-2 rounded-full" style={{ background: c.color }} />
                   {c.name} · {fmt(c.spent)}
                 </span>
               ))}

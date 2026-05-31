@@ -151,8 +151,8 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
        description,category_id,transfer_group_id,kind,status,confirmed_at,
-       currency,notes,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
+       currency,notes,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate,
       input.merchant, input.categoryId ?? null, null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
@@ -192,6 +192,7 @@ export async function updateTransaction(
     bind.push(patch.amount, conv.amountBase, conv.rate);
   }
   if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
@@ -207,7 +208,7 @@ export async function deleteTransactionRow(exec: Exec, id: string): Promise<stri
 
 /** Confirm a pending transaction so it counts in reports. */
 export async function confirmTransaction(exec: Exec, id: string): Promise<void> {
-  await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE id = ? AND status = 'pending'", [
+  await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'", [
     new Date().toISOString(),
     id,
   ]);

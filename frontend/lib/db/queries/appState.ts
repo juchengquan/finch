@@ -11,7 +11,9 @@ export async function getAppState(exec: Exec, key: string): Promise<string | nul
 
 export async function setAppState(exec: Exec, key: string, value: string): Promise<void> {
   await exec(
-    'INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    `INSERT INTO app_state (key, value, created_at, updated_at)
+     VALUES (?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
     [key, value],
   );
 }
