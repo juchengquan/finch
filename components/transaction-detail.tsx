@@ -333,6 +333,108 @@ function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
 }
 
 /**
+ * Reclassifies an income row as a refund. A refund must offset a real expense,
+ * so the user is required to pick the original purchase; on confirm the row's
+ * kind becomes 'refund', it links back via refundedTransactionId, and it adopts
+ * the original's category so it nets against the right spend (not income). The
+ * amount/sign is untouched — income and refund are both stored positive, so the
+ * account balance doesn't move; only the classification changes.
+ */
+function ConvertToRefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
+  const allTxns = useFinanceStore((s) => s.transactions);
+  const updateTransaction = useFinanceStore((s) => s.updateTransaction);
+  const { fmt } = useMoney();
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Candidates: confirmed, non-transfer expenses in the same ledger — the same
+  // notion of "refundable" used for the Refund button on an expense.
+  const candidates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allTxns
+      .filter((t) => (t.ledgerId ?? 'personal') === (tx.ledgerId ?? 'personal'))
+      .filter((t) => !t.pending && !t.transferGroupId && (t.kind === 'expense' || (t.kind == null && t.amount < 0)))
+      .filter((t) => (q ? t.merchant.toLowerCase().includes(q) : true))
+      .slice(0, 50);
+  }, [allTxns, tx.ledgerId, query]);
+
+  const original = selectedId ? allTxns.find((t) => t.id === selectedId) : undefined;
+  const over = original ? Math.abs(tx.amount) > Math.abs(original.amount) + 0.005 : false;
+
+  const submit = () => {
+    if (!original) {
+      toast.error('Pick the purchase this refunds');
+      return;
+    }
+    updateTransaction(tx.id, {
+      kind: 'refund',
+      refundedTransactionId: original.id,
+      category: original.category, // net against the original's category, not income
+    });
+    toast.success('Converted to refund', { description: `Linked to ${original.merchant}` });
+    onClose();
+  };
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Convert to refund</DialogTitle>
+        <DialogDescription>
+          Reclassifies this {fmt(Math.abs(tx.amount))} from income to a refund. Pick the purchase it offsets — it
+          will net against that purchase&rsquo;s category instead of counting as income.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex flex-col gap-3">
+        <Input
+          aria-label="Search purchases"
+          placeholder="Search a purchase by merchant…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="border-border max-h-[260px] divide-y divide-border overflow-y-auto rounded-lg border">
+          {candidates.length === 0 ? (
+            <div className="text-muted-foreground px-3 py-6 text-center text-[13px]">No matching purchases</div>
+          ) : (
+            candidates.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedId(c.id)}
+                className={cn(
+                  'flex w-full items-center justify-between px-3 py-2.5 text-left text-[13px]',
+                  selectedId === c.id ? 'bg-secondary' : 'hover:bg-secondary/50',
+                )}
+              >
+                <span className="flex flex-col">
+                  <span className="truncate">{c.merchant}</span>
+                  <span className="text-muted-foreground text-[11px]">
+                    {c.date} · {catById(c.category).name}
+                  </span>
+                </span>
+                <span className="font-mono">{fmt(Math.abs(c.amount))}</span>
+              </button>
+            ))
+          )}
+        </div>
+        {over && original && (
+          <p className="text-warning text-[11px]">
+            More than the original {fmt(Math.abs(original.amount))} — allowed, but unusual.
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={submit} disabled={!original}>
+          Convert to refund
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+/**
  * The transaction detail body — hero, quick actions, and detail rows.
  * Rendered both inside the right-side sheet and on the standalone /tx route.
  * Contains no page chrome (header/back/padding); the consumer supplies that.
@@ -358,6 +460,7 @@ export function TransactionDetail({
   const [newTag, setNewTag] = useState('');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
 
   // Category options come from the projected store, scoped to this tx's ledger.
   const ledgerId = tx?.ledgerId ?? 'personal';
@@ -395,6 +498,9 @@ export function TransactionDetail({
   // that is itself a refund links back to its original via refundedTransactionId.
   const isRefund = tx.kind === 'refund';
   const isRefundable = !tx.pending && !tx.transferGroupId && (tx.kind === 'expense' || (tx.kind == null && tx.amount < 0));
+  // An income can be reclassified as a refund of a prior expense; transfers and
+  // already-typed non-income rows can't.
+  const isConvertibleToRefund = !tx.transferGroupId && (tx.kind === 'income' || (tx.kind == null && tx.amount > 0));
   const refunds = allTxns.filter((t) => t.refundedTransactionId === tx.id && t.kind === 'refund');
   const refundTotalBase = refunds.reduce((s, r) => s + Math.abs(r.amount), 0);
   const refundedOriginal = tx.refundedTransactionId ? allTxns.find((t) => t.id === tx.refundedTransactionId) : undefined;
@@ -436,6 +542,16 @@ export function TransactionDetail({
           >
             <Icon name="sync" size={18} />
             <span className="text-[10px] font-medium">Refund</span>
+          </button>
+        )}
+        {isConvertibleToRefund && (
+          <button
+            type="button"
+            onClick={() => setConvertOpen(true)}
+            className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
+          >
+            <Icon name="sync" size={18} />
+            <span className="text-[10px] font-medium">To refund</span>
           </button>
         )}
         <button
@@ -599,6 +715,10 @@ export function TransactionDetail({
 
       <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
         {refundOpen && <RefundDialog tx={tx} onClose={() => setRefundOpen(false)} />}
+      </Dialog>
+
+      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
+        {convertOpen && <ConvertToRefundDialog tx={tx} onClose={() => setConvertOpen(false)} />}
       </Dialog>
 
       <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>

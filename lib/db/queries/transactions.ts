@@ -179,7 +179,7 @@ export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[
 export async function updateTransaction(
   exec: Exec,
   id: string,
-  patch: Partial<Pick<Tx, 'merchant' | 'category' | 'amount' | 'date' | 'time' | 'note'>>,
+  patch: Partial<Pick<Tx, 'merchant' | 'category' | 'amount' | 'date' | 'time' | 'note' | 'kind' | 'refundedTransactionId'>>,
 ): Promise<void> {
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
@@ -188,6 +188,11 @@ export async function updateTransaction(
   if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
   if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }
   if (patch.note !== undefined) { sets.push('notes = ?'); bind.push(patch.note ?? null); }
+  // Reclassification (e.g. converting an income into a refund): both the kind and
+  // the link to the offset expense move together. amount/sign is unchanged — an
+  // income and a refund are both stored positive.
+  if (patch.kind !== undefined) { sets.push('kind = ?'); bind.push(patch.kind); }
+  if (patch.refundedTransactionId !== undefined) { sets.push('refunded_transaction_id = ?'); bind.push(patch.refundedTransactionId ?? null); }
   if (patch.amount !== undefined) {
     // `amount` is native (the transaction's own currency). Re-derive the
     // ledger-base figure + lock the rate, using the (possibly edited) date for
