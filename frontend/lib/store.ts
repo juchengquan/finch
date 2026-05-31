@@ -28,11 +28,13 @@ export interface Tx {
   pending?: boolean;
   /** Classification. Optional only for the pre-hydration seed; the DB always sets
    *  it. 'adjustment' = manual balance reconciliation (excluded from spend/flow). */
-  kind?: 'income' | 'expense' | 'transfer' | 'adjustment';
+  kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
   ledgerId?: string;
   transferGroupId?: string;
   /** The scheduled template this row was auto-generated from (if any). */
   sourceTemplateId?: string;
+  /** For `kind='refund'` rows: the original expense this refund offsets. */
+  refundedTransactionId?: string;
   tags?: string[];
   /** Ad-hoc category splits. When present, these override `category` /
    * `amount` for category aggregations (categorySpend / budgets / etc.). */
@@ -279,6 +281,8 @@ export const useFinanceStore = create<FinanceState>()(
           time: tx.time,
           note: tx.note,
           status: tx.pending ? 'pending' : 'confirmed',
+          kind: tx.kind,
+          refundedTransactionId: tx.refundedTransactionId,
         });
         return id;
       },

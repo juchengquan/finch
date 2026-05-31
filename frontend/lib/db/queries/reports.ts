@@ -12,8 +12,8 @@ export interface CashFlow {
 export async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string): Promise<CashFlow> {
   const rows = await exec(
     `SELECT
-       SUM(CASE WHEN amount > 0 THEN amount_base ELSE 0 END) AS income,
-       SUM(CASE WHEN amount < 0 THEN amount_base ELSE 0 END) AS expense,
+       SUM(CASE WHEN kind = 'income' THEN amount_base ELSE 0 END) AS income,
+       SUM(CASE WHEN kind IN ('expense','refund') THEN amount_base ELSE 0 END) AS expense,
        SUM(amount_base) AS net
      FROM transactions
      WHERE ledger_id = ? AND date LIKE ? AND kind NOT IN ('transfer','adjustment') AND status = 'confirmed'`,

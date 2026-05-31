@@ -37,8 +37,11 @@ export interface AddInput {
   note?: string;
   status?: 'pending' | 'confirmed';
   /** Explicit classification; defaults to income/expense by amount sign.
-   *  'adjustment' is the manual balance-reconciliation kind. */
-  kind?: 'income' | 'expense' | 'transfer' | 'adjustment';
+   *  'adjustment' is the manual balance-reconciliation kind; 'refund' is a
+   *  positive row that nets against its category (see refundedTransactionId). */
+  kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
+  /** For kind='refund': the original expense this refund offsets. */
+  refundedTransactionId?: string | null;
 }
 
 export function rowToTx(r: Record<string, unknown>): Tx {
@@ -62,6 +65,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     ledgerId: String(r.ledger_id),
     transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
     sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
+    refundedTransactionId: r.refunded_transaction_id == null ? undefined : String(r.refunded_transaction_id),
   };
 }
 
@@ -150,16 +154,26 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-       description,category_id,transfer_group_id,kind,status,confirmed_at,
+       description,category_id,transfer_group_id,refunded_transaction_id,kind,status,confirmed_at,
        currency,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate,
-      input.merchant, input.categoryId ?? null, null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
+      input.merchant, input.categoryId ?? null, null, input.refundedTransactionId ?? null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
       currency, input.note || null,
     ],
   );
   return id;
+}
+
+/** Refunds linked back to an original expense (newest first). Used by the
+ *  transaction detail page to show "refunded $X" against the original. */
+export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[]> {
+  const rows = await exec(
+    "SELECT * FROM transactions WHERE refunded_transaction_id = ? AND kind = 'refund' ORDER BY date DESC, time DESC",
+    [originalId],
+  );
+  return rows.map(rowToTx);
 }
 
 export async function updateTransaction(

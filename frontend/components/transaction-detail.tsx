@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogClose,
@@ -240,6 +241,98 @@ function SplitEditorDialog({
 }
 
 /**
+ * Records a refund against an expense. A refund is a positive `kind='refund'`
+ * row linked back via `refundedTransactionId`; it nets against the original's
+ * category (not income). Amount + category + account are pre-filled from the
+ * original; the user can adjust the amount (e.g. a partial return).
+ */
+function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const nativeMag = Math.abs(tx.nativeAmount ?? tx.amount);
+  const baseMag = Math.abs(tx.amount);
+  // Reuse the original's native→base rate for the optimistic base figure; the
+  // server re-derives + locks the real rate for the refund's own date on sync.
+  const rate = nativeMag ? baseMag / nativeMag : 1;
+  const currency = tx.currency ?? '';
+  const [amount, setAmount] = useState(nativeMag.toFixed(2));
+  const value = parseFloat(amount);
+  const valid = value > 0;
+  const over = value > nativeMag + 0.005;
+
+  const submit = () => {
+    if (!valid) {
+      toast.error('Enter a refund amount');
+      return;
+    }
+    addTransaction({
+      merchant: `Refund · ${tx.merchant}`,
+      category: tx.category,
+      amount: r2(value * rate), // ledger base, positive (optimistic; server re-derives)
+      nativeAmount: value, // native, positive
+      currency: tx.currency,
+      account: tx.account,
+      date: new Date().toISOString().slice(0, 10),
+      time: new Date().toTimeString().slice(0, 5),
+      note: '',
+      pending: false,
+      ledgerId: tx.ledgerId,
+      kind: 'refund',
+      refundedTransactionId: tx.id,
+    });
+    toast.success('Refund recorded', {
+      description: currency ? fmtNative(value, currency) : value.toFixed(2),
+    });
+    onClose();
+  };
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Refund this purchase</DialogTitle>
+        <DialogDescription>
+          Records money coming back from {tx.merchant}. It nets against the original&rsquo;s category, not income.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="refund-amount">Amount{currency ? ` · ${currency}` : ''}</Label>
+          <Input
+            id="refund-amount"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          {over && (
+            <p className="text-warning text-[11px]">
+              More than the original {fmtNative(nativeMag, currency)} — allowed, but unusual.
+            </p>
+          )}
+        </div>
+        <div className="text-muted-foreground flex items-center justify-between text-[12px]">
+          <span>Category</span>
+          <span>{catById(tx.category).name}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center justify-between text-[12px]">
+          <span>To account</span>
+          <span>{acctById(tx.account).name}</span>
+        </div>
+      </div>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button onClick={submit} disabled={!valid}>
+          Record refund
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+/**
  * The transaction detail body — hero, quick actions, and detail rows.
  * Rendered both inside the right-side sheet and on the standalone /tx route.
  * Contains no page chrome (header/back/padding); the consumer supplies that.
@@ -254,7 +347,8 @@ export function TransactionDetail({
   onDeleted?: () => void;
 }) {
   const { fmt, base } = useMoney();
-  const tx = useFinanceStore((s) => s.transactions.find((t) => t.id === txId));
+  const allTxns = useFinanceStore((s) => s.transactions);
+  const tx = allTxns.find((t) => t.id === txId);
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
   const storeCats = useFinanceStore((s) => s.categories);
@@ -263,6 +357,7 @@ export function TransactionDetail({
   const setTransactionTags = useFinanceStore((s) => s.setTransactionTags);
   const [newTag, setNewTag] = useState('');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
 
   // Category options come from the projected store, scoped to this tx's ledger.
   const ledgerId = tx?.ledgerId ?? 'personal';
@@ -296,12 +391,20 @@ export function TransactionDetail({
   const splits = tx.splits ?? [];
   const categoryNameById = new Map(categoryOptions.map((c) => [c.id, c.name]));
 
+  // Refund wiring. Only confirmed, non-transfer expenses can be refunded; a row
+  // that is itself a refund links back to its original via refundedTransactionId.
+  const isRefund = tx.kind === 'refund';
+  const isRefundable = !tx.pending && !tx.transferGroupId && (tx.kind === 'expense' || (tx.kind == null && tx.amount < 0));
+  const refunds = allTxns.filter((t) => t.refundedTransactionId === tx.id && t.kind === 'refund');
+  const refundTotalBase = refunds.reduce((s, r) => s + Math.abs(r.amount), 0);
+  const refundedOriginal = tx.refundedTransactionId ? allTxns.find((t) => t.id === tx.refundedTransactionId) : undefined;
+
   return (
     <>
       <div className="px-6 pb-7 text-center">
         <CatBar color={cat.color} className="mx-auto mb-4 block h-1 w-10" />
         <div className="text-muted-foreground font-serif text-[22px] italic">
-          {tx.amount > 0 ? 'You received from' : 'You spent at'}
+          {isRefund ? 'Refund from' : tx.amount > 0 ? 'You received from' : 'You spent at'}
         </div>
         <div className="mt-1 font-serif text-[34px] leading-none -tracking-[0.8px]">{tx.merchant}</div>
         <div className="mt-[18px] font-serif text-[56px] font-normal -tracking-[2px]">
@@ -325,6 +428,16 @@ export function TransactionDetail({
             <span className="text-[10px] font-medium">{splits.length ? `Split (${splits.length})` : 'Split'}</span>
           </button>
         </SplitEditorDialog>
+        {isRefundable && (
+          <button
+            type="button"
+            onClick={() => setRefundOpen(true)}
+            className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
+          >
+            <Icon name="sync" size={18} />
+            <span className="text-[10px] font-medium">Refund</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setConfirmDeleteOpen(true)}
@@ -366,6 +479,7 @@ export function TransactionDetail({
           ...(tx.currency && tx.currency !== base && tx.nativeAmount != null
             ? [{ l: 'Original', v: fmtNative(Math.abs(tx.nativeAmount), tx.currency) }]
             : []),
+          ...(isRefund ? [{ l: 'Refund of', v: refundedOriginal?.merchant ?? 'original removed' }] : []),
           { l: 'Status', v: tx.pending ? 'Pending' : 'Posted' },
           { l: 'Note', v: tx.note || '—' },
         ].map((r) => (
@@ -391,6 +505,24 @@ export function TransactionDetail({
                 <span className="font-mono">{fmt(Math.abs(s.amountBase))}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {refunds.length > 0 && (
+        <div className="mt-4">
+          <div className="text-muted-foreground mb-2 px-1 font-mono text-[10px] tracking-wider uppercase">Refunds</div>
+          <div className="bg-card border-border divide-border divide-y rounded-[14px] border px-4">
+            {refunds.map((rfd) => (
+              <div key={rfd.id} className="flex items-center justify-between py-2.5 text-[13px]">
+                <span className="text-muted-foreground">{rfd.date}</span>
+                <span className="text-success font-mono">+{fmt(Math.abs(rfd.amount))}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between py-2.5 text-[13px]">
+              <span>{refundTotalBase >= Math.abs(tx.amount) - 0.005 ? 'Fully refunded' : 'Refunded'}</span>
+              <span className="font-mono">{fmt(refundTotalBase)} of {fmt(Math.abs(tx.amount))}</span>
+            </div>
           </div>
         </div>
       )}
@@ -464,6 +596,10 @@ export function TransactionDetail({
           </div>
         );
       })()}
+
+      <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+        {refundOpen && <RefundDialog tx={tx} onClose={() => setRefundOpen(false)} />}
+      </Dialog>
 
       <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <DialogContent>

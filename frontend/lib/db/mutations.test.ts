@@ -109,6 +109,56 @@ test('transfers are excluded from category spend and cash flow', async () => {
   expect(JSON.stringify(after)).toBe(JSON.stringify(before));
 });
 
+test('a refund nets its category spend, lifts the balance, and stays out of income', async () => {
+  const exec = await seeded();
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
+  const food0 = (await categorySpend(exec, 'personal'))['food'] ?? 0;
+  const chk0 = await balanceOf(exec, 'chk');
+
+  // A $200 grocery expense, then a $50 refund linked back to it (same category).
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'Whole Foods',
+    categoryId: 'food', date: '2026-05-12', kind: 'expense',
+  });
+  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'Whole Foods'");
+  const cf1 = await monthlyCashFlow(exec, 'personal', '2026-05');
+
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: 50, merchant: 'Whole Foods refund',
+    categoryId: 'food', date: '2026-05-20', kind: 'refund', refundedTransactionId: String(exp.id),
+  });
+
+  // Category spend nets: +200 expense − 50 refund = +150 over the baseline.
+  expect(((await categorySpend(exec, 'personal'))['food'] ?? 0) - food0).toBeCloseTo(150, 2);
+  // Balance moved by −200 then +50 → −150 net (the money really came back).
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 150, 2);
+  // The refund must NOT register as income; it lifts the (negative) expense by +50.
+  const cf2 = await monthlyCashFlow(exec, 'personal', '2026-05');
+  expect(cf2.income).toBeCloseTo(cf1.income, 2);
+  expect(cf2.expense - cf1.expense).toBeCloseTo(50, 2);
+});
+
+test('deleting the refunded expense orphans the refund (SET NULL); the refund survives', async () => {
+  const exec = await seeded();
+  const { getRefundsFor } = await import('@/lib/db/queries/transactions');
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'TV',
+    categoryId: 'food', date: '2026-05-12', kind: 'expense',
+  });
+  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'TV'");
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'chk', amount: 80, merchant: 'TV partial refund',
+    categoryId: 'food', date: '2026-05-15', kind: 'refund', refundedTransactionId: String(exp.id),
+  });
+  expect((await getRefundsFor(exec, String(exp.id))).length).toBe(1);
+
+  await applyMutation(exec, 'deleteTransaction', { id: String(exp.id) });
+  const [ref] = await exec("SELECT refunded_transaction_id FROM transactions WHERE description = 'TV partial refund'");
+  expect(ref).toBeTruthy(); // refund row still exists
+  expect(ref.refunded_transaction_id).toBeNull(); // link nulled, not cascaded
+});
+
 test('createCategory inserts a ledger-scoped category', async () => {
   const exec = await seeded();
   const before = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
