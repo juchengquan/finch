@@ -24,19 +24,20 @@ interface Tab {
   label: string;
   path?: string;
   pinned?: boolean;
+  warnDot?: boolean;
+}
+
+// A labeled group of nav links rendered under the primary tabs in the desktop
+// sidebar (e.g. the "Ledger" admin sections).
+interface NavGroup {
+  label: string;
+  tabs: Tab[];
 }
 
 interface Brand {
   glyph?: string;
   label: string;
   toggleable?: boolean;
-}
-
-interface BottomLink {
-  icon: string;
-  label: string;
-  path: string;
-  warnDot?: boolean;
 }
 
 // Detail routes (`/<section>/<id>`) that show a breadcrumb in the desktop
@@ -59,10 +60,10 @@ const EXTRA_TITLES: Record<string, string> = {
 interface PageShellProps {
   children: ReactNode;
   tabs?: Tab[];
+  navGroups?: NavGroup[];
   mobileTabs?: Tab[];
   activeTab?: string;
   brand?: Brand;
-  bottomLinks?: BottomLink[];
   user?: { name: string; label: string };
   sidebarOpen?: boolean;
   onSidebarToggle?: () => void;
@@ -74,10 +75,10 @@ interface PageShellProps {
 export function PageShell({
   children,
   tabs = [],
+  navGroups = [],
   mobileTabs,
   activeTab,
   brand,
-  bottomLinks,
   user,
   sidebarOpen = true,
   onSidebarToggle,
@@ -114,9 +115,31 @@ export function PageShell({
   // matching nav item's label, an explicit name for off-nav routes, else the
   // group default passed via `headerTitle`.
   const pageTitle =
-    [...tabs, ...(bottomLinks ?? [])].find((item) => isActivePath(item.path))?.label ??
+    [...tabs, ...navGroups.flatMap((g) => g.tabs)].find((item) => isActivePath(item.path))?.label ??
     EXTRA_TITLES[segments[0]] ??
     headerTitle;
+
+  const renderTab = (tab: Tab) => (
+    <Link
+      key={tab.id}
+      href={tab.path ?? '/'}
+      title={tab.label}
+      className={cn(
+        'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] transition-colors',
+        isActivePath(tab.path)
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+      )}
+    >
+      <span className="relative flex h-4 shrink-0 items-center">
+        <Icon name={tab.icon} size={16} />
+        {tab.warnDot && !isActivePath(tab.path) && (
+          <span className="bg-warning absolute -top-0.5 -right-0.5 size-2 rounded-full" />
+        )}
+      </span>
+      {sidebarOpen && <span className="whitespace-nowrap">{tab.label}</span>}
+    </Link>
+  );
 
   return (
     <div className="bg-background text-foreground flex h-[100dvh] overflow-hidden font-sans">
@@ -159,48 +182,20 @@ export function PageShell({
           )}
         </div>
 
-        {tabs.length > 0 && (
-          <nav className="flex flex-col gap-1">
-            {tabs.map((tab) => (
-              <Link
-                key={tab.id}
-                href={tab.path ?? '/'}
-                title={tab.label}
-                className={cn(
-                  'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] transition-colors',
-                  isActivePath(tab.path)
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                )}
-              >
-                <Icon name={tab.icon} size={16} />
-                {sidebarOpen && <span className="whitespace-nowrap">{tab.label}</span>}
-              </Link>
-            ))}
-          </nav>
-        )}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          {tabs.length > 0 && <nav className="flex flex-col gap-1">{tabs.map(renderTab)}</nav>}
 
-        <div className="flex-1" />
-
-        {bottomLinks?.map((link) => (
-          <Link
-            key={link.path}
-            href={link.path}
-            title={link.label}
-            className={cn(
-              'relative flex items-center gap-3 rounded-md px-2.5 py-2',
-              link.warnDot ? 'text-warning' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <span className="relative">
-              <Icon name={link.icon} size={16} />
-              {link.warnDot && (
-                <span className="bg-warning absolute -top-0.5 -right-0.5 size-2 rounded-full" />
+          {navGroups.map((group) => (
+            <nav key={group.label} className="flex flex-col gap-1">
+              {sidebarOpen && (
+                <div className="text-muted-foreground px-2.5 pb-1 text-[10px] font-medium tracking-[0.08em] uppercase">
+                  {group.label}
+                </div>
               )}
-            </span>
-            {sidebarOpen && <span className="whitespace-nowrap">{link.label}</span>}
-          </Link>
-        ))}
+              {group.tabs.map(renderTab)}
+            </nav>
+          ))}
+        </div>
 
         {sidebarFooter && <div className="mt-1">{sidebarFooter}</div>}
 
