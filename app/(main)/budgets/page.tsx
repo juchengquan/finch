@@ -143,6 +143,19 @@ export default function BudgetsPage() {
     setConfirmDelGroup(null);
   };
 
+  const addMenuItems = (
+    <>
+      <DropdownMenuItem onSelect={openCreate}>
+        <Icon name="target" size={14} />
+        New budget
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={openCreateGroup}>
+        <Icon name="tags" size={14} />
+        New group
+      </DropdownMenuItem>
+    </>
+  );
+
   const trailing = (
     <div className="flex items-center gap-1">
       <SearchButton />
@@ -156,16 +169,7 @@ export default function BudgetsPage() {
             <Icon name="plus" size={16} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={openCreate}>
-            <Icon name="target" size={14} />
-            New budget
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={openCreateGroup}>
-            <Icon name="tags" size={14} />
-            New group
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+        <DropdownMenuContent align="end">{addMenuItems}</DropdownMenuContent>
       </DropdownMenu>
     </div>
   );
@@ -214,7 +218,7 @@ export default function BudgetsPage() {
 
   return (
     <MobilePage header={<ScreenHeader title="Budgets" trailing={trailing} />}>
-      <div className="px-5 pt-1">
+      <div className="flex items-center justify-between px-5 pt-1">
         <div className="bg-secondary mb-5 inline-flex rounded-full p-1">
           {(['expense', 'income'] as BudgetType[]).map((t) => (
             <button
@@ -230,6 +234,17 @@ export default function BudgetsPage() {
             </button>
           ))}
         </div>
+        {/* Desktop add action: the mobile ScreenHeader (and its + button) is
+            md:hidden, so surface the same menu here for md+ viewports. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="mb-5 hidden md:inline-flex">
+              <Icon name="plus" size={14} />
+              New
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">{addMenuItems}</DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="px-5 pb-[120px]">

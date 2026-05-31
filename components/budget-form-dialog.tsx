@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore, type NewBudgetInput } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
@@ -315,30 +316,32 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
             </div>
           </div>
 
-          <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-            <span>
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <Label htmlFor="b-recurring" className="cursor-pointer font-normal">
               Recurring
               <span className="text-muted-foreground"> · {recurring ? 'repeats each cycle' : type === 'income' ? 'one-shot goal (manual contributions)' : 'one-time'}</span>
-            </span>
-            <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="size-4 cursor-pointer" />
-          </label>
+            </Label>
+            <Switch id="b-recurring" checked={recurring} onCheckedChange={setRecurring} />
+          </div>
 
           {type === 'expense' && (
-            <label className={cn('flex items-center justify-between gap-3 text-sm', frequency === 'daily' ? 'opacity-50' : 'cursor-pointer')}>
-              <span>
+            <div className={cn('flex items-center justify-between gap-3 text-sm', frequency === 'daily' && 'opacity-50')}>
+              <Label
+                htmlFor="b-rollover"
+                className={cn('font-normal', frequency === 'daily' ? 'cursor-not-allowed' : 'cursor-pointer')}
+              >
                 Roll over unused budget
                 {frequency === 'daily' && (
                   <span className="text-muted-foreground ml-2 text-[11px]">(not available for daily)</span>
                 )}
-              </span>
-              <input
-                type="checkbox"
+              </Label>
+              <Switch
+                id="b-rollover"
                 checked={rollover && frequency !== 'daily'}
                 disabled={frequency === 'daily'}
-                onChange={(e) => setRollover(e.target.checked)}
-                className="size-4 cursor-pointer disabled:cursor-not-allowed"
+                onCheckedChange={setRollover}
               />
-            </label>
+            </div>
           )}
 
           <ChipMultiSelect label="Categories" options={ledgerCats} selected={categoryIds} onToggle={(id) => toggle(categoryIds, setCategoryIds, id)} />
