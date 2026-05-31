@@ -626,12 +626,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       ]);
       return;
     }
-    case 'renameCategory': {
-      const name = str(args.name).trim();
-      if (!name) throw new Error('Category name is required');
-      await exec("UPDATE categories SET name = ?, updated_at = datetime('now') WHERE id = ?", [name, str(args.id)]);
-      return;
-    }
     case 'updateCategory': {
       const patch = (args.patch ?? {}) as CategoryPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
