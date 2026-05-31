@@ -738,16 +738,23 @@ CREATE TABLE scheduled_splits (
 
 ---
 
-### 6.15 `exchange_rates` — locked historical FX rates
+### 6.15 `exchange_rates` — FX rate lookup cache (USD-pivoted)
 
-One row per (date, currency). Used by `convertToBase` when stamping `amount_base` on a transaction. SGD is the canonical hub.
+A **lookup cache**, not a permanent record. Each row stores `USD per 1 unit of currency` on a date; USD itself is the universal hub and is never stored. Cross-rate is derived as `rate(C → B) = rate(C) / rate(B)`.
+
+Historical values for foreign-currency transactions are **not** read from this table — the rate is locked onto each transaction at insert time (`transactions.exchange_rate` + `transactions.amount_base`). The table is therefore safe to prune; it's kept on a rolling **90-day window** from the latest stored date (`pruneOldRates`, called on every `setExchangeRate`).
+
+Cache-miss lookup for `convertToBase`:
+1. nearest stored rate on-or-before the txn date
+2. nearest stored rate on-or-after the txn date (covers backdates older than the window)
+3. static `FALLBACK_USD_PER_UNIT` map (covers an empty table on a fresh DB)
 
 ```sql
 CREATE TABLE exchange_rates (
-  date        TEXT NOT NULL,
-  currency    TEXT NOT NULL,
-  rate_to_sgd REAL NOT NULL,
-  source      TEXT,
+  date     TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate     REAL NOT NULL,
+  source   TEXT,
   PRIMARY KEY (date, currency)
 );
 ```
@@ -755,8 +762,8 @@ CREATE TABLE exchange_rates (
 | Column | Type | Description |
 |---|---|---|
 | `date` | TEXT NOT NULL · PK part | `YYYY-MM-DD` the rate applies to. |
-| `currency` | TEXT NOT NULL · PK part | ISO 4217 currency code. |
-| `rate_to_sgd` | REAL NOT NULL | 1 unit of `currency` = N SGD. |
+| `currency` | TEXT NOT NULL · PK part | ISO 4217 code. Never `USD` (the hub). |
+| `rate` | REAL NOT NULL | USD per 1 unit of `currency`. |
 | `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). |
 | (PK) | — | `(date, currency)` composite. |
 

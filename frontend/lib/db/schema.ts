@@ -226,10 +226,10 @@ CREATE TABLE IF NOT EXISTS scheduled_splits (
 );
 
 CREATE TABLE IF NOT EXISTS exchange_rates (
-  date        TEXT NOT NULL,
-  currency    TEXT NOT NULL,
-  rate_to_sgd REAL NOT NULL,
-  source      TEXT,
+  date     TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate     REAL NOT NULL,
+  source   TEXT,
   PRIMARY KEY (date, currency)
 );
 
@@ -320,7 +320,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T04:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T05:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

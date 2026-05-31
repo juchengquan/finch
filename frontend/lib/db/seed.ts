@@ -138,7 +138,7 @@ export async function seedReference(exec: Exec): Promise<void> {
 
   for (const r of exchangeRatesData as RateRow[]) {
     await exec(
-      'INSERT OR IGNORE INTO exchange_rates (date,currency,rate_to_sgd,source) VALUES (?,?,?,?)',
+      'INSERT OR IGNORE INTO exchange_rates (date,currency,rate,source) VALUES (?,?,?,?)',
       [isoDate(r.date), r.currency, r.rate, r.source ?? null],
     );
   }

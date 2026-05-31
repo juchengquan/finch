@@ -43,6 +43,7 @@ import {
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
 import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
+import { pruneOldRates } from './queries/rates';
 import { getAppState, setAppState } from './queries/appState';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { invalidateRollover } from '@/lib/budgets/rollover';
@@ -756,7 +757,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
       if (!currency) throw new Error('Currency is required');
       if (!(rate > 0)) throw new Error('Rate must be greater than 0');
+      if (currency === 'USD') throw new Error('USD is the hub currency and is not stored');
       await qSetExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
+      // Cache-prune to the rolling retention window on every write.
+      await pruneOldRates(exec);
       return;
     }
     case 'deleteExchangeRate':

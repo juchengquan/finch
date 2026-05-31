@@ -163,17 +163,17 @@ test('createTransfer converts the incoming leg across currencies', async () => {
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw','personal','EUR Wallet','cash','EUR',0,1,'2026-05-26','2026-05-26')",
   );
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw', amount: 100, date: '2026-05-24' });
-  // chk is USD; 100 USD → EUR at rate_to_sgd(USD)/rate_to_sgd(EUR) = 1.3412 / 1.4592.
+  // chk is USD; 100 USD → EUR at rate(USD)/rate(EUR) = 1 / 1.088 (USD is the hub).
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw'"))[0].b);
-  expect(eur).toBeCloseTo(100 * (1.3412 / 1.4592), 2);
+  expect(eur).toBeCloseTo(100 * (1 / 1.088), 2);
   const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
-  expect(Number(tg[0].r)).toBeCloseTo(1.3412 / 1.4592, 4);
+  expect(Number(tg[0].r)).toBeCloseTo(1 / 1.088, 4);
   // listTransfers surfaces both legs' native amounts + currencies for the UI.
   const [t] = await listTransfers(exec, 'personal');
   expect(t.fromCurrency).toBe('USD');
   expect(t.toCurrency).toBe('EUR');
   expect(t.amount).toBeCloseTo(100, 2); // sent (USD, native)
-  expect(t.toAmount).toBeCloseTo(100 * (1.3412 / 1.4592), 2); // received (EUR, native)
+  expect(t.toAmount).toBeCloseTo(100 * (1 / 1.088), 2); // received (EUR, native)
 });
 
 test('addTransaction on a foreign-currency account: native balance, ledger-base amount_base', async () => {
@@ -516,8 +516,8 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
   const exec = await seeded();
   const { convertToBase } = await import('@/lib/db/queries/rates');
   await applyMutation(exec, 'setExchangeRate', { date: '2026-06-15', currency: 'JPY', rate: 0.01, source: 'manual' });
-  // JPY → SGD on that date: rate = rateToSgd(JPY)/rateToSgd(SGD) = 0.01/1 = 0.01.
-  const conv = await convertToBase(exec, 100, 'JPY', 'SGD', '2026-06-15');
+  // JPY → USD on that date: rate = rate(JPY) / rate(USD) = 0.01 / 1 = 0.01 (USD is the hub).
+  const conv = await convertToBase(exec, 100, 'JPY', 'USD', '2026-06-15');
   expect(conv.rate).toBeCloseTo(0.01, 6);
   expect(conv.amountBase).toBeCloseTo(1.0, 4);
 });

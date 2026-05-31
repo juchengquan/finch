@@ -101,7 +101,7 @@ export default function FxTransactionPage() {
           <div className="border-border bg-card mt-4 rounded-[14px] border p-4">
             <div className="mb-2 flex items-baseline justify-between">
               <div className="text-[13px] font-semibold">
-                {fx.currency} → SGD <span className="text-muted-foreground font-normal">· last {series.length} days</span>
+                {fx.currency} → USD <span className="text-muted-foreground font-normal">· last {series.length} days</span>
               </div>
               <SchemaChip label="exchange_rates" />
             </div>
