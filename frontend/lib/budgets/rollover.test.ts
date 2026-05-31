@@ -99,8 +99,8 @@ test('rollover ON: April leftover becomes May carry_forward', async () => {
   // Wipe seeded April food txns, replace with a controlled $400 spend.
   await exec("DELETE FROM transactions WHERE category_id = 'food' AND date BETWEEN '2026-04-01' AND '2026-04-30'");
   await exec(
-    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at)
-     VALUES ('t-apr-1','personal','chk','2026-04-10',-400,-400,1,'Groceries','food','confirmed','USD','2026-04-10')`,
+    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at,updated_at)
+     VALUES ('t-apr-1','personal','chk','2026-04-10',-400,-400,1,'Groceries','food','confirmed','USD','2026-04-10','2026-04-10')`,
   );
   await rollBudgetsIfDue(exec, '2026-05-15');
   const b = await readBudget(exec, 'b-on');
@@ -145,8 +145,8 @@ test('pending_amount activates at the boundary (rollover on)', async () => {
   await exec("UPDATE budgets SET pending_amount = 850 WHERE id = 'b-pending-roll'");
   await exec("DELETE FROM transactions WHERE category_id = 'food' AND date BETWEEN '2026-04-01' AND '2026-04-30'");
   await exec(
-    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at)
-     VALUES ('t-apr-2','personal','chk','2026-04-10',-200,-200,1,'Groceries','food','confirmed','USD','2026-04-10')`,
+    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at,updated_at)
+     VALUES ('t-apr-2','personal','chk','2026-04-10',-200,-200,1,'Groceries','food','confirmed','USD','2026-04-10','2026-04-10')`,
   );
   await rollBudgetsIfDue(exec, '2026-05-15');
   const b = await readBudget(exec, 'b-pending-roll');

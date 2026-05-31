@@ -75,14 +75,18 @@ CREATE TABLE IF NOT EXISTS categories (
   type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon       TEXT,
   color      TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tags (
-  id        TEXT PRIMARY KEY,
-  ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name      TEXT NOT NULL,
-  color     TEXT
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  color      TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transaction_tags (
@@ -95,21 +99,21 @@ CREATE TABLE IF NOT EXISTS counterparties (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   standardized_name TEXT NOT NULL,
-  aliases           TEXT,
-  category          TEXT,
   is_verified       INTEGER NOT NULL DEFAULT 0,
-  created_at        TEXT NOT NULL
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transfer_groups (
   id            TEXT PRIMARY KEY,
   ledger_id     TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  created_at    TEXT NOT NULL,
   amount_base   REAL NOT NULL,
   from_currency TEXT NOT NULL,
   to_currency   TEXT NOT NULL,
   exchange_rate REAL,
-  notes         TEXT
+  notes         TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
@@ -133,7 +137,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   source_template_id TEXT,
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
-  created_at         TEXT NOT NULL
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 
 -- Ad-hoc category splits for one transaction. When a row has splits, the
@@ -243,8 +248,10 @@ CREATE TABLE IF NOT EXISTS sync_log (
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
 CREATE TABLE IF NOT EXISTS app_state (
-  key   TEXT PRIMARY KEY,
-  value TEXT
+  key        TEXT PRIMARY KEY,
+  value      TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 -- Single-row table describing the database itself: what produced it, what
@@ -317,7 +324,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T07:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T08:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

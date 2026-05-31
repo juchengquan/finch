@@ -48,6 +48,7 @@ export async function updateCategory(exec: Exec, id: string, patch: CategoryPatc
     bind.push(patch[key] ?? null);
   }
   if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE categories SET ${sets.join(', ')} WHERE id = ?`, bind);
 }

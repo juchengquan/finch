@@ -5,7 +5,7 @@ import { applySchema } from '@/lib/db/schema';
 import { seedDatabase } from '@/lib/db/seed';
 import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
-import { listCounterparties, searchCounterparties, verifyCounterparty, addAlias } from '@/lib/db/queries/counterparties';
+import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
 import { monthlyCashFlow } from '@/lib/db/queries/reports';
 import type { Exec } from '@/lib/db/repo';
 
@@ -111,10 +111,8 @@ test('counterparties: list, search, verify, alias', async () => {
   const donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(false);
   await verifyCounterparty(exec, 'cp-04');
-  await addAlias(exec, 'cp-04', 'DONKI JURONG');
   const after = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
   expect(after.verified).toBe(true);
-  expect(after.aliases).toContain('DONKI JURONG');
 });
 
 test('reports: monthly cash flow', async () => {

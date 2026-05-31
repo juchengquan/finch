@@ -37,8 +37,6 @@ import {
   createCounterparty as qCreateCounterparty,
   verifyCounterparty as qVerifyCounterparty,
   unverifyCounterparty as qUnverifyCounterparty,
-  addAlias as qAddAlias,
-  removeAlias as qRemoveAlias,
   type CounterpartyPatch,
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
@@ -138,12 +136,12 @@ async function insertTxRow(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
        description,category_id,transfer_group_id,kind,status,confirmed_at,
-       currency,notes,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       currency,notes,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, conv.amountBase, conv.rate,
       row.description, null, row.transferGroupId, row.kind, 'confirmed', ts,
-      row.currency, row.note, ts,
+      row.currency, row.note, ts, ts,
     ],
   );
 }
@@ -253,8 +251,8 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   }
   const tgId = newId('tg');
   await exec(
-    'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, date, fromAmount, fromCurrency, toCurrency, rate, note],
+    'INSERT INTO transfer_groups (id,ledger_id,amount_base,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+    [tgId, ledgerId, fromAmount, fromCurrency, toCurrency, rate, note, date, date],
   );
   await insertTxRow(exec, {
     ledgerId, accountId: fromId, date, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
@@ -320,12 +318,12 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
            description,category_id,transfer_group_id,kind,status,confirmed_at,
-           currency,notes,source_template_id,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           currency,notes,source_template_id,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate,
           String(r.name ?? ''), categoryId, null, kind, 'pending', null,
-          currency, null, String(r.id), ts,
+          currency, null, String(r.id), ts, ts,
         ],
       );
     }
@@ -609,12 +607,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'unverifyCounterparty':
       await qUnverifyCounterparty(exec, str(args.id));
       return;
-    case 'addAlias':
-      await qAddAlias(exec, str(args.id), str(args.alias).trim());
-      return;
-    case 'removeAlias':
-      await qRemoveAlias(exec, str(args.id), str(args.alias));
-      return;
     case 'createTransfer':
       await createTransfer(exec, args);
       return;
@@ -629,7 +621,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const icon = args.icon ? str(args.icon) : null;
       const color = args.color ? str(args.color) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec('INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order) VALUES (?,?,?,?,?,?,?)', [
+      await exec("INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))", [
         newId('cat'), ledgerId, name, type, icon, color, Number(rows[0]?.n ?? 0),
       ]);
       return;
@@ -637,7 +629,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'renameCategory': {
       const name = str(args.name).trim();
       if (!name) throw new Error('Category name is required');
-      await exec('UPDATE categories SET name = ? WHERE id = ?', [name, str(args.id)]);
+      await exec("UPDATE categories SET name = ?, updated_at = datetime('now') WHERE id = ?", [name, str(args.id)]);
       return;
     }
     case 'updateCategory': {
@@ -667,7 +659,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createTag': {
       const name = str(args.name).trim();
       if (!name) throw new Error('Tag name is required');
-      await exec('INSERT INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
+      await exec("INSERT INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))", [
         args.id ? str(args.id) : newId('tag'), str(args.ledgerId || 'personal'), name, args.color ? str(args.color) : null,
       ]);
       return;
@@ -755,7 +747,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         id: str(args.id || newId('cp')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
-        category: args.category ? str(args.category) : null,
       });
       return;
     }

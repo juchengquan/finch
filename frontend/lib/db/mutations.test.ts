@@ -361,10 +361,9 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   expect(Number(r.auto_post)).toBe(0);
 
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
-  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co', category: 'shop' } });
-  const [cp] = await exec('SELECT standardized_name, category FROM counterparties WHERE id = ?', [cpId]);
+  await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co' } });
+  const [cp] = await exec('SELECT standardized_name FROM counterparties WHERE id = ?', [cpId]);
   expect(String(cp.standardized_name)).toBe('Renamed Co');
-  expect(String(cp.category)).toBe('shop');
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
@@ -423,11 +422,10 @@ test('updateTransfer with both amounts rewrites the rate on cross-currency', asy
 
 test('createCounterparty inserts an unverified merchant', async () => {
   const exec = await seeded();
-  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks', category: 'Food' });
+  await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks' });
   const { listCounterparties } = await import('@/lib/db/queries/counterparties');
   const cp = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-new')!;
   expect(cp.name).toBe('Starbucks');
-  expect(cp.category).toBe('Food');
   expect(cp.verified).toBe(false);
   await expect(applyMutation(exec, 'createCounterparty', { name: '  ' })).rejects.toThrow();
 });

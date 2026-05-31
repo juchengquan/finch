@@ -179,7 +179,7 @@ function PaletteBody({ close }: { close: () => void }) {
       // Merchants (counterparties).
       const cpMatches = counterparties
         .filter((c) => c.ledgerId === activeId)
-        .filter((c) => matches(q, c.name) || c.aliases.some((a) => matches(q, a)))
+        .filter((c) => matches(q, c.name))
         .slice(0, 5);
       for (const c of cpMatches) {
         out.push({

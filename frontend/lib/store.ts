@@ -191,8 +191,6 @@ interface FinanceState {
   removeScheduledSplit: (templateId: string, index: number) => void;
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
-  addAlias: (id: string, alias: string) => void;
-  removeAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
   createCategory: (input: { name: string; type?: string; icon?: string; color?: string; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
@@ -208,8 +206,8 @@ interface FinanceState {
   deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
-  createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
-  updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
+  createCounterparty: (input: { name: string; ledgerId?: string }) => string;
+  updateCounterparty: (id: string, patch: { name?: string }) => void;
   deleteCounterparty: (id: string) => void;
   setExchangeRate: (input: { date: string; currency: string; rate: number; source?: string | null }) => void;
   deleteExchangeRate: (date: string, currency: string) => void;
@@ -530,24 +528,6 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('unverifyCounterparty', { id });
       },
 
-      addAlias: (id, alias) => {
-        set((s) => ({
-          counterparties: s.counterparties.map((c) =>
-            c.id === id && !c.aliases.includes(alias) ? { ...c, aliases: [...c.aliases, alias] } : c,
-          ),
-        }));
-        syncMutation('addAlias', { id, alias });
-      },
-
-      removeAlias: (id, alias) => {
-        set((s) => ({
-          counterparties: s.counterparties.map((c) =>
-            c.id === id ? { ...c, aliases: c.aliases.filter((a) => a !== alias) } : c,
-          ),
-        }));
-        syncMutation('removeAlias', { id, alias });
-      },
-
       // Transfers are created on the server (multi-row / relational); the server
       // response refreshes the store. (Scheduled "post" is called directly from
       // the scheduled page so it can surface account-match errors.)
@@ -691,9 +671,8 @@ export const useFinanceStore = create<FinanceState>()(
       createCounterparty: (input) => {
         const id = `cp-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const category = input.category ?? null;
-        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, aliases: [], category, verified: false }] }));
-        syncMutation('createCounterparty', { id, ledgerId, name: input.name, category });
+        set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, verified: false }] }));
+        syncMutation('createCounterparty', { id, ledgerId, name: input.name });
         return id;
       },
 

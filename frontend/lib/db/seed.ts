@@ -39,7 +39,7 @@ const ACCOUNT_TYPE: Record<string, string> = {
 
 type AccountRow = { id: string; name: string; type: string; group: string; balance: number; color?: string; ledger?: string };
 type CategoryRow = { id: string; name: string; budget?: number; icon?: string; color?: string; ledger?: string };
-type CounterpartyRow = { id: string; name: string; aliases?: string[]; category?: string; verified?: number };
+type CounterpartyRow = { id: string; name: string; verified?: number };
 type TransferRow = {
   id: string; date: string; amountBase: number; fromCurrency: string; toCurrency: string;
   exchangeRate?: number; fromLedger: string; notes?: string;
@@ -117,22 +117,22 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (let i = 0; i < categories.length; i++) {
     const c = categories[i];
     await exec(
-      'INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order) VALUES (?,?,?,?,?,?,?)',
-      [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.color ?? null, i],
+      'INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.color ?? null, i, SEED_TS, SEED_TS],
     );
   }
 
   for (const cp of counterpartiesData as CounterpartyRow[]) {
     await exec(
-      'INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,is_verified,created_at) VALUES (?,?,?,?,?,?,?)',
-      [cp.id, 'personal', cp.name, JSON.stringify(cp.aliases ?? []), cp.category ?? null, cp.verified ? 1 : 0, SEED_TS],
+      'INSERT INTO counterparties (id,ledger_id,standardized_name,is_verified,created_at,updated_at) VALUES (?,?,?,?,?,?)',
+      [cp.id, 'personal', cp.name, cp.verified ? 1 : 0, SEED_TS, SEED_TS],
     );
   }
 
   for (const tg of transferGroupsData as TransferRow[]) {
     await exec(
-      'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
-      [tg.id, ledgerIdByName(tg.fromLedger), isoDate(tg.date), tg.amountBase, tg.fromCurrency, tg.toCurrency, tg.exchangeRate ?? null, tg.notes ?? null],
+      'INSERT INTO transfer_groups (id,ledger_id,amount_base,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [tg.id, ledgerIdByName(tg.fromLedger), tg.amountBase, tg.fromCurrency, tg.toCurrency, tg.exchangeRate ?? null, tg.notes ?? null, isoDate(tg.date), isoDate(tg.date)],
     );
   }
 
@@ -165,8 +165,8 @@ export async function seedReference(exec: Exec): Promise<void> {
 
   type TagSeed = { id: string; name: string; color?: string; ledger?: string };
   for (const t of (tagsData as { tags: TagSeed[] }).tags) {
-    await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
-      t.id, t.ledger ?? 'personal', t.name, t.color ?? null,
+    await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES (?,?,?,?,?,?)', [
+      t.id, t.ledger ?? 'personal', t.name, t.color ?? null, SEED_TS, SEED_TS,
     ]);
   }
 
@@ -250,12 +250,12 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
            description,category_id,transfer_group_id,kind,status,confirmed_at,
-           currency,notes,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           currency,notes,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate,
           t.merchant, t.category, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          r.currency, t.note || null, SEED_TS,
+          r.currency, t.note || null, SEED_TS, SEED_TS,
         ],
       );
     }
