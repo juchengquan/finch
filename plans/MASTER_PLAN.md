@@ -49,15 +49,15 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Transaction detail | ✅ | Dots `DropdownMenu` (recurring/delete), inline recategorize `Select`, recurring toggle |
 | Main | Settings | 🟡 | Theme + currency + Data + **Database** (shows server file path, Export, Import disabled); missing grouped sections + **tab-layout editor** |
 | Main | Goals | ✅ | Now **folded into Budgets** as the *income* budget type (named-budgets redesign); standalone Goals page removed |
-| Main | Subscriptions | ✅ | Monthly + annualized totals + list |
+| Main | Subscriptions | ➖ | Page + table removed; recurring bills live in `scheduled_templates` (visible on Scheduled). |
 | Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, **SQL search/filter** via the live DB |
 | Main | Reports | ✅ | Spending donut + breakdown, **DB-derived** category spend, ledger-scoped |
 | Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all sync to the server (`app_state` queue) |
 | Ledger | Transfers (two-sided) | ✅ | **DB-derived list + "New transfer"** → paired rows sharing `transfer_group_id`; real transactions |
-| Ledger | Merchants / counterparties (aliases, verified) | ✅ | List reads the projected table; **create / rename / recategorise / delete**, verify/unverify, add/remove alias, SQL search |
+| Ledger | Merchants / counterparties (verified) | ✅ | List reads the projected table; **create / rename / delete**, verify/unverify, name search. `aliases` + `category` removed: aliases were search-aid only with no FK, and category is wrong per-merchant (same payee → many categories). |
 | Ledger | Recurring templates (list + splits) | ✅ | **Create** template + edit fields/splits + delete; **"Post now"** → confirmed tx(s) on the server |
-| Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/hue); delete leaves txns uncategorised |
-| Ledger | Tags admin | ✅ | **Create / edit / delete** (name + hue); assignments cascade on delete |
+| Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/color); delete leaves txns uncategorised. Colour is hex; a curated swatch picker maps OKLCH hues to hex at the standard palette. |
+| Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
 | Ledger | Category tree (2-level) | ⬜ | `categories` table seeded; admin screen not DB-wired |
@@ -77,8 +77,9 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 - **Desktop is still the mobile layout in a sidebar shell** — the design specifies distinct
   desktop dashboards (account-card grid, activity/admin tables, budget stat tiles,
   large calendar, metric tabs).
-- **`MOCK` vs `LEDGER` reference data** still coexist for display metadata (account
-  colors/last4, hues) the schema doesn't model; the live figures now come from the DB.
+- **`MOCK` vs `LEDGER` reference data** still coexist as a pre-hydration fallback for
+  a handful of screens (accounts, merchants, FX page seed); the live figures all come
+  from the DB once the store hydrates.
 - **Remaining DB wiring**: Categories admin, FX, System screens; tags UI; balance-curve
   & net-worth charts; full FX conversion. Plus cleanup (retire `derive.ts` fallbacks +
   baked JSON totals + dead `repo.ts`/`storage.ts`; resolve the redundant browser
@@ -242,8 +243,8 @@ retired the last `app_state` override shims. Delivered in phases on one branch:
 - [x] **Accounts** — display columns + create / table-backed update / archive /
       delete; **`accountOverrides` retired**.
 - [x] **Delete/edit everywhere** — shared `<RowActions>` (⋯ menu + confirm) +
-      edit dialogs for categories, goals, tags, subscriptions, recurring, transfers,
-      merchants.
+      edit dialogs for categories, goals (as income budgets), tags, recurring,
+      transfers, merchants.
 - [x] **Budgets on the table** — per-category upsert + `budgetByCategory`
       projection; **`budgetOverrides` retired**.
 - [x] **Scheduled** create/update/delete; **Transfers** edit (rewrite both legs +

@@ -856,6 +856,8 @@ CREATE TABLE db_metadata (
 
 Indexes speed up queries. Without them, SQLite would scan every row in a table ("full table scan") — fine for small tables, terrible for transactions with 10,000+ rows.
 
+> **Note:** The list below is **aspirational** and predates the current live schema. It references tables that do not exist today (`account_balance_snapshots`, `recurring_templates`, `ledger_summaries`, `net_worth_snapshots`). The authoritative index list is at the bottom of `frontend/lib/db/schema.ts`.
+
 ```sql
 -- Account groups (find all groups in a ledger)
 CREATE INDEX idx_ag_ledger ON account_groups(ledger_id);
