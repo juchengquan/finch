@@ -47,20 +47,6 @@ test('balance trigger leaves each account at its known seed balance', async () =
   expect(Number(chk[0].b)).toBeCloseTo(4218.5, 2);
 });
 
-test('ledger_summaries aggregate confirmed transactions only', async () => {
-  const exec = await seeded();
-  // Pending Lyft (t03) must NOT be in the expense summary.
-  const personalExpense = await exec(
-    "SELECT total_base AS t FROM ledger_summaries WHERE ledger_id = 'personal' AND year_month = '2026-05' AND type = 'expense'",
-  );
-  // Sum of confirmed personal expenses for May (excludes -18.40 pending Lyft).
-  expect(Number(personalExpense[0].t)).toBeLessThan(0);
-  const income = await exec(
-    "SELECT total_base AS t FROM ledger_summaries WHERE ledger_id = 'personal' AND year_month = '2026-05' AND type = 'income'",
-  );
-  expect(Number(income[0].t)).toBeCloseTo(2900, 2);
-});
-
 test('monthly-by-category query returns Food as a top personal category', async () => {
   const exec = await seeded();
   const rows = await exec(

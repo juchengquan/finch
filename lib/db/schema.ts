@@ -49,13 +49,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   currency             TEXT NOT NULL DEFAULT 'SGD',
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
-  credit_limit         REAL,
   notes                TEXT,
   color                TEXT,
   last4                TEXT,
   institution          TEXT,
   routing              TEXT,
-  primary_budget_id    TEXT,
   include_in_net_worth INTEGER,
   is_active            INTEGER NOT NULL DEFAULT 1,
   created_at           TEXT NOT NULL,
@@ -126,7 +124,6 @@ CREATE TABLE IF NOT EXISTS transactions (
   status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
   confirmed_at       TEXT,
   source_template_id TEXT,
-  source_split_id    TEXT,
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
   created_at         TEXT NOT NULL
@@ -193,17 +190,13 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
   day_of_month         INTEGER,
   day_of_week          INTEGER,
-  nth_weekday          INTEGER,
   start_date           TEXT NOT NULL,
   end_date             TEXT,
   next_run             TEXT,
   last_run             TEXT,
   auto_post            INTEGER NOT NULL DEFAULT 1,
-  reminder_days_before INTEGER NOT NULL DEFAULT 3,
   is_active            INTEGER NOT NULL DEFAULT 1,
-  is_archived          INTEGER NOT NULL DEFAULT 0,
   max_executions       INTEGER,
-  last_executed_at     TEXT,
   notes                TEXT,
   color                TEXT,
   created_at           TEXT NOT NULL,
@@ -223,17 +216,6 @@ CREATE TABLE IF NOT EXISTS scheduled_splits (
   CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 
-CREATE TABLE IF NOT EXISTS net_worth_snapshots (
-  id               TEXT PRIMARY KEY,
-  ledger_id        TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  date             TEXT NOT NULL,
-  total_base       REAL,
-  total_investment REAL,
-  total_debt       REAL,
-  notes            TEXT,
-  UNIQUE(ledger_id, date)
-);
-
 CREATE TABLE IF NOT EXISTS subscriptions (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -244,16 +226,6 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   hue        INTEGER NOT NULL DEFAULT 200,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS ledger_summaries (
-  id                TEXT PRIMARY KEY,
-  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  year_month        TEXT NOT NULL,
-  type              TEXT NOT NULL CHECK(type IN ('income','expense','transfer_in','transfer_out')),
-  total_base        REAL NOT NULL,
-  transaction_count INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(ledger_id, year_month, type)
 );
 
 CREATE TABLE IF NOT EXISTS exchange_rates (
@@ -315,11 +287,11 @@ CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
-CREATE INDEX IF NOT EXISTS idx_summary_ledger_month ON ledger_summaries(ledger_id, year_month);
-CREATE INDEX IF NOT EXISTS idx_networth_ledger_date ON net_worth_snapshots(ledger_id, date);
+CREATE INDEX IF NOT EXISTS idx_scheduled_splits_template ON scheduled_splits(template_id);
 CREATE INDEX IF NOT EXISTS idx_subs_ledger ON subscriptions(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
+CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
 
 -- Confirmed inserts move the account balance by their delta (in the account's
 -- currency: the native amount when the entry is in that currency, else the
@@ -337,54 +309,6 @@ BEGIN
       updated_at = datetime('now')
   WHERE id = NEW.account_id;
 END;
-
-CREATE TRIGGER IF NOT EXISTS tr_update_ledger_summary
-AFTER INSERT ON transactions
-FOR EACH ROW
-WHEN NEW.status = 'confirmed'
-BEGIN
-  INSERT INTO ledger_summaries (id, ledger_id, year_month, type, total_base, transaction_count)
-  VALUES (
-    lower(hex(randomblob(16))),
-    NEW.ledger_id,
-    strftime('%Y-%m', NEW.date),
-    CASE
-      WHEN NEW.transfer_group_id IS NOT NULL AND NEW.amount > 0 THEN 'transfer_in'
-      WHEN NEW.transfer_group_id IS NOT NULL AND NEW.amount < 0 THEN 'transfer_out'
-      WHEN NEW.amount > 0 THEN 'income'
-      ELSE 'expense'
-    END,
-    NEW.amount_base,
-    1
-  )
-  ON CONFLICT(ledger_id, year_month, type) DO UPDATE SET
-    total_base = total_base + NEW.amount_base,
-    transaction_count = transaction_count + 1;
-END;
-
-CREATE TRIGGER IF NOT EXISTS tr_update_ledger_summary_status
-AFTER UPDATE OF status ON transactions
-FOR EACH ROW
-WHEN OLD.status = 'confirmed' AND NEW.status != 'confirmed'
-BEGIN
-  INSERT INTO ledger_summaries (id, ledger_id, year_month, type, total_base, transaction_count)
-  VALUES (
-    lower(hex(randomblob(16))),
-    NEW.ledger_id,
-    strftime('%Y-%m', NEW.date),
-    CASE
-      WHEN NEW.transfer_group_id IS NOT NULL AND NEW.amount > 0 THEN 'transfer_in'
-      WHEN NEW.transfer_group_id IS NOT NULL AND NEW.amount < 0 THEN 'transfer_out'
-      WHEN NEW.amount > 0 THEN 'income'
-      ELSE 'expense'
-    END,
-    -OLD.amount_base,
-    -1
-  )
-  ON CONFLICT(ledger_id, year_month, type) DO UPDATE SET
-    total_base = total_base - OLD.amount_base,
-    transaction_count = transaction_count - 1;
-END;
 `;
 
 export async function applySchema(exec: (sql: string, bind?: (string | number | null)[]) => Promise<unknown>): Promise<void> {
@@ -400,7 +324,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-05-31T18:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

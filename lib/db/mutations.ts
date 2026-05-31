@@ -85,7 +85,6 @@ import type { Tx } from '@/lib/store';
 
 const RESET_TABLES = [
   'transactions',
-  'ledger_summaries',
   'subscriptions',
   'scheduled_splits',
   'scheduled_templates',
