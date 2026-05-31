@@ -29,11 +29,6 @@ import {
   type AccountGroupPatch,
 } from './queries/accountGroups';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
-import {
-  deleteSubscription as qDeleteSubscription,
-  updateSubscription as qUpdateSubscription,
-  type SubscriptionPatch,
-} from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
 import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
 import {
@@ -48,6 +43,7 @@ import {
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
 import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
+import { pruneOldRates } from './queries/rates';
 import { getAppState, setAppState } from './queries/appState';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { invalidateRollover } from '@/lib/budgets/rollover';
@@ -85,7 +81,6 @@ import type { Tx } from '@/lib/store';
 
 const RESET_TABLES = [
   'transactions',
-  'subscriptions',
   'scheduled_splits',
   'scheduled_templates',
   'sync_log',
@@ -195,7 +190,7 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
     const fromId = await resolveAccountId(exec, ledgerId, t.from ?? '');
     const toId = await resolveAccountId(exec, ledgerId, t.account);
     if (!fromId || !toId) throw new Error(`Couldn't match the accounts for "${t.name}"`);
-    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, amount: t.amount ?? 0, date, note: t.name });
+    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, fromAmount: t.amount ?? 0, date, note: t.name });
     return;
   }
 
@@ -226,10 +221,11 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
 async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const fromId = str(args.fromAccountId);
   const toId = str(args.toAccountId);
-  const amount = Math.abs(Number(args.amount));
+  const fromAmount = Math.abs(Number(args.fromAmount));
+  const explicitToAmount = args.toAmount != null ? Math.abs(Number(args.toAmount)) : null;
   const date = str(args.date);
   const note = args.note ? str(args.note) : null;
-  if (!amount) throw new Error('Transfer amount must be greater than 0');
+  if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
   if (fromId === toId) throw new Error('Pick two different accounts');
 
   const [from] = await exec('SELECT ledger_id, currency, name FROM accounts WHERE id = ?', [fromId]);
@@ -239,17 +235,29 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const ledgerId = String(from.ledger_id);
   const fromCurrency = String(from.currency);
   const toCurrency = String(to.currency);
-  // `amount` is in the from-account's currency; convert it to the to-account's
-  // currency for the incoming leg (no-op when the currencies match).
-  const conv = await convertToBase(exec, amount, fromCurrency, toCurrency, date);
-  const toAmount = conv.amountBase;
+  // When `toAmount` isn't supplied, derive it (and the rate) from the rates
+  // table. When the caller pins it, use it verbatim and recompute the rate.
+  let toAmount: number;
+  let rate: number;
+  if (explicitToAmount != null) {
+    if (!(explicitToAmount > 0)) throw new Error('Received amount must be greater than 0');
+    if (fromCurrency === toCurrency && Math.abs(explicitToAmount - fromAmount) > 0.005) {
+      throw new Error('Same-currency transfer amounts must match');
+    }
+    toAmount = explicitToAmount;
+    rate = fromCurrency === toCurrency ? 1 : Math.round((toAmount / fromAmount) * 1e6) / 1e6;
+  } else {
+    const conv = await convertToBase(exec, fromAmount, fromCurrency, toCurrency, date);
+    toAmount = conv.amountBase;
+    rate = conv.rate;
+  }
   const tgId = newId('tg');
   await exec(
     'INSERT INTO transfer_groups (id,ledger_id,created_at,amount_base,from_currency,to_currency,exchange_rate,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, date, amount, fromCurrency, toCurrency, conv.rate, note],
+    [tgId, ledgerId, date, fromAmount, fromCurrency, toCurrency, rate, note],
   );
   await insertTxRow(exec, {
-    ledgerId, accountId: fromId, date, amount: -amount, description: `Transfer to ${String(to.name)}`,
+    ledgerId, accountId: fromId, date, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
     currency: fromCurrency, transferGroupId: tgId, note, kind: 'transfer',
   });
   await insertTxRow(exec, {
@@ -566,7 +574,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         id: str(args.id || newId('ag')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
-        includeInNetWorth: args.includeInNetWorth == null ? 1 : Number(args.includeInNetWorth),
       });
       return;
     }
@@ -646,13 +653,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await qUpdateTag(exec, str(args.id), patch);
       return;
     }
-    case 'updateSubscription': {
-      const patch = (args.patch ?? {}) as SubscriptionPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Subscription name is required');
-      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Amount must be greater than 0');
-      await qUpdateSubscription(exec, str(args.id), patch);
-      return;
-    }
     case 'updateScheduled': {
       const patch = (args.patch ?? {}) as ScheduledPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
@@ -706,27 +706,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       }
       return;
     }
-    case 'createSubscription': {
-      const ledgerId = str(args.ledgerId || 'personal');
-      const name = str(args.name).trim();
-      const amount = Number(args.amount);
-      if (!name) throw new Error('Subscription name is required');
-      if (!(amount > 0)) throw new Error('Subscription amount must be greater than 0');
-      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM subscriptions WHERE ledger_id = ?', [ledgerId]);
-      await exec(
-        'INSERT INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-        [newId('sub'), ledgerId, name, amount, args.cadence ? str(args.cadence) : 'monthly', args.next ? str(args.next) : null, args.hue != null ? Number(args.hue) : 200, Number(rows[0]?.n ?? 0), new Date().toISOString()],
-      );
-      return;
-    }
     case 'deleteCategory':
       await qDeleteCategory(exec, str(args.id));
       return;
     case 'deleteTag':
       await qDeleteTag(exec, str(args.id));
-      return;
-    case 'deleteSubscription':
-      await qDeleteSubscription(exec, str(args.id));
       return;
     case 'createScheduled': {
       const name = str(args.name).trim();
@@ -786,7 +770,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
       if (!currency) throw new Error('Currency is required');
       if (!(rate > 0)) throw new Error('Rate must be greater than 0');
+      if (currency === 'USD') throw new Error('USD is the hub currency and is not stored');
       await qSetExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
+      // Cache-prune to the rolling retention window on every write.
+      await pruneOldRates(exec);
       return;
     }
     case 'deleteExchangeRate':

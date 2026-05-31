@@ -11,7 +11,6 @@ import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
-import type { Subscription } from '@/lib/db/queries/planning';
 
 export interface Tx {
   id: string;
@@ -57,7 +56,13 @@ export interface TxSplitInput {
 export interface TransferInput {
   fromAccountId: string;
   toAccountId: string;
-  amount: number;
+  /** Sent magnitude, in the from-account's currency. */
+  fromAmount: number;
+  /** Optional received magnitude, in the to-account's currency. When omitted,
+   *  derived from the rates table at `date`. Set this to pin both sides
+   *  (e.g. matching a bank statement where the actual conversion differs
+   *  from the mid-rate); the rate becomes `toAmount / fromAmount`. */
+  toAmount?: number;
   date: string;
   note?: string;
 }
@@ -101,6 +106,8 @@ export interface AccountPatch {
   routing?: string | null;
   color?: string | null;
   groupId?: string | null;
+  /** Per-account net-worth flag (0/1). Defaulted from `type` at create time. */
+  includeInNetWorth?: number;
 }
 
 export interface NewAccountInput {
@@ -151,7 +158,6 @@ interface FinanceState {
   exchangeRates: ExchangeRate[];
   devices: Device[];
   tags: Tag[];
-  subscriptions: Subscription[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
@@ -169,8 +175,8 @@ interface FinanceState {
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
-  createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
-  updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
+  createAccountGroup: (input: { name: string; ledgerId?: string }) => string;
+  updateAccountGroup: (id: string, patch: { name?: string }) => void;
   deleteAccountGroup: (id: string) => void;
   createBudget: (input: NewBudgetInput) => string;
   updateBudget: (id: string, patch: BudgetPatch) => void;
@@ -201,13 +207,10 @@ interface FinanceState {
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
-  createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
-  updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
-  deleteSubscription: (id: string) => void;
   createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
-  updateTransfer: (id: string, patch: { amount?: number; date?: string; note?: string | null }) => void;
+  updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
   createCounterparty: (input: { name: string; category?: string | null; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string; category?: string | null }) => void;
@@ -242,7 +245,6 @@ export const useFinanceStore = create<FinanceState>()(
       exchangeRates: [],
       devices: [],
       tags: [],
-      subscriptions: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
 
@@ -340,14 +342,13 @@ export const useFinanceStore = create<FinanceState>()(
       createAccountGroup: (input) => {
         const id = `ag-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const includeInNetWorth = input.includeInNetWorth ?? 1;
         set((s) => ({
           accountGroups: [
             ...s.accountGroups,
-            { id, ledgerId, name: input.name, includeInNetWorth, sortOrder: s.accountGroups.length },
+            { id, ledgerId, name: input.name, sortOrder: s.accountGroups.length },
           ],
         }));
-        syncMutation('createAccountGroup', { id, ledgerId, name: input.name, includeInNetWorth });
+        syncMutation('createAccountGroup', { id, ledgerId, name: input.name });
         return id;
       },
 
@@ -643,27 +644,6 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.tags ? { ...t, tags: t.tags.filter((x) => x !== id) } : t)),
         }));
         syncMutation('deleteTag', { id });
-      },
-
-      createSubscription: (input) => {
-        const ledgerId = input.ledgerId ?? 'personal';
-        const id = `sub-${Date.now().toString(36)}`;
-        const cadence = input.cadence ?? 'monthly';
-        const hue = input.hue ?? 200;
-        set((s) => ({
-          subscriptions: [...s.subscriptions, { id, ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue }],
-        }));
-        syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
-      },
-
-      updateSubscription: (id, patch) => {
-        set((s) => ({ subscriptions: s.subscriptions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-        syncMutation('updateSubscription', { id, patch });
-      },
-
-      deleteSubscription: (id) => {
-        set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
-        syncMutation('deleteSubscription', { id });
       },
 
       createScheduled: (input) => {

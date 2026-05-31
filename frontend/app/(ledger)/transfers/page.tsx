@@ -48,14 +48,35 @@ export default function TransfersPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
+  const [received, setReceived] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [editing, setEditing] = useState<{ id: string; amount: string; date: string; note: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string;
+    fromAmount: string;
+    toAmount: string;
+    fromCurrency: string;
+    toCurrency: string;
+    date: string;
+    note: string;
+  } | null>(null);
+
+  const fromCurrency = accountRows.find((a) => a.id === from)?.currency ?? '';
+  const toCurrency = accountRows.find((a) => a.id === to)?.currency ?? '';
+  const newIsCrossCurrency = !!fromCurrency && !!toCurrency && fromCurrency !== toCurrency;
 
   const submitEdit = () => {
     if (!editing) return;
-    const value = parseFloat(editing.amount);
-    if (!value || value <= 0) return void toast.error('Enter an amount');
-    updateTransfer(editing.id, { amount: value, date: editing.date, note: editing.note.trim() || null });
+    const fromValue = parseFloat(editing.fromAmount);
+    if (!fromValue || fromValue <= 0) return void toast.error('Enter a sent amount');
+    const isCross = editing.fromCurrency !== editing.toCurrency;
+    const toValue = isCross ? parseFloat(editing.toAmount) : fromValue;
+    if (isCross && (!toValue || toValue <= 0)) return void toast.error('Enter a received amount');
+    updateTransfer(editing.id, {
+      fromAmount: fromValue,
+      toAmount: isCross ? toValue : undefined,
+      date: editing.date,
+      note: editing.note.trim() || null,
+    });
     toast.success('Transfer updated');
     setEditing(null);
   };
@@ -68,9 +89,12 @@ export default function TransfersPage() {
     const value = parseFloat(amount);
     if (!value || value <= 0) return toast.error('Enter an amount');
     if (from === to) return toast.error('Pick two different accounts');
-    createTransfer({ fromAccountId: from, toAccountId: to, amount: value, date });
+    const recv = newIsCrossCurrency && received ? parseFloat(received) : undefined;
+    if (newIsCrossCurrency && received && (!recv || recv <= 0)) return toast.error('Enter a valid received amount');
+    createTransfer({ fromAccountId: from, toAccountId: to, fromAmount: value, toAmount: recv, date });
     toast.success('Transfer created');
     setAmount('');
+    setReceived('');
   };
 
   const newTransferDialog = (
@@ -107,10 +131,22 @@ export default function TransfersPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground font-serif text-xl">$</span>
+            <span className="text-muted-foreground font-mono text-xs w-10">{fromCurrency || 'SENT'}</span>
             <Input type="number" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             <Input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
           </div>
+          {newIsCrossCurrency && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground font-mono text-xs w-10">{toCurrency}</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="received (optional — leave blank for mid-rate)"
+                value={received}
+                onChange={(e) => setReceived(e.target.value)}
+              />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <DialogClose asChild>
@@ -169,7 +205,15 @@ export default function TransfersPage() {
               </div>
             </div>
             <RowActions
-              onEdit={() => setEditing({ id: tg.id, amount: String(tg.amount), date: tg.date, note: tg.note ?? '' })}
+              onEdit={() => setEditing({
+                id: tg.id,
+                fromAmount: String(tg.amount),
+                toAmount: String(tg.toAmount),
+                fromCurrency: tg.fromCurrency,
+                toCurrency: tg.toCurrency,
+                date: tg.date,
+                note: tg.note ?? '',
+              })}
               onDelete={() => { deleteTransfer(tg.id); toast.success('Transfer deleted'); }}
               confirmTitle="Delete this transfer?"
               confirmDescription={`Removes both legs (${tg.fromName ?? '—'} → ${tg.toName ?? '—'}) and restores the account balances.`}
@@ -187,9 +231,25 @@ export default function TransfersPage() {
           {editing && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Amount</Label>
-                <Input type="number" inputMode="decimal" value={editing.amount} onChange={(e) => setEditing((p) => (p ? { ...p, amount: e.target.value } : p))} autoFocus />
+                <Label>Sent · {editing.fromCurrency}</Label>
+                <Input type="number" inputMode="decimal" value={editing.fromAmount} onChange={(e) => setEditing((p) => (p ? { ...p, fromAmount: e.target.value } : p))} autoFocus />
               </div>
+              {editing.fromCurrency !== editing.toCurrency && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Received · {editing.toCurrency}</Label>
+                  <Input type="number" inputMode="decimal" value={editing.toAmount} onChange={(e) => setEditing((p) => (p ? { ...p, toAmount: e.target.value } : p))} />
+                  {(() => {
+                    const f = parseFloat(editing.fromAmount);
+                    const t = parseFloat(editing.toAmount);
+                    if (!f || !t) return null;
+                    return (
+                      <div className="text-muted-foreground text-[11px]">
+                        Effective rate: {(t / f).toFixed(6)} {editing.toCurrency} per {editing.fromCurrency}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label>Date</Label>
                 <Input type="date" value={editing.date} onChange={(e) => setEditing((p) => (p ? { ...p, date: e.target.value } : p))} />

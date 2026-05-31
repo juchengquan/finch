@@ -248,11 +248,10 @@ and a column reference table.
 12. [`budgets`](#612-budgets--named-spendingincome-targets)
 13. [`scheduled_templates`](#613-scheduled_templates--recurring-transaction-blueprints)
 14. [`scheduled_splits`](#614-scheduled_splits--multi-account-splits-for-a-template)
-15. [`subscriptions`](#615-subscriptions--display-only-list-of-recurring-bills)
-16. [`exchange_rates`](#616-exchange_rates--locked-historical-fx-rates)
-17. [`sync_log`](#617-sync_log--per-device-sync-marker)
-18. [`app_state`](#618-app_state--transitional-keyvalue-bag)
-19. [`db_metadata`](#619-db_metadata--single-row-self-description-of-the-file)
+15. [`exchange_rates`](#615-exchange_rates--locked-historical-fx-rates)
+16. [`sync_log`](#616-sync_log--per-device-sync-marker)
+17. [`app_state`](#617-app_state--transitional-keyvalue-bag)
+18. [`db_metadata`](#618-db_metadata--single-row-self-description-of-the-file)
 
 ---
 
@@ -284,17 +283,16 @@ CREATE TABLE ledgers (
 
 ### 6.2 `account_groups` — account buckets on the Accounts screen
 
-Visual / functional groupings (Cash & Banking, Credit Cards, Investments, Loans). Carries the default `include_in_net_worth` for the accounts in the group.
+Purely organisational groupings (Cash & Banking, Credit Cards, Investments, Loans). The net-worth flag is per-account (see §6.4); groups carry no defaults.
 
 ```sql
 CREATE TABLE account_groups (
-  id                   TEXT PRIMARY KEY,
-  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name                 TEXT NOT NULL,
-  include_in_net_worth INTEGER NOT NULL DEFAULT 1,
-  sort_order           INTEGER NOT NULL DEFAULT 0,
-  created_at           TEXT NOT NULL,
-  updated_at           TEXT NOT NULL
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -303,7 +301,6 @@ CREATE TABLE account_groups (
 | `id` | TEXT PK | App-stable id (`cash`, `credit`, `invest`, …). |
 | `ledger_id` | TEXT NOT NULL FK → `ledgers.id` · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display label. |
-| `include_in_net_worth` | INTEGER NOT NULL · default 1 | Group-level default; accounts can override per-row. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order on the Accounts screen. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
@@ -353,7 +350,7 @@ CREATE TABLE accounts (
   institution          TEXT,
   routing              TEXT,
   sort_order           INTEGER NOT NULL DEFAULT 0,
-  include_in_net_worth INTEGER,
+  include_in_net_worth INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
   archived_at          TEXT,
   created_at           TEXT NOT NULL,
@@ -376,7 +373,7 @@ CREATE TABLE accounts (
 | `institution` | TEXT | Bank / brokerage name — display only. |
 | `routing` | TEXT | Routing number — display only. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the group. |
-| `include_in_net_worth` | INTEGER (nullable; 0 / 1 / NULL) | Per-account override of the group default. NULL = inherit. |
+| `include_in_net_worth` | INTEGER NOT NULL · default 1 | 0 / 1. Defaulted from `type` at create (credit_card → 0, else 1); flippable per account. |
 | `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. `0` hides from active lists; history is kept. |
 | `archived_at` | TEXT | ISO 8601 UTC stamped when `is_active` flips to 0. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
@@ -501,10 +498,10 @@ CREATE TABLE transfer_groups (
 | `id` | TEXT PK | `tg-<random>`; the matching value on both transactions' `transfer_group_id`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `created_at` | TEXT NOT NULL | When the transfer was recorded. |
-| `amount_base` | REAL NOT NULL | Sending-leg amount in the ledger's base currency. |
+| `amount_base` | REAL NOT NULL | Sending-leg magnitude in the from-account's currency (re-recorded on edits). |
 | `from_currency` | TEXT NOT NULL | Source account's currency. |
 | `to_currency` | TEXT NOT NULL | Destination account's currency. |
-| `exchange_rate` | REAL | Locked from→to rate at the moment of transfer. NULL when same currency. |
+| `exchange_rate` | REAL | Effective `to_currency` per 1 `from_currency` — derived from the two legs' magnitudes (`toAmount / fromAmount`). When the user pins both sides on a cross-currency edit, this is rewritten to match the bank's actual conversion. |
 | `notes` | TEXT | User memo. |
 
 ---
@@ -741,48 +738,23 @@ CREATE TABLE scheduled_splits (
 
 ---
 
-### 6.15 `subscriptions` — display-only list of recurring bills
+### 6.15 `exchange_rates` — FX rate lookup cache (USD-pivoted)
 
-Surfaces on the Subscriptions screen; not auto-posting (use `scheduled_templates` for that).
+A **lookup cache**, not a permanent record. Each row stores `USD per 1 unit of currency` on a date; USD itself is the universal hub and is never stored. Cross-rate is derived as `rate(C → B) = rate(C) / rate(B)`.
 
-```sql
-CREATE TABLE subscriptions (
-  id         TEXT PRIMARY KEY,
-  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  amount     REAL NOT NULL,
-  cadence    TEXT NOT NULL DEFAULT 'monthly',
-  next_date  TEXT,
-  hue        INTEGER NOT NULL DEFAULT 200,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-```
+Historical values for foreign-currency transactions are **not** read from this table — the rate is locked onto each transaction at insert time (`transactions.exchange_rate` + `transactions.amount_base`). The table is therefore safe to prune; it's kept on a rolling **90-day window** from the latest stored date (`pruneOldRates`, called on every `setExchangeRate`).
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | TEXT PK | `sub-<random>`. |
-| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `name` | TEXT NOT NULL | Display name. |
-| `amount` | REAL NOT NULL | Per-cycle cost in the ledger base. |
-| `cadence` | TEXT NOT NULL · default `monthly` | Free-text label (`monthly`, `yearly`, …). |
-| `next_date` | TEXT | Optional `YYYY-MM-DD` for the next renewal hint. |
-| `hue` | INTEGER NOT NULL · default 200 | OKLCH hue for the chip / row accent. |
-| `sort_order` | INTEGER NOT NULL · default 0 | Display order. |
-| `created_at` | TEXT NOT NULL | Audit. |
-
----
-
-### 6.16 `exchange_rates` — locked historical FX rates
-
-One row per (date, currency). Used by `convertToBase` when stamping `amount_base` on a transaction. SGD is the canonical hub.
+Cache-miss lookup for `convertToBase`:
+1. nearest stored rate on-or-before the txn date
+2. nearest stored rate on-or-after the txn date (covers backdates older than the window)
+3. static `FALLBACK_USD_PER_UNIT` map (covers an empty table on a fresh DB)
 
 ```sql
 CREATE TABLE exchange_rates (
-  date        TEXT NOT NULL,
-  currency    TEXT NOT NULL,
-  rate_to_sgd REAL NOT NULL,
-  source      TEXT,
+  date     TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate     REAL NOT NULL,
+  source   TEXT,
   PRIMARY KEY (date, currency)
 );
 ```
@@ -790,14 +762,14 @@ CREATE TABLE exchange_rates (
 | Column | Type | Description |
 |---|---|---|
 | `date` | TEXT NOT NULL · PK part | `YYYY-MM-DD` the rate applies to. |
-| `currency` | TEXT NOT NULL · PK part | ISO 4217 currency code. |
-| `rate_to_sgd` | REAL NOT NULL | 1 unit of `currency` = N SGD. |
+| `currency` | TEXT NOT NULL · PK part | ISO 4217 code. Never `USD` (the hub). |
+| `rate` | REAL NOT NULL | USD per 1 unit of `currency`. |
 | `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). |
 | (PK) | — | `(date, currency)` composite. |
 
 ---
 
-### 6.17 `sync_log` — per-device sync marker
+### 6.16 `sync_log` — per-device sync marker
 
 Records the last sync state per device. Read by the System / Devices screen.
 
@@ -823,7 +795,7 @@ CREATE TABLE sync_log (
 
 ---
 
-### 6.18 `app_state` — transitional key/value bag
+### 6.17 `app_state` — transitional key/value bag
 
 Generic JSON-value storage for slices that haven't been moved to dedicated tables yet (pending state, scheduled-occurrence cache, etc.). Each later phase moves a key out of here into its own table.
 
@@ -841,7 +813,7 @@ CREATE TABLE app_state (
 
 ---
 
-### 6.19 `db_metadata` — single-row self-description of the file
+### 6.18 `db_metadata` — single-row self-description of the file
 
 Describes the file itself: what wrote it, what schema version it carries, when it was last written, and (after an export) provenance + a SHA-256 checksum for tamper detection on import.
 
@@ -1224,18 +1196,18 @@ These records are created when the database is first initialized:
 INSERT INTO ledgers (id, name, base_currency, is_default, created_at, updated_at)
 VALUES ('default', 'My Ledger', 'SGD', 1, datetime('now'), datetime('now'));
 
--- Sample account groups
-INSERT INTO account_groups (id, ledger_id, name, include_in_net_worth, sort_order, created_at, updated_at)
+-- Sample account groups (purely organisational — no net-worth defaults)
+INSERT INTO account_groups (id, ledger_id, name, sort_order, created_at, updated_at)
 VALUES
-    ('grp_savings', 'default', 'Savings', 1, 1, datetime('now'), datetime('now')),
-    ('grp_credit',  'default', 'Credit Cards', 0, 2, datetime('now'), datetime('now')),
-    ('grp_invest',  'default', 'Investments', 1, 3, datetime('now'), datetime('now'));
+    ('grp_savings', 'default', 'Savings',      1, datetime('now'), datetime('now')),
+    ('grp_credit',  'default', 'Credit Cards', 2, datetime('now'), datetime('now')),
+    ('grp_invest',  'default', 'Investments',  3, datetime('now'), datetime('now'));
 
--- Sample accounts
-INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, created_at, updated_at)
+-- Sample accounts (include_in_net_worth is defaulted from `type`: credit_card → 0, else 1)
+INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, include_in_net_worth, created_at, updated_at)
 VALUES
-    ('UOB_One',   'default', 'grp_savings', 'UOB One',      'savings', 'SGD', 0, datetime('now'), datetime('now')),
-    ('UOB_LADY',  'default', 'grp_credit',  'UOB LADY',     'credit_card', 'SGD', 0, datetime('now'), datetime('now'));
+    ('UOB_One',   'default', 'grp_savings', 'UOB One',  'savings',     'SGD', 0, 1, datetime('now'), datetime('now')),
+    ('UOB_LADY',  'default', 'grp_credit',  'UOB LADY', 'credit_card', 'SGD', 0, 0, datetime('now'), datetime('now'));
 ```
 
 ---
@@ -1253,7 +1225,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 5 | Tags use a junction table, not JSON | If you rename a tag, the junction table approach updates it in one place (the `tags` row). A JSON array approach would require scanning and updating every transaction record that contains the tag. |
 | 6 | `counterparties` has a `aliases` JSON field | Bank statements spell merchant names dozens of different ways. A single `aliases` array lets us match all variants without creating duplicate merchant records. |
 | 7 | Budgets have no `transfer` type | Transfers don't change net worth — money leaving one account just enters another. They don't need budget tracking. |
-| 8 | Two-level `include_in_net_worth` | Users disagree about whether credit cards should count in net worth. The group-level default handles the norm; the account-level override handles exceptions. |
+| 8 | Per-account `include_in_net_worth` | Users disagree about whether credit cards should count in net worth. The flag is defaulted by `account.type` at create (credit_card → 0, else 1) and stays flippable per account. We tried a group-level default with an account-level override (three-state nullable) but it made the COALESCE join the most confusing piece of the read path; the type-based default covers the common case without the complexity. |
 | 9 | Three JSON filter arrays in budgets | Some users want a budget for "dining out" (category filter). Others want "UOB card only" (account filter). The three arrays can combine: "UOB card + dining out + business trips". All three must match. |
 | 10 | `category_id` ON DELETE SET NULL | Deleting a category shouldn't delete the transactions — that's your financial history. The category field becomes NULL and the transaction shows as "uncategorized". |
 | 11 | `account_id` ON DELETE RESTRICT | An account with transaction history cannot be deleted. This prevents accidental data loss. To "close" an account, set `is_active = 0`. |

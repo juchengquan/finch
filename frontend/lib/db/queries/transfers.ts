@@ -57,7 +57,12 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
 }
 
 export interface TransferPatch {
-  amount?: number; // new magnitude, in the from-account's currency
+  /** Sent magnitude, in the from-account's currency. */
+  fromAmount?: number;
+  /** Received magnitude, in the to-account's currency. Set this when the
+   *  bank's actual conversion differs from the mid-rate; the effective FX
+   *  rate becomes `toAmount / fromAmount`. */
+  toAmount?: number;
   date?: string;
   note?: string | null;
 }
@@ -65,8 +70,14 @@ export interface TransferPatch {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Edit a transfer in place: rewrite both legs (a new amount scales both legs
- * proportionally, preserving any FX ratio), then recompute both accounts.
+ * Edit a transfer in place. The two amounts can move independently:
+ *   - only `fromAmount`: scale the to-leg proportionally (preserve FX ratio)
+ *   - only `toAmount`:   scale the from-leg proportionally (preserve FX ratio)
+ *   - both:              write each leg exactly as given; on cross-currency
+ *                        transfers the stored exchange_rate is recomputed
+ *                        from the new ratio.
+ * Same-currency transfers must end with equal magnitudes (validated when both
+ * are set). Recomputes both accounts after the rewrite.
  */
 export async function updateTransfer(exec: Exec, groupId: string, patch: TransferPatch): Promise<void> {
   const legs = await exec(
@@ -75,20 +86,55 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   );
   if (!legs.length) return;
 
-  if (patch.amount !== undefined) {
-    const newAmount = Math.abs(patch.amount);
-    if (!(newAmount > 0)) throw new Error('Transfer amount must be greater than 0');
-    const fromLeg = legs.find((l) => Number(l.amount) < 0) ?? legs[0];
+  const fromLeg = legs.find((l) => Number(l.amount) < 0) ?? legs[0];
+  const toLeg = legs.find((l) => Number(l.amount) > 0) ?? legs[legs.length - 1];
+  const [tg] = await exec('SELECT from_currency, to_currency FROM transfer_groups WHERE id = ?', [groupId]);
+  const sameCurrency = tg && String(tg.from_currency) === String(tg.to_currency);
+
+  const hasFrom = patch.fromAmount !== undefined;
+  const hasTo = patch.toAmount !== undefined;
+
+  if (hasFrom || hasTo) {
     const oldFrom = Math.abs(Number(fromLeg.amount));
-    const factor = oldFrom > 0 ? newAmount / oldFrom : 1;
-    for (const l of legs) {
-      await exec('UPDATE transactions SET amount = ?, amount_base = ? WHERE id = ?', [
-        r2(Number(l.amount) * factor),
-        r2(Number(l.amount_base) * factor),
-        String(l.id),
-      ]);
+    const oldTo = Math.abs(Number(toLeg.amount));
+    let newFrom = hasFrom ? Math.abs(Number(patch.fromAmount)) : oldFrom;
+    let newTo = hasTo ? Math.abs(Number(patch.toAmount)) : oldTo;
+
+    if (!(newFrom > 0)) throw new Error('Transfer amount must be greater than 0');
+    if (!(newTo > 0)) throw new Error('Transfer amount must be greater than 0');
+
+    if (hasFrom && !hasTo) {
+      // Preserve ratio: scale to-leg by the same factor as from-leg.
+      const factor = oldFrom > 0 ? newFrom / oldFrom : 1;
+      newTo = r2(oldTo * factor);
+    } else if (hasTo && !hasFrom) {
+      const factor = oldTo > 0 ? newTo / oldTo : 1;
+      newFrom = r2(oldFrom * factor);
+    } else if (sameCurrency && Math.abs(newFrom - newTo) > 0.005) {
+      throw new Error('Same-currency transfer amounts must match');
     }
-    await exec('UPDATE transfer_groups SET amount_base = ? WHERE id = ?', [newAmount, groupId]);
+
+    // amount_base on each leg keeps the same scale relative to its leg's native
+    // amount. amount_base on the transfer_group reflects the from-side magnitude.
+    const scaleFrom = oldFrom > 0 ? newFrom / oldFrom : 1;
+    const scaleTo = oldTo > 0 ? newTo / oldTo : 1;
+    await exec('UPDATE transactions SET amount = ?, amount_base = ? WHERE id = ?', [
+      -r2(newFrom),
+      r2(Number(fromLeg.amount_base) * scaleFrom),
+      String(fromLeg.id),
+    ]);
+    await exec('UPDATE transactions SET amount = ?, amount_base = ? WHERE id = ?', [
+      r2(newTo),
+      r2(Number(toLeg.amount_base) * scaleTo),
+      String(toLeg.id),
+    ]);
+
+    const newRate = sameCurrency ? 1 : r2(newTo / newFrom * 1e6) / 1e6;
+    await exec('UPDATE transfer_groups SET amount_base = ?, exchange_rate = ? WHERE id = ?', [
+      r2(newFrom),
+      newRate,
+      groupId,
+    ]);
   }
   if (patch.date !== undefined) {
     await exec('UPDATE transactions SET date = ? WHERE transfer_group_id = ?', [patch.date, groupId]);
