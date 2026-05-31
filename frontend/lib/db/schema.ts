@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
+  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS transaction_tags (
 CREATE TABLE IF NOT EXISTS counterparties (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  standardized_name TEXT NOT NULL,
+  name              TEXT NOT NULL,
   is_verified       INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS budgets (
   ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   group_id           TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
   name               TEXT,
-  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
+  kind               TEXT NOT NULL CHECK(kind IN ('income','expense')),
   amount             REAL NOT NULL,
   saved              REAL NOT NULL DEFAULT 0,
   carry_forward      REAL NOT NULL DEFAULT 0,
@@ -190,14 +190,18 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   id                   TEXT PRIMARY KEY,
   ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name                 TEXT,
-  type                 TEXT NOT NULL CHECK(type IN ('income','expense','transfer')),
+  -- Description stamped onto each posted transaction (falls back to name when
+  -- null). Distinct from name, which is the template's own label in the UI.
+  description          TEXT,
+  kind                 TEXT NOT NULL CHECK(kind IN ('income','expense','transfer')),
   amount               REAL,
   amount_varies        INTEGER NOT NULL DEFAULT 0,
   splits_enabled       INTEGER NOT NULL DEFAULT 0,
-  account_id           TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  account_name         TEXT,
+  -- Account references are real FKs (like transactions); display names are
+  -- derived by joining accounts at read time, not stored. The native currency
+  -- of a posted row is the linked account's currency.
+  account_id           TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  from_account_name    TEXT,
   category_id          TEXT REFERENCES categories(id) ON DELETE RESTRICT,
   frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
   day_of_month         INTEGER,
@@ -217,8 +221,7 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
 CREATE TABLE IF NOT EXISTS scheduled_splits (
   id           TEXT PRIMARY KEY,
   template_id  TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
-  account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  account_name TEXT,
+  account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   amount_pct   REAL,
   amount_abs   REAL,
   category_id  TEXT REFERENCES categories(id) ON DELETE RESTRICT,

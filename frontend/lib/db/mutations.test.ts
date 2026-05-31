@@ -74,19 +74,22 @@ test('postScheduled posts a resolvable expense template as a transaction', async
   expect(String(rows[0].kind)).toBe('expense');
 });
 
-test('postScheduled errors clearly when the account cannot be matched', async () => {
+test('postScheduled posts to the template\'s linked account', async () => {
   const exec = await seeded();
-  // rt-rent uses "UOB One", which has no matching real account.
-  await expect(applyMutation(exec, 'postScheduled', { templateId: 'rt-rent' })).rejects.toThrow(/match account/i);
+  // rt-rent: $1850 expense on Chase Checking (chk).
+  const chkBefore = await balanceOf(exec, 'chk');
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-rent' });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chkBefore - 1850, 2);
 });
 
-test('postScheduled splits income across resolvable accounts', async () => {
+test('postScheduled splits income across its linked accounts', async () => {
   const exec = await seeded();
-  // rt-salary: $5800 income split 60/25/15 across UOB One / Marcus Savings / Fidelity.
-  // "Marcus Savings"→sav and "Fidelity"→inv resolve; "UOB One" does not.
+  // rt-salary: $5800 income split 60/25/15 across Chase Checking / Marcus Savings / Fidelity Brokerage.
+  const chkBefore = await balanceOf(exec, 'chk');
   const savBefore = await balanceOf(exec, 'sav');
   const invBefore = await balanceOf(exec, 'inv');
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-salary' });
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chkBefore + 5800 * 0.60, 2);
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(savBefore + 5800 * 0.25, 2);
   expect(await balanceOf(exec, 'inv')).toBeCloseTo(invBefore + 5800 * 0.15, 2);
 });
@@ -112,7 +115,7 @@ test('createCategory inserts a ledger-scoped category', async () => {
   await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'plane' });
   const rows = await exec("SELECT * FROM categories WHERE name = 'Travel' AND ledger_id = 'personal'");
   expect(rows.length).toBe(1);
-  expect(String(rows[0].type)).toBe('expense');
+  expect(String(rows[0].kind)).toBe('expense');
   expect(String(rows[0].icon)).toBe('plane');
   const after = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
   expect(after).toBe(before + 1);
@@ -317,9 +320,9 @@ test('deleteTransfer removes both legs and restores balances', async () => {
 test('updateCategory edits name/type/icon/color', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', color: '#8085dc' } });
-  const [c] = await exec("SELECT name, type, icon, color FROM categories WHERE id = 'food'");
+  const [c] = await exec("SELECT name, kind, icon, color FROM categories WHERE id = 'food'");
   expect(String(c.name)).toBe('Food & Drink');
-  expect(String(c.type)).toBe('income');
+  expect(String(c.kind)).toBe('income');
   expect(String(c.icon)).toBe('coins');
   expect(String(c.color)).toBe('#8085dc');
 });
@@ -355,8 +358,8 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
 
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
   await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co' } });
-  const [cp] = await exec('SELECT standardized_name FROM counterparties WHERE id = ?', [cpId]);
-  expect(String(cp.standardized_name)).toBe('Renamed Co');
+  const [cp] = await exec('SELECT name FROM counterparties WHERE id = ?', [cpId]);
+  expect(String(cp.name)).toBe('Renamed Co');
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
@@ -427,7 +430,7 @@ test('createScheduled inserts a template that lists and posts', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createScheduled', {
     id: 'rt-new', ledgerId: 'personal', name: 'Netflix', type: 'expense',
-    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, account: 'Amex Gold', autoPost: true, weekDay: null, color: null,
+    amount: 19.99, frequency: 'monthly', dayOfMonth: 9, accountId: 'cc', autoPost: true, weekDay: null, color: null,
   });
   const { listScheduled } = await import('@/lib/db/queries/scheduled');
   const t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-new')!;
@@ -439,8 +442,8 @@ test('createScheduled inserts a template that lists and posts', async () => {
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-new' });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 19.99, 2);
 
-  await expect(applyMutation(exec, 'createScheduled', { name: 'X', type: 'expense', frequency: 'monthly', account: '' })).rejects.toThrow();
-  await expect(applyMutation(exec, 'createScheduled', { name: 'Y', type: 'nope', account: 'cc' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createScheduled', { name: 'X', type: 'expense', frequency: 'monthly', accountId: '' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'createScheduled', { name: 'Y', type: 'nope', accountId: 'cc' })).rejects.toThrow();
 });
 
 test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', async () => {
@@ -450,17 +453,17 @@ test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', 
   const flag = async () => Number((await exec("SELECT splits_enabled FROM scheduled_templates WHERE id = 'rt-spotify'"))[0].splits_enabled);
   expect(await flag()).toBe(0);
 
-  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: 'Marcus Savings', pct: 40 });
-  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: 'Fidelity', pct: 60 });
+  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', accountId: 'sav', pct: 40 });
+  await applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', accountId: 'inv', pct: 60 });
   let t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
-  expect(t.splits?.map((s) => s.account)).toEqual(['Marcus Savings', 'Fidelity']);
+  expect(t.splits?.map((s) => s.account)).toEqual(['Marcus Savings', 'Fidelity Brokerage']);
   expect(t.splits?.map((s) => s.pct)).toEqual([40, 60]);
   expect(await flag()).toBe(1);
 
   // Remove the first split (by index/sort order).
   await applyMutation(exec, 'removeScheduledSplit', { templateId: 'rt-spotify', index: 0 });
   t = (await listScheduled(exec, 'personal')).find((r) => r.id === 'rt-spotify')!;
-  expect(t.splits?.map((s) => s.account)).toEqual(['Fidelity']);
+  expect(t.splits?.map((s) => s.account)).toEqual(['Fidelity Brokerage']);
   expect(await flag()).toBe(1);
 
   // Removing the last one clears the split-enabled flag.
@@ -469,7 +472,7 @@ test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', 
   expect(t.splits ?? []).toEqual([]);
   expect(await flag()).toBe(0);
 
-  await expect(applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', account: '  ' })).rejects.toThrow();
+  await expect(applyMutation(exec, 'addScheduledSplit', { templateId: 'rt-spotify', accountId: '  ' })).rejects.toThrow();
 });
 
 test('adjustAccountBalance posts a marked delta and moves balance to the target', async () => {
@@ -663,17 +666,17 @@ test('generateDueScheduled materializes due occurrences as pending, idempotently
   const cc0 = await balanceOf(exec, 'cc');
 
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
-  // rt-spotify (Amex Gold, day 22) + rt-icloud (Amex Gold, day 8); rent/sweep/coned/salary
-  // are skipped (unresolved account / transfer / variable / split).
+  // rt-spotify (Amex Gold, day 22) + rt-icloud (Amex Gold, day 8) + rt-rent (Chase Checking,
+  // day 1); sweep/coned/salary are skipped (transfer / variable / split).
   const gen = await exec("SELECT id, status, source_template_id AS t FROM transactions WHERE source_template_id IS NOT NULL ORDER BY date");
-  expect(gen.length).toBe(2);
+  expect(gen.length).toBe(3);
   expect(gen.every((r) => String(r.status) === 'pending')).toBe(true);
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0, 2); // pending → balance unchanged
 
   // Idempotent: a second run adds nothing (dedup via source_template_id + date).
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
   const again = await exec("SELECT id FROM transactions WHERE source_template_id IS NOT NULL");
-  expect(again.length).toBe(2);
+  expect(again.length).toBe(3);
 
   // Confirming one (Spotify, 11.99 expense) pulls it into the balance.
   const spotify = gen.find((r) => String(r.t) === 'rt-spotify')!;

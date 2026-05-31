@@ -1,6 +1,6 @@
 // Scheduled templates + their splits, projected back into the store shape.
-// Accounts are referenced by display name (account_name); ids are resolved at
-// post time in lib/db/mutations.ts.
+// Accounts are real FKs (account_id / from_account_id); display names are
+// derived by joining the accounts table at read time, like transactions.
 
 import type { Exec } from '@/lib/db/repo';
 import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
@@ -8,15 +8,29 @@ import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
 export async function listScheduled(exec: Exec, ledgerId?: string): Promise<ScheduledTemplate[]> {
   const rows = await exec(
     ledgerId
-      ? 'SELECT * FROM scheduled_templates WHERE ledger_id = ? ORDER BY rowid'
-      : 'SELECT * FROM scheduled_templates ORDER BY ledger_id, rowid',
+      ? `SELECT t.*, a.name AS account_name, fa.name AS from_account_name
+           FROM scheduled_templates t
+           LEFT JOIN accounts a ON a.id = t.account_id
+           LEFT JOIN accounts fa ON fa.id = t.from_account_id
+          WHERE t.ledger_id = ? ORDER BY t.rowid`
+      : `SELECT t.*, a.name AS account_name, fa.name AS from_account_name
+           FROM scheduled_templates t
+           LEFT JOIN accounts a ON a.id = t.account_id
+           LEFT JOIN accounts fa ON fa.id = t.from_account_id
+          ORDER BY t.ledger_id, t.rowid`,
     ledgerId ? [ledgerId] : [],
   );
-  const splitRows = await exec('SELECT * FROM scheduled_splits ORDER BY template_id, sort_order');
+  const splitRows = await exec(
+    `SELECT s.*, a.name AS account_name
+       FROM scheduled_splits s
+       LEFT JOIN accounts a ON a.id = s.account_id
+      ORDER BY s.template_id, s.sort_order`,
+  );
   const splitsByTemplate = new Map<string, ScheduledSplit[]>();
   for (const s of splitRows) {
     const arr = splitsByTemplate.get(String(s.template_id)) ?? [];
     arr.push({
+      accountId: String(s.account_id),
       account: String(s.account_name ?? ''),
       pct: Number(s.amount_pct ?? 0),
       abs: s.amount_abs == null ? null : Number(s.amount_abs),
@@ -30,14 +44,17 @@ export async function listScheduled(exec: Exec, ledgerId?: string): Promise<Sche
     return {
       id,
       name: String(r.name ?? ''),
-      type: String(r.type),
+      description: r.description == null ? null : String(r.description),
+      type: String(r.kind),
       amount: r.amount == null ? null : Number(r.amount),
       varies: Number(r.amount_varies),
       frequency: String(r.frequency),
       dayOfMonth: Number(r.day_of_month ?? 1),
       weekDay: r.day_of_week == null ? undefined : Number(r.day_of_week),
+      accountId: String(r.account_id),
       account: String(r.account_name ?? ''),
-      from: r.from_account_name == null ? undefined : String(r.from_account_name),
+      fromAccountId: r.from_account_id == null ? undefined : String(r.from_account_id),
+      from: r.from_account_id == null ? undefined : String(r.from_account_name ?? ''),
       autoPost: Number(r.auto_post),
       nextRun: String(r.next_run ?? ''),
       lastRun: String(r.last_run ?? ''),
@@ -53,6 +70,7 @@ export async function listScheduled(exec: Exec, ledgerId?: string): Promise<Sche
 
 export interface ScheduledPatch {
   name?: string;
+  description?: string | null;
   amount?: number | null;
   frequency?: string;
   dayOfMonth?: number;
@@ -67,8 +85,8 @@ export interface ScheduledPatch {
 
 export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPatch): Promise<void> {
   const cols: Record<string, string> = {
-    name: 'name', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month',
-    weekDay: 'day_of_week', autoPost: 'auto_post', color: 'color', type: 'type',
+    name: 'name', description: 'description', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month',
+    weekDay: 'day_of_week', autoPost: 'auto_post', color: 'color', type: 'kind',
     category: 'category_id', endDate: 'end_date', maxExecutions: 'max_executions',
   };
   const sets: string[] = [];
@@ -88,13 +106,14 @@ export interface NewScheduled {
   id: string;
   ledgerId: string;
   name: string;
+  description: string | null;
   type: string;
   amount: number | null;
   frequency: string;
   dayOfMonth: number;
   weekDay: number | null;
-  account: string;
-  from: string | null;
+  accountId: string;
+  fromAccountId: string | null;
   autoPost: number;
   color: string | null;
   category: string | null;
@@ -106,21 +125,21 @@ export interface NewScheduled {
 export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void> {
   await exec(
     `INSERT INTO scheduled_templates
-       (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
-        from_account_id,from_account_name,category_id,frequency,day_of_month,day_of_week,start_date,
+       (id,ledger_id,name,description,kind,amount,amount_varies,splits_enabled,account_id,
+        from_account_id,category_id,frequency,day_of_month,day_of_week,start_date,
         end_date,max_executions,next_run,last_run,auto_post,color,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,0,0,NULL,?,NULL,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
-    [t.id, t.ledgerId, t.name, t.type, t.amount, t.account, t.from, t.category, t.frequency, t.dayOfMonth, t.weekDay, t.startDate, t.endDate, t.maxExecutions, t.autoPost, t.color],
+     VALUES (?,?,?,?,?,?,0,0,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
+    [t.id, t.ledgerId, t.name, t.description, t.type, t.amount, t.accountId, t.fromAccountId, t.category, t.frequency, t.dayOfMonth, t.weekDay, t.startDate, t.endDate, t.maxExecutions, t.autoPost, t.color],
   );
 }
 
-export async function addScheduledSplit(exec: Exec, templateId: string, account: string, pct: number): Promise<void> {
+export async function addScheduledSplit(exec: Exec, templateId: string, accountId: string, pct: number): Promise<void> {
   const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM scheduled_splits WHERE template_id = ?', [templateId]);
   const sort = Number(rows[0]?.n ?? 0);
   const id = `${templateId}-s${sort}-${Math.random().toString(36).slice(2, 8)}`;
   await exec(
-    'INSERT INTO scheduled_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,category_id,description,sort_order) VALUES (?,?,NULL,?,?,NULL,NULL,NULL,?)',
-    [id, templateId, account, pct, sort],
+    'INSERT INTO scheduled_splits (id,template_id,account_id,amount_pct,amount_abs,category_id,description,sort_order) VALUES (?,?,?,?,NULL,NULL,NULL,?)',
+    [id, templateId, accountId, pct, sort],
   );
   await exec("UPDATE scheduled_templates SET splits_enabled = 1, updated_at = datetime('now') WHERE id = ?", [templateId]);
 }

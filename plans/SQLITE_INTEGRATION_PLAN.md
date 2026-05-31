@@ -143,11 +143,15 @@ the former curated mock totals) by explicit decision.
 
 **Also migrated:**
 - ✅ **Recurring templates** moved from the `app_state` JSON slice to the real
-  `recurring_templates` + `recurring_splits` tables (projected like the other
-  reference data). The tables carry the mock's display names + run labels
-  (`account_name`/`from_account_name`/`next_run`/`last_run`, split `account_id`
-  made nullable), so behaviour — incl. `postRecurring`'s name resolution — is
-  unchanged. `postRecurring`/`updateRecurringSplit` now read/write the tables.
+  `scheduled_templates` + `scheduled_splits` tables (projected like the other
+  reference data). The tables originally carried the mock's display names + run
+  labels (`account_name`/`from_account_name`, split `account_id` nullable), so
+  behaviour — incl. name resolution at post time — matched the prototype.
+  - **Superseded:** accounts are now real FKs — `account_id` is NOT NULL,
+    `account_name`/`from_account_name` were dropped, and names are derived by
+    joining `accounts` (the lenient post-time name matcher is gone). The
+    discriminator was renamed `type` → `kind`, and a `description` column was
+    added. See `database_design_en.md` §6.13–6.14 and design notes #13–14.
 
 **Cleanup / teardown — done:**
 - ✅ Deleted the dead flat-schema layer: `lib/db/repo.ts` trimmed to shared types,

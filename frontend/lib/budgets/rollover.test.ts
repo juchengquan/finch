@@ -49,7 +49,7 @@ async function insertBudget(
   const type = opts.type ?? 'expense';
   await exec(
     `INSERT INTO budgets
-       (id, ledger_id, name, type, amount, carry_forward, frequency, start_date,
+       (id, ledger_id, name, kind, amount, carry_forward, frequency, start_date,
         is_recurring, rollover, rollover_limit, account_ids, category_ids,
         warning_pct, created_at, updated_at)
      VALUES (?, 'personal', ?, ?, ?, 0, ?, ?, ?, ?, ?, NULL, ?, 80, '2026-01-01', '2026-01-01')`,

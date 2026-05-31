@@ -132,7 +132,7 @@ All check constraints are documented here. If you add a new enum value, update b
 | `fx` | Foreign currency account |
 | `virtual` | Virtual account used for splitting income |
 
-### 4.3 Category Types (`categories.type`)
+### 4.3 Category Kinds (`categories.kind`)
 
 | Value | Meaning |
 |-------|---------|
@@ -142,7 +142,9 @@ All check constraints are documented here. If you add a new enum value, update b
 
 Refund-shaped transactions don't get their own category type — they use the **original expense's category** with `transactions.kind = 'refund'` so reports net them against the right line. See §6.10 *Kinds*.
 
-### 4.4 Template Types (`recurring_templates.type`)
+> **Naming:** the income/expense/transfer discriminator is named **`kind`** on every table that carries it — `categories.kind`, `budgets.kind`, `scheduled_templates.kind`, and `transactions.kind`. Only `accounts.type` keeps the name `type`, because it is a different classification (`savings`/`credit_card`/…), not the income/expense family.
+
+### 4.4 Template Kinds (`scheduled_templates.kind`)
 
 | Value | Meaning |
 |-------|---------|
@@ -150,7 +152,7 @@ Refund-shaped transactions don't get their own category type — they use the **
 | `expense` | Recurring expense (e.g., rent) |
 | `transfer` | Recurring transfer (e.g., monthly savings) |
 
-### 4.5 Template Frequency (`recurring_templates.frequency`)
+### 4.5 Template Frequency (`scheduled_templates.frequency`)
 
 | Value | Meaning |
 |-------|---------|
@@ -161,7 +163,7 @@ Refund-shaped transactions don't get their own category type — they use the **
 | `quarterly` | Every quarter, on `nth_weekday` + `day_of_week` |
 | `yearly` | Once a year, same month/day as `start_date` |
 
-### 4.6 Budget Types (`budgets.type`)
+### 4.6 Budget Kinds (`budgets.kind`)
 
 | Value | Meaning |
 |-------|---------|
@@ -362,7 +364,7 @@ CREATE TABLE accounts (
 | `group_id` | TEXT FK → `account_groups.id` · SET NULL | Optional grouping. NULL = "Ungrouped". |
 | `name` | TEXT NOT NULL | Display name. Users encode any disambiguator (e.g. last-4) directly here — there is no separate column. |
 | `type` | TEXT NOT NULL · CHECK | `savings` / `credit_card` / `investment` / `cash` / `fx` / `virtual`. |
-| `currency` | TEXT NOT NULL · default `SGD` | ISO 4217 — currency the account holds. |
+| `currency` | TEXT NOT NULL · default `SGD` | ISO 4217 — currency the account holds. **Immutable after creation** (not in `AccountPatch`); changing it would re-interpret every stored native `amount`. |
 | `current_balance` | REAL NOT NULL · default 0 | **Cached.** Kept in sync by `recomputeAccount()` after txn writes. |
 | `opening_balance` | REAL NOT NULL · default 0 | Balance before the first tracked transaction. `current = opening + Σ amount_base` (in account currency). |
 | `color` | TEXT | Hex card / accent colour. Drives the avatar chip on the Accounts screen and the per-row badge in transaction lists. |
@@ -383,7 +385,7 @@ CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
-  type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
+  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -397,7 +399,7 @@ CREATE TABLE categories (
 | `id` | TEXT PK | App-stable id (`food`, `rent`, `cat-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display name. |
-| `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer`. |
+| `kind` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer`. |
 | `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
 | `color` | TEXT | Hex `#rrggbb`. The Categories edit page offers a curated swatch picker; new picks come from `lib/colors.categoryHex(hue)`. Used directly as CSS. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the ledger. |
@@ -454,22 +456,22 @@ A standalone catalog of canonical merchant names. **Not linked back from transac
 
 ```sql
 CREATE TABLE counterparties (
-  id                TEXT PRIMARY KEY,
-  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  standardized_name TEXT NOT NULL,
-  is_verified       INTEGER NOT NULL DEFAULT 0,
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
+  id          TEXT PRIMARY KEY,
+  ledger_id   TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  is_verified INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
 );
 ```
 
-A pure catalog of canonical merchant names. There is **no FK** from `transactions` to this table — the link is informational only. Category is intentionally absent: the same merchant (Amazon, etc.) can have transactions in multiple categories, so category lives on the transaction. Display disambiguators (alternative spellings) belong in the canonical `standardized_name` itself.
+A pure catalog of canonical merchant names. There is **no FK** from `transactions` to this table — the link is informational only. Category is intentionally absent: the same merchant (Amazon, etc.) can have transactions in multiple categories, so category lives on the transaction. Display disambiguators (alternative spellings) belong in the canonical `name` itself. (The column was renamed from `standardized_name` → `name` so the entity-label column is called `name` on every table.)
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | `cp-<n>`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `standardized_name` | TEXT NOT NULL | Canonical display name ("Starbucks"). |
+| `name` | TEXT NOT NULL | Canonical display name ("Starbucks"). |
 | `is_verified` | INTEGER NOT NULL · default 0 | User-confirmed entry (true) vs. auto-suggested (false). |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
@@ -615,7 +617,7 @@ CREATE TABLE budgets (
   ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   group_id           TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
   name               TEXT,
-  type               TEXT NOT NULL CHECK(type IN ('income','expense')),
+  kind               TEXT NOT NULL CHECK(kind IN ('income','expense')),
   amount             REAL NOT NULL,
   saved              REAL NOT NULL DEFAULT 0,
   carry_forward      REAL NOT NULL DEFAULT 0,
@@ -642,7 +644,7 @@ CREATE TABLE budgets (
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `group_id` | TEXT FK → `budget_groups.id` · SET NULL | Optional grouping. |
 | `name` | TEXT | Display label. |
-| `type` | TEXT NOT NULL · CHECK | `expense` (limit) or `income` (target). |
+| `kind` | TEXT NOT NULL · CHECK | `expense` (limit) or `income` (target). |
 | `amount` | REAL NOT NULL | Current-period limit/target in the ledger base. |
 | `saved` | REAL NOT NULL · default 0 | Manual accumulator for one-shot income goals. |
 | `carry_forward` | REAL NOT NULL · default 0 | Unused budget rolled in from the prior period (expense + rollover only). |
@@ -666,49 +668,49 @@ CREATE TABLE budgets (
 
 Plans for transactions that recur (salary, rent, subscriptions). Auto-posting fills `transactions` with `source_template_id` set back to the template.
 
+A template is a **recipe** for transactions, not a transaction itself. It mirrors the postable fields of `transactions` (real account FKs, a `description`, a `kind`) so posting is close to a copy, **plus** recurrence fields (`frequency`, `next_run`, …) that have no transaction analogue, and **minus** the fields a transaction freezes at write time. In particular it does **not** store `amount_base` / `exchange_rate` / `currency`: those are derived per occurrence at post time from the linked account's currency and the rate on that date (a template that locked them at creation would reshape future postings). Accounts are referenced by real FK (`account_id` / `from_account_id`); display names are derived by joining `accounts` at read time, exactly like `transactions`.
+
 ```sql
 CREATE TABLE scheduled_templates (
-  id                TEXT PRIMARY KEY,
-  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name              TEXT,
-  type              TEXT NOT NULL CHECK(type IN ('income','expense','transfer')),
-  amount            REAL,
-  amount_varies     INTEGER NOT NULL DEFAULT 0,
-  splits_enabled    INTEGER NOT NULL DEFAULT 0,
-  account_id        TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  account_name      TEXT,
-  from_account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  from_account_name TEXT,
-  category_id       TEXT REFERENCES categories(id) ON DELETE RESTRICT,
-  frequency         TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
-  day_of_month      INTEGER,
-  day_of_week       INTEGER,
-  start_date        TEXT NOT NULL,
-  end_date          TEXT,
-  next_run          TEXT,
-  last_run          TEXT,
-  auto_post         INTEGER NOT NULL DEFAULT 1,
-  is_active         INTEGER NOT NULL DEFAULT 1,
-  max_executions    INTEGER,
-  color             TEXT,
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
+  id                   TEXT PRIMARY KEY,
+  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name                 TEXT,
+  description          TEXT,
+  kind                 TEXT NOT NULL CHECK(kind IN ('income','expense','transfer')),
+  amount               REAL,
+  amount_varies        INTEGER NOT NULL DEFAULT 0,
+  splits_enabled       INTEGER NOT NULL DEFAULT 0,
+  account_id           TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  category_id          TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
+  day_of_month         INTEGER,
+  day_of_week          INTEGER,
+  start_date           TEXT NOT NULL,
+  end_date             TEXT,
+  next_run             TEXT,
+  last_run             TEXT,
+  auto_post            INTEGER NOT NULL DEFAULT 1,
+  is_active            INTEGER NOT NULL DEFAULT 1,
+  max_executions       INTEGER,
+  color                TEXT,
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
 );
 ```
 
 | Column | Type | Description |
 |---|---|---|
-| `id` | TEXT PK | `rt-<random>` typically. |
+| `id` | TEXT PK | `rt-<random>` / `sch-<random>` typically. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `name` | TEXT | Display label ("Spotify Premium"). |
-| `type` | TEXT NOT NULL · CHECK | `income` / `expense` / `transfer`. |
-| `amount` | REAL | Default amount per occurrence. NULL when `amount_varies = 1`. |
+| `name` | TEXT | Template's own label in the UI ("Spotify Premium"). |
+| `description` | TEXT | Text stamped onto each posted transaction. Falls back to `name` when NULL. Distinct from `name` so renaming the template doesn't rewrite the description of future occurrences. |
+| `kind` | TEXT NOT NULL · CHECK | `income` / `expense` / `transfer`. (No `adjustment` — a recurring reconciliation makes no sense.) |
+| `amount` | REAL | Default amount per occurrence, in the linked account's currency. NULL when `amount_varies = 1`. |
 | `amount_varies` | INTEGER NOT NULL · default 0 | `1` = user enters amount per occurrence. |
 | `splits_enabled` | INTEGER NOT NULL · default 0 | `1` = use `scheduled_splits` for fan-out (income templates only). |
-| `account_id` | TEXT FK → `accounts.id` · RESTRICT | Resolved account id. Match by name when null. |
-| `account_name` | TEXT | Plain-text account name from the seed (kept for re-resolution). |
-| `from_account_id` | TEXT FK → `accounts.id` · RESTRICT | For transfers: the source account. |
-| `from_account_name` | TEXT | Plain-text source account name. |
+| `account_id` | TEXT NOT NULL FK → `accounts.id` · RESTRICT | Primary account (the destination for a transfer). The posted row's native currency is this account's currency. The display name is derived by joining `accounts`. |
+| `from_account_id` | TEXT FK → `accounts.id` · RESTRICT | Source account for a transfer; NULL for income/expense. |
 | `category_id` | TEXT FK → `categories.id` · RESTRICT | Default category for the posted tx. |
 | `frequency` | TEXT NOT NULL · CHECK | `once` / `daily` / `weekly` / `biweekly` / `monthly` / `quarterly` / `yearly`. |
 | `day_of_month` | INTEGER | 1–31 for monthly+ frequencies. Day 31 clamps to month-end. |
@@ -731,25 +733,25 @@ For income templates: paycheck → split N ways across accounts. Each row contri
 
 ```sql
 CREATE TABLE scheduled_splits (
-  id           TEXT PRIMARY KEY,
-  template_id  TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
-  account_id   TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  account_name TEXT,
-  amount_pct   REAL,
-  amount_abs   REAL,
-  category_id  TEXT REFERENCES categories(id) ON DELETE RESTRICT,
-  description  TEXT,
-  sort_order   INTEGER NOT NULL DEFAULT 0,
+  id          TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
+  account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  amount_pct  REAL,
+  amount_abs  REAL,
+  category_id TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  description TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
   CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 ```
+
+> **Not the same concept as `transaction_splits`.** Despite the parallel name, `transaction_splits` divides one transaction across **categories** (amounts sum to the parent); `scheduled_splits` distributes income across **accounts** (a paycheck allocation). They are deliberately not unified.
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | `<template>-s<n>`. |
 | `template_id` | TEXT NOT NULL FK → `scheduled_templates.id` · CASCADE | Parent template. |
-| `account_id` | TEXT FK → `accounts.id` · RESTRICT | Destination account (when resolved). |
-| `account_name` | TEXT | Plain-text fallback for name matching at post time. |
+| `account_id` | TEXT NOT NULL FK → `accounts.id` · RESTRICT | Destination account. Display name derived by joining `accounts`. |
 | `amount_pct` | REAL | Percentage of the parent template's amount (0–100). |
 | `amount_abs` | REAL | Or an absolute amount in the template's currency. |
 | `category_id` | TEXT FK → `categories.id` · RESTRICT | Override category for this leg. |
@@ -1260,6 +1262,9 @@ These are the non-obvious decisions made during schema design, with explanations
 | 11 | `account_id` ON DELETE RESTRICT | An account with transaction history cannot be deleted. This prevents accidental data loss. To "close" an account, set `is_active = 0`. |
 | 12 | `balance_after` stored on transactions | Every transaction records what the balance was after it posted. This enables the balance curve chart without querying the snapshot table in reverse. The trigger keeps `accounts.current_balance` in sync automatically. |
 | 13 🚧 | Refunds are their own `kind`, linked back via `refunded_transaction_id` | Treating a refund as `income` is wrong for reports: a $50 grocery refund should make "Groceries" show $150 net, not $200 spent + $50 income. The `kind='refund'` marker lets the spend selectors include refunds in their original category as a negative offset, while income totals stay clean. The optional `refunded_transaction_id` FK captures the user's intent (this $50 came back from the $200 May-12 Whole Foods purchase), survives the original expense being deleted (SET NULL), and supports partial / multiple refunds against one expense via many-to-one. We don't enforce sign or sum-≤-|original| in SQL — both get awkward fast across currencies, and the UI handles those validations. |
+| 14 | The income/expense/transfer discriminator is uniformly named `kind` | It was `kind` on `transactions` but `type` on `categories`/`budgets`/`scheduled_templates` — the same concept under two names. Unified to `kind` everywhere it carries the income/expense family (incl. the planned `refund` above). `accounts.type` keeps `type` because its values (`savings`/`credit_card`/…) are a different classification. Likewise `counterparties.standardized_name` → `name`, so the entity-label column is `name` on every table. |
+| 15 | `scheduled_templates` reference accounts by FK, not name | An earlier design stored account *names* (`account_name`) and re-resolved them to ids at post time via fuzzy matching — fragile (a rename silently broke posting) and unlike `transactions`. Now `account_id` is a real NOT NULL FK; names are derived by joining `accounts`. The seed resolves its mock names to ids once (and fails loudly if one doesn't match). Currency and `amount_base` are intentionally **not** stored on the template — they're derived from the account + the rate on each post date, so a later edit can't reshape history. |
+| 16 | `accounts.currency` is immutable after creation | An account's currency denominates every transaction's native `amount`, the cached `current_balance`, and the locked `amount_base` on each row. Editing it would silently re-interpret all of that history. So `currency` is set only at create time — it's absent from `AccountPatch`, the edit UI shows it read-only, and `updateAccount` skips it. To "switch", create a new account (a transaction-less account can be deleted; RESTRICT only blocks accounts with history). |
 
 ---
 

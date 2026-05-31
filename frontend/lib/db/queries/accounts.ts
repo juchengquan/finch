@@ -88,20 +88,23 @@ export async function netWorth(exec: Exec, ledgerId: string): Promise<number> {
   return Number(rows[0]?.total ?? 0);
 }
 
+// `currency` is intentionally not editable — it's fixed at account creation
+// (changing it would re-interpret stored native amounts / locked amount_base).
 export interface AccountPatch {
   name?: string;
   type?: string;
-  currency?: string;
   color?: string | null;
   groupId?: string | null;
   /** Per-account net-worth flag. Defaulted from `type` on create; flippable. */
   includeInNetWorth?: number;
 }
 
+// `currency` is deliberately not patchable — it's fixed at account creation
+// (see AccountPatch in lib/store.ts). Any stray key without a column mapping is
+// skipped below.
 const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   name: 'name',
   type: 'type',
-  currency: 'currency',
   color: 'color',
   groupId: 'group_id',
   includeInNetWorth: 'include_in_net_worth',
@@ -113,8 +116,9 @@ export async function updateAccount(exec: Exec, id: string, patch: AccountPatch)
   const bind: (string | number | null)[] = [];
   for (const key of Object.keys(patch) as (keyof AccountPatch)[]) {
     const value = patch[key];
-    if (value === undefined) continue;
-    sets.push(`${PATCH_COLUMNS[key]} = ?`);
+    const col = PATCH_COLUMNS[key];
+    if (value === undefined || !col) continue; // skip undefined + non-patchable keys (e.g. currency)
+    sets.push(`${col} = ?`);
     bind.push(value ?? null);
   }
   if (!sets.length) return;

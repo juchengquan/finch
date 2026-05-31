@@ -30,7 +30,7 @@ interface BudgetRow {
 
 async function loadBudgets(exec: Exec): Promise<BudgetRow[]> {
   const rows = await exec(
-    `SELECT id, ledger_id, type, amount, carry_forward, frequency, start_date, end_date,
+    `SELECT id, ledger_id, kind, amount, carry_forward, frequency, start_date, end_date,
             is_recurring, rollover, rollover_limit, pending_amount, last_rolled_period,
             account_ids, category_ids
        FROM budgets`,
@@ -38,7 +38,7 @@ async function loadBudgets(exec: Exec): Promise<BudgetRow[]> {
   return rows.map((r) => ({
     id: String(r.id),
     ledger_id: String(r.ledger_id),
-    type: String(r.type) as 'income' | 'expense',
+    type: String(r.kind) as 'income' | 'expense',
     amount: Number(r.amount),
     carry_forward: Number(r.carry_forward ?? 0),
     frequency: String(r.frequency) as Frequency,
