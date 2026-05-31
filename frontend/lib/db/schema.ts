@@ -225,18 +225,6 @@ CREATE TABLE IF NOT EXISTS scheduled_splits (
   CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 
-CREATE TABLE IF NOT EXISTS subscriptions (
-  id         TEXT PRIMARY KEY,
-  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  amount     REAL NOT NULL,
-  cadence    TEXT NOT NULL DEFAULT 'monthly',
-  next_date  TEXT,
-  hue        INTEGER NOT NULL DEFAULT 200,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS exchange_rates (
   date        TEXT NOT NULL,
   currency    TEXT NOT NULL,
@@ -297,7 +285,6 @@ CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequenc
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_scheduled_splits_template ON scheduled_splits(template_id);
-CREATE INDEX IF NOT EXISTS idx_subs_ledger ON subscriptions(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
@@ -333,7 +320,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T03:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T04:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

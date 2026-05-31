@@ -74,7 +74,6 @@ export const CANONICAL_TABLES = [
   'transfer_groups',
   'budgets',
   'tags',
-  'subscriptions',
   'scheduled_templates',
   'scheduled_splits',
   'exchange_rates',

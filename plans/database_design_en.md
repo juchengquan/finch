@@ -248,11 +248,10 @@ and a column reference table.
 12. [`budgets`](#612-budgets--named-spendingincome-targets)
 13. [`scheduled_templates`](#613-scheduled_templates--recurring-transaction-blueprints)
 14. [`scheduled_splits`](#614-scheduled_splits--multi-account-splits-for-a-template)
-15. [`subscriptions`](#615-subscriptions--display-only-list-of-recurring-bills)
-16. [`exchange_rates`](#616-exchange_rates--locked-historical-fx-rates)
-17. [`sync_log`](#617-sync_log--per-device-sync-marker)
-18. [`app_state`](#618-app_state--transitional-keyvalue-bag)
-19. [`db_metadata`](#619-db_metadata--single-row-self-description-of-the-file)
+15. [`exchange_rates`](#615-exchange_rates--locked-historical-fx-rates)
+16. [`sync_log`](#616-sync_log--per-device-sync-marker)
+17. [`app_state`](#617-app_state--transitional-keyvalue-bag)
+18. [`db_metadata`](#618-db_metadata--single-row-self-description-of-the-file)
 
 ---
 
@@ -739,39 +738,7 @@ CREATE TABLE scheduled_splits (
 
 ---
 
-### 6.15 `subscriptions` — display-only list of recurring bills
-
-Surfaces on the Subscriptions screen; not auto-posting (use `scheduled_templates` for that).
-
-```sql
-CREATE TABLE subscriptions (
-  id         TEXT PRIMARY KEY,
-  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  amount     REAL NOT NULL,
-  cadence    TEXT NOT NULL DEFAULT 'monthly',
-  next_date  TEXT,
-  hue        INTEGER NOT NULL DEFAULT 200,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-```
-
-| Column | Type | Description |
-|---|---|---|
-| `id` | TEXT PK | `sub-<random>`. |
-| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `name` | TEXT NOT NULL | Display name. |
-| `amount` | REAL NOT NULL | Per-cycle cost in the ledger base. |
-| `cadence` | TEXT NOT NULL · default `monthly` | Free-text label (`monthly`, `yearly`, …). |
-| `next_date` | TEXT | Optional `YYYY-MM-DD` for the next renewal hint. |
-| `hue` | INTEGER NOT NULL · default 200 | OKLCH hue for the chip / row accent. |
-| `sort_order` | INTEGER NOT NULL · default 0 | Display order. |
-| `created_at` | TEXT NOT NULL | Audit. |
-
----
-
-### 6.16 `exchange_rates` — locked historical FX rates
+### 6.15 `exchange_rates` — locked historical FX rates
 
 One row per (date, currency). Used by `convertToBase` when stamping `amount_base` on a transaction. SGD is the canonical hub.
 
@@ -795,7 +762,7 @@ CREATE TABLE exchange_rates (
 
 ---
 
-### 6.17 `sync_log` — per-device sync marker
+### 6.16 `sync_log` — per-device sync marker
 
 Records the last sync state per device. Read by the System / Devices screen.
 
@@ -821,7 +788,7 @@ CREATE TABLE sync_log (
 
 ---
 
-### 6.18 `app_state` — transitional key/value bag
+### 6.17 `app_state` — transitional key/value bag
 
 Generic JSON-value storage for slices that haven't been moved to dedicated tables yet (pending state, scheduled-occurrence cache, etc.). Each later phase moves a key out of here into its own table.
 
@@ -839,7 +806,7 @@ CREATE TABLE app_state (
 
 ---
 
-### 6.19 `db_metadata` — single-row self-description of the file
+### 6.18 `db_metadata` — single-row self-description of the file
 
 Describes the file itself: what wrote it, what schema version it carries, when it was last written, and (after an export) provenance + a SHA-256 checksum for tamper detection on import.
 

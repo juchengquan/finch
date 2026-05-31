@@ -22,7 +22,6 @@ import { listCounterparties } from './queries/counterparties';
 import { listExchangeRates, listDevices } from './queries/system';
 import { listTags, transactionTagMap } from './queries/tags';
 import { splitsByTransaction } from './queries/transactionSplits';
-import { listSubscriptions } from './queries/planning';
 import { listScheduled } from './queries/scheduled';
 import { getAppState } from './queries/appState';
 import type { Exec, PersistState, ProjectedState } from './repo';
@@ -46,7 +45,7 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec('SELECT * FROM transactions ORDER BY date DESC, time DESC');
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, devices, tags, tagMap, subscriptions, scheduled] =
+  const [accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, devices, tags, tagMap, scheduled] =
     await Promise.all([
       listAccounts(exec),
       listAccountGroups(exec),
@@ -58,7 +57,6 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       listDevices(exec),
       listTags(exec),
       transactionTagMap(exec),
-      listSubscriptions(exec),
       listScheduled(exec),
     ]);
   const mobileTabIds = await readMobileTabIds(exec);
@@ -89,7 +87,6 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     exchangeRates,
     devices,
     tags,
-    subscriptions,
     scheduled,
     mobileTabIds,
     displayCurrencyByLedger,

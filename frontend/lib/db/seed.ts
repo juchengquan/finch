@@ -21,7 +21,6 @@ import transferGroupsData from '@/data/transfer-groups.json';
 import exchangeRatesData from '@/data/exchange-rates.json';
 import devicesData from '@/data/devices.json';
 import goalsData from '@/data/goals.json';
-import subscriptionsData from '@/data/subscriptions.json';
 import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
@@ -169,16 +168,6 @@ export async function seedReference(exec: Exec): Promise<void> {
     await exec('INSERT OR IGNORE INTO tags (id,ledger_id,name,color) VALUES (?,?,?,?)', [
       t.id, t.ledger ?? 'personal', t.name, t.color ?? null,
     ]);
-  }
-
-  type SubRow = { id: string; name: string; amount: number; cadence?: string; next?: string; logoHue?: number; ledger?: string };
-  const subs = subscriptionsData as SubRow[];
-  for (let i = 0; i < subs.length; i++) {
-    const s = subs[i];
-    await exec(
-      'INSERT OR IGNORE INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [s.id, s.ledger ?? 'personal', s.name, s.amount, s.cadence ?? 'monthly', s.next ?? null, s.logoHue ?? 200, i, SEED_TS],
-    );
   }
 
   // Scheduled templates live in their own tables. The mock references accounts by

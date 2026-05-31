@@ -29,11 +29,6 @@ import {
   type AccountGroupPatch,
 } from './queries/accountGroups';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
-import {
-  deleteSubscription as qDeleteSubscription,
-  updateSubscription as qUpdateSubscription,
-  type SubscriptionPatch,
-} from './queries/planning';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
 import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
 import {
@@ -85,7 +80,6 @@ import type { Tx } from '@/lib/store';
 
 const RESET_TABLES = [
   'transactions',
-  'subscriptions',
   'scheduled_splits',
   'scheduled_templates',
   'sync_log',
@@ -645,13 +639,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await qUpdateTag(exec, str(args.id), patch);
       return;
     }
-    case 'updateSubscription': {
-      const patch = (args.patch ?? {}) as SubscriptionPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Subscription name is required');
-      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Amount must be greater than 0');
-      await qUpdateSubscription(exec, str(args.id), patch);
-      return;
-    }
     case 'updateScheduled': {
       const patch = (args.patch ?? {}) as ScheduledPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
@@ -705,27 +692,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       }
       return;
     }
-    case 'createSubscription': {
-      const ledgerId = str(args.ledgerId || 'personal');
-      const name = str(args.name).trim();
-      const amount = Number(args.amount);
-      if (!name) throw new Error('Subscription name is required');
-      if (!(amount > 0)) throw new Error('Subscription amount must be greater than 0');
-      const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM subscriptions WHERE ledger_id = ?', [ledgerId]);
-      await exec(
-        'INSERT INTO subscriptions (id,ledger_id,name,amount,cadence,next_date,hue,sort_order,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-        [newId('sub'), ledgerId, name, amount, args.cadence ? str(args.cadence) : 'monthly', args.next ? str(args.next) : null, args.hue != null ? Number(args.hue) : 200, Number(rows[0]?.n ?? 0), new Date().toISOString()],
-      );
-      return;
-    }
     case 'deleteCategory':
       await qDeleteCategory(exec, str(args.id));
       return;
     case 'deleteTag':
       await qDeleteTag(exec, str(args.id));
-      return;
-    case 'deleteSubscription':
-      await qDeleteSubscription(exec, str(args.id));
       return;
     case 'createScheduled': {
       const name = str(args.name).trim();

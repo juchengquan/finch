@@ -11,7 +11,6 @@ import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { ExchangeRate, Device } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
-import type { Subscription } from '@/lib/db/queries/planning';
 
 export interface Tx {
   id: string;
@@ -153,7 +152,6 @@ interface FinanceState {
   exchangeRates: ExchangeRate[];
   devices: Device[];
   tags: Tag[];
-  subscriptions: Subscription[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
@@ -203,9 +201,6 @@ interface FinanceState {
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
-  createSubscription: (input: { name: string; amount: number; cadence?: string; next?: string; hue?: number; ledgerId?: string }) => void;
-  updateSubscription: (id: string, patch: { name?: string; amount?: number; cadence?: string; next?: string | null }) => void;
-  deleteSubscription: (id: string) => void;
   createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
@@ -244,7 +239,6 @@ export const useFinanceStore = create<FinanceState>()(
       exchangeRates: [],
       devices: [],
       tags: [],
-      subscriptions: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
 
@@ -644,27 +638,6 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.tags ? { ...t, tags: t.tags.filter((x) => x !== id) } : t)),
         }));
         syncMutation('deleteTag', { id });
-      },
-
-      createSubscription: (input) => {
-        const ledgerId = input.ledgerId ?? 'personal';
-        const id = `sub-${Date.now().toString(36)}`;
-        const cadence = input.cadence ?? 'monthly';
-        const hue = input.hue ?? 200;
-        set((s) => ({
-          subscriptions: [...s.subscriptions, { id, ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue }],
-        }));
-        syncMutation('createSubscription', { ledgerId, name: input.name, amount: input.amount, cadence, next: input.next ?? null, hue });
-      },
-
-      updateSubscription: (id, patch) => {
-        set((s) => ({ subscriptions: s.subscriptions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-        syncMutation('updateSubscription', { id, patch });
-      },
-
-      deleteSubscription: (id) => {
-        set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
-        syncMutation('deleteSubscription', { id });
       },
 
       createScheduled: (input) => {

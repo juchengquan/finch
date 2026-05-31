@@ -300,13 +300,6 @@ test('deleteScheduled removes the template and cascades its splits', async () =>
   expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
 });
 
-test('deleteSubscription hard-deletes the row', async () => {
-  const exec = await seeded();
-  const subId = String((await exec("SELECT id FROM subscriptions LIMIT 1"))[0].id);
-  await applyMutation(exec, 'deleteSubscription', { id: subId });
-  expect(Number((await exec('SELECT COUNT(*) AS n FROM subscriptions WHERE id = ?', [subId]))[0].n)).toBe(0);
-});
-
 test('deleteCounterparty removes the merchant', async () => {
   const exec = await seeded();
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
@@ -349,19 +342,12 @@ test('createCategory persists icon + hue, and listCategories returns hue', async
   expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
 });
 
-test('updateTag and updateSubscription edit fields', async () => {
+test('updateTag edits fields', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
   const [tag] = await exec("SELECT name, color FROM tags WHERE id = 'tag-business'");
   expect(String(tag.name)).toBe('Work');
   expect(String(tag.color)).toBe('300');
-
-  const subId = String((await exec('SELECT id FROM subscriptions LIMIT 1'))[0].id);
-  await applyMutation(exec, 'updateSubscription', { id: subId, patch: { name: 'Netflix 4K', amount: 22.99, next: 'Jul 1' } });
-  const [sub] = await exec('SELECT name, amount, next_date FROM subscriptions WHERE id = ?', [subId]);
-  expect(String(sub.name)).toBe('Netflix 4K');
-  expect(Number(sub.amount)).toBeCloseTo(22.99, 2);
-  expect(String(sub.next_date)).toBe('Jul 1');
 });
 
 test('updateScheduled and updateCounterparty edit fields', async () => {
