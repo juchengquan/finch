@@ -11,6 +11,7 @@ import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
+import { RefundBadge } from '@/components/refund-badge';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
@@ -216,7 +217,10 @@ export default function ActivityPage() {
                     >
                       <CatBar color={cat.color} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">{t.merchant}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium">{t.merchant}</span>
+                          {t.kind === 'refund' && <RefundBadge />}
+                        </div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
                           {cat.name} · {acctById(t.account).name}
                           {t.pending && <span className="text-warning"> · pending</span>}
@@ -266,6 +270,7 @@ export default function ActivityPage() {
                         <div className="flex items-center gap-2.5">
                           <CatBar color={cat.color} className="h-4" />
                           {t.merchant}
+                          {t.kind === 'refund' && <RefundBadge />}
                         </div>
                       </td>
                       <td className="text-muted-foreground px-4 py-2.5">{cat.name}</td>
