@@ -149,13 +149,13 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   const kind = input.kind ?? (amountBase > 0 ? 'income' : 'expense');
   await exec(
     `INSERT INTO transactions
-      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-       description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
+       description,category_id,transfer_group_id,kind,status,confirmed_at,
        currency,notes,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`,
     [
-      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate, input.date,
-      input.merchant, input.categoryId ?? null, null, null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
+      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate,
+      input.merchant, input.categoryId ?? null, null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
       currency, input.note || null,
     ],
   );
@@ -188,8 +188,8 @@ export async function updateTransaction(
     const ledgerBase = String(row?.base_currency ?? currency);
     const rateDate = patch.date ?? String(row?.date ?? '');
     const conv = await convertToBase(exec, patch.amount, currency, ledgerBase, rateDate);
-    sets.push('amount = ?', 'amount_base = ?', 'exchange_rate = ?', 'exchange_rate_date = ?');
-    bind.push(patch.amount, conv.amountBase, conv.rate, rateDate);
+    sets.push('amount = ?', 'amount_base = ?', 'exchange_rate = ?');
+    bind.push(patch.amount, conv.amountBase, conv.rate);
   }
   if (!sets.length) return;
   bind.push(id);

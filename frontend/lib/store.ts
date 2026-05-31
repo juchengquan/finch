@@ -565,7 +565,7 @@ export const useFinanceStore = create<FinanceState>()(
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
         const hue = input.hue ?? null;
-        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, parentName: null, type, icon, hue }] }));
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, hue }] }));
         syncMutation('createCategory', { ledgerId, name: input.name, type, icon, hue });
       },
 
