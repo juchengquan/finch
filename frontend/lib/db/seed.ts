@@ -11,6 +11,7 @@
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './queries/rates';
+import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
 import categoriesData from '@/data/categories.json';
@@ -99,8 +100,8 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (let i = 0; i < accountGroupsData.length; i++) {
     const g = accountGroupsData[i];
     await exec(
-      'INSERT INTO account_groups (id,ledger_id,name,include_in_net_worth,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?)',
-      [g.id, 'personal', g.name, g.id === 'credit' ? 0 : 1, i, SEED_TS, SEED_TS],
+      'INSERT INTO account_groups (id,ledger_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?)',
+      [g.id, 'personal', g.name, i, SEED_TS, SEED_TS],
     );
   }
 
@@ -110,7 +111,7 @@ export async function seedReference(exec: Exec): Promise<void> {
       'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,institution,routing,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       // opening_balance starts at the known balance; insertTransactions overwrites
       // it with the true opening (known − Σ bases) for accounts that have txns.
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, a.color ?? null, a.last4 ?? null, null, null, null, 1, SEED_TS, SEED_TS],
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, a.color ?? null, a.last4 ?? null, null, null, defaultIncludeInNetWorth(ACCOUNT_TYPE[a.type] ?? 'savings'), 1, SEED_TS, SEED_TS],
     );
   }
 

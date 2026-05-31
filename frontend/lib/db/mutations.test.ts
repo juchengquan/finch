@@ -605,14 +605,12 @@ test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-e
   await applyMutation(exec, 'createAccountGroup', { id: 'ag-new', ledgerId: 'personal', name: 'Crypto' });
   const created = await listAccountGroups(exec, 'personal');
   expect(created.find((g) => g.id === 'ag-new')?.name).toBe('Crypto');
-  expect(created.find((g) => g.id === 'ag-new')?.includeInNetWorth).toBe(1);
 
-  // Update (rename + toggle net-worth).
-  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets', includeInNetWorth: 0 } });
+  // Update (rename).
+  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets' } });
   const updated = await listAccountGroups(exec, 'personal');
   const u = updated.find((g) => g.id === 'ag-new')!;
   expect(u.name).toBe('Digital Assets');
-  expect(u.includeInNetWorth).toBe(0);
 
   // Assigning the group to an account, then deleting the group, sets accounts.group_id to NULL.
   await applyMutation(exec, 'updateAccount', { id: 'cc', patch: { groupId: 'ag-new' } });

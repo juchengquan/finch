@@ -32,7 +32,7 @@ test('accounts: list, net worth, balance series, edit', async () => {
   expect(accts.length).toBe(4); // chk, sav, cc, inv
   const cc = accts.find((a) => a.id === 'cc')!;
   expect(cc.groupName).toBe('Credit Cards');
-  expect(cc.includeInNetWorth).toBe(0); // credit group excluded by default
+  expect(cc.includeInNetWorth).toBe(0); // credit_card type excluded by default
 
   // Net worth excludes the credit card group (-842.18), so it's assets only.
   const nw = await netWorth(exec, 'personal');

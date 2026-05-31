@@ -2,6 +2,7 @@
 // curve from snapshots, net worth, and editing account details.
 
 import type { Exec } from '@/lib/db/repo';
+import { defaultIncludeInNetWorth } from '@/lib/account-types';
 
 /**
  * Recompute an account's current_balance from its opening balance + confirmed
@@ -44,7 +45,7 @@ export interface AccountRow {
   balance: number;
   groupId: string | null;
   groupName: string | null;
-  includeInNetWorth: number; // resolved (account override ?? group default ?? 1)
+  includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
   color: string | null;
   last4: string | null;
   institution: string | null;
@@ -58,8 +59,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
             a.group_id AS groupId, g.name AS groupName, a.color, a.last4, a.institution, a.routing,
-            a.sort_order AS sortOrder,
-            COALESCE(a.include_in_net_worth, g.include_in_net_worth, 1) AS inw
+            a.sort_order AS sortOrder, a.include_in_net_worth AS inw
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
       ${where}
       ORDER BY g.sort_order, a.sort_order, a.name`,
@@ -86,10 +86,9 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
 /** Net worth = sum of balances for accounts that count (assets minus liabilities). */
 export async function netWorth(exec: Exec, ledgerId: string): Promise<number> {
   const rows = await exec(
-    `SELECT COALESCE(SUM(a.current_balance), 0) AS total
-       FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
-      WHERE a.ledger_id = ? AND a.is_active = 1
-        AND COALESCE(a.include_in_net_worth, g.include_in_net_worth, 1) = 1`,
+    `SELECT COALESCE(SUM(current_balance), 0) AS total
+       FROM accounts
+      WHERE ledger_id = ? AND is_active = 1 AND include_in_net_worth = 1`,
     [ledgerId],
   );
   return Number(rows[0]?.total ?? 0);
@@ -104,6 +103,8 @@ export interface AccountPatch {
   institution?: string | null;
   routing?: string | null;
   groupId?: string | null;
+  /** Per-account net-worth flag. Defaulted from `type` on create; flippable. */
+  includeInNetWorth?: number;
 }
 
 const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
@@ -115,6 +116,7 @@ const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   institution: 'institution',
   routing: 'routing',
   groupId: 'group_id',
+  includeInNetWorth: 'include_in_net_worth',
 };
 
 /** Update an account's editable fields on the real table (replaces the old shim). */
@@ -156,11 +158,12 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
     a.groupId == null ? [a.ledgerId] : [a.ledgerId, a.groupId],
   );
   const sortOrder = Number(rows[0]?.n ?? 0);
+  const inw = defaultIncludeInNetWorth(a.type);
   await exec(
     `INSERT INTO accounts
        (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,sort_order,include_in_net_worth,is_active,created_at,updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, a.last4, sortOrder, null],
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, a.last4, sortOrder, inw],
   );
 }
 

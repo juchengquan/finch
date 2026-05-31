@@ -284,17 +284,16 @@ CREATE TABLE ledgers (
 
 ### 6.2 `account_groups` — account buckets on the Accounts screen
 
-Visual / functional groupings (Cash & Banking, Credit Cards, Investments, Loans). Carries the default `include_in_net_worth` for the accounts in the group.
+Purely organisational groupings (Cash & Banking, Credit Cards, Investments, Loans). The net-worth flag is per-account (see §6.4); groups carry no defaults.
 
 ```sql
 CREATE TABLE account_groups (
-  id                   TEXT PRIMARY KEY,
-  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name                 TEXT NOT NULL,
-  include_in_net_worth INTEGER NOT NULL DEFAULT 1,
-  sort_order           INTEGER NOT NULL DEFAULT 0,
-  created_at           TEXT NOT NULL,
-  updated_at           TEXT NOT NULL
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -303,7 +302,6 @@ CREATE TABLE account_groups (
 | `id` | TEXT PK | App-stable id (`cash`, `credit`, `invest`, …). |
 | `ledger_id` | TEXT NOT NULL FK → `ledgers.id` · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display label. |
-| `include_in_net_worth` | INTEGER NOT NULL · default 1 | Group-level default; accounts can override per-row. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order on the Accounts screen. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
@@ -353,7 +351,7 @@ CREATE TABLE accounts (
   institution          TEXT,
   routing              TEXT,
   sort_order           INTEGER NOT NULL DEFAULT 0,
-  include_in_net_worth INTEGER,
+  include_in_net_worth INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
   archived_at          TEXT,
   created_at           TEXT NOT NULL,
@@ -376,7 +374,7 @@ CREATE TABLE accounts (
 | `institution` | TEXT | Bank / brokerage name — display only. |
 | `routing` | TEXT | Routing number — display only. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the group. |
-| `include_in_net_worth` | INTEGER (nullable; 0 / 1 / NULL) | Per-account override of the group default. NULL = inherit. |
+| `include_in_net_worth` | INTEGER NOT NULL · default 1 | 0 / 1. Defaulted from `type` at create (credit_card → 0, else 1); flippable per account. |
 | `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. `0` hides from active lists; history is kept. |
 | `archived_at` | TEXT | ISO 8601 UTC stamped when `is_active` flips to 0. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
@@ -1224,18 +1222,18 @@ These records are created when the database is first initialized:
 INSERT INTO ledgers (id, name, base_currency, is_default, created_at, updated_at)
 VALUES ('default', 'My Ledger', 'SGD', 1, datetime('now'), datetime('now'));
 
--- Sample account groups
-INSERT INTO account_groups (id, ledger_id, name, include_in_net_worth, sort_order, created_at, updated_at)
+-- Sample account groups (purely organisational — no net-worth defaults)
+INSERT INTO account_groups (id, ledger_id, name, sort_order, created_at, updated_at)
 VALUES
-    ('grp_savings', 'default', 'Savings', 1, 1, datetime('now'), datetime('now')),
-    ('grp_credit',  'default', 'Credit Cards', 0, 2, datetime('now'), datetime('now')),
-    ('grp_invest',  'default', 'Investments', 1, 3, datetime('now'), datetime('now'));
+    ('grp_savings', 'default', 'Savings',      1, datetime('now'), datetime('now')),
+    ('grp_credit',  'default', 'Credit Cards', 2, datetime('now'), datetime('now')),
+    ('grp_invest',  'default', 'Investments',  3, datetime('now'), datetime('now'));
 
--- Sample accounts
-INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, created_at, updated_at)
+-- Sample accounts (include_in_net_worth is defaulted from `type`: credit_card → 0, else 1)
+INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, include_in_net_worth, created_at, updated_at)
 VALUES
-    ('UOB_One',   'default', 'grp_savings', 'UOB One',      'savings', 'SGD', 0, datetime('now'), datetime('now')),
-    ('UOB_LADY',  'default', 'grp_credit',  'UOB LADY',     'credit_card', 'SGD', 0, datetime('now'), datetime('now'));
+    ('UOB_One',   'default', 'grp_savings', 'UOB One',  'savings',     'SGD', 0, 1, datetime('now'), datetime('now')),
+    ('UOB_LADY',  'default', 'grp_credit',  'UOB LADY', 'credit_card', 'SGD', 0, 0, datetime('now'), datetime('now'));
 ```
 
 ---
@@ -1253,7 +1251,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 5 | Tags use a junction table, not JSON | If you rename a tag, the junction table approach updates it in one place (the `tags` row). A JSON array approach would require scanning and updating every transaction record that contains the tag. |
 | 6 | `counterparties` has a `aliases` JSON field | Bank statements spell merchant names dozens of different ways. A single `aliases` array lets us match all variants without creating duplicate merchant records. |
 | 7 | Budgets have no `transfer` type | Transfers don't change net worth — money leaving one account just enters another. They don't need budget tracking. |
-| 8 | Two-level `include_in_net_worth` | Users disagree about whether credit cards should count in net worth. The group-level default handles the norm; the account-level override handles exceptions. |
+| 8 | Per-account `include_in_net_worth` | Users disagree about whether credit cards should count in net worth. The flag is defaulted by `account.type` at create (credit_card → 0, else 1) and stays flippable per account. We tried a group-level default with an account-level override (three-state nullable) but it made the COALESCE join the most confusing piece of the read path; the type-based default covers the common case without the complexity. |
 | 9 | Three JSON filter arrays in budgets | Some users want a budget for "dining out" (category filter). Others want "UOB card only" (account filter). The three arrays can combine: "UOB card + dining out + business trips". All three must match. |
 | 10 | `category_id` ON DELETE SET NULL | Deleting a category shouldn't delete the transactions — that's your financial history. The category field becomes NULL and the transaction shows as "uncategorized". |
 | 11 | `account_id` ON DELETE RESTRICT | An account with transaction history cannot be deleted. This prevents accidental data loss. To "close" an account, set `is_active = 0`. |

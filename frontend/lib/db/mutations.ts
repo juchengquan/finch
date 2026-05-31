@@ -566,7 +566,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         id: str(args.id || newId('ag')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
-        includeInNetWorth: args.includeInNetWorth == null ? 1 : Number(args.includeInNetWorth),
       });
       return;
     }

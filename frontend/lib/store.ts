@@ -101,6 +101,8 @@ export interface AccountPatch {
   routing?: string | null;
   color?: string | null;
   groupId?: string | null;
+  /** Per-account net-worth flag (0/1). Defaulted from `type` at create time. */
+  includeInNetWorth?: number;
 }
 
 export interface NewAccountInput {
@@ -169,8 +171,8 @@ interface FinanceState {
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
-  createAccountGroup: (input: { name: string; includeInNetWorth?: number; ledgerId?: string }) => string;
-  updateAccountGroup: (id: string, patch: { name?: string; includeInNetWorth?: number }) => void;
+  createAccountGroup: (input: { name: string; ledgerId?: string }) => string;
+  updateAccountGroup: (id: string, patch: { name?: string }) => void;
   deleteAccountGroup: (id: string) => void;
   createBudget: (input: NewBudgetInput) => string;
   updateBudget: (id: string, patch: BudgetPatch) => void;
@@ -340,14 +342,13 @@ export const useFinanceStore = create<FinanceState>()(
       createAccountGroup: (input) => {
         const id = `ag-${Date.now().toString(36)}`;
         const ledgerId = input.ledgerId ?? 'personal';
-        const includeInNetWorth = input.includeInNetWorth ?? 1;
         set((s) => ({
           accountGroups: [
             ...s.accountGroups,
-            { id, ledgerId, name: input.name, includeInNetWorth, sortOrder: s.accountGroups.length },
+            { id, ledgerId, name: input.name, sortOrder: s.accountGroups.length },
           ],
         }));
-        syncMutation('createAccountGroup', { id, ledgerId, name: input.name, includeInNetWorth });
+        syncMutation('createAccountGroup', { id, ledgerId, name: input.name });
         return id;
       },
 
