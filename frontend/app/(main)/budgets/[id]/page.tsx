@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Ring, Money, Icon, CatBar } from '@/components/primitives';
+import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
@@ -175,7 +176,10 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
             >
               <CatBar color={catById(t.category).color} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{t.merchant}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{t.merchant}</span>
+                  {t.kind === 'refund' && <RefundBadge />}
+                </div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
                   {t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''} · {acctById(t.account).name}
                 </div>
