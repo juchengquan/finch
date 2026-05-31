@@ -54,7 +54,7 @@ const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) =>
 const EXTRA_TITLES: Record<string, string> = {
   add: 'Add expense',
   settings: 'Settings',
-  fx: 'FX rates',
+  fx: 'FX transaction',
 };
 
 interface PageShellProps {

@@ -12,12 +12,9 @@ import { useFinanceStore } from '@/lib/store';
 // surfaced as a labeled group in the main sidebar (desktop). URLs are unchanged.
 const LEDGER_TABS = [
   { id: 'pending', icon: 'doc', label: 'Pending', path: '/pending' },
-  { id: 'transfers', icon: 'split', label: 'Transfers', path: '/transfers' },
   { id: 'merchants', icon: 'bag', label: 'Merchants', path: '/merchants' },
   { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
   { id: 'tags', icon: 'tags', label: 'Tags', path: '/tags' },
-  { id: 'fx', icon: 'swap', label: 'FX', path: '/fx' },
-  { id: 'system', icon: 'cog', label: 'System', path: '/system' },
 ];
 
 // The pinned center button opens the add-expense sheet (see PageShell) rather
