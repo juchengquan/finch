@@ -18,7 +18,7 @@ export interface Device {
 }
 
 export async function listExchangeRates(exec: Exec): Promise<ExchangeRate[]> {
-  const rows = await exec('SELECT date, currency, rate_to_sgd AS rate, source FROM exchange_rates ORDER BY date');
+  const rows = await exec('SELECT date, currency, rate, source FROM exchange_rates ORDER BY date');
   return rows.map((r) => ({
     date: String(r.date),
     currency: String(r.currency),
@@ -27,13 +27,13 @@ export async function listExchangeRates(exec: Exec): Promise<ExchangeRate[]> {
   }));
 }
 
-/** Upsert an exchange rate on (date, currency). `rate` is rate_to_sgd. */
+/** Upsert an exchange rate on (date, currency). `rate` is USD per 1 unit of `currency`. */
 export async function setExchangeRate(
   exec: Exec,
   input: { date: string; currency: string; rate: number; source?: string | null },
 ): Promise<void> {
   await exec(
-    'INSERT OR REPLACE INTO exchange_rates (date, currency, rate_to_sgd, source) VALUES (?, ?, ?, ?)',
+    'INSERT OR REPLACE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, ?)',
     [input.date, input.currency, input.rate, input.source ?? null],
   );
 }

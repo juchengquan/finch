@@ -17,8 +17,7 @@ const PAGES: { label: string; href: string; icon: string; keywords: string[] }[]
   { label: 'Activity', href: '/activity', icon: 'doc', keywords: ['transactions', 'feed'] },
   { label: 'Budgets', href: '/budgets', icon: 'chart', keywords: ['spending', 'limit', 'goals', 'save', 'income'] },
   { label: 'Insights', href: '/insights', icon: 'sparkle', keywords: ['analytics', 'reports'] },
-  { label: 'Subscriptions', href: '/subscriptions', icon: 'sync', keywords: ['scheduled'] },
-  { label: 'Scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming'] },
+  { label: 'Scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming', 'subscriptions'] },
   { label: 'Add', href: '/add', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
   { label: 'Settings', href: '/settings', icon: 'cog', keywords: ['preferences'] },
   // Ledger admin

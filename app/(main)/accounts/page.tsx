@@ -138,9 +138,8 @@ const CURRENCY_CODES = Object.keys(CURRENCIES);
 interface GroupDraft {
   id: string | null; // null => create
   name: string;
-  includeInNetWorth: boolean;
 }
-const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '', includeInNetWorth: true };
+const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '' };
 
 export default function AccountsPage() {
   const { fmt, toBase } = useMoney();
@@ -217,7 +216,7 @@ export default function AccountsPage() {
   const openEditGroup = (id: string) => {
     const g = ledgerGroups.find((x) => x.id === id);
     if (!g) return;
-    setGroupDraft({ id: g.id, name: g.name, includeInNetWorth: g.includeInNetWorth !== 0 });
+    setGroupDraft({ id: g.id, name: g.name });
     setGroupDialogOpen(true);
   };
 
@@ -225,10 +224,10 @@ export default function AccountsPage() {
     const name = groupDraft.name.trim();
     if (!name) return;
     if (groupDraft.id) {
-      updateAccountGroup(groupDraft.id, { name, includeInNetWorth: groupDraft.includeInNetWorth ? 1 : 0 });
+      updateAccountGroup(groupDraft.id, { name });
       toast.success('Group updated');
     } else {
-      createAccountGroup({ name, includeInNetWorth: groupDraft.includeInNetWorth ? 1 : 0, ledgerId: activeId });
+      createAccountGroup({ name, ledgerId: activeId });
       toast.success('Group created', { description: name });
     }
     setGroupDialogOpen(false);
@@ -350,7 +349,7 @@ export default function AccountsPage() {
             <DialogHeader>
               <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
               <DialogDescription>
-                {groupDraft.id ? 'Rename or toggle net-worth inclusion.' : `Added to ${active.name}.`}
+                {groupDraft.id ? 'Rename this group.' : `Added to ${active.name}.`}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
@@ -363,15 +362,6 @@ export default function AccountsPage() {
                   autoFocus
                 />
               </div>
-              <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-                <span>Count toward net worth</span>
-                <input
-                  type="checkbox"
-                  checked={groupDraft.includeInNetWorth}
-                  onChange={(e) => setGroupDraft({ ...groupDraft, includeInNetWorth: e.target.checked })}
-                  className="size-4 cursor-pointer"
-                />
-              </label>
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -476,7 +466,7 @@ export default function AccountsPage() {
           <DialogHeader>
             <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
             <DialogDescription>
-              {groupDraft.id ? 'Rename or toggle net-worth inclusion.' : `Added to ${active.name}.`}
+              {groupDraft.id ? 'Rename this group.' : `Added to ${active.name}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -489,15 +479,6 @@ export default function AccountsPage() {
                 autoFocus
               />
             </div>
-            <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-              <span>Count toward net worth</span>
-              <input
-                type="checkbox"
-                checked={groupDraft.includeInNetWorth}
-                onChange={(e) => setGroupDraft({ ...groupDraft, includeInNetWorth: e.target.checked })}
-                className="size-4 cursor-pointer"
-              />
-            </label>
           </div>
           <DialogFooter>
             <DialogClose asChild>

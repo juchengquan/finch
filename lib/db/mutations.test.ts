@@ -37,7 +37,7 @@ test('createTransfer makes paired rows that move both balances', async () => {
   await applyMutation(exec, 'createTransfer', {
     fromAccountId: 'chk',
     toAccountId: 'sav',
-    amount: 200,
+    fromAmount: 200,
     date: '2026-05-27',
     note: 'Savings sweep',
   });
@@ -55,10 +55,10 @@ test('createTransfer makes paired rows that move both balances', async () => {
 test('createTransfer rejects same-account and zero amount', async () => {
   const exec = await seeded();
   await expect(
-    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'chk', amount: 50, date: '2026-05-27' }),
+    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'chk', fromAmount: 50, date: '2026-05-27' }),
   ).rejects.toThrow();
   await expect(
-    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 0, date: '2026-05-27' }),
+    applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 0, date: '2026-05-27' }),
   ).rejects.toThrow();
 });
 
@@ -98,7 +98,7 @@ test('transfers are excluded from category spend and cash flow', async () => {
   await applyMutation(exec, 'createTransfer', {
     fromAccountId: 'chk',
     toAccountId: 'sav',
-    amount: 500,
+    fromAmount: 500,
     date: '2026-05-27',
   });
   const after = await categorySpend(exec, 'personal');
@@ -162,18 +162,18 @@ test('createTransfer converts the incoming leg across currencies', async () => {
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw','personal','EUR Wallet','cash','EUR',0,1,'2026-05-26','2026-05-26')",
   );
-  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw', amount: 100, date: '2026-05-24' });
-  // chk is USD; 100 USD → EUR at rate_to_sgd(USD)/rate_to_sgd(EUR) = 1.3412 / 1.4592.
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw', fromAmount: 100, date: '2026-05-24' });
+  // chk is USD; 100 USD → EUR at rate(USD)/rate(EUR) = 1 / 1.088 (USD is the hub).
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw'"))[0].b);
-  expect(eur).toBeCloseTo(100 * (1.3412 / 1.4592), 2);
+  expect(eur).toBeCloseTo(100 * (1 / 1.088), 2);
   const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
-  expect(Number(tg[0].r)).toBeCloseTo(1.3412 / 1.4592, 4);
+  expect(Number(tg[0].r)).toBeCloseTo(1 / 1.088, 4);
   // listTransfers surfaces both legs' native amounts + currencies for the UI.
   const [t] = await listTransfers(exec, 'personal');
   expect(t.fromCurrency).toBe('USD');
   expect(t.toCurrency).toBe('EUR');
   expect(t.amount).toBeCloseTo(100, 2); // sent (USD, native)
-  expect(t.toAmount).toBeCloseTo(100 * (1.3412 / 1.4592), 2); // received (EUR, native)
+  expect(t.toAmount).toBeCloseTo(100 * (1 / 1.088), 2); // received (EUR, native)
 });
 
 test('addTransaction on a foreign-currency account: native balance, ledger-base amount_base', async () => {
@@ -300,13 +300,6 @@ test('deleteScheduled removes the template and cascades its splits', async () =>
   expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBe(0);
 });
 
-test('deleteSubscription hard-deletes the row', async () => {
-  const exec = await seeded();
-  const subId = String((await exec("SELECT id FROM subscriptions LIMIT 1"))[0].id);
-  await applyMutation(exec, 'deleteSubscription', { id: subId });
-  expect(Number((await exec('SELECT COUNT(*) AS n FROM subscriptions WHERE id = ?', [subId]))[0].n)).toBe(0);
-});
-
 test('deleteCounterparty removes the merchant', async () => {
   const exec = await seeded();
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
@@ -318,7 +311,7 @@ test('deleteTransfer removes both legs and restores balances', async () => {
   const exec = await seeded();
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
-  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27' });
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27' });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 200, 2);
   const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
   await applyMutation(exec, 'deleteTransfer', { id: groupId });
@@ -349,19 +342,12 @@ test('createCategory persists icon + hue, and listCategories returns hue', async
   expect((await listCategories(exec, 'personal')).find((c) => c.id === 'food')!.hue).toBe(12);
 });
 
-test('updateTag and updateSubscription edit fields', async () => {
+test('updateTag edits fields', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
   const [tag] = await exec("SELECT name, color FROM tags WHERE id = 'tag-business'");
   expect(String(tag.name)).toBe('Work');
   expect(String(tag.color)).toBe('300');
-
-  const subId = String((await exec('SELECT id FROM subscriptions LIMIT 1'))[0].id);
-  await applyMutation(exec, 'updateSubscription', { id: subId, patch: { name: 'Netflix 4K', amount: 22.99, next: 'Jul 1' } });
-  const [sub] = await exec('SELECT name, amount, next_date FROM subscriptions WHERE id = ?', [subId]);
-  expect(String(sub.name)).toBe('Netflix 4K');
-  expect(Number(sub.amount)).toBeCloseTo(22.99, 2);
-  expect(String(sub.next_date)).toBe('Jul 1');
 });
 
 test('updateScheduled and updateCounterparty edit fields', async () => {
@@ -385,13 +371,54 @@ test('updateTransfer rewrites both legs and recomputes balances', async () => {
   const exec = await seeded();
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
-  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', amount: 200, date: '2026-05-27', note: 'a' });
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27', note: 'a' });
   const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
-  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { amount: 350, date: '2026-05-28', note: 'updated' } });
+  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 350, date: '2026-05-28', note: 'updated' } });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 350, 2);
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 350, 2);
   const legs = await exec('SELECT date, notes FROM transactions WHERE transfer_group_id = ?', [groupId]);
   expect(legs.every((l) => l.date === '2026-05-28' && l.notes === 'updated')).toBe(true);
+});
+
+test('createTransfer with explicit toAmount pins both sides + sets the rate', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw2','personal','EUR Wallet 2','cash','EUR',0,1,'2026-05-26','2026-05-26')",
+  );
+  // chk is USD; user types: sent $100, received €90 (bank's actual conversion, including fees).
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw2', fromAmount: 100, toAmount: 90, date: '2026-05-24' });
+  const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw2'"))[0].b);
+  expect(eur).toBeCloseTo(90, 2);
+  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
+  expect(Number(tg[0].r)).toBeCloseTo(0.9, 4);
+});
+
+test('updateTransfer with only fromAmount preserves the FX ratio on cross-currency', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw3','personal','EUR Wallet 3','cash','EUR',0,1,'2026-05-26','2026-05-26')",
+  );
+  // Create at $100 → €91 (rate 0.91), then double the from-leg.
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw3', fromAmount: 100, toAmount: 91, date: '2026-05-24' });
+  const groupId = String((await exec("SELECT id FROM transfer_groups ORDER BY created_at DESC LIMIT 1"))[0].id);
+  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 200 } });
+  const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw3'"))[0].b);
+  expect(eur).toBeCloseTo(182, 2); // 91 × (200/100)
+});
+
+test('updateTransfer with both amounts rewrites the rate on cross-currency', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw4','personal','EUR Wallet 4','cash','EUR',0,1,'2026-05-26','2026-05-26')",
+  );
+  // Initial: $100 → €91 (mid-rate). User corrects to $100 → €89 (bank's actual).
+  await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw4', fromAmount: 100, toAmount: 91, date: '2026-05-24' });
+  const groupId = String((await exec("SELECT id FROM transfer_groups ORDER BY created_at DESC LIMIT 1"))[0].id);
+  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 100, toAmount: 89 } });
+  const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw4'"))[0].b);
+  expect(eur).toBeCloseTo(89, 2);
+  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups WHERE id = ?', [groupId]);
+  expect(Number(tg[0].r)).toBeCloseTo(0.89, 4);
 });
 
 test('createCounterparty inserts an unverified merchant', async () => {
@@ -530,8 +557,8 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
   const exec = await seeded();
   const { convertToBase } = await import('@/lib/db/queries/rates');
   await applyMutation(exec, 'setExchangeRate', { date: '2026-06-15', currency: 'JPY', rate: 0.01, source: 'manual' });
-  // JPY → SGD on that date: rate = rateToSgd(JPY)/rateToSgd(SGD) = 0.01/1 = 0.01.
-  const conv = await convertToBase(exec, 100, 'JPY', 'SGD', '2026-06-15');
+  // JPY → USD on that date: rate = rate(JPY) / rate(USD) = 0.01 / 1 = 0.01 (USD is the hub).
+  const conv = await convertToBase(exec, 100, 'JPY', 'USD', '2026-06-15');
   expect(conv.rate).toBeCloseTo(0.01, 6);
   expect(conv.amountBase).toBeCloseTo(1.0, 4);
 });
@@ -605,14 +632,12 @@ test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-e
   await applyMutation(exec, 'createAccountGroup', { id: 'ag-new', ledgerId: 'personal', name: 'Crypto' });
   const created = await listAccountGroups(exec, 'personal');
   expect(created.find((g) => g.id === 'ag-new')?.name).toBe('Crypto');
-  expect(created.find((g) => g.id === 'ag-new')?.includeInNetWorth).toBe(1);
 
-  // Update (rename + toggle net-worth).
-  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets', includeInNetWorth: 0 } });
+  // Update (rename).
+  await applyMutation(exec, 'updateAccountGroup', { id: 'ag-new', patch: { name: 'Digital Assets' } });
   const updated = await listAccountGroups(exec, 'personal');
   const u = updated.find((g) => g.id === 'ag-new')!;
   expect(u.name).toBe('Digital Assets');
-  expect(u.includeInNetWorth).toBe(0);
 
   // Assigning the group to an account, then deleting the group, sets accounts.group_id to NULL.
   await applyMutation(exec, 'updateAccount', { id: 'cc', patch: { groupId: 'ag-new' } });

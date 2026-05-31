@@ -77,6 +77,6 @@ test('foreign seed rows derive their base from the rate table and lock the rate'
   );
   expect(Number(row.amount)).toBe(-3820); // native JPY
   expect(String(row.currency)).toBe('JPY');
-  expect(Number(row.amount_base)).toBeCloseTo(-24.84, 2); // -3820 * (0.00872 / 1.34120)
-  expect(Number(row.exchange_rate)).toBeCloseTo(0.00872 / 1.3412, 6);
+  expect(Number(row.amount_base)).toBeCloseTo(-24.83, 2); // -3820 * 0.00650 (USD is the hub, rate(USD) = 1)
+  expect(Number(row.exchange_rate)).toBeCloseTo(0.00650, 6);
 });
