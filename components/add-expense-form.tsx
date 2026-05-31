@@ -52,16 +52,22 @@ export function AddExpenseForm({
   className?: string;
 }) {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const createTransfer = useFinanceStore((s) => s.createTransfer);
   const storeCats = useFinanceStore((s) => s.categories);
   const storeAccts = useFinanceStore((s) => s.accounts);
   const { activeId } = useLedger();
   const { base } = useMoney();
 
-  const [type, setType] = useState<'expense' | 'income'>('expense');
+  const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('food');
   const [account, setAccount] = useState('cc');
+  // Transfer-only: source/destination accounts and the received amount (used
+  // only when the two accounts hold different currencies).
+  const [fromAccount, setFromAccount] = useState('');
+  const [toAccount, setToAccount] = useState('');
+  const [received, setReceived] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [note, setNote] = useState('');
 
@@ -77,14 +83,49 @@ export function AddExpenseForm({
   // Keep the current selection valid as options load / the ledger switches.
   if (categoryOptions.length && !categoryOptions.some((o) => o.id === category)) setCategory(categoryOptions[0].id);
   if (accountOptions.length && !accountOptions.some((o) => o.id === account)) setAccount(accountOptions[0].id);
+  // Default the transfer from/to to the first two accounts.
+  if (accountOptions.length && !accountOptions.some((o) => o.id === fromAccount)) setFromAccount(accountOptions[0].id);
+  if (accountOptions.length > 1 && !accountOptions.some((o) => o.id === toAccount)) setToAccount(accountOptions[1].id);
 
+  const curOf = (id: string) => storeAccts.find((a) => a.id === id)?.currency ?? base;
   // The entry currency follows the selected account (an account holds one
   // currency); foreign spend is modelled via a dedicated fx account, not a
-  // foreign entry here. Falls back to the ledger base pre-hydration.
-  const accountCurrency = storeAccts.find((a) => a.id === account)?.currency ?? base;
+  // foreign entry here. Falls back to the ledger base pre-hydration. For a
+  // transfer the top amount is denominated in the source account.
+  const accountCurrency = type === 'transfer' ? curOf(fromAccount) : curOf(account);
   const currencySym = CURRENCIES[accountCurrency as keyof typeof CURRENCIES]?.sym ?? '$';
+  const toCurrency = curOf(toAccount);
+  const transferIsCrossCurrency = type === 'transfer' && !!accountCurrency && !!toCurrency && accountCurrency !== toCurrency;
+
+  const saveTransfer = () => {
+    const value = parseFloat(amount);
+    if (!value || value <= 0) return void toast.error('Enter an amount');
+    if (!fromAccount || !toAccount) return void toast.error('Pick both accounts');
+    if (fromAccount === toAccount) return void toast.error('Pick two different accounts');
+    // Cross-currency: the received amount is required so the actual bank
+    // conversion is recorded rather than guessed from the mid-rate.
+    let recv: number | undefined;
+    if (transferIsCrossCurrency) {
+      recv = parseFloat(received);
+      if (!recv || recv <= 0) return void toast.error(`Enter the amount received in ${toCurrency}`);
+    }
+    createTransfer({
+      fromAccountId: fromAccount,
+      toAccountId: toAccount,
+      fromAmount: value,
+      toAmount: recv,
+      date: date.slice(0, 10),
+      time: date.slice(11, 16) || undefined,
+      note: note.trim() || undefined,
+    });
+    const fromName = accountOptions.find((a) => a.id === fromAccount)?.name ?? 'account';
+    const toName = accountOptions.find((a) => a.id === toAccount)?.name ?? 'account';
+    toast.success('Transfer created', { description: `${fromName} → ${toName} · ${fmtNative(value, accountCurrency)}` });
+    onSaved?.('');
+  };
 
   const save = () => {
+    if (type === 'transfer') return saveTransfer();
     const value = parseFloat(amount);
     if (!value || Number.isNaN(value)) {
       toast.error('Enter an amount');
@@ -118,7 +159,7 @@ export function AddExpenseForm({
     <div className={cn('flex flex-col gap-3.5 px-5 pt-4 pb-8', className)}>
       <div className="flex justify-center pt-5">
         <div role="tablist" aria-label="Transaction type" className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
-          {(['expense', 'income'] as const).map((t) => (
+          {(['expense', 'income', 'transfer'] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -133,7 +174,9 @@ export function AddExpenseForm({
         </div>
       </div>
       <div className="text-center">
-        <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">AMOUNT</div>
+        <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">
+          {type === 'transfer' ? 'SENT' : 'AMOUNT'}
+        </div>
         <div className="flex items-baseline justify-center gap-1">
           <span className="text-muted-foreground font-serif text-[40px]">{currencySym}</span>
           <input
@@ -148,45 +191,104 @@ export function AddExpenseForm({
       </div>
 
       <div>
-        <Field icon="coins" label="Currency">
-          <span className="text-muted-foreground text-[15px]" title="Follows the selected account">{accountCurrency}</span>
-        </Field>
-        <Field icon="tag" label="Merchant">
-          <input
-            value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
-            aria-label="Merchant" placeholder="e.g. Blue Bottle"
-            className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
-          />
-        </Field>
-        <Field icon="fork" label="Category">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger size="sm" className="border-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categoryOptions.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field icon="wallet" label="Account">
-          <Select value={account} onValueChange={setAccount}>
-            <SelectTrigger size="sm" className="border-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {accountOptions.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        {type === 'transfer' ? (
+          <>
+            <Field icon="wallet" label="From">
+              <Select value={fromAccount} onValueChange={setFromAccount}>
+                <SelectTrigger size="sm" className="border-0 shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accountOptions.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field icon="arrow-r" label="To">
+              <Select value={toAccount} onValueChange={setToAccount}>
+                <SelectTrigger size="sm" className="border-0 shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accountOptions.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {transferIsCrossCurrency && (
+              <>
+                <Field icon="coins" label={`Recv ${toCurrency}`}>
+                  <input
+                    value={received}
+                    onChange={(e) => setReceived(e.target.value.replace(/[^0-9.]/g, ''))}
+                    inputMode="decimal"
+                    aria-label="Received amount"
+                    placeholder={`amount in ${toCurrency}`}
+                    className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
+                  />
+                </Field>
+                {(() => {
+                  const sent = parseFloat(amount);
+                  const got = parseFloat(received);
+                  if (!sent || !got) return null;
+                  return (
+                    <div className="text-muted-foreground px-5 py-2 text-right text-[11px]">
+                      Effective rate: {(got / sent).toFixed(6)} {toCurrency} per {accountCurrency}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Field icon="coins" label="Currency">
+              <span className="text-muted-foreground text-[15px]" title="Follows the selected account">{accountCurrency}</span>
+            </Field>
+            <Field icon="tag" label="Merchant">
+              <input
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
+                aria-label="Merchant" placeholder="e.g. Blue Bottle"
+                className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
+              />
+            </Field>
+            <Field icon="fork" label="Category">
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger size="sm" className="border-0 shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field icon="wallet" label="Account">
+              <Select value={account} onValueChange={setAccount}>
+                <SelectTrigger size="sm" className="border-0 shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accountOptions.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </>
+        )}
         <Field icon="calendar" label="Date">
           <input
             type="datetime-local" aria-label="Date"
@@ -210,7 +312,7 @@ export function AddExpenseForm({
         onClick={save}
         className="bg-foreground text-background mt-2 flex h-[54px] cursor-pointer items-center justify-center rounded-[27px] text-base font-medium -tracking-[0.2px]"
       >
-        {type === 'income' ? 'Save income' : 'Save expense'}
+        {type === 'transfer' ? 'Save transfer' : type === 'income' ? 'Save income' : 'Save expense'}
       </button>
     </div>
   );

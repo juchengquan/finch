@@ -118,6 +118,7 @@ async function insertTxRow(
     ledgerId: string;
     accountId: string;
     date: string;
+    time?: string | null;
     amount: number;
     description: string;
     currency: string;
@@ -139,7 +140,7 @@ async function insertTxRow(
        currency,notes,created_at,updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, conv.amountBase, conv.rate,
+      newId('t'), row.ledgerId, row.accountId, row.date, row.time ?? null, row.amount, conv.amountBase, conv.rate,
       row.description, null, row.transferGroupId, row.kind, 'confirmed', ts,
       row.currency, row.note, ts, ts,
     ],
@@ -205,6 +206,7 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const fromAmount = Math.abs(Number(args.fromAmount));
   const explicitToAmount = args.toAmount != null ? Math.abs(Number(args.toAmount)) : null;
   const date = str(args.date);
+  const time = args.time ? str(args.time) : null;
   const note = args.note ? str(args.note) : null;
   if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
   if (fromId === toId) throw new Error('Pick two different accounts');
@@ -238,11 +240,11 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
     [tgId, ledgerId, fromAmount, fromCurrency, toCurrency, rate, note, date, date],
   );
   await insertTxRow(exec, {
-    ledgerId, accountId: fromId, date, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
+    ledgerId, accountId: fromId, date, time, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
     currency: fromCurrency, transferGroupId: tgId, note, kind: 'transfer',
   });
   await insertTxRow(exec, {
-    ledgerId, accountId: toId, date, amount: toAmount, description: `Transfer from ${String(from.name)}`,
+    ledgerId, accountId: toId, date, time, amount: toAmount, description: `Transfer from ${String(from.name)}`,
     currency: toCurrency, transferGroupId: tgId, note, kind: 'transfer',
   });
 }
