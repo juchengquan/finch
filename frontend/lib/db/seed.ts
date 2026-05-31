@@ -131,8 +131,8 @@ export async function seedReference(exec: Exec): Promise<void> {
 
   for (const tg of transferGroupsData as TransferRow[]) {
     await exec(
-      'INSERT INTO transfer_groups (id,ledger_id,amount_base,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [tg.id, ledgerIdByName(tg.fromLedger), tg.amountBase, tg.fromCurrency, tg.toCurrency, tg.exchangeRate ?? null, tg.notes ?? null, isoDate(tg.date), isoDate(tg.date)],
+      'INSERT INTO transfer_groups (id,ledger_id,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',
+      [tg.id, ledgerIdByName(tg.fromLedger), tg.fromCurrency, tg.toCurrency, tg.exchangeRate ?? null, tg.notes ?? null, SEED_TS, SEED_TS],
     );
   }
 

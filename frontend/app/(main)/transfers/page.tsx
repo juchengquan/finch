@@ -50,6 +50,7 @@ export default function TransfersPage() {
   const [amount, setAmount] = useState('');
   const [received, setReceived] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [editing, setEditing] = useState<{
     id: string;
     fromAmount: string;
@@ -57,6 +58,7 @@ export default function TransfersPage() {
     fromCurrency: string;
     toCurrency: string;
     date: string;
+    time: string;
     note: string;
   } | null>(null);
 
@@ -75,6 +77,7 @@ export default function TransfersPage() {
       fromAmount: fromValue,
       toAmount: isCross ? toValue : undefined,
       date: editing.date,
+      time: editing.time || null,
       note: editing.note.trim() || null,
     });
     toast.success('Transfer updated');
@@ -91,7 +94,7 @@ export default function TransfersPage() {
     if (from === to) return toast.error('Pick two different accounts');
     const recv = newIsCrossCurrency && received ? parseFloat(received) : undefined;
     if (newIsCrossCurrency && received && (!recv || recv <= 0)) return toast.error('Enter a valid received amount');
-    createTransfer({ fromAccountId: from, toAccountId: to, fromAmount: value, toAmount: recv, date });
+    createTransfer({ fromAccountId: from, toAccountId: to, fromAmount: value, toAmount: recv, date, time: time || undefined });
     toast.success('Transfer created');
     setAmount('');
     setReceived('');
@@ -134,6 +137,7 @@ export default function TransfersPage() {
             <span className="text-muted-foreground font-mono text-xs w-10">{fromCurrency || 'SENT'}</span>
             <Input type="number" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             <Input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+            <Input type="time" aria-label="Time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
           </div>
           {newIsCrossCurrency && (
             <div className="flex items-center gap-2">
@@ -197,7 +201,7 @@ export default function TransfersPage() {
                 </div>
               </div>
               <div className="text-muted-foreground mt-0.5 text-[11px]">
-                {tg.date.replace(/-/g, '/')}
+                {tg.date.replace(/-/g, '/')}{tg.time ? ` ${tg.time}` : ''}
                 {tg.fromCurrency !== tg.toCurrency && tg.amount > 0
                   ? ` · → ${fmtNative(tg.toAmount, tg.toCurrency)} @ ${(tg.toAmount / tg.amount).toFixed(4)}`
                   : ''}
@@ -212,6 +216,7 @@ export default function TransfersPage() {
                 fromCurrency: tg.fromCurrency,
                 toCurrency: tg.toCurrency,
                 date: tg.date,
+                time: tg.time ?? '',
                 note: tg.note ?? '',
               })}
               onDelete={() => { deleteTransfer(tg.id); toast.success('Transfer deleted'); }}
@@ -250,9 +255,15 @@ export default function TransfersPage() {
                   })()}
                 </div>
               )}
-              <div className="flex flex-col gap-1.5">
-                <Label>Date</Label>
-                <Input type="date" value={editing.date} onChange={(e) => setEditing((p) => (p ? { ...p, date: e.target.value } : p))} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Date</Label>
+                  <Input type="date" value={editing.date} onChange={(e) => setEditing((p) => (p ? { ...p, date: e.target.value } : p))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Time</Label>
+                  <Input type="time" value={editing.time} onChange={(e) => setEditing((p) => (p ? { ...p, time: e.target.value } : p))} />
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Note (optional)</Label>

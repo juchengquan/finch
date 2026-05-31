@@ -423,6 +423,7 @@ export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: st
     const out_ = rows.find((r) => r.amount < 0);
     const in_ = rows.find((r) => r.amount > 0);
     const date = rows.reduce((d, r) => (r.date > d ? r.date : d), rows[0].date);
+    const time = rows.map((r) => r.time).find((t) => t != null) ?? null;
     const note = rows.map((r) => r.note).find((n) => n != null) ?? null;
     const fromId = out_?.account ?? null;
     const toId = in_?.account ?? null;
@@ -431,6 +432,7 @@ export function selectTransfers(txns: Tx[], accounts: AccountRow[], ledgerId: st
     out.push({
       id,
       date,
+      time,
       amount: out_ ? Math.abs(out_.nativeAmount ?? out_.amount) : 0,
       toAmount: in_ ? Math.abs(in_.nativeAmount ?? in_.amount) : 0,
       fromCurrency: (fromId ? curById.get(fromId) : undefined) ?? out_?.currency ?? 'USD',

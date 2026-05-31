@@ -104,10 +104,13 @@ CREATE TABLE IF NOT EXISTS counterparties (
   updated_at        TEXT NOT NULL
 );
 
+-- Grouping row for a transfer's two transaction legs. The amounts live on the
+-- legs (each leg's native amount plus amount_base); this row only carries the
+-- currencies, the locked from-to rate, and a shared note. listTransfers
+-- reconstructs the figures from the legs, so no amount is duplicated here.
 CREATE TABLE IF NOT EXISTS transfer_groups (
   id            TEXT PRIMARY KEY,
   ledger_id     TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  amount_base   REAL NOT NULL,
   from_currency TEXT NOT NULL,
   to_currency   TEXT NOT NULL,
   exchange_rate REAL,
@@ -331,7 +334,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T10:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T12:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
