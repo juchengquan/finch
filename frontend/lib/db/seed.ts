@@ -107,25 +107,25 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (const a of accounts) {
     const ledgerId = a.ledger ?? 'personal';
     await exec(
-      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,notes,color,last4,institution,routing,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,last4,institution,routing,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       // opening_balance starts at the known balance; insertTransactions overwrites
       // it with the true opening (known − Σ bases) for accounts that have txns.
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, null, a.color ?? null, a.last4 ?? null, null, null, null, 1, SEED_TS, SEED_TS],
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, a.color ?? null, a.last4 ?? null, null, null, null, 1, SEED_TS, SEED_TS],
     );
   }
 
   for (let i = 0; i < categories.length; i++) {
     const c = categories[i];
     await exec(
-      'INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?,?)',
-      [c.id, c.ledger ?? 'personal', c.name, null, 'expense', c.icon ?? null, c.hue ?? null, i],
+      'INSERT INTO categories (id,ledger_id,name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?)',
+      [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.hue ?? null, i],
     );
   }
 
   for (const cp of counterpartiesData as CounterpartyRow[]) {
     await exec(
-      'INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,logo_url,is_verified,created_at) VALUES (?,?,?,?,?,?,?,?)',
-      [cp.id, 'personal', cp.name, JSON.stringify(cp.aliases ?? []), cp.category ?? null, null, cp.verified ? 1 : 0, SEED_TS],
+      'INSERT INTO counterparties (id,ledger_id,standardized_name,aliases,category,is_verified,created_at) VALUES (?,?,?,?,?,?,?)',
+      [cp.id, 'personal', cp.name, JSON.stringify(cp.aliases ?? []), cp.category ?? null, cp.verified ? 1 : 0, SEED_TS],
     );
   }
 
@@ -258,13 +258,13 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       const kind = t.transferGroupId ? 'transfer' : r.amountBase > 0 ? 'income' : 'expense';
       await exec(
         `INSERT INTO transactions
-          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
+           description,category_id,transfer_group_id,kind,status,confirmed_at,
            currency,notes,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate, t.date,
-          t.merchant, t.category, null, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
+          t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate,
+          t.merchant, t.category, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
           r.currency, t.note || null, SEED_TS,
         ],
       );

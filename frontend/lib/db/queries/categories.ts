@@ -6,7 +6,6 @@ export interface CategoryRow {
   id: string;
   ledgerId: string;
   name: string;
-  parentName: string | null;
   type: string;
   icon: string | null;
   hue: number | null;
@@ -24,7 +23,6 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
     id: String(r.id),
     ledgerId: String(r.ledger_id),
     name: String(r.name),
-    parentName: r.parent_name == null ? null : String(r.parent_name),
     type: String(r.type),
     icon: r.icon == null ? null : String(r.icon),
     hue: r.hue == null ? null : Number(r.hue),

@@ -99,7 +99,6 @@ export interface AccountPatch {
   name?: string;
   type?: string;
   currency?: string;
-  notes?: string | null;
   color?: string | null;
   last4?: string | null;
   institution?: string | null;
@@ -111,7 +110,6 @@ const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   name: 'name',
   type: 'type',
   currency: 'currency',
-  notes: 'notes',
   color: 'color',
   last4: 'last4',
   institution: 'institution',

@@ -141,13 +141,13 @@ async function insertTxRow(
   const conv = await convertToBase(exec, row.amount, row.currency, ledgerBase, row.date);
   await exec(
     `INSERT INTO transactions
-      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-       description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
+       description,category_id,transfer_group_id,kind,status,confirmed_at,
        currency,notes,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, conv.amountBase, conv.rate, row.date,
-      row.description, null, null, row.transferGroupId, row.kind, 'confirmed', ts,
+      newId('t'), row.ledgerId, row.accountId, row.date, null, row.amount, conv.amountBase, conv.rate,
+      row.description, null, row.transferGroupId, row.kind, 'confirmed', ts,
       row.currency, row.note, ts,
     ],
   );
@@ -310,13 +310,13 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
       const conv = await convertToBase(exec, amount, currency, ledgerBase, date);
       await exec(
         `INSERT INTO transactions
-          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,exchange_rate_date,
-           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
+          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
+           description,category_id,transfer_group_id,kind,status,confirmed_at,
            currency,notes,source_template_id,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate, date,
-          String(r.name ?? ''), categoryId, null, null, kind, 'pending', null,
+          newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate,
+          String(r.name ?? ''), categoryId, null, kind, 'pending', null,
           currency, null, String(r.id), ts,
         ],
       );
@@ -623,8 +623,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const icon = args.icon ? str(args.icon) : null;
       const hue = args.hue != null ? Number(args.hue) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec('INSERT INTO categories (id,ledger_id,name,parent_name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?,?)', [
-        newId('cat'), ledgerId, name, null, type, icon, hue, Number(rows[0]?.n ?? 0),
+      await exec('INSERT INTO categories (id,ledger_id,name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, type, icon, hue, Number(rows[0]?.n ?? 0),
       ]);
       return;
     }
