@@ -220,7 +220,7 @@ interface FinanceState {
   createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
-  updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
+  updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; time?: string | null; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
   createCounterparty: (input: { name: string; ledgerId?: string }) => string;
   updateCounterparty: (id: string, patch: { name?: string }) => void;

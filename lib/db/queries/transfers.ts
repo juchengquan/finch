@@ -8,6 +8,8 @@ import { recomputeAccount } from './accounts';
 export interface Transfer {
   id: string; // transfer_group_id
   date: string;
+  /** Time-of-day "HH:MM" shared by both legs; null when none was recorded. */
+  time: string | null;
   amount: number; // positive magnitude sent, in `fromCurrency` (native)
   toAmount: number; // positive magnitude received, in `toCurrency` (native)
   fromCurrency: string;
@@ -24,6 +26,7 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
     `SELECT
        t.transfer_group_id AS id,
        MAX(t.date) AS date,
+       MAX(t.time) AS time,
        MAX(CASE WHEN t.amount < 0 THEN -t.amount END) AS amount,
        MAX(CASE WHEN t.amount > 0 THEN t.amount END) AS toAmount,
        MAX(CASE WHEN t.amount < 0 THEN t.currency END) AS fromCurrency,
@@ -44,6 +47,7 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
   return rows.map((r) => ({
     id: String(r.id),
     date: String(r.date),
+    time: r.time == null ? null : String(r.time),
     amount: Number(r.amount ?? 0),
     toAmount: Number(r.toAmount ?? 0),
     fromCurrency: r.fromCurrency == null ? 'USD' : String(r.fromCurrency),
@@ -64,6 +68,8 @@ export interface TransferPatch {
    *  rate becomes `toAmount / fromAmount`. */
   toAmount?: number;
   date?: string;
+  /** Time-of-day "HH:MM" written to both legs; null clears it. */
+  time?: string | null;
   note?: string | null;
 }
 
@@ -115,7 +121,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     }
 
     // amount_base on each leg keeps the same scale relative to its leg's native
-    // amount. amount_base on the transfer_group reflects the from-side magnitude.
+    // amount. The transfer_group stores no amount — only the locked rate.
     const scaleFrom = oldFrom > 0 ? newFrom / oldFrom : 1;
     const scaleTo = oldTo > 0 ? newTo / oldTo : 1;
     await exec('UPDATE transactions SET amount = ?, amount_base = ? WHERE id = ?', [
@@ -130,14 +136,16 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     ]);
 
     const newRate = sameCurrency ? 1 : r2(newTo / newFrom * 1e6) / 1e6;
-    await exec("UPDATE transfer_groups SET amount_base = ?, exchange_rate = ?, updated_at = datetime('now') WHERE id = ?", [
-      r2(newFrom),
+    await exec("UPDATE transfer_groups SET exchange_rate = ?, updated_at = datetime('now') WHERE id = ?", [
       newRate,
       groupId,
     ]);
   }
   if (patch.date !== undefined) {
     await exec('UPDATE transactions SET date = ? WHERE transfer_group_id = ?', [patch.date, groupId]);
+  }
+  if (patch.time !== undefined) {
+    await exec('UPDATE transactions SET time = ? WHERE transfer_group_id = ?', [patch.time ?? null, groupId]);
   }
   if (patch.note !== undefined) {
     await exec('UPDATE transactions SET notes = ? WHERE transfer_group_id = ?', [patch.note ?? null, groupId]);
