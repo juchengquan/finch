@@ -257,6 +257,9 @@ Each writer fetches the **ledger's `base_currency`** (via the account's
     from-account currency and, when the legs differ, "→ received @ rate". (The
     transfers **detail** page still reads `LEDGER.transferGroups` mock data — a
     pre-existing wiring gap, not multi-currency-specific; left as a separate task.)
+    **Create:** the Add sheet now has a `transfer` type — From/To accounts and,
+    when the currencies differ, a **Received** field whose amount locks the rate
+    (`createTransfer({ toAmount })`). See `SETTINGS_AND_TRANSFERS_PLAN.md`.
   - ↩ **Unrealized FX gain/loss** — deferred. Needs `opening_balance` projected to
     the client (today only `current_balance` is, as `AccountRow.balance`) **and** a
     cost-basis decision for the opening balance (it has no locked rate), so it's a

@@ -53,7 +53,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, **SQL search/filter** via the live DB |
 | Main | Reports | ✅ | Spending donut + breakdown, **DB-derived** category spend, ledger-scoped |
 | Ledger | Pending review (confirm/edit/cancel, bulk) | ✅ | Confirm / Cancel / Confirm-all sync to the server (`app_state` queue) |
-| Ledger | Transfers (two-sided) | ✅ | **DB-derived list + "New transfer"** → paired rows sharing `transfer_group_id`; real transactions |
+| Ledger | Transfers (two-sided) | ✅ | **DB-derived list + "New transfer"** → paired rows sharing `transfer_group_id`; real transactions. Also creatable from the **Add** sheet (incl. cross-currency — a Received amount locks the rate). |
 | Ledger | Merchants / counterparties (verified) | ✅ | List reads the projected table; **create / rename / delete**, verify/unverify, name search. `aliases` + `category` removed: aliases were search-aid only with no FK, and category is wrong per-merchant (same payee → many categories). |
 | Ledger | Recurring templates (list + splits) | ✅ | **Create** template + edit fields/splits + delete; **"Post now"** → confirmed tx(s) on the server |
 | Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/color); delete leaves txns uncategorised. Colour is hex; a curated swatch picker maps OKLCH hues to hex at the standard palette. |
@@ -61,7 +61,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
 | Ledger | Category tree (2-level) | ⬜ | `categories` table seeded; admin screen not DB-wired |
-| Ledger | System admin (exchange-rate book, sync log) | ⬜ | `exchange_rates` seeded; `/system` + `/fx` screens still static |
+| Settings | Exchange-rate book + device/sync list | ✅ | `/system` **retired** → rates under **Settings › Ledger** (add/delete, sparkline, source badges), device/sync list under **Settings › Devices**; both DB-backed. See `SETTINGS_AND_TRANSFERS_PLAN.md`. |
 | Ledger | FX transaction detail | 🟡 | dual-currency stored (`amount`/`amount_base`); conversion/rate-locking simplified |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
 
@@ -80,7 +80,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 - **`MOCK` vs `LEDGER` reference data** still coexist as a pre-hydration fallback for
   a handful of screens (accounts, merchants, FX page seed); the live figures all come
   from the DB once the store hydrates.
-- **Remaining DB wiring**: Categories admin, FX, System screens; tags UI; balance-curve
+- **Remaining DB wiring**: Categories admin; tags UI; balance-curve
   & net-worth charts; full FX conversion. Plus cleanup (retire `derive.ts` fallbacks +
   baked JSON totals + dead `repo.ts`/`storage.ts`; resolve the redundant browser
   `DbProvider`). See `SQLITE_INTEGRATION_PLAN.md` §6.
@@ -168,7 +168,8 @@ Built on existing mock data; no new state machinery.
       rate + date, schema rows, and a JPY→SGD rate sparkline.
 - [x] **System admin** (`/system`) — exchange-rate book (rates, source badges,
       sparklines, Refresh) + `sync_log` device list (last sync/txn, This-device badge).
-      Added a desktop-only **System** ledger tab.
+      Added a desktop-only **System** ledger tab. _(Later retired — relocated
+      into Settings › Ledger + Settings › Devices; see `SETTINGS_AND_TRANSFERS_PLAN.md`.)_
 
 ### Phase F — Persistence & real SQLite ✅ _(done)_
 Reframed from the original "build a backend" plan: the app is client-only and runs

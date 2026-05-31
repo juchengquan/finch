@@ -160,6 +160,9 @@ edit/cancel.)
   the split %; **Delete/archive** `deleteRecurring(id)` (splits cascade).
 
 ### Transfers
+- **Create** `createTransfer(input)` → paired legs + a `transfer_groups` row;
+  reachable from the **Add** sheet's `transfer` type (incl. cross-currency via a
+  Received amount that locks the rate). See `SETTINGS_AND_TRANSFERS_PLAN.md`.
 - **Update** `updateTransfer(groupId, patch)` (amount/date/note → rewrite both
   legs + recompute both accounts).
 - **Delete** `deleteTransfer(groupId)` → delete both legs + the group, then

@@ -118,8 +118,10 @@ the former curated mock totals) by explicit decision.
 - ✅ **FX** (`/fx`) — shows a real foreign-currency transaction with its locked
   base/rate; rates from the projected `exchange_rates`. `insertTransactions` locks
   the per-row rate at import.
-- ✅ **System** (`/system`) — exchange rates + devices projected (`sync_log`
-  extended with name/current).
+- ✅ **System** — exchange rates + devices projected (`sync_log` extended with
+  name/current). _(The `/system` screen was later retired; these now render under
+  **Settings › Ledger** (rates) and **Settings › Devices** — see
+  `SETTINGS_AND_TRANSFERS_PLAN.md`. The projections are unchanged.)_
 - ✅ **Pending** (`/pending`) — migrated to `transactions.status='pending'`;
   confirm flips status (flows into reports/balances), cancel voids. Legacy
   `app_state` pending slice retired.
