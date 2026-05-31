@@ -59,7 +59,8 @@ interface Result {
   label: string;
   hint?: string;
   icon: string;
-  iconHue?: number;
+  /** Hex `#rrggbb` to tint the icon chip. Omitted = neutral chip. */
+  iconColor?: string;
   run: () => void;
 }
 
@@ -203,9 +204,8 @@ function PaletteBody({ close }: { close: () => void }) {
           key: `cat:${c.id}`,
           group: 'Categories',
           label: c.name,
-          hint: c.hue == null ? undefined : `hue ${c.hue}`,
           icon: c.icon ?? 'tags',
-          iconHue: c.hue ?? undefined,
+          iconColor: c.color ?? undefined,
           run: () => {
             router.push(`/budgets/${c.id}`);
             close();
@@ -341,8 +341,8 @@ function PaletteBody({ close }: { close: () => void }) {
                     <span
                       className="flex size-7 items-center justify-center rounded-md"
                       style={
-                        r.iconHue != null
-                          ? { background: `oklch(0.92 0.05 ${r.iconHue})`, color: `oklch(0.40 0.13 ${r.iconHue})` }
+                        r.iconColor
+                          ? { background: r.iconColor, color: 'white' }
                           : { background: 'var(--secondary)' }
                       }
                     >

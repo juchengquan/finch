@@ -68,7 +68,7 @@ export function convertAmount(amount: number, from: string, to: string) {
   return usd * (RATE[to] ?? 1);
 }
 
-export const catById = (id: string | null) => MOCK.categories.find((c) => c.id === id) || { name: 'Uncategorized', hue: 0 };
+export const catById = (id: string | null) => MOCK.categories.find((c) => c.id === id) || { name: 'Uncategorized', color: null };
 export const acctById = (id: string) => MOCK.accounts.find((a) => a.id === id) || { name: '' };
 
 export function fmtMoney(n: number, currency: string = 'USD', opts: { compact?: boolean } = {}) {

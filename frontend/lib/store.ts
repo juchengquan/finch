@@ -194,9 +194,9 @@ interface FinanceState {
   addAlias: (id: string, alias: string) => void;
   removeAlias: (id: string, alias: string) => void;
   createTransfer: (input: TransferInput) => void;
-  createCategory: (input: { name: string; type?: string; icon?: string; hue?: number; ledgerId?: string }) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; color?: string; ledgerId?: string }) => void;
   renameCategory: (id: string, name: string) => void;
-  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; hue?: number | null }) => void;
+  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; color?: string | null }) => void;
   deleteCategory: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
@@ -560,9 +560,9 @@ export const useFinanceStore = create<FinanceState>()(
         const id = `cat-${Date.now().toString(36)}`;
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
-        const hue = input.hue ?? null;
-        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, hue }] }));
-        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, hue });
+        const color = input.color ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, color }] }));
+        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, color });
       },
 
       renameCategory: (id, name) => {

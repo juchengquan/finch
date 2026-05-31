@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RowActions } from '@/components/RowActions';
 import { LEDGER } from '@/lib/data';
+import { oklchToHex } from '@/lib/colors';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -21,15 +22,18 @@ interface MerchantData {
   category: string | null;
   verified: boolean;
   aliases: string[];
-  hue: number;
+  color: string;
   txCount: number | null;
 }
 
-// Decorative-only fields (hue/txCount) the table doesn't store — fall back to the
-// static seed by id, deriving a stable hue for merchants created in-app.
+// Decorative-only fields (color/txCount) the table doesn't store — fall back
+// to the static seed by id, deriving a stable hue→hex for merchants created
+// in-app.
 const MOCK_BY_ID = new Map(LEDGER.counterparties.map((c) => [c.id, c]));
-const hueFor = (id: string, name: string) =>
-  MOCK_BY_ID.get(id)?.hue ?? [...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+const colorFor = (id: string, name: string): string => {
+  const hue = MOCK_BY_ID.get(id)?.hue ?? [...name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+  return oklchToHex(0.65, 0.2, hue);
+};
 
 function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border: boolean; onEdit: () => void; onDelete: () => void }) {
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
@@ -52,7 +56,7 @@ function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border:
     <div className={cn('flex items-start gap-3 py-3.5', border && 'border-border border-t')}>
       <div
         className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg font-mono text-[10px] font-semibold text-white"
-        style={{ background: `oklch(0.65 0.2 ${c.hue})` }}
+        style={{ background: c.color }}
       >
         {c.name.slice(0, 2).toUpperCase()}
       </div>
@@ -147,8 +151,8 @@ export default function MerchantsPage() {
   // seed only until the store hydrates so the first paint isn't empty.
   const projected = counterparties.filter((c) => c.ledgerId === CP_LEDGER);
   const rows: MerchantData[] = projected.length
-    ? projected.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified, aliases: c.aliases, hue: hueFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
-    : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified === 1, aliases: c.aliases, hue: c.hue, txCount: c.txCount }));
+    ? projected.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified, aliases: c.aliases, color: colorFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
+    : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, category: c.category, verified: c.verified === 1, aliases: c.aliases, color: oklchToHex(0.65, 0.2, c.hue), txCount: c.txCount }));
 
   const q = query.toLowerCase();
   const list = rows.filter((c) => !q || c.name.toLowerCase().includes(q) || c.aliases.some((a) => a.toLowerCase().includes(q)));

@@ -204,7 +204,7 @@ export default function AccountDetailPage() {
                   key={tx.id}
                   className={cn('flex items-center gap-3 px-[18px] py-3', i && 'border-border border-t-[0.5px]')}
                 >
-                  <CatBar hue={cat.hue} />
+                  <CatBar color={cat.color} />
                   <button type="button" onClick={() => openTransaction(tx.id)} className="min-w-0 flex-1 cursor-pointer text-left">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[13px] font-medium">{tx.merchant}</span>
@@ -249,7 +249,7 @@ export default function AccountDetailPage() {
                   onClick={() => openTransaction(tx.id)}
                   className={cn('hover:bg-secondary/40 flex w-full cursor-pointer items-center gap-3 px-[18px] py-3 text-left', i && 'border-border border-t-[0.5px]')}
                 >
-                  <CatBar hue={cat.hue} />
+                  <CatBar color={cat.color} />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium">{tx.merchant}</div>
                     <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>

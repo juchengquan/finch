@@ -385,7 +385,7 @@ CREATE TABLE categories (
   name       TEXT NOT NULL,
   type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon       TEXT,
-  hue        INTEGER,
+  color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 ```
@@ -397,7 +397,7 @@ CREATE TABLE categories (
 | `name` | TEXT NOT NULL | Display name. |
 | `type` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer` / `refund`. |
 | `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
-| `hue` | INTEGER | OKLCH hue 0–360; renders the accent colour. |
+| `color` | TEXT | Hex `#rrggbb`. The Categories edit page offers a curated swatch picker; new picks come from `lib/colors.categoryHex(hue)`. Used directly as CSS. |
 | `sort_order` | INTEGER NOT NULL · default 0 | Display order within the ledger. |
 
 ---
@@ -420,7 +420,7 @@ CREATE TABLE tags (
 | `id` | TEXT PK | App-stable id (`tag-business`, `tag-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
 | `name` | TEXT NOT NULL | Display label. |
-| `color` | TEXT | OKLCH hue (as string) for the chip — optional. |
+| `color` | TEXT | Hex `#rrggbb` for the chip — optional. Curated swatch picker; new picks come from `lib/colors.tagHex(hue)`. |
 
 ---
 

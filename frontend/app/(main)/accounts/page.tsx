@@ -438,7 +438,7 @@ export default function AccountsPage() {
                       onClick={() => openTransaction(t.id)}
                       className={cn('hover:bg-secondary/40 flex w-full items-center gap-3 px-4 py-3 text-left text-inherit', i && 'border-border border-t-[0.5px]')}
                     >
-                      <CatBar hue={cat.hue} />
+                      <CatBar color={cat.color} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{t.merchant}</div>
                         <div className="text-muted-foreground text-xs">{t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''} · {cat.name}</div>

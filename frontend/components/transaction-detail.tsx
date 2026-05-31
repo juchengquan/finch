@@ -299,7 +299,7 @@ export function TransactionDetail({
   return (
     <>
       <div className="px-6 pb-7 text-center">
-        <CatBar hue={cat.hue} className="mx-auto mb-4 block h-1 w-10" />
+        <CatBar color={cat.color} className="mx-auto mb-4 block h-1 w-10" />
         <div className="text-muted-foreground font-serif text-[22px] italic">
           {tx.amount > 0 ? 'You received from' : 'You spent at'}
         </div>
@@ -421,7 +421,7 @@ export function TransactionDetail({
                     type="button"
                     onClick={() => removeTag(id)}
                     className="bg-secondary text-secondary-foreground flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px]"
-                    style={t?.color ? { color: `oklch(0.55 0.15 ${t.color})` } : undefined}
+                    style={t?.color ? { color: t.color } : undefined}
                   >
                     {t?.name ?? id}
                     <Icon name="x" size={11} />

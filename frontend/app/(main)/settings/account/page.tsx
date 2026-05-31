@@ -150,7 +150,7 @@ export default function AccountSettingsPage() {
       </div>
 
       <div className="flex items-center gap-3.5 px-5 pb-[22px]">
-        <MerchantGlyph name="Alex Morgan" size={64} bg="var(--primary)" fg="var(--primary-foreground)" />
+        <MerchantGlyph name="Alex Morgan" size={64} color="var(--primary)" fg="var(--primary-foreground)" />
         <div className="flex-1">
           <div className="font-serif text-[22px] -tracking-[0.3px]">Alex Morgan</div>
           <div className="text-muted-foreground text-xs">Personal plan</div>

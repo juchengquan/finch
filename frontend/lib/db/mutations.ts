@@ -627,10 +627,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!name) throw new Error('Category name is required');
       const type = args.type ? str(args.type) : 'expense';
       const icon = args.icon ? str(args.icon) : null;
-      const hue = args.hue != null ? Number(args.hue) : null;
+      const color = args.color ? str(args.color) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec('INSERT INTO categories (id,ledger_id,name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?)', [
-        newId('cat'), ledgerId, name, type, icon, hue, Number(rows[0]?.n ?? 0),
+      await exec('INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order) VALUES (?,?,?,?,?,?,?)', [
+        newId('cat'), ledgerId, name, type, icon, color, Number(rows[0]?.n ?? 0),
       ]);
       return;
     }

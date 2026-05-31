@@ -38,7 +38,7 @@ const ACCOUNT_TYPE: Record<string, string> = {
 };
 
 type AccountRow = { id: string; name: string; type: string; group: string; balance: number; color?: string; ledger?: string };
-type CategoryRow = { id: string; name: string; budget?: number; icon?: string; hue?: number; ledger?: string };
+type CategoryRow = { id: string; name: string; budget?: number; icon?: string; color?: string; ledger?: string };
 type CounterpartyRow = { id: string; name: string; aliases?: string[]; category?: string; verified?: number };
 type TransferRow = {
   id: string; date: string; amountBase: number; fromCurrency: string; toCurrency: string;
@@ -117,8 +117,8 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (let i = 0; i < categories.length; i++) {
     const c = categories[i];
     await exec(
-      'INSERT INTO categories (id,ledger_id,name,type,icon,hue,sort_order) VALUES (?,?,?,?,?,?,?)',
-      [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.hue ?? null, i],
+      'INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order) VALUES (?,?,?,?,?,?,?)',
+      [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.color ?? null, i],
     );
   }
 

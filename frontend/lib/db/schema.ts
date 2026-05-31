@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS categories (
   name       TEXT NOT NULL,
   type       TEXT NOT NULL CHECK(type IN ('expense','income','transfer','refund')),
   icon       TEXT,
-  hue        INTEGER,
+  color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
@@ -317,7 +317,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T06:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T07:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

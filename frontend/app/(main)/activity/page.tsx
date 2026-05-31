@@ -214,7 +214,7 @@ export default function ActivityPage() {
                       onClick={() => openTransaction(t.id)}
                       className={cn('flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
                     >
-                      <CatBar hue={cat.hue} />
+                      <CatBar color={cat.color} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{t.merchant}</div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
@@ -264,7 +264,7 @@ export default function ActivityPage() {
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2.5">
-                          <CatBar hue={cat.hue} className="h-4" />
+                          <CatBar color={cat.color} className="h-4" />
                           {t.merchant}
                         </div>
                       </td>

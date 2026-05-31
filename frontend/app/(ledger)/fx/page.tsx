@@ -61,7 +61,7 @@ export default function FxTransactionPage() {
 
         <div className="px-1 pb-6 text-center">
           <div className="flex justify-center">
-            <MerchantGlyph name={fx.merchant} size={56} hue={12} />
+            <MerchantGlyph name={fx.merchant} size={56} color="#d16b7a" />
           </div>
           <div className="mt-3 text-sm font-medium">{fx.merchant}</div>
           <div className="text-muted-foreground text-[11px]">
