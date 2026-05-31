@@ -64,6 +64,27 @@ test('accounts: create, then archive removes from the active list', async () => 
   await archiveAccount(exec, 'acct-new');
   accts = await listAccounts(exec, 'personal');
   expect(accts.find((a) => a.id === 'acct-new')).toBeUndefined();
+
+  // archived_at is stamped so the audit trail survives the soft-delete.
+  const [archived] = await exec("SELECT is_active, archived_at FROM accounts WHERE id = 'acct-new'");
+  expect(Number(archived.is_active)).toBe(0);
+  expect(archived.archived_at).not.toBeNull();
+});
+
+test('accounts: createAccount assigns an incrementing sort_order within the same group', async () => {
+  const exec = await seeded();
+  await createAccount(exec, {
+    id: 'acct-a', ledgerId: 'personal', name: 'A', type: 'cash',
+    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null, last4: null,
+  });
+  await createAccount(exec, {
+    id: 'acct-b', ledgerId: 'personal', name: 'B', type: 'cash',
+    currency: 'USD', groupId: 'cash', openingBalance: 0, color: null, last4: null,
+  });
+  const accts = await listAccounts(exec, 'personal');
+  const a = accts.find((x) => x.id === 'acct-a')!;
+  const b = accts.find((x) => x.id === 'acct-b')!;
+  expect(b.sortOrder).toBeGreaterThan(a.sortOrder);
 });
 
 test('categories: list + monthly spend', async () => {

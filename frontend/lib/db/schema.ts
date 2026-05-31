@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   name                 TEXT NOT NULL,
   type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
   currency             TEXT NOT NULL DEFAULT 'SGD',
+  -- Cached running balance. Kept in sync by recomputeAccount() — see
+  -- queries/accounts.ts. Treat as derived state; opening_balance is the
+  -- source of truth for the starting point.
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
   notes                TEXT,
@@ -54,8 +57,14 @@ CREATE TABLE IF NOT EXISTS accounts (
   last4                TEXT,
   institution          TEXT,
   routing              TEXT,
+  -- Sort order within the account group (and within "ungrouped"). Smaller
+  -- values come first.
+  sort_order           INTEGER NOT NULL DEFAULT 0,
   include_in_net_worth INTEGER,
   is_active            INTEGER NOT NULL DEFAULT 1,
+  -- Set when is_active flips to 0; null when active. Lets the UI surface
+  -- "archived <date>" without losing the audit trail.
+  archived_at          TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
 );
@@ -324,7 +333,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T01:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
