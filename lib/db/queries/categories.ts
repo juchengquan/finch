@@ -24,7 +24,7 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
     id: String(r.id),
     ledgerId: String(r.ledger_id),
     name: String(r.name),
-    type: String(r.type),
+    type: String(r.kind),
     icon: r.icon == null ? null : String(r.icon),
     color: r.color == null ? null : String(r.color),
   }));
@@ -39,7 +39,7 @@ export interface CategoryPatch {
 
 /** Update a category's editable fields. */
 export async function updateCategory(exec: Exec, id: string, patch: CategoryPatch): Promise<void> {
-  const cols: Record<keyof CategoryPatch, string> = { name: 'name', type: 'type', icon: 'icon', color: 'color' };
+  const cols: Record<keyof CategoryPatch, string> = { name: 'name', type: 'kind', icon: 'icon', color: 'color' };
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
   for (const key of Object.keys(patch) as (keyof CategoryPatch)[]) {

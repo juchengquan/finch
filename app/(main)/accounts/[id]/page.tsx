@@ -30,7 +30,7 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { MOCK, catById, CURRENCIES, fmtNative } from '@/lib/data';
+import { MOCK, catById, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
@@ -71,7 +71,7 @@ export default function AccountDetailPage() {
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileTarget, setReconcileTarget] = useState('');
   const [reconcileNote, setReconcileNote] = useState('');
-  const [draft, setDraft] = useState({ name: '', type: 'savings', currency: '' });
+  const [draft, setDraft] = useState({ name: '', type: 'savings' });
   const { openTransaction } = useTransactionSheet();
 
   const name = row?.name ?? mock.name;
@@ -79,16 +79,16 @@ export default function AccountDetailPage() {
   const currency = row?.currency ?? active.base;
 
   const openEdit = () => {
-    setDraft({ name, type, currency });
+    setDraft({ name, type });
     setDetailsOpen(false);
     setEditOpen(true);
   };
 
   const saveDetails = () => {
+    // currency is intentionally omitted — it's fixed at account creation.
     updateAccount(accountId, {
       name: draft.name.trim(),
       type: draft.type,
-      currency: draft.currency,
     });
     toast.success('Account updated', { description: draft.name.trim() || name });
   };
@@ -322,12 +322,13 @@ export default function AccountDetailPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="acct-currency">Currency</Label>
-                <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
-                  <SelectTrigger id="acct-currency" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(CURRENCIES).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div
+                  id="acct-currency"
+                  className="border-input bg-muted text-muted-foreground flex h-9 w-full items-center rounded-md border px-3 text-sm"
+                >
+                  {currency}
+                </div>
+                <p className="text-muted-foreground text-[11px]">Set at creation and cannot be changed. Make a new account to use another currency.</p>
               </div>
             </div>
           </div>

@@ -15,7 +15,7 @@ function rowToCp(r: Record<string, unknown>): Counterparty {
   return {
     id: String(r.id),
     ledgerId: String(r.ledger_id),
-    name: String(r.standardized_name),
+    name: String(r.name),
     verified: !!Number(r.is_verified),
   };
 }
@@ -24,8 +24,8 @@ function rowToCp(r: Record<string, unknown>): Counterparty {
 export async function listCounterparties(exec: Exec, ledgerId?: string): Promise<Counterparty[]> {
   const rows = await exec(
     ledgerId
-      ? 'SELECT * FROM counterparties WHERE ledger_id = ? ORDER BY standardized_name'
-      : 'SELECT * FROM counterparties ORDER BY ledger_id, standardized_name',
+      ? 'SELECT * FROM counterparties WHERE ledger_id = ? ORDER BY name'
+      : 'SELECT * FROM counterparties ORDER BY ledger_id, name',
     ledgerId ? [ledgerId] : [],
   );
   return rows.map(rowToCp);
@@ -35,8 +35,8 @@ export async function listCounterparties(exec: Exec, ledgerId?: string): Promise
 export async function searchCounterparties(exec: Exec, ledgerId: string, query: string): Promise<Counterparty[]> {
   const rows = await exec(
     `SELECT * FROM counterparties
-      WHERE ledger_id = ? AND standardized_name LIKE ?
-      ORDER BY standardized_name`,
+      WHERE ledger_id = ? AND name LIKE ?
+      ORDER BY name`,
     [ledgerId, `%${query}%`],
   );
   return rows.map(rowToCp);
@@ -59,7 +59,7 @@ export interface NewCounterparty {
 /** Insert a new (unverified) merchant. */
 export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
   await exec(
-    "INSERT INTO counterparties (id,ledger_id,standardized_name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
+    "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
     [c.id, c.ledgerId, c.name],
   );
 }
@@ -73,7 +73,7 @@ export interface CounterpartyPatch {
 export async function updateCounterparty(exec: Exec, id: string, patch: CounterpartyPatch): Promise<void> {
   if (patch.name === undefined) return;
   await exec(
-    "UPDATE counterparties SET standardized_name = ?, updated_at = datetime('now') WHERE id = ?",
+    "UPDATE counterparties SET name = ?, updated_at = datetime('now') WHERE id = ?",
     [patch.name, id],
   );
 }

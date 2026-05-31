@@ -50,7 +50,7 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     ledgerId: String(r.ledger_id),
     groupId: r.group_id == null ? null : String(r.group_id),
     name: r.name == null ? '' : String(r.name),
-    type: String(r.type) === 'income' ? 'income' : 'expense',
+    type: String(r.kind) === 'income' ? 'income' : 'expense',
     amount: Number(r.amount),
     saved: Number(r.saved ?? 0),
     carryForward: Number(r.carry_forward ?? 0),
@@ -106,7 +106,7 @@ const idsToJson = (ids?: string[]): string | null => (ids && ids.length ? JSON.s
 export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
   await exec(
     `INSERT INTO budgets
-       (id, ledger_id, group_id, name, type, amount, saved, carry_forward,
+       (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
         frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
         account_ids, category_ids, tag_ids, warning_pct, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
@@ -152,7 +152,7 @@ export interface BudgetPatch {
 const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   groupId: 'group_id',
   name: 'name',
-  type: 'type',
+  type: 'kind',
   amount: 'amount',
   frequency: 'frequency',
   startDate: 'start_date',

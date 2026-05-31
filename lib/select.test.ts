@@ -267,6 +267,7 @@ const rt = (over: Partial<ScheduledTemplate>): ScheduledTemplate => ({
   amount: 100,
   frequency: 'monthly',
   dayOfMonth: 1,
+  accountId: 'chk',
   account: 'chk',
   autoPost: 0,
   nextRun: '',

@@ -117,14 +117,14 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (let i = 0; i < categories.length; i++) {
     const c = categories[i];
     await exec(
-      'INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO categories (id,ledger_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
       [c.id, c.ledger ?? 'personal', c.name, 'expense', c.icon ?? null, c.color ?? null, i, SEED_TS, SEED_TS],
     );
   }
 
   for (const cp of counterpartiesData as CounterpartyRow[]) {
     await exec(
-      'INSERT INTO counterparties (id,ledger_id,standardized_name,is_verified,created_at,updated_at) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,?,?,?)',
       [cp.id, 'personal', cp.name, cp.verified ? 1 : 0, SEED_TS, SEED_TS],
     );
   }
@@ -157,7 +157,7 @@ export async function seedReference(exec: Exec): Promise<void> {
   for (const g of goalsData as GoalRow[]) {
     await exec(
       `INSERT OR IGNORE INTO budgets
-         (id,ledger_id,group_id,name,type,amount,saved,carry_forward,frequency,start_date,end_date,is_recurring,rollover,warning_pct,created_at,updated_at)
+         (id,ledger_id,group_id,name,kind,amount,saved,carry_forward,frequency,start_date,end_date,is_recurring,rollover,warning_pct,created_at,updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [`bud-goal-${g.id}`, g.ledger ?? 'personal', null, g.name, 'income', g.target, g.saved ?? 0, 0, 'monthly', '2026-05-01', null, 0, 0, 80, SEED_TS, SEED_TS],
     );
@@ -170,9 +170,17 @@ export async function seedReference(exec: Exec): Promise<void> {
     ]);
   }
 
-  // Scheduled templates live in their own tables. The mock references accounts by
-  // display name (not all map to real accounts), so the names are stored verbatim
-  // (account_id stays null) and resolved at post time; next/last run are display labels.
+  // Scheduled templates store real account FKs (like transactions). The mock
+  // references accounts by display name, so resolve each name → id here, scoped
+  // by ledger; names are guaranteed to match real accounts. next/last run are
+  // display labels.
+  const acctIdByName = new Map<string, string>();
+  for (const a of accounts) acctIdByName.set(`${a.ledger ?? 'personal'}::${a.name.toLowerCase()}`, a.id);
+  const acctId = (ledger: string, name: string): string => {
+    const id = acctIdByName.get(`${ledger}::${name.toLowerCase()}`);
+    if (!id) throw new Error(`seed: scheduled template references unknown account "${name}" in ledger "${ledger}"`);
+    return id;
+  };
   type SplitSeed = { account: string; pct?: number; abs?: number | null; label?: string };
   type SchedSeed = {
     id: string; name: string; type: string; amount?: number | null; varies?: number;
@@ -183,13 +191,13 @@ export async function seedReference(exec: Exec): Promise<void> {
     const ledgerId = r.ledger ?? 'personal';
     await exec(
       `INSERT OR IGNORE INTO scheduled_templates
-        (id,ledger_id,name,type,amount,amount_varies,splits_enabled,account_id,account_name,
-         from_account_id,from_account_name,category_id,frequency,day_of_month,start_date,
+        (id,ledger_id,name,description,kind,amount,amount_varies,splits_enabled,account_id,
+         from_account_id,category_id,frequency,day_of_month,start_date,
          next_run,last_run,auto_post,is_active,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        r.id, ledgerId, r.name, r.type, r.amount ?? null, r.varies ? 1 : 0, r.splits?.length ? 1 : 0,
-        null, r.account, null, r.from ?? null, null, r.frequency, r.dayOfMonth, '2026-05-01',
+        r.id, ledgerId, r.name, null, r.type, r.amount ?? null, r.varies ? 1 : 0, r.splits?.length ? 1 : 0,
+        acctId(ledgerId, r.account), r.from ? acctId(ledgerId, r.from) : null, null, r.frequency, r.dayOfMonth, '2026-05-01',
         r.nextRun ?? null, r.lastRun ?? null, r.autoPost ?? 1, 1, SEED_TS, SEED_TS,
       ],
     );
@@ -197,8 +205,8 @@ export async function seedReference(exec: Exec): Promise<void> {
     for (let i = 0; i < splits.length; i++) {
       const sp = splits[i];
       await exec(
-        'INSERT OR IGNORE INTO scheduled_splits (id,template_id,account_id,account_name,amount_pct,amount_abs,description,sort_order) VALUES (?,?,?,?,?,?,?,?)',
-        [`${r.id}-s${i}`, r.id, null, sp.account, sp.pct ?? null, sp.abs ?? null, sp.label ?? null, i],
+        'INSERT OR IGNORE INTO scheduled_splits (id,template_id,account_id,amount_pct,amount_abs,description,sort_order) VALUES (?,?,?,?,?,?,?)',
+        [`${r.id}-s${i}`, r.id, acctId(ledgerId, sp.account), sp.pct ?? null, sp.abs ?? null, sp.label ?? null, i],
       );
     }
   }

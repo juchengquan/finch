@@ -4,7 +4,7 @@ import type { ScheduledTemplate } from '@/lib/store';
 
 const T = (o: Partial<ScheduledTemplate>): ScheduledTemplate => ({
   id: 'x', name: 'x', type: 'expense', amount: 1, frequency: 'monthly', dayOfMonth: 1,
-  account: 'a', autoPost: 0, nextRun: '', lastRun: '', ...o,
+  accountId: 'a', account: 'a', autoPost: 0, nextRun: '', lastRun: '', ...o,
 });
 
 test('monthly occurrences land on dayOfMonth through the cutoff', () => {

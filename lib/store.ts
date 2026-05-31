@@ -68,6 +68,8 @@ export interface TransferInput {
 }
 
 export interface ScheduledSplit {
+  /** FK to the destination account. `account` is its display name, derived. */
+  accountId: string;
   account: string;
   pct: number;
   abs: number | null;
@@ -77,13 +79,20 @@ export interface ScheduledSplit {
 export interface ScheduledTemplate {
   id: string;
   name: string;
+  /** Description stamped onto posted transactions; falls back to `name`. */
+  description?: string | null;
   type: string;
   amount: number | null;
   varies?: number;
   frequency: string;
   dayOfMonth: number;
   weekDay?: number;
+  /** FK to the primary account (the destination for a transfer). `account` is
+   *  its display name, derived by joining accounts at read time. */
+  accountId: string;
   account: string;
+  /** Source account for a transfer (FK); `from` is its display name. */
+  fromAccountId?: string;
   from?: string;
   autoPost: number;
   nextRun: string;
@@ -97,10 +106,13 @@ export interface ScheduledTemplate {
 }
 
 // Editable account fields, applied as a patch against the real accounts table.
+// Note: `currency` is intentionally absent — an account's currency is fixed at
+// creation. Changing it would re-interpret every stored native `amount` and
+// invalidate the locked amount_base / cached balance. To switch currency, make
+// a new account.
 export interface AccountPatch {
   name?: string;
   type?: string;
-  currency?: string;
   color?: string | null;
   groupId?: string | null;
   /** Per-account net-worth flag (0/1). Defaulted from `type` at create time. */
@@ -187,7 +199,7 @@ interface FinanceState {
   updateBudgetGroup: (id: string, patch: { name?: string }) => void;
   deleteBudgetGroup: (id: string) => void;
   updateScheduledSplit: (templateId: string, index: number, pct: number) => void;
-  addScheduledSplit: (templateId: string, account: string, pct: number) => void;
+  addScheduledSplit: (templateId: string, accountId: string, account: string, pct: number) => void;
   removeScheduledSplit: (templateId: string, index: number) => void;
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
@@ -200,8 +212,8 @@ interface FinanceState {
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
-  createScheduled: (input: { name: string; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; account?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
-  updateScheduled: (id: string, patch: { name?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
+  createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
+  updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
   deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
@@ -499,13 +511,13 @@ export const useFinanceStore = create<FinanceState>()(
         syncMutation('updateScheduledSplit', { templateId, index, pct });
       },
 
-      addScheduledSplit: (templateId, account, pct) => {
+      addScheduledSplit: (templateId, accountId, account, pct) => {
         set((s) => ({
           scheduled: s.scheduled.map((t) =>
-            t.id === templateId ? { ...t, splits: [...(t.splits ?? []), { account, pct, abs: null, label: '' }] } : t,
+            t.id === templateId ? { ...t, splits: [...(t.splits ?? []), { accountId, account, pct, abs: null, label: '' }] } : t,
           ),
         }));
-        syncMutation('addScheduledSplit', { templateId, account, pct });
+        syncMutation('addScheduledSplit', { templateId, accountId, pct });
       },
 
       removeScheduledSplit: (templateId, index) => {
@@ -625,7 +637,10 @@ export const useFinanceStore = create<FinanceState>()(
         const autoPost = input.autoPost ? 1 : 0;
         const amount = input.amount ?? null;
         const color = input.color ?? null;
+        const description = input.description ?? null;
+        const accountId = input.accountId;
         const account = input.account ?? '';
+        const fromAccountId = input.fromAccountId;
         const category = input.category ?? null;
         const startDate = input.startDate ?? '';
         const endDate = input.endDate ?? null;
@@ -633,10 +648,10 @@ export const useFinanceStore = create<FinanceState>()(
         set((s) => ({
           scheduled: [
             ...s.scheduled,
-            { id, name: input.name, type, amount, frequency, dayOfMonth, weekDay, account, from: input.from, autoPost, nextRun: '', lastRun: '', color, category, startDate, endDate, maxExecutions },
+            { id, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay, accountId, account, fromAccountId, from: input.from, autoPost, nextRun: '', lastRun: '', color, category, startDate, endDate, maxExecutions },
           ],
         }));
-        syncMutation('createScheduled', { id, ledgerId, name: input.name, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, account, from: input.from ?? null, autoPost: !!input.autoPost, color, category, startDate, endDate, maxExecutions });
+        syncMutation('createScheduled', { id, ledgerId, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, accountId, fromAccountId: fromAccountId ?? null, autoPost: !!input.autoPost, color, category, startDate, endDate, maxExecutions });
         return id;
       },
 

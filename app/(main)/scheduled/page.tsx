@@ -29,12 +29,15 @@ const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yea
 interface DraftForm {
   id: string;
   name: string;
+  description: string;
   amount: string;
   type: string;
   frequency: string;
   dayOfMonth: string;
   weekDay: string;
+  accountId: string;
   account: string;
+  fromAccountId: string;
   from: string;
   autoPost: boolean;
   color: string;
@@ -46,8 +49,8 @@ interface DraftForm {
 }
 
 const EMPTY_DRAFT: DraftForm = {
-  id: '', name: '', amount: '', type: 'expense', frequency: 'monthly',
-  dayOfMonth: '1', weekDay: '', account: '', from: '', autoPost: false, color: '#c96442',
+  id: '', name: '', description: '', amount: '', type: 'expense', frequency: 'monthly',
+  dayOfMonth: '1', weekDay: '', accountId: '', account: '', fromAccountId: '', from: '', autoPost: false, color: '#c96442',
   category: '', startDate: new Date().toISOString().slice(0, 16), endDate: '', maxExecutions: '', isRecurring: true,
 };
 
@@ -55,12 +58,15 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
   return {
     id: t.id,
     name: t.name,
+    description: t.description ?? '',
     amount: t.amount == null ? '' : String(t.amount),
     type: t.type,
     frequency: t.frequency,
     dayOfMonth: String(t.dayOfMonth || 1),
     weekDay: t.weekDay != null ? String(t.weekDay) : '',
+    accountId: t.accountId ?? '',
     account: t.account ?? '',
+    fromAccountId: t.fromAccountId ?? '',
     from: t.from ?? '',
     autoPost: !!t.autoPost,
     color: t.color ?? '#c96442',
@@ -87,6 +93,9 @@ export default function ScheduledPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DraftForm>(EMPTY_DRAFT);
   const [isNew, setIsNew] = useState(true);
+  // Native currency of the picked account — a template's amount is denominated
+  // in its account's currency (derived from the FK, not stored).
+  const draftCurrency = accounts.find((a) => a.id === draft.accountId)?.currency ?? '';
 
   const openCreate = () => { setIsNew(true); setDraft(EMPTY_DRAFT); setOpen(true); };
 
@@ -108,16 +117,24 @@ export default function ScheduledPage() {
     const startDate = draft.startDate || undefined;
     const endDate = draft.endDate || null;
     const maxExecutions = draft.maxExecutions ? Number(draft.maxExecutions) : null;
+    const description = draft.description.trim() || null;
     if (isNew) {
+      if (!draft.accountId) return void toast.error('Pick an account');
+      if (type === 'transfer' && !draft.fromAccountId) return void toast.error('Pick a source account');
+      const acctName = accounts.find((a) => a.id === draft.accountId)?.name ?? '';
+      const fromName = accounts.find((a) => a.id === draft.fromAccountId)?.name;
       createScheduled({
         name,
+        description,
         type,
         amount,
         frequency,
         dayOfMonth,
         weekDay,
-        account: draft.account.trim(),
-        from: type === 'transfer' ? draft.from.trim() || undefined : undefined,
+        accountId: draft.accountId,
+        account: acctName,
+        fromAccountId: type === 'transfer' ? draft.fromAccountId : undefined,
+        from: type === 'transfer' ? fromName : undefined,
         autoPost: draft.autoPost,
         color: draft.color,
         category,
@@ -130,6 +147,7 @@ export default function ScheduledPage() {
     } else {
       updateScheduled(draft.id, {
         name,
+        description,
         amount,
         frequency,
         dayOfMonth,
@@ -381,30 +399,34 @@ export default function ScheduledPage() {
               ))}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Description</Label>
+              <Label>Name</Label>
               <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Rent" autoFocus />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Amount</Label>
+              <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Shown on each posted transaction — defaults to the name" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Amount{draftCurrency ? <span className="text-muted-foreground font-normal"> · {draftCurrency}</span> : null}</Label>
               <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" />
             </div>
             {draft.type === 'transfer' ? (
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label>To account</Label>
-                  <Select value={draft.account} onValueChange={(v) => setDraft({ ...draft, account: v })}>
+                  <Select value={draft.accountId} onValueChange={(v) => setDraft({ ...draft, accountId: v })}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
                     <SelectContent>
-                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>From account</Label>
-                  <Select value={draft.from} onValueChange={(v) => setDraft({ ...draft, from: v })}>
+                  <Select value={draft.fromAccountId} onValueChange={(v) => setDraft({ ...draft, fromAccountId: v })}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
                     <SelectContent>
-                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                      {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -412,10 +434,10 @@ export default function ScheduledPage() {
             ) : (
               <div className="flex flex-col gap-1.5">
                 <Label>Account</Label>
-                <Select value={draft.account} onValueChange={(v) => setDraft({ ...draft, account: v })}>
+                <Select value={draft.accountId} onValueChange={(v) => setDraft({ ...draft, accountId: v })}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
                   <SelectContent>
-                    {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                    {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

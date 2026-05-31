@@ -1,13 +1,13 @@
 [
-  { "id": "rt-salary",  "name": "Acme \u00b7 salary",    "type": "income",    "amount": 5800,  "frequency": "monthly", "dayOfMonth": 25, "account": "UOB One", "autoPost": 0,
+  { "id": "rt-salary",  "name": "Acme \u00b7 salary",    "type": "income",    "amount": 5800,  "frequency": "monthly", "dayOfMonth": 25, "account": "Chase Checking", "autoPost": 0,
     "splits": [
-      { "account": "UOB One",        "pct": 60, "abs": null, "label": "Daily spending" },
+      { "account": "Chase Checking",        "pct": 60, "abs": null, "label": "Daily spending" },
       { "account": "Marcus Savings", "pct": 25, "abs": null, "label": "Savings sweep" },
-      { "account": "Fidelity",       "pct": 15, "abs": null, "label": "Auto-invest" }
+      { "account": "Fidelity Brokerage",       "pct": 15, "abs": null, "label": "Auto-invest" }
     ], "nextRun": "May 25", "lastRun": "Apr 25" },
-  { "id": "rt-rent",    "name": "Rent \u00b7 Greene St.", "type": "expense",   "amount": 1850, "frequency": "monthly", "dayOfMonth": 1,  "account": "UOB One", "autoPost": 1, "nextRun": "Jun 1",  "lastRun": "May 1"  },
-  { "id": "rt-sweep",   "name": "Savings sweep",          "type": "transfer", "amount": 800,  "frequency": "monthly", "dayOfMonth": 28, "account": "Marcus Savings", "from": "UOB One", "autoPost": 1, "nextRun": "May 28", "lastRun": "Apr 28" },
-  { "id": "rt-coned",   "name": "ConEd Electric",         "type": "expense",   "amount": null,  "varies": 1, "frequency": "monthly", "dayOfMonth": 30, "account": "UOB One", "autoPost": 0, "nextRun": "May 30", "lastRun": "Apr 30" },
+  { "id": "rt-rent",    "name": "Rent \u00b7 Greene St.", "type": "expense",   "amount": 1850, "frequency": "monthly", "dayOfMonth": 1,  "account": "Chase Checking", "autoPost": 1, "nextRun": "Jun 1",  "lastRun": "May 1"  },
+  { "id": "rt-sweep",   "name": "Savings sweep",          "type": "transfer", "amount": 800,  "frequency": "monthly", "dayOfMonth": 28, "account": "Marcus Savings", "from": "Chase Checking", "autoPost": 1, "nextRun": "May 28", "lastRun": "Apr 28" },
+  { "id": "rt-coned",   "name": "ConEd Electric",         "type": "expense",   "amount": null,  "varies": 1, "frequency": "monthly", "dayOfMonth": 30, "account": "Chase Checking", "autoPost": 0, "nextRun": "May 30", "lastRun": "Apr 30" },
   { "id": "rt-spotify", "name": "Spotify Premium",        "type": "expense",   "amount": 11.99, "frequency": "monthly", "dayOfMonth": 22, "account": "Amex Gold", "autoPost": 1, "nextRun": "Jun 22", "lastRun": "May 22" },
   { "id": "rt-icloud",  "name": "iCloud+ Family",          "type": "expense",   "amount": 9.99, "frequency": "monthly", "dayOfMonth":  8, "account": "Amex Gold", "autoPost": 1, "nextRun": "Jun 8",  "lastRun": "May 8"  }
 ]

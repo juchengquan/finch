@@ -146,20 +146,6 @@ async function insertTxRow(
   );
 }
 
-// Match a recurring template's account NAME to a real account id in the ledger
-// (the mock templates store names like "Amex Gold", not ids).
-async function resolveAccountId(exec: Exec, ledgerId: string, name: string): Promise<string | null> {
-  if (!name) return null;
-  const accts = await exec('SELECT id, name FROM accounts WHERE ledger_id = ?', [ledgerId]);
-  const lc = name.toLowerCase();
-  const exact = accts.find((a) => String(a.name).toLowerCase() === lc);
-  if (exact) return String(exact.id);
-  const partial = accts.find(
-    (a) => String(a.name).toLowerCase().includes(lc) || lc.includes(String(a.name).toLowerCase()),
-  );
-  return partial ? String(partial.id) : null;
-}
-
 async function postSingle(
   exec: Exec,
   ledgerId: string,
@@ -183,12 +169,13 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const t = scheduled.find((r) => r.id === templateId);
   if (!t) throw new Error('Template not found');
   const date = new Date().toISOString().slice(0, 10);
+  // The posted transaction's description: the template's own description, or
+  // its name as a fallback.
+  const desc = t.description || t.name;
 
   if (t.type === 'transfer') {
-    const fromId = await resolveAccountId(exec, ledgerId, t.from ?? '');
-    const toId = await resolveAccountId(exec, ledgerId, t.account);
-    if (!fromId || !toId) throw new Error(`Couldn't match the accounts for "${t.name}"`);
-    await createTransfer(exec, { fromAccountId: fromId, toAccountId: toId, fromAmount: t.amount ?? 0, date, note: t.name });
+    if (!t.fromAccountId || !t.accountId) throw new Error(`"${t.name}" is missing an account`);
+    await createTransfer(exec, { fromAccountId: t.fromAccountId, toAccountId: t.accountId, fromAmount: t.amount ?? 0, date, note: desc });
     return;
   }
 
@@ -198,20 +185,16 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   if (t.type === 'income' && t.splits?.length) {
     let posted = 0;
     for (const sp of t.splits) {
-      const acctId = await resolveAccountId(exec, ledgerId, sp.account);
-      if (!acctId) continue;
       const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
       if (!portion) continue;
-      await postSingle(exec, ledgerId, acctId, portion, `${t.name} · ${sp.label}`, date);
+      await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date);
       posted++;
     }
-    if (!posted) throw new Error(`Couldn't match any split account for "${t.name}"`);
+    if (!posted) throw new Error(`No split amounts to post for "${t.name}"`);
     return;
   }
 
-  const acctId = await resolveAccountId(exec, ledgerId, t.account);
-  if (!acctId) throw new Error(`Couldn't match account "${t.account}" for "${t.name}"`);
-  await postSingle(exec, ledgerId, acctId, sign * t.amount, t.name, date);
+  await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date);
 }
 
 // Create a transfer: a transfer_group plus two confirmed transactions (out/in)
@@ -275,7 +258,7 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
   const rows = await exec('SELECT * FROM scheduled_templates WHERE is_active = 1');
   const ts = new Date().toISOString();
   for (const r of rows) {
-    const type = String(r.type);
+    const type = String(r.kind);
     if (type === 'transfer') continue;
     if (r.amount == null) continue; // variable amount → manual
     if (Number(r.splits_enabled)) continue; // split income → manual
@@ -300,8 +283,7 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
     if (!dates.length) continue;
 
     const ledgerId = String(r.ledger_id);
-    const acctId = await resolveAccountId(exec, ledgerId, String(r.account_name ?? ''));
-    if (!acctId) continue;
+    const acctId = String(r.account_id);
     const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [acctId]);
     const currency = String(acct?.currency ?? 'USD');
     const ledgerBase = await ledgerBaseCurrency(exec, ledgerId);
@@ -322,7 +304,7 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate,
-          String(r.name ?? ''), categoryId, null, kind, 'pending', null,
+          String(r.description ?? r.name ?? ''), categoryId, null, kind, 'pending', null,
           currency, null, String(r.id), ts, ts,
         ],
       );
@@ -592,9 +574,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'addScheduledSplit': {
-      const account = str(args.account).trim();
-      if (!account) throw new Error('A split needs an account');
-      await qAddScheduledSplit(exec, str(args.templateId), account, Number(args.pct) || 0);
+      const accountId = str(args.accountId).trim();
+      if (!accountId) throw new Error('A split needs an account');
+      await qAddScheduledSplit(exec, str(args.templateId), accountId, Number(args.pct) || 0);
       return;
     }
     case 'removeScheduledSplit': {
@@ -621,7 +603,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const icon = args.icon ? str(args.icon) : null;
       const color = args.color ? str(args.color) : null;
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec("INSERT INTO categories (id,ledger_id,name,type,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))", [
+      await exec("INSERT INTO categories (id,ledger_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))", [
         newId('cat'), ledgerId, name, type, icon, color, Number(rows[0]?.n ?? 0),
       ]);
       return;
@@ -706,19 +688,20 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!['once', 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
         throw new Error(`Unknown frequency "${frequency}"`);
       }
-      const account = str(args.account ?? '').trim();
-      if (!account) throw new Error('An account is required');
+      const accountId = str(args.accountId ?? '').trim();
+      if (!accountId) throw new Error('An account is required');
       await qCreateScheduled(exec, {
         id: str(args.id || newId('sch')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
+        description: args.description ? str(args.description).trim() : null,
         type,
         amount: args.amount == null || args.amount === '' ? null : Number(args.amount),
         frequency,
         dayOfMonth: Number(args.dayOfMonth) || 1,
         weekDay: args.weekDay != null ? Number(args.weekDay) : null,
-        account,
-        from: type === 'transfer' && args.from ? str(args.from).trim() : null,
+        accountId,
+        fromAccountId: type === 'transfer' && args.fromAccountId ? str(args.fromAccountId).trim() : null,
         autoPost: args.autoPost ? 1 : 0,
         color: args.color ? str(args.color) : null,
         category: args.category ? str(args.category) : null,
