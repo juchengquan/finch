@@ -354,6 +354,15 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    Insights flows income → top-N expense categories + a "Saved" stub.
 8. **Investment tracking** (holdings, gains) for the `invest` account type —
    meaningful scope expansion.
+9. **Refund support** — new `kind='refund'` on `transactions` linked back to
+   the original expense via `refunded_transaction_id` (SET NULL on delete).
+   Schema, decision, and cascade policy live in
+   `plans/database_design_en.md` §6.10 / §8 / §13. Implementation work:
+   schema bump + index, query layer (`addRefund`, `getRefundsFor`),
+   `categorySpend`/`monthlyByCategory` widen filter to `kind IN ('expense','refund')`
+   so the positive refund amount nets against its category, and a "Refund this
+   purchase" action on transaction detail that pre-fills category + suggested
+   amount from the original.
 9. **Multi-currency accounts** ✅ *(Phases 1–3 done — see `plans/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* —
    per-account currency is a stored/editable property. **Phase 1 (storage):**
    writes true ledger-base `amount_base` and accumulates the account-currency delta

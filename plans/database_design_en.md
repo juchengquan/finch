@@ -512,25 +512,30 @@ The heart of the schema. Every confirmed insert moves the account balance via a 
 
 ```sql
 CREATE TABLE transactions (
-  id                 TEXT PRIMARY KEY,
-  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  account_id         TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  date               TEXT NOT NULL,
-  time               TEXT,
-  amount             REAL NOT NULL,
-  amount_base        REAL NOT NULL,
-  exchange_rate      REAL NOT NULL,
-  description        TEXT,
-  category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
-  transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
-  kind               TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment')),
-  status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
-  confirmed_at       TEXT,
-  source_template_id TEXT,
-  currency           TEXT NOT NULL DEFAULT 'SGD',
-  notes              TEXT,
-  created_at         TEXT NOT NULL,
-  updated_at         TEXT NOT NULL
+  id                      TEXT PRIMARY KEY,
+  ledger_id               TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  account_id              TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  date                    TEXT NOT NULL,
+  time                    TEXT,
+  amount                  REAL NOT NULL,
+  amount_base             REAL NOT NULL,
+  exchange_rate           REAL NOT NULL,
+  description             TEXT,
+  category_id             TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  transfer_group_id       TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
+  -- A refund row's link back to the original expense it offsets. SET NULL on
+  -- delete: if the original expense is removed, the refund survives as an
+  -- orphan (the money really did come back). One expense can have many
+  -- refunds (partial returns).
+  refunded_transaction_id TEXT REFERENCES transactions(id) ON DELETE SET NULL,
+  kind                    TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment','refund')),
+  status                  TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
+  confirmed_at            TEXT,
+  source_template_id      TEXT,
+  currency                TEXT NOT NULL DEFAULT 'SGD',
+  notes                   TEXT,
+  created_at              TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
 );
 ```
 
@@ -547,13 +552,26 @@ CREATE TABLE transactions (
 | `description` | TEXT | Free-text merchant / memo line. |
 | `category_id` | TEXT FK → `categories.id` · SET NULL | Parent category. Overridden per-row by `transaction_splits` when splits exist. |
 | `transfer_group_id` | TEXT FK → `transfer_groups.id` · SET NULL | Set on both legs of a transfer. |
-| `kind` | TEXT NOT NULL · default `expense` · CHECK | `income` / `expense` / `transfer` / `adjustment`. |
+| `refunded_transaction_id` | TEXT FK → `transactions.id` · SET NULL | Set on `kind='refund'` rows; points at the original expense being refunded. NULL on every other kind. |
+| `kind` | TEXT NOT NULL · default `expense` · CHECK | `income` / `expense` / `transfer` / `adjustment` / `refund` — see *Kinds* below. |
 | `status` | TEXT NOT NULL · default `confirmed` · CHECK | `pending` (excluded from reports + balances) / `confirmed`. |
 | `confirmed_at` | TEXT | ISO 8601 UTC stamped on pending → confirmed transition. |
 | `source_template_id` | TEXT | Link back to `scheduled_templates.id` for auto-posted occurrences (no FK — soft link). |
 | `currency` | TEXT NOT NULL · default `SGD` | Native currency the row was entered in. |
 | `notes` | TEXT | User memo. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
+
+**Kinds**
+
+| `kind` | `amount` sign | Affects category spend | Affects income totals | Notes |
+|---|---|---|---|---|
+| `expense` | negative | yes | no | The default. |
+| `income` | positive | no | yes | Salary, interest, gifts. |
+| `transfer` | both legs | no | no | Two rows sharing a `transfer_group_id`. |
+| `adjustment` | either | no | no | Manual reconciliation row (sets the cached balance back to truth without inventing a category). |
+| `refund` | positive | **yes — netted against the original's category** | no | Linked to the original expense via `refunded_transaction_id`. The positive `amount_base` reduces the offset category's spend (a $50 refund against a $200 grocery purchase shows "Groceries: $150 net", not "Groceries: $200 + $50 income"). One expense can have multiple partial refunds. |
+
+The refund's category typically inherits the original expense's category (UI auto-fills) so the netting works on the right line. Users can override — assigning a refund to a dedicated "Returns" category bypasses the offset and surfaces refunds as their own report bucket instead.
 
 ---
 
@@ -856,7 +874,7 @@ CREATE TABLE db_metadata (
 
 Indexes speed up queries. Without them, SQLite would scan every row in a table ("full table scan") — fine for small tables, terrible for transactions with 10,000+ rows.
 
-> **Note:** The list below is **aspirational** and predates the current live schema. It references tables that do not exist today (`account_balance_snapshots`, `recurring_templates`, `ledger_summaries`, `net_worth_snapshots`). The authoritative index list is at the bottom of `frontend/lib/db/schema.ts`.
+> **Note:** The list below is **aspirational** and predates the current live schema. It references tables that do not exist today (`account_balance_snapshots`, `recurring_templates`, `ledger_summaries`, `net_worth_snapshots`). The authoritative index list is at the bottom of `frontend/lib/db/schema.ts`. When the refund link is wired in, the live schema also gains `idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL` to support "show all refunds of this expense".
 
 ```sql
 -- Account groups (find all groups in a ledger)
@@ -943,6 +961,7 @@ When you delete a parent record, what happens to the child records? We use three
 | `recurring_templates` | `transactions` (source_template_id) | SET NULL | Transaction preserved, loses template link |
 | `recurring_templates` | `recurring_splits` | CASCADE | Splits are only meaningful with their template |
 | `account_groups` | `accounts` | SET NULL | Accounts survive, become "ungrouped" |
+| `transactions` (original expense) | `transactions` (refund, via `refunded_transaction_id`) | SET NULL | The refund row survives as an orphan — the money really did come back, even if the original expense was later removed. |
 
 ---
 
@@ -1236,6 +1255,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 10 | `category_id` ON DELETE SET NULL | Deleting a category shouldn't delete the transactions — that's your financial history. The category field becomes NULL and the transaction shows as "uncategorized". |
 | 11 | `account_id` ON DELETE RESTRICT | An account with transaction history cannot be deleted. This prevents accidental data loss. To "close" an account, set `is_active = 0`. |
 | 12 | `balance_after` stored on transactions | Every transaction records what the balance was after it posted. This enables the balance curve chart without querying the snapshot table in reverse. The trigger keeps `accounts.current_balance` in sync automatically. |
+| 13 | Refunds are their own `kind`, linked back via `refunded_transaction_id` | Treating a refund as `income` is wrong for reports: a $50 grocery refund should make "Groceries" show $150 net, not $200 spent + $50 income. The `kind='refund'` marker lets the spend selectors include refunds in their original category as a negative offset, while income totals stay clean. The optional `refunded_transaction_id` FK captures the user's intent (this $50 came back from the $200 May-12 Whole Foods purchase), survives the original expense being deleted (SET NULL), and supports partial / multiple refunds against one expense via many-to-one. We don't enforce sign or sum-≤-|original| in SQL — both get awkward fast across currencies, and the UI handles those validations. |
 
 ---
 
