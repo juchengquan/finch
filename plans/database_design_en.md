@@ -376,14 +376,17 @@ CREATE TABLE accounts (
 
 ---
 
-### 6.5 `categories` — spending/income categories
+### 6.5 `categories` — spending/income categories (2-level tree)
 
-One row per category. Used on transactions, transaction_splits, and budgets.
+One row per category. Used on transactions, transaction_splits, and budgets. Categories form a **2-level taxonomy** via the self-referential `parent_id`: rows with `parent_id IS NULL` are top-level "parents", rows pointing at one of those are "children". The "no grandchildren" invariant is enforced at the mutation layer (see `assertCanBeParent` in `mutations.ts`).
+
+Both levels are **bookable** — a transaction can file directly against a parent ("Food & Dining") or a leaf ("Groceries"). Reports get a `categorySpend` (leaf-keyed, as filed) plus a pure `rollupCategorySpend` helper that folds each child's total into its parent's bucket so a parent figure = its own transactions + Σ(children's transactions).
 
 ```sql
 CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
   icon       TEXT,
@@ -392,12 +395,14 @@ CREATE TABLE categories (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE INDEX idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL;
 ```
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | App-stable id (`food`, `rent`, `cat-<random>`). |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `parent_id` | TEXT FK → `categories.id` · **SET NULL** | NULL = top-level. Non-NULL = child of that parent. Deleting a parent **promotes its children to top-level** (no data destroyed). The "no grandchildren" rule is enforced by mutations. |
 | `name` | TEXT NOT NULL | Display name. |
 | `kind` | TEXT NOT NULL · CHECK | `expense` / `income` / `transfer`. |
 | `icon` | TEXT | Icon key (`fork`, `home`, …) — matches `components/primitives.tsx`. |
@@ -1265,6 +1270,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 14 | The income/expense/transfer discriminator is uniformly named `kind` | It was `kind` on `transactions` but `type` on `categories`/`budgets`/`scheduled_templates` — the same concept under two names. Unified to `kind` everywhere it carries the income/expense family (incl. the planned `refund` above). `accounts.type` keeps `type` because its values (`savings`/`credit_card`/…) are a different classification. Likewise `counterparties.standardized_name` → `name`, so the entity-label column is `name` on every table. |
 | 15 | `scheduled_templates` reference accounts by FK, not name | An earlier design stored account *names* (`account_name`) and re-resolved them to ids at post time via fuzzy matching — fragile (a rename silently broke posting) and unlike `transactions`. Now `account_id` is a real NOT NULL FK; names are derived by joining `accounts`. The seed resolves its mock names to ids once (and fails loudly if one doesn't match). Currency and `amount_base` are intentionally **not** stored on the template — they're derived from the account + the rate on each post date, so a later edit can't reshape history. |
 | 16 | `accounts.currency` is immutable after creation | An account's currency denominates every transaction's native `amount`, the cached `current_balance`, and the locked `amount_base` on each row. Editing it would silently re-interpret all of that history. So `currency` is set only at create time — it's absent from `AccountPatch`, the edit UI shows it read-only, and `updateAccount` skips it. To "switch", create a new account (a transaction-less account can be deleted; RESTRICT only blocks accounts with history). |
+| 17 | Categories are a 2-level tree with bookable parents, promote-on-delete | A flat list is too thin (no rollup view of "Food spending"); arbitrary nesting is too heavy (UX and aggregation math blow up past 2 levels). The shape settles at parent + child, both bookable so a vague purchase can file at the parent without forcing a sub-choice. `categorySpend` returns leaf-keyed totals (no double-count); `rollupCategorySpend` is a pure helper that callers apply when they want the parent rollup. Deletion uses `ON DELETE SET NULL` on `parent_id` — deleting a parent promotes its children to top-level, matching the rest of the schema's "preserve data, lose only the link" cascade pattern. The "no grandchildren" invariant lives in the mutation layer (`assertCanBeParent`) rather than a self-referential CHECK; the cost of a few extra SELECTs on create/update is small and the SQL stays portable. |
 
 ---
 

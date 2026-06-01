@@ -47,7 +47,7 @@ test('projected state carries accounts / categories / counterparties', async () 
   expect(loaded.accounts.length).toBe(6);
   expect(loaded.accounts.find((a) => a.id === 'cc')?.name).toBe('Amex Gold');
   expect(typeof loaded.accounts[0].balance).toBe('number');
-  expect(loaded.categories.length).toBe(12);
+  expect(loaded.categories.length).toBe(19);
   expect(loaded.counterparties.length).toBeGreaterThan(0);
 });
 

@@ -60,7 +60,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
-| Ledger | Category tree (2-level) | ⬜ | `categories` table seeded; admin screen not DB-wired |
+| Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
 | Settings | Exchange-rate book + device/sync list | ✅ | `/system` **retired** → rates under **Settings › Ledger** (add/delete, sparkline, source badges), device/sync list under **Settings › Devices**; both DB-backed. See `SETTINGS_AND_TRANSFERS_PLAN.md`. |
 | Ledger | FX transaction detail | 🟡 | dual-currency stored (`amount`/`amount_base`); conversion/rate-locking simplified |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
