@@ -127,6 +127,12 @@ export default function MerchantsPage() {
       header={<ScreenHeader title="Merchants" trailing={<IconButton icon="plus" aria-label="New merchant" onClick={() => setCreateOpen(true)} />} />}
     >
       <div className="px-5 pb-[120px]">
+        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
+          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" size={14} />
+            New merchant
+          </Button>
+        </div>
         <div className="px-1 pb-[18px]">
           <SchemaChip label="counterparties" />
           <div className="mt-2 flex items-baseline gap-3.5">

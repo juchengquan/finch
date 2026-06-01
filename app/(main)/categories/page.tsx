@@ -260,6 +260,12 @@ export default function CategoriesPage() {
   return (
     <MobilePage header={<ScreenHeader title="Categories" trailing={triggerCreate} />}>
       <div className="px-5 pb-[120px]">
+        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
+          <Button size="sm" variant="outline" onClick={openCreateTop}>
+            <Icon name="plus" size={14} />
+            New category
+          </Button>
+        </div>
         <div className="px-1 pb-5">
           <SchemaChip label="categories" />
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">

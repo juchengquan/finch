@@ -161,6 +161,86 @@ test('counterparties: list, search, verify, alias', async () => {
   expect(after.verified).toBe(true);
 });
 
+test('counterparty FK: addTransaction links exact name (case-insensitive), null on no match', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+
+  const matched = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10,
+    merchant: 'grab', // lowercase — exists as 'Grab' (cp-02)
+    date: '2026-05-25',
+  });
+  const [m] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [matched]);
+  expect(String(m.counterparty_id)).toBe('cp-02');
+
+  const unmatched = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -10,
+    merchant: 'Random Shop That Has No Catalog Entry',
+    date: '2026-05-25',
+  });
+  const [u] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [unmatched]);
+  expect(u.counterparty_id).toBeNull();
+});
+
+test('counterparty FK: renaming a counterparty makes projectState surface the canonical name', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { projectState } = await import('@/lib/db/state');
+
+  // Insert a row that links to Grab (cp-02).
+  await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -8,
+    merchant: 'Grab', date: '2026-05-25',
+  });
+
+  // Rename the catalog entry; projected merchant should follow the new name
+  // even though `transactions.description` is unchanged.
+  await applyMutation(exec, 'updateCounterparty', { id: 'cp-02', patch: { name: 'Grab Mobility' } });
+  const projected = await projectState(exec);
+  const tx = projected.transactions.find((t) => t.counterpartyId === 'cp-02')!;
+  expect(tx).toBeTruthy();
+  expect(tx.merchant).toBe('Grab Mobility');
+});
+
+test('counterparty FK: updateTransaction re-resolves when merchant text changes', async () => {
+  const exec = await seeded();
+  const { addTransaction, updateTransaction } = await import('@/lib/db/queries/transactions');
+
+  // Start with a row linked to Grab (cp-02).
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -8,
+    merchant: 'Grab', date: '2026-05-25',
+  });
+  let [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.counterparty_id)).toBe('cp-02');
+
+  // Rename merchant to a non-catalog string; link should drop to NULL.
+  await updateTransaction(exec, txId, { merchant: 'Some One-off Vendor' });
+  [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(row.counterparty_id).toBeNull();
+
+  // Rename to a known catalog name; link should re-establish.
+  await updateTransaction(exec, txId, { merchant: 'Apple' }); // cp-05
+  [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.counterparty_id)).toBe('cp-05');
+});
+
+test('counterparty FK: deleting a counterparty leaves linked transactions intact (SET NULL)', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { applyMutation } = await import('@/lib/db/mutations');
+
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -8,
+    merchant: 'Grab', date: '2026-05-25',
+  });
+  await applyMutation(exec, 'deleteCounterparty', { id: 'cp-02' });
+  const [row] = await exec('SELECT counterparty_id, description FROM transactions WHERE id = ?', [txId]);
+  expect(row.counterparty_id).toBeNull();
+  expect(String(row.description)).toBe('Grab');
+});
+
 test('reports: monthly cash flow', async () => {
   const exec = await seeded();
   const cf = await monthlyCashFlow(exec, 'personal', '2026-05');
