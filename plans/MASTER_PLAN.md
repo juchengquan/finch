@@ -47,7 +47,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Main | Insights (trend, insight cards, Apr-vs-May) | ✅ | Metric tabs (Spending/Income/Cashflow) + 3M/6M/1Y ranges |
 | Main | Scheduled (month calendar grid + upcoming list) | ✅ | Month nav + per-day dots |
 | Main | Transaction detail | ✅ | Dots `DropdownMenu` (recurring/delete), inline recategorize `Select`, recurring toggle |
-| Main | Settings | 🟡 | Theme + currency + Data + **Database** (shows server file path, Export, Import disabled); missing grouped sections + **tab-layout editor** |
+| Main | Settings | ✅ | Two tabs: **Account** (Theme · Bottom-bar editor · Sample data · Database card · Export `.db` / `.csv` · Import · Snapshot · Restore) + **Ledger** (Active ledger · Display currency · Categories count link · Exchange rates). Sections grouped with the uppercase-header pattern. |
 | Main | Goals | ✅ | Now **folded into Budgets** as the *income* budget type (named-budgets redesign); standalone Goals page removed |
 | Main | Subscriptions | ➖ | Page + table removed; recurring bills live in `scheduled_templates` (visible on Scheduled). |
 | Main | Activity (cross-account feed, filters, search) | ✅ | Grouped by day, All/Out/In, **SQL search/filter** via the live DB |
@@ -59,9 +59,9 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/color); delete leaves txns uncategorised. Colour is hex; a curated swatch picker maps OKLCH hues to hex at the standard palette. |
 | Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
-| Ledger | Ledger admin table (desktop) | 🟡 | Header only |
+| Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) covers the practical need (pick a ledger); a full admin table for 4 hardcoded ledgers without a "New ledger" mutation would be half-baked theater. Reconsider if/when ledger creation lands. |
 | Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
-| Settings | Exchange-rate book + device/sync list | ✅ | `/system` **retired** → rates under **Settings › Ledger** (add/delete, sparkline, source badges), device/sync list under **Settings › Devices**; both DB-backed. See `SETTINGS_AND_TRANSFERS_PLAN.md`. |
+| Settings | Exchange-rate book | ✅ | Under **Settings › Ledger** (add/delete, sparkline, source badges); DB-backed. The "device/sync" piece was retired with the `sync_log` table — DB file is the source of truth, no multi-device sync to expose. |
 | Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
 
@@ -168,8 +168,9 @@ Built on existing mock data; no new state machinery.
       rate + date, schema rows, and a JPY→SGD rate sparkline.
 - [x] **System admin** (`/system`) — exchange-rate book (rates, source badges,
       sparklines, Refresh) + `sync_log` device list (last sync/txn, This-device badge).
-      Added a desktop-only **System** ledger tab. _(Later retired — relocated
-      into Settings › Ledger + Settings › Devices; see `SETTINGS_AND_TRANSFERS_PLAN.md`.)_
+      Added a desktop-only **System** ledger tab. _(Later retired — rates moved
+      into Settings › Ledger; `sync_log` + the Devices tab were dropped entirely
+      since the DB file is the source of truth and no multi-device sync exists.)_
 
 ### Phase F — Persistence & real SQLite ✅ _(done)_
 Reframed from the original "build a backend" plan: the app is client-only and runs

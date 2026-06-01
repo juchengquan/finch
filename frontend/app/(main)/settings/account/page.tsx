@@ -1,10 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Icon, MerchantGlyph } from '@/components/primitives';
+import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
-import { SettingsItem } from '@/components/SettingsItem';
 import { MobileTabsEditor } from '@/components/MobileTabsEditor';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -149,21 +148,8 @@ export default function AccountSettingsPage() {
         <SettingsTabs />
       </div>
 
-      <div className="flex items-center gap-3.5 px-5 pb-[22px]">
-        <MerchantGlyph name="Alex Morgan" size={64} color="var(--primary)" fg="var(--primary-foreground)" />
-        <div className="flex-1">
-          <div className="font-serif text-[22px] -tracking-[0.3px]">Alex Morgan</div>
-          <div className="text-muted-foreground text-xs">Personal plan</div>
-        </div>
-      </div>
-
       <div className="px-5 pb-28">
         <div className="text-muted-foreground pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Preferences
-        </div>
-        <SettingsItem item={{ label: 'Notifications', toggle: true, icon: 'bell' }} />
-
-        <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
           Appearance
         </div>
         <Row icon="sparkle" label="Theme">
