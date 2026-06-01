@@ -3,7 +3,7 @@
 // and invalidates the rollover cache when a backdated transaction edit could
 // have affected an already-rolled period.
 //
-// See plans/BUDGET_CYCLES_PLAN.md for the design.
+// See plans/done/BUDGET_CYCLES_PLAN.md for the design.
 
 import type { Exec } from '@/lib/db/repo';
 import { periodOf, prevPeriod, nextPeriod, periodRange, type Frequency } from './period';

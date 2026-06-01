@@ -1,5 +1,14 @@
 # Budget cycles + automatic period rollover — reimplementation plan
 
+Status: **implemented & merged** on `feat/frontend`. `rollBudgetsIfDue()` in
+`lib/budgets/rollover.ts` is driven from `lib/db/server.ts` against the named-
+budgets model, with `last_rolled_period` + `pending_amount` columns on
+`budgets` and tests in `lib/budgets/rollover.test.ts`. The spec below is kept
+as the design rationale; everything described as "to do" / "to implement" is
+done.
+
+---
+
 The original engine shipped in PR #48 against the legacy
 per-category-amount-map model. The "clean-slate DB + named-budgets"
 redesign (`bdd6f47`) dropped that engine and rebuilt budgets as named

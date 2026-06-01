@@ -6,7 +6,7 @@ and the current implementation in `frontend/`.
 
 > **SQLite integration shipped** (PRs #15–#17): the design-doc schema is now the
 > app's live data layer, served by a **server-side** SQLite database. See
-> `plans/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
+> `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
 _Last updated: 2026-05-27._
 
@@ -208,7 +208,7 @@ the seam a real backend can slot behind later.
 
 ### Phase G — Relational schema + server-side SQLite ✅ _(done; PRs #15–#17)_
 The design-doc schema is now the app's live data layer. See
-`plans/SQLITE_INTEGRATION_PLAN.md` for detail.
+`plans/done/SQLITE_INTEGRATION_PLAN.md` for detail.
 - [x] **Full relational schema** (`lib/db/schema.ts`) + seed (`seed.ts`) + typed
       queries/mutations (`lib/db/queries/*`, `mutations.ts`), all unit-tested.
 - [x] **Server-side DB** (`lib/db/server.ts`) — `@sqlite.org/sqlite-wasm` in Node,
@@ -235,7 +235,7 @@ The design-doc schema is now the app's live data layer. See
       JSON files removed across PRs #30 and #33 (the Insights derived-series
       rewrite). See `MASTER_PLAN.md §5` for the up-to-date open list.
 
-### Phase H — Full CRUD parity ✅ _(done; see `plans/CRUD_PARITY_PLAN.md`)_
+### Phase H — Full CRUD parity ✅ _(done; see `plans/done/CRUD_PARITY_PLAN.md`)_
 Brought every user-facing entity to full Create / Update / Delete (or archive) and
 retired the last `app_state` override shims. Delivered in phases on one branch:
 - [x] **Schema versioning** — `SCHEMA_VERSION` + `migrate()` in `lib/db/schema.ts`
@@ -311,6 +311,14 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
+**Current open items (as of PR #61):**
+1. **Investment tracking** (#8 below) — open; biggest scope expansion left.
+2. **Counterparty FK link** (`plans/MERCHANTS_LINK_PLAN.md`) — proposed, not started; would add `transactions.counterparty_id` so renaming a merchant follows history.
+3. **Unrealized FX gain/loss** (Multi-currency phase 4 follow-up) — deferred; needs opening-balance cost basis on multi-currency accounts.
+4. **Base-currency-change recompute tool** (Multi-currency phase 4 follow-up) — deferred; heavy/rare.
+
+Everything else in the curated list below — Transaction splits, Spending forecast, ⌘K palette, Account-group CRUD, Budget rollover (UI + auto period), Activity filters, Sankey, Refund support, Multi-currency phases 1–3 + Phase-4-partial — is ✅ shipped.
+
 **Picked next:**
 1. **Transaction splits** ✅ *(done — see PR)* — ad-hoc category splits on any
    confirmed transaction. New `transaction_splits` table (schema v6) holds the
@@ -341,9 +349,11 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
 5. **Budget rollover UI** ✅ *(done — see PR)* — rollover toggle + optional cap
    on the budget detail page, carry-forward shown in the header and folded
    into the ring + remaining figure (matches budgetProgress). Automatic
-   period rollover (carry-over computation) was built in **PR #48** but
-   **superseded by the named-budgets redesign**; re-application onto named
-   budgets is specced in `plans/BUDGET_CYCLES_PLAN.md` §10 (pending).
+   period rollover **also shipped** against the named-budgets model
+   (`rollBudgetsIfDue` in `lib/budgets/rollover.ts`, driven from
+   `lib/db/server.ts`; tracked via the `last_rolled_period` / `pending_amount`
+   columns); the PR #48 engine was superseded by the redesign and replayed.
+   See `plans/done/BUDGET_CYCLES_PLAN.md`.
 6. **Date / amount filters on Activity** ✅ *(done — see PR)* — `minAmount` /
    `maxAmount` on ListOptions + selectTransactions (date range already wired
    on the server, just unused). UI: collapsible "Filters" panel below the
@@ -365,19 +375,21 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    `kind IN ('expense','refund')` so the positive refund nets against its category,
    cash-flow income gated to `kind='income'`, and a "Refund" action on transaction
    detail that pre-fills amount + category from the original.
-9. **Multi-currency accounts** ✅ *(Phases 1–3 done — see `plans/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* —
-   per-account currency is a stored/editable property. **Phase 1 (storage):**
-   writes true ledger-base `amount_base` and accumulates the account-currency delta
-   into balances. **Phase 2 (read/display):** `useMoney.toBase`/`fmtFrom`;
-   `balanceSeries` walks the native amount; net-worth selectors sum mixed currencies
-   in the ledger base via a `ToBase`; account detail shows native + "≈ display".
-   **Phase 3 (entry UX):** add-expense currency follows the selected account;
-   `updateTransaction` reconverts `amount_base` on an amount edit. **Phase 4
-   (partial):** cross-currency transfer UX — `selectTransfers`/`listTransfers`
-   return both legs' native amounts + currencies; the transfers list shows
-   "sent → received @ rate". All no-ops on existing account == base data, with
-   divergent-account tests. Deferred: unrealized FX gain/loss (needs opening-balance
-   cost basis) and a base-currency-change recompute tool (heavy/rare).
+10. **Multi-currency accounts** ✅ *(Phases 1–3 done — see `plans/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* —
+    per-account currency is a stored/editable property. **Phase 1 (storage):**
+    writes true ledger-base `amount_base` and accumulates the account-currency delta
+    into balances. **Phase 2 (read/display):** `useMoney.toBase`/`fmtFrom`;
+    `balanceSeries` walks the native amount; net-worth selectors sum mixed currencies
+    in the ledger base via a `ToBase`; account detail shows native + "≈ display".
+    **Phase 3 (entry UX):** add-expense currency follows the selected account;
+    `updateTransaction` reconverts `amount_base` on an amount edit. **Phase 4
+    (partial):** cross-currency transfer UX — `selectTransfers`/`listTransfers`
+    return both legs' native amounts + currencies; the transfers list shows
+    "sent → received @ rate". The FX-transaction detail also embeds the locked-rate
+    block directly into `<TransactionDetail>` (PR #60) so foreign rows surface
+    rate + dual-amount audit info without a separate `/fx` page. Deferred:
+    unrealized FX gain/loss (needs opening-balance cost basis) and a
+    base-currency-change recompute tool (heavy/rare).
 
 ### Done since (Phase H follow-ups)
 - Recurring **split add/remove** UI on the template detail screen.

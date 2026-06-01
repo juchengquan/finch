@@ -1,15 +1,36 @@
 # FX / cross-currency conversion — design plan
 
-Status: **Phase 1 + 2 implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
-- ✅ **Phase 1** — `lib/db/queries/rates.ts` (`rateToSgd` + `convertToBase`, SGD
-  pivot, nearest-on-or-before, static fallback); `addTransaction` converts
-  native→base and locks the rate.
+Status: **implemented & merged** on `feat/frontend`. Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
+
+The original plan called for an SGD-pivoted rate table; the live schema uses a
+**USD hub** (PR #54). `rateToSgd` was renamed `rateToHub`; the rates table is a
+90-day sliding cache (older rows pruned). When a transaction's date precedes the
+window, lookup falls forward to the earliest stored rate, then to a static
+`FALLBACK_USD_PER_UNIT` map. Cross-rate is `rate(C → B) = rate(C) / rate(B)`.
+
+What's done:
+- ✅ **Phase 1** — `lib/db/queries/rates.ts` (`rateToHub` + `convertToBase`, USD
+  pivot, nearest-in-time lookup with on-or-before then on-or-after fallback,
+  static `FALLBACK_USD_PER_UNIT` as last resort); `addTransaction` converts
+  native→base and locks the rate onto the transaction row.
 - ✅ **Phase 2** — seed bases for foreign rows are derived from the table (fixed
   per-account opening recomputed from the seed's derived bases, so balances still
   land on the known seed balance); `createTransfer` converts the incoming leg;
   rate coverage extended to the FX seed date.
-- ↩ **Remaining**: broader/real rate history, a rate-admin affordance, and whether
-  `useMoney` display conversion should move off the static map (§7).
+- ✅ **Rate admin** — Settings › Ledger › Exchange rates surfaces add/delete +
+  sparkline + source badges, DB-backed.
+- ✅ **`useMoney` off the static map** — display conversion goes through
+  `latestRateMap` over the projected `exchange_rates` rows; the static
+  `convertAmount` only fires as a pre-hydration fallback.
+- ✅ **FX transaction detail** — the dedicated `/fx` page was retired (PR #60);
+  `<TransactionDetail>` embeds a dual-amount card (Original / Base LOCKED) + the
+  locked-rate badge directly when `currency ≠ ledger_base`.
+
+What's deferred (Multi-currency follow-ups):
+- ↩ Unrealized FX gain/loss for foreign-currency accounts (needs opening-balance
+  cost basis).
+- ↩ Base-currency-change recompute tool (rebuild every `amount_base` after a
+  ledger's base flips; heavy and rare).
 
 ## 1. Goal
 

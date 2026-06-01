@@ -1,6 +1,6 @@
 # Insights — design plan
 
-Status: **Phase A implemented.** Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
+Status: **all phases implemented & merged** on `feat/frontend`. Companion to `SQLITE_INTEGRATION_PLAN.md` §6.
 - ✅ **Phase A** — `lib/insights.ts` rule engine over the projected store
   (over-budget, pending, top category, weekday skew, goal progress, net-worth
   direction), ranked + capped; the Insights screen renders computed cards and
