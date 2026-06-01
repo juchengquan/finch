@@ -110,6 +110,14 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Reject creating/moving a category under one that itself has a parent —
+ *  the taxonomy is exactly 2 levels deep. */
+async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
+  const rows = await exec('SELECT parent_id FROM categories WHERE id = ?', [parentId]);
+  if (!rows.length) throw new Error('Parent category does not exist');
+  if (rows[0].parent_id != null) throw new Error('Categories nest only two levels deep');
+}
+
 // Insert one confirmed transaction row directly (used for transfers, which carry
 // a transfer_group_id). The insert trigger moves the account balance.
 async function insertTxRow(
@@ -605,16 +613,26 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const type = args.type ? str(args.type) : 'expense';
       const icon = args.icon ? str(args.icon) : null;
       const color = args.color ? str(args.color) : null;
+      const parentId = args.parentId ? str(args.parentId) : null;
+      if (parentId != null) await assertCanBeParent(exec, parentId);
       const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM categories WHERE ledger_id = ?', [ledgerId]);
-      await exec("INSERT INTO categories (id,ledger_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))", [
-        newId('cat'), ledgerId, name, type, icon, color, Number(rows[0]?.n ?? 0),
+      await exec("INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))", [
+        newId('cat'), ledgerId, parentId, name, type, icon, color, Number(rows[0]?.n ?? 0),
       ]);
       return;
     }
     case 'updateCategory': {
+      const id = str(args.id);
       const patch = (args.patch ?? {}) as CategoryPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
-      await qUpdateCategory(exec, str(args.id), patch);
+      if (patch.parentId !== undefined && patch.parentId !== null) {
+        if (patch.parentId === id) throw new Error('A category cannot be its own parent');
+        await assertCanBeParent(exec, patch.parentId);
+        // Re-parenting a row that itself has children would create 3 levels.
+        const kids = await exec('SELECT COUNT(*) AS n FROM categories WHERE parent_id = ?', [id]);
+        if (Number(kids[0]?.n ?? 0) > 0) throw new Error('Move or promote this category\'s children before nesting it under another parent');
+      }
+      await qUpdateCategory(exec, id, patch);
       return;
     }
     case 'updateTag': {

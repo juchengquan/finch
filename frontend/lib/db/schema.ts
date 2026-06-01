@@ -71,6 +71,12 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  -- Optional parent within a 2-level taxonomy. NULL = top-level. A non-NULL
+  -- value must itself reference a top-level row (no grandchildren — enforced
+  -- in the mutation layer, not SQL, since a self-referential CHECK is hard
+  -- to express cleanly). Promote-on-delete: SET NULL pushes children up to
+  -- top-level when their parent is removed, so no rows are destroyed.
+  parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
   icon       TEXT,
@@ -79,6 +85,7 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
   id         TEXT PRIMARY KEY,
@@ -334,7 +341,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T12:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T13:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

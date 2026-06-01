@@ -87,7 +87,7 @@ test('accounts: createAccount assigns an incrementing sort_order within the same
 
 test('categories: list + monthly spend', async () => {
   const exec = await seeded();
-  expect((await listCategories(exec, 'personal')).length).toBe(8);
+  expect((await listCategories(exec, 'personal')).length).toBe(15); // 8 top-level + 7 demo subcategories
   const spend = await monthlyByCategory(exec, 'personal', '2026-05');
   const food = spend.find((c) => c.id === 'food')!;
   expect(food.spent).toBeGreaterThan(0);
@@ -99,6 +99,52 @@ test('categories: list + monthly spend', async () => {
   // sum; assert at least that minimum so it stays a meaningful regression test.
   const map = await categorySpend(exec, 'personal');
   expect(map.food).toBeGreaterThanOrEqual(6.75 + 84.32 + 42.18 + 14.2 + 29.84 + 132.8 + 96.5);
+});
+
+test('categories: 2-level tree — parent_id wires children, build+rollup behave', async () => {
+  const exec = await seeded();
+  const { buildCategoryTree, rollupCategorySpend } = await import('@/lib/db/queries/categories');
+  const cats = await listCategories(exec, 'personal');
+
+  // Seeded demo children carry their parent id.
+  const groceries = cats.find((c) => c.id === 'food-groceries')!;
+  expect(groceries.parentId).toBe('food');
+  const food = cats.find((c) => c.id === 'food')!;
+  expect(food.parentId).toBeNull();
+
+  // Tree groups children under their parent; childless parents come back with [].
+  const tree = buildCategoryTree(cats);
+  const foodNode = tree.find((n) => n.parent.id === 'food')!;
+  expect(foodNode.children.map((c) => c.id).sort()).toEqual(
+    ['food-coffee', 'food-groceries', 'food-restaurants'].sort(),
+  );
+  expect(tree.find((n) => n.parent.id === 'rent')!.children).toEqual([]);
+
+  // rollupCategorySpend folds child totals into the parent bucket.
+  const rolled = rollupCategorySpend({ food: 10, 'food-groceries': 30, 'food-coffee': 5 }, cats);
+  expect(rolled.food).toBe(10 + 30 + 5);
+  expect(rolled['food-groceries']).toBe(30); // children keep their own line too
+});
+
+test('createCategory rejects nesting under a row that already has a parent (no 3-level)', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  await expect(
+    applyMutation(exec, 'createCategory', {
+      ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
+    }),
+  ).rejects.toThrow(/two levels/i);
+});
+
+test('deleteCategory promotes children to top-level (ON DELETE SET NULL)', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  // 'food' has demo children. Delete it; the children should survive as top-level.
+  await applyMutation(exec, 'deleteCategory', { id: 'food' });
+  const after = await listCategories(exec, 'personal');
+  const groceries = after.find((c) => c.id === 'food-groceries')!;
+  expect(groceries).toBeTruthy();
+  expect(groceries.parentId).toBeNull();
 });
 
 test('counterparties: list, search, verify, alias', async () => {
