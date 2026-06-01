@@ -1,13 +1,15 @@
 'use client';
 
+import Link from 'next/link';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
-import { SettingsItem } from '@/components/SettingsItem';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { LedgerSwitcher } from '@/components/ledger-switcher';
 import { ExchangeRates } from '@/components/exchange-rates';
 import { useCurrency, type Currency } from '@/components/currency-provider';
+import { useLedger } from '@/components/ledger-provider';
+import { useFinanceStore } from '@/lib/store';
 import {
   Select,
   SelectContent,
@@ -32,6 +34,10 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
 
 export default function LedgerSettingsPage() {
   const { currency, setCurrency } = useCurrency();
+  const { activeId } = useLedger();
+  const categoryCount = useFinanceStore(
+    (s) => s.categories.filter((c) => c.ledgerId === activeId).length,
+  );
 
   return (
     <MobilePage>
@@ -67,7 +73,12 @@ export default function LedgerSettingsPage() {
             </SelectContent>
           </Select>
         </Row>
-        <SettingsItem item={{ label: 'Categories', value: '8 active', icon: 'tag' }} />
+        <Row icon="tag" label="Categories">
+          <Link href="/categories" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12px]">
+            {categoryCount} {categoryCount === 1 ? 'category' : 'categories'}
+            <Icon name="chev" size={11} />
+          </Link>
+        </Row>
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
           Exchange rates

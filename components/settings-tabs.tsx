@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils';
 const TABS = [
   { href: '/settings/account', label: 'Account' },
   { href: '/settings/ledger', label: 'Ledger' },
-  { href: '/settings/devices', label: 'Devices' },
 ];
 
 export function SettingsTabs() {

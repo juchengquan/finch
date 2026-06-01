@@ -5,7 +5,7 @@ import type { BudgetRow } from './queries/budgets';
 import type { BudgetGroupRow } from './queries/budgetGroups';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
-import type { ExchangeRate, Device } from './queries/system';
+import type { ExchangeRate } from './queries/system';
 import type { Tag } from './queries/tags';
 
 // A minimal async query interface so the same logic works against the in-memory
@@ -31,7 +31,6 @@ export interface ProjectedState extends PersistState {
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
-  devices: Device[];
   tags: Tag[];
   scheduled: ScheduledTemplate[];
   /** Ordered section ids for the mobile bottom bar. Empty = use the client default. */
