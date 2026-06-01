@@ -11,6 +11,7 @@
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './queries/rates';
+import { resolveCounterpartyIdByName } from './queries/counterparties';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
@@ -245,15 +246,16 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     for (const r of resolved) {
       const t = r.t;
       const kind = t.transferGroupId ? 'transfer' : r.amountBase > 0 ? 'income' : 'expense';
+      const cpId = await resolveCounterpartyIdByName(exec, r.ledgerId, t.merchant);
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-           description,category_id,transfer_group_id,kind,status,confirmed_at,
+           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
            currency,notes,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate,
-          t.merchant, t.category, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
+          t.merchant, t.category, cpId, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
           r.currency, t.note || null, SEED_TS, SEED_TS,
         ],
       );

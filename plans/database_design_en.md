@@ -530,6 +530,10 @@ CREATE TABLE transactions (
   description             TEXT,
   category_id             TEXT REFERENCES categories(id) ON DELETE SET NULL,
   transfer_group_id       TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
+  -- Link to the canonical merchant when one matches. NULL = free-text only;
+  -- otherwise display picks the catalog name so renames follow history. SET
+  -- NULL on delete preserves the original description text.
+  counterparty_id         TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   -- A refund row's link back to the original expense it offsets. SET NULL on
   -- delete: if the original expense is removed, the refund survives as an
   -- orphan (the money really did come back). One expense can have many
@@ -558,6 +562,7 @@ CREATE TABLE transactions (
 | `exchange_rate` | REAL NOT NULL | Rate used to derive `amount_base`. Locked so future rate edits don't reshape history. |
 | `description` | TEXT | Free-text merchant / memo line. |
 | `category_id` | TEXT FK → `categories.id` · SET NULL | Parent category. Overridden per-row by `transaction_splits` when splits exist. |
+| `counterparty_id` | TEXT FK → `counterparties.id` · SET NULL | Set when `description` matches a row in `counterparties` (case-insensitive exact match within the same ledger). Resolved at insert/update by `resolveCounterpartyIdByName`. NULL when no catalog row matches — `description` stands on its own. Renames on the catalog row follow history automatically because `projectState` swaps `merchant` for the canonical name when this FK is set. SET NULL on delete preserves the transaction's plain description text. |
 | `transfer_group_id` | TEXT FK → `transfer_groups.id` · SET NULL | Set on both legs of a transfer. |
 | `refunded_transaction_id` | TEXT FK → `transactions.id` · SET NULL | Set on `kind='refund'` rows; points at the original expense being refunded. NULL on every other kind. |
 | `kind` | TEXT NOT NULL · default `expense` · CHECK | `income` / `expense` / `transfer` / `adjustment` / `refund` — see *Kinds* below. |
@@ -1243,6 +1248,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 15 | `scheduled_templates` reference accounts by FK, not name | An earlier design stored account *names* (`account_name`) and re-resolved them to ids at post time via fuzzy matching — fragile (a rename silently broke posting) and unlike `transactions`. Now `account_id` is a real NOT NULL FK; names are derived by joining `accounts`. The seed resolves its mock names to ids once (and fails loudly if one doesn't match). Currency and `amount_base` are intentionally **not** stored on the template — they're derived from the account + the rate on each post date, so a later edit can't reshape history. |
 | 16 | `accounts.currency` is immutable after creation | An account's currency denominates every transaction's native `amount`, the cached `current_balance`, and the locked `amount_base` on each row. Editing it would silently re-interpret all of that history. So `currency` is set only at create time — it's absent from `AccountPatch`, the edit UI shows it read-only, and `updateAccount` skips it. To "switch", create a new account (a transaction-less account can be deleted; RESTRICT only blocks accounts with history). |
 | 17 | Categories are a 2-level tree with bookable parents, promote-on-delete | A flat list is too thin (no rollup view of "Food spending"); arbitrary nesting is too heavy (UX and aggregation math blow up past 2 levels). The shape settles at parent + child, both bookable so a vague purchase can file at the parent without forcing a sub-choice. `categorySpend` returns leaf-keyed totals (no double-count); `rollupCategorySpend` is a pure helper that callers apply when they want the parent rollup. Deletion uses `ON DELETE SET NULL` on `parent_id` — deleting a parent promotes its children to top-level, matching the rest of the schema's "preserve data, lose only the link" cascade pattern. The "no grandchildren" invariant lives in the mutation layer (`assertCanBeParent`) rather than a self-referential CHECK; the cost of a few extra SELECTs on create/update is small and the SQL stays portable. |
+| 18 | `transactions.counterparty_id` resolves at insert, display at projection, SET NULL on catalog delete | Earlier the `counterparties` catalog was orphan-decorative — renaming "Don Don Donki" on the merchants page didn't touch any past transaction's `description`. The FK turns the catalog into the source of truth for merchant names: `addTransaction` / `updateTransaction` call `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger) to set the link; `projectState` then overrides each linked row's `merchant` with the canonical catalog name, so renames follow history automatically. We do **not** auto-create counterparties from typed names — the catalog stays manually curated. SET NULL on delete preserves the row's plain `description` text. |
 
 ---
 

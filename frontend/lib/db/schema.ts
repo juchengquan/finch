@@ -140,6 +140,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   exchange_rate      REAL NOT NULL,
   description        TEXT,
   category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  -- Link to the canonical counterparty when one matches. NULL = free-text
+  -- merchant (one-off, or no catalog entry). Renames on the counterparty
+  -- follow history automatically because display picks the canonical name
+  -- via this FK in projectState. SET NULL on delete: deleting a merchant
+  -- leaves the transaction with its plain description text intact.
+  counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
   -- A refund row's link back to the original expense it offsets. SET NULL on
   -- delete: if the original expense is removed, the refund survives as an
@@ -300,6 +306,7 @@ CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
 CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
 
 -- Confirmed inserts move the account balance by their delta (in the account's
 -- currency: the native amount when the entry is in that currency, else the
@@ -332,7 +339,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T14:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T15:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

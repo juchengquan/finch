@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,12 @@ export default function TagsPage() {
       header={<ScreenHeader title="Tags" trailing={<IconButton icon="plus" aria-label="New tag" onClick={() => setCreateOpen(true)} />} />}
     >
       <div className="px-5 pb-[120px]">
+        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
+          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" size={14} />
+            New tag
+          </Button>
+        </div>
         <div className="px-1 pb-5">
           <SchemaChip label="tags" />
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">

@@ -5,6 +5,7 @@
 import type { Exec } from '@/lib/db/repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './rates';
+import { resolveCounterpartyIdByName } from './counterparties';
 
 export type Direction = 'all' | 'in' | 'out';
 
@@ -66,6 +67,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
     sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
     refundedTransactionId: r.refunded_transaction_id == null ? undefined : String(r.refunded_transaction_id),
+    counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
   };
 }
 
@@ -151,15 +153,16 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   const amountBase = conv.amountBase;
   const exchangeRate = conv.rate;
   const kind = input.kind ?? (amountBase > 0 ? 'income' : 'expense');
+  const counterpartyId = await resolveCounterpartyIdByName(exec, input.ledgerId, input.merchant);
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-       description,category_id,transfer_group_id,refunded_transaction_id,kind,status,confirmed_at,
+       description,category_id,counterparty_id,transfer_group_id,refunded_transaction_id,kind,status,confirmed_at,
        currency,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate,
-      input.merchant, input.categoryId ?? null, null, input.refundedTransactionId ?? null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
+      input.merchant, input.categoryId ?? null, counterpartyId, null, input.refundedTransactionId ?? null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
       currency, input.note || null,
     ],
   );
@@ -183,7 +186,17 @@ export async function updateTransaction(
 ): Promise<void> {
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
-  if (patch.merchant !== undefined) { sets.push('description = ?'); bind.push(patch.merchant); }
+  if (patch.merchant !== undefined) {
+    sets.push('description = ?');
+    bind.push(patch.merchant);
+    // Re-resolve the catalog link: a rename to a name that matches a
+    // counterparty wires the FK; a rename away from a known name nulls it.
+    const [row] = await exec('SELECT ledger_id FROM transactions WHERE id = ?', [id]);
+    const ledgerId = String(row?.ledger_id ?? '');
+    const cpId = ledgerId ? await resolveCounterpartyIdByName(exec, ledgerId, patch.merchant) : null;
+    sets.push('counterparty_id = ?');
+    bind.push(cpId);
+  }
   if (patch.category !== undefined) { sets.push('category_id = ?'); bind.push(patch.category); }
   if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
   if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }

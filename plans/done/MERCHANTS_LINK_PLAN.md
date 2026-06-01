@@ -1,17 +1,13 @@
 # Link merchants (counterparties) to transactions
 
-Status: **proposed — not started**
-
-Scope: `frontend/` data layer + UI. **Schema change** (new column on
-`transactions`), so it follows the project's reset-the-DB workflow (no live
-migration; rename the live file aside and reseed — see §6).
-
-Builds on the current state where `counterparties` is an orphaned catalog.
-Note: PR #58 simplified `counterparties` by dropping the `aliases` JSON
-column and the `category` field — counterparty is now just `(id, ledger_id,
-name, is_verified, audit)`. The link work below is unchanged by that;
-anything that referenced `aliases`/`category` in the design rationale is
-historical.
+Status: **implemented & merged** on `feat/frontend`. `transactions.counterparty_id`
+points to `counterparties.id` (SET NULL on delete). Insert/update mutations call
+`resolveCounterpartyIdByName` (case-insensitive exact match within the ledger);
+`projectState` swaps in the canonical catalog name for any row with a non-NULL
+FK, so renames follow history without touching `transactions.description`. Auto-
+creation of catalog rows from typed names is intentionally NOT done — the
+catalog stays curated. See `plans/database_design_en.md` §6.10 + decision #18.
+The original spec is kept below as the design rationale.
 
 ---
 

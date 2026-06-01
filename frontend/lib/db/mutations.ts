@@ -37,6 +37,7 @@ import {
   createCounterparty as qCreateCounterparty,
   verifyCounterparty as qVerifyCounterparty,
   unverifyCounterparty as qUnverifyCounterparty,
+  resolveCounterpartyIdByName,
   type CounterpartyPatch,
 } from './queries/counterparties';
 import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
@@ -140,15 +141,16 @@ async function insertTxRow(
   // These rows are confirmed, so the insert trigger moves the account balance.
   const ledgerBase = await ledgerBaseCurrency(exec, row.ledgerId);
   const conv = await convertToBase(exec, row.amount, row.currency, ledgerBase, row.date);
+  const cpId = await resolveCounterpartyIdByName(exec, row.ledgerId, row.description);
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-       description,category_id,transfer_group_id,kind,status,confirmed_at,
+       description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
        currency,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId('t'), row.ledgerId, row.accountId, row.date, row.time ?? null, row.amount, conv.amountBase, conv.rate,
-      row.description, null, row.transferGroupId, row.kind, 'confirmed', ts,
+      row.description, null, cpId, row.transferGroupId, row.kind, 'confirmed', ts,
       row.currency, row.note, ts, ts,
     ],
   );
@@ -301,6 +303,8 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
     const kind = type === 'income' ? 'income' : 'expense';
     const categoryId = r.category_id == null ? null : String(r.category_id);
 
+    const description = String(r.description ?? r.name ?? '');
+    const cpId = await resolveCounterpartyIdByName(exec, ledgerId, description);
     for (const date of dates) {
       // `amount` is native (account currency); `amount_base` is the ledger-base
       // figure for reports — convert + lock the rate per occurrence date. Pending
@@ -309,12 +313,12 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
       await exec(
         `INSERT INTO transactions
           (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-           description,category_id,transfer_group_id,kind,status,confirmed_at,
+           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
            currency,notes,source_template_id,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate,
-          String(r.description ?? r.name ?? ''), categoryId, null, kind, 'pending', null,
+          description, categoryId, cpId, null, kind, 'pending', null,
           currency, null, String(r.id), ts, ts,
         ],
       );
