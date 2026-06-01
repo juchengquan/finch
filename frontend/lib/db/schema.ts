@@ -252,15 +252,6 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
   PRIMARY KEY (date, currency)
 );
 
-CREATE TABLE IF NOT EXISTS sync_log (
-  device_id    TEXT PRIMARY KEY,
-  ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  device_name  TEXT NOT NULL,
-  last_sync_at TEXT NOT NULL,
-  last_txn_id  TEXT,
-  is_current   INTEGER NOT NULL DEFAULT 0
-);
-
 -- Transitional store slices not yet migrated to real tables (pending, scheduled,
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
@@ -341,7 +332,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T13:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T14:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

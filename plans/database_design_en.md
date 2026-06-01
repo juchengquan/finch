@@ -198,7 +198,6 @@ erDiagram
     ledgers ||--o{ net_worth_snapshots : "ledger_id"
     ledgers ||--o{ ledger_summaries : "ledger_id"
     ledgers ||--o{ transfer_groups : "ledger_id"
-    ledgers ||--o{ sync_log : "ledger_id"
 
     account_groups ||--o{ accounts : "group_id"
 
@@ -251,9 +250,8 @@ and a column reference table.
 13. [`scheduled_templates`](#613-scheduled_templates--recurring-transaction-blueprints)
 14. [`scheduled_splits`](#614-scheduled_splits--multi-account-splits-for-a-template)
 15. [`exchange_rates`](#615-exchange_rates--locked-historical-fx-rates)
-16. [`sync_log`](#616-sync_log--per-device-sync-marker)
-17. [`app_state`](#617-app_state--transitional-keyvalue-bag)
-18. [`db_metadata`](#618-db_metadata--single-row-self-description-of-the-file)
+16. [`app_state`](#616-app_state--transitional-keyvalue-bag)
+17. [`db_metadata`](#617-db_metadata--single-row-self-description-of-the-file)
 
 ---
 
@@ -797,33 +795,7 @@ CREATE TABLE exchange_rates (
 
 ---
 
-### 6.16 `sync_log` — per-device sync marker
-
-Records the last sync state per device. Read by the System / Devices screen.
-
-```sql
-CREATE TABLE sync_log (
-  device_id    TEXT PRIMARY KEY,
-  ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  device_name  TEXT NOT NULL,
-  last_sync_at TEXT NOT NULL,
-  last_txn_id  TEXT,
-  is_current   INTEGER NOT NULL DEFAULT 0
-);
-```
-
-| Column | Type | Description |
-|---|---|---|
-| `device_id` | TEXT PK | Stable id for the device. |
-| `ledger_id` | TEXT NOT NULL FK · CASCADE | Ledger this sync row applies to. |
-| `device_name` | TEXT NOT NULL | Display label ("iPhone 15 Pro"). |
-| `last_sync_at` | TEXT NOT NULL | ISO 8601 UTC of the last sync. |
-| `last_txn_id` | TEXT | Most recent `transactions.id` known to this device. |
-| `is_current` | INTEGER NOT NULL · default 0 | `1` for the device currently using the app. |
-
----
-
-### 6.17 `app_state` — transitional key/value bag
+### 6.16 `app_state` — transitional key/value bag
 
 Generic JSON-value storage for slices that haven't been moved to dedicated tables yet (pending state, scheduled-occurrence cache, etc.). Each later phase moves a key out of here into its own table.
 
@@ -844,7 +816,7 @@ CREATE TABLE app_state (
 
 ---
 
-### 6.18 `db_metadata` — single-row self-description of the file
+### 6.17 `db_metadata` — single-row self-description of the file
 
 Describes the file itself: what wrote it, what schema version it carries, when it was last written, and (after an export) provenance + a SHA-256 checksum for tamper detection on import.
 

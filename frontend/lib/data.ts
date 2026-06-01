@@ -21,12 +21,6 @@ export const LEDGER = {
   transferGroups: transferGroupsData,
   counterparties: counterpartiesData,
   exchangeRates: exchangeRatesData,
-  devices: [
-    { id: 'iphone-15-pro', name: 'iPhone 15 Pro',  last: '2 min ago',  txn: 't01', current: 1 },
-    { id: 'macbook-air',   name: 'MacBook Air',    last: '8 min ago',  txn: 't01', current: 0 },
-    { id: 'ipad-pro-11',   name: 'iPad Pro 11"',   last: '1 hr ago',   txn: 't13', current: 0 },
-    { id: 'web-firefox',   name: 'Web · Firefox', last: 'yesterday', txn: 't22', current: 0 },
-  ],
 };
 
 export const CURRENCIES = currenciesData;

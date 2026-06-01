@@ -9,7 +9,7 @@ import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/queries/budget
 import type { BudgetGroupRow } from '@/lib/db/queries/budgetGroups';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
-import type { ExchangeRate, Device } from '@/lib/db/queries/system';
+import type { ExchangeRate } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
 
 export interface Tx {
@@ -169,7 +169,6 @@ interface FinanceState {
   categories: CategoryRow[];
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
-  devices: Device[];
   tags: Tag[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
@@ -253,7 +252,6 @@ export const useFinanceStore = create<FinanceState>()(
       categories: [],
       counterparties: [],
       exchangeRates: [],
-      devices: [],
       tags: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},

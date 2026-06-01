@@ -28,7 +28,6 @@ const PAGES: { label: string; href: string; icon: string; keywords: string[] }[]
   { label: 'Categories', href: '/categories', icon: 'tags', keywords: [] },
   { label: 'Tags', href: '/tags', icon: 'tag', keywords: [] },
   { label: 'Exchange rates', href: '/settings/ledger', icon: 'coins', keywords: ['fx', 'exchange', 'rates', 'currency'] },
-  { label: 'Devices', href: '/settings/devices', icon: 'cog', keywords: ['sync', 'system'] },
 ];
 
 interface CommandPaletteValue {

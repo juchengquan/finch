@@ -81,7 +81,6 @@ const RESET_TABLES = [
   'transactions',
   'scheduled_splits',
   'scheduled_templates',
-  'sync_log',
   'tags',
   'budgets',
   'budget_groups',
