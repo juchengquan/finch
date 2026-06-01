@@ -209,8 +209,8 @@ interface FinanceState {
   verifyCounterparty: (id: string) => void;
   unverifyCounterparty: (id: string) => void;
   createTransfer: (input: TransferInput) => void;
-  createCategory: (input: { name: string; type?: string; icon?: string; color?: string; ledgerId?: string }) => void;
-  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; color?: string | null }) => void;
+  createCategory: (input: { name: string; type?: string; icon?: string; color?: string; parentId?: string | null; ledgerId?: string }) => void;
+  updateCategory: (id: string, patch: { name?: string; type?: string; icon?: string | null; color?: string | null; parentId?: string | null }) => void;
   deleteCategory: (id: string) => void;
   createTag: (input: { name: string; color?: string; ledgerId?: string }) => string;
   setTransactionTags: (transactionId: string, tagIds: string[]) => void;
@@ -559,8 +559,9 @@ export const useFinanceStore = create<FinanceState>()(
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
         const color = input.color ?? null;
-        set((s) => ({ categories: [...s.categories, { id, ledgerId, name: input.name, type, icon, color }] }));
-        syncMutation('createCategory', { ledgerId, name: input.name, type, icon, color });
+        const parentId = input.parentId ?? null;
+        set((s) => ({ categories: [...s.categories, { id, ledgerId, parentId, name: input.name, type, icon, color }] }));
+        syncMutation('createCategory', { ledgerId, parentId, name: input.name, type, icon, color });
       },
 
       updateCategory: (id, patch) => {
