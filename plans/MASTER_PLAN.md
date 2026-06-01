@@ -62,7 +62,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Ledger admin table (desktop) | 🟡 | Header only |
 | Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
 | Settings | Exchange-rate book + device/sync list | ✅ | `/system` **retired** → rates under **Settings › Ledger** (add/delete, sparkline, source badges), device/sync list under **Settings › Devices**; both DB-backed. See `SETTINGS_AND_TRANSFERS_PLAN.md`. |
-| Ledger | FX transaction detail | 🟡 | dual-currency stored (`amount`/`amount_base`); conversion/rate-locking simplified |
+| Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
 
 **Charts not yet built (design defines them):** `CalendarHeatmap`, multi-series `AreaChart`.
