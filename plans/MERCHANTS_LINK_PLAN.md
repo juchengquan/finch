@@ -7,6 +7,11 @@ Scope: `frontend/` data layer + UI. **Schema change** (new column on
 migration; rename the live file aside and reseed — see §6).
 
 Builds on the current state where `counterparties` is an orphaned catalog.
+Note: PR #58 simplified `counterparties` by dropping the `aliases` JSON
+column and the `category` field — counterparty is now just `(id, ledger_id,
+name, is_verified, audit)`. The link work below is unchanged by that;
+anything that referenced `aliases`/`category` in the design rationale is
+historical.
 
 ---
 

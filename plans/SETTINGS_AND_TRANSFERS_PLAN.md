@@ -4,6 +4,10 @@ Status: **implemented & merged** on `feat/frontend`:
 - `8176e0f` — refactor(settings): retire the `/system` page into Settings ›
   Devices + Ledger
 - `29e286a` — feat(add): transfer type in the Add sheet (+ time on transfers)
+- **PR #61** (later) — dropped the **Devices** tab + `sync_log` table entirely.
+  The DB file is the source of truth; no multi-device sync exists, so the
+  devices surface was dead weight. Exchange rates remain under Settings ›
+  Ledger; what's left is Account + Ledger.
 
 Follow-on (also landed): surface transfer **time** through the transfers
 read/edit path — see §4.

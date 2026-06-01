@@ -1,5 +1,15 @@
 # Import / Export overhaul — plan
 
+Status: **implemented & merged** on `feat/frontend`. `GET /api/export` streams
+the live `.sqlite3` (with `db_metadata` exported_at/exported_from/row_counts/
+checksum stamped on a clone); `POST /api/import` validates the file (SQLite
+header, schema version, FK pragma, checksum) and swaps atomically after
+auto-snapshotting the current state. Settings › Account has the Snapshot /
+Restore / Export `.db` / Export `.csv` / Import controls. The spec below is
+kept as the design rationale.
+
+---
+
 The DB file is the **only** unit of save / dump / sync. No cloud DB; cloud
 file-path drops are fine because they're just files. Export = whole DB.
 Import = whole-file replace. This doc covers what we need to add to make
