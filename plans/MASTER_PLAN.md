@@ -6,7 +6,7 @@ and the current implementation in `frontend/`.
 
 > **SQLite integration shipped** (PRs #15–#17): the design-doc schema is now the
 > app's live data layer, served by a **server-side** SQLite database. See
-> `plans/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
+> `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
 _Last updated: 2026-05-27._
 
@@ -208,7 +208,7 @@ the seam a real backend can slot behind later.
 
 ### Phase G — Relational schema + server-side SQLite ✅ _(done; PRs #15–#17)_
 The design-doc schema is now the app's live data layer. See
-`plans/SQLITE_INTEGRATION_PLAN.md` for detail.
+`plans/done/SQLITE_INTEGRATION_PLAN.md` for detail.
 - [x] **Full relational schema** (`lib/db/schema.ts`) + seed (`seed.ts`) + typed
       queries/mutations (`lib/db/queries/*`, `mutations.ts`), all unit-tested.
 - [x] **Server-side DB** (`lib/db/server.ts`) — `@sqlite.org/sqlite-wasm` in Node,
@@ -235,7 +235,7 @@ The design-doc schema is now the app's live data layer. See
       JSON files removed across PRs #30 and #33 (the Insights derived-series
       rewrite). See `MASTER_PLAN.md §5` for the up-to-date open list.
 
-### Phase H — Full CRUD parity ✅ _(done; see `plans/CRUD_PARITY_PLAN.md`)_
+### Phase H — Full CRUD parity ✅ _(done; see `plans/done/CRUD_PARITY_PLAN.md`)_
 Brought every user-facing entity to full Create / Update / Delete (or archive) and
 retired the last `app_state` override shims. Delivered in phases on one branch:
 - [x] **Schema versioning** — `SCHEMA_VERSION` + `migrate()` in `lib/db/schema.ts`
@@ -353,7 +353,7 @@ Everything else in the curated list below — Transaction splits, Spending forec
    (`rollBudgetsIfDue` in `lib/budgets/rollover.ts`, driven from
    `lib/db/server.ts`; tracked via the `last_rolled_period` / `pending_amount`
    columns); the PR #48 engine was superseded by the redesign and replayed.
-   See `plans/BUDGET_CYCLES_PLAN.md`.
+   See `plans/done/BUDGET_CYCLES_PLAN.md`.
 6. **Date / amount filters on Activity** ✅ *(done — see PR)* — `minAmount` /
    `maxAmount` on ListOptions + selectTransactions (date range already wired
    on the server, just unused). UI: collapsible "Filters" panel below the
