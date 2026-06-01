@@ -35,6 +35,10 @@ export interface Tx {
   sourceTemplateId?: string;
   /** For `kind='refund'` rows: the original expense this refund offsets. */
   refundedTransactionId?: string;
+  /** Set when the description matches a row in `counterparties`. Resolved
+   *  server-side at insert/update; `projectState` then overrides `merchant`
+   *  with the canonical catalog name so renames follow history. */
+  counterpartyId?: string;
   tags?: string[];
   /** Ad-hoc category splits. When present, these override `category` /
    * `amount` for category aggregations (categorySpend / budgets / etc.). */

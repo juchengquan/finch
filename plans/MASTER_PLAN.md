@@ -311,11 +311,12 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
-**Current open items (as of PR #61):**
+**Current open items:**
 1. **Investment tracking** (#8 below) — open; biggest scope expansion left.
-2. **Counterparty FK link** (`plans/MERCHANTS_LINK_PLAN.md`) — proposed, not started; would add `transactions.counterparty_id` so renaming a merchant follows history.
-3. **Unrealized FX gain/loss** (Multi-currency phase 4 follow-up) — deferred; needs opening-balance cost basis on multi-currency accounts.
-4. **Base-currency-change recompute tool** (Multi-currency phase 4 follow-up) — deferred; heavy/rare.
+2. **Unrealized FX gain/loss** (Multi-currency phase 4 follow-up) — deferred; needs opening-balance cost basis on multi-currency accounts.
+3. **Base-currency-change recompute tool** (Multi-currency phase 4 follow-up) — deferred; heavy/rare.
+
+**Counterparty FK link** ✅ shipped — `transactions.counterparty_id` is set at insert/update via `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger); `projectState` overrides `merchant` with the canonical catalog name when the FK is set, so renames on the Merchants page follow transaction history. `ON DELETE SET NULL` preserves the original description text. See `plans/database_design_en.md` §6.10 / decision #18 for the schema and rationale.
 
 Everything else in the curated list below — Transaction splits, Spending forecast, ⌘K palette, Account-group CRUD, Budget rollover (UI + auto period), Activity filters, Sankey, Refund support, Multi-currency phases 1–3 + Phase-4-partial — is ✅ shipped.
 

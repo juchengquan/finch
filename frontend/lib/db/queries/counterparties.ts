@@ -84,3 +84,23 @@ export async function updateCounterparty(exec: Exec, id: string, patch: Counterp
 export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM counterparties WHERE id = ?', [id]);
 }
+
+/** Resolve a free-text merchant string to a counterparty id by case-insensitive
+ *  exact match within the same ledger. Returns null when no row matches —
+ *  callers leave `transactions.counterparty_id` NULL and the description
+ *  stands on its own. Auto-creating counterparties from typed names is
+ *  intentionally NOT done here: the catalog stays curated. */
+export async function resolveCounterpartyIdByName(
+  exec: Exec,
+  ledgerId: string,
+  name: string | null | undefined,
+): Promise<string | null> {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const rows = await exec(
+    'SELECT id FROM counterparties WHERE ledger_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+    [ledgerId, trimmed],
+  );
+  return rows.length ? String(rows[0].id) : null;
+}

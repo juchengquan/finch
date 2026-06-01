@@ -61,6 +61,9 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const mobileTabIds = await readMobileTabIds(exec);
   const displayCurrencyByLedger = await readDisplayCurrencyByLedger(exec);
   const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
+  // Cache canonical merchant names by counterparty id so renames on the
+  // catalog follow history without touching `transactions.description`.
+  const cpNameById = new Map(counterparties.map((c) => [c.id, c.name]));
   for (const t of transactions) {
     const ids = tagMap[t.id];
     if (ids) t.tags = ids;
@@ -73,6 +76,10 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
         amountBase: s.amountBase,
         description: s.description,
       }));
+    }
+    if (t.counterpartyId) {
+      const canonical = cpNameById.get(t.counterpartyId);
+      if (canonical) t.merchant = canonical;
     }
   }
   return {
