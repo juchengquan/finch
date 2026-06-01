@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, Sparkline } from '@/components/primitives';
@@ -103,10 +102,7 @@ export function ExchangeRates() {
           </div>
         ))}
       </div>
-      <div className="mt-2.5 flex items-center justify-between px-1">
-        <Link href="/fx" className="text-primary text-xs">
-          See a locked FX transaction →
-        </Link>
+      <div className="mt-2.5 flex items-center justify-end px-1">
         <Button variant="outline" size="sm" onClick={openAdd}>
           <Icon name="plus" size={12} />
           Add rate

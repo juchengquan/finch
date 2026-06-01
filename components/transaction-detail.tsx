@@ -564,6 +564,30 @@ export function TransactionDetail({
         </button>
       </div>
 
+      {tx.currency && tx.currency !== base && tx.nativeAmount != null && (() => {
+        const native = tx.nativeAmount;
+        const baseAmt = tx.amount;
+        const rate = native !== 0 ? baseAmt / native : 1;
+        return (
+          <div className="mb-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-card border-border rounded-[14px] border p-4">
+                <div className="text-muted-foreground font-mono text-[9px] tracking-[1px]">ORIGINAL · {tx.currency}</div>
+                <div className="mt-1 font-serif text-2xl">{fmtNative(Math.abs(native), tx.currency)}</div>
+              </div>
+              <div className="bg-card border-border rounded-[14px] border p-4">
+                <div className="text-muted-foreground font-mono text-[9px] tracking-[1px]">BASE · {base} (LOCKED)</div>
+                <div className="mt-1 font-serif text-2xl">{fmtNative(Math.abs(baseAmt), base)}</div>
+              </div>
+            </div>
+            <div className="bg-secondary text-secondary-foreground mt-2 inline-flex items-center gap-2 rounded-[12px] px-3 py-1 font-mono text-[10px] tracking-[0.5px]">
+              <Icon name="check" size={11} className="text-success" stroke={2} />
+              RATE LOCKED @ {Math.abs(rate).toFixed(6)} · {tx.currency}→{base} · {tx.date}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="bg-card border-border rounded-[14px] border px-4 py-1">
         <div className="border-border flex items-center justify-between py-2 text-[13px]">
           <span className="text-muted-foreground">Category</span>
@@ -592,9 +616,6 @@ export function TransactionDetail({
         </div>
         {[
           { l: 'Account', v: acctLabel },
-          ...(tx.currency && tx.currency !== base && tx.nativeAmount != null
-            ? [{ l: 'Original', v: fmtNative(Math.abs(tx.nativeAmount), tx.currency) }]
-            : []),
           ...(isRefund ? [{ l: 'Refund of', v: refundedOriginal?.merchant ?? 'original removed' }] : []),
           { l: 'Status', v: tx.pending ? 'Pending' : 'Posted' },
           { l: 'Note', v: tx.note || '—' },
