@@ -19,6 +19,7 @@ import { listCategories } from './queries/categories';
 import { listBudgets } from './queries/budgets';
 import { listBudgetGroups } from './queries/budgetGroups';
 import { listCounterparties } from './queries/counterparties';
+import { listLedgers } from './queries/ledgers';
 import { listExchangeRates } from './queries/system';
 import { listTags, transactionTagMap } from './queries/tags';
 import { splitsByTransaction } from './queries/transactionSplits';
@@ -45,8 +46,9 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec('SELECT * FROM transactions ORDER BY date DESC, time DESC');
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, tagMap, scheduled] =
+  const [ledgers, accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, tagMap, scheduled] =
     await Promise.all([
+      listLedgers(exec),
       listAccounts(exec),
       listAccountGroups(exec),
       listBudgets(exec),
@@ -84,6 +86,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   }
   return {
     transactions,
+    ledgers,
     accounts,
     accountGroups,
     budgets: namedBudgets,

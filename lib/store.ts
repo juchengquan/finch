@@ -9,6 +9,7 @@ import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/queries/budget
 import type { BudgetGroupRow } from '@/lib/db/queries/budgetGroups';
 import type { CategoryRow } from '@/lib/db/queries/categories';
 import type { Counterparty } from '@/lib/db/queries/counterparties';
+import type { LedgerRow } from '@/lib/db/queries/ledgers';
 import type { ExchangeRate } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
 
@@ -166,6 +167,7 @@ interface FinanceState {
   transactions: Tx[];
   scheduled: ScheduledTemplate[];
   // Reference / derived data projected from the server DB (read-only mirror).
+  ledgers: LedgerRow[];
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   budgets: BudgetRow[];
@@ -188,6 +190,7 @@ interface FinanceState {
   confirmAllPending: () => void;
   setMobileTabIds: (ids: string[]) => void;
   setDisplayCurrency: (ledgerId: string, currency: string) => void;
+  changeLedgerBase: (ledgerId: string, newBase: string) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
@@ -249,6 +252,7 @@ export const useFinanceStore = create<FinanceState>()(
   (set) => ({
       transactions: SEED_TX,
       scheduled: SEED_SCHEDULED,
+      ledgers: [],
       accounts: [],
       accountGroups: [],
       budgets: [],
@@ -268,6 +272,17 @@ export const useFinanceStore = create<FinanceState>()(
       setDisplayCurrency: (ledgerId, currency) => {
         set((s) => ({ displayCurrencyByLedger: { ...s.displayCurrencyByLedger, [ledgerId]: currency } }));
         syncMutation('setDisplayCurrency', { ledgerId, currency });
+      },
+
+      changeLedgerBase: (ledgerId, newBase) => {
+        // The server-side recompute rewrites every locked amount_base in the
+        // ledger; the projection that comes back has the new base and the
+        // re-derived figures everywhere. Optimistic update flips the local
+        // base immediately so the UI doesn't show stale labels.
+        set((s) => ({
+          ledgers: s.ledgers.map((l) => (l.id === ledgerId ? { ...l, base: newBase } : l)),
+        }));
+        syncMutation('changeLedgerBase', { ledgerId, newBase });
       },
 
       addTransaction: (tx) => {
