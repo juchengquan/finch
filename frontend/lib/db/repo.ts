@@ -5,6 +5,7 @@ import type { BudgetRow } from './queries/budgets';
 import type { BudgetGroupRow } from './queries/budgetGroups';
 import type { CategoryRow } from './queries/categories';
 import type { Counterparty } from './queries/counterparties';
+import type { LedgerRow } from './queries/ledgers';
 import type { ExchangeRate } from './queries/system';
 import type { Tag } from './queries/tags';
 
@@ -23,6 +24,9 @@ export interface PersistState {
 // What the server projects to the client: persisted slices + reference/derived
 // data the read screens need (account balances, categories, merchants).
 export interface ProjectedState extends PersistState {
+  /** Live ledger rows. The UI merges these with the static `data/ledgers.json`
+   *  for cosmetic fields (color/tagline) the schema doesn't store. */
+  ledgers: LedgerRow[];
   accounts: AccountRow[];
   accountGroups: AccountGroupRow[];
   /** Named budgets (expense limits / income targets). */
