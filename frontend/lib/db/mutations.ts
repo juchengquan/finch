@@ -805,6 +805,18 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'reset':
       await resetDb(exec);
       return;
+    case 'changeLedgerBase': {
+      const ledgerId = str(args.ledgerId);
+      const newBase = str(args.newBase).trim().toUpperCase();
+      if (!ledgerId) throw new Error('ledgerId is required');
+      if (!/^[A-Z]{3}$/.test(newBase)) throw new Error('newBase must be a 3-letter ISO code');
+      const [row] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [ledgerId]);
+      if (!row) throw new Error('Ledger not found');
+      if (String(row.base_currency) === newBase) return; // no-op
+      const { recomputeAmountBases } = await import('./queries/ledgers');
+      await recomputeAmountBases(exec, ledgerId, newBase);
+      return;
+    }
     default:
       throw new Error(`Unknown action: ${action}`);
   }

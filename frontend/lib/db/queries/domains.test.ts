@@ -241,6 +241,56 @@ test('counterparty FK: deleting a counterparty leaves linked transactions intact
   expect(String(row.description)).toBe('Grab');
 });
 
+test('changeLedgerBase: rewrites amount_base under the new base using each txn date', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { convertToBase } = await import('@/lib/db/queries/rates');
+  const { listLedgers } = await import('@/lib/db/queries/ledgers');
+
+  // The personal ledger seeds with USD base. Switch to SGD and verify each
+  // transaction's amount_base now equals convertToBase(native, currency, SGD, date).
+  const beforeLedger = (await listLedgers(exec)).find((l) => l.id === 'personal')!;
+  expect(beforeLedger.base).toBe('USD');
+
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
+
+  const afterLedger = (await listLedgers(exec)).find((l) => l.id === 'personal')!;
+  expect(afterLedger.base).toBe('SGD');
+
+  // Spot-check the foreign JPY seed row (t-jpy-1, native ¥-3820 on 2026-05-13).
+  const [jpy] = await exec("SELECT amount, currency, date, amount_base, exchange_rate FROM transactions WHERE id = 't-jpy-1'");
+  const expected = await convertToBase(exec, Number(jpy.amount), String(jpy.currency), 'SGD', String(jpy.date));
+  expect(Number(jpy.amount_base)).toBeCloseTo(expected.amountBase, 2);
+  expect(Number(jpy.exchange_rate)).toBeCloseTo(expected.rate, 6);
+
+  // Spot-check a same-currency row (any USD row) — rate should be 1, base = native.
+  const [usd] = await exec("SELECT id, amount, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' AND currency = 'SGD' LIMIT 1");
+  if (usd) {
+    expect(Number(usd.amount_base)).toBeCloseTo(Number(usd.amount), 2);
+    expect(Number(usd.exchange_rate)).toBeCloseTo(1, 6);
+  }
+});
+
+test('changeLedgerBase: same-base call is a no-op', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const before = await exec("SELECT id, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'USD' });
+  const after = await exec("SELECT id, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+});
+
+test('changeLedgerBase: rejects malformed currency codes', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  await expect(applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'usd' }))
+    .resolves.toBeUndefined(); // case-insensitive: lowercased input is accepted (validator uppercases)
+  await expect(applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'US' }))
+    .rejects.toThrow(/3-letter/);
+  await expect(applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'usd1' }))
+    .rejects.toThrow(/3-letter/);
+});
+
 test('reports: monthly cash flow', async () => {
   const exec = await seeded();
   const cf = await monthlyCashFlow(exec, 'personal', '2026-05');

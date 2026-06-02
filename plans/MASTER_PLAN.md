@@ -314,9 +314,10 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
 **Current open items:**
 1. **Investment tracking** (#8 below) — open; biggest scope expansion left.
 2. **Unrealized FX gain/loss** (Multi-currency phase 4 follow-up) — deferred; needs opening-balance cost basis on multi-currency accounts.
-3. **Base-currency-change recompute tool** (Multi-currency phase 4 follow-up) — deferred; heavy/rare.
 
 **Counterparty FK link** ✅ shipped — `transactions.counterparty_id` is set at insert/update via `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger); `projectState` overrides `merchant` with the canonical catalog name when the FK is set, so renames on the Merchants page follow transaction history. `ON DELETE SET NULL` preserves the original description text. See `plans/database_design_en.md` §6.10 / decision #18 for the schema and rationale.
+
+**Base-currency-change recompute tool** ✅ shipped — Settings › Ledger has a "Base currency" select; flipping it confirms then atomically rewrites every locked `amount_base` (transactions + splits) under the new base using each row's own date, and re-runs `recomputeAccount` for every account in the ledger. `transfer_groups.amount_base` isn't touched (it's the from-leg native magnitude, not a ledger-base figure). See `plans/database_design_en.md` §6.1 / decision #19 + `lib/db/queries/ledgers.ts::recomputeAmountBases`.
 
 Everything else in the curated list below — Transaction splits, Spending forecast, ⌘K palette, Account-group CRUD, Budget rollover (UI + auto period), Activity filters, Sankey, Refund support, Multi-currency phases 1–3 + Phase-4-partial — is ✅ shipped.
 
