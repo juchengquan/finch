@@ -56,6 +56,65 @@ test('search matches the merchant/description substring', async () => {
   expect(res.every((t) => /coffee/i.test(t.merchant))).toBe(true);
 });
 
+test('FTS5 search is case-folded and matches prefixes', async () => {
+  const exec = await seeded();
+  // SEED has rows like "Blue Bottle Coffee". A lowercase "BLUE" should still match.
+  const upper = await listTransactions(exec, { ledgerId: 'personal', query: 'BLUE' });
+  expect(upper.length).toBeGreaterThan(0);
+  expect(upper.every((t) => /blue/i.test(t.merchant))).toBe(true);
+
+  // Multi-word AND across description tokens — every hit has both "blue" and "bottle".
+  const both = await listTransactions(exec, { ledgerId: 'personal', query: 'blue bottle' });
+  expect(both.length).toBeGreaterThan(0);
+  expect(both.every((t) => /blue/i.test(t.merchant) && /bottle/i.test(t.merchant))).toBe(true);
+});
+
+test('FTS5 search includes notes (not just description)', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -3,
+    merchant: 'Unrelated Vendor', note: 'sticky cinnamon bun receipt',
+    date: '2026-05-25',
+  });
+  const res = await listTransactions(exec, { ledgerId: 'personal', query: 'cinnamon' });
+  expect(res.some((t) => t.merchant === 'Unrelated Vendor')).toBe(true);
+});
+
+test('FTS5 sync triggers: edits + deletes propagate to the index', async () => {
+  const exec = await seeded();
+  const { addTransaction, updateTransaction, deleteTransactionRow } =
+    await import('@/lib/db/queries/transactions');
+
+  const id = await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -5,
+    merchant: 'Quirkbird Coffee Cooperative', date: '2026-05-25',
+  });
+  let res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
+  expect(res.some((t) => t.id === id)).toBe(true);
+
+  // Rename — old token shouldn't match the same row anymore.
+  await updateTransaction(exec, id, { merchant: 'Renamed Hideout' });
+  res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
+  expect(res.some((t) => t.id === id)).toBe(false);
+  res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
+  expect(res.some((t) => t.id === id)).toBe(true);
+
+  // Delete — fully gone from the index.
+  await deleteTransactionRow(exec, id);
+  res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
+  expect(res.some((t) => t.id === id)).toBe(false);
+});
+
+test('counterparty resolver matches via COLLATE NOCASE (no LOWER in WHERE)', async () => {
+  const exec = await seeded();
+  const { resolveCounterpartyIdByName } = await import('@/lib/db/queries/counterparties');
+  // Seed has "Grab" (cp-02); mixed-case + leading/trailing space should still resolve.
+  expect(await resolveCounterpartyIdByName(exec, 'personal', '  gRAb  ')).toBe('cp-02');
+  expect(await resolveCounterpartyIdByName(exec, 'personal', 'GRAB')).toBe('cp-02');
+  expect(await resolveCounterpartyIdByName(exec, 'personal', 'NoSuchMerchant')).toBeNull();
+});
+
 test('filter by account and category', async () => {
   const exec = await seeded();
   const food = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'food' });

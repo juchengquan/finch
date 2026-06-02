@@ -455,26 +455,27 @@ CREATE TABLE transaction_tags (
 
 ### 6.8 `counterparties` — merchant/payee catalog
 
-A standalone catalog of canonical merchant names. **Not linked back from transactions today** — transactions display their own `description`. Used by the `/merchants` admin screen.
+A standalone catalog of canonical merchant names. Linked back from `transactions.counterparty_id` (SET NULL on delete); see §6.10 + decision #18. Used by the `/merchants` admin screen.
 
 ```sql
 CREATE TABLE counterparties (
   id          TEXT PRIMARY KEY,
   ledger_id   TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name        TEXT NOT NULL,
+  name        TEXT NOT NULL COLLATE NOCASE,
   is_verified INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );
+CREATE INDEX idx_counterparty_ledger_name ON counterparties(ledger_id, name);
 ```
 
-A pure catalog of canonical merchant names. There is **no FK** from `transactions` to this table — the link is informational only. Category is intentionally absent: the same merchant (Amazon, etc.) can have transactions in multiple categories, so category lives on the transaction. Display disambiguators (alternative spellings) belong in the canonical `name` itself. (The column was renamed from `standardized_name` → `name` so the entity-label column is called `name` on every table.)
+Category is intentionally absent: the same merchant (Amazon, etc.) can have transactions in multiple categories, so category lives on the transaction. Display disambiguators (alternative spellings) belong in the canonical `name` itself. (The column was renamed from `standardized_name` → `name` so the entity-label column is called `name` on every table.)
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | `cp-<n>`. |
 | `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
-| `name` | TEXT NOT NULL | Canonical display name ("Starbucks"). |
+| `name` | TEXT NOT NULL · COLLATE NOCASE | Canonical display name ("Starbucks"). The NOCASE collation lets `resolveCounterpartyIdByName` do case-insensitive index seeks without `LOWER()` defeating the index. |
 | `is_verified` | INTEGER NOT NULL · default 0 | User-confirmed entry (true) vs. auto-suggested (false). |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
@@ -852,6 +853,35 @@ CREATE TABLE db_metadata (
 | `exported_from` | TEXT | Hostname that produced the export. Suppressed when `FINCH_EXPORT_INCLUDE_HOST=0`. |
 | `row_counts` | TEXT | JSON `{ transactions: N, accounts: N, … }` at export time. |
 | `checksum` | TEXT | SHA-256 over a deterministic dump of the canonical tables. Verified on import. |
+
+---
+
+### 6.18 `transactions_fts` — FTS5 inverted index over transaction text
+
+A virtual table that mirrors `transactions.description + notes` so the Activity / ⌘K search can use an indexed full-text match instead of a `LIKE '%term%'` table scan. Kept in lock-step with `transactions` by three triggers (`tr_txn_fts_insert` / `_update` / `_delete`).
+
+```sql
+CREATE VIRTUAL TABLE transactions_fts USING fts5(
+  id UNINDEXED,
+  description,
+  notes,
+  tokenize='unicode61 remove_diacritics 2'
+);
+```
+
+| Column | Notes |
+|---|---|
+| `id` | The owning `transactions.id`. UNINDEXED — stored for the JOIN back, not tokenized. |
+| `description` | Indexed. Tokenized as unicode words with diacritics folded. |
+| `notes` | Indexed. Same tokenizer. |
+
+Query shape:
+```sql
+SELECT * FROM transactions
+WHERE id IN (SELECT id FROM transactions_fts WHERE transactions_fts MATCH 'blue* AND bottle*')
+```
+
+User input is translated by `toFts5Query` in `lib/db/queries/transactions.ts`: each whitespace-separated word becomes a case-folded prefix term joined with `AND` (so "blue bottle" → `blue* AND bottle*`). Non-word characters are stripped so accidental punctuation doesn't trip FTS5's own query syntax.
 
 ---
 ---
@@ -1250,6 +1280,8 @@ These are the non-obvious decisions made during schema design, with explanations
 | 17 | Categories are a 2-level tree with bookable parents, promote-on-delete | A flat list is too thin (no rollup view of "Food spending"); arbitrary nesting is too heavy (UX and aggregation math blow up past 2 levels). The shape settles at parent + child, both bookable so a vague purchase can file at the parent without forcing a sub-choice. `categorySpend` returns leaf-keyed totals (no double-count); `rollupCategorySpend` is a pure helper that callers apply when they want the parent rollup. Deletion uses `ON DELETE SET NULL` on `parent_id` — deleting a parent promotes its children to top-level, matching the rest of the schema's "preserve data, lose only the link" cascade pattern. The "no grandchildren" invariant lives in the mutation layer (`assertCanBeParent`) rather than a self-referential CHECK; the cost of a few extra SELECTs on create/update is small and the SQL stays portable. |
 | 18 | `transactions.counterparty_id` resolves at insert, display at projection, SET NULL on catalog delete | Earlier the `counterparties` catalog was orphan-decorative — renaming "Don Don Donki" on the merchants page didn't touch any past transaction's `description`. The FK turns the catalog into the source of truth for merchant names: `addTransaction` / `updateTransaction` call `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger) to set the link; `projectState` then overrides each linked row's `merchant` with the canonical catalog name, so renames follow history automatically. We do **not** auto-create counterparties from typed names — the catalog stays manually curated. SET NULL on delete preserves the row's plain `description` text. |
 | 19 | `ledgers.base_currency` is mutable via an atomic full-ledger recompute | A ledger's base currency *can* change (user switches the reporting currency of their books). Doing this safely means rewriting every locked `amount_base` so historical reports stay consistent. `recomputeAmountBases` runs in a transaction: it (a) updates `ledgers.base_currency`, (b) reconverts every transaction's `amount_base` + `exchange_rate` using each row's own date and currency (so the historical rate at the time is honored, not today's rate), (c) reconverts each `transaction_splits.amount_base`, and (d) re-runs `recomputeAccount` for every account in the ledger so cached balances reflect the new delta meaning. A same-base call is a no-op; failures `ROLLBACK`. `transfer_groups.amount_base` is **not** rewritten — it carries the from-leg's native magnitude, not a ledger-base figure. |
+| 20 | `counterparties.name` uses `COLLATE NOCASE`, not `LOWER()` in queries | `resolveCounterpartyIdByName` runs on every transaction insert/update — every single write does a counterparty lookup. The original `WHERE LOWER(name) = LOWER(?)` form couldn't use any index on `name` because the function wraps the column; it scanned the whole ledger's catalog for each match attempt. Switching `name` to `TEXT NOT NULL COLLATE NOCASE` makes `=` case-insensitive natively, and `idx_counterparty_ledger_name ON counterparties(ledger_id, name)` is then actually used. `searchCounterparties` is unaffected (LIKE has its own ASCII case-fold). |
+| 21 | Transaction text search uses an FTS5 shadow, not `LIKE '%term%'` | `LIKE` with a leading wildcard can't use a B-tree index — every search scanned every transaction. The Activity / ⌘K search needed real indexed lookup. `transactions_fts` is an FTS5 virtual table mirroring `description + notes`, kept in sync by three triggers. `listTransactions` translates the user's typed query through `toFts5Query` (lowercased prefix terms joined with AND, punctuation stripped) and matches via `id IN (SELECT id FROM transactions_fts WHERE … MATCH ?)`. Trade-off: FTS5 matches **whole-word prefixes**, not arbitrary substrings — so a query "ucks" no longer matches "Starbucks" the way LIKE did. Per-word prefix matching is the standard search semantics users expect from autocomplete, and the index makes the search constant-time at any practical scale. |
 
 ---
 
