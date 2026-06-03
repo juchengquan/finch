@@ -7,6 +7,22 @@ import type { Tx } from '@/lib/store';
 import { convertToBase } from './rates';
 import { resolveCounterpartyIdByName } from './counterparties';
 
+/** Translate a user-typed search string into an FTS5 MATCH expression.
+ *  Each whitespace-separated word becomes a case-folded prefix term joined
+ *  with AND. Non-word characters are stripped so accidental punctuation
+ *  (`!`, `"`, `()`, etc.) doesn't trip FTS5's own query syntax. Returns the
+ *  empty string when nothing usable remains — callers should skip the
+ *  filter in that case. */
+function toFts5Query(raw: string): string {
+  const tokens = raw
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.replace(/[^\p{L}\p{N}]+/gu, ''))
+    .filter((t) => t.length > 0);
+  if (tokens.length === 0) return '';
+  return tokens.map((t) => `${t}*`).join(' AND ');
+}
+
 export type Direction = 'all' | 'in' | 'out';
 
 export interface ListOptions {
@@ -79,8 +95,13 @@ export async function listTransactions(exec: Exec, opts: ListOptions): Promise<T
   if (opts.direction === 'in') where.push('amount > 0');
   if (opts.direction === 'out') where.push('amount < 0');
   if (opts.query) {
-    where.push('description LIKE ?');
-    bind.push(`%${opts.query}%`);
+    const fts = toFts5Query(opts.query);
+    if (fts) {
+      // Inverted-index lookup via the transactions_fts shadow (description + notes).
+      // Tokens are matched as prefixes, AND-joined — "blue bottle" ⇒ blue* AND bottle*.
+      where.push('id IN (SELECT id FROM transactions_fts WHERE transactions_fts MATCH ?)');
+      bind.push(fts);
+    }
   }
   if (opts.accountId) {
     where.push('account_id = ?');

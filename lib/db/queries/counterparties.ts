@@ -98,8 +98,10 @@ export async function resolveCounterpartyIdByName(
   if (!name) return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
+  // The name column is COLLATE NOCASE, so `=` matches case-insensitively and
+  // the (ledger_id, name) index serves the lookup directly — no LOWER() needed.
   const rows = await exec(
-    'SELECT id FROM counterparties WHERE ledger_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+    'SELECT id FROM counterparties WHERE ledger_id = ? AND name = ? LIMIT 1',
     [ledgerId, trimmed],
   );
   return rows.length ? String(rows[0].id) : null;
