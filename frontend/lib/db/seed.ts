@@ -24,6 +24,7 @@ import goalsData from '@/data/goals.json';
 import tagsData from '@/data/tags.json';
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
+import holdingsData from '@/data/holdings.json';
 
 const SEED_TS = '2026-05-26T00:00:00';
 const SEED_DATE = '2026-05-26';
@@ -209,6 +210,29 @@ export async function seedReference(exec: Exec): Promise<void> {
         [`${r.id}-s${i}`, r.id, acctId(ledgerId, sp.account), sp.pct ?? null, sp.abs ?? null, sp.label ?? null, i],
       );
     }
+  }
+
+  // Seed investment holdings against their accounts. The account already exists
+  // above; FKs require nothing further. ledger_id is resolved by looking the
+  // account up (we don't want a separate seed JSON to drift from accounts.json).
+  type HoldingSeed = {
+    id: string; account: string; symbol: string; name?: string; shares: number;
+    costBasis: number; currency: string; lastPrice?: number; lastPriceDate?: string; notes?: string;
+  };
+  const accountLedger = new Map<string, string>();
+  for (const a of accounts) accountLedger.set(a.id, a.ledger ?? 'personal');
+  for (const h of holdingsData as HoldingSeed[]) {
+    const hLedger = accountLedger.get(h.account);
+    if (!hLedger) continue; // skip orphan holdings — the JSON references an unknown account
+    await exec(
+      `INSERT OR IGNORE INTO holdings
+         (id,ledger_id,account_id,symbol,name,shares,cost_basis,currency,last_price,last_price_date,notes,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        h.id, hLedger, h.account, h.symbol, h.name ?? null, h.shares, h.costBasis, h.currency,
+        h.lastPrice ?? null, h.lastPriceDate ?? null, h.notes ?? null, SEED_TS, SEED_TS,
+      ],
+    );
   }
 }
 

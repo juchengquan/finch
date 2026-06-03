@@ -311,8 +311,9 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
-**Current open items:**
-1. **Investment tracking** (#8 below) — open; biggest scope expansion left.
+**Current open items:** none — the last big gaps shipped (see below).
+
+**Investment tracking** ✅ shipped — new `holdings` table (one row per position inside an investment-type account) carries `symbol + shares + cost_basis + currency + (last_price, last_price_date)`. Cash stays in `accounts.current_balance` (driven by ordinary buy/sell/dividend transactions); positions are managed separately, valued live as `shares × last_price`, with unrealized gain/loss = value − cost_basis. The investment-account detail page surfaces a "Holdings" panel with add / edit / price-update / delete dialogs and a "Holdings value + ≈ display + unrealized" summary row; the balance card prints "+ X in holdings · total Y" alongside the cash figure. No external feeds — prices are typed manually, and we keep no price-history table (`last_price` overwrites). See `plans/database_design_en.md` §6.19 / decision #23.
 
 **Unrealized FX gain/loss** ✅ shipped — `accounts.opening_balance_base` locks the ledger-base cost of each account's opening balance at creation. With it the account's cost basis is `opening_balance_base + Σ amount_base of confirmed transactions`, and the live valuation `current_balance × today's rate` reveals the drift as unrealized FX. The account-detail balance card shows an "FX gain/loss" line for accounts denominated in a non-base currency; same-currency-as-base accounts read 0 and hide it. `recomputeAmountBases` re-stamps the column when the ledger's base itself changes. See `plans/database_design_en.md` §6.4 / decision #22.
 
@@ -367,8 +368,14 @@ Everything else in the curated list below — Transaction splits, Spending forec
 7. **Sankey diagram** ✅ *(done — see PR)* — new `Sankey` SVG primitive +
    `incomeCategoryFlow` selector; "Where {Month} income went" card on
    Insights flows income → top-N expense categories + a "Saved" stub.
-8. **Investment tracking** (holdings, gains) for the `invest` account type —
-   meaningful scope expansion.
+8. **Investment tracking** ✅ *(done)* — `holdings` table per investment-type
+   account carries shares + cost basis + last logged price (no price history;
+   updates overwrite). Buy / sell / dividend transactions still move the account's
+   cash balance through the normal path; positions are managed separately and
+   summed for a live total = cash + Σ shares × last_price. Investment-account
+   detail page has a Holdings panel with add / edit / price-update / delete
+   dialogs; the balance card surfaces "+ X in holdings · total Y" alongside
+   cash. See `plans/database_design_en.md` §6.19 / decision #23.
 9. **Refund support** ✅ *(done)* — `kind='refund'` on `transactions` linked back
    to the original expense via `refunded_transaction_id` (SET NULL on delete).
    Schema, decision, and cascade policy live in

@@ -198,10 +198,12 @@ erDiagram
     ledgers ||--o{ net_worth_snapshots : "ledger_id"
     ledgers ||--o{ ledger_summaries : "ledger_id"
     ledgers ||--o{ transfer_groups : "ledger_id"
+    ledgers ||--o{ holdings : "ledger_id"
 
     account_groups ||--o{ accounts : "group_id"
 
     accounts ||--o{ transactions : "account_id"
+    accounts ||--o{ holdings : "account_id"
     accounts ||--o{ account_balance_snapshots : "account_id"
     accounts }o--o| budgets : "primary_budget_id"
 
@@ -886,6 +888,47 @@ WHERE id IN (SELECT id FROM transactions_fts WHERE transactions_fts MATCH 'blue*
 User input is translated by `toFts5Query` in `lib/db/queries/transactions.ts`: each whitespace-separated word becomes a case-folded prefix term joined with `AND` (so "blue bottle" → `blue* AND bottle*`). Non-word characters are stripped so accidental punctuation doesn't trip FTS5's own query syntax.
 
 ---
+
+### 6.19 `holdings` — investment positions inside an investment account
+
+One row per position (e.g. 50 shares of VTI) inside an account whose `type = 'investment'`. The account's cached `current_balance` continues to represent the cash position only — bought/sold/dividend transactions move it the same as for any other account. The shares + cost basis + last logged price live here; total account value at display = `accounts.current_balance + Σ holdings_value` (computed on the fly, not stored).
+
+The price pair (`last_price`, `last_price_date`) is the only quote we keep — there's no separate price-history table, so updating a price overwrites the previous values. Prices are entered manually by the user (no external feeds), so a per-share history would mostly be empty noise. A holding without a logged price falls back to its cost basis when summed into the account total.
+
+```sql
+CREATE TABLE holdings (
+  id              TEXT PRIMARY KEY,
+  ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol          TEXT NOT NULL,
+  name            TEXT,
+  shares          REAL NOT NULL DEFAULT 0,
+  cost_basis      REAL NOT NULL DEFAULT 0,
+  currency        TEXT NOT NULL,
+  last_price      REAL,
+  last_price_date TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | App-stable id (`h-<random>`). |
+| `ledger_id` | TEXT NOT NULL FK · CASCADE | Owning ledger. |
+| `account_id` | TEXT NOT NULL FK · CASCADE | The investment account this position sits in. The mutation handler rejects non-investment accounts; the FK uses CASCADE because a hard account delete (only possible when txn-less) should take its holdings with it rather than leave orphans. Archiving is unaffected (`is_active = 0` only). |
+| `symbol` | TEXT NOT NULL | Ticker / symbol, stored upper-cased (e.g. `VTI`, `AAPL`, `BTC`). The mutation layer upper-cases on write. |
+| `name` | TEXT | Optional human-readable name (`Vanguard Total Stock Market ETF`). |
+| `shares` | REAL NOT NULL · default 0 | Quantity currently held. Fractional shares supported. |
+| `cost_basis` | REAL NOT NULL · default 0 | Total amount paid in `currency` for the current `shares`. Per-share average = `cost_basis / shares` (derived, not stored — partial sells / DRIP reinvestments make storing both forms fragile). |
+| `currency` | TEXT NOT NULL | The holding's denomination (e.g. `USD` for VTI even on an SGD-base ledger). Set at creation and not editable through `updateHolding`. |
+| `last_price` | REAL | Per-share price the user last logged, in `currency`. NULL = no quote yet; the position shows cost basis but no live valuation. |
+| `last_price_date` | TEXT | `YYYY-MM-DD` the `last_price` was effective. Required when `last_price` is set; cleared together when both are null. |
+| `notes` | TEXT | Freeform note (purchase rationale, broker label, etc.). |
+| `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
+
+---
 ---
 
 ## 7. Indexes
@@ -1285,6 +1328,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 20 | `counterparties.name` uses `COLLATE NOCASE`, not `LOWER()` in queries | `resolveCounterpartyIdByName` runs on every transaction insert/update — every single write does a counterparty lookup. The original `WHERE LOWER(name) = LOWER(?)` form couldn't use any index on `name` because the function wraps the column; it scanned the whole ledger's catalog for each match attempt. Switching `name` to `TEXT NOT NULL COLLATE NOCASE` makes `=` case-insensitive natively, and `idx_counterparty_ledger_name ON counterparties(ledger_id, name)` is then actually used. `searchCounterparties` is unaffected (LIKE has its own ASCII case-fold). |
 | 21 | Transaction text search uses an FTS5 shadow, not `LIKE '%term%'` | `LIKE` with a leading wildcard can't use a B-tree index — every search scanned every transaction. The Activity / ⌘K search needed real indexed lookup. `transactions_fts` is an FTS5 virtual table mirroring `description + notes`, kept in sync by three triggers. `listTransactions` translates the user's typed query through `toFts5Query` (lowercased prefix terms joined with AND, punctuation stripped) and matches via `id IN (SELECT id FROM transactions_fts WHERE … MATCH ?)`. Trade-off: FTS5 matches **whole-word prefixes**, not arbitrary substrings — so a query "ucks" no longer matches "Starbucks" the way LIKE did. Per-word prefix matching is the standard search semantics users expect from autocomplete, and the index makes the search constant-time at any practical scale. |
 | 22 | `accounts.opening_balance_base` locks the starting cost basis for unrealized FX | Without it, every foreign-currency account would look like it cost (today's rate × opening_balance), which moves around as FX moves and hides the gain/loss buried in any account that isn't in the ledger base. The new column captures the ledger-base value of `opening_balance` at the rate on the account's creation date. With it, an account's cost basis is simply `opening_balance_base + Σ amount_base of confirmed transactions` (every transaction's `amount_base` is already locked at its own date's rate), and unrealized FX = `(current_balance × today's rate) − cost basis`. Same-currency-as-base accounts always read 0, so the column is harmless when it doesn't apply. The figure is re-stamped only when the ledger's base currency itself changes (inside `recomputeAmountBases`), using the same creation-date rate just expressed against the new base — keeping a single locked snapshot rather than auditing creation-day rates separately. |
+| 23 | Investment holdings are a separate table from `transactions`, with `last_price` overwritten in place (no history table) | A holding is a long-lived position (shares + cost basis + a current quote) — fundamentally different from a cashflow event. Modeling it as a "transaction with extra columns" forces every cashflow query to special-case it, and a `LIKE 'SHARES%'` description convention would rot fast. The `holdings` table stays narrow: shares + cost basis + the last quote the user logged. Buys / sells / dividends are still ordinary transactions against the account's cash position; the user keeps the holding row in sync manually (this PR is no-API; an integration would write to both). Total account value = `accounts.current_balance + Σ holdings_value` (live, computed on the fly), so the existing `current_balance` ledger keeps working unchanged and only the investment-account UI knows about holdings. We chose `last_price` + `last_price_date` over a separate `holding_prices(symbol, currency, date)` history because prices are typed manually — a per-symbol history would be sparse and rarely useful, and a future integration can add the table without disturbing the column. CASCADE on `account_id` (not SET NULL) is deliberate: a holding without an account is meaningless, and the only path to a hard account delete is "zero transactions" anyway. |
 
 ---
 
@@ -1294,7 +1338,6 @@ These features are planned but not in the current schema. If you're implementing
 
 | Feature | Description |
 |---------|-------------|
-| Investment holdings | `holdings` table — track stock positions (symbol, shares, cost basis) linked to `net_worth_snapshots` |
 | Installment tracking | Add `installment_total` and `installment_paid` to `recurring_templates` for tracking payment progress |
 | Bill calendar | Recurring template due-date reminders via cron + Telegram notification |
 | Annual tax report | Export全年数据 by IRAS tax categories |

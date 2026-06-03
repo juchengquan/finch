@@ -1,0 +1,35 @@
+[
+  {
+    "id": "h-vti",
+    "account": "inv",
+    "symbol": "VTI",
+    "name": "Vanguard Total Stock Market ETF",
+    "shares": 50,
+    "costBasis": 11250.00,
+    "currency": "USD",
+    "lastPrice": 248.50,
+    "lastPriceDate": "2026-05-26"
+  },
+  {
+    "id": "h-vxus",
+    "account": "inv",
+    "symbol": "VXUS",
+    "name": "Vanguard Total International Stock ETF",
+    "shares": 80,
+    "costBasis": 4720.00,
+    "currency": "USD",
+    "lastPrice": 62.10,
+    "lastPriceDate": "2026-05-26"
+  },
+  {
+    "id": "h-bnd",
+    "account": "inv",
+    "symbol": "BND",
+    "name": "Vanguard Total Bond Market ETF",
+    "shares": 40,
+    "costBasis": 3060.00,
+    "currency": "USD",
+    "lastPrice": 73.85,
+    "lastPriceDate": "2026-05-26"
+  }
+]

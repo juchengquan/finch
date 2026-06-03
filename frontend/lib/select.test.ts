@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal } from "@/lib/select";
+import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -414,4 +415,61 @@ test('unrealizedFx: ignores pending and other accounts', () => {
     tx({ account: 'other', amount: 9999, date: '2026-04-02' }),             // other account, skipped
   ];
   expect(unrealizedFx(a, txns, sgdToBase)).toBe(350); // same as opening-only
+});
+
+const holding = (over: Partial<Holding>): Holding => ({
+  id: 'h1',
+  ledgerId: 'personal',
+  accountId: 'inv',
+  symbol: 'VTI',
+  name: null,
+  shares: 10,
+  costBasis: 2000,
+  currency: 'USD',
+  lastPrice: null,
+  lastPriceDate: null,
+  notes: null,
+  ...over,
+});
+
+test('holdingValue: null when no last price is logged', () => {
+  expect(holdingValue(holding({ lastPrice: null }))).toBeNull();
+});
+
+test('holdingValue: shares × last price', () => {
+  expect(holdingValue(holding({ shares: 10, lastPrice: 250 }))).toBe(2500);
+});
+
+test('holdingGainLoss: positive when value exceeds cost basis, null without a price', () => {
+  expect(holdingGainLoss(holding({ shares: 10, costBasis: 2000, lastPrice: 250 }))).toBe(500);
+  expect(holdingGainLoss(holding({ shares: 10, costBasis: 2000, lastPrice: 150 }))).toBe(-500);
+  expect(holdingGainLoss(holding({ lastPrice: null }))).toBeNull();
+});
+
+test('holdingsValueForAccount: sums live values; falls back to cost basis when no price', () => {
+  const hs = [
+    holding({ id: 'a', shares: 10, lastPrice: 250, costBasis: 2000 }), // value 2500
+    holding({ id: 'b', shares: 5, lastPrice: null, costBasis: 500 }),  // falls back to 500
+    holding({ id: 'c', accountId: 'other', shares: 99, lastPrice: 99 }), // not counted
+  ];
+  expect(holdingsValueForAccount(hs, 'inv')).toBe(3000);
+});
+
+test('holdingsForAccount: filters by accountId', () => {
+  const hs = [
+    holding({ id: 'a', accountId: 'inv' }),
+    holding({ id: 'b', accountId: 'inv' }),
+    holding({ id: 'c', accountId: 'other' }),
+  ];
+  expect(holdingsForAccount(hs, 'inv').map((h) => h.id)).toEqual(['a', 'b']);
+});
+
+test('investmentAccountTotal: investment → cash + holdings; non-investment → balance unchanged', () => {
+  const inv = acct({ id: 'inv', type: 'investment', balance: 500 });
+  const hs = [holding({ accountId: 'inv', shares: 10, lastPrice: 250 })]; // value 2500
+  expect(investmentAccountTotal(inv, hs)).toBe(3000);
+
+  const cash = acct({ id: 'cash', type: 'savings', balance: 500 });
+  // Holdings on an unrelated account aren't dragged in.
+  expect(investmentAccountTotal(cash, hs)).toBe(500);
 });

@@ -262,6 +262,36 @@ CREATE TABLE IF NOT EXISTS scheduled_splits (
   CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
 );
 
+-- Per-position investment holdings inside an investment-type account.
+-- Cash sits in accounts.current_balance (driven by transactions); positions
+-- (e.g. 100 shares of VTI) live here with a locked cost basis + the last price
+-- the user logged. Total account value at display = cash + Σ shares × last_price
+-- (computed live, not stored). Prices are entered manually; we keep no history
+-- table — last_price is the authoritative figure and gets overwritten on update.
+-- ON DELETE CASCADE on account_id: archiving an account is the supported
+-- "decomission" path; a hard account delete (only possible when txn-less)
+-- takes its holdings with it rather than leaving orphans.
+CREATE TABLE IF NOT EXISTS holdings (
+  id              TEXT PRIMARY KEY,
+  ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol          TEXT NOT NULL,
+  name            TEXT,
+  shares          REAL NOT NULL DEFAULT 0,
+  -- Total amount paid in the holding's own currency, locked at entry. The
+  -- per-share average is derived as cost_basis / shares; we don't store it
+  -- because partial sells / DRIP reinvestments would have to keep both in sync.
+  cost_basis      REAL NOT NULL DEFAULT 0,
+  currency        TEXT NOT NULL,
+  -- Last price the user logged (per share, in the row's own currency). NULL =
+  -- no price yet; the holding shows cost basis but no live valuation.
+  last_price      REAL,
+  last_price_date TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS exchange_rates (
   date     TEXT NOT NULL,
   currency TEXT NOT NULL,
@@ -320,6 +350,8 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(le
 CREATE INDEX IF NOT EXISTS idx_scheduled_splits_template ON scheduled_splits(template_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
+CREATE INDEX IF NOT EXISTS idx_holdings_ledger ON holdings(ledger_id);
+CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
@@ -384,7 +416,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T17:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T18:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

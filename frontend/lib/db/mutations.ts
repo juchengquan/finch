@@ -68,6 +68,13 @@ import {
 import { isAccountType } from '@/lib/account-types';
 import { convertToBase, ledgerBaseCurrency } from './queries/rates';
 import {
+  createHolding as qCreateHolding,
+  updateHolding as qUpdateHolding,
+  setHoldingPrice as qSetHoldingPrice,
+  deleteHolding as qDeleteHolding,
+  type HoldingPatch,
+} from './queries/holdings';
+import {
   addTransaction as qAdd,
   updateTransaction as qUpdate,
   deleteTransactionRow as qDelete,
@@ -79,6 +86,7 @@ import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
 
 const RESET_TABLES = [
+  'holdings',
   'transactions',
   'scheduled_splits',
   'scheduled_templates',
@@ -804,6 +812,74 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'reset':
       await resetDb(exec);
+      return;
+    case 'createHolding': {
+      const accountId = str(args.accountId).trim();
+      const symbol = str(args.symbol).trim().toUpperCase();
+      const shares = Number(args.shares);
+      const costBasis = Number(args.costBasis);
+      if (!accountId) throw new Error('An investment account is required');
+      if (!symbol) throw new Error('Symbol is required');
+      if (!(shares > 0)) throw new Error('Shares must be greater than 0');
+      if (!(costBasis >= 0)) throw new Error('Cost basis must be 0 or greater');
+      const [acct] = await exec('SELECT type, currency, ledger_id FROM accounts WHERE id = ?', [accountId]);
+      if (!acct) throw new Error('Account not found');
+      if (String(acct.type) !== 'investment') throw new Error('Holdings can only be added to an investment account');
+      const ledgerId = str(args.ledgerId || acct.ledger_id || 'personal');
+      const currency = args.currency ? str(args.currency).trim().toUpperCase() : String(acct.currency ?? 'USD');
+      await qCreateHolding(exec, {
+        id: str(args.id || newId('h')),
+        ledgerId,
+        accountId,
+        symbol,
+        name: args.name ? str(args.name).trim() : null,
+        shares,
+        costBasis,
+        currency,
+        lastPrice: args.lastPrice == null || args.lastPrice === '' ? null : Number(args.lastPrice),
+        lastPriceDate: args.lastPriceDate ? str(args.lastPriceDate) : null,
+        notes: args.notes ? str(args.notes) : null,
+      });
+      return;
+    }
+    case 'updateHolding': {
+      const id = str(args.id);
+      const patch = (args.patch ?? {}) as Record<string, unknown>;
+      const normalized: HoldingPatch = {};
+      if (patch.symbol !== undefined) {
+        const sym = str(patch.symbol).trim().toUpperCase();
+        if (!sym) throw new Error('Symbol cannot be empty');
+        normalized.symbol = sym;
+      }
+      if (patch.name !== undefined) normalized.name = patch.name == null ? null : str(patch.name);
+      if (patch.shares !== undefined) {
+        const s = Number(patch.shares);
+        if (!(s > 0)) throw new Error('Shares must be greater than 0');
+        normalized.shares = s;
+      }
+      if (patch.costBasis !== undefined) {
+        const c = Number(patch.costBasis);
+        if (!(c >= 0)) throw new Error('Cost basis must be 0 or greater');
+        normalized.costBasis = c;
+      }
+      if (patch.notes !== undefined) normalized.notes = patch.notes == null ? null : str(patch.notes);
+      await qUpdateHolding(exec, id, normalized);
+      return;
+    }
+    case 'setHoldingPrice': {
+      const id = str(args.id);
+      const price = args.price == null ? null : Number(args.price);
+      const date = args.date == null ? null : str(args.date);
+      if (price !== null && !(price >= 0)) throw new Error('Price must be 0 or greater');
+      if ((price === null) !== (date === null)) {
+        throw new Error('Provide both price and date, or null both to clear');
+      }
+      if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
+      await qSetHoldingPrice(exec, id, price, date);
+      return;
+    }
+    case 'deleteHolding':
+      await qDeleteHolding(exec, str(args.id));
       return;
     case 'changeLedgerBase': {
       const ledgerId = str(args.ledgerId);
