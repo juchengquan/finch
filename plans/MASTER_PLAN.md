@@ -313,7 +313,8 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
 
 **Current open items:**
 1. **Investment tracking** (#8 below) — open; biggest scope expansion left.
-2. **Unrealized FX gain/loss** (Multi-currency phase 4 follow-up) — deferred; needs opening-balance cost basis on multi-currency accounts.
+
+**Unrealized FX gain/loss** ✅ shipped — `accounts.opening_balance_base` locks the ledger-base cost of each account's opening balance at creation. With it the account's cost basis is `opening_balance_base + Σ amount_base of confirmed transactions`, and the live valuation `current_balance × today's rate` reveals the drift as unrealized FX. The account-detail balance card shows an "FX gain/loss" line for accounts denominated in a non-base currency; same-currency-as-base accounts read 0 and hide it. `recomputeAmountBases` re-stamps the column when the ledger's base itself changes. See `plans/database_design_en.md` §6.4 / decision #22.
 
 **Counterparty FK link** ✅ shipped — `transactions.counterparty_id` is set at insert/update via `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger); `projectState` overrides `merchant` with the canonical catalog name when the FK is set, so renames on the Merchants page follow transaction history. `ON DELETE SET NULL` preserves the original description text. See `plans/database_design_en.md` §6.10 / decision #18 for the schema and rationale.
 

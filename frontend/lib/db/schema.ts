@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS accounts (
   -- source of truth for the starting point.
   current_balance      REAL NOT NULL DEFAULT 0,
   opening_balance      REAL NOT NULL DEFAULT 0,
+  -- Ledger-base value of opening_balance, locked at account creation using the
+  -- rate on the creation date. Stays put when the FX rate moves later, so the
+  -- account's cost basis (opening_balance_base + Σ amount_base of confirmed
+  -- transactions) is stable. The drift between cost basis and the live
+  -- (current_balance × today's rate) figure is the unrealized FX gain/loss.
+  -- Re-stamped only when the ledger's base currency itself changes (see
+  -- recomputeAmountBases).
+  opening_balance_base REAL NOT NULL DEFAULT 0,
   color                TEXT,
   -- Sort order within the account group (and within "ungrouped"). Smaller
   -- values come first.
@@ -376,7 +384,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T16:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T17:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

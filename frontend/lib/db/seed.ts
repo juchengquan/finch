@@ -26,6 +26,7 @@ import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 
 const SEED_TS = '2026-05-26T00:00:00';
+const SEED_DATE = '2026-05-26';
 
 const ACCOUNT_TYPE: Record<string, string> = {
   checking: 'savings',
@@ -106,11 +107,18 @@ export async function seedReference(exec: Exec): Promise<void> {
 
   for (const a of accounts) {
     const ledgerId = a.ledger ?? 'personal';
+    const ledgerBase = baseOf(ledgerId);
+    // Seed accounts inherit the ledger's base currency (no foreign-currency seed
+    // accounts today), so opening_balance_base == opening_balance here. The
+    // convertToBase call still goes through the pivot for correctness should a
+    // future seed introduce a foreign-currency account.
+    const { amountBase: openingBase } = await convertToBase(exec, a.balance, ledgerBase, ledgerBase, SEED_DATE);
     await exec(
-      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,color,include_in_net_worth,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       // opening_balance starts at the known balance; insertTransactions overwrites
-      // it with the true opening (known − Σ bases) for accounts that have txns.
-      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', baseOf(ledgerId), a.balance, a.balance, a.color ?? null, defaultIncludeInNetWorth(ACCOUNT_TYPE[a.type] ?? 'savings'), 1, SEED_TS, SEED_TS],
+      // it (and opening_balance_base) with the true opening (known − Σ bases) for
+      // accounts that have txns.
+      [a.id, ledgerId, a.group, a.name, ACCOUNT_TYPE[a.type] ?? 'savings', ledgerBase, a.balance, a.balance, openingBase, a.color ?? null, defaultIncludeInNetWorth(ACCOUNT_TYPE[a.type] ?? 'savings'), 1, SEED_TS, SEED_TS],
     );
   }
 
@@ -242,7 +250,19 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     // Start current_balance at the true opening; the insert trigger then moves it
     // by each confirmed row's delta, ending at the known seed balance. opening_balance
     // is recorded so recomputeAccount can rebuild after edits/deletes.
-    await exec('UPDATE accounts SET opening_balance = ?, current_balance = ? WHERE id = ?', [open, open, accountId]);
+    //
+    // opening_balance_base is re-derived against the ledger base on SEED_DATE. Seed
+    // accounts are denominated in the ledger base today, so this is identity; the
+    // conversion call survives a future foreign-currency seed account.
+    const accRow = accounts.find((a) => a.id === accountId);
+    const ledgerId = accRow?.ledger ?? 'personal';
+    const ledgerBase = baseOf(ledgerId);
+    const accountCurrency = ledgerBase; // seed accounts inherit ledger base; see seedReference
+    const { amountBase: openBase } = await convertToBase(exec, open, accountCurrency, ledgerBase, SEED_DATE);
+    await exec(
+      'UPDATE accounts SET opening_balance = ?, opening_balance_base = ?, current_balance = ? WHERE id = ?',
+      [open, openBase, open, accountId],
+    );
     for (const r of resolved) {
       const t = r.t;
       const kind = t.transferGroupId ? 'transfer' : r.amountBase > 0 ? 'income' : 'expense';

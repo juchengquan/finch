@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx } from "@/lib/select";
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -22,6 +22,7 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   type: 'credit_card',
   currency: 'USD',
   balance: 0,
+  openingBalanceBase: 0,
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
@@ -378,4 +379,39 @@ test('incomeCategoryFlow: saved is floored at 0 when expenses exceed income', ()
   ];
   const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
   expect(flow.saved).toBe(0);
+});
+
+// Live-rate stub for FX tests: USD account on an SGD ledger, USD → SGD at
+// 1.35. toBase(amount, 'USD') returns amount * 1.35; other currencies pass
+// through.
+const sgdToBase = (amount: number, currency: string) => (currency === 'USD' ? amount * 1.35 : amount);
+
+test('unrealizedFx: zero when the account is in the ledger base', () => {
+  const a = acct({ id: 'sgd', currency: 'SGD', balance: 1000, openingBalanceBase: 1000 });
+  // toBase is identity for the base currency — must return exactly 0.
+  expect(unrealizedFx(a, [], (n) => n)).toBe(0);
+});
+
+test('unrealizedFx: opening-only — full delta when no transactions', () => {
+  // Cost basis was 1000 SGD (USD 1000 × 1.0). Live rate jumped to 1.35 → 1350 SGD.
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1000, openingBalanceBase: 1000 });
+  expect(unrealizedFx(a, [], sgdToBase)).toBe(350);
+});
+
+test('unrealizedFx: cost basis includes Σ amount_base of confirmed txns', () => {
+  // Opening 1000 USD locked at 1.0 → 1000 SGD basis. Add a USD 500 deposit locked
+  // at 1.2 → +600 SGD basis. Current balance 1500 USD × 1.35 = 2025 SGD.
+  // Unrealized FX = 2025 − (1000 + 600) = 425.
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1500, openingBalanceBase: 1000 });
+  const txns = [tx({ account: 'usd', amount: 600, nativeAmount: 500, currency: 'USD', date: '2026-04-01' })];
+  expect(unrealizedFx(a, txns, sgdToBase)).toBe(425);
+});
+
+test('unrealizedFx: ignores pending and other accounts', () => {
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1000, openingBalanceBase: 1000 });
+  const txns = [
+    tx({ account: 'usd', amount: 200, pending: true, date: '2026-04-01' }), // pending, skipped
+    tx({ account: 'other', amount: 9999, date: '2026-04-02' }),             // other account, skipped
+  ];
+  expect(unrealizedFx(a, txns, sgdToBase)).toBe(350); // same as opening-only
 });

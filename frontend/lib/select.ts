@@ -358,6 +358,34 @@ export function accountBalance(accounts: AccountRow[], accountId: string): numbe
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
 }
 
+/**
+ * Unrealized FX gain/loss on one account, in the ledger base currency.
+ *
+ *   cost basis      = openingBalanceBase + Σ amount_base of confirmed txns
+ *   current value   = toBase(currentBalance, accountCurrency)        [live rate]
+ *   unrealized FX   = current value − cost basis
+ *
+ * `Tx.amount` IS the locked ledger-base figure (it mirrors DB `amount_base`),
+ * so the cost basis sums those directly — no per-transaction reconversion. A
+ * same-currency-as-base account always returns 0 (toBase is identity, base
+ * never moves). Pending rows are excluded — they aren't in the live balance
+ * either.
+ */
+export function unrealizedFx(
+  account: AccountRow,
+  txns: Tx[],
+  toBase: ToBase,
+): number {
+  const currentValueBase = toBase(account.balance, account.currency);
+  let costBasis = account.openingBalanceBase;
+  for (const t of txns) {
+    if (t.account !== account.id) continue;
+    if (t.pending) continue;
+    costBasis += t.amount;
+  }
+  return r2(currentValueBase - costBasis);
+}
+
 const byDateAsc = (a: Tx, b: Tx) => {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
   const at = a.time ?? '';

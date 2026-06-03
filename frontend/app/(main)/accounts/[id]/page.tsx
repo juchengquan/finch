@@ -34,12 +34,12 @@ import { useTransactionSheet } from '@/components/transaction-sheet';
 import { MOCK, catById, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
-import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
+import { selectTransactions, accountBalance, balanceSeries, unrealizedFx } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
   const { active } = useLedger();
-  const { display, fmtFrom } = useMoney();
+  const { display, fmtFrom, toBase, fmt } = useMoney();
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
@@ -65,6 +65,10 @@ export default function AccountDetailPage() {
   const toConfirm = selectTransactions(allTxns, { ledgerId, accountId, status: 'pending' });
   const balance = row ? accountBalance(accounts, accountId) : mock.balance;
   const series = balanceSeries(allTxns, accountId, balance);
+  // Unrealized FX gain/loss: how far the live ledger-base valuation has drifted
+  // from the locked cost basis. Always zero for accounts denominated in the
+  // ledger base; only meaningful for foreign-currency accounts.
+  const fxDelta = row && row.currency !== active.base ? unrealizedFx(row, allTxns, toBase) : 0;
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -151,6 +155,11 @@ export default function AccountDetailPage() {
               </div>
               {currency !== display && (
                 <div className="mt-1.5 text-sm text-white/70 tabular-nums">≈ {fmtFrom(balance, currency)}</div>
+              )}
+              {row && row.currency !== active.base && Math.abs(fxDelta) >= 0.01 && (
+                <div className="mt-1 text-xs text-white/60 tabular-nums">
+                  FX {fxDelta >= 0 ? 'gain' : 'loss'} {fmt(Math.abs(fxDelta))}
+                </div>
               )}
             </div>
             {/* Mobile: single entry — opens the details sheet, which holds the Edit button. */}
