@@ -113,6 +113,12 @@ export interface ScheduledTemplate {
   startDate?: string;
   endDate?: string | null;
   maxExecutions?: number | null;
+  /** Total payments in a finite installment plan (e.g. 24 for a 24-month
+   *  phone contract). Null = ordinary recurring expense, no end in sight. */
+  installmentTotal?: number | null;
+  /** Payments posted so far. Auto-incremented when the template posts; when
+   *  it reaches installmentTotal the template flips to inactive. */
+  installmentPaid?: number;
   splits?: ScheduledSplit[];
 }
 
@@ -226,8 +232,8 @@ interface FinanceState {
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
-  createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; ledgerId?: string }) => string;
-  updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null }) => void;
+  createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null; ledgerId?: string }) => string;
+  updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null }) => void;
   deleteScheduled: (id: string) => void;
   updateTransfer: (id: string, patch: { fromAmount?: number; toAmount?: number; date?: string; time?: string | null; note?: string | null }) => void;
   deleteTransfer: (id: string) => void;
@@ -689,13 +695,14 @@ export const useFinanceStore = create<FinanceState>()(
         const startDate = input.startDate ?? '';
         const endDate = input.endDate ?? null;
         const maxExecutions = input.maxExecutions ?? null;
+        const installmentTotal = input.installmentTotal ?? null;
         set((s) => ({
           scheduled: [
             ...s.scheduled,
-            { id, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay, accountId, account, fromAccountId, from: input.from, autoPost, nextRun: '', lastRun: '', color, category, startDate, endDate, maxExecutions },
+            { id, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay, accountId, account, fromAccountId, from: input.from, autoPost, nextRun: '', lastRun: '', color, category, startDate, endDate, maxExecutions, installmentTotal, installmentPaid: 0 },
           ],
         }));
-        syncMutation('createScheduled', { id, ledgerId, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, accountId, fromAccountId: fromAccountId ?? null, autoPost: !!input.autoPost, color, category, startDate, endDate, maxExecutions });
+        syncMutation('createScheduled', { id, ledgerId, name: input.name, description, type, amount, frequency, dayOfMonth, weekDay: weekDay ?? null, accountId, fromAccountId: fromAccountId ?? null, autoPost: !!input.autoPost, color, category, startDate, endDate, maxExecutions, installmentTotal });
         return id;
       },
 

@@ -706,6 +706,7 @@ CREATE TABLE scheduled_templates (
   auto_post            INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
   max_executions       INTEGER,
+  installment_total    INTEGER,
   color                TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
@@ -734,7 +735,8 @@ CREATE TABLE scheduled_templates (
 | `last_run` | TEXT | Cached last posted occurrence. |
 | `auto_post` | INTEGER NOT NULL · default 1 | `1` = post automatically; `0` = surface as a pending suggestion. |
 | `is_active` | INTEGER NOT NULL · default 1 | Soft-archive flag. |
-| `max_executions` | INTEGER | Optional cap on lifetime occurrences. |
+| `max_executions` | INTEGER | Optional cap on lifetime occurrences. Silent — no progress UI. |
+| `installment_total` | INTEGER | Optional installment plan size (e.g. 24 for a 24-month phone contract). NULL = ordinary recurring expense. Caps `generateDueScheduled` the same way `max_executions` does; the post handler also blocks once paid reaches total, so a fully-paid plan can't sneak through. The matching "paid so far" count is **derived**, not stored — it's `COUNT(*) FROM transactions WHERE source_template_id = id AND status = 'confirmed'`, so pending rows don't inflate it and a cancelled pending row leaves it untouched. Cash math only — for the interest/principal split of a loan payment, the user adds transaction splits to the posted row. |
 | `color` | TEXT | Display tint for the calendar / list. |
 | `created_at` / `updated_at` | TEXT NOT NULL | Audit. |
 
@@ -1329,6 +1331,7 @@ These are the non-obvious decisions made during schema design, with explanations
 | 21 | Transaction text search uses an FTS5 shadow, not `LIKE '%term%'` | `LIKE` with a leading wildcard can't use a B-tree index — every search scanned every transaction. The Activity / ⌘K search needed real indexed lookup. `transactions_fts` is an FTS5 virtual table mirroring `description + notes`, kept in sync by three triggers. `listTransactions` translates the user's typed query through `toFts5Query` (lowercased prefix terms joined with AND, punctuation stripped) and matches via `id IN (SELECT id FROM transactions_fts WHERE … MATCH ?)`. Trade-off: FTS5 matches **whole-word prefixes**, not arbitrary substrings — so a query "ucks" no longer matches "Starbucks" the way LIKE did. Per-word prefix matching is the standard search semantics users expect from autocomplete, and the index makes the search constant-time at any practical scale. |
 | 22 | `accounts.opening_balance_base` locks the starting cost basis for unrealized FX | Without it, every foreign-currency account would look like it cost (today's rate × opening_balance), which moves around as FX moves and hides the gain/loss buried in any account that isn't in the ledger base. The new column captures the ledger-base value of `opening_balance` at the rate on the account's creation date. With it, an account's cost basis is simply `opening_balance_base + Σ amount_base of confirmed transactions` (every transaction's `amount_base` is already locked at its own date's rate), and unrealized FX = `(current_balance × today's rate) − cost basis`. Same-currency-as-base accounts always read 0, so the column is harmless when it doesn't apply. The figure is re-stamped only when the ledger's base currency itself changes (inside `recomputeAmountBases`), using the same creation-date rate just expressed against the new base — keeping a single locked snapshot rather than auditing creation-day rates separately. |
 | 23 | Investment holdings are a separate table from `transactions`, with `last_price` overwritten in place (no history table) | A holding is a long-lived position (shares + cost basis + a current quote) — fundamentally different from a cashflow event. Modeling it as a "transaction with extra columns" forces every cashflow query to special-case it, and a `LIKE 'SHARES%'` description convention would rot fast. The `holdings` table stays narrow: shares + cost basis + the last quote the user logged. Buys / sells / dividends are still ordinary transactions against the account's cash position; the user keeps the holding row in sync manually (this PR is no-API; an integration would write to both). Total account value = `accounts.current_balance + Σ holdings_value` (live, computed on the fly), so the existing `current_balance` ledger keeps working unchanged and only the investment-account UI knows about holdings. We chose `last_price` + `last_price_date` over a separate `holding_prices(symbol, currency, date)` history because prices are typed manually — a per-symbol history would be sparse and rarely useful, and a future integration can add the table without disturbing the column. CASCADE on `account_id` (not SET NULL) is deliberate: a holding without an account is meaningless, and the only path to a hard account delete is "zero transactions" anyway. |
+| 24 | Installment plan progress is derived from confirmed transactions, not a stored counter | A 24-month phone contract or 0% furniture plan is a finite version of an ordinary recurring expense — it ends after N postings instead of running forever. The minimum schema bump is one column: `installment_total`. The matching "how many paid so far" figure could be a second column maintained by every post/confirm/cancel/delete path, but that's four code paths to keep in sync and one missed update is a permanent drift. Instead we **derive** it via `COUNT(*) FROM transactions WHERE source_template_id = id AND status = 'confirmed'` — pending occurrences don't inflate progress (the user hasn't acted on them yet), cancelling a pending row deletes it (count drops naturally), and there's no counter to corrupt. Two enforcement points share the total: `generateDueScheduled` caps occurrences at `installment_total - have.size` (mirrors the `max_executions` cap), and `postScheduled` refuses once `installmentPaid >= installment_total` so a fully-paid plan can't be tipped over by a manual click. Interest is intentionally not modeled here — for users who care about the principal / interest split of a payment, that lives on the posted transaction's splits, not on the template. |
 
 ---
 
@@ -1338,7 +1341,6 @@ These features are planned but not in the current schema. If you're implementing
 
 | Feature | Description |
 |---------|-------------|
-| Installment tracking | Add `installment_total` and `installment_paid` to `recurring_templates` for tracking payment progress |
 | Bill calendar | Recurring template due-date reminders via cron + Telegram notification |
 | Annual tax report | Export全年数据 by IRAS tax categories |
 | Web admin UI | Flask/React web interface for managing the ledger |

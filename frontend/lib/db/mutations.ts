@@ -118,6 +118,18 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Normalize an installment total — accept null/missing as "not a plan" and
+ *  enforce a positive integer otherwise. Throws on a malformed value rather
+ *  than silently coercing 0 / NaN to null, so a UI typo surfaces. */
+function parseInstallmentTotal(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error('Installment total must be a positive whole number');
+  }
+  return n;
+}
+
 /** Reject creating/moving a category under one that itself has a parent —
  *  the taxonomy is exactly 2 levels deep. */
 async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
@@ -141,6 +153,7 @@ async function insertTxRow(
     transferGroupId: string | null;
     note: string | null;
     kind: 'income' | 'expense' | 'transfer' | 'adjustment';
+    sourceTemplateId?: string | null;
   },
 ): Promise<void> {
   const ts = new Date().toISOString();
@@ -154,12 +167,12 @@ async function insertTxRow(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
        description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
-       currency,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       currency,notes,source_template_id,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId('t'), row.ledgerId, row.accountId, row.date, row.time ?? null, row.amount, conv.amountBase, conv.rate,
       row.description, null, cpId, row.transferGroupId, row.kind, 'confirmed', ts,
-      row.currency, row.note, ts, ts,
+      row.currency, row.note, row.sourceTemplateId ?? null, ts, ts,
     ],
   );
 }
@@ -171,12 +184,14 @@ async function postSingle(
   amount: number,
   description: string,
   date: string,
+  sourceTemplateId: string | null = null,
 ): Promise<void> {
   const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [accountId]);
   await insertTxRow(exec, {
     ledgerId, accountId, date, amount, description,
     currency: String(acct?.currency ?? 'USD'),
     transferGroupId: null, note: null, kind: amount > 0 ? 'income' : 'expense',
+    sourceTemplateId,
   });
 }
 
@@ -186,6 +201,12 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const scheduled = await listScheduled(exec, ledgerId);
   const t = scheduled.find((r) => r.id === templateId);
   if (!t) throw new Error('Template not found');
+  // Refuse to post more than the installment plan calls for. We block before
+  // we touch the account, so a fully-paid plan can't sneak an extra payment
+  // through. installmentPaid is the derived count of confirmed posts.
+  if (t.installmentTotal != null && (t.installmentPaid ?? 0) >= t.installmentTotal) {
+    throw new Error(`"${t.name}" has finished its ${t.installmentTotal}-payment plan`);
+  }
   const date = new Date().toISOString().slice(0, 10);
   // The posted transaction's description: the template's own description, or
   // its name as a fallback.
@@ -205,14 +226,14 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
     for (const sp of t.splits) {
       const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
       if (!portion) continue;
-      await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date);
+      await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id);
       posted++;
     }
     if (!posted) throw new Error(`No split amounts to post for "${t.name}"`);
     return;
   }
 
-  await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date);
+  await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id);
 }
 
 // Create a transfer: a transfer_group plus two confirmed transactions (out/in)
@@ -300,6 +321,11 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
     dates = dates.filter((d) => !have.has(d));
     const max = r.max_executions == null ? null : Number(r.max_executions);
     if (max != null) dates = dates.slice(0, Math.max(0, max - have.size));
+    // Installment plans cap at installment_total just like max_executions, so a
+    // 24-month phone contract stops generating after 24 occurrences without the
+    // user having to remember to flip is_active.
+    const installmentTotal = r.installment_total == null ? null : Number(r.installment_total);
+    if (installmentTotal != null) dates = dates.slice(0, Math.max(0, installmentTotal - have.size));
     if (!dates.length) continue;
 
     const ledgerId = String(r.ledger_id);
@@ -653,8 +679,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'updateScheduled': {
-      const patch = (args.patch ?? {}) as ScheduledPatch;
+      const patch = { ...(args.patch ?? {}) } as ScheduledPatch & { installmentTotal?: unknown };
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
+      if ('installmentTotal' in patch) {
+        patch.installmentTotal = parseInstallmentTotal(patch.installmentTotal);
+      }
       await qUpdateScheduled(exec, str(args.id), patch);
       return;
     }
@@ -740,6 +769,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         startDate: args.startDate ? str(args.startDate) : new Date().toISOString().slice(0, 10),
         endDate: args.endDate ? str(args.endDate) : null,
         maxExecutions: args.maxExecutions != null ? Number(args.maxExecutions) : null,
+        installmentTotal: parseInstallmentTotal(args.installmentTotal),
       });
       return;
     }

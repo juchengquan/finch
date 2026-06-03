@@ -245,6 +245,15 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   auto_post            INTEGER NOT NULL DEFAULT 1,
   is_active            INTEGER NOT NULL DEFAULT 1,
   max_executions       INTEGER,
+  -- Installment plan tracking. installment_total = how many payments the plan
+  -- has in total (e.g. 24 for a 24-month phone contract); NULL = "this is a
+  -- normal recurring expense, not a finite plan". The matching "paid so far"
+  -- count is NOT stored — it's derived from the confirmed transactions linked
+  -- back through source_template_id, so pending rows don't inflate progress
+  -- and a cancelled pending row leaves the counter untouched. Cash math only:
+  -- the interest/principal split of a payment lives in transaction splits on
+  -- the posted row, not here.
+  installment_total    INTEGER,
   color                TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
@@ -416,7 +425,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T18:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T19:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

@@ -6,14 +6,22 @@ import type { Exec } from '@/lib/db/repo';
 import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
 
 export async function listScheduled(exec: Exec, ledgerId?: string): Promise<ScheduledTemplate[]> {
+  // installment_paid is derived: count the CONFIRMED transactions linked back
+  // via source_template_id. Pending rows wait for the user's confirm action
+  // and shouldn't inflate "X of Y paid". Cancelled pending rows are deleted
+  // outright, so the count naturally stays in sync without any bookkeeping.
   const rows = await exec(
     ledgerId
-      ? `SELECT t.*, a.name AS account_name, fa.name AS from_account_name
+      ? `SELECT t.*, a.name AS account_name, fa.name AS from_account_name,
+                (SELECT COUNT(*) FROM transactions x
+                  WHERE x.source_template_id = t.id AND x.status = 'confirmed') AS installment_paid
            FROM scheduled_templates t
            LEFT JOIN accounts a ON a.id = t.account_id
            LEFT JOIN accounts fa ON fa.id = t.from_account_id
           WHERE t.ledger_id = ? ORDER BY t.rowid`
-      : `SELECT t.*, a.name AS account_name, fa.name AS from_account_name
+      : `SELECT t.*, a.name AS account_name, fa.name AS from_account_name,
+                (SELECT COUNT(*) FROM transactions x
+                  WHERE x.source_template_id = t.id AND x.status = 'confirmed') AS installment_paid
            FROM scheduled_templates t
            LEFT JOIN accounts a ON a.id = t.account_id
            LEFT JOIN accounts fa ON fa.id = t.from_account_id
@@ -63,6 +71,8 @@ export async function listScheduled(exec: Exec, ledgerId?: string): Promise<Sche
       startDate: r.start_date == null ? undefined : String(r.start_date),
       endDate: r.end_date == null ? null : String(r.end_date),
       maxExecutions: r.max_executions == null ? null : Number(r.max_executions),
+      installmentTotal: r.installment_total == null ? null : Number(r.installment_total),
+      installmentPaid: Number(r.installment_paid ?? 0),
       ...(splits ? { splits } : {}),
     };
   });
@@ -81,6 +91,7 @@ export interface ScheduledPatch {
   category?: string | null;
   endDate?: string | null;
   maxExecutions?: number | null;
+  installmentTotal?: number | null;
 }
 
 export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPatch): Promise<void> {
@@ -88,6 +99,7 @@ export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPa
     name: 'name', description: 'description', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month',
     weekDay: 'day_of_week', autoPost: 'auto_post', color: 'color', type: 'kind',
     category: 'category_id', endDate: 'end_date', maxExecutions: 'max_executions',
+    installmentTotal: 'installment_total',
   };
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
@@ -120,6 +132,7 @@ export interface NewScheduled {
   startDate: string;
   endDate: string | null;
   maxExecutions: number | null;
+  installmentTotal: number | null;
 }
 
 export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void> {
@@ -127,9 +140,9 @@ export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void
     `INSERT INTO scheduled_templates
        (id,ledger_id,name,description,kind,amount,amount_varies,splits_enabled,account_id,
         from_account_id,category_id,frequency,day_of_month,day_of_week,start_date,
-        end_date,max_executions,next_run,last_run,auto_post,color,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,0,0,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
-    [t.id, t.ledgerId, t.name, t.description, t.type, t.amount, t.accountId, t.fromAccountId, t.category, t.frequency, t.dayOfMonth, t.weekDay, t.startDate, t.endDate, t.maxExecutions, t.autoPost, t.color],
+        end_date,max_executions,installment_total,next_run,last_run,auto_post,color,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,0,0,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,1,datetime('now'),datetime('now'))`,
+    [t.id, t.ledgerId, t.name, t.description, t.type, t.amount, t.accountId, t.fromAccountId, t.category, t.frequency, t.dayOfMonth, t.weekDay, t.startDate, t.endDate, t.maxExecutions, t.installmentTotal, t.autoPost, t.color],
   );
 }
 

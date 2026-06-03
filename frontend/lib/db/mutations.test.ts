@@ -777,3 +777,87 @@ test('generateDueScheduled materializes due occurrences as pending, idempotently
   await applyMutation(exec, 'confirmTransaction', { id: String(spotify.id) });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0 - 11.99, 2);
 });
+
+// ---------------------------------------------------------------------------
+// Installment plans — `installment_total` caps auto-generation, the manual
+// post path blocks once the plan is full, and the derived `installmentPaid`
+// counts only confirmed transactions.
+// ---------------------------------------------------------------------------
+
+const installmentPaidOf = async (exec: Exec, id: string) => {
+  const { listScheduled } = await import('@/lib/db/queries/scheduled');
+  const all = await listScheduled(exec, 'personal');
+  return all.find((t) => t.id === id)?.installmentPaid ?? -1;
+};
+
+test('createScheduled rejects an installment total that isn\'t a positive integer', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'createScheduled', {
+      id: 'sch-bad', name: 'Bad plan', type: 'expense', frequency: 'monthly',
+      dayOfMonth: 1, accountId: 'chk', amount: 100, installmentTotal: 0,
+    }),
+  ).rejects.toThrow('Installment total must be a positive whole number');
+  await expect(
+    applyMutation(exec, 'createScheduled', {
+      id: 'sch-bad2', name: 'Bad plan 2', type: 'expense', frequency: 'monthly',
+      dayOfMonth: 1, accountId: 'chk', amount: 100, installmentTotal: 1.5,
+    }),
+  ).rejects.toThrow('Installment total must be a positive whole number');
+});
+
+test('postScheduled blocks once installmentPaid reaches installmentTotal', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-phone', name: 'Phone contract', type: 'expense', frequency: 'monthly',
+    dayOfMonth: 1, accountId: 'chk', amount: 50, installmentTotal: 2,
+  });
+  await applyMutation(exec, 'postScheduled', { templateId: 'sch-phone' });
+  expect(await installmentPaidOf(exec, 'sch-phone')).toBe(1);
+  await applyMutation(exec, 'postScheduled', { templateId: 'sch-phone' });
+  expect(await installmentPaidOf(exec, 'sch-phone')).toBe(2);
+  // The plan is now full; a third post should be rejected.
+  await expect(
+    applyMutation(exec, 'postScheduled', { templateId: 'sch-phone' }),
+  ).rejects.toThrow('finished its 2-payment plan');
+});
+
+test('installmentPaid counts only CONFIRMED transactions; cancelling a pending leaves it untouched', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-plan', name: 'Furniture 0%', type: 'expense', frequency: 'monthly',
+    dayOfMonth: 1, accountId: 'chk', amount: 200, installmentTotal: 12,
+    autoPost: true, startDate: '2026-01-01',
+  });
+  // generateDueScheduled creates pending rows — they shouldn't count toward
+  // "paid" (the user hasn't confirmed them yet).
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-03-15' });
+  const pendingBefore = await exec(
+    "SELECT id FROM transactions WHERE source_template_id = 'sch-plan' AND status = 'pending'",
+  );
+  expect(pendingBefore.length).toBeGreaterThan(0);
+  expect(await installmentPaidOf(exec, 'sch-plan')).toBe(0);
+  // Confirming one of them moves the counter by exactly one.
+  await applyMutation(exec, 'confirmTransaction', { id: String(pendingBefore[0].id) });
+  expect(await installmentPaidOf(exec, 'sch-plan')).toBe(1);
+  // Cancelling another pending row leaves the counter untouched.
+  await applyMutation(exec, 'deleteTransaction', { id: String(pendingBefore[1].id) });
+  expect(await installmentPaidOf(exec, 'sch-plan')).toBe(1);
+});
+
+test('generateDueScheduled stops generating once the plan has filled installmentTotal', async () => {
+  const exec = await seeded();
+  // 3-month plan starting Jan 2026, daily would over-shoot, monthly is right.
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-cap', name: 'Three-month plan', type: 'expense', frequency: 'monthly',
+    dayOfMonth: 1, accountId: 'chk', amount: 100, installmentTotal: 3,
+    autoPost: true, startDate: '2026-01-01',
+  });
+  // After a year, only 3 occurrences should exist (Jan, Feb, Mar) — the cap
+  // wins even though monthly occurrences would otherwise have generated 12.
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-12-31' });
+  const gen = await exec(
+    "SELECT id FROM transactions WHERE source_template_id = 'sch-cap'",
+  );
+  expect(gen.length).toBe(3);
+});
