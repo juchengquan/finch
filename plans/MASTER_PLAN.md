@@ -311,7 +311,10 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 The original plan list is closed. From a fresh audit, here's a curated list of
 real feature gaps — picks for the next phase, with the highest-value ones first.
 
-**Current open items:** none — the last big gaps shipped (see below).
+**Current open items:**
+1. **PWA** — turn finch into an installable, offline-capable app (cache the
+   shell + WASM via a service worker, request persistent storage). Data layer
+   doesn't change. Scoping doc at `plans/PWA_PLAN.md`.
 
 **Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.
 
@@ -323,7 +326,7 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
 
 **Base-currency-change recompute tool** ✅ shipped — Settings › Ledger has a "Base currency" select; flipping it confirms then atomically rewrites every locked `amount_base` (transactions + splits) under the new base using each row's own date, and re-runs `recomputeAccount` for every account in the ledger. `transfer_groups.amount_base` isn't touched (it's the from-leg native magnitude, not a ledger-base figure). See `plans/database_design_en.md` §6.1 / decision #19 + `lib/db/queries/ledgers.ts::recomputeAmountBases`.
 
-Everything else in the curated list below — Transaction splits, Spending forecast, ⌘K palette, Account-group CRUD, Budget rollover (UI + auto period), Activity filters, Sankey, Refund support, Multi-currency phases 1–3 + Phase-4-partial — is ✅ shipped.
+Everything else in the curated list below — Transaction splits, Spending forecast, ⌘K palette, Account-group CRUD, Budget rollover (UI + auto period), Activity filters, Sankey, Refund support, Multi-currency phases 1–4 — is ✅ shipped.
 
 **Picked next:**
 1. **Transaction splits** ✅ *(done — see PR)* — ad-hoc category splits on any
@@ -387,21 +390,26 @@ Everything else in the curated list below — Transaction splits, Spending forec
    `kind IN ('expense','refund')` so the positive refund nets against its category,
    cash-flow income gated to `kind='income'`, and a "Refund" action on transaction
    detail that pre-fills amount + category from the original.
-10. **Multi-currency accounts** ✅ *(Phases 1–3 done — see `plans/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* —
-    per-account currency is a stored/editable property. **Phase 1 (storage):**
-    writes true ledger-base `amount_base` and accumulates the account-currency delta
-    into balances. **Phase 2 (read/display):** `useMoney.toBase`/`fmtFrom`;
-    `balanceSeries` walks the native amount; net-worth selectors sum mixed currencies
-    in the ledger base via a `ToBase`; account detail shows native + "≈ display".
+10. **Multi-currency accounts** ✅ *(fully done — see
+    `plans/done/MULTI_CURRENCY_ACCOUNTS_PLAN.md`)* — per-account currency is a
+    stored/editable property. **Phase 1 (storage):** writes true ledger-base
+    `amount_base` and accumulates the account-currency delta into balances.
+    **Phase 2 (read/display):** `useMoney.toBase`/`fmtFrom`; `balanceSeries`
+    walks the native amount; net-worth selectors sum mixed currencies in the
+    ledger base via a `ToBase`; account detail shows native + "≈ display".
     **Phase 3 (entry UX):** add-expense currency follows the selected account;
     `updateTransaction` reconverts `amount_base` on an amount edit. **Phase 4
-    (partial):** cross-currency transfer UX — `selectTransfers`/`listTransfers`
+    (polish):** cross-currency transfer UX — `selectTransfers`/`listTransfers`
     return both legs' native amounts + currencies; the transfers list shows
-    "sent → received @ rate". The FX-transaction detail also embeds the locked-rate
-    block directly into `<TransactionDetail>` (PR #60) so foreign rows surface
-    rate + dual-amount audit info without a separate `/fx` page. Deferred:
-    unrealized FX gain/loss (needs opening-balance cost basis) and a
-    base-currency-change recompute tool (heavy/rare).
+    "sent → received @ rate". The FX-transaction detail also embeds the
+    locked-rate block directly into `<TransactionDetail>` (PR #60) so foreign
+    rows surface rate + dual-amount audit info without a separate `/fx` page.
+    Unrealized FX gain/loss shipped in PR #66 (`accounts.opening_balance_base`
+    locks the cost basis at account creation; the account-detail balance card
+    surfaces the drift). Base-currency-change recompute tool shipped in PR #64
+    (Settings › Ledger lets the user flip a ledger's base; `recomputeAmountBases`
+    atomically rewrites every locked `amount_base` and re-stamps
+    `opening_balance_base`).
 
 ### Done since (Phase H follow-ups)
 - Recurring **split add/remove** UI on the template detail screen.

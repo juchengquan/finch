@@ -1,9 +1,14 @@
 # Multi-currency accounts — scoping / design plan
 
-Status: **Phases 1–3 done + Phase 4 partial** (storage correctness + read/native
-display + entry UX + cross-currency transfer UX; unrealized-FX and base-change tool
-deferred with rationale). Builds on `FX_CONVERSION_PLAN.md` (entry→base conversion,
-done) and the domain model in `database_design_en.md` (§"Multi-currency",
+Status: **fully done.** Storage correctness + read/native display + entry UX +
+cross-currency transfer UX (Phases 1–3) shipped earlier; unrealized FX gain/loss
+shipped in PR #66 (`accounts.opening_balance_base` locks the cost basis at
+account creation, account-detail UI surfaces the drift, decision #22 in
+`database_design_en.md`); base-currency-change recompute tool shipped in PR #64
+(Settings › Ledger lets the user flip a ledger's base; `recomputeAmountBases`
+atomically rewrites every locked `amount_base` under the new base; decision
+#19). Builds on `FX_CONVERSION_PLAN.md` (entry→base conversion, done) and the
+domain model in `database_design_en.md` (§"Multi-currency",
 `transactions.amount_base`).
 
 - ✅ **Phase 1** — `amount_base` is now the **ledger base** at every writer
@@ -250,7 +255,7 @@ Each writer fetches the **ledger's `base_currency`** (via the account's
   account (read-only); `updateTransaction` reconverts `amount_base` on an amount
   edit. (Cross-currency *transfer* UX polish — both legs' rate inline — remains a
   nice-to-have; the math is already correct from Phase 1.)
-- **Phase 4 — polish (partial):**
+- **Phase 4 — polish:** ✅ done.
   - ✅ **Cross-currency transfer UX** — `selectTransfers` / `listTransfers` now
     return both legs' **native** amounts + currencies (`amount`/`fromCurrency`,
     `toAmount`/`toCurrency`); the transfers list shows the sent figure in the
@@ -262,15 +267,24 @@ Each writer fetches the **ledger's `base_currency`** (via the account's
     **Create:** the Add sheet now has a `transfer` type — From/To accounts and,
     when the currencies differ, a **Received** field whose amount locks the rate
     (`createTransfer({ toAmount })`). See `SETTINGS_AND_TRANSFERS_PLAN.md`.
-  - ↩ **Unrealized FX gain/loss** — deferred. Needs `opening_balance` projected to
-    the client (today only `current_balance` is, as `AccountRow.balance`) **and** a
-    cost-basis decision for the opening balance (it has no locked rate), so it's a
-    real accounting-design task, not just plumbing. Invisible on seed data (no
-    divergent accounts) — revisit when a divergent account exists to validate against.
-  - ↩ **Base-currency-change recompute tool** — deferred. No UI/mutation exists to
-    change a ledger's `base_currency` today; the design doc (`database_design_en.md:253`)
-    flags it as a "significant operation" requiring a recompute of every
-    `amount_base`. Heavy and rare; out of scope for this pass.
+  - ✅ **Unrealized FX gain/loss** — shipped (PR #66). New
+    `accounts.opening_balance_base` column locks the ledger-base value of the
+    opening balance at the rate on the account's creation date, so the cost
+    basis is stable: `opening_balance_base + Σ amount_base of confirmed
+    transactions`. Unrealized FX = `(current_balance × today's rate) − cost
+    basis`; the account-detail balance card shows an "FX gain/loss" line for
+    non-base-currency accounts. Same-currency accounts read 0 and hide it.
+    Re-stamped when the ledger's base itself changes inside
+    `recomputeAmountBases`. See `database_design_en.md` §6.4 / decision #22.
+  - ✅ **Base-currency-change recompute tool** — shipped (PR #64). Settings ›
+    Ledger has a "Base currency" select; flipping it confirms then atomically
+    rewrites every locked `amount_base` (transactions + splits) under the new
+    base using each row's own date, re-runs `recomputeAccount` for every
+    account, and re-stamps `opening_balance_base`. Wrapped in a single
+    transaction; same-base call is a no-op. `transfer_groups.amount_base` isn't
+    rewritten (it's the from-leg's native magnitude, not a ledger-base figure).
+    See `database_design_en.md` §6.1 / decision #19 +
+    `lib/db/queries/ledgers.ts::recomputeAmountBases`.
 
 ## 11. Test plan
 
