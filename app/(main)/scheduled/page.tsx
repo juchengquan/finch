@@ -45,13 +45,14 @@ interface DraftForm {
   startDate: string;
   endDate: string;
   maxExecutions: string;
+  installmentTotal: string;
   isRecurring: boolean;
 }
 
 const EMPTY_DRAFT: DraftForm = {
   id: '', name: '', description: '', amount: '', type: 'expense', frequency: 'monthly',
   dayOfMonth: '1', weekDay: '', accountId: '', account: '', fromAccountId: '', from: '', autoPost: false, color: '#c96442',
-  category: '', startDate: new Date().toISOString().slice(0, 16), endDate: '', maxExecutions: '', isRecurring: true,
+  category: '', startDate: new Date().toISOString().slice(0, 16), endDate: '', maxExecutions: '', installmentTotal: '', isRecurring: true,
 };
 
 function templateToDraft(t: ScheduledTemplate): DraftForm {
@@ -74,6 +75,7 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
     startDate: t.startDate ?? new Date().toISOString().slice(0, 16),
     endDate: t.endDate ?? '',
     maxExecutions: t.maxExecutions != null ? String(t.maxExecutions) : '',
+    installmentTotal: t.installmentTotal != null ? String(t.installmentTotal) : '',
     isRecurring: t.frequency !== 'once',
   };
 }
@@ -117,6 +119,10 @@ export default function ScheduledPage() {
     const startDate = draft.startDate || undefined;
     const endDate = draft.endDate || null;
     const maxExecutions = draft.maxExecutions ? Number(draft.maxExecutions) : null;
+    const installmentTotal = draft.installmentTotal ? Number(draft.installmentTotal) : null;
+    if (installmentTotal != null && (!Number.isInteger(installmentTotal) || installmentTotal <= 0)) {
+      return void toast.error('Installment total must be a whole number > 0');
+    }
     const description = draft.description.trim() || null;
     if (isNew) {
       if (!draft.accountId) return void toast.error('Pick an account');
@@ -141,6 +147,7 @@ export default function ScheduledPage() {
         startDate,
         endDate,
         maxExecutions,
+        installmentTotal,
         ledgerId: activeId,
       });
       toast.success('Scheduled item added', { description: name });
@@ -157,6 +164,7 @@ export default function ScheduledPage() {
         category,
         endDate,
         maxExecutions,
+        installmentTotal,
       });
       toast.success('Scheduled item updated', { description: name });
     }
@@ -498,6 +506,11 @@ export default function ScheduledPage() {
                     <Input type="datetime-local" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
                   </div>
                 </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Installment plan</Label>
+                  <Input type="number" inputMode="numeric" min={1} value={draft.installmentTotal} onChange={(e) => setDraft({ ...draft, installmentTotal: e.target.value })} placeholder="e.g. 24 for a 24-month plan" />
+                  <p className="text-muted-foreground text-[11px]">Stops auto-posting after this many payments and shows progress. Leave blank for an ordinary recurring expense.</p>
+                </div>
               </>
             )}
             <div className="flex items-center justify-between">
@@ -539,6 +552,8 @@ interface CalendarItem {
   autoPost: number;
   color: string;
   category?: string | null;
+  installmentTotal?: number | null;
+  installmentPaid?: number;
 }
 
 function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: number): CalendarItem[] {
@@ -558,6 +573,8 @@ function daysForMonth(items: ScheduledTemplate[], viewYear: number, viewMonth: n
       autoPost: it.autoPost,
       color: it.color ?? 'var(--primary)',
       category: it.category ?? null,
+      installmentTotal: it.installmentTotal ?? null,
+      installmentPaid: it.installmentPaid ?? 0,
     };
     if (it.frequency === 'once') {
       if (it.startDate) {
@@ -670,6 +687,18 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
           {item.category ? <> · {categories.find(c => c.id === item.category)?.name ?? item.category}</> : null}
           {item.account ? <> · {item.account}</> : null}
           {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span> : null}
+          {item.installmentTotal != null && (
+            <span
+              className={cn(
+                'rounded px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px]',
+                (item.installmentPaid ?? 0) >= item.installmentTotal
+                  ? 'bg-success/10 text-success'
+                  : 'bg-secondary text-secondary-foreground',
+              )}
+            >
+              {item.installmentPaid ?? 0}/{item.installmentTotal}
+            </span>
+          )}
         </div>
       </div>
       <Money
