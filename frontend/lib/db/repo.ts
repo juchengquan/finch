@@ -8,6 +8,7 @@ import type { Counterparty } from './queries/counterparties';
 import type { LedgerRow } from './queries/ledgers';
 import type { ExchangeRate } from './queries/system';
 import type { Tag } from './queries/tags';
+import type { Holding } from './queries/holdings';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -36,6 +37,8 @@ export interface ProjectedState extends PersistState {
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   tags: Tag[];
+  /** Per-position investment holdings inside investment-type accounts. */
+  holdings: Holding[];
   scheduled: ScheduledTemplate[];
   /** Ordered section ids for the mobile bottom bar. Empty = use the client default. */
   mobileTabIds: string[];

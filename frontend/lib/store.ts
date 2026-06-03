@@ -12,6 +12,7 @@ import type { Counterparty } from '@/lib/db/queries/counterparties';
 import type { LedgerRow } from '@/lib/db/queries/ledgers';
 import type { ExchangeRate } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
+import type { Holding } from '@/lib/db/queries/holdings';
 
 export interface Tx {
   id: string;
@@ -176,6 +177,8 @@ interface FinanceState {
   counterparties: Counterparty[];
   exchangeRates: ExchangeRate[];
   tags: Tag[];
+  /** Per-position investment holdings inside investment-type accounts. */
+  holdings: Holding[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
@@ -233,6 +236,21 @@ interface FinanceState {
   deleteCounterparty: (id: string) => void;
   setExchangeRate: (input: { date: string; currency: string; rate: number; source?: string | null }) => void;
   deleteExchangeRate: (date: string, currency: string) => void;
+  createHolding: (input: {
+    accountId: string;
+    symbol: string;
+    name?: string | null;
+    shares: number;
+    costBasis: number;
+    currency?: string;
+    lastPrice?: number | null;
+    lastPriceDate?: string | null;
+    notes?: string | null;
+    ledgerId?: string;
+  }) => string;
+  updateHolding: (id: string, patch: { symbol?: string; name?: string | null; shares?: number; costBasis?: number; notes?: string | null }) => void;
+  setHoldingPrice: (id: string, price: number | null, date: string | null) => void;
+  deleteHolding: (id: string) => void;
   reset: () => void;
 }
 
@@ -261,6 +279,7 @@ export const useFinanceStore = create<FinanceState>()(
       counterparties: [],
       exchangeRates: [],
       tags: [],
+      holdings: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
 
@@ -734,6 +753,67 @@ export const useFinanceStore = create<FinanceState>()(
         const upper = currency.toUpperCase();
         set((s) => ({ exchangeRates: s.exchangeRates.filter((r) => !(r.date === date && r.currency === upper)) }));
         syncMutation('deleteExchangeRate', { date, currency: upper });
+      },
+
+      // Investment positions live on the server in `holdings`; the store mirrors
+      // them with an optimistic update + the projected state once the round-trip
+      // returns. Currency defaults to the account's on the server when omitted.
+      createHolding: (input) => {
+        const id = `h-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const symbol = input.symbol.trim().toUpperCase();
+        const ledgerId = input.ledgerId ?? 'personal';
+        set((s) => ({
+          holdings: [
+            ...s.holdings,
+            {
+              id,
+              ledgerId,
+              accountId: input.accountId,
+              symbol,
+              name: input.name ?? null,
+              shares: input.shares,
+              costBasis: input.costBasis,
+              currency: input.currency ?? 'USD',
+              lastPrice: input.lastPrice ?? null,
+              lastPriceDate: input.lastPriceDate ?? null,
+              notes: input.notes ?? null,
+            },
+          ],
+        }));
+        syncMutation('createHolding', {
+          id,
+          ledgerId,
+          accountId: input.accountId,
+          symbol,
+          name: input.name ?? null,
+          shares: input.shares,
+          costBasis: input.costBasis,
+          currency: input.currency ?? null,
+          lastPrice: input.lastPrice ?? null,
+          lastPriceDate: input.lastPriceDate ?? null,
+          notes: input.notes ?? null,
+        });
+        return id;
+      },
+
+      updateHolding: (id, patch) => {
+        const normalized = patch.symbol == null ? patch : { ...patch, symbol: patch.symbol.trim().toUpperCase() };
+        set((s) => ({
+          holdings: s.holdings.map((h) => (h.id === id ? { ...h, ...normalized } : h)),
+        }));
+        syncMutation('updateHolding', { id, patch: normalized });
+      },
+
+      setHoldingPrice: (id, price, date) => {
+        set((s) => ({
+          holdings: s.holdings.map((h) => (h.id === id ? { ...h, lastPrice: price, lastPriceDate: date } : h)),
+        }));
+        syncMutation('setHoldingPrice', { id, price, date });
+      },
+
+      deleteHolding: (id) => {
+        set((s) => ({ holdings: s.holdings.filter((h) => h.id !== id) }));
+        syncMutation('deleteHolding', { id });
       },
 
       reset: () => {

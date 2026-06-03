@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal } from "@/lib/select";
+import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 
@@ -22,6 +23,7 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   type: 'credit_card',
   currency: 'USD',
   balance: 0,
+  openingBalanceBase: 0,
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
@@ -378,4 +380,96 @@ test('incomeCategoryFlow: saved is floored at 0 when expenses exceed income', ()
   ];
   const flow = incomeCategoryFlow(txns, cats, 'personal', '2026-05', 6);
   expect(flow.saved).toBe(0);
+});
+
+// Live-rate stub for FX tests: USD account on an SGD ledger, USD → SGD at
+// 1.35. toBase(amount, 'USD') returns amount * 1.35; other currencies pass
+// through.
+const sgdToBase = (amount: number, currency: string) => (currency === 'USD' ? amount * 1.35 : amount);
+
+test('unrealizedFx: zero when the account is in the ledger base', () => {
+  const a = acct({ id: 'sgd', currency: 'SGD', balance: 1000, openingBalanceBase: 1000 });
+  // toBase is identity for the base currency — must return exactly 0.
+  expect(unrealizedFx(a, [], (n) => n)).toBe(0);
+});
+
+test('unrealizedFx: opening-only — full delta when no transactions', () => {
+  // Cost basis was 1000 SGD (USD 1000 × 1.0). Live rate jumped to 1.35 → 1350 SGD.
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1000, openingBalanceBase: 1000 });
+  expect(unrealizedFx(a, [], sgdToBase)).toBe(350);
+});
+
+test('unrealizedFx: cost basis includes Σ amount_base of confirmed txns', () => {
+  // Opening 1000 USD locked at 1.0 → 1000 SGD basis. Add a USD 500 deposit locked
+  // at 1.2 → +600 SGD basis. Current balance 1500 USD × 1.35 = 2025 SGD.
+  // Unrealized FX = 2025 − (1000 + 600) = 425.
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1500, openingBalanceBase: 1000 });
+  const txns = [tx({ account: 'usd', amount: 600, nativeAmount: 500, currency: 'USD', date: '2026-04-01' })];
+  expect(unrealizedFx(a, txns, sgdToBase)).toBe(425);
+});
+
+test('unrealizedFx: ignores pending and other accounts', () => {
+  const a = acct({ id: 'usd', currency: 'USD', balance: 1000, openingBalanceBase: 1000 });
+  const txns = [
+    tx({ account: 'usd', amount: 200, pending: true, date: '2026-04-01' }), // pending, skipped
+    tx({ account: 'other', amount: 9999, date: '2026-04-02' }),             // other account, skipped
+  ];
+  expect(unrealizedFx(a, txns, sgdToBase)).toBe(350); // same as opening-only
+});
+
+const holding = (over: Partial<Holding>): Holding => ({
+  id: 'h1',
+  ledgerId: 'personal',
+  accountId: 'inv',
+  symbol: 'VTI',
+  name: null,
+  shares: 10,
+  costBasis: 2000,
+  currency: 'USD',
+  lastPrice: null,
+  lastPriceDate: null,
+  notes: null,
+  ...over,
+});
+
+test('holdingValue: null when no last price is logged', () => {
+  expect(holdingValue(holding({ lastPrice: null }))).toBeNull();
+});
+
+test('holdingValue: shares × last price', () => {
+  expect(holdingValue(holding({ shares: 10, lastPrice: 250 }))).toBe(2500);
+});
+
+test('holdingGainLoss: positive when value exceeds cost basis, null without a price', () => {
+  expect(holdingGainLoss(holding({ shares: 10, costBasis: 2000, lastPrice: 250 }))).toBe(500);
+  expect(holdingGainLoss(holding({ shares: 10, costBasis: 2000, lastPrice: 150 }))).toBe(-500);
+  expect(holdingGainLoss(holding({ lastPrice: null }))).toBeNull();
+});
+
+test('holdingsValueForAccount: sums live values; falls back to cost basis when no price', () => {
+  const hs = [
+    holding({ id: 'a', shares: 10, lastPrice: 250, costBasis: 2000 }), // value 2500
+    holding({ id: 'b', shares: 5, lastPrice: null, costBasis: 500 }),  // falls back to 500
+    holding({ id: 'c', accountId: 'other', shares: 99, lastPrice: 99 }), // not counted
+  ];
+  expect(holdingsValueForAccount(hs, 'inv')).toBe(3000);
+});
+
+test('holdingsForAccount: filters by accountId', () => {
+  const hs = [
+    holding({ id: 'a', accountId: 'inv' }),
+    holding({ id: 'b', accountId: 'inv' }),
+    holding({ id: 'c', accountId: 'other' }),
+  ];
+  expect(holdingsForAccount(hs, 'inv').map((h) => h.id)).toEqual(['a', 'b']);
+});
+
+test('investmentAccountTotal: investment → cash + holdings; non-investment → balance unchanged', () => {
+  const inv = acct({ id: 'inv', type: 'investment', balance: 500 });
+  const hs = [holding({ accountId: 'inv', shares: 10, lastPrice: 250 })]; // value 2500
+  expect(investmentAccountTotal(inv, hs)).toBe(3000);
+
+  const cash = acct({ id: 'cash', type: 'savings', balance: 500 });
+  // Holdings on an unrelated account aren't dragged in.
+  expect(investmentAccountTotal(cash, hs)).toBe(500);
 });

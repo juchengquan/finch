@@ -7,6 +7,7 @@ import type { AccountRow } from '@/lib/db/queries/accounts';
 import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
 import type { BudgetRow } from '@/lib/db/queries/budgets';
+import type { Holding } from '@/lib/db/queries/holdings';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -356,6 +357,76 @@ export function topCategoryDeltas(
 /** Balance of one account from the projected account rows. */
 export function accountBalance(accounts: AccountRow[], accountId: string): number {
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
+}
+
+/**
+ * Unrealized FX gain/loss on one account, in the ledger base currency.
+ *
+ *   cost basis      = openingBalanceBase + Σ amount_base of confirmed txns
+ *   current value   = toBase(currentBalance, accountCurrency)        [live rate]
+ *   unrealized FX   = current value − cost basis
+ *
+ * `Tx.amount` IS the locked ledger-base figure (it mirrors DB `amount_base`),
+ * so the cost basis sums those directly — no per-transaction reconversion. A
+ * same-currency-as-base account always returns 0 (toBase is identity, base
+ * never moves). Pending rows are excluded — they aren't in the live balance
+ * either.
+ */
+export function unrealizedFx(
+  account: AccountRow,
+  txns: Tx[],
+  toBase: ToBase,
+): number {
+  const currentValueBase = toBase(account.balance, account.currency);
+  let costBasis = account.openingBalanceBase;
+  for (const t of txns) {
+    if (t.account !== account.id) continue;
+    if (t.pending) continue;
+    costBasis += t.amount;
+  }
+  return r2(currentValueBase - costBasis);
+}
+
+/** Holdings for one account (already filtered by ledger via the holdings table). */
+export function holdingsForAccount(holdings: Holding[], accountId: string): Holding[] {
+  return holdings.filter((h) => h.accountId === accountId);
+}
+
+/** Live market value of one position in the holding's own currency.
+ *  Returns null when no last_price has been logged — the caller decides
+ *  whether to fall back to cost basis or render "no quote". */
+export function holdingValue(h: Holding): number | null {
+  if (h.lastPrice == null) return null;
+  return r2(h.shares * h.lastPrice);
+}
+
+/** Unrealized gain/loss on one position in the holding's own currency
+ *  (value − costBasis). Null when there's no price to compute value. */
+export function holdingGainLoss(h: Holding): number | null {
+  const v = holdingValue(h);
+  if (v == null) return null;
+  return r2(v - h.costBasis);
+}
+
+/** Sum of holding values for `accountId`, expressed in the account's currency.
+ *  Positions without a logged price fall back to their cost basis so the total
+ *  reflects "money parked here", not "live valuation of what we know about". */
+export function holdingsValueForAccount(holdings: Holding[], accountId: string): number {
+  let total = 0;
+  for (const h of holdings) {
+    if (h.accountId !== accountId) continue;
+    const v = holdingValue(h);
+    total += v ?? h.costBasis;
+  }
+  return r2(total);
+}
+
+/** Total value of an investment account: cash (account.balance) + holdings
+ *  value. Non-investment accounts return the cash balance unchanged. The
+ *  returned figure is in the account's own currency. */
+export function investmentAccountTotal(account: AccountRow, holdings: Holding[]): number {
+  if (account.type !== 'investment') return account.balance;
+  return r2(account.balance + holdingsValueForAccount(holdings, account.id));
 }
 
 const byDateAsc = (a: Tx, b: Tx) => {
