@@ -105,7 +105,11 @@ CREATE TABLE IF NOT EXISTS transaction_tags (
 CREATE TABLE IF NOT EXISTS counterparties (
   id                TEXT PRIMARY KEY,
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  name              TEXT NOT NULL,
+  -- COLLATE NOCASE makes "=" and the (ledger_id, name) index case-insensitive
+  -- without needing LOWER() in the WHERE clause. resolveCounterpartyIdByName
+  -- runs on every transaction write, so the index actually getting used here
+  -- matters.
+  name              TEXT NOT NULL COLLATE NOCASE,
   is_verified       INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
@@ -291,6 +295,10 @@ CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
 CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_tags_ledger ON tags(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_counterparty_ledger ON counterparties(ledger_id);
+-- Resolver index: (ledger_id, name) under the column's NOCASE collation lets
+-- "WHERE ledger_id = ? AND name = ?" short-circuit to an index seek for the
+-- per-write counterparty lookup. Without it the resolver scans every row.
+CREATE INDEX IF NOT EXISTS idx_counterparty_ledger_name ON counterparties(ledger_id, name);
 CREATE INDEX IF NOT EXISTS idx_txn_ledger_date ON transactions(ledger_id, date);
 CREATE INDEX IF NOT EXISTS idx_txn_account_date ON transactions(account_id, date);
 CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
@@ -324,6 +332,35 @@ BEGIN
       updated_at = datetime('now')
   WHERE id = NEW.account_id;
 END;
+
+-- Inverted-index search over transactions.description + notes via FTS5. Lets
+-- the Activity / Cmd-K search use indexed prefix matching instead of a
+-- full-table LIKE '%term%' scan. tokenize='unicode61 remove_diacritics 2'
+-- folds accents (sushi/sushí, cafe/café) and case. The id column is
+-- UNINDEXED — stored for the JOIN back but not tokenized.
+CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
+  id UNINDEXED,
+  description,
+  notes,
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+-- Sync triggers keep the FTS shadow in lock-step with transactions.
+CREATE TRIGGER IF NOT EXISTS tr_txn_fts_insert AFTER INSERT ON transactions BEGIN
+  INSERT INTO transactions_fts (id, description, notes)
+  VALUES (NEW.id, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_txn_fts_delete AFTER DELETE ON transactions BEGIN
+  DELETE FROM transactions_fts WHERE id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_txn_fts_update AFTER UPDATE OF description, notes ON transactions BEGIN
+  UPDATE transactions_fts
+     SET description = COALESCE(NEW.description, ''),
+         notes       = COALESCE(NEW.notes, '')
+   WHERE id = NEW.id;
+END;
 `;
 
 export async function applySchema(exec: (sql: string, bind?: (string | number | null)[]) => Promise<unknown>): Promise<void> {
@@ -339,7 +376,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T15:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T16:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
