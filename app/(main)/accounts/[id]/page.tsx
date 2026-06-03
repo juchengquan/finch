@@ -34,18 +34,20 @@ import { useTransactionSheet } from '@/components/transaction-sheet';
 import { MOCK, catById, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
-import { selectTransactions, accountBalance, balanceSeries } from '@/lib/select';
+import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
+import { AccountHoldings } from '@/components/account-holdings';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
   const { active } = useLedger();
-  const { display, fmtFrom } = useMoney();
+  const { display, fmtFrom, toBase, fmt } = useMoney();
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
   const mock = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
   const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
+  const holdings = useFinanceStore((s) => s.holdings);
   const updateAccount = useFinanceStore((s) => s.updateAccount);
   const archiveAccount = useFinanceStore((s) => s.archiveAccount);
   const adjustAccountBalance = useFinanceStore((s) => s.adjustAccountBalance);
@@ -65,6 +67,14 @@ export default function AccountDetailPage() {
   const toConfirm = selectTransactions(allTxns, { ledgerId, accountId, status: 'pending' });
   const balance = row ? accountBalance(accounts, accountId) : mock.balance;
   const series = balanceSeries(allTxns, accountId, balance);
+  // Unrealized FX gain/loss: how far the live ledger-base valuation has drifted
+  // from the locked cost basis. Always zero for accounts denominated in the
+  // ledger base; only meaningful for foreign-currency accounts.
+  const fxDelta = row && row.currency !== active.base ? unrealizedFx(row, allTxns, toBase) : 0;
+  // Investment accounts have positions in `holdings` separate from cash; the
+  // total account value is cash + Σ holdings_value (in the account's currency).
+  const isInvestment = (row?.type ?? toDbType(mock.type)) === 'investment';
+  const holdingsTotal = isInvestment ? holdingsValueForAccount(holdings, accountId) : 0;
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -152,6 +162,17 @@ export default function AccountDetailPage() {
               {currency !== display && (
                 <div className="mt-1.5 text-sm text-white/70 tabular-nums">≈ {fmtFrom(balance, currency)}</div>
               )}
+              {row && row.currency !== active.base && Math.abs(fxDelta) >= 0.01 && (
+                <div className="mt-1 text-xs text-white/60 tabular-nums">
+                  FX {fxDelta >= 0 ? 'gain' : 'loss'} {fmt(Math.abs(fxDelta))}
+                </div>
+              )}
+              {isInvestment && holdingsTotal > 0 && (
+                <div className="mt-1.5 text-xs text-white/70 tabular-nums">
+                  + {fmtNative(holdingsTotal, currency)} in holdings ·
+                  total {fmtNative(balance + holdingsTotal, currency)}
+                </div>
+              )}
             </div>
             {/* Mobile: single entry — opens the details sheet, which holds the Edit button. */}
             <button
@@ -231,6 +252,12 @@ export default function AccountDetailPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {isInvestment && (
+          <div className="mb-4">
+            <AccountHoldings accountId={accountId} ledgerId={ledgerId} accountCurrency={currency} />
           </div>
         )}
 

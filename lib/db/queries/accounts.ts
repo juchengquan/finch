@@ -3,6 +3,7 @@
 
 import type { Exec } from '@/lib/db/repo';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
+import { convertToBase } from './rates';
 
 /**
  * Recompute an account's current_balance from its opening balance + confirmed
@@ -43,6 +44,10 @@ export interface AccountRow {
   type: string;
   currency: string;
   balance: number;
+  /** Ledger-base value of the opening balance, locked at account creation. The
+   *  cost-basis half of the unrealized-FX calculation: cost basis =
+   *  openingBalanceBase + Σ amount_base of confirmed transactions. */
+  openingBalanceBase: number;
   groupId: string | null;
   groupName: string | null;
   includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
@@ -55,6 +60,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 1' : 'WHERE a.is_active = 1';
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
+            a.opening_balance_base AS openingBalanceBase,
             a.group_id AS groupId, g.name AS groupName, a.color,
             a.sort_order AS sortOrder, a.include_in_net_worth AS inw
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
@@ -69,6 +75,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     type: String(r.type),
     currency: String(r.currency),
     balance: Number(r.balance),
+    openingBalanceBase: Number(r.openingBalanceBase ?? 0),
     groupId: r.groupId == null ? null : String(r.groupId),
     groupName: r.groupName == null ? null : String(r.groupName),
     includeInNetWorth: Number(r.inw),
@@ -140,7 +147,12 @@ export interface NewAccount {
 
 /** Insert a new account; current_balance starts at the opening balance.
  *  Sort_order is appended after the existing rows in the same group (or
- *  ungrouped bucket) so new accounts land at the bottom of the list. */
+ *  ungrouped bucket) so new accounts land at the bottom of the list.
+ *
+ *  opening_balance is the native figure the user typed; opening_balance_base
+ *  locks its ledger-base equivalent at today's rate. The base figure stays
+ *  put when FX moves later, so the account's cost basis is stable and any
+ *  drift from the live valuation shows up as unrealized FX gain/loss. */
 export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   const rows = await exec(
     a.groupId == null
@@ -150,11 +162,15 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   );
   const sortOrder = Number(rows[0]?.n ?? 0);
   const inw = defaultIncludeInNetWorth(a.type);
+  const lRows = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [a.ledgerId]);
+  const ledgerBase = String(lRows[0]?.base_currency ?? a.currency);
+  const today = new Date().toISOString().slice(0, 10);
+  const { amountBase: openingBase } = await convertToBase(exec, a.openingBalance, a.currency, ledgerBase, today);
   await exec(
     `INSERT INTO accounts
-       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, a.color, sortOrder, inw],
+       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, openingBase, a.color, sortOrder, inw],
   );
 }
 

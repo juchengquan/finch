@@ -98,8 +98,27 @@ export async function recomputeAmountBases(
     // trigger's choice of delta (native vs amount_base) depends on whether
     // the txn currency matches the account currency. Foreign rows on
     // account-currency-matches-old-base accounts changed meaning, so rebuild.
-    const accts = await exec('SELECT id FROM accounts WHERE ledger_id = ?', [ledgerId]);
-    for (const a of accts) await recomputeAccount(exec, String(a.id));
+    // The locked opening_balance_base must also move to the new base — same
+    // creation-date rate, just expressed against newBase via the USD pivot.
+    const accts = await exec(
+      'SELECT id, currency, opening_balance, created_at FROM accounts WHERE ledger_id = ?',
+      [ledgerId],
+    );
+    for (const a of accts) {
+      const createdDate = String(a.created_at ?? '').slice(0, 10);
+      const conv = await convertToBase(
+        exec,
+        Number(a.opening_balance ?? 0),
+        String(a.currency),
+        newBase,
+        createdDate,
+      );
+      await exec(
+        "UPDATE accounts SET opening_balance_base = ?, updated_at = datetime('now') WHERE id = ?",
+        [conv.amountBase, String(a.id)],
+      );
+      await recomputeAccount(exec, String(a.id));
+    }
 
     await exec('COMMIT');
     return { transactions: txns.length, splits: splits.length, accounts: accts.length };
