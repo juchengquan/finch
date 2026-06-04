@@ -193,6 +193,9 @@ interface FinanceState {
   addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
+  /** Apply the same category to a batch of confirmed transactions in one
+   *  server round-trip. `categoryId` of `null` clears the category. */
+  bulkRecategorize: (ids: string[], categoryId: string | null) => void;
   deleteTransaction: (id: string) => void;
   confirmPending: (id: string) => void;
   /**
@@ -359,6 +362,15 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
         }));
         syncMutation('updateTransaction', { id, patch });
+      },
+
+      bulkRecategorize: (ids, categoryId) => {
+        if (!ids.length) return;
+        const idSet = new Set(ids);
+        set((s) => ({
+          transactions: s.transactions.map((t) => (idSet.has(t.id) ? { ...t, category: categoryId } : t)),
+        }));
+        syncMutation('bulkRecategorize', { ids, categoryId });
       },
 
       deleteTransaction: (id) => {
