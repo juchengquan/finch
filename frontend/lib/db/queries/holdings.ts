@@ -54,11 +54,16 @@ export async function listHoldings(exec: Exec, ledgerId?: string, accountId?: st
     where.push('h.account_id = ?');
     bind.push(accountId);
   }
+  // Sort by live position value (shares × last_price) descending so the
+  // biggest holdings surface first — the usual "what matters most" order
+  // for a brokerage panel. Positions without a logged price fall back to
+  // cost basis so they don't sink to the bottom just for being un-priced;
+  // ties break alphabetically by symbol.
   const rows = await exec(
     `SELECT h.* FROM holdings h
        JOIN accounts a ON a.id = h.account_id
       WHERE ${where.join(' AND ')}
-      ORDER BY h.symbol, h.created_at`,
+      ORDER BY COALESCE(h.shares * h.last_price, h.cost_basis) DESC, h.symbol`,
     bind,
   );
   return rows.map(rowToHolding);

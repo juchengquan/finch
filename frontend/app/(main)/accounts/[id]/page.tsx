@@ -44,7 +44,12 @@ export default function AccountDetailPage() {
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
-  const mock = MOCK.accounts.find(a => a.id === accountId) || MOCK.accounts[0];
+  // Try real (DB-backed) accounts first; the mock list is a pre-hydration
+  // fallback for structural fields (color, ledger). When neither matches the
+  // route id, we render a Not-Found state below — silently swapping in
+  // MOCK.accounts[0] would have shown the first mock account on every bad
+  // link, which the audit flagged as a real UX bug.
+  const mock = MOCK.accounts.find((a) => a.id === accountId);
   const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const holdings = useFinanceStore((s) => s.holdings);
@@ -57,15 +62,20 @@ export default function AccountDetailPage() {
   // The projected DB row is the source of truth; the mock is a pre-hydration
   // fallback for structural fields (color, ledger).
   const row = accounts.find((a) => a.id === accountId);
-  const ledgerId = row?.ledgerId ?? (mock as { ledger?: string }).ledger ?? 'personal';
-  const cardColor = row?.color ?? mock.color;
+  // No real account AND no mock — the route id doesn't resolve. The store may
+  // still be hydrating on first paint though (no `accounts` yet, no `mock` for
+  // unseeded ids), so only commit to the Not-Found state once the projection
+  // has at least loaded; until then we render a quiet placeholder.
+  const notFound = !row && !mock;
+  const ledgerId = row?.ledgerId ?? (mock as { ledger?: string } | undefined)?.ledger ?? 'personal';
+  const cardColor = row?.color ?? mock?.color ?? '#374151';
 
   // Transaction list and live balance come from the projected store state.
   // The posted list is confirmed-only; unconfirmed (pending) rows surface in a
   // separate "To confirm" section and don't affect the balance until confirmed.
   const txs = selectTransactions(allTxns, { ledgerId, accountId, status: 'confirmed' });
   const toConfirm = selectTransactions(allTxns, { ledgerId, accountId, status: 'pending' });
-  const balance = row ? accountBalance(accounts, accountId) : mock.balance;
+  const balance = row ? accountBalance(accounts, accountId) : (mock?.balance ?? 0);
   const series = balanceSeries(allTxns, accountId, balance);
   // Unrealized FX gain/loss: how far the live ledger-base valuation has drifted
   // from the locked cost basis. Always zero for accounts denominated in the
@@ -73,7 +83,7 @@ export default function AccountDetailPage() {
   const fxDelta = row && row.currency !== active.base ? unrealizedFx(row, allTxns, toBase) : 0;
   // Investment accounts have positions in `holdings` separate from cash; the
   // total account value is cash + Σ holdings_value (in the account's currency).
-  const isInvestment = (row?.type ?? toDbType(mock.type)) === 'investment';
+  const isInvestment = (row?.type ?? (mock ? toDbType(mock.type) : '')) === 'investment';
   const holdingsTotal = isInvestment ? holdingsValueForAccount(holdings, accountId) : 0;
 
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -85,8 +95,8 @@ export default function AccountDetailPage() {
   const [draft, setDraft] = useState({ name: '', type: 'savings' });
   const { openTransaction } = useTransactionSheet();
 
-  const name = row?.name ?? mock.name;
-  const type = row?.type ?? toDbType(mock.type);
+  const name = row?.name ?? mock?.name ?? '';
+  const type = row?.type ?? (mock ? toDbType(mock.type) : 'savings');
   const currency = row?.currency ?? active.base;
 
   const openEdit = () => {
@@ -136,6 +146,30 @@ export default function AccountDetailPage() {
     ['Last sync', '2 min ago'],
     ['Linked since', 'Jan 2024'],
   ];
+
+  if (notFound) {
+    return (
+      <MobilePage
+        header={
+          <ScreenHeader title="Account not found" back={true} backHref="/accounts" trailing={<></>} />
+        }
+      >
+        <div className="px-5 pb-[22px]">
+          <div className="bg-card border-border mt-4 flex flex-col items-center gap-3 rounded-2xl border px-6 py-12 text-center">
+            <Icon name="wallet" size={28} />
+            <div className="font-serif text-xl">No account here</div>
+            <p className="text-muted-foreground max-w-xs text-sm">
+              We couldn&rsquo;t find an account with id <code className="font-mono text-xs">{accountId}</code>.
+              It may have been deleted, or the link is wrong.
+            </p>
+            <Button variant="outline" onClick={() => router.push('/accounts')}>
+              Back to accounts
+            </Button>
+          </div>
+        </div>
+      </MobilePage>
+    );
+  }
 
   return (
     <MobilePage
