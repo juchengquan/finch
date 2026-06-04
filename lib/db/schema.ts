@@ -449,15 +449,42 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T20:00:00Z';
+export const SCHEMA_VERSION = '2026-06-05T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
 // Applied in lex (== chronological) order for versions strictly greater than a
-// database's recorded schema_version. Empty at the baseline.
+// database's recorded schema_version.
 const MIGRATIONS: Record<string, string[]> = {
-  // '2026-06-15T12:00:00Z': ['ALTER TABLE accounts ADD COLUMN preferred_rate TEXT'],
+  // accounts.opening_balance_base shipped in the unrealized-FX work (#66) but the
+  // SCHEMA_VERSION wasn't bumped, so databases created in the window between the
+  // baseline and #66 report the baseline version yet lack the column — and
+  // nothing healed them (CREATE TABLE IF NOT EXISTS can't add a column, and this
+  // runner only replays versions strictly greater than the recorded one). This
+  // ALTER closes that gap; it's idempotent (see runMigrationStmt) so it's a
+  // no-op on files that already carry the column.
+  '2026-06-05T00:00:00Z': ['ALTER TABLE accounts ADD COLUMN opening_balance_base REAL NOT NULL DEFAULT 0'],
 };
+
+// Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be
+// safe to replay on a database that already carries the change — the baseline
+// shipped several shape changes without a version bump, so a file's recorded
+// version no longer reliably distinguishes "needs this" from "already has it".
+// Swallow only the SQLite errors that mean "the target already exists"; anything
+// else is a real migration failure and propagates.
+function isAlreadyAppliedError(err: unknown): boolean {
+  const msg = String((err as { message?: unknown })?.message ?? err);
+  return /duplicate column name|already exists/i.test(msg);
+}
+
+async function runMigrationStmt(exec: ExecFn, sql: string): Promise<void> {
+  try {
+    await exec(sql);
+  } catch (err) {
+    if (isAlreadyAppliedError(err)) return;
+    throw err;
+  }
+}
 
 // Read the package version once so the metadata row reports it on import.
 function appVersion(): string {
@@ -504,7 +531,7 @@ export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<v
   );
   for (const version of Object.keys(MIGRATIONS).sort()) {
     if (version <= cur) continue;
-    for (const sql of MIGRATIONS[version] ?? []) await exec(sql);
+    for (const sql of MIGRATIONS[version] ?? []) await runMigrationStmt(exec, sql);
   }
   await ensureMetadataRow(exec, SCHEMA_VERSION);
 }
