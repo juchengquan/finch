@@ -78,9 +78,11 @@ export async function updateCounterparty(exec: Exec, id: string, patch: Counterp
   );
 }
 
-/** Hard delete a merchant. (No FK link from transactions — counterparty data
- *  lives entirely in this table; transaction display uses the description
- *  field.) */
+/** Hard delete a merchant. `transactions.counterparty_id` is a real FK with
+ *  ON DELETE SET NULL, so historical rows survive — but they lose the
+ *  catalog rename projection (projectState overrides each linked row's
+ *  description with the counterparty's name; once the FK is null the row
+ *  falls back to whatever `description` text was last written). */
 export async function deleteCounterparty(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM counterparties WHERE id = ?', [id]);
 }
