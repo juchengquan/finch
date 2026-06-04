@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -486,4 +486,93 @@ test('investmentAccountTotal: investment → cash + holdings; non-investment →
   const cash = acct({ id: 'cash', type: 'savings', balance: 500 });
   // Holdings on an unrelated account aren't dragged in.
   expect(investmentAccountTotal(cash, hs)).toBe(500);
+});
+
+// ---------------------------------------------------------------------------
+// suggestCategory — local-heuristic next-category guess for a new expense.
+// ---------------------------------------------------------------------------
+
+test('suggestCategory: empty description + no counterparty → null', () => {
+  expect(suggestCategory([], 'personal', '')).toBeNull();
+  expect(suggestCategory([], 'personal', '   ')).toBeNull();
+});
+
+test('suggestCategory: matches case-insensitive description', () => {
+  const txns = [
+    tx({ merchant: 'Blue Bottle', category: 'food', amount: -10 }),
+    tx({ merchant: 'BLUE BOTTLE', category: 'food', amount: -8 }),
+    tx({ merchant: 'Other', category: 'utils', amount: -50 }),
+  ];
+  const s = suggestCategory(txns, 'personal', 'blue bottle');
+  expect(s).not.toBeNull();
+  expect(s!.categoryId).toBe('food');
+  expect(s!.count).toBe(2);
+  expect(s!.confidence).toBe(1);
+});
+
+test('suggestCategory: counterparty match takes priority over description', () => {
+  const txns = [
+    tx({ merchant: 'Old name', category: 'food', amount: -10, counterpartyId: 'cp-1' }),
+    tx({ merchant: 'Another', category: 'food', amount: -10, counterpartyId: 'cp-1' }),
+    // Same description as the query but wrong counterparty — must be ignored.
+    tx({ merchant: 'Whole Foods', category: 'utils', amount: -10, counterpartyId: 'cp-2' }),
+  ];
+  const s = suggestCategory(txns, 'personal', 'Whole Foods', 'cp-1');
+  expect(s).not.toBeNull();
+  expect(s!.categoryId).toBe('food');
+  expect(s!.count).toBe(2);
+});
+
+test('suggestCategory: ignores pending, refunds, transfers, income, and other ledgers', () => {
+  const txns = [
+    tx({ merchant: 'Test', category: 'food', amount: -10, pending: true }),
+    tx({ merchant: 'Test', category: 'food', amount: 10, kind: 'refund' }),
+    tx({ merchant: 'Test', category: 'food', amount: -10, kind: 'transfer' }),
+    tx({ merchant: 'Test', category: 'food', amount: 10, kind: 'income' }),
+    tx({ merchant: 'Test', category: 'food', amount: -10, ledgerId: 'family' }),
+    // Only this one should count.
+    tx({ merchant: 'Test', category: 'utils', amount: -10 }),
+  ];
+  const s = suggestCategory(txns, 'personal', 'Test');
+  expect(s).not.toBeNull();
+  expect(s!.categoryId).toBe('utils');
+  expect(s!.count).toBe(1);
+});
+
+test('suggestCategory: returns the dominant category when history is mixed', () => {
+  const txns = [
+    tx({ merchant: 'Amazon', category: 'food', amount: -10 }),
+    tx({ merchant: 'Amazon', category: 'food', amount: -10 }),
+    tx({ merchant: 'Amazon', category: 'food', amount: -10 }),
+    tx({ merchant: 'Amazon', category: 'office', amount: -10 }),
+  ];
+  const s = suggestCategory(txns, 'personal', 'Amazon');
+  expect(s!.categoryId).toBe('food');
+  expect(s!.count).toBe(3);
+  expect(s!.confidence).toBeCloseTo(0.75, 2);
+});
+
+test('suggestCategory: splits override the parent category for the count', () => {
+  // A past row split 50/50 between food and utils. Both should count once.
+  const txns = [
+    tx({
+      merchant: 'Costco', category: 'household', amount: -100,
+      splits: [
+        { id: 's1', categoryId: 'food', amount: -50, amountBase: -50, description: null },
+        { id: 's2', categoryId: 'utils', amount: -50, amountBase: -50, description: null },
+      ],
+    }),
+    tx({ merchant: 'Costco', category: 'food', amount: -20 }),
+  ];
+  const s = suggestCategory(txns, 'personal', 'Costco');
+  expect(s).not.toBeNull();
+  // After the split row contributes one food + one utils, plus the plain food
+  // row: food=2, utils=1 — food wins.
+  expect(s!.categoryId).toBe('food');
+  expect(s!.count).toBe(2);
+});
+
+test('suggestCategory: returns null when nothing matches', () => {
+  const txns = [tx({ merchant: 'Other', category: 'food', amount: -10 })];
+  expect(suggestCategory(txns, 'personal', 'Nowhere')).toBeNull();
 });
