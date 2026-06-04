@@ -420,6 +420,155 @@ export function recentExpenses(txns: Tx[], ledgerId: string, limit = 5): RecentE
 }
 
 // ---------------------------------------------------------------------------
+// Weekly digest — Sunday-night recap of the most recently completed Mon-Sun
+// window. Surfaces totals, top categories, biggest single expense, and how it
+// compares to the prior week + a trailing 12-week average. Pure aggregation,
+// one pass over the projected transactions.
+// ---------------------------------------------------------------------------
+
+/** Add `n` days (can be negative) to a YYYY-MM-DD date, UTC. */
+function addDaysIso(iso: string, n: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** YYYY-MM-DD for the Monday of the ISO week containing `date` (UTC). */
+function isoWeekMonday(date: string): string {
+  const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  // JS getUTCDay: Sun=0..Sat=6. Shift so Mon=0..Sun=6 via (day+6)%7.
+  const shift = (dt.getUTCDay() + 6) % 7;
+  dt.setUTCDate(dt.getUTCDate() - shift);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+export interface WeeklyDigest {
+  /** Mon-Sun window the digest reports on (YYYY-MM-DD inclusive). */
+  weekStart: string;
+  weekEnd: string;
+  /** Total confirmed expense magnitude in ledger base, this window. */
+  spent: number;
+  /** Total confirmed income in ledger base, this window. */
+  income: number;
+  /** income - spent (positive = saved, negative = burned cash). */
+  net: number;
+  /** Previous Mon-Sun window's spend; null when there's no prior confirmed data. */
+  prevSpent: number | null;
+  /** % change vs prevSpent (e.g. 0.18 = +18%); null when prevSpent is null/0. */
+  vsPrevPct: number | null;
+  /** Average weekly spend over the 4-12 weeks PRIOR to this one. */
+  avgSpent: number;
+  /** Weeks of history used to compute avgSpent (0..12). */
+  avgWeeks: number;
+  /** % change vs avgSpent; null when avg is 0 or we have < 4 weeks of history. */
+  vsAvgPct: number | null;
+  /** Top spending categories this week, descending. Capped at 5. */
+  topCategories: { categoryId: string; amount: number }[];
+  /** Largest single expense in the week (positive magnitude). Refunds excluded. */
+  biggestExpense: { txId: string; merchant: string; amount: number; date: string } | null;
+  /** Confirmed expense transaction count in the window. */
+  txCount: number;
+}
+
+/**
+ * Recap of the most recently completed Mon-Sun week before `anchor` (typically
+ * today). Splits respect the same category attribution as `categorySpend`.
+ *
+ * Returns null when the ledger has no confirmed history at all — nothing to
+ * recap. The vs-prev / vs-avg deltas are independently null when their
+ * windows are empty or undersized (vs-avg requires ≥ 4 weeks of history to
+ * avoid the "vs typical $50" exaggeration on a fresh ledger).
+ */
+export function weeklyDigest(txns: Tx[], ledgerId: string, anchor: string): WeeklyDigest | null {
+  if (!anchor) return null;
+  const thisMon = isoWeekMonday(anchor);
+  const weekStart = addDaysIso(thisMon, -7);
+  const weekEnd = addDaysIso(thisMon, -1);
+  const prevStart = addDaysIso(weekStart, -7);
+  const prevEnd = addDaysIso(weekStart, -1);
+  const avgStart = addDaysIso(weekStart, -7 * 12);
+  const avgEnd = addDaysIso(weekStart, -1);
+
+  let spent = 0;
+  let income = 0;
+  let prevSpent = 0;
+  let avgSum = 0;
+  let txCount = 0;
+  let prevHasAny = false;
+  let everHadConfirmed = false;
+  const byCat: Record<string, number> = {};
+  const weeksWithData = new Set<string>();
+  let biggest: { txId: string; merchant: string; amount: number; date: string } | null = null;
+
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending) continue;
+    everHadConfirmed = true;
+    const k = kindOf(t);
+    const d = t.date;
+    const inWeek = d >= weekStart && d <= weekEnd;
+    const inPrev = d >= prevStart && d <= prevEnd;
+    const inAvg = d >= avgStart && d <= avgEnd;
+    if (inPrev) prevHasAny = true;
+
+    if (isSpend(t)) {
+      const mag = -t.amount;
+      if (inWeek) {
+        spent += mag;
+        txCount++;
+        if (t.splits && t.splits.length) {
+          for (const s of t.splits) {
+            if (!s.categoryId) continue;
+            byCat[s.categoryId] = (byCat[s.categoryId] ?? 0) + -s.amountBase;
+          }
+        } else if (t.category) {
+          byCat[t.category] = (byCat[t.category] ?? 0) + mag;
+        }
+        // Refunds offset category totals but don't make sense as a "biggest hit" headline.
+        if (k === 'expense' && (!biggest || mag > biggest.amount)) {
+          biggest = { txId: t.id, merchant: t.merchant, amount: mag, date: d };
+        }
+      }
+      if (inPrev) prevSpent += mag;
+      if (inAvg) {
+        avgSum += mag;
+        weeksWithData.add(isoWeekMonday(d));
+      }
+    } else if (k === 'income' && inWeek) {
+      income += t.amount;
+    }
+  }
+
+  if (!everHadConfirmed) return null;
+
+  const prev: number | null = prevHasAny ? r2(prevSpent) : null;
+  const avgWeeks = weeksWithData.size;
+  const avg = avgWeeks > 0 ? r2(avgSum / avgWeeks) : 0;
+  const topCategories = Object.entries(byCat)
+    .map(([categoryId, amount]) => ({ categoryId, amount: r2(amount) }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  return {
+    weekStart,
+    weekEnd,
+    spent: r2(spent),
+    income: r2(income),
+    net: r2(income - spent),
+    prevSpent: prev,
+    vsPrevPct: prev != null && prev > 0 ? r2((spent - prev) / prev) : null,
+    avgSpent: avg,
+    avgWeeks,
+    vsAvgPct: avgWeeks >= 4 && avg > 0 ? r2((spent - avg) / avg) : null,
+    topCategories,
+    biggestExpense: biggest,
+    txCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Anomaly detection — per-merchant z-score over confirmed expense magnitudes.
 // Catches both fraud ("this is 4× my usual coffee") and "wait, that was
 // expensive". Pure heuristic, no model.
@@ -723,13 +872,6 @@ export interface AccountForecast {
    *  oldest first. Length = horizonDays + 1. Use for the sparkline. */
   series: { date: string; balance: number }[];
 }
-
-const addDaysIso = (iso: string, n: number): string => {
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + n);
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
-};
 
 /**
  * Project an account's balance forward over the next `horizonDays`, combining

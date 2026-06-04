@@ -7,11 +7,12 @@ import { SearchButton } from '@/components/command-palette';
 import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
+import { WeeklyDigestCard } from '@/components/weekly-digest-card';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow, weeklyDigest } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 import type { MonthForecast } from '@/lib/select';
@@ -108,6 +109,10 @@ export default function InsightsPage() {
   // Income → categories flow for the Sankey card.
   const flow = month ? incomeCategoryFlow(transactions, ledgerCategories, activeId, month, 6) : null;
 
+  // Sunday-night recap card: most recently completed Mon-Sun. `lastDate`
+  // approximates "today" without a wall-clock dependency (mirrors monthForecast).
+  const digest = lastDate ? weeklyDigest(transactions, activeId, lastDate) : null;
+
   return (
     <MobilePage
       header={<ScreenHeader title="Insights" trailing={<SearchButton />} />}
@@ -129,6 +134,7 @@ export default function InsightsPage() {
       </div>
 
       <div className="px-5 pb-[120px]">
+        <WeeklyDigestCard digest={digest} />
         <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="bg-secondary flex gap-1 rounded-full p-1">
