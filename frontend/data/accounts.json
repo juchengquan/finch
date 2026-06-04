@@ -1,8 +1,0 @@
-[
-  { "id": "chk", "name": "Chase Checking",     "type": "checking", "group": "cash",   "balance": 4218.50,  "color": "#1f3a5f" },
-  { "id": "sav", "name": "Marcus Savings",     "type": "savings",  "group": "cash",   "balance": 8120.00,  "color": "#c89a3e" },
-  { "id": "cc",  "name": "Amex Gold",          "type": "credit",   "group": "credit", "balance": -842.18,  "color": "#3a2d1f" },
-  { "id": "inv", "name": "Fidelity Brokerage", "type": "invest",   "group": "invest", "balance": 21430.00, "color": "#2d4a3a" },
-  { "id": "f-dbs",  "name": "DBS Joint",  "type": "checking", "group": "cash",   "balance": 8400.00,  "color": "#3d6b46", "ledger": "family" },
-  { "id": "f-visa", "name": "UOB Visa",   "type": "credit",   "group": "credit", "balance": -1240.50, "color": "#5d76a8", "ledger": "family" }
-]

@@ -1,6 +1,0 @@
-[
-  { "id": "cash",   "name": "Cash & Banking",   "icon": "wallet" },
-  { "id": "credit", "name": "Credit Cards",     "icon": "tag" },
-  { "id": "invest", "name": "Investments",      "icon": "arrow-u" },
-  { "id": "loan",   "name": "Loans & Mortgage", "icon": "doc" }
-]

@@ -1,8 +1,0 @@
-{
-  "USD": { "sym": "$",    "code": "USD", "locale": "en-US" },
-  "EUR": { "sym": "€", "code": "EUR", "locale": "de-DE" },
-  "GBP": { "sym": "£", "code": "GBP", "locale": "en-GB" },
-  "JPY": { "sym": "¥", "code": "JPY", "locale": "ja-JP" },
-  "SGD": { "sym": "S$", "code": "SGD", "locale": "en-SG" },
-  "CNY": { "sym": "CN¥", "code": "CNY", "locale": "zh-CN" }
-}

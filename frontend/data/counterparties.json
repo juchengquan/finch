@@ -1,8 +1,0 @@
-[
-  { "id": "cp-01", "name": "7-Eleven",       "verified": 1, "txCount": 42, "hue":  12 },
-  { "id": "cp-02", "name": "Grab",           "verified": 1, "txCount": 31, "hue": 200 },
-  { "id": "cp-03", "name": "NTUC FairPrice", "verified": 1, "txCount": 28, "hue":  12 },
-  { "id": "cp-04", "name": "Don Don Donki",  "verified": 0, "txCount":  6, "hue":   8 },
-  { "id": "cp-05", "name": "Apple",          "verified": 1, "txCount":  4, "hue": 280 },
-  { "id": "cp-06", "name": "Sushiro",        "verified": 0, "txCount":  3, "hue":  12 }
-]

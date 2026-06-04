@@ -1,5 +1,0 @@
-[
-  { "id": "g1", "name": "Emergency Fund", "target": 10000, "saved": 6820, "eta": "Sep 2026",  "hue": 200 },
-  { "id": "g2", "name": "Japan trip",     "target":  4500, "saved": 2140, "eta": "Mar 2027",  "hue":  12 },
-  { "id": "g3", "name": "New laptop",     "target":  2200, "saved": 1850, "eta": "Aug 2026",  "hue": 280 }
-]
