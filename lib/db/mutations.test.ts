@@ -796,27 +796,60 @@ test('pending transactions are excluded from the balance until confirmed', async
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(b0 - 50, 2); // confirming pulls it in
 });
 
-test('generateDueScheduled materializes due occurrences as pending, idempotently', async () => {
+test('generateDueScheduled materializes due occurrences, idempotently', async () => {
   const exec = await seeded();
   const cc0 = await balanceOf(exec, 'cc');
+  const chk0 = await balanceOf(exec, 'chk');
+  const sav0 = await balanceOf(exec, 'sav');
 
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
-  // rt-spotify (Amex Gold, day 22) + rt-icloud (Amex Gold, day 8) + rt-rent (Chase Checking,
-  // day 1); sweep/coned/salary are skipped (transfer / variable / split).
-  const gen = await exec("SELECT id, status, source_template_id AS t FROM transactions WHERE source_template_id IS NOT NULL ORDER BY date");
-  expect(gen.length).toBe(3);
-  expect(gen.every((r) => String(r.status) === 'pending')).toBe(true);
-  expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0, 2); // pending → balance unchanged
+  // rt-spotify (cc, day 22), rt-icloud (cc, day 8), rt-rent (chk, day 1) →
+  // 3 pending expense rows. rt-sweep (chk → sav, day 28) → 1 confirmed
+  // transfer = 2 transaction rows (from + to legs). coned/salary are
+  // still skipped (variable / split).
+  const gen = await exec(
+    "SELECT id, status, source_template_id AS t FROM transactions WHERE source_template_id IS NOT NULL ORDER BY date",
+  );
+  expect(gen.length).toBe(5);
+  const pending = gen.filter((r) => String(r.status) === 'pending');
+  const confirmed = gen.filter((r) => String(r.status) === 'confirmed');
+  expect(pending.length).toBe(3); // expense + income legs stay pending
+  expect(confirmed.length).toBe(2); // transfer fires both legs as confirmed
+  expect(confirmed.every((r) => String(r.t) === 'rt-sweep')).toBe(true);
+  // Pending didn't touch cc; the confirmed sweep moved chk and sav.
+  expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0, 2);
+  expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 800, 2);
+  expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 800, 2);
 
   // Idempotent: a second run adds nothing (dedup via source_template_id + date).
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
   const again = await exec("SELECT id FROM transactions WHERE source_template_id IS NOT NULL");
-  expect(again.length).toBe(3);
+  expect(again.length).toBe(5);
 
-  // Confirming one (Spotify, 11.99 expense) pulls it into the balance.
+  // Confirming the Spotify pending (11.99 expense) pulls it into cc's balance.
   const spotify = gen.find((r) => String(r.t) === 'rt-spotify')!;
   await applyMutation(exec, 'confirmTransaction', { id: String(spotify.id) });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0 - 11.99, 2);
+});
+
+test('generateDueScheduled: recurring transfer caps at installment_total like other templates', async () => {
+  const exec = await seeded();
+  // 3-payment recurring transfer; after a year only 3 occurrences should fire
+  // (Jan, Feb, Mar 2026), each producing two legs = 6 transaction rows total.
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-recur-xfer', name: 'Auto-savings', type: 'transfer',
+    frequency: 'monthly', dayOfMonth: 5, accountId: 'sav', fromAccountId: 'chk',
+    amount: 200, installmentTotal: 3, autoPost: true, startDate: '2026-01-01',
+  });
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-12-31' });
+  const legs = await exec(
+    "SELECT id FROM transactions WHERE source_template_id = 'sch-recur-xfer'",
+  );
+  expect(legs.length).toBe(6); // 3 dates × 2 legs
+  const tg = await exec(
+    "SELECT DISTINCT transfer_group_id FROM transactions WHERE source_template_id = 'sch-recur-xfer'",
+  );
+  expect(tg.length).toBe(3); // three distinct transfer_groups
 });
 
 // ---------------------------------------------------------------------------
