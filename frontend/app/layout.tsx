@@ -6,6 +6,7 @@ import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
 import { TransactionSheetProvider } from '@/components/transaction-sheet';
+import { EditTransactionSheetProvider } from '@/components/edit-transaction-sheet';
 import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
 import { MerchantPickerSheetProvider } from '@/components/merchant-picker-sheet';
 import { CommandPaletteProvider } from '@/components/command-palette';
@@ -55,12 +56,14 @@ export default function RootLayout({
             <SqliteBackupProvider>
               <MerchantPickerSheetProvider>
                 <TransactionSheetProvider>
-                  <AddExpenseSheetProvider>
-                    <CommandPaletteProvider>
-                      {children}
-                      <Toaster />
-                    </CommandPaletteProvider>
-                  </AddExpenseSheetProvider>
+                  <EditTransactionSheetProvider>
+                    <AddExpenseSheetProvider>
+                      <CommandPaletteProvider>
+                        {children}
+                        <Toaster />
+                      </CommandPaletteProvider>
+                    </AddExpenseSheetProvider>
+                  </EditTransactionSheetProvider>
                 </TransactionSheetProvider>
               </MerchantPickerSheetProvider>
             </SqliteBackupProvider>

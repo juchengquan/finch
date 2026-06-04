@@ -33,6 +33,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { useEditTransaction } from '@/components/edit-transaction-sheet';
 
 interface SplitRow {
   key: string;
@@ -461,6 +462,7 @@ export function TransactionDetail({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const { openEditTransaction } = useEditTransaction();
 
   // Category options come from the projected store, scoped to this tx's ledger.
   const ledgerId = tx?.ledgerId ?? 'personal';
@@ -554,6 +556,15 @@ export function TransactionDetail({
             <span className="text-[10px] font-medium">To refund</span>
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => openEditTransaction(tx.id)}
+          className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
+          aria-label="Edit transaction"
+        >
+          <Icon name="pencil" size={18} />
+          <span className="text-[10px] font-medium">Edit</span>
+        </button>
         <button
           type="button"
           onClick={() => setConfirmDeleteOpen(true)}

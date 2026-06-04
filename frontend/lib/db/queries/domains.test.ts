@@ -495,3 +495,131 @@ test('confirmPendingWithMerchant: with no resolution leaves the row confirmed bu
   expect(String(row.description)).toBe('ONE OFF MERCHANT');
   expect(row.counterparty_id).toBeNull();
 });
+
+test('updateTransaction: account change moves the row and recomputes both source + destination balances', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { recomputeAccount, listAccounts } = await import('@/lib/db/queries/accounts');
+  // Establish a known starting balance.
+  await recomputeAccount(exec, 'chk');
+  await recomputeAccount(exec, 'sav');
+  const startChk = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  const startSav = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'sav')!.balance);
+  // Insert a confirmed $50 expense on chk.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -50,
+    merchant: 'Moving target',
+    date: '2026-05-25',
+  });
+  await recomputeAccount(exec, 'chk');
+  const afterAddChk = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  expect(afterAddChk).toBeCloseTo(startChk - 50, 2);
+  // Move it to sav via the dispatcher. Both the source and the destination
+  // account should be recomputed; chk's balance rises back to startChk and
+  // sav's drops by 50.
+  await applyMutation(exec, 'updateTransaction', { id: txId, patch: { account: 'sav' } });
+  const finalChk = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  const finalSav = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'sav')!.balance);
+  expect(finalChk).toBeCloseTo(startChk, 2);
+  expect(finalSav).toBeCloseTo(startSav - 50, 2);
+  const [row] = await exec('SELECT account_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.account_id)).toBe('sav');
+});
+
+test('updateTransaction: same-account edit returns null oldAccountId', async () => {
+  const exec = await seeded();
+  const { addTransaction, updateTransaction } = await import('@/lib/db/queries/transactions');
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -10,
+    merchant: 'Note change',
+    date: '2026-05-25',
+  });
+  // Patch only the note — the row stays in chk, so oldAccountId is null and
+  // the dispatcher's "recompute source account" branch is a no-op.
+  const result = await updateTransaction(exec, txId, { note: 'updated' });
+  expect(result.oldAccountId).toBeNull();
+  const [row] = await exec('SELECT account_id, notes FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.account_id)).toBe('chk');
+  expect(String(row.notes)).toBe('updated');
+});
+
+test('updateTransaction: currency change re-derives amount_base + locks a new rate', async () => {
+  const exec = await seeded();
+  const { addTransaction, updateTransaction } = await import('@/lib/db/queries/transactions');
+  const { convertToBase } = await import('@/lib/db/queries/rates');
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -100,
+    merchant: 'Currency switch',
+    date: '2026-05-25',
+  });
+  // Same-magnitude form, new currency label. amount_base should be re-derived
+  // against the new currency at the same date; the rate is locked.
+  await updateTransaction(exec, txId, { currency: 'SGD' });
+  const [row] = await exec('SELECT amount, currency, amount_base, exchange_rate FROM transactions WHERE id = ?', [txId]);
+  expect(Number(row.amount)).toBe(-100);
+  expect(String(row.currency)).toBe('SGD');
+  const expected = await convertToBase(exec, -100, 'SGD', 'USD', '2026-05-25');
+  expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
+  expect(Number(row.exchange_rate)).toBeCloseTo(expected.rate, 6);
+});
+
+test('updateTransaction: status flip sets/clears confirmed_at and moves the balance', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { applyMutation } = await import('@/lib/db/mutations');
+  const { recomputeAccount, listAccounts } = await import('@/lib/db/queries/accounts');
+  // Insert a $25 pending expense on chk. Pending rows are excluded from the
+  // balance sum, so chk's balance is unchanged after add.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -25,
+    merchant: 'Pending expense',
+    date: '2026-05-25',
+    status: 'pending',
+  });
+  await recomputeAccount(exec, 'chk');
+  const pendingBal = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  // Confirm via the dispatcher. confirmed_at gets stamped; the dispatch
+  // recomputes the account, so the balance drops by 25.
+  await applyMutation(exec, 'updateTransaction', { id: txId, patch: { status: 'confirmed' } });
+  const confirmedBal = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  expect(confirmedBal).toBeCloseTo(pendingBal - 25, 2);
+  const [confirmed] = await exec('SELECT status, confirmed_at FROM transactions WHERE id = ?', [txId]);
+  expect(String(confirmed.status)).toBe('confirmed');
+  expect(confirmed.confirmed_at).not.toBeNull();
+  // Demote back to pending. confirmed_at clears; the recompute drops the row
+  // from the balance sum, so chk's balance rises back to pendingBal.
+  await applyMutation(exec, 'updateTransaction', { id: txId, patch: { status: 'pending' } });
+  const demotedBal = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
+  expect(demotedBal).toBeCloseTo(pendingBal, 2);
+  const [demoted] = await exec('SELECT status, confirmed_at FROM transactions WHERE id = ?', [txId]);
+  expect(String(demoted.status)).toBe('pending');
+  expect(demoted.confirmed_at).toBeNull();
+});
+
+test('updateTransaction: cross-ledger account change is rejected', async () => {
+  const exec = await seeded();
+  const { addTransaction, updateTransaction } = await import('@/lib/db/queries/transactions');
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -5,
+    merchant: 'Cross-ledger attempt',
+    date: '2026-05-25',
+  });
+  // f-dbs is a family-ledger account (the seed has it under ledger='family').
+  // The patch must not silently migrate the row across ledgers — it should
+  // throw so the UI surfaces a clear error.
+  await expect(updateTransaction(exec, txId, { account: 'f-dbs' })).rejects.toThrow(/different ledger/i);
+  // The row's account is unchanged.
+  const [row] = await exec('SELECT account_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.account_id)).toBe('chk');
+});

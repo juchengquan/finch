@@ -398,8 +398,14 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateTransaction': {
       const id = str(args.id);
       const before = await txTouches(exec, id);
-      await qUpdate(exec, id, args.patch as Parameters<typeof qUpdate>[2]);
-      await recomputeForTransaction(exec, id); // an amount/date edit shifts balances
+      // qUpdate may return a non-null `oldAccountId` when the patch moved the
+      // row to a different account — in which case the source account's
+      // balance no longer includes this row and must be recomputed.
+      const { oldAccountId } = await qUpdate(exec, id, args.patch as Parameters<typeof qUpdate>[2]);
+      await recomputeForTransaction(exec, id); // recompute the row's (now-NEW) account
+      if (oldAccountId) {
+        await recomputeAccount(exec, oldAccountId);
+      }
       const after = await txTouches(exec, id);
       const merged = mergeTouches(before, after);
       if (merged) {

@@ -313,13 +313,124 @@ export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[
   return rows.map(rowToTx);
 }
 
+/**
+ * Server-side patch shape. Mirrors the in-app `Tx` columns that are editable
+ * via the edit-transaction sheet, plus three server-only fields the client
+ * shape doesn't carry:
+ *
+ *   - `account`   — change the account FK. The OLD account is returned via
+ *     `oldAccountId` so the dispatcher can recompute it (the row no longer
+ *     contributes to its balance). Cross-ledger moves are rejected.
+ *   - `currency`  — change the row's native currency. The form's `amount`
+ *     stays as the user entered it; amount_base + exchange_rate are re-derived
+ *     against the new currency at the (possibly edited) date.
+ *   - `status`    — flip pending ↔ confirmed. `confirmed_at` follows the flip
+ *     (now on confirm, NULL on demote). The recompute step picks up the
+ *     change in the account balance, since the balance sum is `confirmed`-only.
+ */
+export interface TransactionPatch {
+  merchant?: Tx['merchant'];
+  category?: Tx['category'];
+  amount?: Tx['amount'];
+  date?: Tx['date'];
+  time?: Tx['time'];
+  note?: Tx['note'];
+  kind?: Tx['kind'];
+  refundedTransactionId?: Tx['refundedTransactionId'];
+  account?: string;
+  currency?: string;
+  status?: 'pending' | 'confirmed';
+}
+
 export async function updateTransaction(
   exec: Exec,
   id: string,
-  patch: Partial<Pick<Tx, 'merchant' | 'category' | 'amount' | 'date' | 'time' | 'note' | 'kind' | 'refundedTransactionId'>>,
-): Promise<void> {
+  patch: TransactionPatch,
+): Promise<{ oldAccountId: string | null }> {
+  // Snapshot the row so the patch can be evaluated against the OLD values
+  // (old account → returned to caller for recompute; old currency → used when
+  // re-deriving amount_base without a currency patch; old status → drives the
+  // confirmed_at flip; old date → rate lookup when date isn't in the patch).
+  const [cur] = await exec(
+    'SELECT account_id, currency, date, status FROM transactions WHERE id = ?',
+    [id],
+  );
+  if (!cur) return { oldAccountId: null };
+  const oldAccountId = String(cur.account_id);
+  const oldCurrency = String(cur.currency ?? 'USD');
+  const oldDate = String(cur.date);
+  const oldStatus = String(cur.status);
+
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
+
+  // -- Status: pending ↔ confirmed. confirmed_at moves with the flip.
+  if (patch.status !== undefined && patch.status !== oldStatus) {
+    sets.push('status = ?');
+    bind.push(patch.status);
+    if (patch.status === 'confirmed') {
+      sets.push('confirmed_at = ?');
+      bind.push(new Date().toISOString());
+    } else {
+      sets.push('confirmed_at = NULL');
+    }
+  }
+
+  // -- Account: change FK. A cross-ledger account would orphan the row from
+  //    the ledger's base currency and FX rules — reject it.
+  let newAccountId = oldAccountId;
+  if (patch.account !== undefined && patch.account !== oldAccountId) {
+    const [acct] = await exec('SELECT ledger_id FROM accounts WHERE id = ?', [patch.account]);
+    if (!acct) throw new Error('Account not found');
+    // The transaction's ledger is fixed at insert time; accounts in a different
+    // ledger are not eligible. We compare the row's ledger (not the account's
+    // ledger — the row may have been inserted into a different ledger than its
+    // current account under unusual conditions; the row's ledger is the
+    // authoritative scope).
+    const [rowLedger] = await exec('SELECT ledger_id FROM transactions WHERE id = ?', [id]);
+    if (String(acct.ledger_id) !== String(rowLedger?.ledger_id)) {
+      throw new Error('Account is in a different ledger');
+    }
+    sets.push('account_id = ?');
+    bind.push(patch.account);
+    newAccountId = String(patch.account);
+  }
+
+  // -- Currency: rewrite the row's native currency. The form's "amount" is
+  //    the user-entered figure in the new currency, so we keep the magnitude
+  //    but re-derive amount_base + exchange_rate. If `amount` is not in the
+  //    patch, the existing magnitude is preserved.
+  const currencyChanged = patch.currency !== undefined && patch.currency !== oldCurrency;
+  if (currencyChanged || patch.amount !== undefined) {
+    let amountToStore: number;
+    if (patch.amount !== undefined) {
+      amountToStore = patch.amount;
+    } else {
+      const [a] = await exec('SELECT amount FROM transactions WHERE id = ?', [id]);
+      amountToStore = Number(a?.amount ?? 0);
+    }
+    const newCurrency = patch.currency ?? oldCurrency;
+    const newDate = patch.date ?? oldDate;
+    const [l] = await exec(
+      'SELECT base_currency FROM ledgers WHERE id = (SELECT ledger_id FROM transactions WHERE id = ?)',
+      [id],
+    );
+    const ledgerBase = String(l?.base_currency ?? newCurrency);
+    const conv = await convertToBase(exec, amountToStore, newCurrency, ledgerBase, newDate);
+    sets.push('amount = ?', 'amount_base = ?', 'exchange_rate = ?');
+    bind.push(amountToStore, conv.amountBase, conv.rate);
+    if (currencyChanged) {
+      // `currencyChanged` already implies patch.currency !== undefined, but
+      // the `let`/const narrowing through a derived boolean doesn't carry
+      // that into `patch.currency` here. Re-check so the type stays `string`.
+      if (patch.currency !== undefined) {
+        sets.push('currency = ?');
+        bind.push(patch.currency);
+      }
+    }
+  }
+
+  // -- Merchant: SET description + re-resolve the counterparty FK. --
   if (patch.merchant !== undefined) {
     sets.push('description = ?');
     bind.push(patch.merchant);
@@ -331,6 +442,7 @@ export async function updateTransaction(
     sets.push('counterparty_id = ?');
     bind.push(cpId);
   }
+
   if (patch.category !== undefined) { sets.push('category_id = ?'); bind.push(patch.category); }
   if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
   if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }
@@ -340,27 +452,16 @@ export async function updateTransaction(
   // income and a refund are both stored positive.
   if (patch.kind !== undefined) { sets.push('kind = ?'); bind.push(patch.kind); }
   if (patch.refundedTransactionId !== undefined) { sets.push('refunded_transaction_id = ?'); bind.push(patch.refundedTransactionId ?? null); }
-  if (patch.amount !== undefined) {
-    // `amount` is native (the transaction's own currency). Re-derive the
-    // ledger-base figure + lock the rate, using the (possibly edited) date for
-    // the rate lookup — so an edit stays correct when account currency ≠ base.
-    const [row] = await exec(
-      `SELECT t.currency, t.date, l.base_currency
-         FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN ledgers l ON l.id = a.ledger_id
-        WHERE t.id = ?`,
-      [id],
-    );
-    const currency = String(row?.currency ?? 'USD');
-    const ledgerBase = String(row?.base_currency ?? currency);
-    const rateDate = patch.date ?? String(row?.date ?? '');
-    const conv = await convertToBase(exec, patch.amount, currency, ledgerBase, rateDate);
-    sets.push('amount = ?', 'amount_base = ?', 'exchange_rate = ?');
-    bind.push(patch.amount, conv.amountBase, conv.rate);
-  }
-  if (!sets.length) return;
+
+  if (!sets.length) return { oldAccountId: null };
   sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
+
+  // Surface the OLD account id only when the row actually moved, so the
+  // dispatcher's "recompute source account" step is a no-op for same-account
+  // edits.
+  return { oldAccountId: newAccountId !== oldAccountId ? oldAccountId : null };
 }
 
 /** Hard-delete a transaction (tags/splits cascade). Returns its account_id so the
