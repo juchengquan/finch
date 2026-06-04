@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
@@ -43,9 +45,38 @@ export default function ActivityPage() {
   const [maxAmt, setMaxAmt] = useState('');
   const allTxns = useFinanceStore((s) => s.transactions);
   const allTags = useFinanceStore((s) => s.tags);
+  const allCategories = useFinanceStore((s) => s.categories);
+  const bulkRecategorize = useFinanceStore((s) => s.bulkRecategorize);
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
+  const ledgerCategories = allCategories.filter((c) => c.ledgerId === activeId);
+
+  // Bulk-recategorize mode: a row tap toggles selection instead of opening the
+  // detail sheet, and a floating action bar appears with a category picker.
+  // Cleared whenever the user exits the page or switches ledger (Set rebuilds).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+  const applyBulkCategory = (categoryId: string) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    bulkRecategorize(ids, categoryId);
+    const cat = ledgerCategories.find((c) => c.id === categoryId);
+    toast.success(`Set category to ${cat?.name ?? 'Uncategorized'} on ${ids.length} ${ids.length === 1 ? 'transaction' : 'transactions'}`);
+    exitSelectMode();
+  };
   // Per-merchant stats for the anomaly badge. One pass over the transaction
   // list per render; lookup per row is O(1). Memoized on the txn list + ledger
   // so we don't recompute on every render.
@@ -138,6 +169,19 @@ export default function ActivityPage() {
             <Icon name="filter" size={13} />
             Filters{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
           </button>
+          <button
+            type="button"
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            aria-label={selectMode ? 'Exit select mode' : 'Select transactions to recategorize'}
+            aria-pressed={selectMode}
+            className={cn(
+              'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
+              selectMode ? 'border-primary text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <Icon name={selectMode ? 'x' : 'check'} size={13} />
+            {selectMode ? 'Cancel' : 'Select'}
+          </button>
         </div>
 
         {filtersOpen && (
@@ -225,14 +269,32 @@ export default function ActivityPage() {
                 {group.items.map((t, i) => {
                   const cat = catById(t.category);
                   const inc = t.amount > 0;
+                  const selected = selectedIds.has(t.id);
                   return (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => openTransaction(t.id)}
-                      className={cn('flex w-full items-center gap-3 p-3.5 text-left', i && 'border-border border-t')}
+                      onClick={() => (selectMode ? toggleSelected(t.id) : openTransaction(t.id))}
+                      aria-pressed={selectMode ? selected : undefined}
+                      className={cn(
+                        'flex w-full items-center gap-3 p-3.5 text-left',
+                        i && 'border-border border-t',
+                        selectMode && selected && 'bg-primary/5',
+                      )}
                     >
-                      <CatBar color={cat.color} />
+                      {selectMode ? (
+                        <span
+                          className={cn(
+                            'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                            selected ? 'bg-primary border-primary text-primary-foreground' : 'border-border',
+                          )}
+                          aria-hidden
+                        >
+                          {selected && <Icon name="check" size={10} />}
+                        </span>
+                      ) : (
+                        <CatBar color={cat.color} />
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate text-sm font-medium">{t.merchant}</span>
@@ -278,18 +340,35 @@ export default function ActivityPage() {
                 {txns.map((t) => {
                   const cat = catById(t.category);
                   const inc = t.amount > 0;
+                  const selected = selectedIds.has(t.id);
                   return (
                     <tr
                       key={t.id}
-                      onClick={() => openTransaction(t.id)}
-                      className="border-border hover:bg-secondary/40 cursor-pointer border-t first:border-t-0"
+                      onClick={() => (selectMode ? toggleSelected(t.id) : openTransaction(t.id))}
+                      aria-pressed={selectMode ? selected : undefined}
+                      className={cn(
+                        'border-border hover:bg-secondary/40 cursor-pointer border-t first:border-t-0',
+                        selectMode && selected && 'bg-primary/5',
+                      )}
                     >
                       <td className="text-muted-foreground px-4 py-2.5 font-mono text-xs whitespace-nowrap">
                         {t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2.5">
-                          <CatBar color={cat.color} className="h-4" />
+                          {selectMode ? (
+                            <span
+                              className={cn(
+                                'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                                selected ? 'bg-primary border-primary text-primary-foreground' : 'border-border',
+                              )}
+                              aria-hidden
+                            >
+                              {selected && <Icon name="check" size={10} />}
+                            </span>
+                          ) : (
+                            <CatBar color={cat.color} className="h-4" />
+                          )}
                           {t.merchant}
                           {t.kind === 'refund' && <RefundBadge />}
                           {(() => {
@@ -318,6 +397,44 @@ export default function ActivityPage() {
           </div>
         )}
       </div>
+
+      {selectMode && (
+        <div
+          role="region"
+          aria-label="Bulk recategorize"
+          className="bg-card border-border fixed inset-x-3 bottom-[88px] z-30 flex items-center gap-2 rounded-2xl border p-2.5 shadow-lg md:right-6 md:bottom-6 md:left-auto md:max-w-md"
+        >
+          <span className="font-mono text-[11px] font-medium">
+            {selectedIds.size} selected
+          </span>
+          {selectedIds.size < txns.length && (
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set(txns.map((t) => t.id)))}
+              className="text-primary text-[11px] underline-offset-2 hover:underline"
+            >
+              Select all {txns.length}
+            </button>
+          )}
+          <div className="flex-1" />
+          <Select
+            value=""
+            onValueChange={applyBulkCategory}
+            disabled={selectedIds.size === 0}
+          >
+            <SelectTrigger size="sm" className="w-[150px]">
+              <SelectValue placeholder="Recategorize…" />
+            </SelectTrigger>
+            <SelectContent>
+              {ledgerCategories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </MobilePage>
   );
 }

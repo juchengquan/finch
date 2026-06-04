@@ -411,6 +411,35 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       }
       return;
     }
+    case 'bulkRecategorize': {
+      // Category-only bulk update: amounts/dates/accounts don't move, so we
+      // skip account balance recompute. Rollover IS affected — invalidate it
+      // for both the old and the new category from the earliest affected date.
+      const ids = Array.isArray(args.ids) ? args.ids.map(str) : [];
+      const categoryId = args.categoryId == null ? null : str(args.categoryId);
+      if (!ids.length) return;
+      const placeholders = ids.map(() => '?').join(',');
+      const before = await exec(
+        `SELECT category_id, date FROM transactions WHERE id IN (${placeholders})`,
+        ids,
+      );
+      await exec(
+        `UPDATE transactions SET category_id = ? WHERE id IN (${placeholders})`,
+        [categoryId, ...ids],
+      );
+      const cats = new Set<string>();
+      if (categoryId) cats.add(categoryId);
+      let earliest = '';
+      for (const r of before) {
+        if (r.category_id != null) cats.add(String(r.category_id));
+        const d = String(r.date ?? '');
+        if (d && (!earliest || d < earliest)) earliest = d;
+      }
+      if (cats.size > 0 && earliest) {
+        await invalidateRollover(exec, { categoryIds: [...cats], accountIds: [] }, earliest);
+      }
+      return;
+    }
     case 'deleteTransaction': {
       const id = str(args.id);
       const before = await txTouches(exec, id);
