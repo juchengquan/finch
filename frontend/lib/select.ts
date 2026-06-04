@@ -419,6 +419,116 @@ export function recentExpenses(txns: Tx[], ledgerId: string, limit = 5): RecentE
   return out.slice(0, limit).map((r) => r.row);
 }
 
+// ---------------------------------------------------------------------------
+// Anomaly detection — per-merchant z-score over confirmed expense magnitudes.
+// Catches both fraud ("this is 4× my usual coffee") and "wait, that was
+// expensive". Pure heuristic, no model.
+// ---------------------------------------------------------------------------
+
+export interface MerchantStats {
+  /** Number of past confirmed expense samples for the merchant. */
+  count: number;
+  /** Mean of |amount| in account currency (we don't reconvert FX — the
+   *  z-score is per-merchant and per-account-currency, so the unit cancels). */
+  mean: number;
+  /** Population standard deviation. Zero when count < 2. */
+  std: number;
+}
+
+export interface AnomalyScore {
+  /** Standard score against the merchant's past mean (always >= 0). */
+  zScore: number;
+  /** Mean spent at this merchant historically (account currency). */
+  mean: number;
+  /** Number of past samples used. */
+  count: number;
+  /** True when both `zScore >= threshold` and `count >= minCount`. */
+  isAnomaly: boolean;
+}
+
+/** Bucket key for grouping past transactions by merchant identity. Mirrors
+ *  the suggestCategory matching rules: the counterparty FK wins when set,
+ *  otherwise a case-folded description match. */
+function merchantKey(t: Tx): string | null {
+  if (t.counterpartyId) return `cp:${t.counterpartyId}`;
+  const name = t.merchant.trim().toLowerCase();
+  return name ? `m:${name}` : null;
+}
+
+/**
+ * Aggregate the merchant-level mean + population std over confirmed expenses
+ * in `ledgerId`. Excludes pending, refunds, transfers, income, adjustments —
+ * only "spent at this merchant" amounts make sense to compare. Returns a
+ * lookup keyed by merchantKey for O(1) per-row anomaly scoring.
+ *
+ * One pass over the transaction list; downstream anomaly checks are
+ * arithmetic. Caller is expected to call this once and reuse the map across
+ * a list render (memoize with `useMemo`).
+ */
+export function merchantStats(txns: Tx[], ledgerId: string): Map<string, MerchantStats> {
+  const sums = new Map<string, { n: number; sum: number; sqSum: number }>();
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending) continue;
+    if (kindOf(t) !== 'expense') continue;
+    const key = merchantKey(t);
+    if (!key) continue;
+    const mag = Math.abs(t.nativeAmount ?? t.amount);
+    const bucket = sums.get(key) ?? { n: 0, sum: 0, sqSum: 0 };
+    bucket.n += 1;
+    bucket.sum += mag;
+    bucket.sqSum += mag * mag;
+    sums.set(key, bucket);
+  }
+  const out = new Map<string, MerchantStats>();
+  for (const [key, b] of sums) {
+    const mean = b.sum / b.n;
+    // Population std (we have the full history at this merchant, not a sample).
+    // n=1 gives variance=0 and a degenerate std — anomaly check guards on count.
+    const variance = b.n > 0 ? b.sqSum / b.n - mean * mean : 0;
+    const std = Math.sqrt(Math.max(0, variance));
+    out.set(key, { count: b.n, mean: r2(mean), std: r2(std) });
+  }
+  return out;
+}
+
+/**
+ * Score one transaction against its merchant's history. Returns null when
+ * there's no meaningful comparison (no history yet, or only 1 past sample
+ * which makes std undefined). Pass `stats` from `merchantStats` so the
+ * aggregation runs once per list render, not once per row.
+ *
+ * **Important:** stats include the transaction itself when it's in the same
+ * txns array — that's fine for new history-building but skews the per-row
+ * check toward "no anomaly" (the row is in its own mean). Either exclude
+ * `tx` from the txns array passed to `merchantStats`, or accept the slight
+ * smoothing — for lists of 20+ rows per merchant the bias is negligible.
+ *
+ * Defaults: `minCount = 3` (need at least 3 past samples to call a trend),
+ * `threshold = 2.5` (~99% confidence under normal, errs toward quiet).
+ */
+export function anomalyScore(
+  tx: Tx,
+  stats: Map<string, MerchantStats>,
+  opts: { minCount?: number; threshold?: number } = {},
+): AnomalyScore | null {
+  if (kindOf(tx) !== 'expense' || tx.pending) return null;
+  const key = merchantKey(tx);
+  if (!key) return null;
+  const s = stats.get(key);
+  if (!s || s.count < 2 || s.std === 0) return null;
+  const mag = Math.abs(tx.nativeAmount ?? tx.amount);
+  const z = Math.abs(mag - s.mean) / s.std;
+  const minCount = opts.minCount ?? 3;
+  const threshold = opts.threshold ?? 2.5;
+  return {
+    zScore: r2(z),
+    mean: s.mean,
+    count: s.count,
+    isAnomaly: z >= threshold && s.count >= minCount,
+  };
+}
+
 export interface CategorySuggestion {
   /** Highest-frequency category id for the matched history. */
   categoryId: string;

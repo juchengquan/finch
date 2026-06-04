@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { RefundBadge } from '@/components/refund-badge';
+import { AnomalyBadge } from '@/components/anomaly-badge';
+import { merchantStats, anomalyScore } from '@/lib/select';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -86,6 +88,11 @@ export default function AccountDetailPage() {
   // total account value is cash + Σ holdings_value (in the account's currency).
   const isInvestment = (row?.type ?? (mock ? toDbType(mock.type) : '')) === 'investment';
   const holdingsTotal = isInvestment ? holdingsValueForAccount(holdings, accountId) : 0;
+  // Per-merchant stats power the inline "Unusual" badge on transaction rows.
+  // One pass over the ledger's transactions per render; row lookup is O(1).
+  // Computed inline (not useMemo) because the React Compiler / preserve-
+  // manual-memoization lint rule flags the derived `ledgerId` as unstable.
+  const merchantStatsMap = merchantStats(allTxns, ledgerId);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -323,6 +330,10 @@ export default function AccountDetailPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-[13px] font-medium">{tx.merchant}</span>
                       {tx.kind === 'refund' && <RefundBadge />}
+                      {(() => {
+                        const a = anomalyScore(tx, merchantStatsMap);
+                        return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
+                      })()}
                     </div>
                     <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
                   </div>

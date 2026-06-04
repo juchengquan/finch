@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -12,6 +12,8 @@ import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { RefundBadge } from '@/components/refund-badge';
+import { AnomalyBadge } from '@/components/anomaly-badge';
+import { merchantStats, anomalyScore } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
@@ -44,6 +46,10 @@ export default function ActivityPage() {
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
+  // Per-merchant stats for the anomaly badge. One pass over the transaction
+  // list per render; lookup per row is O(1). Memoized on the txn list + ledger
+  // so we don't recompute on every render.
+  const stats = useMemo(() => merchantStats(allTxns, activeId), [allTxns, activeId]);
 
   const minA = minAmt.trim() === '' ? null : Number(minAmt);
   const maxA = maxAmt.trim() === '' ? null : Number(maxAmt);
@@ -231,6 +237,10 @@ export default function ActivityPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="truncate text-sm font-medium">{t.merchant}</span>
                           {t.kind === 'refund' && <RefundBadge />}
+                          {(() => {
+                            const a = anomalyScore(t, stats);
+                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
+                          })()}
                         </div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
                           {cat.name} · {acctById(t.account).name}
@@ -282,6 +292,10 @@ export default function ActivityPage() {
                           <CatBar color={cat.color} className="h-4" />
                           {t.merchant}
                           {t.kind === 'refund' && <RefundBadge />}
+                          {(() => {
+                            const a = anomalyScore(t, stats);
+                            return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
+                          })()}
                         </div>
                       </td>
                       <td className="text-muted-foreground px-4 py-2.5">{cat.name}</td>
