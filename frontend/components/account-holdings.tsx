@@ -227,7 +227,6 @@ function AddHoldingDialog({
   const [name, setName] = useState('');
   const [shares, setShares] = useState('');
   const [costBasis, setCostBasis] = useState('');
-  const [currency, setCurrency] = useState(defaultCurrency);
   const [lastPrice, setLastPrice] = useState('');
   const [lastPriceDate, setLastPriceDate] = useState(today());
 
@@ -236,7 +235,6 @@ function AddHoldingDialog({
     setName('');
     setShares('');
     setCostBasis('');
-    setCurrency(defaultCurrency);
     setLastPrice('');
     setLastPriceDate(today());
   };
@@ -250,6 +248,10 @@ function AddHoldingDialog({
     if (!Number.isFinite(c) || c < 0) return void toast.error('Cost basis must be 0 or greater');
     const price = lastPrice === '' ? null : parseFloat(lastPrice);
     if (price !== null && (!Number.isFinite(price) || price < 0)) return void toast.error('Price must be 0 or greater');
+    // Holding currency is locked to the account's currency. Summing values
+    // across mixed currencies without conversion would silently corrupt the
+    // total — see code-review finding. A foreign-currency position belongs
+    // in a foreign-currency investment account.
     onCreate({
       accountId,
       ledgerId,
@@ -257,7 +259,7 @@ function AddHoldingDialog({
       name: name.trim() || null,
       shares: s,
       costBasis: c,
-      currency: currency.trim().toUpperCase() || defaultCurrency,
+      currency: defaultCurrency,
       lastPrice: price,
       lastPriceDate: price == null ? null : lastPriceDate,
     });
@@ -281,7 +283,12 @@ function AddHoldingDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="h-currency">Currency</Label>
-              <Input id="h-currency" value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder={defaultCurrency} />
+              <div
+                id="h-currency"
+                className="border-input bg-muted text-muted-foreground flex h-9 w-full items-center rounded-md border px-3 text-sm"
+              >
+                {defaultCurrency}
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-1.5">

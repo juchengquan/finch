@@ -417,6 +417,20 @@ test('unrealizedFx: ignores pending and other accounts', () => {
   expect(unrealizedFx(a, txns, sgdToBase)).toBe(350); // same as opening-only
 });
 
+test('unrealizedFx: ignores txns from a different ledger even when account ids collide', () => {
+  // A future shared id between ledgers shouldn't drag in the wrong rows.
+  // The function takes the whole store transaction list; the ledger filter is
+  // the only thing keeping the cost basis honest.
+  const a = acct({ id: 'usd', ledgerId: 'personal', currency: 'USD', balance: 1000, openingBalanceBase: 1000 });
+  const txns = [
+    tx({ account: 'usd', ledgerId: 'personal', amount: 200, date: '2026-04-01' }),
+    tx({ account: 'usd', ledgerId: 'family',   amount: 5000, date: '2026-04-02' }), // wrong ledger, skipped
+  ];
+  // Cost basis: 1000 (opening) + 200 (personal txn) = 1200. Value: 1000 * 1.35 = 1350.
+  // Unrealized FX = 1350 − 1200 = 150. (Without the ledger filter we'd see −5450.)
+  expect(unrealizedFx(a, txns, sgdToBase)).toBe(150);
+});
+
 const holding = (over: Partial<Holding>): Holding => ({
   id: 'h1',
   ledgerId: 'personal',

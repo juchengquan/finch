@@ -380,6 +380,10 @@ export function unrealizedFx(
   const currentValueBase = toBase(account.balance, account.currency);
   let costBasis = account.openingBalanceBase;
   for (const t of txns) {
+    // Guard the ledger too — account ids are unique today, but the function
+    // takes the whole store transaction list and shouldn't quietly rely on
+    // that invariant. A future shared id can't drag in another ledger's rows.
+    if (ledgerOf(t) !== account.ledgerId) continue;
     if (t.account !== account.id) continue;
     if (t.pending) continue;
     costBasis += t.amount;

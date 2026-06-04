@@ -128,3 +128,17 @@ test('account ON DELETE CASCADE: hard-deleting an account takes its holdings', a
   await exec("DELETE FROM accounts WHERE id = 'br2'");
   expect(await getHolding(exec, 'h-tmp')).toBeNull();
 });
+
+test('listHoldings hides positions belonging to archived accounts', async () => {
+  const exec = await seeded();
+  const before = await listHoldings(exec, 'personal', 'inv');
+  expect(before.length).toBeGreaterThan(0);
+  // Archive the brokerage; its holdings should drop out of the projection.
+  await exec("UPDATE accounts SET is_active = 0 WHERE id = 'inv'");
+  const after = await listHoldings(exec, 'personal', 'inv');
+  expect(after.length).toBe(0);
+  // Unarchiving brings them back — the underlying rows are still there.
+  await exec("UPDATE accounts SET is_active = 1 WHERE id = 'inv'");
+  const restored = await listHoldings(exec, 'personal', 'inv');
+  expect(restored.length).toBe(before.length);
+});

@@ -8,17 +8,14 @@ import { convertToBase } from './rates';
 import { resolveCounterpartyIdByName } from './counterparties';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
- *  Each whitespace-separated word becomes a case-folded prefix term joined
- *  with AND. Non-word characters are stripped so accidental punctuation
- *  (`!`, `"`, `()`, etc.) doesn't trip FTS5's own query syntax. Returns the
- *  empty string when nothing usable remains — callers should skip the
- *  filter in that case. */
+ *  Each run of unicode letters/numbers becomes a case-folded prefix term
+ *  joined with AND. Splitting on punctuation (not just whitespace) matches
+ *  the FTS5 `unicode61` tokenizer, which indexes `"O'Reilly"` as `o` and
+ *  `reilly` — so a query of `"O'Reilly"` becomes `o* AND reilly*` and
+ *  actually matches the stored row. Returns the empty string when nothing
+ *  usable remains — callers should skip the filter in that case. */
 function toFts5Query(raw: string): string {
-  const tokens = raw
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]+/gu, ''))
-    .filter((t) => t.length > 0);
+  const tokens = [...raw.toLowerCase().matchAll(/[\p{L}\p{N}]+/gu)].map((m) => m[0]);
   if (tokens.length === 0) return '';
   return tokens.map((t) => `${t}*`).join(' AND ');
 }
