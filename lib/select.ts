@@ -359,6 +359,65 @@ export function accountBalance(accounts: AccountRow[], accountId: string): numbe
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
 }
 
+/** A trimmed Tx shape for the Add screen's "Recent" chips — just enough to
+ *  pre-fill the form on tap. */
+export interface RecentExpense {
+  merchant: string;
+  /** Native amount (account currency), positive magnitude for the chip
+   *  display; the caller re-signs as expense on submit. */
+  amount: number;
+  /** Account currency at the time the row was written. */
+  currency: string;
+  accountId: string;
+  categoryId: string | null;
+}
+
+/**
+ * Recent confirmed expenses for the active ledger, **deduplicated** by
+ * (merchant + amount + account + category). Useful as a one-tap "redo" for
+ * habitual purchases — the daily coffee, the lunch place, the parking
+ * meter. Pending rows, refunds, transfers, adjustments, and income are all
+ * excluded because they don't make sense as "expense to repeat".
+ *
+ * The dedupe key uses native amount + currency so two identical purchases
+ * collapse into one chip; sort is by most-recent-first so a chip's "freshness"
+ * matches the user's intuition. `limit` caps the result.
+ */
+export function recentExpenses(txns: Tx[], ledgerId: string, limit = 5): RecentExpense[] {
+  const seen = new Set<string>();
+  const out: { date: string; time: string; row: RecentExpense }[] = [];
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending) continue;
+    if (kindOf(t) !== 'expense') continue;
+    const native = t.nativeAmount ?? t.amount;
+    if (native >= 0) continue; // sanity: an expense must be negative
+    const currency = t.currency ?? 'USD';
+    const amountMag = Math.abs(native);
+    const key = `${t.merchant}|${amountMag.toFixed(2)}|${t.account}|${t.category ?? ''}|${currency}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      date: t.date,
+      time: t.time ?? '',
+      row: {
+        merchant: t.merchant,
+        amount: amountMag,
+        currency,
+        accountId: t.account,
+        categoryId: t.category,
+      },
+    });
+  }
+  // Most-recent first; the iteration above respects DB insert order, but the
+  // store can be in any order after edits, so sort defensively.
+  out.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return a.time < b.time ? 1 : a.time > b.time ? -1 : 0;
+  });
+  return out.slice(0, limit).map((r) => r.row);
+}
+
 export interface CategorySuggestion {
   /** Highest-frequency category id for the matched history. */
   categoryId: string;
