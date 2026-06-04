@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast, merchantStats, anomalyScore } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -723,4 +723,83 @@ test('accountForecast: installment_total caps future occurrences', () => {
   });
   const f = accountForecast(a, [plan], '2026-06-10', 365);
   expect(f.events.length).toBe(4);
+});
+
+// ---------------------------------------------------------------------------
+// merchantStats + anomalyScore — per-merchant z-score for the "Unusual" badge.
+// ---------------------------------------------------------------------------
+
+test('merchantStats: counts only confirmed expenses, groups by counterparty FK first', () => {
+  const txns = [
+    tx({ merchant: 'Old name', amount: -10, counterpartyId: 'cp-1' }),
+    tx({ merchant: 'Renamed', amount: -12, counterpartyId: 'cp-1' }),
+    tx({ merchant: 'Refund', amount: 10, kind: 'refund' }),
+    tx({ merchant: 'Pending', amount: -10, pending: true }),
+    tx({ merchant: 'Transfer', amount: -10, kind: 'transfer' }),
+    tx({ merchant: 'Income', amount: 100, kind: 'income' }),
+    tx({ merchant: 'OtherLedger', amount: -10, ledgerId: 'family' }),
+  ];
+  const stats = merchantStats(txns, 'personal');
+  // Both expense rows share the FK; the wrong-kind/pending/other-ledger rows
+  // are filtered out.
+  expect(stats.get('cp:cp-1')?.count).toBe(2);
+  expect(stats.get('cp:cp-1')?.mean).toBe(11);
+  expect(stats.size).toBe(1);
+});
+
+test('merchantStats: falls back to lowercased description when no counterparty FK', () => {
+  const txns = [
+    tx({ merchant: 'BLUE BOTTLE', amount: -8 }),
+    tx({ merchant: 'blue bottle', amount: -10 }),
+    tx({ merchant: 'Blue Bottle', amount: -12 }),
+  ];
+  const stats = merchantStats(txns, 'personal');
+  expect(stats.get('m:blue bottle')?.count).toBe(3);
+  expect(stats.get('m:blue bottle')?.mean).toBe(10);
+});
+
+test('anomalyScore: returns null without enough history (n < 2)', () => {
+  const txns = [tx({ merchant: 'New Place', amount: -100 })];
+  const stats = merchantStats(txns, 'personal');
+  const a = anomalyScore(txns[0], stats);
+  expect(a).toBeNull();
+});
+
+test('anomalyScore: flags a magnitude well above the merchant mean', () => {
+  // Coffee runs are ~$4 (tight cluster). A $40 charge at the same merchant
+  // should fire. Stats use history only — the function doc warns about the
+  // bias if you include the candidate row in its own aggregation.
+  const history = [
+    tx({ id: 'h1', merchant: 'Starbucks', amount: -4 }),
+    tx({ id: 'h2', merchant: 'Starbucks', amount: -4.5 }),
+    tx({ id: 'h3', merchant: 'Starbucks', amount: -3.5 }),
+    tx({ id: 'h4', merchant: 'Starbucks', amount: -4 }),
+  ];
+  const outlier = tx({ id: 'h5', merchant: 'Starbucks', amount: -40 });
+  const stats = merchantStats(history, 'personal');
+  const a = anomalyScore(outlier, stats);
+  expect(a).not.toBeNull();
+  expect(a!.isAnomaly).toBe(true);
+  expect(a!.count).toBe(4);
+  expect(a!.zScore).toBeGreaterThan(2.5);
+});
+
+test('anomalyScore: does NOT flag a typical transaction', () => {
+  const history = [
+    tx({ merchant: 'Starbucks', amount: -4 }),
+    tx({ merchant: 'Starbucks', amount: -4.5 }),
+    tx({ merchant: 'Starbucks', amount: -3.5 }),
+  ];
+  const normal = tx({ id: 'n', merchant: 'Starbucks', amount: -4.2 });
+  const txns = [...history, normal];
+  const stats = merchantStats(txns, 'personal');
+  const a = anomalyScore(normal, stats);
+  expect(a?.isAnomaly).toBe(false);
+});
+
+test('anomalyScore: skips non-expense and pending rows', () => {
+  const history = Array.from({ length: 10 }, () => tx({ merchant: 'Test', amount: -10 }));
+  const stats = merchantStats(history, 'personal');
+  expect(anomalyScore(tx({ merchant: 'Test', amount: 100, kind: 'income' }), stats)).toBeNull();
+  expect(anomalyScore(tx({ merchant: 'Test', amount: -100, pending: true }), stats)).toBeNull();
 });
