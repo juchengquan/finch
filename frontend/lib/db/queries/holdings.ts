@@ -122,15 +122,20 @@ const PATCH_COLUMNS: Record<keyof HoldingPatch, string> = {
  *  (changing it would re-interpret cost basis), and price moves through the
  *  dedicated setHoldingPrice (so both halves of the pair update atomically). */
 export async function updateHolding(exec: Exec, id: string, patch: HoldingPatch): Promise<void> {
+  // Normalize once at entry so the bind loop stays uniform.
+  const normalized: HoldingPatch = { ...patch };
+  if (typeof normalized.symbol === 'string') {
+    normalized.symbol = normalized.symbol.toUpperCase();
+  }
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
-  for (const key of Object.keys(patch) as (keyof HoldingPatch)[]) {
-    const value = patch[key];
+  for (const key of Object.keys(normalized) as (keyof HoldingPatch)[]) {
+    const value = normalized[key];
     if (value === undefined) continue;
     const col = PATCH_COLUMNS[key];
     if (!col) continue;
     sets.push(`${col} = ?`);
-    bind.push(typeof value === 'string' && key === 'symbol' ? value.toUpperCase() : value);
+    bind.push(value);
   }
   if (!sets.length) return;
   sets.push("updated_at = datetime('now')");

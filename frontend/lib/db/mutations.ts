@@ -5,7 +5,7 @@
 
 import type { Exec } from './repo';
 import {
-  listScheduled,
+  getScheduled,
   deleteScheduled as qDeleteScheduled,
   updateScheduled as qUpdateScheduled,
   createScheduled as qCreateScheduled,
@@ -66,6 +66,7 @@ import {
   type BudgetGroupPatch,
 } from './queries/budgetGroups';
 import { isAccountType } from '@/lib/account-types';
+import { parseInstallmentTotal } from '@/lib/installment';
 import { convertToBase } from './queries/rates';
 import {
   createHolding as qCreateHolding,
@@ -119,18 +120,6 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Normalize an installment total — accept null/missing as "not a plan" and
- *  enforce a positive integer otherwise. Throws on a malformed value rather
- *  than silently coercing 0 / NaN to null, so a UI typo surfaces. */
-function parseInstallmentTotal(raw: unknown): number | null {
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n <= 0) {
-    throw new Error('Installment total must be a positive whole number');
-  }
-  return n;
-}
-
 /** Reject creating/moving a category under one that itself has a parent —
  *  the taxonomy is exactly 2 levels deep. */
 async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
@@ -160,8 +149,7 @@ async function postSingle(
 async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const templateId = str(args.templateId);
   const ledgerId = 'personal';
-  const scheduled = await listScheduled(exec, ledgerId);
-  const t = scheduled.find((r) => r.id === templateId);
+  const t = await getScheduled(exec, templateId);
   if (!t) throw new Error('Template not found');
   // Refuse to post more than the installment plan calls for. We block before
   // we touch the account, so a fully-paid plan can't sneak an extra payment
@@ -863,11 +851,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'setHoldingPrice': {
       const id = str(args.id);
       const price = args.price == null ? null : Number(args.price);
-      const date = args.date == null ? null : str(args.date);
+      // Clearing the price always clears the date too — the UI never sends a
+      // partial-null pair, so this just enforces the "both halves move
+      // together" invariant rather than rejecting at the boundary.
+      const date = price == null ? null : args.date == null ? null : str(args.date);
       if (price !== null && !(price >= 0)) throw new Error('Price must be 0 or greater');
-      if ((price === null) !== (date === null)) {
-        throw new Error('Provide both price and date, or null both to clear');
-      }
       if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
       await qSetHoldingPrice(exec, id, price, date);
       return;
