@@ -19,7 +19,7 @@ const ICONS: Record<string, LucideIcon> = {
   'arrow-r': ArrowRight, 'arrow-l': ArrowLeft, 'arrow-u': ArrowUp, 'arrow-d': ArrowDown,
   'arrow-dl': ArrowDownLeft, 'arrow-ur': ArrowUpRight, menu: Menu, bell: Bell, wallet: Wallet,
   chart: ChartColumn, cog: Settings, doc: FileText, target: Target, tag: Tag, tags: Tags, split: Split,
-  edit: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
+  edit: Pencil, pencil: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
   clock: Clock, download: Download, upload: Upload, swap: ArrowRightLeft, coins: Coins, trash: Trash2,
 };
 
