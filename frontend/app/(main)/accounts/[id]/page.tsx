@@ -36,6 +36,7 @@ import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
 import { AccountHoldings } from '@/components/account-holdings';
+import { AccountForecast } from '@/components/account-forecast';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -292,6 +293,12 @@ export default function AccountDetailPage() {
         {isInvestment && (
           <div className="mb-4">
             <AccountHoldings accountId={accountId} ledgerId={ledgerId} accountCurrency={currency} />
+          </div>
+        )}
+
+        {row && (
+          <div className="mb-4">
+            <AccountForecast account={row} />
           </div>
         )}
 

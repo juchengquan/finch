@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -627,4 +627,100 @@ test('recentExpenses: respects the limit parameter', () => {
     tx({ merchant: `M${i}`, amount: -(i + 1), date: `2026-05-${10 + i}` }),
   );
   expect(recentExpenses(txns, 'personal', 3).length).toBe(3);
+});
+
+// ---------------------------------------------------------------------------
+// accountForecast — 30/60/90-day cashflow projection.
+// ---------------------------------------------------------------------------
+
+const sched = (over: Partial<ScheduledTemplate>): ScheduledTemplate => ({
+  id: 't-rent', name: 'Rent', type: 'expense', amount: 1850,
+  frequency: 'monthly', dayOfMonth: 1,
+  accountId: 'chk', account: 'Chase Checking',
+  autoPost: 1, nextRun: '', lastRun: '',
+  startDate: '2026-01-01',
+  ...over,
+});
+
+test('accountForecast: no scheduled templates → flat balance, trough = starting', () => {
+  const a = acct({ id: 'chk', balance: 5000, currency: 'USD' });
+  const f = accountForecast(a, [], '2026-06-01', 30);
+  expect(f.startingBalance).toBe(5000);
+  expect(f.endingBalance).toBe(5000);
+  expect(f.trough.balance).toBe(5000);
+  expect(f.events.length).toBe(0);
+  expect(f.series.length).toBe(31); // today + 30 days
+});
+
+test('accountForecast: monthly rent debit reduces the balance on the 1st', () => {
+  const a = acct({ id: 'chk', balance: 5000, currency: 'USD' });
+  // Today is Jun 10; rent on the 1st has already passed for June, next hit
+  // is Jul 1 — within the 30-day horizon.
+  const f = accountForecast(a, [sched({})], '2026-06-10', 30);
+  expect(f.events.length).toBe(1);
+  expect(f.events[0].date).toBe('2026-07-01');
+  expect(f.events[0].amount).toBe(-1850);
+  expect(f.endingBalance).toBe(3150); // 5000 - 1850
+  expect(f.trough.balance).toBe(3150);
+  expect(f.trough.date).toBe('2026-07-01');
+});
+
+test('accountForecast: salary credit + rent debit net out across 60 days', () => {
+  const a = acct({ id: 'chk', balance: 1000, currency: 'USD' });
+  const templates = [
+    sched({ id: 't-rent', name: 'Rent', type: 'expense', amount: 1500, dayOfMonth: 1 }),
+    sched({ id: 't-sal',  name: 'Salary', type: 'income',  amount: 3000, dayOfMonth: 15 }),
+  ];
+  // Today: Jun 10. Horizon 60d → through Aug 9. Events:
+  //   Jun 15 +3000  → 4000
+  //   Jul 1  −1500  → 2500
+  //   Jul 15 +3000  → 5500
+  //   Aug 1  −1500  → 4000
+  const f = accountForecast(a, templates, '2026-06-10', 60);
+  expect(f.events.length).toBe(4);
+  expect(f.endingBalance).toBe(4000);
+});
+
+test('accountForecast: transfer leg signs apply correctly (from = −, to = +)', () => {
+  const chk = acct({ id: 'chk', balance: 2000, currency: 'USD' });
+  const sav = acct({ id: 'sav', balance: 500, currency: 'USD' });
+  const sweep = sched({
+    id: 't-sweep', name: 'Weekly sweep', type: 'transfer',
+    amount: 100, frequency: 'weekly',
+    accountId: 'sav', account: 'Savings',
+    fromAccountId: 'chk', from: 'Checking',
+    weekDay: 1, // Mondays
+    startDate: '2026-06-01',
+  });
+  const chkForecast = accountForecast(chk, [sweep], '2026-06-01', 30);
+  const savForecast = accountForecast(sav, [sweep], '2026-06-01', 30);
+  // Same template, opposite signs on the two accounts.
+  expect(chkForecast.events.every((e) => e.amount === -100)).toBe(true);
+  expect(savForecast.events.every((e) => e.amount === 100)).toBe(true);
+  // Same number of events on both sides (the two legs of each occurrence).
+  expect(chkForecast.events.length).toBe(savForecast.events.length);
+});
+
+test('accountForecast: trough tracks the lowest balance and its date', () => {
+  const a = acct({ id: 'chk', balance: 1000, currency: 'USD' });
+  const templates = [
+    sched({ id: 't-rent', type: 'expense', amount: 800, dayOfMonth: 5 }),
+    sched({ id: 't-sal',  type: 'income',  amount: 500, dayOfMonth: 20 }),
+  ];
+  // Today: Jun 1. Jun 5 −800 → 200 (trough). Jun 20 +500 → 700. Jul 5 −800 → −100 (new trough).
+  const f = accountForecast(a, templates, '2026-06-01', 60);
+  expect(f.trough.date).toBe('2026-07-05');
+  expect(f.trough.balance).toBe(-100);
+});
+
+test('accountForecast: installment_total caps future occurrences', () => {
+  const a = acct({ id: 'chk', balance: 2400, currency: 'USD' });
+  // 12-month plan; 8 already paid → only 4 future occurrences should fire.
+  const plan = sched({
+    id: 't-plan', name: 'Phone plan', type: 'expense', amount: 50,
+    dayOfMonth: 1, installmentTotal: 12, installmentPaid: 8,
+    startDate: '2026-01-01',
+  });
+  const f = accountForecast(a, [plan], '2026-06-10', 365);
+  expect(f.events.length).toBe(4);
 });

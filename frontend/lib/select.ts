@@ -8,6 +8,7 @@ import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
 import type { BudgetRow } from '@/lib/db/queries/budgets';
 import type { Holding } from '@/lib/db/queries/holdings';
+import { occurrencesUpTo } from '@/lib/recurrence';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -582,6 +583,154 @@ export function holdingsValueForAccount(holdings: Holding[], accountId: string):
 export function investmentAccountTotal(account: AccountRow, holdings: Holding[]): number {
   if (account.type !== 'investment') return account.balance;
   return r2(account.balance + holdingsValueForAccount(holdings, account.id));
+}
+
+export interface ForecastEvent {
+  /** YYYY-MM-DD the event hits the account. */
+  date: string;
+  /** Signed amount in the account's currency (positive = inflow). */
+  amount: number;
+  /** Human-readable label for the marker — the template's description or name. */
+  description: string;
+  /** Source template id, for navigating to /scheduled or filtering. */
+  templateId: string;
+}
+
+export interface AccountForecast {
+  today: string;
+  horizonDays: number;
+  /** Account currency at the time of the forecast — for display. */
+  currency: string;
+  /** account.balance at `today`, before any forecast events apply. */
+  startingBalance: number;
+  /** Projected balance at the end of the horizon (= startingBalance + Σ events). */
+  endingBalance: number;
+  /** Lowest projected balance and the date it hits. When the trough equals
+   *  startingBalance the account never dips below where it is now. */
+  trough: { date: string; balance: number };
+  events: ForecastEvent[];
+  /** Daily projected balance for each day in [today, today + horizonDays],
+   *  oldest first. Length = horizonDays + 1. Use for the sparkline. */
+  series: { date: string; balance: number }[];
+}
+
+const addDaysIso = (iso: string, n: number): string => {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+};
+
+/**
+ * Project an account's balance forward over the next `horizonDays`, combining
+ * the current `account.balance` with every scheduled template that touches
+ * this account (income, expense, or transfer leg).
+ *
+ * Per template:
+ *   - **income**  → +amount on every future occurrence, if the template's
+ *     `accountId` equals this account
+ *   - **expense** → −amount on every future occurrence, if the template's
+ *     `accountId` equals this account
+ *   - **transfer** → +amount when this account is the `accountId` (the to-leg),
+ *     −amount when this account is the `fromAccountId` (the from-leg). Cross-
+ *     currency transfers are simplified to a same-currency move at the
+ *     template's nominal amount — the real-time FX conversion only happens at
+ *     post time, so a precise forecast would need a rate lookup we don't
+ *     plumb here. Same-currency transfers are exact.
+ *
+ * Templates without an amount (variable) are skipped. Templates with
+ * `installment_total` cap is respected. Past occurrences (already posted as
+ * transactions) are NOT subtracted — `account.balance` is already a function
+ * of those, so we'd double-count.
+ *
+ * Pure function over inputs; no DB query, no side effects.
+ */
+export function accountForecast(
+  account: AccountRow,
+  scheduled: ScheduledTemplate[],
+  today: string,
+  horizonDays: number,
+): AccountForecast {
+  const start = account.balance;
+  const end = addDaysIso(today, horizonDays);
+
+  // Collect every future occurrence that touches this account, sorted by date.
+  const events: ForecastEvent[] = [];
+  for (const t of scheduled) {
+    if (t.amount == null) continue; // variable amount — manual entry only
+    const isToHere = t.accountId === account.id;
+    const isFromHere = t.type === 'transfer' && t.fromAccountId === account.id;
+    if (!isToHere && !isFromHere) continue;
+
+    // Sign of the cash flow on THIS account.
+    let sign = 0;
+    if (t.type === 'income' && isToHere) sign = 1;
+    else if (t.type === 'expense' && isToHere) sign = -1;
+    else if (t.type === 'transfer' && isToHere) sign = 1;
+    else if (t.type === 'transfer' && isFromHere) sign = -1;
+    if (sign === 0) continue;
+
+    // occurrencesUpTo returns dates from the template's startDate; trim to
+    // the forecast window's open-end (strictly after today, through end).
+    const all = occurrencesUpTo(t, end);
+    const future = all.filter((d) => d > today);
+    if (!future.length) continue;
+
+    // Respect installmentTotal: count CONFIRMED occurrences already booked
+    // (mirrors the cap math in generateDueScheduled — installmentPaid is the
+    // derived figure from confirmed transactions; future events can't exceed
+    // total − paid).
+    let cap = future.length;
+    if (t.installmentTotal != null) {
+      const remaining = Math.max(0, t.installmentTotal - (t.installmentPaid ?? 0));
+      cap = Math.min(cap, remaining);
+    }
+    if (t.maxExecutions != null) {
+      // We don't know how many have run for max_executions (no derived count),
+      // so we can only conservatively cap at maxExecutions itself.
+      cap = Math.min(cap, t.maxExecutions);
+    }
+    for (let i = 0; i < cap; i++) {
+      events.push({
+        date: future[i],
+        amount: sign * Math.abs(Number(t.amount)),
+        description: t.description ?? t.name ?? '',
+        templateId: t.id,
+      });
+    }
+  }
+  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  // Walk forward day-by-day, accumulating events on their date.
+  const eventsByDate = new Map<string, number>();
+  for (const e of events) {
+    eventsByDate.set(e.date, (eventsByDate.get(e.date) ?? 0) + e.amount);
+  }
+  const series: { date: string; balance: number }[] = [];
+  let balance = start;
+  let troughDate = today;
+  let troughBalance = start;
+  for (let i = 0; i <= horizonDays; i++) {
+    const date = addDaysIso(today, i);
+    const delta = eventsByDate.get(date) ?? 0;
+    balance = r2(balance + delta);
+    series.push({ date, balance });
+    if (balance < troughBalance) {
+      troughBalance = balance;
+      troughDate = date;
+    }
+  }
+
+  return {
+    today,
+    horizonDays,
+    currency: account.currency,
+    startingBalance: r2(start),
+    endingBalance: r2(balance),
+    trough: { date: troughDate, balance: r2(troughBalance) },
+    events,
+    series,
+  };
 }
 
 const byDateAsc = (a: Tx, b: Tx) => {
