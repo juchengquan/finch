@@ -359,6 +359,98 @@ export function accountBalance(accounts: AccountRow[], accountId: string): numbe
   return accounts.find((a) => a.id === accountId)?.balance ?? 0;
 }
 
+export interface CategorySuggestion {
+  /** Highest-frequency category id for the matched history. */
+  categoryId: string;
+  /** Number of past transactions backing this suggestion. */
+  count: number;
+  /** Share of matched history that picked this category (0..1). */
+  confidence: number;
+}
+
+const NORMALIZE = (s: string) => s.trim().toLowerCase();
+
+/**
+ * Suggest a category for a new expense based on past confirmed expenses for
+ * the same merchant. Two matching strategies, tried in order:
+ *
+ *   1. Counterparty FK match — if `counterpartyId` is set, look for past rows
+ *      with the same `counterpartyId`. Highest signal: that's a merchant the
+ *      user has explicitly named.
+ *
+ *   2. Case-insensitive description match — fall back to rows whose `merchant`
+ *      equals (case-folded) `description`. Covers free-text entries that
+ *      didn't get auto-resolved to a counterparty.
+ *
+ * The matched set is filtered to **confirmed expenses in the same ledger**:
+ *   - pending rows aren't part of the user's stable history
+ *   - refunds, transfers, adjustments, income don't categorize the same way
+ *   - cross-ledger matches would leak Personal categorizations into Family
+ *
+ * Splits override the parent category — when a past row was split, each
+ * split's category contributes (matches existing `categorySpend` semantics).
+ *
+ * Returns the dominant category + confidence + match count. Returns `null`
+ * when there's no useful signal:
+ *   - empty description AND no counterparty
+ *   - zero past matches
+ *   - top category's confidence is below `MIN_CONFIDENCE` (default 0.5) and
+ *     the match count is too small (< MIN_COUNT) — surfacing a coin flip is
+ *     more annoying than helpful
+ *
+ * Pure function over the store's projected transactions; no DB query.
+ */
+export function suggestCategory(
+  txns: Tx[],
+  ledgerId: string,
+  description: string,
+  counterpartyId?: string | null,
+  opts: { minCount?: number; minConfidence?: number } = {},
+): CategorySuggestion | null {
+  const minCount = opts.minCount ?? 1;
+  const minConfidence = opts.minConfidence ?? 0.5;
+  const term = NORMALIZE(description);
+  if (!term && !counterpartyId) return null;
+
+  const counts = new Map<string, number>();
+  let total = 0;
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending) continue;
+    if (kindOf(t) !== 'expense') continue;
+    const matches = counterpartyId
+      ? t.counterpartyId === counterpartyId
+      : NORMALIZE(t.merchant) === term;
+    if (!matches) continue;
+    if (t.splits && t.splits.length) {
+      for (const s of t.splits) {
+        if (!s.categoryId) continue;
+        counts.set(s.categoryId, (counts.get(s.categoryId) ?? 0) + 1);
+        total++;
+      }
+    } else if (t.category) {
+      counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
+      total++;
+    }
+  }
+  if (total === 0) return null;
+  let topId = '';
+  let topCount = 0;
+  for (const [id, n] of counts) {
+    if (n > topCount) {
+      topId = id;
+      topCount = n;
+    }
+  }
+  if (!topId) return null;
+  const confidence = topCount / total;
+  // Quiet down ambiguous results: a 1-of-2 coin flip surfaces as a chip with
+  // 50% confidence — more noise than signal. Demand either confidence over
+  // the threshold or enough samples to call the trend stable.
+  if (confidence < minConfidence && topCount < minCount) return null;
+  return { categoryId: topId, count: topCount, confidence };
+}
+
 /**
  * Unrealized FX gain/loss on one account, in the ledger base currency.
  *
