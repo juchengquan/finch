@@ -370,7 +370,6 @@ export default function AccountsPage() {
     );
   }
 
-  const total = ledgerAccounts.reduce((s, a) => s + balanceOf(a.id), 0);
   const ungroupedAccts = ledgerAccounts.filter((a) => !a.group || !groupShells.some((g) => g.id === a.group));
   const groupedAccounts = [
     ...groupShells.map((g) => ({ id: g.id, name: g.name, accounts: ledgerAccounts.filter((a) => a.group === g.id) })),
@@ -383,14 +382,6 @@ export default function AccountsPage() {
   return (
     <MobilePage>
       <ScreenHeader title="Accounts" trailing={trailing} />
-
-      <div className="px-5 pb-[22px]">
-        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Net worth · all accounts</div>
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <Money value={total} mono={false} className="font-serif text-4xl leading-none font-normal -tracking-[1.5px] sm:text-5xl sm:-tracking-[2px]" />
-          <span className="text-success text-xs whitespace-nowrap">+ <Money value={812} /> this month</span>
-        </div>
-      </div>
 
       <div className="px-5 pb-[120px] md:hidden">
         <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />

@@ -80,6 +80,7 @@ import {
   updateTransaction as qUpdate,
   deleteTransactionRow as qDelete,
   confirmTransaction as qConfirm,
+  confirmPendingWithMerchant as qConfirmWithMerchant,
   insertTxRow,
   type AddInput,
 } from './queries/transactions';
@@ -431,6 +432,14 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // Confirming pulls the row into the balance (pending was excluded).
       await recomputeForTransaction(exec, str(args.id));
       return;
+    case 'confirmPendingWithMerchant': {
+      await qConfirmWithMerchant(exec, str(args.id), {
+        counterpartyId: args.counterpartyId != null ? str(args.counterpartyId) : null,
+        newCounterpartyName: args.newCounterpartyName != null ? str(args.newCounterpartyName) : null,
+      });
+      await recomputeForTransaction(exec, str(args.id));
+      return;
+    }
     case 'confirmAllPending': {
       const pendingAccts = await exec("SELECT DISTINCT account_id FROM transactions WHERE status = 'pending'");
       await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE status = 'pending'", [

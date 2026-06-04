@@ -7,6 +7,7 @@ import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
 import { TransactionSheetProvider } from '@/components/transaction-sheet';
 import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
+import { MerchantPickerSheetProvider } from '@/components/merchant-picker-sheet';
 import { CommandPaletteProvider } from '@/components/command-palette';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -52,14 +53,16 @@ export default function RootLayout({
           <LedgerProvider>
             <StoreHydration />
             <SqliteBackupProvider>
-              <TransactionSheetProvider>
-                <AddExpenseSheetProvider>
-                  <CommandPaletteProvider>
-                    {children}
-                    <Toaster />
-                  </CommandPaletteProvider>
-                </AddExpenseSheetProvider>
-              </TransactionSheetProvider>
+              <MerchantPickerSheetProvider>
+                <TransactionSheetProvider>
+                  <AddExpenseSheetProvider>
+                    <CommandPaletteProvider>
+                      {children}
+                      <Toaster />
+                    </CommandPaletteProvider>
+                  </AddExpenseSheetProvider>
+                </TransactionSheetProvider>
+              </MerchantPickerSheetProvider>
             </SqliteBackupProvider>
           </LedgerProvider>
         </ThemeProvider>

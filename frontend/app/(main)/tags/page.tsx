@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +45,10 @@ export default function TagsPage() {
 
   const list = tags.filter((t) => t.ledgerId === activeId);
 
+  const [query, setQuery] = useState('');
+  const q = query.toLowerCase();
+  const filteredList = q ? list.filter((t) => t.name.toLowerCase().includes(q)) : list;
+
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState(DEFAULT_TAG_HEX);
@@ -70,45 +74,60 @@ export default function TagsPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Tags" trailing={<IconButton icon="plus" aria-label="New tag" onClick={() => setCreateOpen(true)} />} />}
+      header={<ScreenHeader title="Tags" />}
     >
       <div className="px-5 pb-[120px]">
-        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
-          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-            <Icon name="plus" size={14} />
-            New tag
-          </Button>
-        </div>
-        <div className="px-1 pb-5">
-          <SchemaChip label="tags" />
-          <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
-            {list.length} <span className="text-muted-foreground italic">tags</span>
-          </div>
-          <div className="text-secondary-foreground mt-1.5 text-[13px]">
-            Labels you can attach to transactions in {active.name}.
-          </div>
-        </div>
-
-        {list.length === 0 && (
-          <div className="text-muted-foreground rounded-[14px] border border-dashed py-10 text-center text-sm">
-            No tags yet — use the + button to add one.
-          </div>
-        )}
-
-        {list.map((t) => (
-          <div key={t.id} className="border-border bg-card mb-2.5 flex w-full items-center gap-3 rounded-[14px] border p-4">
-            <button type="button" onClick={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-              <span className="size-4 shrink-0 rounded-full" style={{ background: t.color ?? DEFAULT_TAG_HEX }} />
-              <div className="min-w-0 flex-1 text-sm font-medium">{t.name}</div>
-            </button>
-            <RowActions
-              onEdit={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })}
-              onDelete={() => { deleteTag(t.id); toast.success('Tag deleted', { description: t.name }); }}
-              confirmTitle={`Delete ${t.name}?`}
-              confirmDescription="The tag is removed from every transaction it's on. This can't be undone."
+        {/* Search + Add row (visible on both mobile and desktop, Categories-style) */}
+        <div className="mb-3.5 flex items-center gap-2">
+          <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
+            <Icon name="search" size={14} className="text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search tags"
+              placeholder="Search tags…"
+              className="placeholder:text-muted-foreground w-full bg-transparent outline-none"
             />
           </div>
-        ))}
+          <Button
+            onClick={() => setCreateOpen(true)}
+            size="icon"
+            className="rounded-full"
+            aria-label="New tag"
+            title="New tag"
+          >
+            <Icon name="plus" size={16} stroke={2} />
+          </Button>
+        </div>
+
+        {list.length === 0 ? (
+          <div className="text-muted-foreground rounded-[14px] border border-dashed py-10 text-center text-sm">
+            No tags yet — tap + to add one.
+          </div>
+        ) : filteredList.length === 0 ? (
+          <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
+        ) : (
+          <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border">
+            {filteredList.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50"
+              >
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: t.color ?? DEFAULT_TAG_HEX }}
+                />
+                <div className="min-w-0 flex-1 text-sm font-medium">{t.name}</div>
+                <RowActions
+                  onEdit={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })}
+                  onDelete={() => { deleteTag(t.id); toast.success('Tag deleted', { description: t.name }); }}
+                  confirmTitle={`Delete ${t.name}?`}
+                  confirmDescription="The tag is removed from every transaction it's on. This can't be undone."
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

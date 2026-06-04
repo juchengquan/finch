@@ -298,3 +298,200 @@ test('reports: monthly cash flow', async () => {
   expect(cf.expense).toBeLessThan(0);
   expect(cf.net).toBeCloseTo(cf.income + cf.expense, 2);
 });
+
+test('addTransaction: exact-name match sets counterparty_id, projection rewrites merchant to canonical', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { projectState } = await import('@/lib/db/state');
+  // A raw "Grab" description links to cp-02 at insert time. The projection
+  // then surfaces the canonical name on `merchant` (overriding the raw
+  // description), and the FK is preserved.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -3,
+    merchant: 'Grab',
+    date: '2026-05-25',
+  });
+  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.description)).toBe('Grab');
+  expect(String(row.counterparty_id)).toBe('cp-02');
+  const projected = await projectState(exec);
+  const tx = projected.transactions.find((t) => t.id === txId)!;
+  expect(tx.counterpartyId).toBe('cp-02');
+  expect(tx.merchant).toBe('Grab'); // canonical name == the raw here
+});
+
+test('addTransaction: catalog rename rewrites all linked rows on the next projection', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  const { updateCounterparty } = await import('@/lib/db/queries/counterparties');
+  const { projectState } = await import('@/lib/db/state');
+  // Insert a row, then rename the counterparty. The row's stored description
+  // is untouched (the catalog is the source of truth, not transactions).
+  // The projection overrides merchant with the new canonical name on read.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -3,
+    merchant: 'Grab',
+    date: '2026-05-25',
+  });
+  await updateCounterparty(exec, 'cp-02', { name: 'Grab Holdings' });
+  const projected = await projectState(exec);
+  const tx = projected.transactions.find((t) => t.id === txId)!;
+  expect(tx.merchant).toBe('Grab Holdings');
+  expect(tx.counterpartyId).toBe('cp-02');
+});
+
+test('addTransaction: unknown name leaves counterparty_id null (no auto-create)', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  // A brand-new name like "BLUE BOTTLE COFFEE" doesn't match the catalog, so
+  // the row is inserted unlinked. The matcher/picker is responsible for
+  // creating the counterparty and linking it later (via
+  // confirmPendingWithMerchant or a future Add-Expense pre-link).
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -12.5,
+    merchant: 'BLUE BOTTLE COFFEE',
+    date: '2026-05-25',
+  });
+  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.description)).toBe('BLUE BOTTLE COFFEE');
+  expect(row.counterparty_id).toBeNull();
+});
+
+test('addTransaction: explicit counterpartyId links the row to that counterparty', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  // Pass a raw merchant string that wouldn't match by name. The explicit
+  // counterpartyId forces the link, and the projection surfaces the canonical
+  // name on `merchant` regardless of the raw description.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -8,
+    merchant: 'APPLE.COM/BILL',
+    date: '2026-05-25',
+    counterpartyId: 'cp-05', // Apple (verified, seeded)
+  });
+  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.description)).toBe('APPLE.COM/BILL');
+  expect(String(row.counterparty_id)).toBe('cp-05');
+  // Projection surfaces the canonical name on the merchant field.
+  const { projectState } = await import('@/lib/db/state');
+  const projected = await projectState(exec);
+  const tx = projected.transactions.find((t) => t.id === txId)!;
+  expect(tx.merchant).toBe('Apple');
+  expect(tx.counterpartyId).toBe('cp-05');
+});
+
+test('addTransaction: explicit counterpartyId is rejected if it belongs to a different ledger', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  // Spin up a second ledger + counterparty; passing its id to an
+  // addTransaction for the 'personal' ledger must not link.
+  await exec(
+    "INSERT INTO ledgers (id, name, base_currency, is_default, created_at, updated_at) VALUES ('biz', 'Business', 'SGD', 0, datetime('now'), datetime('now'))",
+  );
+  const otherCpId = 'cp-other-ledger';
+  await exec(
+    "INSERT INTO counterparties (id, ledger_id, name, is_verified, created_at, updated_at) VALUES (?, 'biz', ?, 1, datetime('now'), datetime('now'))",
+    [otherCpId, 'Foreign Ledger Merchant'],
+  );
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -5,
+    merchant: 'Raw Merchant String',
+    date: '2026-05-25',
+    counterpartyId: otherCpId,
+  });
+  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(row.counterparty_id).toBeNull();
+  expect(String(row.description)).toBe('Raw Merchant String');
+});
+
+test('addTransaction: no counterpartyId + exact name match → auto-resolve', async () => {
+  const exec = await seeded();
+  const { addTransaction } = await import('@/lib/db/queries/transactions');
+  // "Grab" (capitalised) still auto-resolves to cp-02 the legacy way when
+  // counterpartyId is omitted.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -3,
+    merchant: 'Grab',
+    date: '2026-05-25',
+  });
+  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.description)).toBe('Grab');
+  expect(String(row.counterparty_id)).toBe('cp-02');
+});
+
+test('confirmPendingWithMerchant: links + rewrites description in one round-trip', async () => {
+  const exec = await seeded();
+  const { addTransaction, confirmPendingWithMerchant } = await import('@/lib/db/queries/transactions');
+  // Insert a pending row with a raw, munged merchant name.
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -8,
+    merchant: 'NETFLIX.COM*SUB',
+    date: '2026-05-25',
+    status: 'pending',
+  });
+  // Confirm + link to Apple (cp-05). The matcher would never suggest Apple
+  // for "NETFLIX.COM*SUB" but the test exercises the wiring directly.
+  await confirmPendingWithMerchant(exec, txId, { counterpartyId: 'cp-05' });
+  const [row] = await exec(
+    'SELECT status, description, counterparty_id, confirmed_at FROM transactions WHERE id = ?',
+    [txId],
+  );
+  expect(String(row.status)).toBe('confirmed');
+  expect(String(row.description)).toBe('Apple'); // canonical name, not raw
+  expect(String(row.counterparty_id)).toBe('cp-05');
+  expect(row.confirmed_at).not.toBeNull();
+});
+
+test('confirmPendingWithMerchant: newCounterpartyName creates unverified + links', async () => {
+  const exec = await seeded();
+  const { addTransaction, confirmPendingWithMerchant } = await import('@/lib/db/queries/transactions');
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -4.5,
+    merchant: 'BLUE BOTTLE COFFEE',
+    date: '2026-05-25',
+    status: 'pending',
+  });
+  await confirmPendingWithMerchant(exec, txId, { newCounterpartyName: 'Blue Bottle Coffee' });
+  const [row] = await exec('SELECT status, description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.status)).toBe('confirmed');
+  expect(String(row.description)).toBe('Blue Bottle Coffee');
+  const cpId = String(row.counterparty_id);
+  expect(cpId).toMatch(/^cp-/);
+  const [cp] = await exec('SELECT name, is_verified FROM counterparties WHERE id = ?', [cpId]);
+  expect(String(cp.name)).toBe('Blue Bottle Coffee');
+  expect(Number(cp.is_verified)).toBe(0);
+});
+
+test('confirmPendingWithMerchant: with no resolution leaves the row confirmed but unlinked', async () => {
+  const exec = await seeded();
+  const { addTransaction, confirmPendingWithMerchant } = await import('@/lib/db/queries/transactions');
+  const txId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -2,
+    merchant: 'ONE OFF MERCHANT',
+    date: '2026-05-25',
+    status: 'pending',
+  });
+  await confirmPendingWithMerchant(exec, txId, {});
+  const [row] = await exec('SELECT status, description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  expect(String(row.status)).toBe('confirmed');
+  expect(String(row.description)).toBe('ONE OFF MERCHANT');
+  expect(row.counterparty_id).toBeNull();
+});

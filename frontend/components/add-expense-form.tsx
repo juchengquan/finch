@@ -7,6 +7,7 @@ import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
+import { useMerchantPicker } from '@/components/merchant-picker-sheet';
 import {
   Select,
   SelectContent,
@@ -60,6 +61,7 @@ export function AddExpenseForm({
   const storeCps = useFinanceStore((s) => s.counterparties);
   const { activeId } = useLedger();
   const { base } = useMoney();
+  const { openMerchantPicker } = useMerchantPicker();
 
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
@@ -311,12 +313,21 @@ export function AddExpenseForm({
               <span className="text-muted-foreground text-[15px]" title="Follows the selected account">{accountCurrency}</span>
             </Field>
             <Field icon="tag" label="Merchant">
-              <input
-                value={merchant}
-                onChange={(e) => setMerchant(e.target.value)}
-                aria-label="Merchant" placeholder="e.g. Blue Bottle"
-                className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
-              />
+              <button
+                type="button"
+                onClick={() =>
+                  openMerchantPicker(merchant, (res) => {
+                    if (res) setMerchant(res.name);
+                  })
+                }
+                className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
+                aria-label="Select merchant"
+              >
+                <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
+                  {merchant || 'Pick a merchant'}
+                </span>
+                <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
+              </button>
             </Field>
             <Field icon="fork" label="Category">
               <Select value={category} onValueChange={setCategory}>

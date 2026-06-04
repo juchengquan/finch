@@ -56,6 +56,11 @@ export interface AddInput {
   kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
   /** For kind='refund': the original expense this refund offsets. */
   refundedTransactionId?: string | null;
+  /** Optional explicit counterparty link. When provided, the wrapper
+   *  forwards it to `insertTxRow`, which uses it as the FK and skips the
+   *  name-based auto-resolve. The projection in `state.ts` still overwrites
+   *  `merchant` with the canonical counterparty name on read. */
+  counterpartyId?: string | null;
 }
 
 export function rowToTx(r: Record<string, unknown>): Tx {
@@ -266,7 +271,20 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   // `amount` is native (in `currency`); the row's ledger-base figure is
   // derived inside insertTxRow from the row's currency + date. Kind defaults
   // to income/expense by amount sign; the caller can override (refund,
-  // adjustment, transfer).
+  // adjustment, transfer). An explicit `counterpartyId` is forwarded as-is;
+  // insertTxRow skips the name-based auto-resolve when present.
+  //
+  // Cross-ledger guard: if the caller passes a `counterpartyId` from a
+  // different ledger, drop the hint and let `insertTxRow` fall through to
+  // the name-based auto-resolve. This keeps the FK in scope — counterparty
+  // ids are not portable across ledgers.
+  let counterpartyId = input.counterpartyId ?? undefined;
+  if (counterpartyId) {
+    const [cp] = await exec('SELECT ledger_id FROM counterparties WHERE id = ?', [counterpartyId]);
+    if (!cp || String(cp.ledger_id) !== input.ledgerId) {
+      counterpartyId = undefined;
+    }
+  }
   const kind = input.kind ?? (input.amount > 0 ? 'income' : 'expense');
   return await insertTxRow(exec, {
     ledgerId: input.ledgerId,
@@ -281,6 +299,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
     status: input.status ?? 'confirmed',
     refundedTransactionId: input.refundedTransactionId ?? null,
     notes: input.note || null,
+    counterpartyId,
   });
 }
 
@@ -359,4 +378,50 @@ export async function confirmTransaction(exec: Exec, id: string): Promise<void> 
     new Date().toISOString(),
     id,
   ]);
+}
+
+/**
+ * Confirm a pending transaction and (optionally) link it to a counterparty
+ * in the same write. Used by the Pending page after the matcher decides
+ * where a row belongs. Counterparty resolution priority mirrors
+ * `addTransaction`: explicit `counterpartyId` > `newCounterpartyName` (create
+ * + link) > leave the existing link untouched. The row's `description` is
+ * rewritten to the canonical counterparty name; the projection in
+ * `state.ts` will further surface it as the row's `merchant` on read.
+ */
+export async function confirmPendingWithMerchant(
+  exec: Exec,
+  id: string,
+  resolution: { counterpartyId?: string | null; newCounterpartyName?: string | null },
+): Promise<void> {
+  const [row] = await exec('SELECT description, ledger_id FROM transactions WHERE id = ?', [id]);
+  if (!row) return;
+  const ledgerId = String(row.ledger_id ?? '');
+
+  let counterpartyId: string | null = null;
+  let description = String(row.description ?? '');
+  if (resolution.counterpartyId) {
+    const [cp] = await exec('SELECT name FROM counterparties WHERE id = ? AND ledger_id = ?', [
+      resolution.counterpartyId,
+      ledgerId,
+    ]);
+    if (cp) {
+      counterpartyId = String(cp.id ?? resolution.counterpartyId);
+      description = String(cp.name);
+    }
+  } else if (resolution.newCounterpartyName && resolution.newCounterpartyName.trim()) {
+    const name = resolution.newCounterpartyName.trim();
+    const newCpId = `cp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    await exec(
+      "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
+      [newCpId, ledgerId, name],
+    );
+    counterpartyId = newCpId;
+    description = name;
+  }
+
+  await exec(
+    "UPDATE transactions SET status = 'confirmed', confirmed_at = ?, counterparty_id = ?, description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+    [new Date().toISOString(), counterpartyId, description, id],
+  );
 }

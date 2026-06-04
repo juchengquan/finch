@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -108,22 +107,22 @@ export default function CategoriesPage() {
   const topLevel = useMemo(() => list.filter((c) => c.parentId == null), [list]);
   const colorOf = (c: CategoryRow) => c.color ?? DEFAULT_CATEGORY_HEX;
 
+  // Main categories are collapsed by default; their ids are added when the
+  // chevron is clicked, revealing the subcategory rows beneath.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const [draft, setDraft] = useState<CatDraft>(EMPTY_DRAFT);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const openCreateTop = () => {
     setDraft(EMPTY_DRAFT);
-    setDialogOpen(true);
-  };
-
-  const openCreateChild = (parentId: string) => {
-    const parent = list.find((c) => c.id === parentId);
-    setDraft({
-      ...EMPTY_DRAFT,
-      parentId,
-      type: parent?.type ?? 'expense',
-      color: parent?.color ?? DEFAULT_CATEGORY_HEX,
-    });
     setDialogOpen(true);
   };
 
@@ -246,38 +245,14 @@ export default function CategoriesPage() {
     </Dialog>
   );
 
-  const triggerCreate = (
-    <Dialog>
-      <DialogTrigger asChild>
-        <IconButton icon="plus" aria-label="New category" onClick={openCreateTop} />
-      </DialogTrigger>
-    </Dialog>
-  );
-
-  const childCount = list.filter((c) => c.parentId != null).length;
-  const parentCount = topLevel.length;
-
   return (
-    <MobilePage header={<ScreenHeader title="Categories" trailing={triggerCreate} />}>
-      <div className="px-5 pb-[120px]">
-        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
+    <MobilePage header={<ScreenHeader title="Categories" trailing={<IconButton icon="plus" aria-label="New category" onClick={openCreateTop} />} />}>
+      <div className="px-5 pb-[120px] md:pb-5 md:pt-[52px]">
+        <div className="fixed top-[73px] right-5 z-50 hidden md:block">
           <Button size="sm" variant="outline" onClick={openCreateTop}>
             <Icon name="plus" size={14} />
             New category
           </Button>
-        </div>
-        <div className="px-1 pb-5">
-          <SchemaChip label="categories" />
-          <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
-            {parentCount}
-            <span className="text-muted-foreground italic"> parent{parentCount === 1 ? '' : 's'}</span>
-            {childCount > 0 && (
-              <span className="text-muted-foreground"> · {childCount} subcategor{childCount === 1 ? 'y' : 'ies'}</span>
-            )}
-          </div>
-          <div className="text-secondary-foreground mt-1.5 text-[13px]">
-            A 2-level taxonomy. Tap a card to edit; transactions can file against either level — a parent rolls up its subcategories&rsquo; totals.
-          </div>
         </div>
 
         {tree.length === 0 && (
@@ -286,29 +261,37 @@ export default function CategoriesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {tree.map(({ parent, children }) => (
-            <div key={parent.id} className="border-border bg-card rounded-[14px] border p-4">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => openEdit(parent)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  aria-label={`Edit ${parent.name}`}
+        <div className="border-border bg-card divide-border divide-y md:max-h-[calc(100dvh-150px)] max-h-[calc(100dvh-200px)] overflow-y-auto rounded-[14px] border">
+          {tree.flatMap(({ parent, children }) => {
+            const isOpen = expanded.has(parent.id);
+            const parentRow = (
+              <div
+                key={parent.id}
+                className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50"
+              >
+                <div
+                  className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
+                  style={{ background: colorOf(parent) }}
                 >
-                  <div
-                    className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-                    style={{ background: colorOf(parent) }}
+                  <Icon name={parent.icon ?? 'tag'} size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{parent.name}</div>
+                  <div className="text-muted-foreground mt-0.5 font-mono text-[10px] tracking-[0.5px] uppercase">
+                    {parent.type}{children.length > 0 && ` · ${children.length} sub`}
+                  </div>
+                </div>
+                {children.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(parent.id)}
+                    className="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1"
+                    aria-label={isOpen ? `Collapse ${parent.name}` : `Expand ${parent.name}`}
+                    aria-expanded={isOpen}
                   >
-                    <Icon name={parent.icon ?? 'tag'} size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{parent.name}</div>
-                    <div className="text-muted-foreground mt-0.5 font-mono text-[10px] tracking-[0.5px] uppercase">
-                      {parent.type}{children.length > 0 && ` · ${children.length} sub`}
-                    </div>
-                  </div>
-                </button>
+                    <Icon name={isOpen ? 'chev-d' : 'chev'} size={14} />
+                  </button>
+                )}
                 <RowActions
                   onEdit={() => openEdit(parent)}
                   onDelete={() => {
@@ -327,40 +310,29 @@ export default function CategoriesPage() {
                   }
                 />
               </div>
-
-              {children.length > 0 && (
-                <div className="border-border mt-3 flex flex-col gap-1 border-t border-dashed pt-2">
-                  {children.map((child) => (
-                    <div key={child.id} className="flex items-center gap-2 py-1.5">
-                      <span className="text-muted-foreground ml-1 font-mono text-[10px]">└</span>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(child)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="truncate text-[13px]">{child.name}</div>
-                      </button>
-                      <RowActions
-                        onEdit={() => openEdit(child)}
-                        onDelete={() => { deleteCategory(child.id); toast.success('Subcategory deleted', { description: child.name }); }}
-                        confirmTitle={`Delete ${child.name}?`}
-                        confirmDescription="Transactions in this subcategory become uncategorised."
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => openCreateChild(parent.id)}
-                className="text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 font-mono text-[10px]"
+            );
+            const childRows = isOpen ? children.map((child) => (
+              <div
+                key={child.id}
+                className="flex items-center gap-2 py-2 pr-3 pl-12 transition-colors hover:bg-secondary/50"
               >
-                <Icon name="plus" size={10} stroke={2} />
-                new subcategory
-              </button>
-            </div>
-          ))}
+                <div
+                  className="flex size-6 flex-shrink-0 items-center justify-center rounded-md text-white"
+                  style={{ background: child.color ?? colorOf(parent) }}
+                >
+                  <Icon name={child.icon ?? parent.icon ?? 'tag'} size={12} />
+                </div>
+                <div className="min-w-0 flex-1 truncate text-[13px]">{child.name}</div>
+                <RowActions
+                  onEdit={() => openEdit(child)}
+                  onDelete={() => { deleteCategory(child.id); toast.success('Subcategory deleted', { description: child.name }); }}
+                  confirmTitle={`Delete ${child.name}?`}
+                  confirmDescription="Transactions in this subcategory become uncategorised."
+                />
+              </div>
+            )) : [];
+            return [parentRow, ...childRows];
+          })}
         </div>
       </div>
 
