@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast, merchantStats, anomalyScore } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -802,4 +802,93 @@ test('anomalyScore: skips non-expense and pending rows', () => {
   const stats = merchantStats(history, 'personal');
   expect(anomalyScore(tx({ merchant: 'Test', amount: 100, kind: 'income' }), stats)).toBeNull();
   expect(anomalyScore(tx({ merchant: 'Test', amount: -100, pending: true }), stats)).toBeNull();
+});
+
+// Anchor 2026-05-13 (Wednesday) ⇒ "last week" = 2026-05-04 (Mon) … 2026-05-10 (Sun);
+// prev week = 2026-04-27 … 2026-05-03.
+test('weeklyDigest: returns null on a ledger with no confirmed history', () => {
+  expect(weeklyDigest([], 'personal', '2026-05-13')).toBeNull();
+  expect(
+    weeklyDigest([tx({ pending: true, date: '2026-05-06', amount: -50 })], 'personal', '2026-05-13'),
+  ).toBeNull();
+});
+
+test('weeklyDigest: reports the most recently completed Mon-Sun window', () => {
+  // Anchor mid-week (Wed) — the digest is "last week", not "this week".
+  const txns = [
+    tx({ id: 'in-week', date: '2026-05-06', amount: -42, category: 'food' }),
+    // Outside the last-week window (still in current week): must NOT count.
+    tx({ id: 'this-week', date: '2026-05-13', amount: -99, category: 'food' }),
+  ];
+  const d = weeklyDigest(txns, 'personal', '2026-05-13');
+  expect(d).not.toBeNull();
+  expect(d!.weekStart).toBe('2026-05-04');
+  expect(d!.weekEnd).toBe('2026-05-10');
+  expect(d!.spent).toBe(42);
+  expect(d!.txCount).toBe(1);
+});
+
+test('weeklyDigest: vs-prev % is signed and rounded; null when there is no prior history', () => {
+  // 100 spend last week, 80 prev week → +25%.
+  const txns = [
+    tx({ id: 'a', date: '2026-05-05', amount: -60, category: 'food' }),
+    tx({ id: 'b', date: '2026-05-09', amount: -40, category: 'food' }),
+    tx({ id: 'c', date: '2026-04-30', amount: -80, category: 'food' }),
+  ];
+  const d = weeklyDigest(txns, 'personal', '2026-05-13')!;
+  expect(d.spent).toBe(100);
+  expect(d.prevSpent).toBe(80);
+  expect(d.vsPrevPct).toBe(0.25);
+
+  // No prior week activity at all → vsPrevPct is null (not 0, not Infinity).
+  const noPrior = weeklyDigest(
+    [tx({ id: 'a', date: '2026-05-05', amount: -60 })],
+    'personal',
+    '2026-05-13',
+  )!;
+  expect(noPrior.prevSpent).toBeNull();
+  expect(noPrior.vsPrevPct).toBeNull();
+});
+
+test('weeklyDigest: top categories sorted desc, capped at 5; biggest hit excludes refunds', () => {
+  const mk = (cat: string, amount: number, id = cat) =>
+    tx({ id, date: '2026-05-07', amount: -amount, category: cat });
+  const txns = [
+    mk('a', 60),
+    mk('b', 50),
+    mk('c', 40),
+    mk('d', 30),
+    mk('e', 20),
+    mk('f', 10),
+    // A refund is bigger than any expense, but shouldn't claim the headline.
+    tx({ id: 'rf', date: '2026-05-07', amount: 200, category: 'a', kind: 'refund' }),
+  ];
+  const d = weeklyDigest(txns, 'personal', '2026-05-13')!;
+  expect(d.topCategories.map((c) => c.categoryId)).toEqual(['b', 'c', 'd', 'e', 'f']);
+  // Category 'a' nets to -140 (60 expense − 200 refund) so falls off; refund offsets correctly.
+  expect(d.biggestExpense?.txId).toBe('a');
+  expect(d.biggestExpense?.amount).toBe(60);
+});
+
+test('weeklyDigest: vsAvgPct null when fewer than 4 weeks of history', () => {
+  // Two weeks of trailing data → avgWeeks = 2 → vsAvgPct null.
+  const txns = [
+    tx({ id: 'w', date: '2026-05-05', amount: -50 }),
+    tx({ id: 'p1', date: '2026-04-28', amount: -30 }),
+    tx({ id: 'p2', date: '2026-04-21', amount: -30 }),
+  ];
+  const d = weeklyDigest(txns, 'personal', '2026-05-13')!;
+  expect(d.avgWeeks).toBe(2);
+  expect(d.vsAvgPct).toBeNull();
+});
+
+test('weeklyDigest: income counted from income rows only; net = income - spent', () => {
+  const txns = [
+    tx({ id: 's', date: '2026-05-05', amount: -100, category: 'food' }),
+    tx({ id: 'i', date: '2026-05-07', amount: 300, category: 'salary', kind: 'income' }),
+  ];
+  const d = weeklyDigest(txns, 'personal', '2026-05-13')!;
+  expect(d.spent).toBe(100);
+  expect(d.income).toBe(300);
+  expect(d.net).toBe(200);
 });

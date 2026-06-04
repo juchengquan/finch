@@ -1003,3 +1003,54 @@ test('changeLedgerBase same-base call is a no-op (no row changes)', async () => 
     expect(Number(after[i].amount_base)).toBeCloseTo(Number(before[i].amount_base), 6);
   }
 });
+
+test('bulkRecategorize moves N rows in one statement; categorySpend shifts accordingly', async () => {
+  const exec = await seeded();
+  const { categorySpend } = await import('@/lib/db/queries/categories');
+  // Pick three confirmed expenses currently tagged 'food'.
+  const ids = (
+    await exec(
+      "SELECT id FROM transactions WHERE ledger_id = 'personal' AND category_id = 'food' AND status = 'confirmed' ORDER BY date DESC LIMIT 3",
+    )
+  ).map((r) => String(r.id));
+  expect(ids.length).toBe(3);
+  const movedSum = (
+    await exec(
+      `SELECT SUM(amount_base) AS s FROM transactions WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ids,
+    )
+  )[0];
+  const moved = Math.abs(Number(movedSum.s));
+  const before = await categorySpend(exec, 'personal');
+
+  await applyMutation(exec, 'bulkRecategorize', { ids, categoryId: 'misc' });
+  const after = await categorySpend(exec, 'personal');
+
+  // Each moved row now has category 'misc'; no row keeps the old food link.
+  const stillFood = await exec(
+    `SELECT COUNT(*) AS c FROM transactions WHERE id IN (${ids.map(() => '?').join(',')}) AND category_id = 'food'`,
+    ids,
+  );
+  expect(Number(stillFood[0].c)).toBe(0);
+  expect((after['food'] ?? 0)).toBeCloseTo((before['food'] ?? 0) - moved, 2);
+  expect((after['misc'] ?? 0)).toBeCloseTo((before['misc'] ?? 0) + moved, 2);
+});
+
+test('bulkRecategorize: empty ids is a no-op; null categoryId clears the link', async () => {
+  const exec = await seeded();
+  // Empty: nothing changes.
+  const beforeCount = Number(
+    (await exec("SELECT COUNT(*) AS c FROM transactions WHERE category_id = 'food'"))[0].c,
+  );
+  await applyMutation(exec, 'bulkRecategorize', { ids: [], categoryId: 'misc' });
+  expect(
+    Number((await exec("SELECT COUNT(*) AS c FROM transactions WHERE category_id = 'food'"))[0].c),
+  ).toBe(beforeCount);
+
+  // Null: clear the category on a single row.
+  const [row] = await exec("SELECT id FROM transactions WHERE category_id = 'food' LIMIT 1");
+  const id = String(row.id);
+  await applyMutation(exec, 'bulkRecategorize', { ids: [id], categoryId: null });
+  const [after] = await exec('SELECT category_id AS c FROM transactions WHERE id = ?', [id]);
+  expect(after.c).toBeNull();
+});
