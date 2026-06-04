@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAddExpense } from '@/components/add-expense-sheet';
-import { useCommandPalette } from '@/components/command-palette';
+import { SearchButton } from '@/components/command-palette';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -87,7 +87,6 @@ export function PageShell({
 }: PageShellProps) {
   const pathname = usePathname();
   const { openAddExpense } = useAddExpense();
-  const { open: openSearch } = useCommandPalette();
   const accounts = useFinanceStore((s) => s.accounts);
   const tabBarTabs = mobileTabs ?? tabs;
 
@@ -250,18 +249,15 @@ export function PageShell({
             <div className="font-serif text-2xl tracking-tight">{pageTitle}</div>
           )}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={openSearch}
-              aria-label="Search"
-              className="bg-secondary text-muted-foreground hover:text-foreground flex h-9 w-60 items-center gap-2 rounded-full px-3.5 text-[13px] transition-colors"
-            >
-              <Icon name="search" size={14} />
-              <span className="flex-1 text-left">Search transactions…</span>
-              <kbd className="font-mono text-[10px] tracking-wide">⌘K</kbd>
-            </button>
+            <SearchButton />
             {showAdd && (
-              <Button onClick={openAddExpense} size="icon" aria-label="Add expense" title="Add expense">
+              <Button
+                onClick={openAddExpense}
+                size="icon"
+                aria-label="Add expense"
+                title="Add expense"
+                className="rounded-full"
+              >
                 <Icon name="plus" size={16} stroke={2} />
               </Button>
             )}

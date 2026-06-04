@@ -190,11 +190,24 @@ interface FinanceState {
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
   displayCurrencyByLedger: Record<string, string>;
 
-  addTransaction: (tx: Omit<Tx, 'id'>) => string;
+  addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
   deleteTransaction: (id: string) => void;
   confirmPending: (id: string) => void;
+  /**
+   * Confirm a pending transaction with an explicit counterparty resolution
+   * (chosen by the matcher / picker). `resolution` is one of:
+   *   - `{ kind: 'existing', id }` — link to an existing counterparty
+   *   - `{ kind: 'new', name }` — create a new unverified counterparty
+   *   - `{ kind: 'skip' }` — confirm without linking (rare; the matcher
+   *     offered a "skip and use raw" escape hatch in earlier design but
+   *     we've decided against it; kept for forward-compatibility).
+   */
+  confirmPendingWithMatch: (
+    id: string,
+    resolution: { kind: 'existing'; id: string } | { kind: 'new'; name: string } | { kind: 'skip' },
+  ) => void;
   cancelPending: (id: string) => void;
   confirmAllPending: () => void;
   setMobileTabIds: (ids: string[]) => void;
@@ -328,6 +341,10 @@ export const useFinanceStore = create<FinanceState>()(
           status: tx.pending ? 'pending' : 'confirmed',
           kind: tx.kind,
           refundedTransactionId: tx.refundedTransactionId,
+          // Optional explicit counterparty link; the server's addTransaction
+          // is a thin wrapper around insertTxRow which resolves the link
+          // (auto-resolve by name, or accepts an explicit counterpartyId).
+          counterpartyId: tx.counterpartyId ?? null,
         });
         return id;
       },
@@ -354,6 +371,42 @@ export const useFinanceStore = create<FinanceState>()(
       confirmPending: (id) => {
         set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, pending: false } : t)) }));
         syncMutation('confirmTransaction', { id });
+      },
+
+      confirmPendingWithMatch: (id, resolution) => {
+        // Optimistically flip status. The server-side `confirmPendingWithMerchant`
+        // mutation handles status flip + counterparty link + description rewrite
+        // in a single UPDATE. We patch the local row's counterpartyId + merchant
+        // so the UI doesn't wait for the round-trip to render the canonical name.
+        set((s) => ({
+          transactions: s.transactions.map((t) => {
+            if (t.id !== id) return t;
+            // Optimistic preview: if we know the canonical name, surface it
+            // immediately. The server re-projects and replaces this with the
+            // authoritative row.
+            const patched: Tx = { ...t, pending: false };
+            if (resolution.kind === 'existing') {
+              const cp = useFinanceStore.getState().counterparties.find((c) => c.id === resolution.id);
+              if (cp) {
+                patched.counterpartyId = cp.id;
+                patched.merchant = cp.name;
+              } else {
+                patched.counterpartyId = resolution.id;
+              }
+            } else if (resolution.kind === 'new') {
+              // Don't fabricate an id — leave the FK unset optimistically.
+              // The server creates the counterparty and the projected state
+              // surfaces the link.
+              patched.merchant = resolution.name;
+            }
+            return patched;
+          }),
+        }));
+        syncMutation('confirmPendingWithMerchant', {
+          id,
+          counterpartyId: resolution.kind === 'existing' ? resolution.id : null,
+          newCounterpartyName: resolution.kind === 'new' ? resolution.name : null,
+        });
       },
 
       cancelPending: (id) => {

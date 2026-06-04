@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -127,15 +127,8 @@ export default function MerchantsPage() {
       header={<ScreenHeader title="Merchants" trailing={<IconButton icon="plus" aria-label="New merchant" onClick={() => setCreateOpen(true)} />} />}
     >
       <div className="px-5 pb-[120px]">
-        <div className="hidden items-center justify-end pt-2 pb-3 md:flex">
-          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-            <Icon name="plus" size={14} />
-            New merchant
-          </Button>
-        </div>
         <div className="px-1 pb-[18px]">
-          <SchemaChip label="counterparties" />
-          <div className="mt-2 flex items-baseline gap-3.5">
+          <div className="flex items-baseline gap-3.5">
             <div>
               <div className="font-serif text-[40px] leading-none tracking-[-1.4px]">{rows.length}</div>
               <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">STANDARDISED</div>
@@ -146,6 +139,13 @@ export default function MerchantsPage() {
               <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">UNVERIFIED</div>
             </div>
           </div>
+        </div>
+
+        <div className="hidden items-center justify-end pb-3 md:flex">
+          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" size={14} />
+            New merchant
+          </Button>
         </div>
 
         <div className="bg-secondary mb-3.5 flex h-[38px] items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
