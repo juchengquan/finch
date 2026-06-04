@@ -47,7 +47,12 @@ export async function recomputeAmountBases(
   ledgerId: string,
   newBase: string,
 ): Promise<{ transactions: number; splits: number; accounts: number }> {
-  await exec('BEGIN');
+  // SAVEPOINT (not BEGIN) so this composes with an outer transaction. SQLite
+  // rejects nested BEGINs — and while no caller wraps us today, the API
+  // route's mutation queue is the kind of place a future "batch these"
+  // wrapper would slot in. RELEASE on success, ROLLBACK TO on failure.
+  const sp = 'recompute_bases';
+  await exec(`SAVEPOINT ${sp}`);
   try {
     await exec(
       "UPDATE ledgers SET base_currency = ?, updated_at = datetime('now') WHERE id = ?",
@@ -120,10 +125,11 @@ export async function recomputeAmountBases(
       await recomputeAccount(exec, String(a.id));
     }
 
-    await exec('COMMIT');
+    await exec(`RELEASE ${sp}`);
     return { transactions: txns.length, splits: splits.length, accounts: accts.length };
   } catch (err) {
-    await exec('ROLLBACK');
+    await exec(`ROLLBACK TO ${sp}`);
+    await exec(`RELEASE ${sp}`);
     throw err;
   }
 }

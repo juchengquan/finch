@@ -187,3 +187,31 @@ test('listTransactions filters by minAmount / maxAmount on absolute amount', asy
   const window = await listTransactions(exec, { ledgerId: 'personal', minAmount: 20, maxAmount: 50 });
   expect(window.every((t) => Math.abs(t.amount) >= 20 && Math.abs(t.amount) <= 50)).toBe(true);
 });
+
+test("FTS5 search matches tokens with internal punctuation (O'Reilly, AT&T)", async () => {
+  const exec = await seeded();
+  // FTS5's unicode61 tokenizer splits "O'Reilly" into `o` + `reilly`; our
+  // toFts5Query must match that split, not collapse the string to `oreilly`.
+  await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'cc',
+    amount: -42.5,
+    merchant: "O'Reilly Auto Parts",
+    date: '2026-05-22',
+    categoryId: 'food',
+  });
+  await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'cc',
+    amount: -29.99,
+    merchant: 'AT&T Wireless',
+    date: '2026-05-22',
+    categoryId: 'food',
+  });
+  const reilly = await listTransactions(exec, { ledgerId: 'personal', query: 'reilly' });
+  expect(reilly.some((t) => t.merchant === "O'Reilly Auto Parts")).toBe(true);
+  const att = await listTransactions(exec, { ledgerId: 'personal', query: 'at&t' });
+  expect(att.some((t) => t.merchant === 'AT&T Wireless')).toBe(true);
+  const apostrophe = await listTransactions(exec, { ledgerId: 'personal', query: "O'Reilly" });
+  expect(apostrophe.some((t) => t.merchant === "O'Reilly Auto Parts")).toBe(true);
+});

@@ -154,6 +154,7 @@ async function insertTxRow(
     note: string | null;
     kind: 'income' | 'expense' | 'transfer' | 'adjustment';
     sourceTemplateId?: string | null;
+    categoryId?: string | null;
   },
 ): Promise<void> {
   const ts = new Date().toISOString();
@@ -171,7 +172,7 @@ async function insertTxRow(
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId('t'), row.ledgerId, row.accountId, row.date, row.time ?? null, row.amount, conv.amountBase, conv.rate,
-      row.description, null, cpId, row.transferGroupId, row.kind, 'confirmed', ts,
+      row.description, row.categoryId ?? null, cpId, row.transferGroupId, row.kind, 'confirmed', ts,
       row.currency, row.note, row.sourceTemplateId ?? null, ts, ts,
     ],
   );
@@ -185,13 +186,14 @@ async function postSingle(
   description: string,
   date: string,
   sourceTemplateId: string | null = null,
+  categoryId: string | null = null,
 ): Promise<void> {
   const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [accountId]);
   await insertTxRow(exec, {
     ledgerId, accountId, date, amount, description,
     currency: String(acct?.currency ?? 'USD'),
     transferGroupId: null, note: null, kind: amount > 0 ? 'income' : 'expense',
-    sourceTemplateId,
+    sourceTemplateId, categoryId,
   });
 }
 
@@ -226,14 +228,14 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
     for (const sp of t.splits) {
       const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
       if (!portion) continue;
-      await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id);
+      await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null);
       posted++;
     }
     if (!posted) throw new Error(`No split amounts to post for "${t.name}"`);
     return;
   }
 
-  await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id);
+  await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null);
 }
 
 // Create a transfer: a transfer_group plus two confirmed transactions (out/in)
@@ -856,7 +858,16 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!acct) throw new Error('Account not found');
       if (String(acct.type) !== 'investment') throw new Error('Holdings can only be added to an investment account');
       const ledgerId = str(args.ledgerId || acct.ledger_id || 'personal');
-      const currency = args.currency ? str(args.currency).trim().toUpperCase() : String(acct.currency ?? 'USD');
+      // Lock currency to the account's so cross-position sums in the
+      // account's currency stay correct without per-row conversion. A
+      // mismatched override is rejected outright rather than silently
+      // coerced — surfaces the misuse instead of corrupting totals.
+      const accountCurrency = String(acct.currency ?? 'USD');
+      const requested = args.currency ? str(args.currency).trim().toUpperCase() : accountCurrency;
+      if (requested !== accountCurrency) {
+        throw new Error(`Holding currency must match the account currency (${accountCurrency})`);
+      }
+      const currency = accountCurrency;
       await qCreateHolding(exec, {
         id: str(args.id || newId('h')),
         ledgerId,

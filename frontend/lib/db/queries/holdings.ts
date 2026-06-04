@@ -39,21 +39,26 @@ function rowToHolding(r: Record<string, unknown>): Holding {
   };
 }
 
-/** List holdings. Pass a ledgerId to scope; passing accountId scopes further. */
+/** List holdings, scoped to *active* accounts only. Pass a ledgerId to scope
+ *  further; passing accountId scopes further still. Archived accounts'
+ *  holdings stay in the table (so unarchive restores them) but don't surface
+ *  in the projection — keeping them in sync with `listAccounts`. */
 export async function listHoldings(exec: Exec, ledgerId?: string, accountId?: string): Promise<Holding[]> {
-  const where: string[] = [];
+  const where: string[] = ['a.is_active = 1'];
   const bind: (string | number | null)[] = [];
   if (ledgerId) {
-    where.push('ledger_id = ?');
+    where.push('h.ledger_id = ?');
     bind.push(ledgerId);
   }
   if (accountId) {
-    where.push('account_id = ?');
+    where.push('h.account_id = ?');
     bind.push(accountId);
   }
-  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const rows = await exec(
-    `SELECT * FROM holdings ${clause} ORDER BY symbol, created_at`,
+    `SELECT h.* FROM holdings h
+       JOIN accounts a ON a.id = h.account_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY h.symbol, h.created_at`,
     bind,
   );
   return rows.map(rowToHolding);

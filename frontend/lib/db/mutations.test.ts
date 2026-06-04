@@ -74,6 +74,34 @@ test('postScheduled posts a resolvable expense template as a transaction', async
   expect(String(rows[0].kind)).toBe('expense');
 });
 
+test('postScheduled stamps the template category onto the posted transaction', async () => {
+  const exec = await seeded();
+  // Build a template that has a category set, then post it manually. The
+  // posted row should carry that category — earlier the manual-post path
+  // hard-coded category_id to NULL while autopost preserved it.
+  await applyMutation(exec, 'createScheduled', {
+    id: 'sch-cat', name: 'Coffee subscription', type: 'expense', frequency: 'monthly',
+    dayOfMonth: 1, accountId: 'cc', amount: 12, category: 'food',
+  });
+  await applyMutation(exec, 'postScheduled', { templateId: 'sch-cat' });
+  const [row] = await exec(
+    "SELECT category_id FROM transactions WHERE source_template_id = 'sch-cat'",
+  );
+  expect(String(row.category_id)).toBe('food');
+});
+
+test('createHolding rejects a currency that differs from the account currency', async () => {
+  const exec = await seeded();
+  // `inv` is denominated in USD (personal-ledger base). Trying to add a EUR
+  // position should fail outright — mixed-currency sums on the account total
+  // would silently corrupt without per-row conversion.
+  await expect(
+    applyMutation(exec, 'createHolding', {
+      accountId: 'inv', symbol: 'EUNA', shares: 5, costBasis: 1000, currency: 'EUR',
+    }),
+  ).rejects.toThrow('Holding currency must match the account currency');
+});
+
 test('postScheduled posts to the template\'s linked account', async () => {
   const exec = await seeded();
   // rt-rent: $1850 expense on Chase Checking (chk).
@@ -454,6 +482,19 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co' } });
   const [cp] = await exec('SELECT name FROM counterparties WHERE id = ?', [cpId]);
   expect(String(cp.name)).toBe('Renamed Co');
+});
+
+test('updateScheduled silently skips unknown keys without throwing a SQL error', async () => {
+  const exec = await seeded();
+  // A stray patch key (typo, stale field name) used to become `undefined = ?`
+  // in SQL and throw "near '=': syntax error". The query should ignore it and
+  // apply the known fields cleanly.
+  await applyMutation(exec, 'updateScheduled', {
+    id: 'rt-spotify',
+    patch: { name: 'Spotify Family', unknownField: 'noise', anotherTypo: 42 },
+  });
+  const [r] = await exec("SELECT name FROM scheduled_templates WHERE id = 'rt-spotify'");
+  expect(String(r.name)).toBe('Spotify Family');
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
