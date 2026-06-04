@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { suggestCategory } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };
@@ -55,6 +56,8 @@ export function AddExpenseForm({
   const createTransfer = useFinanceStore((s) => s.createTransfer);
   const storeCats = useFinanceStore((s) => s.categories);
   const storeAccts = useFinanceStore((s) => s.accounts);
+  const storeTxns = useFinanceStore((s) => s.transactions);
+  const storeCps = useFinanceStore((s) => s.counterparties);
   const { activeId } = useLedger();
   const { base } = useMoney();
 
@@ -86,6 +89,26 @@ export function AddExpenseForm({
   // Default the transfer from/to to the first two accounts.
   if (accountOptions.length && !accountOptions.some((o) => o.id === fromAccount)) setFromAccount(accountOptions[0].id);
   if (accountOptions.length > 1 && !accountOptions.some((o) => o.id === toAccount)) setToAccount(accountOptions[1].id);
+
+  // Local-heuristic category suggestion: if the typed merchant resolves to a
+  // counterparty (or matches a past free-text description), surface the most-
+  // common category from past confirmed expenses for that merchant. Quiet
+  // when there's no signal. Only suggests for expenses (income/transfer have
+  // their own conventions).
+  const merchantTerm = merchant.trim().toLowerCase();
+  const counterpartyId = useMemo(() => {
+    if (!merchantTerm) return null;
+    const hit = storeCps.find(
+      (c) => c.ledgerId === activeId && c.name.trim().toLowerCase() === merchantTerm,
+    );
+    return hit ? hit.id : null;
+  }, [storeCps, activeId, merchantTerm]);
+  const suggestion = useMemo(() => {
+    if (type !== 'expense') return null;
+    return suggestCategory(storeTxns, activeId, merchant, counterpartyId);
+  }, [storeTxns, activeId, merchant, counterpartyId, type]);
+  const suggestedName = suggestion ? categoryOptions.find((c) => c.id === suggestion.categoryId)?.name : null;
+  const alreadyApplied = suggestion ? suggestion.categoryId === category : false;
 
   const curOf = (id: string) => storeAccts.find((a) => a.id === id)?.currency ?? base;
   // The entry currency follows the selected account (an account holds one
@@ -273,6 +296,20 @@ export function AddExpenseForm({
                 </SelectContent>
               </Select>
             </Field>
+            {type === 'expense' && suggestion && suggestedName && !alreadyApplied && (
+              <div className="flex justify-end px-5 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCategory(suggestion.categoryId)}
+                  className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors"
+                  aria-label={`Use suggested category ${suggestedName}`}
+                >
+                  <Icon name="sync" size={10} />
+                  <span>Suggested: <span className="font-medium">{suggestedName}</span></span>
+                  <span className="text-muted-foreground">· {suggestion.count}×</span>
+                </button>
+              </div>
+            )}
             <Field icon="wallet" label="Account">
               <Select value={account} onValueChange={setAccount}>
                 <SelectTrigger size="sm" className="border-0 shadow-none">
