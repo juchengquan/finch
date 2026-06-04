@@ -188,6 +188,51 @@ test('listTransactions filters by minAmount / maxAmount on absolute amount', asy
   expect(window.every((t) => Math.abs(t.amount) >= 20 && Math.abs(t.amount) <= 50)).toBe(true);
 });
 
+test("insertTxRow: defaults currency to the account's, derives amount_base via convertToBase, looks up counterparty", async () => {
+  const { insertTxRow } = await import('@/lib/db/queries/transactions');
+  const exec = await seeded();
+  // Verify each default resolution fires when the caller leaves the field out.
+  // `inv` is USD; the personal-ledger base is USD too, so amount_base == amount.
+  const id = await insertTxRow(exec, {
+    ledgerId: 'personal',
+    accountId: 'inv',
+    date: '2026-05-26',
+    amount: -100,
+    description: 'Blue Bottle Coffee',
+    kind: 'expense',
+  });
+  const [row] = await exec('SELECT * FROM transactions WHERE id = ?', [id]);
+  expect(String(row.currency)).toBe('USD');               // defaulted from account
+  expect(Number(row.amount_base)).toBeCloseTo(-100, 2);   // convertToBase ran
+  expect(Number(row.exchange_rate)).toBeCloseTo(1, 6);
+  expect(String(row.status)).toBe('confirmed');           // default status
+  expect(row.confirmed_at).not.toBeNull();                // stamped on confirmed rows
+  expect(row.source_template_id).toBeNull();
+});
+
+test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance trigger', async () => {
+  const { insertTxRow } = await import('@/lib/db/queries/transactions');
+  const exec = await seeded();
+  const before = Number(
+    (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,
+  );
+  await insertTxRow(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    date: '2026-05-26',
+    amount: -42,
+    description: 'Pending charge',
+    kind: 'expense',
+    status: 'pending',
+  });
+  const [row] = await exec("SELECT confirmed_at FROM transactions WHERE description = 'Pending charge'");
+  expect(row.confirmed_at).toBeNull();
+  const after = Number(
+    (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,
+  );
+  expect(after).toBeCloseTo(before, 2); // pending didn't move the balance
+});
+
 test("FTS5 search matches tokens with internal punctuation (O'Reilly, AT&T)", async () => {
   const exec = await seeded();
   // FTS5's unicode61 tokenizer splits "O'Reilly" into `o` + `reilly`; our
