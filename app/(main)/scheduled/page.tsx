@@ -375,6 +375,8 @@ export default function ScheduledPage() {
                   autoPost: item.autoPost,
                   color: item.color ?? 'var(--primary)',
                   category: item.category ?? null,
+                  installmentTotal: item.installmentTotal ?? null,
+                  installmentPaid: item.installmentPaid ?? 0,
                 }}
                 status={occStatus(item.id, item.dayOfMonth || 0)}
                 onEdit={openEdit}

@@ -104,8 +104,12 @@ export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPa
   const sets: string[] = [];
   const bind: (string | number | null)[] = [];
   for (const key of Object.keys(patch)) {
-    if (patch[key as keyof ScheduledPatch] === undefined) continue;
-    sets.push(`${cols[key]} = ?`);
+    const col = cols[key];
+    // Skip undefined values *and* unknown keys — without the latter, a stray
+    // patch key (typo, stale field name) becomes `undefined = ?` in SQL and
+    // throws an unhelpful "near '=': syntax error" instead of being ignored.
+    if (!col || patch[key as keyof ScheduledPatch] === undefined) continue;
+    sets.push(`${col} = ?`);
     bind.push(patch[key as keyof ScheduledPatch] ?? null);
   }
   if (!sets.length) return;
