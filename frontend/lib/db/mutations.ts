@@ -66,7 +66,7 @@ import {
   type BudgetGroupPatch,
 } from './queries/budgetGroups';
 import { isAccountType } from '@/lib/account-types';
-import { convertToBase, ledgerBaseCurrency } from './queries/rates';
+import { convertToBase } from './queries/rates';
 import {
   createHolding as qCreateHolding,
   updateHolding as qUpdateHolding,
@@ -79,6 +79,7 @@ import {
   updateTransaction as qUpdate,
   deleteTransactionRow as qDelete,
   confirmTransaction as qConfirm,
+  insertTxRow,
   type AddInput,
 } from './queries/transactions';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
@@ -138,46 +139,6 @@ async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
   if (rows[0].parent_id != null) throw new Error('Categories nest only two levels deep');
 }
 
-// Insert one confirmed transaction row directly (used for transfers, which carry
-// a transfer_group_id). The insert trigger moves the account balance.
-async function insertTxRow(
-  exec: Exec,
-  row: {
-    ledgerId: string;
-    accountId: string;
-    date: string;
-    time?: string | null;
-    amount: number;
-    description: string;
-    currency: string;
-    transferGroupId: string | null;
-    note: string | null;
-    kind: 'income' | 'expense' | 'transfer' | 'adjustment';
-    sourceTemplateId?: string | null;
-    categoryId?: string | null;
-  },
-): Promise<void> {
-  const ts = new Date().toISOString();
-  // `amount` is native (in `row.currency`, the account's currency). `amount_base`
-  // is the ledger-base figure for cross-account reports — convert + lock the rate.
-  // These rows are confirmed, so the insert trigger moves the account balance.
-  const ledgerBase = await ledgerBaseCurrency(exec, row.ledgerId);
-  const conv = await convertToBase(exec, row.amount, row.currency, ledgerBase, row.date);
-  const cpId = await resolveCounterpartyIdByName(exec, row.ledgerId, row.description);
-  await exec(
-    `INSERT INTO transactions
-      (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-       description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
-       currency,notes,source_template_id,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      newId('t'), row.ledgerId, row.accountId, row.date, row.time ?? null, row.amount, conv.amountBase, conv.rate,
-      row.description, row.categoryId ?? null, cpId, row.transferGroupId, row.kind, 'confirmed', ts,
-      row.currency, row.note, row.sourceTemplateId ?? null, ts, ts,
-    ],
-  );
-}
-
 async function postSingle(
   exec: Exec,
   ledgerId: string,
@@ -188,12 +149,11 @@ async function postSingle(
   sourceTemplateId: string | null = null,
   categoryId: string | null = null,
 ): Promise<void> {
-  const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [accountId]);
   await insertTxRow(exec, {
-    ledgerId, accountId, date, amount, description,
-    currency: String(acct?.currency ?? 'USD'),
-    transferGroupId: null, note: null, kind: amount > 0 ? 'income' : 'expense',
-    sourceTemplateId, categoryId,
+    ledgerId, accountId, date,
+    amount, description, categoryId,
+    kind: amount > 0 ? 'income' : 'expense',
+    sourceTemplateId,
   });
 }
 
@@ -281,12 +241,14 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
     [tgId, ledgerId, fromCurrency, toCurrency, rate, note, ts, ts],
   );
   await insertTxRow(exec, {
-    ledgerId, accountId: fromId, date, time, amount: -fromAmount, description: `Transfer to ${String(to.name)}`,
-    currency: fromCurrency, transferGroupId: tgId, note, kind: 'transfer',
+    ledgerId, accountId: fromId, date, time, amount: -fromAmount,
+    description: `Transfer to ${String(to.name)}`,
+    currency: fromCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
   });
   await insertTxRow(exec, {
-    ledgerId, accountId: toId, date, time, amount: toAmount, description: `Transfer from ${String(from.name)}`,
-    currency: toCurrency, transferGroupId: tgId, note, kind: 'transfer',
+    ledgerId, accountId: toId, date, time, amount: toAmount,
+    description: `Transfer from ${String(from.name)}`,
+    currency: toCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
   });
 }
 
@@ -332,32 +294,23 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
 
     const ledgerId = String(r.ledger_id);
     const acctId = String(r.account_id);
-    const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [acctId]);
-    const currency = String(acct?.currency ?? 'USD');
-    const ledgerBase = await ledgerBaseCurrency(exec, ledgerId);
     const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
     const kind = type === 'income' ? 'income' : 'expense';
     const categoryId = r.category_id == null ? null : String(r.category_id);
-
     const description = String(r.description ?? r.name ?? '');
+    // Counterparty is resolved once per template (the description is the same
+    // for every occurrence); insertTxRow then receives a concrete id rather
+    // than re-running the lookup on each date.
     const cpId = await resolveCounterpartyIdByName(exec, ledgerId, description);
     for (const date of dates) {
-      // `amount` is native (account currency); `amount_base` is the ledger-base
-      // figure for reports — convert + lock the rate per occurrence date. Pending
-      // rows don't move the balance (the insert trigger fires only on confirmed).
-      const conv = await convertToBase(exec, amount, currency, ledgerBase, date);
-      await exec(
-        `INSERT INTO transactions
-          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
-           currency,notes,source_template_id,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          newId('t'), ledgerId, acctId, date, null, amount, conv.amountBase, conv.rate,
-          description, categoryId, cpId, null, kind, 'pending', null,
-          currency, null, String(r.id), ts, ts,
-        ],
-      );
+      await insertTxRow(exec, {
+        ledgerId, accountId: acctId, date,
+        amount, description, categoryId, kind,
+        status: 'pending',
+        sourceTemplateId: String(r.id),
+        counterpartyId: cpId,
+        timestamp: ts,
+      });
     }
   }
 }
