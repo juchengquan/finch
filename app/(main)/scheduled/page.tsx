@@ -15,6 +15,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import type { ScheduledTemplate } from '@/lib/store';
+import { parseInstallmentTotal } from '@/lib/installment';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -119,9 +120,11 @@ export default function ScheduledPage() {
     const startDate = draft.startDate || undefined;
     const endDate = draft.endDate || null;
     const maxExecutions = draft.maxExecutions ? Number(draft.maxExecutions) : null;
-    const installmentTotal = draft.installmentTotal ? Number(draft.installmentTotal) : null;
-    if (installmentTotal != null && (!Number.isInteger(installmentTotal) || installmentTotal <= 0)) {
-      return void toast.error('Installment total must be a whole number > 0');
+    let installmentTotal: number | null;
+    try {
+      installmentTotal = parseInstallmentTotal(draft.installmentTotal);
+    } catch (err) {
+      return void toast.error(err instanceof Error ? err.message : 'Invalid installment total');
     }
     const description = draft.description.trim() || null;
     if (isNew) {

@@ -902,3 +902,71 @@ test('generateDueScheduled stops generating once the plan has filled installment
   );
   expect(gen.length).toBe(3);
 });
+
+// ---------------------------------------------------------------------------
+// changeLedgerBase — rewrites locked amount_base figures + re-stamps the
+// account opening cost basis. Pre-PR-66 these branches were untested.
+// ---------------------------------------------------------------------------
+
+test('changeLedgerBase re-stamps opening_balance_base for a foreign-currency account', async () => {
+  const exec = await seeded();
+  // Stand up a JPY account in the (USD) personal ledger with a known opening
+  // balance + creation date. The seed's exchange_rates table has a JPY row on
+  // 2026-05-24 (0.0065 USD per JPY).
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,opening_balance_base,is_active,created_at,updated_at) " +
+    "VALUES ('jpyw','personal','JPY Wallet','cash','JPY',100000,100000,650,1,'2026-05-24','2026-05-24')",
+  );
+  // Flip the base to SGD. JPY → SGD via the USD pivot at the same creation
+  // date should produce a new opening_balance_base that's roughly
+  // 100000 * 0.0065 / 0.7457 ≈ 871.7 SGD.
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
+  const [a] = await exec("SELECT opening_balance_base FROM accounts WHERE id = 'jpyw'");
+  expect(Number(a.opening_balance_base)).toBeCloseTo(871.7, 0); // ±1 SGD tolerance
+  const [l] = await exec("SELECT base_currency FROM ledgers WHERE id = 'personal'");
+  expect(String(l.base_currency)).toBe('SGD');
+});
+
+test('changeLedgerBase rewrites transaction_splits.amount_base under the new base', async () => {
+  const exec = await seeded();
+  // Pick any seed transaction with a known amount; attach two splits whose
+  // amount_base values are written under the current (USD) base.
+  const [tx] = await exec("SELECT id, amount FROM transactions WHERE ledger_id = 'personal' LIMIT 1");
+  const txId = String(tx.id);
+  const amt = Number(tx.amount);
+  await applyMutation(exec, 'setTransactionSplits', {
+    id: txId,
+    splits: [
+      { categoryId: 'food', amount: amt / 2 },
+      { categoryId: 'food', amount: amt / 2 },
+    ],
+  });
+  const before = await exec(
+    'SELECT amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    [txId],
+  );
+  // Flip the base to SGD and confirm the split's amount_base rewrote to match
+  // the new base's conversion. We don't pin an exact value — just verify the
+  // figure changed (USD == base today means amount == amount_base; under SGD
+  // the conversion is no longer the identity for a USD-denominated row).
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
+  const after = await exec(
+    'SELECT amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    [txId],
+  );
+  expect(after.length).toBe(before.length);
+  for (let i = 0; i < after.length; i++) {
+    expect(Number(after[i].amount_base)).not.toBeCloseTo(Number(before[i].amount_base), 4);
+  }
+});
+
+test('changeLedgerBase same-base call is a no-op (no row changes)', async () => {
+  const exec = await seeded();
+  const before = await exec("SELECT id, amount_base FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'USD' });
+  const after = await exec("SELECT id, amount_base FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  expect(after.length).toBe(before.length);
+  for (let i = 0; i < after.length; i++) {
+    expect(Number(after[i].amount_base)).toBeCloseTo(Number(before[i].amount_base), 6);
+  }
+});
