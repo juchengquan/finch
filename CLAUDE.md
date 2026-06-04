@@ -1,0 +1,66 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository layout
+
+- `frontend/` — the only running code: a **Next.js 16 / React 19 / TypeScript** app (App Router). All commands below run from inside `frontend/`.
+- `plans/` — design docs, not code. `database_design_en.md` is the domain model (SQLite ledger schema); `MASTER_PLAN.md` tracks the design-vs-implementation roadmap; `frontend_design/` is the original prototype.
+- The app has **no server/API**. Reference data is static JSON; mutable data lives in a client store persisted to the browser (see Data & state).
+
+See also `frontend/AGENTS.md` (Next.js 16 caveat) and `frontend/README.md`.
+
+## Commands (run from `frontend/`)
+
+Set up for **Bun** (`bun.lock`).
+
+```bash
+bun install
+bun dev                  # dev server at http://localhost:3000
+bun run build            # production build
+bun run lint             # eslint (flat config, eslint.config.mjs)
+bun run typecheck        # tsc --noEmit
+bun test lib             # unit tests (bun's test runner) — files in lib/**/*.test.ts
+bun run test:e2e         # Playwright e2e (e2e/), needs a build/dev server
+```
+
+To run a single unit test file: `bun test lib/derive.test.ts`. CI mirrors these in `.github/workflows/ci.yml`.
+
+## Critical: Next.js 16 ≠ your training data
+
+Next.js 16 has breaking changes. Before writing routing/server code, read the relevant guide in `frontend/node_modules/next/dist/docs/` and heed deprecations (also stated in `frontend/AGENTS.md`).
+
+## Architecture
+
+### Stack
+Tailwind CSS v4 + **shadcn/ui** (Radix-based components in `components/ui/*`), **zustand** for state, **lucide-react** icons, **next-themes** for light/dark, **sonner** for toasts. Fonts are loaded via `next/font` in `app/layout.tsx` and exposed as CSS variables.
+
+### Routing & the shell
+`app/` has a single App Router route group, `(main)/`, whose `layout.tsx` renders the shared **`components/PageShell.tsx`**. It holds both the consumer sections (accounts, budgets, scheduled, insights, reports, activity, goals, …) and the former "Ledger admin" pages (pending, transfers, merchants, categories, tags, fx, system). The consumer sections are the primary `tabs`; the ledger-admin pages are passed as a labeled **`navGroups`** entry ("Ledger") so they render as their own group in the desktop sidebar. (They previously lived in a separate `(ledger)/` group with its own shell; route groups don't affect URLs, so the merge left every path unchanged.)
+
+`PageShell` is a **single-render responsive shell**: page content renders once, and the chrome switches by CSS at the `md` (768px) breakpoint — a sidebar + desktop top bar on `md+`, a fixed bottom tab bar on mobile. There is no dual mobile/desktop render. Pages are mostly `'use client'`. The ledger-admin pages appear only in the desktop sidebar (via `navGroups`), not the mobile bottom bar — reach them on mobile via the command palette (⌘K) or in-content links.
+
+The desktop top bar shows `headerTitle`, except on detail routes (`/<section>/<id>`) where `PageShell` derives an "Section › Name" **breadcrumb** from the path via `BREADCRUMB_SECTIONS` (accounts/budgets/transfers/recurring). Detail pages keep their own in-content breadcrumb but mark it `md:hidden` so it doesn't duplicate the header one.
+
+### Data & state — three distinct layers
+1. **Static reference data** — `lib/data.ts` exports `MOCK` (accounts, accountGroups, categories…) and `LEDGER` (ledgers, transferGroups, recurringTemplates…) loaded from `data/*.json`, plus lookups (`acctById`, `catById`) and formatters. This is read-only seed/reference data.
+2. **Live mutable state** — `lib/store.ts` is a **zustand** store (transactions, pending, recurring) seeded from `data/*.json`, with the `persist` middleware writing to **localStorage**. `components/store-hydration.tsx` hydrates it on load. Read it via `useFinanceStore(...)`.
+3. **Durable backup** — `lib/db/*` mirrors the store into a real **SQLite** database (`public/sqlite3.wasm`) stored in **OPFS**, with File System Access + file-download fallbacks. `components/sqlite-backup-provider.tsx` drives the auto-mirror. This is a backup/export layer, not the live read path.
+
+`lib/derive.ts` holds pure selectors over a transaction list (`accountBalance`, `categorySpent`, `netWorth`, `monthSpent`, `monthIncome`) — compute figures from these rather than storing them.
+
+### Money & currencies (easy to get wrong)
+Amounts are stored in the **active ledger's base currency**. To display, convert to the user's chosen display currency — don't print raw amounts:
+- `useMoney()` (`components/use-money.ts`) returns `fmt` (full) and `short` (compact), already converting active-ledger-base → display currency. Use this for store/MOCK amounts.
+- `fmtNative` / `fmtNativeShort` (`lib/data.ts`) format an amount **already denominated in its own currency** (e.g. ledger FX rows) — no conversion.
+- Active ledger comes from `useLedger()` (`components/ledger-provider.tsx`); display currency from `useCurrency()` (`components/currency-provider.tsx`). Display currency is **per-ledger** — `useCurrency()` returns the active ledger's choice (DB-backed via the store's `displayCurrencyByLedger`), defaulting to that ledger's base until the user picks one in Settings › Ledger.
+
+### Theming & styling
+Design tokens are **shadcn CSS variables in `app/globals.css`** (light = "warm editorial", dark = "noir"); toggled by `next-themes` (`ThemeProvider`, `class` attribute). There is no `lib/theme.ts` or `styles/tokens.css` — those were removed in the rewrite. Style with semantic Tailwind classes that map to tokens: `bg-card`, `text-muted-foreground`, `border-border`, and the finance-semantic `text-success` / `text-warning`. `components/primitives.tsx` is a lucide-backed `Icon` shim (icons referenced by string name, e.g. `<Icon name="wallet"/>`) plus `Money` and SVG charts (sparkline/bar/donut/ring) that read the token CSS variables.
+
+### Provider order
+`app/layout.tsx` wraps the tree: `ThemeProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`. (Display currency is no longer a provider — `useCurrency()` derives the active ledger's display currency from `useLedger()` + the store; see Money & currencies.)
+
+## Conventions
+- Import alias `@/*` → `frontend/` root; TypeScript `strict` is on.
+- Customizing a shadcn component (in `components/ui/*`) is fine when it's the only consumer — e.g. `AccordionTrigger` takes a `chevronSide` prop used only by the Accounts page.
