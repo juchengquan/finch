@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { suggestCategory } from '@/lib/select';
+import { suggestCategory, recentExpenses } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };
@@ -110,6 +110,22 @@ export function AddExpenseForm({
   const suggestedName = suggestion ? categoryOptions.find((c) => c.id === suggestion.categoryId)?.name : null;
   const alreadyApplied = suggestion ? suggestion.categoryId === category : false;
 
+  // Recent confirmed expenses (deduplicated by merchant+amount+account+category)
+  // — surfaced as one-tap chips so daily-habit purchases (coffee, lunch,
+  // parking) fill the form in a single tap. Capped at 5 to keep the row
+  // compact; sorted most-recent-first by the selector.
+  const recents = useMemo(
+    () => (type === 'expense' ? recentExpenses(storeTxns, activeId, 5) : []),
+    [storeTxns, activeId, type],
+  );
+
+  const applyRecent = (r: ReturnType<typeof recentExpenses>[number]) => {
+    setAmount(String(r.amount));
+    setMerchant(r.merchant);
+    if (r.categoryId) setCategory(r.categoryId);
+    setAccount(r.accountId);
+  };
+
   const curOf = (id: string) => storeAccts.find((a) => a.id === id)?.currency ?? base;
   // The entry currency follows the selected account (an account holds one
   // currency); foreign spend is modelled via a dedicated fx account, not a
@@ -196,6 +212,26 @@ export function AddExpenseForm({
           ))}
         </div>
       </div>
+
+      {recents.length > 0 && (
+        <div className="-mx-5 px-5">
+          <div className="text-muted-foreground mb-1.5 font-mono text-[10px] tracking-[1.5px]">RECENT</div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {recents.map((r, i) => (
+              <button
+                key={`${r.merchant}-${r.amount}-${i}`}
+                type="button"
+                onClick={() => applyRecent(r)}
+                aria-label={`Repeat ${r.merchant} ${fmtNative(r.amount, r.currency)}`}
+                className="bg-secondary text-secondary-foreground hover:bg-secondary/80 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] transition-colors"
+              >
+                <span className="truncate max-w-[14ch]">{r.merchant}</span>
+                <span className="text-muted-foreground tabular-nums">{fmtNative(r.amount, r.currency)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="text-center">
         <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">
           {type === 'transfer' ? 'SENT' : 'AMOUNT'}

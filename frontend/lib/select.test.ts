@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -575,4 +575,56 @@ test('suggestCategory: splits override the parent category for the count', () =>
 test('suggestCategory: returns null when nothing matches', () => {
   const txns = [tx({ merchant: 'Other', category: 'food', amount: -10 })];
   expect(suggestCategory(txns, 'personal', 'Nowhere')).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// recentExpenses — one-tap "redo" chips for the Add screen.
+// ---------------------------------------------------------------------------
+
+test('recentExpenses: empty input → empty list', () => {
+  expect(recentExpenses([], 'personal')).toEqual([]);
+});
+
+test('recentExpenses: most-recent first, capped at `limit`, returns positive amount magnitudes', () => {
+  const txns = [
+    tx({ merchant: 'Starbucks', amount: -4, date: '2026-05-29', time: '08:00' }),
+    tx({ merchant: 'Whole Foods', amount: -42, date: '2026-05-30', time: '12:00' }),
+    tx({ merchant: 'Parking', amount: -3, date: '2026-05-30', time: '14:00' }),
+  ];
+  const out = recentExpenses(txns, 'personal', 5);
+  expect(out.map((r) => r.merchant)).toEqual(['Parking', 'Whole Foods', 'Starbucks']);
+  expect(out.every((r) => r.amount > 0)).toBe(true); // chip displays magnitude
+});
+
+test('recentExpenses: deduplicates by merchant + amount + account + category', () => {
+  const txns = [
+    tx({ merchant: 'Starbucks', amount: -4, account: 'cc', category: 'food', date: '2026-05-29' }),
+    tx({ merchant: 'Starbucks', amount: -4, account: 'cc', category: 'food', date: '2026-05-25' }),
+    tx({ merchant: 'Starbucks', amount: -4, account: 'cc', category: 'food', date: '2026-05-20' }),
+    // Different amount → counts as a separate chip.
+    tx({ merchant: 'Starbucks', amount: -6, account: 'cc', category: 'food', date: '2026-05-26' }),
+  ];
+  const out = recentExpenses(txns, 'personal');
+  expect(out.length).toBe(2);
+  expect(out.map((r) => r.amount)).toEqual([4, 6]);
+});
+
+test('recentExpenses: ignores pending, refunds, transfers, income, and other ledgers', () => {
+  const txns = [
+    tx({ merchant: 'Pending', amount: -10, pending: true, date: '2026-05-30' }),
+    tx({ merchant: 'Refund', amount: 10, kind: 'refund', date: '2026-05-30' }),
+    tx({ merchant: 'Transfer', amount: -10, kind: 'transfer', date: '2026-05-30' }),
+    tx({ merchant: 'Salary', amount: 5000, kind: 'income', date: '2026-05-30' }),
+    tx({ merchant: 'Other ledger', amount: -10, ledgerId: 'family', date: '2026-05-30' }),
+    tx({ merchant: 'Real expense', amount: -10, date: '2026-05-29' }),
+  ];
+  const out = recentExpenses(txns, 'personal');
+  expect(out.map((r) => r.merchant)).toEqual(['Real expense']);
+});
+
+test('recentExpenses: respects the limit parameter', () => {
+  const txns = Array.from({ length: 10 }, (_, i) =>
+    tx({ merchant: `M${i}`, amount: -(i + 1), date: `2026-05-${10 + i}` }),
+  );
+  expect(recentExpenses(txns, 'personal', 3).length).toBe(3);
 });
