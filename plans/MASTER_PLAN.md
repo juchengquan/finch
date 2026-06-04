@@ -316,6 +316,16 @@ real feature gaps — picks for the next phase, with the highest-value ones firs
    shell + WASM via a service worker, request persistent storage). Data layer
    doesn't change. Scoping doc at `plans/PWA_PLAN.md`.
 
+**Recurring transfers** ✅ shipped — `generateDueScheduled` now materializes
+transfer templates too, calling `createTransfer` once per due date with the
+template's id stamped on both legs via `source_template_id`. Transfers post
+as **confirmed** (vs pending for income/expense) because they're entirely
+within the user's books and a half-confirmed transfer would be visually
+confusing on both ledgers. The de-dupe + installment-total caps work
+unchanged — the Set collapses the two legs that share a date. Templates
+without a `from_account_id` are left to manual entry. See
+`plans/database_design_en.md` decision #25.
+
 **Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.
 
 **Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.

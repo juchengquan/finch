@@ -33,7 +33,10 @@ async function seeded(): Promise<Exec> {
 test('listHoldings: seeded brokerage carries 3 positions', async () => {
   const exec = await seeded();
   const rows = await listHoldings(exec, 'personal', 'inv');
-  expect(rows.map((h) => h.symbol)).toEqual(['BND', 'VTI', 'VXUS']);
+  // Sort order is by live value desc (shares × last_price, falling back to
+  // cost_basis when no price). Seed: VTI 50×248.50 = 12425, VXUS 80×62.10 = 4968,
+  // BND 40×73.85 = 2954. So VTI > VXUS > BND.
+  expect(rows.map((h) => h.symbol)).toEqual(['VTI', 'VXUS', 'BND']);
 });
 
 test('listHoldings: scoped to account when accountId is passed', async () => {
@@ -111,6 +114,28 @@ test('deleteHolding: hard removes the row', async () => {
   const exec = await seeded();
   await deleteHolding(exec, 'h-vti');
   expect(await getHolding(exec, 'h-vti')).toBeNull();
+});
+
+test('schema trigger: a direct INSERT into holdings against a non-investment account is rejected', async () => {
+  const exec = await seeded();
+  // The mutation handler refuses non-investment accounts; the schema trigger
+  // is defense-in-depth for paths that bypass the handler (an import script,
+  // future bulk loader, a direct SQL exec). `chk` is a savings-type account.
+  await expect(
+    exec(
+      `INSERT INTO holdings (id,ledger_id,account_id,symbol,shares,cost_basis,currency,created_at,updated_at)
+       VALUES ('h-bad','personal','chk','AAPL',5,1000,'USD','2026-05-26','2026-05-26')`,
+    ),
+  ).rejects.toThrow('Holdings can only be added to an investment account');
+});
+
+test('schema trigger: UPDATE that moves a holding to a non-investment account is rejected', async () => {
+  const exec = await seeded();
+  // h-vti currently lives on `inv` (investment). Trying to move it to `chk`
+  // (savings) must fail at the trigger.
+  await expect(
+    exec("UPDATE holdings SET account_id = 'chk' WHERE id = 'h-vti'"),
+  ).rejects.toThrow('Holdings can only be added to an investment account');
 });
 
 test('account ON DELETE CASCADE: hard-deleting an account takes its holdings', async () => {

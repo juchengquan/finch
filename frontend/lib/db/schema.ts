@@ -410,6 +410,30 @@ CREATE TRIGGER IF NOT EXISTS tr_txn_fts_update AFTER UPDATE OF description, note
          notes       = COALESCE(NEW.notes, '')
    WHERE id = NEW.id;
 END;
+
+-- Defense-in-depth guard for holdings.account_id: the row's account MUST be
+-- an investment-type account. The mutation handler already enforces this, but
+-- a direct SQL insert (an import path, a future bulk loader, anything that
+-- bypasses the handler) could slip a stock position into a credit card. The
+-- BEFORE-trigger RAISES on the insert so the schema is its own contract.
+CREATE TRIGGER IF NOT EXISTS tr_holdings_investment_only_insert
+BEFORE INSERT ON holdings
+FOR EACH ROW
+WHEN COALESCE((SELECT type FROM accounts WHERE id = NEW.account_id), '') != 'investment'
+BEGIN
+  SELECT RAISE(ABORT, 'Holdings can only be added to an investment account');
+END;
+
+-- Same guard on account_id updates. Today no mutation moves a holding between
+-- accounts, but the column isn't immutable in SQL — a manual UPDATE would
+-- otherwise be free to move a position to a non-investment account.
+CREATE TRIGGER IF NOT EXISTS tr_holdings_investment_only_update
+BEFORE UPDATE OF account_id ON holdings
+FOR EACH ROW
+WHEN COALESCE((SELECT type FROM accounts WHERE id = NEW.account_id), '') != 'investment'
+BEGIN
+  SELECT RAISE(ABORT, 'Holdings can only be added to an investment account');
+END;
 `;
 
 export async function applySchema(exec: (sql: string, bind?: (string | number | null)[]) => Promise<unknown>): Promise<void> {
@@ -425,7 +449,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-01T19:00:00Z';
+export const SCHEMA_VERSION = '2026-06-01T20:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.

@@ -196,6 +196,10 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const date = str(args.date);
   const time = args.time ? str(args.time) : null;
   const note = args.note ? str(args.note) : null;
+  // Optional link back to the scheduled template — set when this transfer was
+  // auto-generated (or manually posted) from a recurring entry. Stamped on
+  // both legs so the dedupe / cap math in generateDueScheduled works.
+  const sourceTemplateId = args.sourceTemplateId ? str(args.sourceTemplateId) : null;
   if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
   if (fromId === toId) throw new Error('Pick two different accounts');
 
@@ -232,29 +236,33 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
     ledgerId, accountId: fromId, date, time, amount: -fromAmount,
     description: `Transfer to ${String(to.name)}`,
     currency: fromCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
+    sourceTemplateId,
   });
   await insertTxRow(exec, {
     ledgerId, accountId: toId, date, time, amount: toAmount,
     description: `Transfer from ${String(from.name)}`,
     currency: toCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
+    sourceTemplateId,
   });
 }
 
 // Auto-generate transactions for scheduled templates whose occurrences are due
-// (on/before `today`), as UNCONFIRMED (status='pending') rows linked to the
-// template via source_template_id. Pending rows don't affect balances; the user
-// confirms them from Accounts or the Pending screen. Idempotent: occurrences
-// already materialized (any status) are skipped via source_template_id + date.
-// v1 covers fixed-amount income/expense; transfers, variable, and split
-// templates are left to manual entry.
+// (on/before `today`). Income/expense rows materialize as UNCONFIRMED (the
+// user confirms them from Accounts or the Pending screen — pending rows don't
+// affect balances). Transfers materialize as CONFIRMED via createTransfer
+// because that's the only mode it supports today and bank transfers truly do
+// happen on schedule; the user can delete one if it shouldn't have run.
+// Idempotent: occurrences already materialized (any status) are skipped via
+// source_template_id + date. Variable-amount and split-income templates are
+// left to manual entry.
 async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
   const rows = await exec('SELECT * FROM scheduled_templates WHERE is_active = 1');
   const ts = new Date().toISOString();
   for (const r of rows) {
     const type = String(r.kind);
-    if (type === 'transfer') continue;
     if (r.amount == null) continue; // variable amount → manual
     if (Number(r.splits_enabled)) continue; // split income → manual
+    if (type === 'transfer' && r.from_account_id == null) continue; // transfer missing source → manual
 
     const template = {
       startDate: r.start_date == null ? undefined : String(r.start_date),
@@ -282,10 +290,29 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
 
     const ledgerId = String(r.ledger_id);
     const acctId = String(r.account_id);
+    const description = String(r.description ?? r.name ?? '');
+
+    if (type === 'transfer') {
+      // Cross-account recurring: one createTransfer per due date, both legs
+      // stamped with source_template_id so the dedupe + cap math above keeps
+      // working (the Set dedupes the two legs that share a date). Same-currency
+      // transfers infer the to-amount; cross-currency picks the rate at the
+      // occurrence date via convertToBase (matches the manual transfer path).
+      const fromAccountId = String(r.from_account_id);
+      const fromAmount = Math.abs(Number(r.amount));
+      const sourceTemplateId = String(r.id);
+      for (const date of dates) {
+        await createTransfer(exec, {
+          fromAccountId, toAccountId: acctId, fromAmount, date,
+          note: description || null, sourceTemplateId,
+        });
+      }
+      continue;
+    }
+
     const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
     const kind = type === 'income' ? 'income' : 'expense';
     const categoryId = r.category_id == null ? null : String(r.category_id);
-    const description = String(r.description ?? r.name ?? '');
     // Counterparty is resolved once per template (the description is the same
     // for every occurrence); insertTxRow then receives a concrete id rather
     // than re-running the lookup on each date.
