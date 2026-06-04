@@ -12,6 +12,7 @@ import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './queries/rates';
 import { resolveCounterpartyIdByName } from './queries/counterparties';
+import { insertTxRow } from './queries/transactions';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
@@ -290,19 +291,30 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
     for (const r of resolved) {
       const t = r.t;
       const kind = t.transferGroupId ? 'transfer' : r.amountBase > 0 ? 'income' : 'expense';
+      // baseOfTx already converted the row into the ledger base; pass the
+      // pre-computed pair so insertTxRow skips its own convertToBase call.
+      // Counterparty + id + timestamp all come from the seed payload so the
+      // generated row is byte-for-byte stable across runs.
       const cpId = await resolveCounterpartyIdByName(exec, r.ledgerId, t.merchant);
-      await exec(
-        `INSERT INTO transactions
-          (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-           description,category_id,counterparty_id,transfer_group_id,kind,status,confirmed_at,
-           currency,notes,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          t.id, r.ledgerId, t.account, t.date, t.time ?? null, r.native, r.amountBase, r.rate,
-          t.merchant, t.category, cpId, t.transferGroupId ?? null, kind, t.pending ? 'pending' : 'confirmed', t.pending ? null : SEED_TS,
-          r.currency, t.note || null, SEED_TS, SEED_TS,
-        ],
-      );
+      await insertTxRow(exec, {
+        id: t.id,
+        ledgerId: r.ledgerId,
+        accountId: t.account,
+        date: t.date,
+        time: t.time ?? null,
+        amount: r.native,
+        currency: r.currency,
+        description: t.merchant,
+        categoryId: t.category,
+        kind,
+        status: t.pending ? 'pending' : 'confirmed',
+        transferGroupId: t.transferGroupId ?? null,
+        notes: t.note || null,
+        amountBase: r.amountBase,
+        exchangeRate: r.rate,
+        counterpartyId: cpId,
+        timestamp: SEED_TS,
+      });
     }
   }
 }

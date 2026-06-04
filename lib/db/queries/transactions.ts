@@ -149,42 +149,139 @@ function newId(): string {
   return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Insert a transaction; confirmed rows move the account balance via the insert trigger. */
-export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
-  const id = newId();
-  const status = input.status ?? 'confirmed';
-  const acct = await exec(
-    `SELECT a.currency, l.base_currency
-       FROM accounts a JOIN ledgers l ON l.id = a.ledger_id
-      WHERE a.id = ?`,
-    [input.accountId],
-  );
-  const accountCurrency = String(acct[0]?.currency ?? 'USD');
-  const ledgerBase = String(acct[0]?.base_currency ?? accountCurrency);
-  const currency = input.currency ?? accountCurrency;
-  // `amount` is native (in `currency`); `amount_base` is the LEDGER-base figure
-  // that drives cross-account reports — convert native → ledger base + lock the
-  // rate. The account balance is moved by the insert trigger (confirmed rows
-  // only), using the account-currency delta. (A three-currency row — entry ≠
-  // account ≠ base — is unsupported; the entry currency tracks the account's.)
-  const conv = await convertToBase(exec, input.amount, currency, ledgerBase, input.date);
-  const amountBase = conv.amountBase;
-  const exchangeRate = conv.rate;
-  const kind = input.kind ?? (amountBase > 0 ? 'income' : 'expense');
-  const counterpartyId = await resolveCounterpartyIdByName(exec, input.ledgerId, input.merchant);
+/**
+ * The shape every transaction-insert path normalizes to. One row per call.
+ * Callers from different contexts (user add, transfer leg, scheduled post,
+ * auto-generated pending, seed bulk import) all funnel through `insertTxRow`
+ * so the column list, default resolution, and column drift live in one
+ * place. Optional fields fall back to:
+ *
+ *   - `id`               → freshly generated `t-…`
+ *   - `currency`         → the account's currency (one SELECT)
+ *   - `amountBase`/`rate` → `convertToBase(amount, currency, ledger.base, date)`
+ *   - `counterpartyId`   → `resolveCounterpartyIdByName(ledgerId, description)`
+ *   - `status`           → `'confirmed'`
+ *   - `confirmedAt`      → `now` when confirmed, NULL when pending
+ *   - `timestamp`        → `new Date().toISOString()` for created_at/updated_at
+ *
+ * Bulk callers (seed) skip the resolutions they already did by passing the
+ * concrete values; one-off callers (mutations, addTransaction) leave them
+ * undefined and pay the per-row lookups.
+ */
+export interface NewTxRow {
+  ledgerId: string;
+  accountId: string;
+  date: string;
+  time?: string | null;
+  /** Signed native amount in `currency` (the account's currency). */
+  amount: number;
+  description: string;
+  kind: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
+  /** Optional: omit to default to the account's own currency. */
+  currency?: string;
+  categoryId?: string | null;
+  status?: 'pending' | 'confirmed';
+  transferGroupId?: string | null;
+  refundedTransactionId?: string | null;
+  sourceTemplateId?: string | null;
+  notes?: string | null;
+  /** Pre-resolved (amount_base, rate) when the caller already has them
+   *  (seed already converted the whole batch; recompute paths supply
+   *  their own). Default: convert on the fly via `convertToBase`. */
+  amountBase?: number;
+  exchangeRate?: number;
+  /** Pre-resolved counterparty id. Pass `null` to skip the lookup with a
+   *  known-empty result; omit (undefined) to run the resolver. */
+  counterpartyId?: string | null;
+  /** Override the generated id (seed uses fixed ids). */
+  id?: string;
+  /** Override created/updated/confirmed timestamps (seed uses SEED_TS). */
+  timestamp?: string;
+}
+
+/**
+ * The single insert path for the `transactions` table. See `NewTxRow` for
+ * defaults and which call sites pre-resolve which fields. Returns the row's
+ * id (caller-supplied or freshly generated).
+ *
+ * Confirmed rows fire the AFTER INSERT trigger that moves the account
+ * balance; pending rows don't. The FTS5 shadow stays in sync via its own
+ * triggers regardless.
+ */
+export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
+  const id = row.id ?? newId();
+  const status = row.status ?? 'confirmed';
+  const ts = row.timestamp ?? new Date().toISOString();
+
+  // Currency: the account's, unless the caller already resolved it.
+  let currency = row.currency;
+  if (currency === undefined) {
+    const [acct] = await exec('SELECT currency FROM accounts WHERE id = ?', [row.accountId]);
+    currency = String(acct?.currency ?? 'USD');
+  }
+
+  // amount_base + rate: caller-supplied (seed already batched the
+  // conversion) or one convertToBase round-trip on the row's date.
+  let amountBase: number;
+  let exchangeRate: number;
+  if (row.amountBase !== undefined && row.exchangeRate !== undefined) {
+    amountBase = row.amountBase;
+    exchangeRate = row.exchangeRate;
+  } else {
+    const [l] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [row.ledgerId]);
+    const ledgerBase = String(l?.base_currency ?? currency);
+    const conv = await convertToBase(exec, row.amount, currency, ledgerBase, row.date);
+    amountBase = conv.amountBase;
+    exchangeRate = conv.rate;
+  }
+
+  // Counterparty: caller's value (including explicit null), otherwise resolve.
+  const counterpartyId = row.counterpartyId !== undefined
+    ? row.counterpartyId
+    : await resolveCounterpartyIdByName(exec, row.ledgerId, row.description);
+
+  const confirmedAt = status === 'confirmed' ? ts : null;
+
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
-       description,category_id,counterparty_id,transfer_group_id,refunded_transaction_id,kind,status,confirmed_at,
-       currency,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+       description,category_id,counterparty_id,transfer_group_id,refunded_transaction_id,
+       kind,status,confirmed_at,currency,notes,source_template_id,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      id, input.ledgerId, input.accountId, input.date, input.time ?? null, input.amount, amountBase, exchangeRate,
-      input.merchant, input.categoryId ?? null, counterpartyId, null, input.refundedTransactionId ?? null, kind, status, status === 'confirmed' ? new Date().toISOString() : null,
-      currency, input.note || null,
+      id, row.ledgerId, row.accountId, row.date, row.time ?? null,
+      row.amount, amountBase, exchangeRate,
+      row.description, row.categoryId ?? null, counterpartyId,
+      row.transferGroupId ?? null, row.refundedTransactionId ?? null,
+      row.kind, status, confirmedAt,
+      currency, row.notes ?? null, row.sourceTemplateId ?? null,
+      ts, ts,
     ],
   );
   return id;
+}
+
+/** Insert a transaction; confirmed rows move the account balance via the insert trigger. */
+export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
+  // `amount` is native (in `currency`); the row's ledger-base figure is
+  // derived inside insertTxRow from the row's currency + date. Kind defaults
+  // to income/expense by amount sign; the caller can override (refund,
+  // adjustment, transfer).
+  const kind = input.kind ?? (input.amount > 0 ? 'income' : 'expense');
+  return await insertTxRow(exec, {
+    ledgerId: input.ledgerId,
+    accountId: input.accountId,
+    date: input.date,
+    time: input.time ?? null,
+    amount: input.amount,
+    currency: input.currency,
+    description: input.merchant,
+    categoryId: input.categoryId ?? null,
+    kind,
+    status: input.status ?? 'confirmed',
+    refundedTransactionId: input.refundedTransactionId ?? null,
+    notes: input.note || null,
+  });
 }
 
 /** Refunds linked back to an original expense (newest first). Used by the
