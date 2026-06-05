@@ -35,6 +35,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Shrink the layout viewport when the on-screen keyboard appears so that
+  // `dvh` / `vh` measurements exclude it. Without this, the add-expense bottom
+  // sheet (h-[92dvh]) keeps its full pre-keyboard height on iOS, hiding the
+  // submit button behind the keyboard.
+  interactiveWidget: 'resizes-content',
 };
 
 export default function RootLayout({

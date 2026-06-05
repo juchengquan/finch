@@ -154,7 +154,7 @@ export default function MerchantsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search merchants" placeholder="Search merchants…"
-            className="placeholder:text-muted-foreground w-full bg-transparent outline-none"
+            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
           />
         </div>
 

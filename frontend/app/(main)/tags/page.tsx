@@ -86,7 +86,7 @@ export default function TagsPage() {
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Search tags"
               placeholder="Search tags…"
-              className="placeholder:text-muted-foreground w-full bg-transparent outline-none"
+              className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
             />
           </div>
           <Button
