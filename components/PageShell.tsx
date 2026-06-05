@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAddExpense } from '@/components/add-expense-sheet';
 import { SearchButton } from '@/components/command-palette';
-import { acctById, catById } from '@/lib/data';
+import { acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -41,10 +41,12 @@ interface Brand {
 }
 
 // Detail routes (`/<section>/<id>`) that show a breadcrumb in the desktop
-// header. `name` mirrors what each detail page displays as its current crumb.
+// header. The current segment's display name is resolved at render time
+// (some sections look up live store rows; see `crumb` below) rather than via
+// these static name() fallbacks alone.
 const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) => string }> = {
   accounts: { label: 'Accounts', name: (id) => acctById(id).name || id },
-  budgets: { label: 'Budgets', name: (id) => catById(id).name },
+  budgets: { label: 'Budgets', name: (id) => id },
   transfers: { label: 'Transfers', name: (id) => id },
   scheduled: { label: 'Scheduled', name: (id) => id },
 };
@@ -88,18 +90,28 @@ export function PageShell({
   const pathname = usePathname();
   const { openAddExpense } = useAddExpense();
   const accounts = useFinanceStore((s) => s.accounts);
+  const budgets = useFinanceStore((s) => s.budgets);
   const tabBarTabs = mobileTabs ?? tabs;
 
   const segments = pathname.split('/').filter(Boolean);
   const section = BREADCRUMB_SECTIONS[segments[0]];
+  // Resolve the detail row's display name from the live store first (so a
+  // renamed account / budget reflects immediately); fall back to the static
+  // BREADCRUMB_SECTIONS.name() — used for routes whose detail page derives
+  // its title some other way (transfers, scheduled), or when the id doesn't
+  // match a row (e.g. mid-route during deletion).
+  const liveCurrent = (() => {
+    if (!segments[1]) return null;
+    if (segments[0] === 'accounts') return accounts.find((a) => a.id === segments[1])?.name ?? null;
+    if (segments[0] === 'budgets') return budgets.find((b) => b.id === segments[1])?.name ?? null;
+    return null;
+  })();
   const crumb =
     section && segments[1]
       ? {
           label: section.label,
           parent: `/${segments[0]}`,
-          current:
-            (segments[0] === 'accounts' && accounts.find((a) => a.id === segments[1])?.name) ||
-            section.name(segments[1]),
+          current: liveCurrent || section.name(segments[1]),
         }
       : null;
 

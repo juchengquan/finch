@@ -136,7 +136,7 @@ export default function ActivityPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search transactions" placeholder="Search transactions"
-            className="placeholder:text-muted-foreground w-full bg-transparent text-[13px] outline-none"
+            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-[13px] outline-none"
           />
         </div>
 

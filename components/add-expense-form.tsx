@@ -246,7 +246,7 @@ export function AddExpenseForm({
             inputMode="decimal"
             aria-label="Amount" placeholder="0"
             autoFocus
-            className="placeholder:text-muted-foreground w-[5ch] bg-transparent text-center font-serif text-[72px] leading-none font-normal -tracking-[3px] outline-none"
+            className="placeholder:text-muted-foreground focus-ring w-[5ch] bg-transparent text-center font-serif text-[72px] leading-none font-normal -tracking-[3px] outline-none"
           />
         </div>
       </div>
@@ -291,7 +291,7 @@ export function AddExpenseForm({
                     inputMode="decimal"
                     aria-label="Received amount"
                     placeholder={`amount in ${toCurrency}`}
-                    className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
+                    className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-right text-[15px] outline-none"
                   />
                 </Field>
                 {(() => {
@@ -320,7 +320,7 @@ export function AddExpenseForm({
                     if (res) setMerchant(res.name);
                   })
                 }
-                className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
+                className="focus-ring flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
                 aria-label="Select merchant"
               >
                 <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
@@ -378,7 +378,7 @@ export function AddExpenseForm({
             type="datetime-local" aria-label="Date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="bg-transparent text-right text-[15px] outline-none"
+            className="focus-ring bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
         <Field icon="edit" label="Note">
@@ -386,7 +386,7 @@ export function AddExpenseForm({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             aria-label="Note" placeholder="Optional"
-            className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
+            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
       </div>

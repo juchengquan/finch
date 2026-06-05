@@ -4,11 +4,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { cn } from '@/lib/utils';
 
 // The set of pages we expose to the palette. `icon` reuses the existing string
 // shim in primitives.tsx so the UI stays consistent with the tab bar.
@@ -43,10 +43,18 @@ export function useCommandPalette(): CommandPaletteValue {
 }
 
 /** Button that opens the palette. Replaces the placeholder search affordance in headers. */
-export function SearchButton() {
+export function SearchButton({ className }: { className?: string }) {
   const { open } = useCommandPalette();
+  // 44px touch target on mobile (WCAG 2.5.5); 36px on desktop top bar where
+  // the cursor handles precision and chrome density matters more.
   return (
-    <Button variant="outline" size="icon" className="rounded-full" aria-label="Search" onClick={open}>
+    <Button
+      variant="outline"
+      size="icon"
+      className={cn('size-11 rounded-full md:size-9', className)}
+      aria-label="Search"
+      onClick={open}
+    >
       <Icon name="search" size={16} />
     </Button>
   );
@@ -307,7 +315,7 @@ function PaletteBody({ close }: { close: () => void }) {
           placeholder="Search transactions, accounts, screens…"
           aria-label="Command palette search"
           autoFocus
-          className="placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
+          className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-sm outline-none"
         />
         <kbd className="text-muted-foreground hidden font-mono text-[10px] tracking-wide sm:inline">
           esc
