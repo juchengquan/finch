@@ -15,6 +15,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { RefundBadge } from '@/components/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
+import { EmptyState } from '@/components/empty-state';
 import { merchantStats, anomalyScore } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
@@ -255,7 +256,15 @@ export default function ActivityPage() {
         )}
 
         {txns.length === 0 && (
-          <div className="text-muted-foreground py-10 text-center text-sm">No transactions</div>
+          <EmptyState
+            icon="search"
+            title="No transactions"
+            description={
+              query || tagFilter || activeRangeCount > 0
+                ? 'Nothing matches the current filters. Clear them to see all rows.'
+                : 'Add an expense to get started — it’ll show up here.'
+            }
+          />
         )}
 
         {/* Mobile: grouped feed */}

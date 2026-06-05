@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { EmptyState } from '@/components/empty-state';
 import { fmtNative } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
 import { RowActions } from '@/components/RowActions';
@@ -178,9 +179,11 @@ export default function TransfersPage() {
         </div>
 
         {transfers.length === 0 && (
-          <div className="text-muted-foreground rounded-[14px] border border-dashed py-10 text-center text-sm">
-            No transfers yet — use the + button to create one.
-          </div>
+          <EmptyState
+            icon="swap"
+            title="No transfers yet"
+            description="Tap + to move money between accounts — pairs a debit and a credit on the same date."
+          />
         )}
 
         {transfers.map((tg) => (

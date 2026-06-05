@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -256,9 +257,11 @@ export default function CategoriesPage() {
         </div>
 
         {tree.length === 0 && (
-          <div className="text-muted-foreground rounded-[14px] border border-dashed py-10 text-center text-sm">
-            No categories yet — use the + button to add one.
-          </div>
+          <EmptyState
+            icon="tag"
+            title="No categories yet"
+            description="Tap + to add one — they slot into the budget rings and reports."
+          />
         )}
 
         <div className="border-border bg-card divide-border divide-y md:max-h-[calc(100dvh-150px)] max-h-[calc(100dvh-200px)] overflow-y-auto rounded-[14px] border">

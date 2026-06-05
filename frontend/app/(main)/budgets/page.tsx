@@ -7,6 +7,7 @@ import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { BudgetFormDialog } from '@/components/budget-form-dialog';
+import { EmptyState } from '@/components/empty-state';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -203,9 +204,7 @@ export default function BudgetsPage() {
         )}
       </div>
       {items.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-4 text-center text-xs">
-          No {tab} budgets
-        </div>
+        <EmptyState variant="card" size="sm" title={`No ${tab} budgets`} />
       ) : (
         <div className="md:grid md:grid-cols-2 md:gap-x-4">
           {items.map((b) => (
@@ -249,9 +248,15 @@ export default function BudgetsPage() {
 
       <div className="px-5 pb-[120px]">
         {typed.length === 0 && ledgerGroups.length === 0 ? (
-          <div className="text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-            No {tab} budgets in <span className="text-foreground font-medium">{active.name}</span> yet — use the + button.
-          </div>
+          <EmptyState
+            icon="target"
+            title={
+              <>
+                No {tab} budgets in <span className="text-foreground font-medium">{active.name}</span> yet
+              </>
+            }
+            description="Tap + to set a monthly cap or savings target."
+          />
         ) : (
           <>
             {ledgerGroups.map((g) => renderGroup(g.id, g.name, typed.filter((b) => b.groupId === g.id), g.id))}
