@@ -508,7 +508,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         rolloverLimit: args.rolloverLimit == null ? null : Number(args.rolloverLimit),
         accountIds: strList(args.accountIds),
         categoryIds: strList(args.categoryIds),
-        tagIds: strList(args.tagIds),
         warningPct: args.warningPct != null ? Number(args.warningPct) : 80,
       });
       return;
