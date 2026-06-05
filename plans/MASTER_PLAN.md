@@ -8,7 +8,7 @@ and the current implementation in `frontend/`.
 > app's live data layer, served by a **server-side** SQLite database. See
 > `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-05-27._
+_Last updated: 2026-06-05._
 
 ---
 
@@ -65,7 +65,8 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
 
-**Charts not yet built (design defines them):** `CalendarHeatmap`, multi-series `AreaChart`.
+**Charts not yet built (design defines them):** multi-series `AreaChart`.
+(`CalendarHeatmap` shipped in PR #38; `Sankey` shipped with the Insights flow card.)
 
 **Cross-cutting status:**
 - ✅ **Mutations are real** — add/edit/delete/confirm/verify/alias/transfer/recurring-post
@@ -74,16 +75,16 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
   delete = soft-cancel.)
 - ✅ **Server-side persistence** — a SQLite file at `FINCH_DB_DIR`/`FINCH_DB_FILE`,
   written after every change and reloaded across restarts. No CSV import / auth / multi-device sync.
-- **Desktop is still the mobile layout in a sidebar shell** — the design specifies distinct
-  desktop dashboards (account-card grid, activity/admin tables, budget stat tiles,
-  large calendar, metric tabs).
-- **`MOCK` vs `LEDGER` reference data** still coexist as a pre-hydration fallback for
-  a handful of screens (accounts, merchants, FX page seed); the live figures all come
-  from the DB once the store hydrates.
-- **Remaining DB wiring**: Categories admin; tags UI; balance-curve
-  & net-worth charts; full FX conversion. Plus cleanup (retire `derive.ts` fallbacks +
-  baked JSON totals + dead `repo.ts`/`storage.ts`; resolve the redundant browser
-  `DbProvider`). See `SQLITE_INTEGRATION_PLAN.md` §6.
+- **Bespoke desktop dashboards landed in Phase D.** Accounts, Activity,
+  Budgets, Insights, and Scheduled all have distinct desktop layouts
+  (gradient card grid, full transaction table, stat tiles, fluid charts,
+  large calendar). The shell is single-render; the layout choice is CSS at
+  the `md` breakpoint.
+- **`MOCK` reference data** is now seed-only — pre-hydration fallback for
+  static lookups (`acctById`, `catById`); every figure that matters comes
+  from the live server DB once the store hydrates. The flat-schema
+  fallbacks (`derive.ts`, `repo.ts`, `storage.ts`, the `DbProvider`) were
+  removed across PRs #30 / #33.
 
 ---
 
@@ -295,9 +296,11 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
    **`CalendarHeatmap` primitive** + daily-spending use site on Insights shipped
    (PR #38). **Richer net-worth trend** — fourth metric tab on Insights driven by
    the new `netWorthByMonth` selector (PR #39). The accounts-list / detail
-   sparklines stay put as glanceable context. Receipt attachment is dropped
-   from scope entirely — the old "Receipt — coming soon" quick-action stub on
-   the transaction detail was replaced with a **Delete** action.
+   sparklines stay put as glanceable context. Receipt attachment was de-scoped
+   at the time — the old "Receipt — coming soon" quick-action stub on the
+   transaction detail was replaced with a **Delete** action. _(Re-opened as
+   a candidate in `plans/FEATURE_IDEAS.md` §4.1; listed under "Current open
+   items" above.)_
 4. ✅ **Income + Adjustment transaction types**. `/add` is now "Add transaction"
    with an income/expense toggle that signs the amount on save. Adjustments are
    modelled as a `transactions.is_adjustment` flag (schema v5, `MIGRATIONS[5]`)
@@ -308,13 +311,35 @@ remaining `app_state` shims. The original §5 list is now mostly complete:
 
 ### Future features (curated)
 
-The original plan list is closed. From a fresh audit, here's a curated list of
-real feature gaps — picks for the next phase, with the highest-value ones first.
+The original plan list is closed. The detailed brainstorm of where to take the
+app next lives in `plans/FEATURE_IDEAS.md` — categorized, impact-tagged, S/M/L
+effort. The picks already landed are crossed off in the "Done since" coda
+below; what's still open is summarized here.
 
-**Current open items:**
-1. **PWA** — turn finch into an installable, offline-capable app (cache the
-   shell + WASM via a service worker, request persistent storage). Data layer
-   doesn't change. Scoping doc at `plans/PWA_PLAN.md`.
+**Current open items (high payoff):**
+1. **Receipt photos** (FEATURE_IDEAS §4.1) — attach an image to a transaction.
+   New `transaction_attachments` table; OPFS blob + IndexedDB pointer;
+   thumbnail in the detail sheet. Reverses the earlier "Receipt — coming soon"
+   stub that was deleted as part of the cleanup pass. **M, schema change.**
+2. **PWA** — turn finch into an installable, offline-capable app (cache the
+   shell + WASM via a service worker, request persistent storage). Scoping
+   doc at `plans/PWA_PLAN.md`; five open questions still to resolve. **M.**
+   _Note: the plan doc still describes the OPFS-backed client database the
+   app no longer uses — the data layer is now server-side SQLite. The
+   service-worker caching strategy needs to be revisited in that light._
+3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+   30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
+   change. **M.**
+4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+   categories + a filtered report page + CSV export. **M, schema change.**
+5. **Saved searches / smart filters** (FEATURE_IDEAS §7.2) — pin
+   "subscriptions > $20" as a chip on Activity, stored in `app_state`. **S.**
+
+**Layout / a11y polish (from the layout audit, deferred from #81):**
+- Dark mode `--muted-foreground` contrast bump for WCAG AA on cards
+  (single-token CSS change).
+- Shared `<EmptyState />` component for Accounts / Activity / Budgets.
+- Desktop breadcrumb truncation at 1024-1280px (`min-w-0 truncate`).
 
 **Recurring transfers** ✅ shipped — `generateDueScheduled` now materializes
 transfer templates too, calling `createTransfer` once per due date with the
@@ -325,8 +350,6 @@ confusing on both ledgers. The de-dupe + installment-total caps work
 unchanged — the Set collapses the two legs that share a date. Templates
 without a `from_account_id` are left to manual entry. See
 `plans/database_design_en.md` decision #25.
-
-**Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.
 
 **Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.
 
@@ -443,4 +466,80 @@ Everything else in the curated list below — Transaction splits, Spending forec
 - **`CalendarHeatmap` primitive + daily-spending heatmap on Insights** (PR #38).
 - **Net worth metric tab on Insights** — `netWorthByMonth` selector + a fourth
   tab next to Spending / Income / Cashflow (PR #39).
+
+### Done since (post-PR-#66)
+
+Feature work, polish, and infra after the unrealized-FX / holdings PR. Cross-
+references to `plans/FEATURE_IDEAS.md` are in parentheses.
+
+- **Eight correctness fixes from the code-quality audit** (PR #69) — silent
+  category drop on `postScheduled`, mixed-currency holdings sums, FTS5
+  punctuation tokenization, installment badge missing from default Upcoming
+  list, `unrealizedFx` ledger filter, archived account holdings, `SAVEPOINT`
+  vs `BEGIN` in nested mutations, unknown patch keys.
+- **Transaction-insert consolidation refactor** (PR #70) — three transaction
+  write paths collapsed into a single `insertTxRow` helper in
+  `queries/transactions.ts`; `mutations.ts` shrunk by 93 LOC.
+- **🟡/🔵 polish pass** (PR #71) — six small cleanups + three coverage tests.
+- **Four small items** (PR #72) — SQL trigger for investment-only holdings
+  account, sort holdings by value, 404 state, recurring transfers (`generateDueScheduled` materializes transfer templates too).
+- **Local-heuristic category suggestion on Add** (PR #73, ≈ FEATURE_IDEAS §1.3)
+  — when the typed merchant resolves to a counterparty or matches past
+  transactions, suggest the most-common category from history. No model, no
+  API; quiet "Suggested: X · 4×" chip the user can tap to apply.
+- **PWA scoping plan** (PR #68) — `plans/PWA_PLAN.md` checked in;
+  implementation deferred (see "Current open items" above).
+- **FEATURE_IDEAS catalog** (PR #74) — ≈ 50 features grouped by 11 themes
+  with effort/impact tags; the source of truth for "what could we do next".
+- **Recent-expense chips on Add** (PR #75, FEATURE_IDEAS §1.1) — horizontal
+  row of "Starbucks · $4.50" chips above the amount input when type=expense;
+  tap pre-fills merchant + amount + account + category. Dedup by
+  (merchant + amount + account + category). New `recentExpenses` selector.
+- **30/60/90-day cashflow forecast on account detail** (PR #76, FEATURE_IDEAS §2.1)
+  — `accountForecast` selector projects daily balance from current_balance +
+  every scheduled template that touches this account, capped by
+  `installment_total - paid` and `max_executions`. Renders as a forecast card
+  on the account detail page with a sparkline of projected balance, an
+  upcoming-events list, and a "low point" stat that turns red if it dips
+  negative or warning-yellow if it dips below today.
+- **Per-merchant anomaly detector** (PR #78, FEATURE_IDEAS §3.1) — new
+  `merchantStats` + `anomalyScore` selectors in `lib/select.ts`; z-score over
+  each merchant's confirmed-expense history (counterparty FK first, lowercased
+  description fallback). `minCount = 3`, `threshold = 2.5`. A small
+  warning-tinted "Unusual" badge appears inline next to the merchant name on
+  Activity (mobile + desktop) and account-detail transaction lists.
+- **Weekly digest card on Insights** (PR #79, FEATURE_IDEAS §3.2) — Sunday-
+  night recap of the most-recently-completed Mon-Sun: spent, income, net,
+  vs-prev-week %, vs-12-week-avg, top 5 categories, biggest hit. New
+  `weeklyDigest` selector + `WeeklyDigestCard` component at the top of the
+  Insights page.
+- **Bulk recategorize from Activity** (PR #79, FEATURE_IDEAS §7.1) — new
+  "Select" mode on `/activity` turns rows into multi-select; floating action
+  bar with category picker applies one category to every selected row in a
+  single server roundtrip via a new `bulkRecategorize` mutation.
+- **Schema audit follow-ups** (PR #80) — `scheduled_templates.category_id`
+  FK swapped from `ON DELETE RESTRICT` to `SET NULL` (categories with linked
+  schedules can now be deleted, matching transactions); dead `budgets.tag_ids`
+  column dropped (was stored but never read); new composite index
+  `idx_rate_currency_date` for `convertToBase`'s hot path; new
+  `idx_txn_account_status` for `recomputeAccount`. `SCHEMA_VERSION` bumped
+  with an idempotent migration. `isAlreadyAppliedError` regex extended to
+  swallow "no such column / table / index" for `DROP COLUMN` and
+  table-recreation re-runs.
+- **Layout / a11y fixes** (PR #81) — budget detail breadcrumb resolves the
+  budget's actual name from the live store (was reading via `catById`, so
+  the breadcrumb always read "Uncategorized"); mobile header touch targets
+  bumped to 44×44 (`SearchButton` baked in `size-11 md:size-9`, back/profile
+  buttons explicit at the call site); new `focus-ring` Tailwind v4 utility
+  applied to the 14 custom inputs/buttons that suppressed the browser focus
+  outline without a fallback; `interactiveWidget: 'resizes-content'` on
+  the Next.js viewport export so the on-screen keyboard shrinks `dvh` (fixes
+  the add-expense submit hiding behind the iOS keyboard).
+- **Spending pattern surfacer** (PR #82, FEATURE_IDEAS §3.4) — four new
+  descriptive rules in the insights engine: `weekendVsWeekday` (weekend per-
+  calendar-day spend vs weekday), `topCategoryByWeekday` (when one category
+  dominates a weekday's spend), `endOfMonthBump` (days 23-31 vs days 1-22),
+  `quietestDay` (counterpart to the existing `weekdaySkew` — the day-of-week
+  that's reliably half the daily average). All gated on a minimum-data floor
+  so they don't fire on stub ledgers.
 
