@@ -79,7 +79,9 @@
   --secondary-foreground: #c9c0b1;
 
   --muted: #1a1816;
-  --muted-foreground: #7a7367;
+  /* Bumped from #7a7367 (~3.5:1 on --card #1c1a17, fails WCAG AA for body text)
+     to #9a8f7e (~6:1 on --card, ~6:1 on --background). Same warm-grey family. */
+  --muted-foreground: #9a8f7e;
 
   --accent: #2a2722;
   --accent-foreground: #f1ece2;
