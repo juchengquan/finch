@@ -250,17 +250,22 @@ export function PageShell({
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="border-border hidden shrink-0 items-center justify-between gap-4 border-b px-8 py-5 md:flex">
           {crumb ? (
-            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
-              <Link href={crumb.parent} className="text-muted-foreground hover:text-foreground">
+            // `min-w-0 flex-1` lets the flex container shrink past its content's
+            // natural width; `shrink-0` on the parent label + chevron keeps
+            // them whole; `truncate` on the current segment takes the spill.
+            // Without this, a long account name pushed the right-side actions
+            // onto a second row at 1024-1280px viewport widths.
+            <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+              <Link href={crumb.parent} className="text-muted-foreground shrink-0 hover:text-foreground">
                 {crumb.label}
               </Link>
-              <Icon name="chev" size={11} className="text-muted-foreground" />
-              <span className="text-foreground font-medium">{crumb.current}</span>
+              <Icon name="chev" size={11} className="text-muted-foreground shrink-0" />
+              <span className="text-foreground min-w-0 truncate font-medium">{crumb.current}</span>
             </nav>
           ) : (
-            <div className="font-serif text-2xl tracking-tight">{pageTitle}</div>
+            <div className="min-w-0 flex-1 truncate font-serif text-2xl tracking-tight">{pageTitle}</div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <SearchButton />
             {showAdd && (
               <Button

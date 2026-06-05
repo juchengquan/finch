@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
+import { EmptyState } from '@/components/empty-state';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById, CURRENCIES } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
@@ -97,9 +98,7 @@ function AccountGroupAccordion({
             </AccordionTrigger>
             <AccordionContent>
               {empty ? (
-                <div className="border-border text-muted-foreground flex h-[52px] w-full items-center justify-center rounded-xl border border-dashed text-xs">
-                  No accounts
-                </div>
+                <EmptyState variant="card" size="sm" title="No accounts" />
               ) : (
                 <div className="bg-card border-border rounded-xl border">
                   {g.accounts.map((a, i) => {
@@ -332,9 +331,16 @@ export default function AccountsPage() {
     return (
       <MobilePage>
         <ScreenHeader title="Accounts" trailing={trailing} />
-        <div className="text-muted-foreground px-5 pt-16 text-center text-sm">
-          No accounts linked in <span className="text-foreground font-medium">{active.name}</span> yet.
-        </div>
+        <EmptyState
+          variant="page"
+          icon="wallet"
+          title={
+            <>
+              No accounts linked in <span className="text-foreground font-medium">{active.name}</span> yet.
+            </>
+          }
+          description="Add your first account to start tracking balances and transactions."
+        />
         {createDialog}
 
         <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
