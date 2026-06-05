@@ -212,7 +212,6 @@ CREATE TABLE IF NOT EXISTS budgets (
   pending_amount     REAL,
   account_ids        TEXT,
   category_ids       TEXT,
-  tag_ids            TEXT,
   warning_pct        REAL NOT NULL DEFAULT 80,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
@@ -234,7 +233,10 @@ CREATE TABLE IF NOT EXISTS scheduled_templates (
   -- of a posted row is the linked account's currency.
   account_id           TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
-  category_id          TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  -- SET NULL on delete (matches transactions.category_id): the schedule keeps
+  -- running, posting uncategorized rows the user can re-classify later. RESTRICT
+  -- would block category cleanup whenever any schedule referenced it.
+  category_id          TEXT REFERENCES categories(id) ON DELETE SET NULL,
   frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
   day_of_month         INTEGER,
   day_of_week          INTEGER,
@@ -348,6 +350,9 @@ CREATE INDEX IF NOT EXISTS idx_counterparty_ledger ON counterparties(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_counterparty_ledger_name ON counterparties(ledger_id, name);
 CREATE INDEX IF NOT EXISTS idx_txn_ledger_date ON transactions(ledger_id, date);
 CREATE INDEX IF NOT EXISTS idx_txn_account_date ON transactions(account_id, date);
+-- recomputeAccount filters by (account_id, status='confirmed') with no date
+-- predicate; the broader (account_id, date) index above is more than we need.
+CREATE INDEX IF NOT EXISTS idx_txn_account_status ON transactions(account_id, status);
 CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_txn_transfer_group ON transactions(transfer_group_id);
 CREATE INDEX IF NOT EXISTS idx_txn_pending ON transactions(ledger_id, status) WHERE status = 'pending';
@@ -358,7 +363,9 @@ CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period)
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
 CREATE INDEX IF NOT EXISTS idx_scheduled_splits_template ON scheduled_splits(template_id);
 CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
-CREATE INDEX IF NOT EXISTS idx_rate_currency ON exchange_rates(currency);
+-- Composite for rateToHub's WHERE currency = ? AND date <= ? ORDER BY date DESC;
+-- a single-column (currency) index would force a scan over the date filter.
+CREATE INDEX IF NOT EXISTS idx_rate_currency_date ON exchange_rates(currency, date DESC);
 CREATE INDEX IF NOT EXISTS idx_holdings_ledger ON holdings(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
@@ -449,7 +456,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-05T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-06T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -464,6 +471,70 @@ const MIGRATIONS: Record<string, string[]> = {
   // ALTER closes that gap; it's idempotent (see runMigrationStmt) so it's a
   // no-op on files that already carry the column.
   '2026-06-05T00:00:00Z': ['ALTER TABLE accounts ADD COLUMN opening_balance_base REAL NOT NULL DEFAULT 0'],
+  // Schema audit follow-ups:
+  //   - new composite index serves rateToHub's (currency, date) lookups on
+  //     every transaction write; the single-column idx_rate_currency it
+  //     supersedes is dropped.
+  //   - new (account_id, status) index for recomputeAccount.
+  //   - budgets.tag_ids was declared but never read by any selector — drop it.
+  //   - scheduled_templates.category_id FK swaps from RESTRICT to SET NULL so a
+  //     category can be deleted even when a schedule references it (mirrors
+  //     transactions.category_id). SQLite has no ALTER for FK clauses, so the
+  //     table is rebuilt via the standard recreation dance.
+  '2026-06-06T00:00:00Z': [
+    'DROP INDEX IF EXISTS idx_rate_currency',
+    'CREATE INDEX IF NOT EXISTS idx_rate_currency_date ON exchange_rates(currency, date DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_txn_account_status ON transactions(account_id, status)',
+    'ALTER TABLE budgets DROP COLUMN tag_ids',
+    // Rebuild scheduled_templates with the new FK. Each step is re-runnable:
+    // the staging table is dropped first, the canonical re-create uses the
+    // same column order as the CREATE TABLE above, and RENAME is the last
+    // step so a partial failure leaves the original table intact.
+    'PRAGMA foreign_keys = OFF',
+    'DROP TABLE IF EXISTS scheduled_templates_new',
+    `CREATE TABLE scheduled_templates_new (
+       id                   TEXT PRIMARY KEY,
+       ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+       name                 TEXT,
+       description          TEXT,
+       kind                 TEXT NOT NULL CHECK(kind IN ('income','expense','transfer')),
+       amount               REAL,
+       amount_varies        INTEGER NOT NULL DEFAULT 0,
+       splits_enabled       INTEGER NOT NULL DEFAULT 0,
+       account_id           TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+       from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+       category_id          TEXT REFERENCES categories(id) ON DELETE SET NULL,
+       frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
+       day_of_month         INTEGER,
+       day_of_week          INTEGER,
+       start_date           TEXT NOT NULL,
+       end_date             TEXT,
+       next_run             TEXT,
+       last_run             TEXT,
+       auto_post            INTEGER NOT NULL DEFAULT 1,
+       is_active            INTEGER NOT NULL DEFAULT 1,
+       max_executions       INTEGER,
+       installment_total    INTEGER,
+       color                TEXT,
+       created_at           TEXT NOT NULL,
+       updated_at           TEXT NOT NULL
+     )`,
+    `INSERT INTO scheduled_templates_new (
+       id, ledger_id, name, description, kind, amount, amount_varies, splits_enabled,
+       account_id, from_account_id, category_id, frequency, day_of_month, day_of_week,
+       start_date, end_date, next_run, last_run, auto_post, is_active, max_executions,
+       installment_total, color, created_at, updated_at
+     ) SELECT
+       id, ledger_id, name, description, kind, amount, amount_varies, splits_enabled,
+       account_id, from_account_id, category_id, frequency, day_of_month, day_of_week,
+       start_date, end_date, next_run, last_run, auto_post, is_active, max_executions,
+       installment_total, color, created_at, updated_at
+     FROM scheduled_templates`,
+    'DROP TABLE scheduled_templates',
+    'ALTER TABLE scheduled_templates_new RENAME TO scheduled_templates',
+    'CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1',
+    'PRAGMA foreign_keys = ON',
+  ],
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be
@@ -474,7 +545,13 @@ const MIGRATIONS: Record<string, string[]> = {
 // else is a real migration failure and propagates.
 function isAlreadyAppliedError(err: unknown): boolean {
   const msg = String((err as { message?: unknown })?.message ?? err);
-  return /duplicate column name|already exists/i.test(msg);
+  // - "duplicate column name" — ADD COLUMN re-run
+  // - "already exists" — CREATE TABLE / INDEX / TRIGGER re-run
+  // - "no such column" — DROP COLUMN re-run after the column is gone
+  // - "no such table/index" — DROP / table-recreation step where the target
+  //   was already cleaned up. Real DBs (produced by applySchema) always have
+  //   every base table, so the only place this fires is migration replays.
+  return /duplicate column name|already exists|no such (column|table|index)/i.test(msg);
 }
 
 async function runMigrationStmt(exec: ExecFn, sql: string): Promise<void> {

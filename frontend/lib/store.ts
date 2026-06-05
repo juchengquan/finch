@@ -507,7 +507,6 @@ export const useFinanceStore = create<FinanceState>()(
           lastRolledPeriod: null,
           accountIds: input.accountIds ?? [],
           categoryIds: input.categoryIds ?? [],
-          tagIds: input.tagIds ?? [],
           warningPct: input.warningPct ?? 80,
         };
         set((s) => ({ budgets: [...s.budgets, row] }));
@@ -527,7 +526,6 @@ export const useFinanceStore = create<FinanceState>()(
           rolloverLimit: row.rolloverLimit,
           accountIds: row.accountIds,
           categoryIds: row.categoryIds,
-          tagIds: row.tagIds,
           warningPct: row.warningPct,
         });
         return id;
