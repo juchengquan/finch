@@ -389,6 +389,18 @@ test('migrate stamps the schema version in db_metadata', async () => {
   expect(meta!.appName).toBe('finch');
 });
 
+test('schema shape: budgets no longer carries tag_ids; new indexes present', async () => {
+  const exec = await seeded();
+  const budgetCols = (await exec('PRAGMA table_info(budgets)')).map((r) => String(r.name));
+  expect(budgetCols).not.toContain('tag_ids');
+
+  const indexNames = async (table: string) =>
+    (await exec(`PRAGMA index_list(${table})`)).map((r) => String(r.name));
+  expect(await indexNames('exchange_rates')).toContain('idx_rate_currency_date');
+  expect(await indexNames('exchange_rates')).not.toContain('idx_rate_currency');
+  expect(await indexNames('transactions')).toContain('idx_txn_account_status');
+});
+
 
 test('deleteCategory uncategorizes its transactions', async () => {
   const exec = await seeded();
@@ -400,6 +412,23 @@ test('deleteCategory uncategorizes its transactions', async () => {
   expect(Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n)).toBe(0);
   // FK is SET NULL: those transactions survive but become uncategorized.
   expect(Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n)).toBe(0);
+});
+
+test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RESTRICT)', async () => {
+  const exec = await seeded();
+  // Hand-build a schedule linked to 'food' — bypassing the higher-level mutation
+  // so the test focuses on the FK clause itself, not the createScheduled path.
+  await exec(
+    `INSERT INTO scheduled_templates
+       (id, ledger_id, name, kind, account_id, category_id, frequency,
+        start_date, created_at, updated_at)
+     VALUES ('sch-food','personal','Weekly groceries','expense','chk','food','weekly',
+             '2026-05-01', datetime('now'), datetime('now'))`,
+  );
+  // Pre-fix this would throw "FOREIGN KEY constraint failed" (RESTRICT).
+  await applyMutation(exec, 'deleteCategory', { id: 'food' });
+  const [row] = await exec("SELECT category_id FROM scheduled_templates WHERE id = 'sch-food'");
+  expect(row.category_id).toBeNull();
 });
 
 test('deleteTag drops the tag and its assignments', async () => {

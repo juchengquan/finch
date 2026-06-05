@@ -30,7 +30,6 @@ export interface BudgetRow {
   lastRolledPeriod: string | null;
   accountIds: string[];
   categoryIds: string[];
-  tagIds: string[];
   warningPct: number;
 }
 
@@ -64,7 +63,6 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     lastRolledPeriod: r.last_rolled_period == null ? null : String(r.last_rolled_period),
     accountIds: parseIds(r.account_ids),
     categoryIds: parseIds(r.category_ids),
-    tagIds: parseIds(r.tag_ids),
     warningPct: Number(r.warning_pct ?? 80),
   };
 }
@@ -96,7 +94,6 @@ export interface NewBudget {
   rolloverLimit?: number | null;
   accountIds?: string[];
   categoryIds?: string[];
-  tagIds?: string[];
   warningPct?: number;
 }
 
@@ -108,8 +105,8 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
     `INSERT INTO budgets
        (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
         frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
-        account_ids, category_ids, tag_ids, warning_pct, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+        account_ids, category_ids, warning_pct, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       b.id,
       b.ledgerId,
@@ -126,7 +123,6 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
       b.rolloverLimit ?? null,
       idsToJson(b.accountIds),
       idsToJson(b.categoryIds),
-      idsToJson(b.tagIds),
       b.warningPct ?? 80,
     ],
   );
@@ -145,7 +141,6 @@ export interface BudgetPatch {
   rolloverLimit?: number | null;
   accountIds?: string[];
   categoryIds?: string[];
-  tagIds?: string[];
   warningPct?: number;
 }
 
@@ -162,11 +157,10 @@ const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   rolloverLimit: 'rollover_limit',
   accountIds: 'account_ids',
   categoryIds: 'category_ids',
-  tagIds: 'tag_ids',
   warningPct: 'warning_pct',
 };
 
-const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set(['accountIds', 'categoryIds', 'tagIds']);
+const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set(['accountIds', 'categoryIds']);
 
 export async function updateBudget(exec: Exec, id: string, patch: BudgetPatch): Promise<void> {
   const sets: string[] = [];

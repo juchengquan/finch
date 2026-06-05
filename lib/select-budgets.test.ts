@@ -31,7 +31,6 @@ const budget = (p: Partial<BudgetRow>): BudgetRow => ({
   lastRolledPeriod: null,
   accountIds: [],
   categoryIds: [],
-  tagIds: [],
   warningPct: 80,
   ...p,
 });
