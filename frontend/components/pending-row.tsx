@@ -277,7 +277,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
         onChange={(e) => onNewNameChange(e.target.value)}
         placeholder="Merchant name"
         aria-label="New merchant name"
-        className="bg-secondary text-foreground placeholder:text-muted-foreground h-7 min-w-0 flex-1 rounded-md border-0 px-2.5 text-xs outline-none"
+        className="bg-secondary text-foreground placeholder:text-muted-foreground focus-ring h-7 min-w-0 flex-1 rounded-md border-0 px-2.5 text-xs outline-none"
       />
     </div>
   );

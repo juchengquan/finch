@@ -200,3 +200,10 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* Fallback focus ring for custom inputs/buttons that suppress the browser's
+   default outline with `outline-none` and don't ship their own focus styles.
+   shadcn-derived components in components/ui/* already define their own. */
+@utility focus-ring {
+  @apply focus-visible:ring-ring focus-visible:rounded-sm focus-visible:ring-2;
+}
