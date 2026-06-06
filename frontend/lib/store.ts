@@ -13,6 +13,7 @@ import type { LedgerRow } from '@/lib/db/queries/ledgers';
 import type { ExchangeRate } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
 import type { Holding } from '@/lib/db/queries/holdings';
+import type { Attachment } from '@/lib/db/queries/attachments';
 import type { Rule } from '@/lib/rules/types';
 
 export interface Tx {
@@ -201,6 +202,10 @@ interface FinanceState {
   /** Conditional rules engine — per-ledger if-then rules consumed by
    *  applyRules() on insert. See RULES_ENGINE_PLAN §2. */
   rules: Rule[];
+  /** Receipt attachments — pointer rows. The actual photos/PDFs live on
+   *  the server filesystem and are reached via GET /api/attachments/:id.
+   *  RECEIPT_PHOTOS_PLAN §2.1. */
+  attachments: Attachment[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
@@ -218,6 +223,13 @@ interface FinanceState {
   /** Mark every unreviewed confirmed row in the ledger (optionally one
    *  account) reviewed in a single server round-trip. */
   markAllReviewed: (ledgerId: string, opts?: { accountId?: string }) => void;
+  /** Upload a receipt attachment for a transaction. Returns the new
+   *  attachment id (and throws on failure so the UI can toast). The full
+   *  ProjectedState is adopted on success. RECEIPT_PHOTOS_PLAN §5.1. */
+  uploadAttachment: (transactionId: string, file: File) => Promise<string>;
+  /** Delete a receipt attachment — DB row + file. Optimistic: the row
+   *  drops from the projection on the round-trip. */
+  removeAttachment: (id: string) => void;
   /** Finalise a reconciliation: stamps the account checkpoint and, when
    *  `postAdjustment` is true and a non-zero gap remains, posts an Adjustment
    *  transaction equal to the remainder so the cleared balance lands exactly
@@ -364,6 +376,7 @@ export const useFinanceStore = create<FinanceState>()(
       tags: [],
       holdings: [],
       rules: [],
+      attachments: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
 
@@ -470,6 +483,29 @@ export const useFinanceStore = create<FinanceState>()(
           }),
         }));
         syncMutation('markAllReviewed', { ledgerId, accountId });
+      },
+
+      uploadAttachment: async (transactionId, file) => {
+        // Upload bypasses syncMutation (multipart body, not JSON). The route
+        // returns the same ProjectedState shape, so adoption mirrors the
+        // syncMutation path. We let the caller catch errors so the UI can
+        // surface them (size cap, mime allowlist, etc.).
+        const { uploadAttachment } = await import('@/lib/api-client');
+        const state = await uploadAttachment(transactionId, file);
+        useFinanceStore.setState(state);
+        // The new row is the most recent one for this transaction.
+        const created = [...state.attachments]
+          .filter((a) => a.transactionId === transactionId)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+        return created?.id ?? '';
+      },
+
+      removeAttachment: (id) => {
+        // Optimistic — drop the projected row immediately; the server
+        // round-trip overwrites the slice with the authoritative state
+        // (and unlinks the file).
+        set((s) => ({ attachments: s.attachments.filter((a) => a.id !== id) }));
+        syncMutation('removeAttachment', { id });
       },
 
       reconcileAccount: ({ accountId, statementBalance, statementDate, postAdjustment }) => {

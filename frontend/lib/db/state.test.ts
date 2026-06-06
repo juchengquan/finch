@@ -54,6 +54,34 @@ test('projected state carries accounts / categories / counterparties', async () 
   expect(loaded.counterparties.length).toBeGreaterThan(0);
 });
 
+test('projected state carries attachments (empty by default; populated when present)', async () => {
+  const { exec } = await freshDb();
+  await buildState(exec, sample);
+
+  // Fresh DB has no attachments yet.
+  const empty = await projectState(exec);
+  expect(empty.attachments).toEqual([]);
+
+  // Add one against an existing seed transaction; it must show up in the
+  // projection in the client-safe shape (no rel_path).
+  const seedTxId = sample.transactions[0].id;
+  await exec(
+    `INSERT INTO transaction_attachments
+       (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size,
+        sha256, original_filename, created_at, updated_at)
+     VALUES ('att-x', 'personal', ?, 'image', 'attachments/x/att-x.jpg',
+             'image/jpeg', 1234, 'h', 'receipt.jpg', datetime('now'), datetime('now'))`,
+    [seedTxId],
+  );
+  const loaded = await projectState(exec);
+  expect(loaded.attachments).toHaveLength(1);
+  expect(loaded.attachments[0].id).toBe('att-x');
+  expect(loaded.attachments[0].transactionId).toBe(seedTxId);
+  expect(loaded.attachments[0].kind).toBe('image');
+  // The projection MUST NOT carry rel_path.
+  expect((loaded.attachments[0] as unknown as { relPath?: string }).relPath).toBeUndefined();
+});
+
 test('account balance reflects the live transaction set (not just the seed)', async () => {
   const { exec } = await freshDb();
   const base: PersistState = {

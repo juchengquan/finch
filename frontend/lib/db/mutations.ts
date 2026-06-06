@@ -92,8 +92,30 @@ import {
   type AddInput,
 } from './queries/transactions';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
+import {
+  deleteAttachment as qDeleteAttachment,
+  getAttachmentFile as qGetAttachmentFile,
+  getAttachmentRelPathsForTransaction as qAttachmentPathsForTx,
+} from './queries/attachments';
+import { resolveAttachmentPath } from './paths';
+import { unlink } from 'node:fs/promises';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
+
+/** Best-effort attachment-file cleanup. Called AFTER the DB row(s) are gone:
+ *  if the unlink fails (missing file, EBUSY on Windows in dev, etc.) the
+ *  orphan is harmless — `lib/db/queries/attachments.ts` will never surface a
+ *  row pointing at it again, and a future vacuum can sweep it. The opposite
+ *  order (unlink first, then delete) would risk a phantom DB row pointing
+ *  at a missing file. RECEIPT_PHOTOS_PLAN §3.3. */
+async function unlinkAttachmentFiles(relPaths: string[]): Promise<void> {
+  if (!relPaths.length) return;
+  for (const rel of relPaths) {
+    const abs = resolveAttachmentPath(rel);
+    if (!abs) continue;
+    await unlink(abs).catch(() => {});
+  }
+}
 
 const RESET_TABLES = [
   'holdings',
@@ -597,8 +619,12 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteTransaction': {
       const id = str(args.id);
       const before = await txTouches(exec, id);
-      // Hard delete (tags/splits cascade); recompute the affected account after,
-      // using the id captured before the row is gone.
+      // Collect attachment rel_paths BEFORE the FK CASCADE fires — afterwards
+      // the rows are gone and we can't recover them. The actual unlinks run
+      // at the bottom of this case, after the DB state is settled.
+      const attachmentPaths = await qAttachmentPathsForTx(exec, id);
+      // Hard delete (tags/splits/attachments cascade); recompute the affected
+      // account after, using the id captured before the row is gone.
       const acctId = await qDelete(exec, id);
       if (acctId) await recomputeAccount(exec, acctId);
       if (before) {
@@ -608,6 +634,18 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           before.date,
         );
       }
+      await unlinkAttachmentFiles(attachmentPaths);
+      return;
+    }
+    case 'removeAttachment': {
+      // Toggle off a single receipt — delete the pointer row, then unlink the
+      // file. The user-visible model is "the receipt is gone" regardless of
+      // which step technically fails (RECEIPT_PHOTOS_PLAN §3.3).
+      const id = str(args.id);
+      const row = await qGetAttachmentFile(exec, id);
+      if (!row) return; // already gone — idempotent
+      await qDeleteAttachment(exec, id);
+      await unlinkAttachmentFiles([row.relPath]);
       return;
     }
     case 'confirmTransaction':

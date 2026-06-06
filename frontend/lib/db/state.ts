@@ -22,6 +22,7 @@ import { listRules } from './queries/rules';
 import { splitsByTransaction } from './queries/transactionSplits';
 import { listScheduled } from './queries/scheduled';
 import { listHoldings } from './queries/holdings';
+import { listAttachments } from './queries/attachments';
 import { getAppState } from './queries/appState';
 import type { Exec, PersistState, ProjectedState } from './repo';
 import type { Tx } from '@/lib/store';
@@ -44,7 +45,7 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 export async function projectState(exec: Exec): Promise<ProjectedState> {
   const txRows = await exec('SELECT * FROM transactions ORDER BY date DESC, time DESC');
   const transactions: Tx[] = txRows.map(rowToTx);
-  const [ledgers, accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, tagMap, scheduled, holdings, rules] =
+  const [ledgers, accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, tagMap, scheduled, holdings, rules, attachments] =
     await Promise.all([
       listLedgers(exec),
       listAccounts(exec),
@@ -59,6 +60,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       listScheduled(exec),
       listHoldings(exec),
       listRules(exec),
+      listAttachments(exec),
     ]);
   const mobileTabIds = await readMobileTabIds(exec);
   const displayCurrencyByLedger = await readDisplayCurrencyByLedger(exec);
@@ -98,6 +100,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     holdings,
     scheduled,
     rules,
+    attachments,
     mobileTabIds,
     displayCurrencyByLedger,
   };

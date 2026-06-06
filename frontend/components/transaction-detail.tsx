@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon, CatBar } from '@/components/primitives';
+import { AttachmentsRow } from '@/components/transaction-attachments';
 import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
 import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
@@ -736,6 +737,7 @@ export function TransactionDetail({
             </button>
           </div>
         )}
+        <AttachmentsRow transactionId={tx.id} />
       </div>
 
       {splits.length > 0 && (

@@ -1131,6 +1131,95 @@ test('setReviewed toggles reviewed_at; markAllReviewed clears the ledger queue',
   expect(family).toBe(0);
 });
 
+test('removeAttachment deletes the row + unlinks the file (best-effort)', async () => {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const os = await import('node:os');
+
+  // Point FINCH_DB_DIR at a tmp dir so the unlink hits a real file we
+  // created — verifies the cleanup actually runs, not just the DB row.
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'finch-mut-attach-'));
+  const prevDbDir = process.env.FINCH_DB_DIR;
+  process.env.FINCH_DB_DIR = tmpRoot;
+  try {
+    const exec = await seeded();
+    const [tx] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+    const txId = String(tx.id);
+
+    const relPath = `attachments/${txId}/att-1.jpg`;
+    const absPath = path.join(tmpRoot, relPath);
+    await fs.mkdir(path.dirname(absPath), { recursive: true });
+    await fs.writeFile(absPath, Buffer.from([0xff, 0xd8, 0xff]));
+
+    await exec(
+      `INSERT INTO transaction_attachments
+         (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
+       VALUES ('att-1','personal',?,'image',?,'image/jpeg',3,'h','r.jpg',datetime('now'),datetime('now'))`,
+      [txId, relPath],
+    );
+
+    await applyMutation(exec, 'removeAttachment', { id: 'att-1' });
+
+    // DB row gone.
+    expect((await exec('SELECT id FROM transaction_attachments WHERE id = ?', ['att-1'])).length).toBe(0);
+    // File on disk gone.
+    expect(await fs.access(absPath).then(() => true, () => false)).toBe(false);
+
+    // Idempotent: a second call is a no-op.
+    await applyMutation(exec, 'removeAttachment', { id: 'att-1' });
+  } finally {
+    if (prevDbDir === undefined) delete process.env.FINCH_DB_DIR;
+    else process.env.FINCH_DB_DIR = prevDbDir;
+    await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('deleteTransaction collects rel_paths via cascade and unlinks the files', async () => {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const os = await import('node:os');
+
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'finch-mut-cascade-'));
+  const prevDbDir = process.env.FINCH_DB_DIR;
+  process.env.FINCH_DB_DIR = tmpRoot;
+  try {
+    const exec = await seeded();
+    const [tx] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+    const txId = String(tx.id);
+
+    const paths = [
+      `attachments/${txId}/a.jpg`,
+      `attachments/${txId}/b.pdf`,
+    ];
+    for (const rel of paths) {
+      const abs = path.join(tmpRoot, rel);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, Buffer.from('x'));
+    }
+    await exec(
+      `INSERT INTO transaction_attachments
+         (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
+       VALUES ('att-a','personal',?,'image',?,'image/jpeg',1,'h',null,datetime('now'),datetime('now')),
+              ('att-b','personal',?,'pdf',?,'application/pdf',1,'h',null,datetime('now'),datetime('now'))`,
+      [txId, paths[0], txId, paths[1]],
+    );
+
+    await applyMutation(exec, 'deleteTransaction', { id: txId });
+
+    // Both rows cascaded away.
+    expect((await exec('SELECT id FROM transaction_attachments WHERE transaction_id = ?', [txId])).length).toBe(0);
+    // Both files unlinked.
+    for (const rel of paths) {
+      const abs = path.join(tmpRoot, rel);
+      expect(await fs.access(abs).then(() => true, () => false)).toBe(false);
+    }
+  } finally {
+    if (prevDbDir === undefined) delete process.env.FINCH_DB_DIR;
+    else process.env.FINCH_DB_DIR = prevDbDir;
+    await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
 test('reconcileAccount stamps the checkpoint without an adjustment when none is asked', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'reconcileAccount', {
