@@ -15,6 +15,7 @@ const LEDGER_TABS = [
   { id: 'merchants', icon: 'bag', label: 'Merchants', path: '/merchants' },
   { id: 'categories', icon: 'tag', label: 'Categories', path: '/categories' },
   { id: 'tags', icon: 'tags', label: 'Tags', path: '/tags' },
+  { id: 'rules', icon: 'sparkle', label: 'Rules', path: '/rules' },
 ];
 
 // The pinned center button opens the add-expense sheet (see PageShell) rather
