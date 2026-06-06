@@ -420,6 +420,19 @@ CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction
 CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active);
 
+-- Dedup backstop: an exact-identical row can't be inserted twice. SQLite treats
+-- NULLs as distinct, so rows with a NULL time (e.g. scheduled auto-posts) never
+-- collide here — the guard only bites genuine same-minute manual duplicates,
+-- which is what the Add form's soft duplicate detector steers users away from
+-- first. Mirrors database_design_en.md's transactions UNIQUE.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_dedup ON transactions(account_id, date, time, amount, description);
+
+-- One named budget per (ledger, name, cycle). Stops a double-submit or a
+-- copy-paste from silently creating two identical budgets that both match the
+-- same transactions. Legacy NULL-named rows are no longer created, but NULLs
+-- would be distinct here anyway.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_unique ON budgets(ledger_id, name, frequency, start_date);
+
 -- Confirmed inserts move the account balance by their delta (in the account's
 -- currency: the native amount when the entry is in that currency, else the
 -- ledger-base figure for a foreign entry on a base-currency account). Pending
@@ -504,7 +517,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-08T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-09T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -614,6 +627,24 @@ const MIGRATIONS: Record<string, string[]> = {
      )`,
     'CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active)',
     'ALTER TABLE transactions ADD COLUMN applied_rule_ids TEXT',
+  ],
+  // Dedup UNIQUE backstops (#5). De-dupe first so the index build can't fail on
+  // a pre-existing file that already holds duplicates: keep the lowest rowid of
+  // each colliding group, drop the rest. Both DELETEs are no-ops on a clean DB.
+  // Equality here uses IS so NULL keys (e.g. a NULL transaction time) group
+  // together for the cleanup — stricter than the index itself, which is the
+  // safe direction (it only removes rows the index would also reject).
+  '2026-06-09T00:00:00Z': [
+    `DELETE FROM transactions WHERE rowid NOT IN (
+       SELECT MIN(rowid) FROM transactions
+       GROUP BY account_id, date, time, amount, description
+     )`,
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_dedup ON transactions(account_id, date, time, amount, description)',
+    `DELETE FROM budgets WHERE rowid NOT IN (
+       SELECT MIN(rowid) FROM budgets
+       GROUP BY ledger_id, name, frequency, start_date
+     )`,
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_unique ON budgets(ledger_id, name, frequency, start_date)',
   ],
 };
 

@@ -122,6 +122,30 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// Turn a UNIQUE violation from a known dedup index into a human message, so a
+// double-submit surfaces as a clear toast instead of a raw 500. SQLite reports
+// the violated index by its *columns*, not its name (e.g. "UNIQUE constraint
+// failed: budgets.ledger_id, budgets.name, ..."), so we match on a distinctive
+// column from each backstop index (idx_txn_dedup / idx_budget_unique in
+// schema.ts, #5). Any other error propagates unchanged.
+const DEDUP_MESSAGES: { signature: string; message: string }[] = [
+  { signature: 'transactions.account_id, transactions.date', message: 'This looks like a duplicate — an identical transaction already exists.' },
+  { signature: 'budgets.ledger_id, budgets.name', message: 'A budget with this name and cycle already exists.' },
+];
+async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    const msg = String((err as Error)?.message ?? err);
+    if (msg.includes('UNIQUE constraint failed')) {
+      for (const { signature, message } of DEDUP_MESSAGES) {
+        if (msg.includes(signature)) throw new Error(message);
+      }
+    }
+    throw err;
+  }
+}
+
 /** Reject creating/moving a category under one that itself has a parent —
  *  the taxonomy is exactly 2 levels deep. */
 async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
@@ -363,7 +387,7 @@ function mergeTouches(
 export async function applyMutation(exec: Exec, action: string, args: Args): Promise<void> {
   switch (action) {
     case 'addTransaction': {
-      const id = await qAdd(exec, args as unknown as AddInput);
+      const id = await withDedupMessage(() => qAdd(exec, args as unknown as AddInput));
       const touches = await txTouches(exec, id);
       if (touches) {
         await invalidateRollover(
@@ -584,7 +608,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const amount = Number(args.amount);
       if (!(amount > 0)) throw new Error('Budget amount must be greater than 0');
       const strList = (v: unknown): string[] => (Array.isArray(v) ? (v as unknown[]).map(str) : []);
-      await qCreateBudget(exec, {
+      await withDedupMessage(() => qCreateBudget(exec, {
         id: str(args.id || newId('bgt')),
         ledgerId,
         groupId: args.groupId ? str(args.groupId) : null,
@@ -601,7 +625,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         accountIds: strList(args.accountIds),
         categoryIds: strList(args.categoryIds),
         warningPct: args.warningPct != null ? Number(args.warningPct) : 80,
-      });
+      }));
       return;
     }
     case 'updateBudget': {

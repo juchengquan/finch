@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -894,4 +894,23 @@ test('weeklyDigest: income counted from income rows only; net = income - spent',
   expect(d.spent).toBe(100);
   expect(d.income).toBe(300);
   expect(d.net).toBe(200);
+});
+
+test('findDuplicate flags a same-account same-merchant same-amount row within the window', () => {
+  const txns = [
+    tx({ id: 'a', merchant: 'Starbucks', amount: -6.5, account: 'cc', date: '2026-05-10' }),
+  ];
+  // Exact match a day later → flagged.
+  expect(findDuplicate(txns, 'personal', { merchant: 'starbucks', amount: -6.5, accountId: 'cc', date: '2026-05-11' })?.id).toBe('a');
+  // Outside the ±3d window → no match.
+  expect(findDuplicate(txns, 'personal', { merchant: 'Starbucks', amount: -6.5, accountId: 'cc', date: '2026-05-20' })).toBeNull();
+  // Different account → no match.
+  expect(findDuplicate(txns, 'personal', { merchant: 'Starbucks', amount: -6.5, accountId: 'chk', date: '2026-05-10' })).toBeNull();
+  // Different amount → no match.
+  expect(findDuplicate(txns, 'personal', { merchant: 'Starbucks', amount: -7, accountId: 'cc', date: '2026-05-10' })).toBeNull();
+  // The row's own id is excluded (edit case).
+  expect(findDuplicate(txns, 'personal', { merchant: 'Starbucks', amount: -6.5, accountId: 'cc', date: '2026-05-10', excludeId: 'a' })).toBeNull();
+  // Pending rows are ignored.
+  const pend = [tx({ id: 'p', merchant: 'Starbucks', amount: -6.5, account: 'cc', date: '2026-05-10', pending: true })];
+  expect(findDuplicate(pend, 'personal', { merchant: 'Starbucks', amount: -6.5, accountId: 'cc', date: '2026-05-10' })).toBeNull();
 });
