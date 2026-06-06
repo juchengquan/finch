@@ -1,6 +1,9 @@
 # File-backed SQLite + WAL — scoping plan
 
-Status: **planning** — no code changes yet.
+Status: **shipped** (PRs #96, #97, #99, #100) — the persistence runtime moved
+from in-memory `@sqlite.org/sqlite-wasm` (whole-file snapshot per mutation) to a
+file-backed **`better-sqlite3`** database with WAL; `sqlite-wasm` is fully
+retired. This doc is kept as the design record.
 
 Today finch's database lives entirely in process memory and is persisted to
 disk as a whole-file snapshot after every mutation (the
