@@ -40,7 +40,7 @@ interface BackupContextValue {
   metadata: DbMetadataView | null;
   backups: BackupEntry[];
   download: () => Promise<void>;
-  downloadCsv: () => Promise<void>;
+  downloadCsv: (scope?: { ledgerId?: string; month?: string }) => Promise<void>;
   importFile: (file: File) => Promise<ImportResult>;
   backupNow: () => Promise<{ path: string }>;
   refreshBackups: () => Promise<void>;
@@ -127,12 +127,19 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     downloadBytes(bytes, `finch-${ts}.sqlite3`);
   }, []);
 
-  const downloadCsv = useCallback(async () => {
-    const res = await fetch(`${base}/api/export/transactions`);
+  // Optional scope narrows the export to one ledger and/or month; omitted = the
+  // full all-ledgers dump. The filename mirrors the server's scoped name.
+  const downloadCsv = useCallback(async (scope?: { ledgerId?: string; month?: string }) => {
+    const params = new URLSearchParams();
+    if (scope?.ledgerId) params.set('ledger', scope.ledgerId);
+    if (scope?.month) params.set('month', scope.month);
+    const qs = params.toString();
+    const res = await fetch(`${base}/api/export/transactions${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error(`CSV export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('@/lib/db/storage');
-    downloadBytes(bytes, 'finch-transactions.csv', 'text/csv;charset=utf-8');
+    const suffix = [scope?.ledgerId, scope?.month].filter(Boolean).join('-');
+    downloadBytes(bytes, suffix ? `finch-transactions-${suffix}.csv` : 'finch-transactions.csv', 'text/csv;charset=utf-8');
   }, []);
 
   const importFile = useCallback(

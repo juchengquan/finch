@@ -131,8 +131,8 @@ test('mobile bottom-bar tab ids round-trip through app_state', async () => {
   expect((await projectState(exec)).mobileTabIds).toEqual(['insights', 'goals', 'budgets']);
 
   // Overwrite replaces the prior value (single app_state row).
-  await applyMutation(exec, 'setMobileTabIds', { ids: ['reports'] });
-  expect((await projectState(exec)).mobileTabIds).toEqual(['reports']);
+  await applyMutation(exec, 'setMobileTabIds', { ids: ['activity'] });
+  expect((await projectState(exec)).mobileTabIds).toEqual(['activity']);
 });
 
 test('per-ledger display currency round-trips through app_state', async () => {

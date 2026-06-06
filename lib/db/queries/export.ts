@@ -36,8 +36,28 @@ const COLUMNS: CsvColumn[] = [
   { key: 'tags', label: 'Tags' },
 ];
 
+/** Optional scoping for a transactions export. Both filters are independent;
+ *  omit for the full all-ledgers export (the Settings backup behaviour). */
+export interface TxExportFilter {
+  /** Restrict to one ledger. */
+  ledgerId?: string;
+  /** Restrict to a single YYYY-MM month (matched against the txn date). */
+  month?: string;
+}
+
 /** Transactions with account/category names + tag list, newest first. */
-export async function transactionExportRows(exec: Exec): Promise<TxExportRow[]> {
+export async function transactionExportRows(exec: Exec, filter: TxExportFilter = {}): Promise<TxExportRow[]> {
+  const where: string[] = [];
+  const bind: (string | number)[] = [];
+  if (filter.ledgerId) {
+    where.push('t.ledger_id = ?');
+    bind.push(filter.ledgerId);
+  }
+  if (filter.month) {
+    where.push('t.date LIKE ?');
+    bind.push(`${filter.month}%`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const rows = await exec(
     `SELECT t.date, t.time, t.ledger_id AS ledger,
             a.name AS account, t.description AS merchant, c.name AS category,
@@ -48,7 +68,9 @@ export async function transactionExportRows(exec: Exec): Promise<TxExportRow[]> 
        FROM transactions t
        LEFT JOIN accounts a ON t.account_id = a.id
        LEFT JOIN categories c ON t.category_id = c.id
+      ${whereSql}
       ORDER BY t.date DESC, t.time DESC, t.created_at DESC`,
+    bind,
   );
   return rows.map((r) => ({
     date: String(r.date ?? ''),
@@ -67,7 +89,7 @@ export async function transactionExportRows(exec: Exec): Promise<TxExportRow[]> 
   }));
 }
 
-export async function transactionsCsv(exec: Exec): Promise<string> {
-  const rows = await transactionExportRows(exec);
+export async function transactionsCsv(exec: Exec, filter: TxExportFilter = {}): Promise<string> {
+  const rows = await transactionExportRows(exec, filter);
   return toCsv(rows as unknown as Record<string, unknown>[], COLUMNS);
 }

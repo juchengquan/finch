@@ -1,15 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Money, BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
 import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
 import { WeeklyDigestCard } from '@/components/weekly-digest-card';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
+import { useBackup } from '@/components/sqlite-backup-provider';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
 import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow, weeklyDigest } from '@/lib/select';
@@ -19,6 +28,13 @@ import type { MonthForecast } from '@/lib/select';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fullMonth = (ym: string) => (ym ? MONTH_LABELS[Number(ym.slice(5)) - 1] : '');
+const formatMonth = (ym: string) => (ym ? `${MONTH_LABELS[Number(ym.slice(5)) - 1]} ${ym.slice(0, 4)}` : '');
+
+const VIEWS = [
+  { id: 'trends', label: 'Trends' },
+  { id: 'breakdown', label: 'Breakdown' },
+] as const;
+type View = (typeof VIEWS)[number]['id'];
 
 // Stacked horizontal bar that visualises the four forecast components
 // (mtd / unscheduled / scheduled) at their proportional widths.
@@ -54,14 +70,47 @@ const RANGES = [
 ] as const;
 
 export default function InsightsPage() {
+  const [view, setView] = useState<View>('trends');
   const [metric, setMetric] = useState<Metric>('spending');
   const [range, setRange] = useState<number>(12);
   const { activeId } = useLedger();
   const { fmt, toBase } = useMoney();
+  const { downloadCsv } = useBackup();
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const budgets = useFinanceStore((s) => s.budgets);
   const scheduled = useFinanceStore((s) => s.scheduled);
+
+  // --- Breakdown view (formerly the Reports page): a month picker + the
+  // per-category spend list for the chosen month. The picker is restricted to
+  // months that actually have data in the active ledger. ---
+  const breakdownMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of transactions) {
+      if ((t.ledgerId ?? 'personal') === activeId) set.add(t.date.slice(0, 7));
+    }
+    return Array.from(set).sort().reverse();
+  }, [transactions, activeId]);
+  const [pickedMonth, setPickedMonth] = useState<string>(() => currentMonth(transactions, activeId));
+  // The pick is the source of truth; if it falls out of range (ledger switch,
+  // data prune) fall back to the latest month with data — at render, no effect.
+  const breakdownMonth = breakdownMonths.includes(pickedMonth) ? pickedMonth : (breakdownMonths[0] ?? '');
+  const breakdownSpentById = categorySpend(transactions, activeId, breakdownMonth);
+  const breakdownCats = (MOCK.categories as { id: string; name: string; color?: string; ledger?: string }[])
+    .filter((c) => (c.ledger ?? 'personal') === activeId)
+    .map((c) => ({ id: c.id, name: c.name, color: c.color ?? '#9ca3af', spent: breakdownSpentById[c.id] ?? 0 }))
+    .sort((a, b) => b.spent - a.spent);
+  const breakdownTotal = breakdownCats.reduce((s, c) => s + c.spent, 0);
+
+  const exportCsv = () => {
+    void downloadCsv({ ledgerId: activeId, month: breakdownMonth || undefined })
+      .then(() =>
+        toast.success('Transactions exported', {
+          description: breakdownMonth ? `${formatMonth(breakdownMonth)} · CSV` : 'CSV downloaded',
+        }),
+      )
+      .catch((err) => toast.error('Export failed', { description: String((err as Error).message ?? err) }));
+  };
 
   // Category reference (name + static seed budget) for the deltas comparison; the
   // page derives monthly/cashflow series straight from the projected transactions.
@@ -134,6 +183,85 @@ export default function InsightsPage() {
       </div>
 
       <div className="px-5 pb-[120px]">
+        {/* Trends / Breakdown view toggle (Insights + the former Reports page). */}
+        <div role="tablist" aria-label="Insights view" className="bg-secondary mb-4 flex gap-1 rounded-full p-1">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={view === v.id}
+              onClick={() => setView(v.id)}
+              className={cn(
+                'h-8 flex-1 rounded-full text-xs font-medium transition-colors',
+                view === v.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {view === 'breakdown' ? (
+          // Desktop: a summary rail (picker + total + export) beside the
+          // category list. Mobile: the two stack in the same source order.
+          <div className="md:grid md:grid-cols-[1fr_1.7fr] md:items-start md:gap-8">
+            <div className="md:bg-card md:border-border md:rounded-xl md:border md:p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Month</div>
+                {breakdownMonths.length > 0 ? (
+                  <Select value={breakdownMonth} onValueChange={setPickedMonth}>
+                    <SelectTrigger className="border-border bg-card h-7 w-auto min-w-[110px] gap-1.5 rounded-full px-3 text-xs font-medium">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {breakdownMonths.map((m) => (
+                        <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-muted-foreground text-xs">—</span>
+                )}
+              </div>
+              <div className="mb-4">
+                <PageHeader
+                  label="Spent"
+                  value={<Money value={breakdownTotal} mono={false} />}
+                  sublabel={`${breakdownCats.length} categories`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!breakdownMonth}
+                className="bg-secondary text-secondary-foreground flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium disabled:opacity-50"
+              >
+                Export {breakdownMonth ? formatMonth(breakdownMonth) : 'month'} CSV
+              </button>
+            </div>
+            {breakdownTotal === 0 ? (
+              <div className="text-muted-foreground border-border mt-4 rounded-xl border border-dashed py-10 text-center text-sm md:mt-0">
+                No spending in {formatMonth(breakdownMonth) || 'this ledger'}.
+              </div>
+            ) : (
+              <div className="md:bg-card md:border-border md:rounded-xl md:border md:px-4">
+                {breakdownCats.filter((c) => c.spent > 0).map((c) => {
+                  const pct = breakdownTotal ? Math.round((c.spent / breakdownTotal) * 100) : 0;
+                  return (
+                    <div key={c.id} className="border-border flex items-center gap-3 border-t py-3 first:border-t-0">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
+                      <div className="flex-1 truncate text-sm">{c.name}</div>
+                      <div className="text-muted-foreground w-9 text-right font-mono text-xs">{pct}%</div>
+                      <Money value={c.spent} className="w-20 text-right text-sm" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+        <>
         <WeeklyDigestCard digest={digest} />
         <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -354,6 +482,8 @@ export default function InsightsPage() {
             </div>
             <AprVsMay data={categoryDeltas} />
           </div>
+        )}
+        </>
         )}
       </div>
     </MobilePage>
