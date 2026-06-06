@@ -87,7 +87,19 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     refundedTransactionId: r.refunded_transaction_id == null ? undefined : String(r.refunded_transaction_id),
     counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
     clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
+    appliedRuleIds: parseRuleIds(r.applied_rule_ids),
   };
+}
+
+/** Parse the applied_rule_ids JSON array column; undefined when null/corrupt. */
+function parseRuleIds(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  try {
+    const v = JSON.parse(String(raw));
+    return Array.isArray(v) ? v.map(String) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** List transactions for a ledger with optional search / filters. */

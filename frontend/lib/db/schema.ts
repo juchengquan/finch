@@ -183,6 +183,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- null = uncleared. Independent of the status column: a confirmed
   -- transaction can still be uncleared (logged but not yet seen on a statement).
   cleared_at         TEXT,
+  -- Rules-engine observability (RULES_ENGINE_PLAN section 2.2). JSON array of
+  -- rule ids that touched this row, in apply order. Answers "why is this
+  -- Groceries?" on the detail sheet and doubles as the infinite-loop guard:
+  -- the engine skips rows it already generated (e.g. a rule's auto-transfer
+  -- output must not itself trigger rules). null = the engine never touched it.
+  applied_rule_ids   TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
 );
@@ -325,6 +331,33 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
   PRIMARY KEY (date, currency)
 );
 
+-- Conditional rules engine (RULES_ENGINE_PLAN). Each row is one if-then rule.
+-- The condition tree and the ordered action list are stored as JSON text (same
+-- flat-JSON idiom as budgets.account_ids / app_state.value) and deserialized
+-- into the typed Condition / Action shapes by the engine at read time;
+-- normalizing the tree into sub-tables would be over-engineering for a
+-- single-user app. Rules apply in priority order (lower first); later rules
+-- override earlier ones, with the losing rule still recorded in the
+-- transaction's applied_rule_ids for traceability.
+CREATE TABLE IF NOT EXISTS rules (
+  id           TEXT PRIMARY KEY,
+  ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name         TEXT,
+  priority     INTEGER NOT NULL DEFAULT 100,
+  condition    TEXT NOT NULL,
+  actions      TEXT NOT NULL,
+  is_active    INTEGER NOT NULL DEFAULT 1,
+  -- Whether the rule re-fires when a transaction is edited (not just on
+  -- insert). Defaults to 0 (insert-only) — the safer footgun-free default;
+  -- the user opts a rule into edit-time re-application explicitly.
+  run_on_edit  INTEGER NOT NULL DEFAULT 0,
+  -- Last time this rule was run across existing rows (the "Apply to existing"
+  -- backfill); null = never backfilled.
+  last_applied_at TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
 -- Transitional store slices not yet migrated to real tables (pending, scheduled,
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
@@ -385,6 +418,7 @@ CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active);
 
 -- Confirmed inserts move the account balance by their delta (in the account's
 -- currency: the native amount when the entry is in that currency, else the
@@ -470,7 +504,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-07T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-08T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -559,6 +593,27 @@ const MIGRATIONS: Record<string, string[]> = {
     'ALTER TABLE transactions ADD COLUMN cleared_at TEXT',
     'ALTER TABLE accounts ADD COLUMN last_reconciled_at TEXT',
     'ALTER TABLE accounts ADD COLUMN last_reconciled_balance REAL',
+  ],
+  // Conditional rules engine (RULES_ENGINE_PLAN). A new rules table + its
+  // index, plus the applied_rule_ids observability column on transactions.
+  // CREATE TABLE/INDEX IF NOT EXISTS and ADD COLUMN are all idempotent under
+  // the isAlreadyAppliedError swallow rule, so re-runs are safe.
+  '2026-06-08T00:00:00Z': [
+    `CREATE TABLE IF NOT EXISTS rules (
+       id           TEXT PRIMARY KEY,
+       ledger_id    TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+       name         TEXT,
+       priority     INTEGER NOT NULL DEFAULT 100,
+       condition    TEXT NOT NULL,
+       actions      TEXT NOT NULL,
+       is_active    INTEGER NOT NULL DEFAULT 1,
+       run_on_edit  INTEGER NOT NULL DEFAULT 0,
+       last_applied_at TEXT,
+       created_at   TEXT NOT NULL,
+       updated_at   TEXT NOT NULL
+     )`,
+    'CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active)',
+    'ALTER TABLE transactions ADD COLUMN applied_rule_ids TEXT',
   ],
 };
 
