@@ -229,3 +229,18 @@ test('quietestDay stays silent below 25 expense rows', () => {
   const txns = Array.from({ length: 10 }, () => tx({ date: '2026-05-04', amount: -10 }));
   expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.includes('quietest'))).toBeUndefined();
 });
+
+// Regression for the /insights page TypeError: `topCategoryByWeekday` does
+// `byDay[dow][t.category] = …`, where `byDay` is pre-populated for dows
+// 0–6. A transaction with an unparseable date yields `dow = NaN`, and
+// `byDay[NaN]` is undefined — the next access threw "Cannot read
+// properties of undefined (reading 'food')". The fix skips NaN rows
+// before the bucket lookup.
+test('malformed/empty transaction dates are skipped, not crashed on', () => {
+  const txns: Tx[] = [
+    tx({ date: '', amount: -50, category: 'food' }),
+    tx({ date: 'not-a-date', amount: -30, category: 'food' }),
+    tx({ date: '2026-05-23', amount: -200, category: 'food' }),
+  ];
+  expect(() => generateInsights(baseCtx({ transactions: txns }))).not.toThrow();
+});
