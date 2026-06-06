@@ -30,10 +30,10 @@ export function AddExpenseSheetProvider({ children }: { children: React.ReactNod
     <AddExpenseContext.Provider value={value}>
       {children}
       {/* Centered dialog, matching the other create flows (tag/merchant/
-          category). The form is tall, so the body scrolls within a viewport
-          cap rather than growing the box. */}
+          category). Fixed height (with a small-screen cap) so the box doesn't
+          resize as the form's content changes; the body scrolls inside. */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <DialogContent className="flex h-[720px] max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="border-border border-b px-5 py-4">
             <DialogTitle className="font-serif text-xl italic">Add</DialogTitle>
             <DialogDescription className="sr-only">Record an expense, income, or transfer.</DialogDescription>

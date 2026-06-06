@@ -6,7 +6,6 @@ import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
@@ -282,16 +281,16 @@ function RuleDetailSheet({
   onAskBackfill: (r: Rule) => void;
 }) {
   return (
-    <Sheet open={!!rule} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
-        <SheetHeader className="border-border border-b px-5 py-4">
-          <SheetTitle className="font-serif text-xl italic">
+    <Dialog open={!!rule} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="border-border shrink-0 border-b px-5 py-4">
+          <DialogTitle className="font-serif text-xl italic">
             {rule?.name ?? 'Rule'}
-          </SheetTitle>
-          <SheetDescription className="sr-only">Rule detail</SheetDescription>
-        </SheetHeader>
+          </DialogTitle>
+          <DialogDescription className="sr-only">Rule detail</DialogDescription>
+        </DialogHeader>
         {rule && (
-          <div className="space-y-4 overflow-y-auto px-5 py-4 text-sm">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm">
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => onEdit(rule)}>
                 <Icon name="edit" size={13} />Edit
@@ -346,8 +345,8 @@ function RuleDetailSheet({
             </DetailRow>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

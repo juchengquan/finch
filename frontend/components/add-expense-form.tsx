@@ -27,6 +27,14 @@ function mockOptions(list: { id: string; name: string; ledger?: string }[], ledg
     .map((x) => ({ id: x.id, name: x.name }));
 }
 
+/** Current date+time as a local `datetime-local` value (YYYY-MM-DDTHH:mm).
+ *  `toISOString()` alone would be UTC and show a wall-clock several hours off. */
+function localDateTimeNow(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
 function Field({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
     <div className="border-border flex items-center gap-3.5 border-b px-5 py-3.5">
@@ -55,6 +63,7 @@ export function AddExpenseForm({
 }) {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const createTransfer = useFinanceStore((s) => s.createTransfer);
+  const createCounterparty = useFinanceStore((s) => s.createCounterparty);
   const storeCats = useFinanceStore((s) => s.categories);
   const storeAccts = useFinanceStore((s) => s.accounts);
   const storeTxns = useFinanceStore((s) => s.transactions);
@@ -73,7 +82,7 @@ export function AddExpenseForm({
   const [fromAccount, setFromAccount] = useState('');
   const [toAccount, setToAccount] = useState('');
   const [received, setReceived] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [date, setDate] = useState(localDateTimeNow);
   const [note, setNote] = useState('');
 
   // Category/account options come from the projected store, scoped to the active
@@ -165,13 +174,15 @@ export function AddExpenseForm({
       recv = parseFloat(received);
       if (!recv || recv <= 0) return void toast.error(`Enter the amount received in ${toCurrency}`);
     }
+    // A cleared date field falls back to "now" (local).
+    const when = date || localDateTimeNow();
     createTransfer({
       fromAccountId: fromAccount,
       toAccountId: toAccount,
       fromAmount: value,
       toAmount: recv,
-      date: date.slice(0, 10),
-      time: date.slice(11, 16) || undefined,
+      date: when.slice(0, 10),
+      time: when.slice(11, 16) || undefined,
       note: note.trim() || undefined,
     });
     const fromName = accountOptions.find((a) => a.id === fromAccount)?.name ?? 'account';
@@ -192,6 +203,9 @@ export function AddExpenseForm({
     // figure for immediate display; the server re-derives + locks it on sync.
     const baseAmount =
       accountCurrency === base ? signed : Math.round(convertAmount(signed, accountCurrency, base) * 100) / 100;
+    // Split the datetime-local value into the stored date + time columns,
+    // honouring what the user picked; a cleared field falls back to "now".
+    const when = date || localDateTimeNow();
     const id = addTransaction({
       merchant: merchant.trim() || (type === 'income' ? 'Income' : 'Untitled'),
       category,
@@ -199,8 +213,8 @@ export function AddExpenseForm({
       currency: accountCurrency,
       nativeAmount: signed,
       account,
-      date,
-      time: new Date().toTimeString().slice(0, 5),
+      date: when.slice(0, 10),
+      time: when.slice(11, 16) || undefined,
       note: note.trim(),
       pending: false,
       ledgerId: activeId,
@@ -249,24 +263,20 @@ export function AddExpenseForm({
           </div>
         </div>
       )}
-      <div className="text-center">
-        <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">
-          {type === 'transfer' ? 'SENT' : 'AMOUNT'}
-        </div>
-        <div className="flex items-baseline justify-center gap-1">
-          <span className="text-muted-foreground font-serif text-[40px]">{currencySym}</span>
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-            inputMode="decimal"
-            aria-label="Amount" placeholder="0"
-            autoFocus
-            className="placeholder:text-muted-foreground focus-ring w-[5ch] bg-transparent text-center font-serif text-[72px] leading-none font-normal -tracking-[3px] outline-none"
-          />
-        </div>
-      </div>
-
       <div>
+        <Field icon="banknote" label={type === 'transfer' ? 'Sent' : 'Amount'}>
+          <div className="flex items-baseline gap-1">
+            <span className="text-muted-foreground text-[15px]">{currencySym}</span>
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              inputMode="decimal"
+              aria-label="Amount" placeholder="0"
+              autoFocus
+              className="placeholder:text-muted-foreground w-24 bg-transparent text-right text-[15px] outline-none"
+            />
+          </div>
+        </Field>
         {type === 'transfer' ? (
           <>
             <Field icon="wallet" label="From">
@@ -306,7 +316,7 @@ export function AddExpenseForm({
                     inputMode="decimal"
                     aria-label="Received amount"
                     placeholder={`amount in ${toCurrency}`}
-                    className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-right text-[15px] outline-none"
+                    className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
                   />
                 </Field>
                 {(() => {
@@ -332,10 +342,15 @@ export function AddExpenseForm({
                 type="button"
                 onClick={() =>
                   openMerchantPicker(merchant, (res) => {
-                    if (res) setMerchant(res.name);
+                    if (!res) return;
+                    // "Create new" returns only a name — create the counterparty
+                    // row here so the save-time name resolution has something to
+                    // link (the pending flow's server mutation does this itself).
+                    if (res.kind === 'new') createCounterparty({ name: res.name, ledgerId: activeId });
+                    setMerchant(res.name);
                   })
                 }
-                className="focus-ring flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
+                className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
                 aria-label="Select merchant"
               >
                 <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
@@ -393,7 +408,7 @@ export function AddExpenseForm({
             type="datetime-local" aria-label="Date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="focus-ring bg-transparent text-right text-[15px] outline-none"
+            className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
         <Field icon="edit" label="Note">
@@ -401,7 +416,7 @@ export function AddExpenseForm({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             aria-label="Note" placeholder="Optional"
-            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-right text-[15px] outline-none"
+            className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
       </div>
