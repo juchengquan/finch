@@ -47,6 +47,15 @@ export async function listAttachments(exec: Exec, ledgerId?: string): Promise<At
   return rows.map(rowToAttachment);
 }
 
+/** Server-side variant of `listAttachments` that includes `rel_path`. Used by
+ *  the pack-export path (PACK_FORMAT_PLAN §4). Never sent to the client. */
+export async function listAttachmentFiles(exec: Exec): Promise<AttachmentFile[]> {
+  const rows = await exec(
+    `SELECT * FROM transaction_attachments ORDER BY ledger_id, created_at`,
+  );
+  return rows.map((r) => ({ ...rowToAttachment(r), relPath: String(r.rel_path) }));
+}
+
 /** Full row including `rel_path` for the serve route + the deletion path.
  *  Returns null when no row matches the id. */
 export async function getAttachmentFile(exec: Exec, id: string): Promise<AttachmentFile | null> {

@@ -39,7 +39,7 @@ interface BackupContextValue {
   serverPath: string | null;
   metadata: DbMetadataView | null;
   backups: BackupEntry[];
-  download: () => Promise<void>;
+  download: (opts?: { withAttachments?: boolean }) => Promise<void>;
   downloadCsv: (scope?: { ledgerId?: string; month?: string }) => Promise<void>;
   importFile: (file: File) => Promise<ImportResult>;
   backupNow: () => Promise<{ path: string }>;
@@ -118,13 +118,17 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  const download = useCallback(async () => {
-    const res = await fetch(`${base}/api/export`);
+  const download = useCallback(async (opts?: { withAttachments?: boolean }) => {
+    const withAttachments = opts?.withAttachments === true;
+    const url = withAttachments ? `${base}/api/export?withAttachments=1` : `${base}/api/export`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const { downloadBytes } = await import('@/lib/db/storage');
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace(/-(\d{3})Z$/, 'Z');
-    downloadBytes(bytes, `finch-${ts}.sqlite3`);
+    const ext = withAttachments ? 'finch' : 'sqlite3';
+    const mime = withAttachments ? 'application/zip' : undefined;
+    downloadBytes(bytes, `finch-${ts}.${ext}`, mime);
   }, []);
 
   // Optional scope narrows the export to one ledger and/or month; omitted = the
