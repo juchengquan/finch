@@ -210,6 +210,10 @@ interface FinanceState {
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
   displayCurrencyByLedger: Record<string, string>;
+  /** Auto-backup frequency + retention. Persisted in app_state, mirrored here.
+   *  frequencyMs: -1 = off, 0 = every change, >0 = minimum interval (ms).
+   *  retention: number of `.finch.bak` files to keep on disk. */
+  backupConfig: { frequencyMs: number; retention: number };
 
   addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
@@ -262,6 +266,12 @@ interface FinanceState {
   confirmAllPending: () => void;
   setMobileTabIds: (ids: string[]) => void;
   setDisplayCurrency: (ledgerId: string, currency: string) => void;
+  /** Set the auto-backup frequency. `frequencyMs`: -1 = off, 0 = on every
+   *  change, >0 = minimum interval (ms). Persisted in app_state. */
+  setBackupFrequency: (frequencyMs: number) => void;
+  /** Set the number of `.finch.bak` files kept on disk. >= 1. Persisted in
+   *  app_state. */
+  setBackupRetention: (retention: number) => void;
   changeLedgerBase: (ledgerId: string, newBase: string) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
@@ -379,6 +389,7 @@ export const useFinanceStore = create<FinanceState>()(
       attachments: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
+      backupConfig: { frequencyMs: 60 * 60 * 1000, retention: 14 },
 
       setMobileTabIds: (ids) => {
         set({ mobileTabIds: ids });
@@ -388,6 +399,16 @@ export const useFinanceStore = create<FinanceState>()(
       setDisplayCurrency: (ledgerId, currency) => {
         set((s) => ({ displayCurrencyByLedger: { ...s.displayCurrencyByLedger, [ledgerId]: currency } }));
         syncMutation('setDisplayCurrency', { ledgerId, currency });
+      },
+
+      setBackupFrequency: (frequencyMs) => {
+        set((s) => ({ backupConfig: { ...s.backupConfig, frequencyMs } }));
+        syncMutation('setBackupFrequency', { frequencyMs });
+      },
+
+      setBackupRetention: (retention) => {
+        set((s) => ({ backupConfig: { ...s.backupConfig, retention } }));
+        syncMutation('setBackupRetention', { retention });
       },
 
       changeLedgerBase: (ledgerId, newBase) => {
