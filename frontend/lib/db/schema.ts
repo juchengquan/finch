@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS ledgers (
   name          TEXT NOT NULL,
   base_currency TEXT NOT NULL DEFAULT 'SGD',
   is_default    INTEGER NOT NULL DEFAULT 0,
+  -- Cosmetic fields surfaced in the ledger switcher (LEDGER_CRUD_PLAN section 2).
+  -- Previously lived in static data/ledgers.json only; now persisted so a
+  -- user-created ledger can carry its own colour/tagline and so packs
+  -- round-trip the full visual state across devices. Both nullable -- the
+  -- switcher falls back to a hue derived from the id when color is null.
+  color         TEXT,
+  tagline       TEXT,
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
@@ -548,7 +555,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-11T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-12T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -702,6 +709,12 @@ const MIGRATIONS: Record<string, string[]> = {
      )`,
     'CREATE INDEX IF NOT EXISTS idx_attach_txn ON transaction_attachments(transaction_id)',
     'CREATE INDEX IF NOT EXISTS idx_attach_ledger ON transaction_attachments(ledger_id)',
+  ],
+  // Ledger CRUD cosmetic fields (LEDGER_CRUD_PLAN §2). Two additive nullable
+  // columns; idempotent ADD COLUMN under the isAlreadyAppliedError swallow.
+  '2026-06-12T00:00:00Z': [
+    'ALTER TABLE ledgers ADD COLUMN color TEXT',
+    'ALTER TABLE ledgers ADD COLUMN tagline TEXT',
   ],
 };
 

@@ -273,6 +273,18 @@ interface FinanceState {
    *  app_state. */
   setBackupRetention: (retention: number) => void;
   changeLedgerBase: (ledgerId: string, newBase: string) => void;
+  /** Create a ledger. Returns the new id so the caller can switch the
+   *  active ledger immediately. Optimistic insert into the projected list. */
+  createLedger: (input: { name: string; base: string; color?: string | null; tagline?: string | null }) => string;
+  /** Update a ledger's editable cosmetic fields. Base currency lives on the
+   *  dedicated `changeLedgerBase` path (it has reconversion semantics). */
+  updateLedger: (id: string, patch: { name?: string; color?: string | null; tagline?: string | null }) => void;
+  /** Flip `is_default` on the named ledger; clears every other ledger's flag. */
+  setDefaultLedger: (id: string) => void;
+  /** Delete a ledger and every child row (ordered cascade + on-disk
+   *  attachment sweep). Throws on the last ledger; refuses to delete the
+   *  only remaining one. */
+  deleteLedger: (id: string) => void;
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
@@ -420,6 +432,85 @@ export const useFinanceStore = create<FinanceState>()(
           ledgers: s.ledgers.map((l) => (l.id === ledgerId ? { ...l, base: newBase } : l)),
         }));
         syncMutation('changeLedgerBase', { ledgerId, newBase });
+      },
+
+      createLedger: (input) => {
+        // App-side id like every other createX. Server validates non-collision.
+        const id = `ledger-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const base = input.base.toUpperCase();
+        // Optimistic: project the new row with zero counts.
+        set((s) => ({
+          ledgers: [
+            ...s.ledgers,
+            {
+              id,
+              name: input.name,
+              base,
+              isDefault: 0,
+              color: input.color ?? null,
+              tagline: input.tagline ?? null,
+              accounts: 0,
+              txns: 0,
+            },
+          ],
+        }));
+        syncMutation('createLedger', {
+          id,
+          name: input.name,
+          base,
+          color: input.color ?? null,
+          tagline: input.tagline ?? null,
+        });
+        return id;
+      },
+
+      updateLedger: (id, patch) => {
+        set((s) => ({
+          ledgers: s.ledgers.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+        }));
+        syncMutation('updateLedger', { id, patch });
+      },
+
+      setDefaultLedger: (id) => {
+        set((s) => ({
+          ledgers: s.ledgers.map((l) => ({ ...l, isDefault: l.id === id ? 1 : 0 })),
+        }));
+        syncMutation('setDefaultLedger', { id });
+      },
+
+      deleteLedger: (id) => {
+        // Optimistic: drop the row + every projected slice scoped to this ledger.
+        // The server re-projection arrives with the cleaned-up state shortly.
+        set((s) => {
+          const remaining = s.ledgers.filter((l) => l.id !== id);
+          const wasDefault = s.ledgers.find((l) => l.id === id)?.isDefault === 1;
+          // Default reassignment: promote first by name when the deleted was default.
+          const promoteId = wasDefault
+            ? [...remaining].sort((a, b) => a.name.localeCompare(b.name))[0]?.id ?? null
+            : null;
+          const ledgers = promoteId
+            ? remaining.map((l) => ({ ...l, isDefault: l.id === promoteId ? 1 : 0 }))
+            : remaining;
+          return {
+            ledgers,
+            accounts: s.accounts.filter((a) => a.ledgerId !== id),
+            transactions: s.transactions.filter((t) => (t.ledgerId ?? 'personal') !== id),
+            categories: s.categories.filter((c) => c.ledgerId !== id),
+            tags: s.tags.filter((t) => t.ledgerId !== id),
+            counterparties: s.counterparties.filter((c) => c.ledgerId !== id),
+            budgets: s.budgets.filter((b) => b.ledgerId !== id),
+            budgetGroups: s.budgetGroups.filter((g) => g.ledgerId !== id),
+            accountGroups: s.accountGroups.filter((g) => g.ledgerId !== id),
+            scheduled: s.scheduled, // no ledger_id on the projected shape; server filters
+            holdings: s.holdings.filter((h) => h.ledgerId !== id),
+            rules: s.rules.filter((r) => r.ledgerId !== id),
+            attachments: s.attachments.filter((a) => a.ledgerId !== id),
+            displayCurrencyByLedger: Object.fromEntries(
+              Object.entries(s.displayCurrencyByLedger).filter(([k]) => k !== id),
+            ),
+          };
+        });
+        syncMutation('deleteLedger', { id });
       },
 
       addTransaction: (tx) => {

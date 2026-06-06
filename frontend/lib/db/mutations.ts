@@ -227,11 +227,23 @@ async function postSingle(
   });
 }
 
+/** Read a template's owning ledger directly off the row. Used by postScheduled
+ *  in lieu of the previous 'personal' hardcode (LEDGER_CRUD_PLAN §1 fix). */
+async function resolveTemplateLedger(exec: Exec, templateId: string): Promise<string> {
+  const rows = await exec('SELECT ledger_id FROM scheduled_templates WHERE id = ?', [templateId]);
+  if (!rows.length) throw new Error('Template not found');
+  return String(rows[0].ledger_id);
+}
+
 async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const templateId = str(args.templateId);
-  const ledgerId = 'personal';
   const t = await getScheduled(exec, templateId);
   if (!t) throw new Error('Template not found');
+  // Use the template's own ledger, not a hardcoded 'personal'. Templates can
+  // live in any ledger; posting one to the wrong ledger would orphan the
+  // resulting transaction's ledger_id from its source. (LEDGER_CRUD_PLAN §1
+  // gap fix.)
+  const ledgerId = await resolveTemplateLedger(exec, templateId);
   // Refuse to post more than the installment plan calls for. We block before
   // we touch the account, so a fully-paid plan can't sneak an extra payment
   // through. installmentPaid is the derived count of confirmed posts.
@@ -1305,6 +1317,73 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (String(row.base_currency) === newBase) return; // no-op
       const { recomputeAmountBases } = await import('./queries/ledgers');
       await recomputeAmountBases(exec, ledgerId, newBase);
+      return;
+    }
+    case 'createLedger': {
+      // Ledger CRUD (LEDGER_CRUD_PLAN §4). Validation: non-empty name; valid
+      // ISO currency code; non-colliding id (the store picks the id, mirroring
+      // every other createX action — server doesn't auto-generate).
+      const id = str(args.id);
+      const name = str(args.name).trim();
+      const base = str(args.base).trim().toUpperCase();
+      if (!id) throw new Error('id is required');
+      if (!name) throw new Error('Name is required');
+      if (!/^[A-Z]{3}$/.test(base)) throw new Error('base must be a 3-letter ISO code');
+      const collide = await exec('SELECT id FROM ledgers WHERE id = ?', [id]);
+      if (collide.length) throw new Error('Ledger id already exists');
+      const color = args.color == null ? null : String(args.color);
+      const tagline = args.tagline == null ? null : String(args.tagline);
+      const { createLedger: qCreateLedger } = await import('./queries/ledgers');
+      await qCreateLedger(exec, { id, name, base, color, tagline });
+      return;
+    }
+    case 'updateLedger': {
+      const id = str(args.id);
+      if (!id) throw new Error('id is required');
+      const patch = (args.patch ?? {}) as { name?: string; color?: string | null; tagline?: string | null };
+      if (patch.name !== undefined && !String(patch.name).trim()) {
+        throw new Error('Name cannot be empty');
+      }
+      const { updateLedger: qUpdateLedger } = await import('./queries/ledgers');
+      await qUpdateLedger(exec, id, {
+        ...(patch.name !== undefined ? { name: String(patch.name).trim() } : {}),
+        ...(patch.color !== undefined ? { color: patch.color == null ? null : String(patch.color) } : {}),
+        ...(patch.tagline !== undefined ? { tagline: patch.tagline == null ? null : String(patch.tagline) } : {}),
+      });
+      return;
+    }
+    case 'setDefaultLedger': {
+      const id = str(args.id);
+      if (!id) throw new Error('id is required');
+      const exists = await exec('SELECT id FROM ledgers WHERE id = ?', [id]);
+      if (!exists.length) throw new Error('Ledger not found');
+      const { setDefaultLedger: qSetDefaultLedger } = await import('./queries/ledgers');
+      await qSetDefaultLedger(exec, id);
+      return;
+    }
+    case 'deleteLedger': {
+      // Ordered cascade + attachment-file sweep (LEDGER_CRUD_PLAN §5).
+      const id = str(args.id);
+      if (!id) throw new Error('id is required');
+      const { deleteLedger: qDeleteLedger } = await import('./queries/ledgers');
+      const { relPaths } = await qDeleteLedger(exec, id);
+      // Clean the ledger's key out of the displayCurrencyByLedger map so it
+      // doesn't dangle. Other app_state slices are scalar/per-ledger-irrelevant.
+      const raw = await getAppState(exec, 'displayCurrencyByLedger');
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && id in parsed) {
+            delete (parsed as Record<string, unknown>)[id];
+            await setAppState(exec, 'displayCurrencyByLedger', JSON.stringify(parsed));
+          }
+        } catch {
+          /* malformed — leave it */
+        }
+      }
+      // Unlink attachment files after the DB rows are gone. Best-effort, same
+      // semantics as the per-transaction delete path (RECEIPT_PHOTOS_PLAN §3.3).
+      await unlinkAttachmentFiles(relPaths);
       return;
     }
     default:
