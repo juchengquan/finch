@@ -71,15 +71,51 @@ Decided going in; anything else is an open question (§8).
 - Prebuilds for common Linux / macOS / Windows targets; no compile step on
   the typical CI / local-dev path.
 
-The two risks worth naming:
+### 2.3 Verified findings from the step-1 probe (run 2026-06-06)
 
-- **Native module = platform binaries**. If we ever ship a deployment target
-  where no prebuild exists, we'd need a compile fallback. Manageable.
-- **Bun compatibility**. The project uses Bun for tests and dev. `better-
-  sqlite3` works under Bun's Node-compatibility mode in current versions;
-  the migration PR should pin a Bun version known to load it. The
-  alternative — `bun:sqlite` — has the same shape but ties us to the Bun
-  runtime; rejected so the prod server stays runtime-agnostic.
+The probe (PR landing this section) ran `better-sqlite3@12.10.0` under
+Bun 1.3.11 and Node 22.22.2. Two surprises worth recording so the next
+person doesn't repeat the investigation:
+
+- 🚫 **Bun cannot load `better-sqlite3` today.** `new Database(...)` throws
+  `ERR_DLOPEN_FAILED`, tracked in [`oven-sh/bun#4290`][bun4290]. This
+  contradicts the original "works under Bun's Node-compat mode" claim
+  above. **The fallback shape is**: tests under Bun use **`bun:sqlite`**
+  (built in, exposes the same sync `prepare/run/all` shape, drives the
+  existing `Exec` shim unchanged); the **production server runs under
+  Node** with `better-sqlite3`. Both runtimes share the same shim, so the
+  query layer is engine-agnostic at the source level. This isn't the
+  runtime-coupling §2.2 worried about — the Node server is the
+  authoritative DB consumer; Bun is the test runner that happens to need
+  a sibling driver.
+- ✅ **Native module is no concern on prebuild-supported platforms.**
+  `prebuild-install` resolved the binary in ~540 ms with no compile step.
+  Linux/macOS/Windows × x64/arm64 all have prebuilds for this release.
+- ✅ **Everything else in §2.2's promise held**: WAL engaged on a file-
+  backed DB; the recommended PRAGMA bootstrap (`journal_mode`,
+  `synchronous`, `foreign_keys`, `temp_store`, `cache_size`) applied
+  cleanly; `db.transaction(fn)` wraps with correct rollback on throw;
+  WAL recovery survives a close-without-checkpoint (the SIGKILL shape);
+  `VACUUM INTO` produces a portable snapshot; `wal_checkpoint(TRUNCATE)`
+  drains the WAL to zero.
+- 📊 **Per-mutation latency on file-backed WAL: 0.022 ms/op** (1000 raw
+  inserts on a fresh DB, Node 22, Linux). Comfortably below the §10
+  budget of "single-digit ms on a 10 MB DB". For comparison the same
+  query layer under the existing wasm + snapshot path runs in the
+  10-100 ms range per mutation, dominated by the full-DB rewrite.
+
+The probe is split across two artefacts in the repo:
+
+- `lib/db/probe.test.ts` — runs under `bun test`. Uses `bun:sqlite` to
+  prove the existing `applySchema` + `seedDatabase` + `insertTxRow`
+  + `listAccounts` path survives a swap to a sync SQLite engine via the
+  shared `Exec` shim.
+- `scripts/probe-bs3.mjs` — runs under Node (`bun run db:probe` /
+  `node scripts/probe-bs3.mjs`). The nine `better-sqlite3`-specific
+  checks above. Not in CI; rerun by hand when bumping
+  `better-sqlite3` / Node.
+
+[bun4290]: https://github.com/oven-sh/bun/issues/4290
 
 `node:sqlite` is worth revisiting once it stabilises (Node 24 LTS?); the
 migration is small relative to the rest of this plan.
@@ -289,9 +325,12 @@ no per-mutation file write); steps 4+5 are post-swap cleanup.
    The collapse is cleaner long-term; the wrap is a one-PR option.
    **Recommendation**: keep async for the migration PR (minimise diff),
    collapse in a follow-up.
-2. **Bun version pin?** Confirm a Bun version that loads `better-sqlite3`
-   cleanly. Worst case: the test runner moves to `node --test` for the DB
-   layer specifically.
+2. ~~**Bun version pin?**~~ **Resolved by the probe.** No current Bun loads
+   `better-sqlite3` (oven-sh/bun#4290 is open as of 1.3.11). The settled
+   approach: keep Bun as the test runner, use **`bun:sqlite`** for the
+   test DB (same sync API as better-sqlite3, drives the existing `Exec`
+   shim unchanged); ship **`better-sqlite3`** as the production runtime
+   under Node. See §2.3 for the verified fallback.
 3. **`cache_size`?** 8 MB is a starting point. For a personal-finance
    ledger of ~10k transactions the working set comfortably fits in
    memory; we can revisit if monitoring shows page churn.
