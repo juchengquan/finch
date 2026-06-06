@@ -22,7 +22,8 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — **new (2026-06-06)** — product + architecture direction brief for a future native iOS / macOS port; resolves 8 product decisions including iCloud Drive file-pack sync, the shared receipt-attachments schema, OS baseline (iOS/iPadOS/macOS 26), and ledger CRUD for both apps.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
-- `RECEIPT_PHOTOS_PLAN.md` — **new (2026-06-06)** — web-app implementation plan for attaching receipt photos / PDFs to transactions; builds on the shared schema in `IOS_MACOS_PLAN §2.5`.
+- `RECEIPT_PHOTOS_PLAN.md` — **new (2026-06-06)** — web-app implementation plan for attaching receipt photos / PDFs to transactions; builds on the shared schema in `IOS_MACOS_PLAN §2.5`. The pack/export piece was spun out into its own plan (next entry).
+- `PACK_FORMAT_PLAN.md` — **new (2026-06-06)** — the cross-platform `.finch` file-portability format (zip with manifest + DB + attachments). Web-app export/import implementation on top of the shape decided in `IOS_MACOS_PLAN §2.5.3`. Implement *after* `RECEIPT_PHOTOS_PLAN.md` ships — packs need the attachments table + on-disk folder layout the receipts work introduces.
 
 **Shipped design records (`plans/done/`):**
 

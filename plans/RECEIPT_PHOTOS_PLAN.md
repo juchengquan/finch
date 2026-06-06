@@ -309,40 +309,21 @@ attachment. Computable from the projected `attachments` array in O(1)
 per row. Out of scope for v1 to keep the diff focused — added when the
 attachments are actually being used.
 
-## 7. Export / pack integration
+## 7. Export / pack integration — deferred to its own plan
 
-The web app's current `/api/export` returns a bare `.db` (`VACUUM INTO`).
-This is fine for users who only want the database, but it silently leaves
-receipts behind. Two changes:
+> **Spun out of this plan into `plans/PACK_FORMAT_PLAN.md` (2026-06-06).**
+> The pack work has its own design choices (manifest schema, atomicity +
+> rotation policy, pack-format versioning, magic-byte detection on import)
+> and is self-contained enough to be its own shippable slice. The
+> receipts plan stays focused on "attach, view, delete" — the user-facing
+> feature is deliverable without pack export/import, and packs without
+> attachments would be pointless.
 
-1. **`/api/export?withAttachments=true`** returns a `.finch` zip — the
-   format defined in `IOS_MACOS_PLAN.md §2.5.3`:
-   ```
-   <ledger>.finch                  (ZIP container)
-   ├── manifest.json               -- pack metadata + checksums
-   ├── finch.sqlite3               -- VACUUM INTO'd before packing
-   └── attachments/
-       └── <transaction_id>/
-           └── <attachment_id>.<ext>
-   ```
-   `manifest.json` carries: pack-format version, `app_name`, `app_version`,
-   `schema_version`, `exported_at`, `db_sha256`, `row_counts` (mirrors
-   `db_metadata`), per-attachment `{ id, sha256, byte_size }`. The
-   existing `lib/db/checksum.ts` integrity guard generalises into this.
-2. **`/api/import`** learns to detect a zip pack vs a bare `.db`. On a
-   pack: validate the manifest, validate every attachment's sha256 against
-   `manifest.json`, drop the DB into place (existing path), then mirror
-   the `attachments/` folder into `${FINCH_DB_DIR}/attachments/`. On a
-   bare `.db`: existing behaviour (the attachments table will simply be
-   empty).
-
-Settings UI: under Database, add an "Include receipts" checkbox next to
-the existing "Download .db" button. The default is off (back-compat); a
-saved per-device preference toggles it on.
-
-This makes the web app a fully-fledged member of the file-portability
-loop the iOS/macOS plan describes — the same pack format flows in any
-direction.
+The receipts feature lands first; the pack feature follows once
+attachments are in place and there's something to pack. The pack-format
+plan inherits the shape from `IOS_MACOS_PLAN.md §2.5.3` and fills in the
+web-app implementation details (build/import pipelines, manifest
+validation, the Settings UI changes).
 
 ## 8. Implementation order (one PR, sequenced commits)
 
