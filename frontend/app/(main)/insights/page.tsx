@@ -103,8 +103,12 @@ export default function InsightsPage() {
   const breakdownTotal = breakdownCats.reduce((s, c) => s + c.spent, 0);
 
   const exportCsv = () => {
-    void downloadCsv()
-      .then(() => toast.success('Transactions exported', { description: 'CSV downloaded' }))
+    void downloadCsv({ ledgerId: activeId, month: breakdownMonth || undefined })
+      .then(() =>
+        toast.success('Transactions exported', {
+          description: breakdownMonth ? `${formatMonth(breakdownMonth)} · CSV` : 'CSV downloaded',
+        }),
+      )
       .catch((err) => toast.error('Export failed', { description: String((err as Error).message ?? err) }));
   };
 
@@ -199,37 +203,49 @@ export default function InsightsPage() {
         </div>
 
         {view === 'breakdown' ? (
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Month</div>
-              {breakdownMonths.length > 0 ? (
-                <Select value={breakdownMonth} onValueChange={setPickedMonth}>
-                  <SelectTrigger className="border-border bg-card h-7 w-auto min-w-[110px] gap-1.5 rounded-full px-3 text-xs font-medium">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {breakdownMonths.map((m) => (
-                      <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <span className="text-muted-foreground text-xs">—</span>
-              )}
-            </div>
-            <div className="mb-4">
-              <PageHeader
-                label="Spent"
-                value={<Money value={breakdownTotal} mono={false} />}
-                sublabel={`${breakdownCats.length} categories`}
-              />
+          // Desktop: a summary rail (picker + total + export) beside the
+          // category list. Mobile: the two stack in the same source order.
+          <div className="md:grid md:grid-cols-[1fr_1.7fr] md:items-start md:gap-8">
+            <div className="md:bg-card md:border-border md:rounded-xl md:border md:p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Month</div>
+                {breakdownMonths.length > 0 ? (
+                  <Select value={breakdownMonth} onValueChange={setPickedMonth}>
+                    <SelectTrigger className="border-border bg-card h-7 w-auto min-w-[110px] gap-1.5 rounded-full px-3 text-xs font-medium">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {breakdownMonths.map((m) => (
+                        <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-muted-foreground text-xs">—</span>
+                )}
+              </div>
+              <div className="mb-4">
+                <PageHeader
+                  label="Spent"
+                  value={<Money value={breakdownTotal} mono={false} />}
+                  sublabel={`${breakdownCats.length} categories`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={!breakdownMonth}
+                className="bg-secondary text-secondary-foreground flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium disabled:opacity-50"
+              >
+                Export {breakdownMonth ? formatMonth(breakdownMonth) : 'month'} CSV
+              </button>
             </div>
             {breakdownTotal === 0 ? (
-              <div className="text-muted-foreground border-border rounded-xl border border-dashed py-10 text-center text-sm">
+              <div className="text-muted-foreground border-border mt-4 rounded-xl border border-dashed py-10 text-center text-sm md:mt-0">
                 No spending in {formatMonth(breakdownMonth) || 'this ledger'}.
               </div>
             ) : (
-              <div>
+              <div className="md:bg-card md:border-border md:rounded-xl md:border md:px-4">
                 {breakdownCats.filter((c) => c.spent > 0).map((c) => {
                   const pct = breakdownTotal ? Math.round((c.spent / breakdownTotal) * 100) : 0;
                   return (
@@ -243,13 +259,6 @@ export default function InsightsPage() {
                 })}
               </div>
             )}
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="bg-secondary text-secondary-foreground mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium"
-            >
-              Export transactions CSV
-            </button>
           </div>
         ) : (
         <>
