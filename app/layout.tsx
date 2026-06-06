@@ -60,16 +60,19 @@ export default function RootLayout({
             <StoreHydration />
             <SqliteBackupProvider>
               <MerchantPickerSheetProvider>
-                <TransactionSheetProvider>
-                  <EditTransactionSheetProvider>
+                {/* Edit must wrap Transaction: TransactionSheetProvider renders
+                    TransactionDetail (which calls useEditTransaction) in its own
+                    subtree, not among its children. */}
+                <EditTransactionSheetProvider>
+                  <TransactionSheetProvider>
                     <AddExpenseSheetProvider>
                       <CommandPaletteProvider>
                         {children}
                         <Toaster />
                       </CommandPaletteProvider>
                     </AddExpenseSheetProvider>
-                  </EditTransactionSheetProvider>
-                </TransactionSheetProvider>
+                  </TransactionSheetProvider>
+                </EditTransactionSheetProvider>
               </MerchantPickerSheetProvider>
             </SqliteBackupProvider>
           </LedgerProvider>

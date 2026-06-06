@@ -5,26 +5,26 @@
 // Cross-rate is derived via the hub:
 //   rate(C → B) = rate_to_usd(C) / rate_to_usd(B)
 //
-// The table is a lookup cache, not a permanent record: every confirmed
-// foreign-currency transaction locks the rate it used on its own row
-// (transactions.exchange_rate + amount_base), so pruning old rows never
-// breaks historical display. We keep a rolling window (RATE_RETENTION_DAYS)
-// so the FX page can show recent trends and backdates within the window
-// resolve precisely.
+// The table is an append-only record: rows are never pruned (a decade of
+// daily rates for every supported currency is ~1 MB — there is no size
+// problem to solve), and every rate the app actually relies on is
+// write-through persisted under the date it was used for (see rateToHub).
+// That makes locked conversions reproducible forever: re-deriving a
+// transaction's amount_base (e.g. recomputeAmountBases on a base-currency
+// change) finds the same rate and produces the same figure, no matter how
+// far in the past the transaction sits.
 //
-// Lookup order for a cache miss (txn date outside the window or currency
-// missing entirely):
+// Lookup order for a date with no stored row (backdate or missing currency):
 //   1. nearest stored rate on-or-before the txn date
 //   2. nearest stored rate on-or-after the txn date (closest in time)
 //   3. static FALLBACK_USD_PER_UNIT map (works on an empty table)
+// The resolved rate is then pinned under the requested date (source
+// 'derived') so the approximation is at least stable across future lookups.
 
 import type { Exec } from '@/lib/db/repo';
 
 /** The universal pivot currency. exchange_rates.rate is always vs this. */
 export const HUB_CURRENCY = 'USD';
-
-/** Sliding-window retention. Rows older than this are pruned on rate writes. */
-export const RATE_RETENTION_DAYS = 90;
 
 // Static last-resort map (USD per 1 unit of currency). Used only when the
 // rates table has no rows at all for a currency — keeps the app working on
@@ -49,24 +49,39 @@ export async function ledgerBaseCurrency(exec: Exec, ledgerId: string): Promise<
 
 /**
  * USD-per-1-unit of `currency`, looked up against the table at `date`:
- *   1. nearest on-or-before, else
+ *   1. exact / nearest on-or-before, else
  *   2. nearest on-or-after, else
  *   3. static fallback.
  * USD itself is the hub and short-circuits to 1.
+ *
+ * Write-through: when no exact-date row exists, the resolved rate is pinned
+ * under `date` (source 'derived', INSERT OR IGNORE so a user-set rate is
+ * never clobbered). Every conversion the app locks onto a row is thereby
+ * reproducible — a later recompute at the same date finds the same rate even
+ * if neighboring rows change.
  */
 export async function rateToHub(exec: Exec, currency: string, date: string): Promise<number> {
   if (currency === HUB_CURRENCY) return 1;
   const before = await exec(
-    'SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1',
+    'SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1',
     [currency, date],
   );
-  if (before.length) return Number(before[0].r);
-  const after = await exec(
-    'SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1',
-    [currency, date],
+  if (before.length && String(before[0].d) === date) return Number(before[0].r);
+  let rate: number;
+  if (before.length) {
+    rate = Number(before[0].r);
+  } else {
+    const after = await exec(
+      'SELECT rate AS r FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1',
+      [currency, date],
+    );
+    rate = after.length ? Number(after[0].r) : staticFallback(currency);
+  }
+  await exec(
+    "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, 'derived')",
+    [date, currency, rate],
   );
-  if (after.length) return Number(after[0].r);
-  return staticFallback(currency);
+  return rate;
 }
 
 export interface Conversion {
@@ -86,20 +101,4 @@ export async function convertToBase(
   const [rc, rb] = await Promise.all([rateToHub(exec, currency, date), rateToHub(exec, base, date)]);
   const rate = rb !== 0 ? rc / rb : 1;
   return { amountBase: Math.round(native * rate * 100) / 100, rate: Math.round(rate * 1e6) / 1e6 };
-}
-
-/**
- * Prune rates older than the retention window, computed against the latest
- * stored date (not `now()`) so a long-idle DB doesn't lose its only history.
- * Safe to call after every write — it's a single DELETE.
- */
-export async function pruneOldRates(exec: Exec, daysToKeep = RATE_RETENTION_DAYS): Promise<void> {
-  const rows = await exec('SELECT MAX(date) AS latest FROM exchange_rates');
-  const latest = rows[0]?.latest;
-  if (!latest) return;
-  // SQLite date arithmetic — cutoff = latest minus `daysToKeep` days.
-  await exec(
-    "DELETE FROM exchange_rates WHERE date < date(?, ?)",
-    [String(latest), `-${daysToKeep} days`],
-  );
 }

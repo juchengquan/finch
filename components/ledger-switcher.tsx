@@ -40,12 +40,17 @@ export function LedgerSwitcher({
             <button
               type="button"
               aria-label="Switch ledger"
-              className="hover:bg-sidebar-accent flex min-w-0 flex-1 items-center gap-2.5 rounded-l-lg py-1.5 pl-2.5 text-left transition-colors"
+              // pl-[9px] = the usual 10px inset minus the chip's 1px border, so the
+              // dot rides the same icon column (x=30) as the collapsed state and
+              // the nav icons — no shift when the sidebar toggles.
+              className="hover:bg-sidebar-accent flex min-w-0 flex-1 items-center gap-2.5 rounded-l-lg py-1.5 pl-[9px] text-left transition-colors"
             >
-              <span
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ background: active.color }}
-              />
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <span
+                  className="size-2.5 rounded-full"
+                  style={{ background: active.color }}
+                />
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{active.name}</span>
                 <span className="text-muted-foreground block font-mono text-[10px]">
@@ -75,12 +80,24 @@ export function LedgerSwitcher({
             aria-label="Switch ledger"
             title={active.name}
             className={cn(
-              'hover:bg-sidebar-accent flex w-full items-center rounded-md px-2.5 py-2 transition-colors',
+              // border-transparent + pl-[9px] mirror the expanded chip's border
+              // geometry so the dot stays on the icon column (x=30).
+              'hover:bg-sidebar-accent flex w-full items-center rounded-md border border-transparent py-1.5 pr-2.5 pl-[9px] transition-colors',
               className,
             )}
           >
-            <span className="flex size-4 items-center justify-center">
+            {/* shrink-0: the collapsed content box is narrower than 16px (the
+                aside's right border eats 1px of w-[60px]), so without it this
+                box shrinks and the dot lands at x=29.5 instead of 30. */}
+            <span className="flex size-4 shrink-0 items-center justify-center">
               <span className="size-2.5 rounded-full" style={{ background: active.color }} />
+            </span>
+            {/* Invisible zero-width replica of the expanded chip's two text lines:
+                keeps this trigger exactly as tall as the chip, so the dot doesn't
+                sink when the sidebar collapses (the footer is bottom-anchored). */}
+            <span aria-hidden className="invisible w-0">
+              <span className="block text-[13px] font-medium">{active.name}</span>
+              <span className="block font-mono text-[10px]">{currency}</span>
             </span>
           </button>
         </DropdownMenuTrigger>

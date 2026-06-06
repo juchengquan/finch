@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,6 +107,19 @@ export default function CategoriesPage() {
   const tree = useMemo(() => buildCategoryTree(list), [list]);
   const topLevel = useMemo(() => list.filter((c) => c.parentId == null), [list]);
   const colorOf = (c: CategoryRow) => c.color ?? DEFAULT_CATEGORY_HEX;
+
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  // A query keeps a parent whose own name matches (with all its children), or
+  // narrows it down to just the matching subcategories otherwise.
+  const filteredTree = useMemo(() => {
+    if (!q) return tree;
+    return tree.flatMap(({ parent, children }) => {
+      if (parent.name.toLowerCase().includes(q)) return [{ parent, children }];
+      const matching = children.filter((c) => c.name.toLowerCase().includes(q));
+      return matching.length ? [{ parent, children: matching }] : [];
+    });
+  }, [tree, q]);
 
   // Main categories are collapsed by default; their ids are added when the
   // chevron is clicked, revealing the subcategory rows beneath.
@@ -247,26 +260,48 @@ export default function CategoriesPage() {
   );
 
   return (
-    <MobilePage header={<ScreenHeader title="Categories" trailing={<IconButton icon="plus" aria-label="New category" onClick={openCreateTop} />} />}>
-      <div className="px-5 pb-[120px] md:pb-5 md:pt-[52px]">
-        <div className="fixed top-[73px] right-5 z-50 hidden md:block">
-          <Button size="sm" variant="outline" onClick={openCreateTop}>
-            <Icon name="plus" size={14} />
-            New category
+    <MobilePage header={<ScreenHeader title="Categories" />}>
+      <div className="px-5 pb-[120px] md:pb-5">
+        {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
+        <div className="mb-3.5 flex items-center gap-2">
+          <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
+            <Icon name="search" size={14} className="text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search categories"
+              placeholder="Search categories…"
+              className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
+            />
+          </div>
+          <Button
+            onClick={openCreateTop}
+            size="icon"
+            className="rounded-full"
+            aria-label="New category"
+            title="New category"
+          >
+            <Icon name="plus" size={16} stroke={2} />
           </Button>
         </div>
 
-        {tree.length === 0 && (
+        {tree.length === 0 ? (
           <EmptyState
             icon="tag"
             title="No categories yet"
             description="Tap + to add one — they slot into the budget rings and reports."
           />
-        )}
-
-        <div className="border-border bg-card divide-border divide-y md:max-h-[calc(100dvh-150px)] max-h-[calc(100dvh-200px)] overflow-y-auto rounded-[14px] border">
-          {tree.flatMap(({ parent, children }) => {
-            const isOpen = expanded.has(parent.id);
+        ) : filteredTree.length === 0 ? (
+          <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
+        ) : (
+        // Desktop: cap to the viewport (below the 77px top bar + 24px shell
+        // padding + 52px search row) so the list scrolls internally instead
+        // of the page. Mobile keeps natural page scrolling.
+        <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border md:max-h-[calc(100dvh-180px)] md:overflow-y-auto">
+          {filteredTree.flatMap(({ parent, children }) => {
+            // While searching, a parent kept only for its matching children is
+            // forced open so those matches are actually visible.
+            const isOpen = expanded.has(parent.id) || (!!q && !parent.name.toLowerCase().includes(q));
             const parentRow = (
               <div
                 key={parent.id}
@@ -337,6 +372,7 @@ export default function CategoriesPage() {
             return [parentRow, ...childRows];
           })}
         </div>
+        )}
       </div>
 
       {dialog}

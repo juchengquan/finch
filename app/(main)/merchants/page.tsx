@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -124,9 +124,9 @@ export default function MerchantsPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Merchants" trailing={<IconButton icon="plus" aria-label="New merchant" onClick={() => setCreateOpen(true)} />} />}
+      header={<ScreenHeader title="Merchants" />}
     >
-      <div className="px-5 pb-[120px]">
+      <div className="px-5 pb-[120px] md:pb-5">
         <div className="px-1 pb-[18px]">
           <div className="flex items-baseline gap-3.5">
             <div>
@@ -141,24 +141,32 @@ export default function MerchantsPage() {
           </div>
         </div>
 
-        <div className="hidden items-center justify-end pb-3 md:flex">
-          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-            <Icon name="plus" size={14} />
-            New merchant
+        {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
+        <div className="mb-3.5 flex items-center gap-2">
+          <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
+            <Icon name="search" size={14} className="text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search merchants" placeholder="Search merchants…"
+              className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
+            />
+          </div>
+          <Button
+            onClick={() => setCreateOpen(true)}
+            size="icon"
+            className="rounded-full"
+            aria-label="New merchant"
+            title="New merchant"
+          >
+            <Icon name="plus" size={16} stroke={2} />
           </Button>
         </div>
 
-        <div className="bg-secondary mb-3.5 flex h-[38px] items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
-          <Icon name="search" size={14} className="text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search merchants" placeholder="Search merchants…"
-            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
-          />
-        </div>
-
-        <div className="flex flex-col">
+        {/* Desktop: cap to the viewport (below the 77px top bar + 24px shell
+            padding + ~76px stats block + 52px search row) so the list scrolls
+            internally instead of the page. Mobile keeps natural page scrolling. */}
+        <div className="flex flex-col md:max-h-[calc(100dvh-255px)] md:overflow-y-auto">
           {list.map((c, i) => (
             <MerchantRow
               key={c.id}

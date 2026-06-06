@@ -42,9 +42,9 @@ function Field({ icon, label, children }: { icon: string; label: string; childre
 }
 
 /**
- * The add-expense form, shared by the /add route (full page) and the
- * right-side add slider. `onSaved` fires after a successful add — the route
- * navigates to Activity, the slider closes itself.
+ * The add-expense form, rendered inside the add dialog (see
+ * add-expense-sheet.tsx). `onSaved` fires after a successful add — the
+ * dialog closes itself.
  */
 export function AddExpenseForm({
   onSaved,

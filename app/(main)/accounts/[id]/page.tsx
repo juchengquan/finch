@@ -13,7 +13,6 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   Dialog,
   DialogClose,
@@ -662,12 +661,16 @@ export default function AccountDetailPage() {
         </div>
       </div>
 
-      <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8 md:hidden">
-          <SheetHeader>
-            <SheetTitle className="font-serif text-xl italic">Account details</SheetTitle>
-          </SheetHeader>
-          <div className="px-4">
+      {/* Mobile-only (md+ shows the same details inline in the side column). */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="md:hidden">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl italic">Account details</DialogTitle>
+            <DialogDescription className="sr-only">
+              Metadata for this account.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
             {details.map(([l, v], i) => (
               <div key={l} className={cn('flex justify-between py-2.5 text-sm', i && 'border-border border-t-[0.5px] border-dotted')}>
                 <span className="text-muted-foreground">{l}</span>
@@ -681,8 +684,8 @@ export default function AccountDetailPage() {
               <Icon name="edit" size={14} />Edit details
             </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>

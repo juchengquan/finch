@@ -1,13 +1,11 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { TransactionDetail } from '@/components/transaction-detail';
-import { useIsDesktop } from '@/components/use-is-desktop';
-import { cn } from '@/lib/utils';
 
 interface TransactionSheetValue {
-  /** Open the detail slider for the given transaction id. */
+  /** Open the detail card for the given transaction id. */
   openTransaction: (id: string) => void;
   close: () => void;
 }
@@ -16,8 +14,8 @@ const TransactionSheetContext = createContext<TransactionSheetValue | null>(null
 
 /**
  * Use anywhere a transaction row is clickable. Calling `openTransaction(id)`
- * opens a single app-wide detail panel: a bottom sheet on mobile, a right-side
- * slider on desktop.
+ * opens a single app-wide detail panel as a centered popout card (Dialog),
+ * matching the other entity dialogs (budgets, exchange rates, …).
  */
 export function useTransactionSheet(): TransactionSheetValue {
   const ctx = useContext(TransactionSheetContext);
@@ -26,11 +24,10 @@ export function useTransactionSheet(): TransactionSheetValue {
 }
 
 export function TransactionSheetProvider({ children }: { children: React.ReactNode }) {
-  // `open` drives the Sheet; `txId` is kept through the close animation so the
+  // `open` drives the Dialog; `txId` is kept through the close animation so the
   // content doesn't blank out mid-transition.
   const [open, setOpen] = useState(false);
   const [txId, setTxId] = useState<string | null>(null);
-  const isDesktop = useIsDesktop();
 
   const openTransaction = useCallback((id: string) => {
     setTxId(id);
@@ -43,25 +40,19 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
   return (
     <TransactionSheetContext.Provider value={value}>
       {children}
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          side={isDesktop ? 'right' : 'bottom'}
-          className={cn(
-            'gap-0 p-0',
-            isDesktop ? 'w-full sm:max-w-md' : 'max-h-[85vh] rounded-t-2xl',
-          )}
-        >
-          <SheetTitle className="sr-only">Transaction details</SheetTitle>
-          <SheetDescription className="sr-only">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto p-0 sm:max-w-md">
+          <DialogTitle className="sr-only">Transaction details</DialogTitle>
+          <DialogDescription className="sr-only">
             View and edit the selected transaction.
-          </SheetDescription>
+          </DialogDescription>
           {txId && (
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-8 pb-8">
+            <div className="px-5 pt-8 pb-8">
               <TransactionDetail txId={txId} onDeleted={close} />
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </TransactionSheetContext.Provider>
   );
 }
