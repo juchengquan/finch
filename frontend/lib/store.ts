@@ -55,6 +55,9 @@ export interface Tx {
    *  touched this row. Drives the "why is this Groceries?" detail view and the
    *  engine's loop guard (rows it generated are skipped). */
   appliedRuleIds?: string[];
+  /** Review triage flag (INSPIRATION_IDEAS §5.1). Timestamp when the user
+   *  marked the row reviewed; absent/null = needs review. */
+  reviewedAt?: string | null;
 }
 
 export interface TxSplit {
@@ -209,6 +212,12 @@ interface FinanceState {
   /** Reconcile-to-statement: toggle a single row's cleared-against-statement
    *  flag. Optimistic update + one-column server UPDATE. */
   setCleared: (transactionId: string, cleared: boolean) => void;
+  /** Review triage: toggle a single row's reviewed flag. Optimistic +
+   *  one-column server UPDATE. */
+  setReviewed: (transactionId: string, reviewed: boolean) => void;
+  /** Mark every unreviewed confirmed row in the ledger (optionally one
+   *  account) reviewed in a single server round-trip. */
+  markAllReviewed: (ledgerId: string, opts?: { accountId?: string }) => void;
   /** Finalise a reconciliation: stamps the account checkpoint and, when
    *  `postAdjustment` is true and a non-zero gap remains, posts an Adjustment
    *  transaction equal to the remainder so the cleared balance lands exactly
@@ -437,6 +446,30 @@ export const useFinanceStore = create<FinanceState>()(
           ),
         }));
         syncMutation('setCleared', { id: transactionId, cleared });
+      },
+
+      setReviewed: (transactionId, reviewed) => {
+        const stamp = reviewed ? new Date().toISOString() : null;
+        set((s) => ({
+          transactions: s.transactions.map((t) =>
+            t.id === transactionId ? { ...t, reviewedAt: stamp } : t,
+          ),
+        }));
+        syncMutation('setReviewed', { id: transactionId, reviewed });
+      },
+
+      markAllReviewed: (ledgerId, opts) => {
+        const accountId = opts?.accountId;
+        const stamp = new Date().toISOString();
+        set((s) => ({
+          transactions: s.transactions.map((t) => {
+            if ((t.ledgerId ?? 'personal') !== ledgerId) return t;
+            if (accountId && t.account !== accountId) return t;
+            if (t.pending || t.reviewedAt) return t;
+            return { ...t, reviewedAt: stamp };
+          }),
+        }));
+        syncMutation('markAllReviewed', { ledgerId, accountId });
       },
 
       reconcileAccount: ({ accountId, statementBalance, statementDate, postAdjustment }) => {

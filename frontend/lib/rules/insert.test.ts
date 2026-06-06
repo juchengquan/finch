@@ -183,3 +183,18 @@ test('insertTxRow: a later (higher-priority-number) rule overrides an earlier se
   // Both ids in apply order — losing rule still recorded.
   expect(JSON.parse(String(row.applied_rule_ids))).toEqual(['early', 'late']);
 });
+
+test('insertTxRow: a mark_reviewed rule stamps reviewed_at at insert', async () => {
+  const exec = await seeded();
+  await createRule(exec, 'auto-review', {
+    ledgerId: 'personal',
+    condition: { field: 'merchant', op: 'contains', value: 'netflix' },
+    actions: [{ type: 'mark_reviewed' }],
+  });
+  const reviewed = await insertTxRow(exec, { ...baseRow, description: 'Netflix' });
+  const unreviewed = await insertTxRow(exec, { ...baseRow, description: 'Spotify' });
+  const [a] = await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [reviewed]);
+  const [b] = await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [unreviewed]);
+  expect(a.reviewed_at).not.toBeNull();
+  expect(b.reviewed_at).toBeNull(); // no matching rule → stays unreviewed
+});
