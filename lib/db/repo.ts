@@ -9,6 +9,7 @@ import type { LedgerRow } from './queries/ledgers';
 import type { ExchangeRate } from './queries/system';
 import type { Tag } from './queries/tags';
 import type { Holding } from './queries/holdings';
+import type { Rule } from '@/lib/rules/types';
 
 // A minimal async query interface so the same logic works against the in-memory
 // sqlite (oo1.DB) on the server and in tests.
@@ -40,6 +41,9 @@ export interface ProjectedState extends PersistState {
   /** Per-position investment holdings inside investment-type accounts. */
   holdings: Holding[];
   scheduled: ScheduledTemplate[];
+  /** Conditional rules engine — per-ledger if-then rules consumed by
+   *  applyRules() on insert. RULES_ENGINE_PLAN §2. */
+  rules: Rule[];
   /** Ordered section ids for the mobile bottom bar. Empty = use the client default. */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */

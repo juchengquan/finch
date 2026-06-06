@@ -6,6 +6,9 @@ import { Icon, CatBar } from '@/components/primitives';
 import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
 import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
+import { useLedger } from '@/components/ledger-provider';
+import { RuleBuilderSheet, type RulePrefill } from '@/components/rule-builder-sheet';
+import type { Leaf, Action } from '@/lib/rules/types';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -450,11 +453,19 @@ export function TransactionDetail({
   onDeleted?: () => void;
 }) {
   const { fmt, base } = useMoney();
+  const { activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
   const tx = allTxns.find((t) => t.id === txId);
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
   const storeCats = useFinanceStore((s) => s.categories);
+  const rules = useFinanceStore((s) => s.rules);
+  // Inline "create rule" prompt: after the user manually picks a new
+  // category, surface a non-blocking pill suggesting a forward-applying rule
+  // for that (merchant, category) combo. INSPIRATION_IDEAS §4 + RULES_ENGINE_PLAN §6.
+  const [suggestion, setSuggestion] = useState<{ merchant: string; categoryId: string } | null>(null);
+  const [rulePrefill, setRulePrefill] = useState<RulePrefill | null>(null);
+  const [ruleBuilderOpen, setRuleBuilderOpen] = useState(false);
   const storeTags = useFinanceStore((s) => s.tags);
   const createTag = useFinanceStore((s) => s.createTag);
   const setTransactionTags = useFinanceStore((s) => s.setTransactionTags);
@@ -599,6 +610,50 @@ export function TransactionDetail({
         );
       })()}
 
+      {suggestion && (
+        <div className="bg-primary/5 border-primary/30 flex items-center gap-2 rounded-[14px] border px-3 py-2">
+          <Icon name="sparkle" size={14} className="text-primary shrink-0" />
+          <div className="min-w-0 flex-1 text-[12px]">
+            Always categorize{' '}
+            <span className="text-foreground font-medium">{suggestion.merchant}</span>{' '}
+            as{' '}
+            <span className="text-foreground font-medium">
+              {catById(suggestion.categoryId).name ?? suggestion.categoryId}
+            </span>
+            ?
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const leaves: Leaf[] = [
+                { field: 'merchant', op: 'contains', value: suggestion.merchant },
+              ];
+              const actions: Action[] = [
+                { type: 'set_category', categoryId: suggestion.categoryId },
+              ];
+              setRulePrefill({
+                name: `${suggestion.merchant} → ${catById(suggestion.categoryId).name ?? suggestion.categoryId}`,
+                leaves,
+                actions,
+              });
+              setRuleBuilderOpen(true);
+              setSuggestion(null);
+            }}
+            className="text-primary shrink-0 text-[12px] font-medium underline-offset-2 hover:underline"
+          >
+            Create rule
+          </button>
+          <button
+            type="button"
+            onClick={() => setSuggestion(null)}
+            aria-label="Dismiss"
+            className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1"
+          >
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+      )}
+
       <div className="bg-card border-border rounded-[14px] border px-4 py-1">
         <div className="border-border flex items-center justify-between py-2 text-[13px]">
           <span className="text-muted-foreground">Category</span>
@@ -608,8 +663,30 @@ export function TransactionDetail({
             <Select
               value={tx.category ?? 'uncategorized'}
               onValueChange={(v) => {
-                updateTransaction(tx.id, { category: v === 'uncategorized' ? null : v });
+                const next = v === 'uncategorized' ? null : v;
+                const prev = tx.category ?? null;
+                updateTransaction(tx.id, { category: next });
                 toast.success('Category updated');
+                // Only offer the rule-create pill when:
+                //   - it's a real change (not picking the same category)
+                //   - we landed on a category (clearing → category isn't a "rule" pattern)
+                //   - the merchant string is non-empty (the pattern needs something to match)
+                //   - no existing rule already targets this (merchant, category) pair
+                //     so we don't pester users who've already set the rule up
+                const merchant = tx.merchant.trim();
+                if (next && next !== prev && merchant) {
+                  const already = rules.some((r) => {
+                    if (r.ledgerId !== activeId) return false;
+                    const lc = JSON.stringify(r.condition).toLowerCase();
+                    if (!lc.includes(merchant.toLowerCase())) return false;
+                    return r.actions.some(
+                      (a) => a.type === 'set_category' && a.categoryId === next,
+                    );
+                  });
+                  if (!already) setSuggestion({ merchant, categoryId: next });
+                } else {
+                  setSuggestion(null);
+                }
               }}
             >
               <SelectTrigger size="sm" className="h-7 border-0 shadow-none">
@@ -771,6 +848,13 @@ export function TransactionDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RuleBuilderSheet
+        rule={null}
+        open={ruleBuilderOpen}
+        onClose={() => setRuleBuilderOpen(false)}
+        prefill={rulePrefill ?? undefined}
+      />
     </>
   );
 }
