@@ -383,7 +383,7 @@ at where the behaviour lives today.
 | 26 | Pending review: confirm/edit/cancel/confirm-all + matcher | Pending queue w/ per-row + bulk actions; counterparty match on confirm | Swipe actions; bulk toolbar | 1 | `pending/page.tsx`, `pending-row.tsx` |
 | 27 | Transfers list + detail (two legs, locked rate) | Transfer list + detail showing both legs + rate | Detail view | 2 | `transfers/*` |
 | 28 | Merchants/counterparties admin (verify/rename/delete) | Counterparty manager w/ verify + CRUD + search | `List` + edit | 2 | `merchants/page.tsx` |
-| 29 | Categories admin (2-level tree, icon/colour) | Tree editor; create/edit/delete w/ promote-on-delete | Outline/`DisclosureGroup` | 2 | `categories/page.tsx` |
+| 29 | Categories admin (≤ 3-level tree, icon/colour) | Tree editor; create/edit/delete w/ promote-on-delete; depth cap enforced in mutation layer (mirror the web's check in `Categories.addCategory(parentId:)`) | Outline/`DisclosureGroup` | 2 | `categories/page.tsx`; plan: `plans/CATEGORIES_LEVEL3_PLAN.md` |
 | 30 | Tags admin | Tag CRUD w/ colour | `List` + edit | 2 | `tags/page.tsx` |
 | 31 | Rules: list, builder, backfill w/ preview, inline create-rule | Rule list; condition/action builder; backfill preview; "create rule" after manual recat | Form builder; sheet | 2–3 | `rules/page.tsx`, `rule-builder-sheet.tsx`, `lib/rules/*` |
 | 32 | Transaction detail: recat, split, tags, refund, review/cleared toggles, FX card, rule provenance, delete | Full detail w/ all inline edits + provenance | Detail sheet; menus; swipe | 1 | `transaction-detail.tsx` |

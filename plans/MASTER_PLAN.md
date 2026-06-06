@@ -22,6 +22,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; **all three §8 cross-app implications are shipped** (attachments PR #106, pack format PR #107, ledger CRUD PR #109). §11 cross-references the web's i18n approach in `I18N_PLAN.md`.
 - `I18N_PLAN.md` — **new (2026-06-06)** — multi-language / localization for the web app. `next-intl` + `messages/<locale>.json` catalogs; English base + Simplified Chinese (`zh-CN`) for v1; translations live in app chrome only, **never in the database or `.finch` packs**; per-device persisted via `localStorage`. Server-side mutation errors get a `{ code, params }` shape so they translate client-side. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
+- `CATEGORIES_LEVEL3_PLAN.md` — **new (2026-06-06)** — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** (the 2-level cap lives in mutation layer only). Backend depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: `<Select>` widgets render labels as `Parent › Child › Leaf` (flat list with separators, no tree picker); `/categories` admin page gains a sub-subcategory affordance. SQL trigger for depth invariant noted as future work but skipped in v1.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -360,10 +361,18 @@ below; what's still open is summarized here.
    server-side mutation errors so toasts localise client-side. **No schema
    change**; `.finch` packs are unaffected. **M — five-ish PR-sized
    commits.**
-3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+3. **3-level categories** — `plans/CATEGORIES_LEVEL3_PLAN.md` (2026-06-06).
+   Relax the existing 2-level taxonomy cap to a 3-level hard cap (e.g.
+   `Food › Restaurants › Japanese`). **No schema change** — the cap is
+   mutation-layer-only today. Recursive `rollupCategorySpend` + recursive
+   budget category-id matching (a budget on `food` now also catches
+   `food › restaurants › japanese`); `<Select>` labels render as
+   `Parent › Child › Leaf`; `/categories` admin page gains the
+   sub-subcategory affordance. **S–M — 3 code commits + 1 docs.**
+4. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
-4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+5. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
