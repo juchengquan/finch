@@ -1,7 +1,4 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema } from '@/lib/db/schema';
 import {
   listRules,
   listActiveRules,
@@ -10,22 +7,12 @@ import {
   deleteRule,
   markRuleApplied,
 } from '@/lib/db/queries/rules';
+import { freshDb as freshTestDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 import type { Condition, Action } from '@/lib/rules/types';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
 async function freshDb(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const d = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    d.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
+  const { exec } = await freshTestDb();
   // A ledger to satisfy the rules.ledger_id FK.
   await exec(
     `INSERT INTO ledgers (id, name, base_currency, created_at, updated_at)

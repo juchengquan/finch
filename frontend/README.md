@@ -7,8 +7,8 @@ Personal finance tracker — multi-currency, multi-ledger, mobile-first with a r
 - **Next.js 16** (App Router, Turbopack) + **React 19**
 - **TypeScript** (strict)
 - **Tailwind CSS v4** + **shadcn/ui** (Radix-based components)
-- **zustand** for client-side state (persisted to localStorage)
-- **SQLite** (WASM) for durable backup / export, mirrored from the store into OPFS
+- **zustand** for the client-side store (mirror of the server projection)
+- **SQLite** as the server-side source of truth (`better-sqlite3` under Node, `bun:sqlite` under Bun, WAL mode, file-backed)
 - **lucide-react** icons, **next-themes** (light/dark), **sonner** (toasts)
 - **Bun** for package manager and test runner
 
@@ -44,7 +44,7 @@ components/
 ├── MobileComponents.tsx  # Shared page chrome (ScreenHeader, PageHeader, …)
 ├── primitives.tsx    # Icon shim, Money formatter, SVG charts
 ├── ui/               # shadcn/ui components
-├── sqlite-backup-provider.tsx  # Auto-mirrors store state into SQLite
+├── sqlite-backup-provider.tsx  # Settings → Database wiring (export / import / restore)
 └── store-hydration.tsx  # Hydrates zustand store from server on load
 lib/
 ├── store.ts          # zustand store — all mutable state + actions
@@ -57,9 +57,9 @@ lib/
 
 ### Data layers
 
-1. **Static reference** (`data/*.json` + `lib/data.ts`) — accounts, categories, ledgers, seed scheduled templates.
-2. **Live mutable state** (`lib/store.ts`) — zustand store for transactions, scheduled templates, budgets, goals. Persisted to localStorage via `persist` middleware.
-3. **Durable backup** (`lib/db/`) — SQLite (in-browser WASM + OPFS) mirrors the store for export/backup. Not the live read path — the store is the source of truth.
+1. **Static reference** (`data/*.json` + `lib/data.ts`) — read-only seed: ledgers, accounts, categories, default scheduled templates. Used as the pre-hydration fallback for the client lookups.
+2. **Server-side SQLite** (`lib/db/`) — the **source of truth**. File-backed at `FINCH_DB_DIR/FINCH_DB_FILE` (`./.data/finch.sqlite3` by default), WAL mode, opened by the runtime-detecting `lib/db/driver.ts` (`better-sqlite3` under Node, `bun:sqlite` under Bun). Mutations land via `/api/mutate` inside a `BEGIN`/`COMMIT` wrapper; reads via `/api/state`.
+3. **Client store** (`lib/store.ts`) — the zustand store is a mirror of #2, populated by `components/store-hydration.tsx` on load and patched after every mutation. The store is the in-memory working model for the UI, not the durability boundary.
 
 ### Money & currencies
 

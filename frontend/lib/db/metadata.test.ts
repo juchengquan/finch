@@ -1,26 +1,12 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
+import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { readMetadata, rowCounts, stampExport } from '@/lib/db/queries/metadata';
 import { computeChecksum } from '@/lib/db/checksum';
+import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
 async function fresh(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
-  await seedDatabase(exec);
+  const { exec } = await seededDb();
   await migrate(exec, { fresh: true });
   return exec;
 }

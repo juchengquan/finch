@@ -1,8 +1,4 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
 import {
   listTransactions,
   addTransaction,
@@ -11,24 +7,13 @@ import {
   confirmTransaction,
   getTransaction,
 } from '@/lib/db/queries/transactions';
+import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
-async function seeded(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
-  await seedDatabase(exec);
+const seeded = async (): Promise<Exec> => {
+  const { exec } = await seededDb();
   return exec;
-}
+};
 
 test('list scopes to ledger and excludes the other ledger', async () => {
   const exec = await seeded();

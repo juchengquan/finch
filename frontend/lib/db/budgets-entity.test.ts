@@ -1,26 +1,13 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
+import { migrate } from '@/lib/db/schema';
 import { applyMutation } from '@/lib/db/mutations';
 import { projectState } from '@/lib/db/state';
 import { listBudgetGroups as listGroups } from '@/lib/db/queries/budgetGroups';
+import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
 async function seeded(): Promise<Exec> {
-  const sqlite3 = await (sqlite3InitModule as unknown as (o?: object) => ReturnType<typeof sqlite3InitModule>)({
-    print() {},
-    printErr() {},
-  });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
-  await seedDatabase(exec);
+  const { exec } = await seededDb();
   await migrate(exec, { fresh: true });
   return exec;
 }
