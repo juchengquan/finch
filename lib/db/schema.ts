@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS accounts (
   -- Set when is_active flips to 0; null when active. Lets the UI surface
   -- "archived <date>" without losing the audit trail.
   archived_at          TEXT,
+  -- Reconcile-to-statement checkpoint (RECONCILE_PLAN §2.2). Stamped by
+  -- reconcileAccount when the user finishes a guided session: the statement's
+  -- ending date + the matching balance in this account's native currency.
+  -- Both null when the account has never been reconciled. Editing a row that
+  -- was cleared during this session flips the badge to "edited since" via a
+  -- transaction-level updated_at comparison; we don't store a separate "still
+  -- valid" flag.
+  last_reconciled_at      TEXT,
+  last_reconciled_balance REAL,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL
 );
@@ -169,6 +178,11 @@ CREATE TABLE IF NOT EXISTS transactions (
   source_template_id TEXT,
   currency           TEXT NOT NULL DEFAULT 'SGD',
   notes              TEXT,
+  -- Reconcile-to-statement clearing flag (RECONCILE_PLAN section 2.1).
+  -- Timestamp set when the user ticks this row off against a real statement;
+  -- null = uncleared. Independent of the status column: a confirmed
+  -- transaction can still be uncleared (logged but not yet seen on a statement).
+  cleared_at         TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
 );
@@ -456,7 +470,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-06T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-07T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -534,6 +548,17 @@ const MIGRATIONS: Record<string, string[]> = {
     'ALTER TABLE scheduled_templates_new RENAME TO scheduled_templates',
     'CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1',
     'PRAGMA foreign_keys = ON',
+  ],
+  // Reconcile-to-statement (RECONCILE_PLAN). Three additive columns:
+  //   - transactions.cleared_at: ticked-off-against-a-statement flag.
+  //   - accounts.last_reconciled_at/_balance: the verified-correct checkpoint.
+  // All nullable, defaulted via the migration runner's "duplicate column"
+  // swallow rule (see isAlreadyAppliedError); safe to re-run on a file that
+  // already carries them.
+  '2026-06-07T00:00:00Z': [
+    'ALTER TABLE transactions ADD COLUMN cleared_at TEXT',
+    'ALTER TABLE accounts ADD COLUMN last_reconciled_at TEXT',
+    'ALTER TABLE accounts ADD COLUMN last_reconciled_balance REAL',
   ],
 };
 

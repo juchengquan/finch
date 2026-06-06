@@ -1083,3 +1083,114 @@ test('bulkRecategorize: empty ids is a no-op; null categoryId clears the link', 
   const [after] = await exec('SELECT category_id AS c FROM transactions WHERE id = ?', [id]);
   expect(after.c).toBeNull();
 });
+
+test('setCleared toggles cleared_at and is independent of status', async () => {
+  const exec = await seeded();
+  const [row] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+  const id = String(row.id);
+  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).toBeNull();
+
+  await applyMutation(exec, 'setCleared', { id, cleared: true });
+  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).not.toBeNull();
+
+  await applyMutation(exec, 'setCleared', { id, cleared: false });
+  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).toBeNull();
+
+  // Confirming a transaction does not clear it, and vice versa — independence
+  // matters: the two flags answer different questions.
+  await applyMutation(exec, 'setCleared', { id, cleared: true });
+  const status = (await exec('SELECT status FROM transactions WHERE id = ?', [id]))[0].status;
+  expect(status).toBe('confirmed'); // unaffected by setCleared
+});
+
+test('reconcileAccount stamps the checkpoint without an adjustment when none is asked', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: 9999.99,
+    statementDate: '2026-05-31',
+    postAdjustment: false,
+  });
+  const [row] = await exec(
+    'SELECT last_reconciled_at AS d, last_reconciled_balance AS b FROM accounts WHERE id = ?',
+    ['chk'],
+  );
+  expect(row.d).toBe('2026-05-31');
+  expect(Number(row.b)).toBeCloseTo(9999.99, 2);
+  // No adjustment row was inserted as part of this reconcile.
+  const adj = await exec(
+    "SELECT COUNT(*) AS c FROM transactions WHERE account_id = ? AND kind = 'adjustment'",
+    ['chk'],
+  );
+  expect(Number(adj[0].c)).toBe(0);
+});
+
+test('reconcileAccount with postAdjustment posts the exact remainder + lands cleared sum on target', async () => {
+  const exec = await seeded();
+  // Clear a handful of rows so the cleared sum is non-trivial.
+  const ids = (
+    await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 3")
+  ).map((r) => String(r.id));
+  for (const id of ids) await applyMutation(exec, 'setCleared', { id, cleared: true });
+
+  // Read what the cleared sum currently is, then reconcile to a deliberately
+  // off-by-$12.50 target so the server must post exactly that as the
+  // adjustment.
+  const [chk] = await exec("SELECT opening_balance, currency FROM accounts WHERE id = 'chk'");
+  const opening = Number(chk.opening_balance);
+  const [sum] = await exec(
+    `SELECT COALESCE(SUM(CASE WHEN currency = ? THEN amount ELSE amount_base END), 0) AS s
+       FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' AND cleared_at IS NOT NULL`,
+    [String(chk.currency)],
+  );
+  const clearedBefore = Math.round((opening + Number(sum.s)) * 100) / 100;
+  const target = Math.round((clearedBefore + 12.5) * 100) / 100;
+
+  await applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: target,
+    statementDate: '2026-05-31',
+    postAdjustment: true,
+  });
+
+  // The adjustment posted, was marked cleared, and lands the cleared sum exactly on target.
+  const [adj] = await exec(
+    `SELECT amount, cleared_at FROM transactions
+      WHERE account_id = 'chk' AND kind = 'adjustment'
+      ORDER BY created_at DESC LIMIT 1`,
+  );
+  expect(Number(adj.amount)).toBeCloseTo(12.5, 2);
+  expect(adj.cleared_at).not.toBeNull();
+
+  const [sumAfter] = await exec(
+    `SELECT COALESCE(SUM(CASE WHEN currency = ? THEN amount ELSE amount_base END), 0) AS s
+       FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' AND cleared_at IS NOT NULL`,
+    [String(chk.currency)],
+  );
+  const clearedAfter = Math.round((opening + Number(sumAfter.s)) * 100) / 100;
+  expect(clearedAfter).toBeCloseTo(target, 2);
+
+  // Checkpoint stamped.
+  const [acct] = await exec(
+    'SELECT last_reconciled_at AS d, last_reconciled_balance AS b FROM accounts WHERE id = ?',
+    ['chk'],
+  );
+  expect(acct.d).toBe('2026-05-31');
+  expect(Number(acct.b)).toBeCloseTo(target, 2);
+});
+
+test('reconcileAccount with postAdjustment is a no-op on the adjustment when the gap is within the penny tolerance', async () => {
+  const exec = await seeded();
+  const [chk] = await exec("SELECT opening_balance FROM accounts WHERE id = 'chk'");
+  await applyMutation(exec, 'reconcileAccount', {
+    accountId: 'chk',
+    statementBalance: Number(chk.opening_balance),
+    statementDate: '2026-05-31',
+    postAdjustment: true,
+  });
+  const adj = await exec(
+    "SELECT COUNT(*) AS c FROM transactions WHERE account_id = 'chk' AND kind = 'adjustment'",
+    ['chk'],
+  );
+  expect(Number(adj[0].c)).toBe(0); // no rows cleared → no remainder beyond tolerance.
+});

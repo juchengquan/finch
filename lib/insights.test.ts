@@ -22,12 +22,15 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   type: 'cash',
   currency: 'USD',
   balance: 0,
+  openingBalance: 0,
   openingBalanceBase: 0,
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
   color: null,
   sortOrder: 0,
+  lastReconciledAt: null,
+  lastReconciledBalance: null,
   ...over,
 });
 
