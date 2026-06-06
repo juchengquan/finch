@@ -102,6 +102,7 @@ const RESET_TABLES = [
   'accounts',
   'account_groups',
   'exchange_rates',
+  'rules',
   'ledgers',
   'app_state',
 ];

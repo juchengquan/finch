@@ -50,6 +50,10 @@ export interface Tx {
    *  uncleared. Independent of `pending` — a confirmed row can still be
    *  uncleared (logged but not yet seen on a statement). */
   clearedAt?: string | null;
+  /** Rules-engine provenance (RULES_ENGINE_PLAN §2.2). Ids of the rules that
+   *  touched this row. Drives the "why is this Groceries?" detail view and the
+   *  engine's loop guard (rows it generated are skipped). */
+  appliedRuleIds?: string[];
 }
 
 export interface TxSplit {
