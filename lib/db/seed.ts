@@ -314,6 +314,9 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
         exchangeRate: r.rate,
         counterpartyId: cpId,
         timestamp: SEED_TS,
+        // Seed runs before any user-defined rules exist; skipRules keeps the
+        // generated rows byte-for-byte stable when rules land later.
+        skipRules: true,
       });
     }
   }
