@@ -4,13 +4,14 @@ Status: **shipped** (PR #90) — guided reconcile flow + per-account checkpoint
 (`accounts.last_reconciled_at`/`_balance`) + `transactions.cleared_at`. This doc
 is kept as the design record.
 
-> **v2 scope (planning): "add missing transactions during reconcile".** The
-> shipped flow lets you tick rows and, for any leftover gap, *post an
+> **v2 (shipped, PR #101): "add missing transactions during reconcile".** The
+> original flow let you tick rows and, for any leftover gap, *post an
 > adjustment* — which papers over the gap instead of finding it. In practice a
 > non-zero difference almost always means **a real transaction you forgot to
 > log**, not a mystery delta. v2 makes "add the missing row" a first-class
-> in-flow action so adjustment becomes the true last resort. **No schema change
-> required** (see §11). Specced in §10 below.
+> in-flow action (quick-add + auto-clear, a confirm-and-clear shortcut for
+> pending rows, and gap-framing copy) so adjustment is the true last resort.
+> **No schema change** — it composes existing mutations. Specced in §10–11 below.
 
 finch already has a blunt *adjust-to-target* tool: the "Reconcile balance"
 dialog on account detail posts a single Adjustment delta to force the balance
@@ -285,7 +286,8 @@ UI (PRs 3-5):
 
 # v2 — Add missing transactions during reconcile
 
-Status: **planning** — no code changes yet. Builds on the shipped flow above.
+Status: **shipped** (PR #101). Builds on the shipped flow above. Sections below
+are kept as the design record.
 
 ## 10. Scope
 

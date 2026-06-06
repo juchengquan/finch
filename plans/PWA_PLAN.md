@@ -2,10 +2,19 @@
 
 Status: **planning** — no code changes yet.
 
-Turn finch into an installable, offline-capable Progressive Web App. The data
-already lives client-side (OPFS-backed SQLite); this plan covers caching the
-**app shell + WASM** so the app loads when the network is gone, plus the small
-storage/UI polish that comes with being installable.
+> ⚠️ **Doc predates the data-layer change.** This plan was written when the DB
+> ran client-side in the browser (OPFS-backed `sqlite-wasm`). That's no longer
+> true: the database is now **server-side and file-backed** (`better-sqlite3`
+> with WAL — see `FILE_BACKED_DB_PLAN.md`, shipped), reached over API routes.
+> So "offline" no longer means "the data is already local" — a true offline
+> PWA would need an offline *read* story (cached projections / a client mirror)
+> on top of shell+asset caching. The §-by-§ caching strategy below must be
+> re-derived against the server-side model before any code. Treat the sections
+> below as historical until that rework lands.
+
+Turn finch into an installable, offline-capable Progressive Web App. This plan
+covers caching the **app shell + assets** so the app loads when the network is
+gone, plus the small storage/UI polish that comes with being installable.
 
 ## 0. Confirmed product decisions
 
