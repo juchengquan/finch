@@ -1,0 +1,778 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/primitives';
+import { useLedger } from '@/components/ledger-provider';
+import { useFinanceStore } from '@/lib/store';
+import { applyRules, evaluateCondition } from '@/lib/rules/engine';
+import { describeCondition, describeActions } from '@/lib/rules/describe';
+import { cn } from '@/lib/utils';
+import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
+import type { Tx } from '@/lib/store';
+
+// ---------------------------------------------------------------------------
+// Draft model — UI-friendly flat shape. The builder doesn't expose nested
+// (all-inside-any, NOT) trees in this version; power users hand-edit the
+// JSON. The flat form covers the 80% case (Lunch Money / Tiller's AutoCat
+// pattern: glob ANDed leaves).
+// ---------------------------------------------------------------------------
+
+interface Draft {
+  name: string;
+  priority: number;
+  isActive: boolean;
+  runOnEdit: boolean;
+  combinator: 'all' | 'any';
+  leaves: Leaf[];
+  actions: Action[];
+}
+
+const KIND_OPTIONS: { value: TxKind; label: string }[] = [
+  { value: 'expense', label: 'Expense' },
+  { value: 'income', label: 'Income' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'refund', label: 'Refund' },
+  { value: 'adjustment', label: 'Adjustment' },
+];
+
+const FIELD_OPTIONS: { value: Leaf['field']; label: string }[] = [
+  { value: 'merchant', label: 'Merchant' },
+  { value: 'amount', label: 'Amount' },
+  { value: 'account_id', label: 'Account' },
+  { value: 'category_id', label: 'Category' },
+  { value: 'counterparty_id', label: 'Counterparty' },
+  { value: 'currency', label: 'Currency' },
+  { value: 'date_dow', label: 'Day of week' },
+  { value: 'date_dom', label: 'Day of month' },
+  { value: 'kind', label: 'Kind' },
+  { value: 'tag_id', label: 'Tag' },
+  { value: 'note', label: 'Note' },
+];
+
+const ACTION_OPTIONS: { value: Action['type']; label: string }[] = [
+  { value: 'set_category', label: 'Set category' },
+  { value: 'add_tag', label: 'Add tag' },
+  { value: 'remove_tag', label: 'Remove tag' },
+  { value: 'set_counterparty', label: 'Set counterparty' },
+  { value: 'set_merchant', label: 'Rename merchant' },
+  { value: 'set_note', label: 'Set note' },
+  { value: 'set_kind', label: 'Set kind' },
+  { value: 'mark_reviewed', label: 'Mark reviewed' },
+];
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function defaultLeaf(field: Leaf['field']): Leaf {
+  switch (field) {
+    case 'merchant': return { field, op: 'contains', value: '' };
+    case 'amount': return { field, op: 'lt', value: 10 };
+    case 'account_id': return { field, op: 'is', value: '' };
+    case 'category_id': return { field, op: 'is', value: '' };
+    case 'counterparty_id': return { field, op: 'is', value: '' };
+    case 'currency': return { field, op: 'is', value: 'USD' };
+    case 'date_dow': return { field, op: 'in', value: [] };
+    case 'date_dom': return { field, op: 'eq', value: 1 };
+    case 'kind': return { field, op: 'is', value: 'expense' };
+    case 'tag_id': return { field, op: 'has', value: '' };
+    case 'note': return { field, op: 'contains', value: '' };
+  }
+}
+
+function defaultAction(type: Action['type']): Action {
+  switch (type) {
+    case 'set_category': return { type, categoryId: null };
+    case 'add_tag': return { type, tagId: '' };
+    case 'remove_tag': return { type, tagId: '' };
+    case 'set_counterparty': return { type, counterpartyId: null };
+    case 'set_merchant': return { type, merchant: '' };
+    case 'set_note': return { type, note: '' };
+    case 'set_kind': return { type, kind: 'expense' };
+    case 'mark_reviewed': return { type };
+    case 'split': return { type, splits: [] };
+  }
+}
+
+/** Build the JSON Condition from the flat draft. */
+function buildCondition(draft: Draft): Condition {
+  return draft.combinator === 'all' ? { all: draft.leaves } : { any: draft.leaves };
+}
+
+/** Decompose a Condition back into the flat draft for editing. Nested
+ *  trees collapse to a single "(complex — view-only)" leaf so the user can
+ *  see the rule exists; saving overwrites their flat draft. */
+function decomposeCondition(cond: Condition): { combinator: 'all' | 'any'; leaves: Leaf[] } {
+  if ('all' in cond && cond.all.every((c) => 'field' in c)) {
+    return { combinator: 'all', leaves: cond.all as Leaf[] };
+  }
+  if ('any' in cond && cond.any.every((c) => 'field' in c)) {
+    return { combinator: 'any', leaves: cond.any as Leaf[] };
+  }
+  // Non-flat tree — fall back to a single placeholder leaf so saving doesn't
+  // silently corrupt the rule. The user can drop in a fresh condition.
+  return { combinator: 'all', leaves: [defaultLeaf('merchant')] };
+}
+
+function makeDraft(rule: Rule | null): Draft {
+  if (!rule) {
+    return {
+      name: '',
+      priority: 100,
+      isActive: true,
+      runOnEdit: false,
+      combinator: 'all',
+      leaves: [defaultLeaf('merchant')],
+      actions: [defaultAction('set_category')],
+    };
+  }
+  const { combinator, leaves } = decomposeCondition(rule.condition);
+  return {
+    name: rule.name ?? '',
+    priority: rule.priority,
+    isActive: rule.isActive,
+    runOnEdit: rule.runOnEdit,
+    combinator,
+    leaves,
+    actions: rule.actions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+
+export function RuleBuilderSheet({
+  rule,
+  open,
+  onClose,
+}: {
+  rule: Rule | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { activeId } = useLedger();
+  const categories = useFinanceStore((s) => s.categories);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const counterparties = useFinanceStore((s) => s.counterparties);
+  const tags = useFinanceStore((s) => s.tags);
+  const transactions = useFinanceStore((s) => s.transactions);
+  const createRule = useFinanceStore((s) => s.createRule);
+  const updateRule = useFinanceStore((s) => s.updateRule);
+
+  const [draft, setDraft] = useState<Draft>(() => makeDraft(rule));
+
+  // Reset the draft whenever the sheet (re)opens for a different rule.
+  const ruleId = rule?.id ?? null;
+  const [lastRuleId, setLastRuleId] = useState<string | null>(ruleId);
+  if (open && lastRuleId !== ruleId) {
+    setDraft(makeDraft(rule));
+    setLastRuleId(ruleId);
+  }
+
+  const ledgerCategories = categories.filter((c) => c.ledgerId === activeId);
+  const ledgerAccounts = accounts.filter((a) => a.ledgerId === activeId);
+  const ledgerCounterparties = counterparties.filter((c) => c.ledgerId === activeId);
+  const ledgerTags = tags.filter((t) => t.ledgerId === activeId);
+
+  // Live preview — runs the draft against the last 100 confirmed transactions
+  // in the active ledger. Counts matches; surfaces the first three so the
+  // user can sanity-check before saving.
+  const condition = buildCondition(draft);
+  const preview = useMemo(() => {
+    const recent = transactions
+      .filter((t) => (t.ledgerId ?? 'personal') === activeId && !t.pending)
+      .slice(0, 100);
+    const draftRule: Rule = {
+      id: 'preview',
+      ledgerId: activeId,
+      name: null,
+      priority: draft.priority,
+      condition,
+      actions: draft.actions,
+      isActive: true,
+      runOnEdit: false,
+      lastAppliedAt: null,
+    };
+    const matches: Tx[] = [];
+    for (const t of recent) {
+      if (evaluateCondition(t, condition)) matches.push(t);
+    }
+    const samplePatch = matches[0] ? applyRules(matches[0], [draftRule]) : null;
+    return { matchCount: matches.length, total: recent.length, samples: matches.slice(0, 3), samplePatch };
+  }, [transactions, activeId, condition, draft.actions, draft.priority]);
+
+  const save = () => {
+    if (!draft.leaves.length) {
+      toast.error('Add at least one condition');
+      return;
+    }
+    if (!draft.actions.length) {
+      toast.error('Add at least one action');
+      return;
+    }
+    if (rule) {
+      updateRule(rule.id, {
+        name: draft.name.trim() || null,
+        priority: draft.priority,
+        condition,
+        actions: draft.actions,
+        isActive: draft.isActive,
+        runOnEdit: draft.runOnEdit,
+      });
+      toast.success(`Rule ${draft.name.trim() || rule.id} updated`);
+    } else {
+      const id = createRule({
+        name: draft.name.trim() || null,
+        priority: draft.priority,
+        condition,
+        actions: draft.actions,
+        isActive: draft.isActive,
+        runOnEdit: draft.runOnEdit,
+        ledgerId: activeId,
+      });
+      toast.success(`Rule ${draft.name.trim() || id} created`);
+    }
+    onClose();
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+        <SheetHeader className="border-border shrink-0 border-b px-5 py-4">
+          <SheetTitle className="font-serif text-xl italic">
+            {rule ? 'Edit rule' : 'New rule'}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Build the if-then logic for this rule.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          {/* Name + priority + flags */}
+          <section className="space-y-2.5">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="rule-name" className="text-muted-foreground text-[11px]">Name (optional)</Label>
+              <Input
+                id="rule-name"
+                value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="e.g. Shell under $5 → Snacks"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="rule-priority" className="text-muted-foreground text-[11px]">Priority</Label>
+                <Input
+                  id="rule-priority"
+                  type="number"
+                  value={draft.priority}
+                  onChange={(e) => setDraft((d) => ({ ...d, priority: Number(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2 pt-5">
+                <label className="flex items-center gap-2 text-[12px]">
+                  <input
+                    type="checkbox"
+                    checked={draft.isActive}
+                    onChange={(e) => setDraft((d) => ({ ...d, isActive: e.target.checked }))}
+                  />
+                  Active
+                </label>
+                <label className="flex items-center gap-2 text-[12px]" title="Re-fire when an existing transaction is edited (default off — safer)">
+                  <input
+                    type="checkbox"
+                    checked={draft.runOnEdit}
+                    onChange={(e) => setDraft((d) => ({ ...d, runOnEdit: e.target.checked }))}
+                  />
+                  Re-run on edit
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {/* Condition builder */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-muted-foreground text-[11px]">When</Label>
+              <Select value={draft.combinator} onValueChange={(v) => setDraft((d) => ({ ...d, combinator: v as 'all' | 'any' }))}>
+                <SelectTrigger size="sm" className="h-7 w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ALL of these</SelectItem>
+                  <SelectItem value="any">ANY of these</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ol className="space-y-2">
+              {draft.leaves.map((leaf, i) => (
+                <li key={i}>
+                  <LeafEditor
+                    leaf={leaf}
+                    accounts={ledgerAccounts}
+                    categories={ledgerCategories}
+                    counterparties={ledgerCounterparties}
+                    tags={ledgerTags}
+                    onChange={(next) =>
+                      setDraft((d) => ({ ...d, leaves: d.leaves.map((l, j) => (j === i ? next : l)) }))
+                    }
+                    onRemove={
+                      draft.leaves.length > 1
+                        ? () =>
+                            setDraft((d) => ({ ...d, leaves: d.leaves.filter((_, j) => j !== i) }))
+                        : undefined
+                    }
+                  />
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              onClick={() =>
+                setDraft((d) => ({ ...d, leaves: [...d.leaves, defaultLeaf('merchant')] }))
+              }
+              className="text-primary text-[12px] underline-offset-2 hover:underline"
+            >
+              + Add condition
+            </button>
+          </section>
+
+          {/* Action picker */}
+          <section className="space-y-2">
+            <Label className="text-muted-foreground text-[11px]">Then</Label>
+            <ol className="space-y-2">
+              {draft.actions.map((action, i) => (
+                <li key={i}>
+                  <ActionEditor
+                    action={action}
+                    categories={ledgerCategories}
+                    counterparties={ledgerCounterparties}
+                    tags={ledgerTags}
+                    onChange={(next) =>
+                      setDraft((d) => ({ ...d, actions: d.actions.map((a, j) => (j === i ? next : a)) }))
+                    }
+                    onRemove={
+                      draft.actions.length > 1
+                        ? () =>
+                            setDraft((d) => ({ ...d, actions: d.actions.filter((_, j) => j !== i) }))
+                        : undefined
+                    }
+                  />
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              onClick={() =>
+                setDraft((d) => ({ ...d, actions: [...d.actions, defaultAction('set_category')] }))
+              }
+              className="text-primary text-[12px] underline-offset-2 hover:underline"
+            >
+              + Add action
+            </button>
+          </section>
+
+          {/* Test panel */}
+          <section className="bg-secondary space-y-2 rounded-xl p-3">
+            <div className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide">
+              Test against last {preview.total} transactions
+            </div>
+            <div className="text-foreground text-[13px]">
+              <span className="font-medium">{preview.matchCount}</span> match{preview.matchCount === 1 ? '' : 'es'}
+            </div>
+            {preview.samples.length > 0 ? (
+              <ul className="text-muted-foreground space-y-0.5 font-mono text-[10px]">
+                {preview.samples.map((t) => (
+                  <li key={t.id} className="truncate">
+                    {t.date} · {t.merchant} · ${Math.abs(t.nativeAmount ?? t.amount).toFixed(2)}
+                  </li>
+                ))}
+                {preview.matchCount > preview.samples.length && (
+                  <li className="text-muted-foreground italic">
+                    +{preview.matchCount - preview.samples.length} more
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <div className="text-muted-foreground text-[11px] italic">No matches yet — refine the conditions.</div>
+            )}
+            <div className="border-border mt-2 border-t pt-2">
+              <div className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide">
+                Summary
+              </div>
+              <div className="text-foreground mt-1 font-mono text-[11px]">
+                {describeCondition(condition)} → {describeActions(draft.actions)}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="border-border bg-card shrink-0 border-t px-5 py-3">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={save}>
+              <Icon name="check" size={14} />
+              {rule ? 'Save changes' : 'Create rule'}
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Leaf editor — picks the field, op, and value type-specific input.
+// ---------------------------------------------------------------------------
+
+interface LeafEditorProps {
+  leaf: Leaf;
+  accounts: { id: string; name: string }[];
+  categories: { id: string; name: string }[];
+  counterparties: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
+  onChange: (leaf: Leaf) => void;
+  onRemove?: () => void;
+}
+
+function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange, onRemove }: LeafEditorProps) {
+  return (
+    <div className="bg-card border-border space-y-2 rounded-lg border p-2.5">
+      <div className="flex items-center gap-2">
+        <Select value={leaf.field} onValueChange={(v) => onChange(defaultLeaf(v as Leaf['field']))}>
+          <SelectTrigger size="sm" className="h-7 flex-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FIELD_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Remove condition"
+            className="text-muted-foreground hover:text-foreground rounded p-1"
+          >
+            <Icon name="x" size={14} />
+          </button>
+        )}
+      </div>
+      <LeafBody leaf={leaf} onChange={onChange}
+        accounts={accounts} categories={categories} counterparties={counterparties} tags={tags} />
+    </div>
+  );
+}
+
+function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }: LeafEditorProps) {
+  const inputClass = 'h-8 text-[12px]';
+
+  if (leaf.field === 'merchant') {
+    return (
+      <div className="grid grid-cols-[100px_1fr] gap-2">
+        <Select value={leaf.op} onValueChange={(v) => onChange({ ...leaf, op: v as Leaf['op'] } as Leaf)}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="is">is</SelectItem>
+            <SelectItem value="contains">contains</SelectItem>
+            <SelectItem value="startsWith">starts with</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={leaf.value}
+          onChange={(e) => onChange({ ...leaf, value: e.target.value } as Leaf)}
+          className={inputClass}
+          placeholder="text"
+        />
+      </div>
+    );
+  }
+  if (leaf.field === 'amount') {
+    if (leaf.op === 'between') {
+      const [lo, hi] = Array.isArray(leaf.value) ? leaf.value : [0, 0];
+      return (
+        <div className="grid grid-cols-[100px_1fr_1fr] gap-2">
+          <Select value="between" onValueChange={(v) => onChange({ ...leaf, op: v as Leaf['op'] } as Leaf)}>
+            <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gt">&gt;</SelectItem>
+              <SelectItem value="gte">≥</SelectItem>
+              <SelectItem value="lt">&lt;</SelectItem>
+              <SelectItem value="lte">≤</SelectItem>
+              <SelectItem value="eq">=</SelectItem>
+              <SelectItem value="between">between</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input type="number" value={lo} className={inputClass}
+            onChange={(e) => onChange({ ...leaf, value: [Number(e.target.value) || 0, hi] } as Leaf)} />
+          <Input type="number" value={hi} className={inputClass}
+            onChange={(e) => onChange({ ...leaf, value: [lo, Number(e.target.value) || 0] } as Leaf)} />
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-[100px_1fr] gap-2">
+        <Select value={leaf.op} onValueChange={(v) => {
+          if (v === 'between') {
+            onChange({ field: 'amount', op: 'between', value: [0, 0] });
+          } else {
+            const cur = Array.isArray(leaf.value) ? leaf.value[0] : leaf.value;
+            onChange({ field: 'amount', op: v as 'gt' | 'gte' | 'lt' | 'lte' | 'eq', value: Number(cur) || 0 });
+          }
+        }}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gt">&gt;</SelectItem>
+            <SelectItem value="gte">≥</SelectItem>
+            <SelectItem value="lt">&lt;</SelectItem>
+            <SelectItem value="lte">≤</SelectItem>
+            <SelectItem value="eq">=</SelectItem>
+            <SelectItem value="between">between</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input type="number" value={Number(leaf.value)} className={inputClass}
+          onChange={(e) => onChange({ ...leaf, value: Number(e.target.value) || 0 } as Leaf)} />
+      </div>
+    );
+  }
+  if (leaf.field === 'account_id') {
+    return (
+      <RefPicker label="account" value={String(leaf.value)} options={accounts}
+        onChange={(v) => onChange({ field: 'account_id', op: 'is', value: v })} />
+    );
+  }
+  if (leaf.field === 'category_id') {
+    return (
+      <div className="grid grid-cols-[100px_1fr] gap-2">
+        <Select value={leaf.op as string} onValueChange={(v) => {
+          if (v === 'is_null') onChange({ field: 'category_id', op: 'is_null' });
+          else onChange({ field: 'category_id', op: 'is', value: '' });
+        }}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="is">is</SelectItem>
+            <SelectItem value="is_null">is empty</SelectItem>
+          </SelectContent>
+        </Select>
+        {leaf.op !== 'is_null' && (
+          <RefPicker label="category" value={String(leaf.value ?? '')} options={categories}
+            onChange={(v) => onChange({ field: 'category_id', op: 'is', value: v })} />
+        )}
+      </div>
+    );
+  }
+  if (leaf.field === 'counterparty_id') {
+    return (
+      <div className="grid grid-cols-[100px_1fr] gap-2">
+        <Select value={leaf.op as string} onValueChange={(v) => {
+          if (v === 'is_null') onChange({ field: 'counterparty_id', op: 'is_null' });
+          else onChange({ field: 'counterparty_id', op: 'is', value: '' });
+        }}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="is">is</SelectItem>
+            <SelectItem value="is_null">is empty</SelectItem>
+          </SelectContent>
+        </Select>
+        {leaf.op !== 'is_null' && (
+          <RefPicker label="counterparty" value={String(leaf.value ?? '')} options={counterparties}
+            onChange={(v) => onChange({ field: 'counterparty_id', op: 'is', value: v })} />
+        )}
+      </div>
+    );
+  }
+  if (leaf.field === 'currency') {
+    return (
+      <Input value={String(leaf.value)} className={inputClass}
+        onChange={(e) => onChange({ ...leaf, value: e.target.value.toUpperCase() } as Leaf)} placeholder="USD" />
+    );
+  }
+  if (leaf.field === 'date_dow') {
+    const selected = Array.isArray(leaf.value) ? leaf.value : [];
+    return (
+      <div className="flex flex-wrap gap-1">
+        {WEEKDAYS.map((d, i) => {
+          const on = selected.includes(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                const next = on ? selected.filter((x) => x !== i) : [...selected, i].sort();
+                onChange({ field: 'date_dow', op: 'in', value: next });
+              }}
+              className={cn(
+                'rounded px-2 py-0.5 text-[11px]',
+                on ? 'bg-primary text-primary-foreground' : 'bg-card border-border border',
+              )}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  if (leaf.field === 'date_dom') {
+    return (
+      <div className="grid grid-cols-[100px_1fr] gap-2">
+        <Select value={leaf.op} onValueChange={(v) => onChange({ ...leaf, op: v as 'eq' | 'gte' | 'lte' })}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="eq">=</SelectItem>
+            <SelectItem value="gte">≥</SelectItem>
+            <SelectItem value="lte">≤</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input type="number" min={1} max={31} value={Number(leaf.value)} className={inputClass}
+          onChange={(e) => onChange({ ...leaf, value: Math.max(1, Math.min(31, Number(e.target.value) || 1)) })} />
+      </div>
+    );
+  }
+  if (leaf.field === 'kind') {
+    return (
+      <Select value={String(leaf.value)} onValueChange={(v) => onChange({ field: 'kind', op: 'is', value: v as TxKind })}>
+        <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {KIND_OPTIONS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (leaf.field === 'tag_id') {
+    return (
+      <RefPicker label="tag" value={String(leaf.value)} options={tags}
+        onChange={(v) => onChange({ field: 'tag_id', op: 'has', value: v })} />
+    );
+  }
+  if (leaf.field === 'note') {
+    return (
+      <Input value={String(leaf.value)} className={inputClass}
+        onChange={(e) => onChange({ field: 'note', op: 'contains', value: e.target.value })} placeholder="text in note" />
+    );
+  }
+  return null;
+}
+
+function RefPicker({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value: string;
+  options: { id: string; name: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger size="sm" className="h-8 text-[12px]">
+        <SelectValue placeholder={`pick a ${label}`} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Action editor.
+// ---------------------------------------------------------------------------
+
+interface ActionEditorProps {
+  action: Action;
+  categories: { id: string; name: string }[];
+  counterparties: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
+  onChange: (action: Action) => void;
+  onRemove?: () => void;
+}
+
+function ActionEditor({ action, categories, counterparties, tags, onChange, onRemove }: ActionEditorProps) {
+  return (
+    <div className="bg-card border-border space-y-2 rounded-lg border p-2.5">
+      <div className="flex items-center gap-2">
+        <Select value={action.type} onValueChange={(v) => onChange(defaultAction(v as Action['type']))}>
+          <SelectTrigger size="sm" className="h-7 flex-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ACTION_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Remove action"
+            className="text-muted-foreground hover:text-foreground rounded p-1"
+          >
+            <Icon name="x" size={14} />
+          </button>
+        )}
+      </div>
+      <ActionBody action={action} onChange={onChange} categories={categories} counterparties={counterparties} tags={tags} />
+    </div>
+  );
+}
+
+function ActionBody({ action, onChange, categories, counterparties, tags }: ActionEditorProps) {
+  const inputClass = 'h-8 text-[12px]';
+  switch (action.type) {
+    case 'set_category':
+      return (
+        <RefPicker label="category" value={action.categoryId ?? ''} options={categories}
+          onChange={(v) => onChange({ type: 'set_category', categoryId: v })} />
+      );
+    case 'set_counterparty':
+      return (
+        <RefPicker label="counterparty" value={action.counterpartyId ?? ''} options={counterparties}
+          onChange={(v) => onChange({ type: 'set_counterparty', counterpartyId: v })} />
+      );
+    case 'set_merchant':
+      return (
+        <Input value={action.merchant} className={inputClass}
+          onChange={(e) => onChange({ type: 'set_merchant', merchant: e.target.value })} placeholder="canonical name" />
+      );
+    case 'set_note':
+      return (
+        <Input value={action.note} className={inputClass}
+          onChange={(e) => onChange({ type: 'set_note', note: e.target.value })} placeholder="note text" />
+      );
+    case 'set_kind':
+      return (
+        <Select value={action.kind} onValueChange={(v) => onChange({ type: 'set_kind', kind: v as TxKind })}>
+          <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {KIND_OPTIONS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
+    case 'add_tag':
+      return (
+        <RefPicker label="tag" value={action.tagId} options={tags}
+          onChange={(v) => onChange({ type: 'add_tag', tagId: v })} />
+      );
+    case 'remove_tag':
+      return (
+        <RefPicker label="tag" value={action.tagId} options={tags}
+          onChange={(v) => onChange({ type: 'remove_tag', tagId: v })} />
+      );
+    case 'mark_reviewed':
+      return <div className="text-muted-foreground text-[11px]">No parameters — the row is marked reviewed.</div>;
+    case 'split':
+      return <div className="text-muted-foreground text-[11px] italic">Splits are not yet editable in the builder; hand-craft via the API.</div>;
+  }
+}

@@ -274,6 +274,27 @@ interface FinanceState {
   setTransactionSplits: (transactionId: string, splits: TxSplitInput[]) => void;
   updateTag: (id: string, patch: { name?: string; color?: string | null }) => void;
   deleteTag: (id: string) => void;
+  createRule: (input: {
+    name?: string | null;
+    priority?: number;
+    condition: import('@/lib/rules/types').Condition;
+    actions: import('@/lib/rules/types').Action[];
+    isActive?: boolean;
+    runOnEdit?: boolean;
+    ledgerId?: string;
+  }) => string;
+  updateRule: (
+    id: string,
+    patch: {
+      name?: string | null;
+      priority?: number;
+      condition?: import('@/lib/rules/types').Condition;
+      actions?: import('@/lib/rules/types').Action[];
+      isActive?: boolean;
+      runOnEdit?: boolean;
+    },
+  ) => void;
+  deleteRule: (id: string) => void;
   createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null }) => void;
   deleteScheduled: (id: string) => void;
@@ -792,6 +813,46 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (t.tags ? { ...t, tags: t.tags.filter((x) => x !== id) } : t)),
         }));
         syncMutation('deleteTag', { id });
+      },
+
+      createRule: (input) => {
+        const id = `rule-${Date.now().toString(36)}`;
+        const ledgerId = input.ledgerId ?? 'personal';
+        const optimistic: Rule = {
+          id,
+          ledgerId,
+          name: input.name ?? null,
+          priority: input.priority ?? 100,
+          condition: input.condition,
+          actions: input.actions,
+          isActive: input.isActive !== false,
+          runOnEdit: input.runOnEdit === true,
+          lastAppliedAt: null,
+        };
+        set((s) => ({ rules: [...s.rules, optimistic] }));
+        syncMutation('createRule', {
+          id,
+          ledgerId,
+          name: input.name ?? null,
+          priority: optimistic.priority,
+          condition: input.condition,
+          actions: input.actions,
+          isActive: optimistic.isActive,
+          runOnEdit: optimistic.runOnEdit,
+        });
+        return id;
+      },
+
+      updateRule: (id, patch) => {
+        set((s) => ({
+          rules: s.rules.map((r) => (r.id === id ? { ...r, ...patch, name: patch.name ?? r.name } : r)),
+        }));
+        syncMutation('updateRule', { id, patch });
+      },
+
+      deleteRule: (id) => {
+        set((s) => ({ rules: s.rules.filter((r) => r.id !== id) }));
+        syncMutation('deleteRule', { id });
       },
 
       createScheduled: (input) => {

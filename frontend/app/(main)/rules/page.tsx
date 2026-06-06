@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
-import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
+import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { describeActions, describeCondition } from '@/lib/rules/describe';
+import { RuleBuilderSheet } from '@/components/rule-builder-sheet';
 import { cn } from '@/lib/utils';
 import type { Rule } from '@/lib/rules/types';
 
@@ -27,7 +31,36 @@ export default function RulesPage() {
   const { activeId, active } = useLedger();
   const rules = useFinanceStore((s) => s.rules);
   const txns = useFinanceStore((s) => s.transactions);
+  const updateRule = useFinanceStore((s) => s.updateRule);
+  const deleteRule = useFinanceStore((s) => s.deleteRule);
   const [openRule, setOpenRule] = useState<Rule | null>(null);
+  const [builderRule, setBuilderRule] = useState<Rule | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Rule | null>(null);
+
+  const openNewBuilder = () => {
+    setBuilderRule(null);
+    setBuilderOpen(true);
+  };
+  const openEditBuilder = (r: Rule) => {
+    setBuilderRule(r);
+    setBuilderOpen(true);
+    setOpenRule(null);
+  };
+  const closeBuilder = () => setBuilderOpen(false);
+
+  const onToggle = (r: Rule) => {
+    updateRule(r.id, { isActive: !r.isActive });
+    toast.success(`Rule ${r.name ?? r.id} ${r.isActive ? 'disabled' : 'enabled'}`);
+    setOpenRule(null);
+  };
+
+  const onDelete = (r: Rule) => {
+    deleteRule(r.id);
+    toast.success(`Rule ${r.name ?? r.id} deleted`);
+    setConfirmDelete(null);
+    setOpenRule(null);
+  };
 
   const ledgerRules = rules.filter((r) => r.ledgerId === activeId);
   // Per-rule "applied to N transactions" count from the projected store.
@@ -39,19 +72,39 @@ export default function RulesPage() {
   }
 
   return (
-    <MobilePage header={<ScreenHeader title="Rules" />}>
+    <MobilePage
+      header={
+        <ScreenHeader
+          title="Rules"
+          trailing={
+            <IconButton icon="plus" aria-label="New rule" variant="primary" onClick={openNewBuilder} />
+          }
+        />
+      }
+    >
       <div className="px-5 pb-[120px]">
-        <div className="mb-4 text-muted-foreground text-xs leading-relaxed">
-          Rules run automatically on every new transaction in <span className="text-foreground font-medium">{active.name}</span>.
-          A matching rule can set the category, add a tag, rename the merchant,
-          or split the row.
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="text-muted-foreground text-xs leading-relaxed">
+            Rules run automatically on every new transaction in <span className="text-foreground font-medium">{active.name}</span>.
+            A matching rule can set the category, add a tag, rename the merchant, or split the row.
+          </div>
+          <Button onClick={openNewBuilder} size="sm" className="hidden shrink-0 md:flex">
+            <Icon name="plus" size={14} />
+            New rule
+          </Button>
         </div>
 
         {ledgerRules.length === 0 ? (
           <EmptyState
             icon="sparkle"
             title="No rules yet"
-            description="Rules categorise repeat merchants automatically. A builder ships next; for now, rules can be staged via the lib/db/queries/rules helpers."
+            description="Rules categorise repeat merchants automatically. Tap “New rule” to set one up — start with the merchant you re-categorise most often."
+            action={
+              <Button onClick={openNewBuilder}>
+                <Icon name="plus" size={14} />
+                New rule
+              </Button>
+            }
           />
         ) : (
           <ul className="bg-card border-border divide-border divide-y rounded-xl border">
@@ -104,7 +157,36 @@ export default function RulesPage() {
         )}
       </div>
 
-      <RuleDetailSheet rule={openRule} onClose={() => setOpenRule(null)} matchCountByRule={matchCountByRule} />
+      <RuleDetailSheet
+        rule={openRule}
+        onClose={() => setOpenRule(null)}
+        matchCountByRule={matchCountByRule}
+        onEdit={openEditBuilder}
+        onToggle={onToggle}
+        onAskDelete={(r) => setConfirmDelete(r)}
+      />
+
+      <RuleBuilderSheet rule={builderRule} open={builderOpen} onClose={closeBuilder} />
+
+      <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this rule?</DialogTitle>
+            <DialogDescription>
+              The rule won&rsquo;t fire on new transactions. Existing rows it already touched
+              keep their values; the rule id stays in their <code>applied_rule_ids</code> for traceability.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={() => confirmDelete && onDelete(confirmDelete)}>
+              Delete rule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }
@@ -113,10 +195,16 @@ function RuleDetailSheet({
   rule,
   onClose,
   matchCountByRule,
+  onEdit,
+  onToggle,
+  onAskDelete,
 }: {
   rule: Rule | null;
   onClose: () => void;
   matchCountByRule: Map<string, number>;
+  onEdit: (r: Rule) => void;
+  onToggle: (r: Rule) => void;
+  onAskDelete: (r: Rule) => void;
 }) {
   return (
     <Sheet open={!!rule} onOpenChange={(o) => !o && onClose()}>
@@ -129,6 +217,18 @@ function RuleDetailSheet({
         </SheetHeader>
         {rule && (
           <div className="space-y-4 overflow-y-auto px-5 py-4 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => onEdit(rule)}>
+                <Icon name="edit" size={13} />Edit
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onToggle(rule)}>
+                <Icon name={rule.isActive ? 'x' : 'check'} size={13} />
+                {rule.isActive ? 'Disable' : 'Enable'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onAskDelete(rule)} className="text-destructive">
+                <Icon name="trash" size={13} />Delete
+              </Button>
+            </div>
             <DetailRow label="Status">
               <span className={cn('font-medium', rule.isActive ? 'text-success' : 'text-muted-foreground')}>
                 {rule.isActive ? 'Active' : 'Disabled'}

@@ -29,6 +29,13 @@ import {
   type AccountGroupPatch,
 } from './queries/accountGroups';
 import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
+import {
+  createRule as qCreateRule,
+  updateRule as qUpdateRule,
+  deleteRule as qDeleteRule,
+  type RulePatchInput,
+} from './queries/rules';
+import type { Action, Condition, NewRule } from '@/lib/rules/types';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
 import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
 import {
@@ -820,6 +827,33 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const patch = (args.patch ?? {}) as CounterpartyPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Merchant name is required');
       await qUpdateCounterparty(exec, str(args.id), patch);
+      return;
+    }
+    case 'createRule': {
+      const ledgerId = str(args.ledgerId || 'personal');
+      const condition = args.condition as Condition;
+      const actions = (Array.isArray(args.actions) ? args.actions : []) as Action[];
+      if (!condition) throw new Error('Rule condition is required');
+      const input: NewRule = {
+        ledgerId,
+        name: args.name == null ? null : str(args.name),
+        priority: args.priority != null ? Number(args.priority) : 100,
+        condition,
+        actions,
+        isActive: args.isActive !== false,
+        runOnEdit: args.runOnEdit === true,
+      };
+      const id = args.id ? str(args.id) : newId('rule');
+      await qCreateRule(exec, id, input);
+      return;
+    }
+    case 'updateRule': {
+      const patch = (args.patch ?? {}) as RulePatchInput;
+      await qUpdateRule(exec, str(args.id), patch);
+      return;
+    }
+    case 'deleteRule': {
+      await qDeleteRule(exec, str(args.id));
       return;
     }
     case 'createTag': {
