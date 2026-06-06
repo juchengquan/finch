@@ -1,6 +1,8 @@
 # Reconcile-to-statement — scoping plan
 
-Status: **planning** — no code changes yet.
+Status: **shipped** (PR #90) — guided reconcile flow + per-account checkpoint
+(`accounts.last_reconciled_at`/`_balance`) + `transactions.cleared_at`. This doc
+is kept as the design record.
 
 finch already has a blunt *adjust-to-target* tool: the "Reconcile balance"
 dialog on account detail posts a single Adjustment delta to force the balance
