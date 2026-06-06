@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -47,6 +47,45 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
   );
 }
 
+// Per-device "Include receipts in export" preference (PACK_FORMAT_PLAN §6.1).
+// Persisted to localStorage so it survives reloads on the same browser; the
+// choice isn't ledger data, mirroring the pattern saved-searches uses.
+const INCLUDE_RECEIPTS_KEY = 'finch.export.includeReceipts';
+function readIncludeReceipts(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(INCLUDE_RECEIPTS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function subscribeIncludeReceipts(cb: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === INCLUDE_RECEIPTS_KEY) cb();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+function useReceiptsPref(): [boolean, (next: boolean) => void] {
+  const value = useSyncExternalStore(
+    subscribeIncludeReceipts,
+    readIncludeReceipts,
+    () => false, // SSR snapshot
+  );
+  const set = useCallback((next: boolean) => {
+    try {
+      window.localStorage.setItem(INCLUDE_RECEIPTS_KEY, next ? '1' : '0');
+    } catch {
+      // localStorage unavailable / quota — fall back to no-op
+    }
+    // Same-tab updates: 'storage' fires only across tabs, so dispatch
+    // manually for the current tab.
+    window.dispatchEvent(new StorageEvent('storage', { key: INCLUDE_RECEIPTS_KEY }));
+  }, []);
+  return [value, set];
+}
+
 export default function AccountSettingsPage() {
   const reset = useFinanceStore((s) => s.reset);
   const backup = useBackup();
@@ -54,6 +93,10 @@ export default function AccountSettingsPage() {
   const [pendingFile, setPendingFile] = useState<{ file: File; metadata: DbMetadataView } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
   const [busy, setBusy] = useState(false);
+  // Per-device preference for the export format. Persisted via localStorage
+  // so it survives reloads on the same browser; the choice isn't ledger data
+  // and doesn't belong in the DB. PACK_FORMAT_PLAN §6.1.
+  const [includeReceipts, setIncludeReceipts] = useReceiptsPref();
 
   const onFilePicked = async (file: File) => {
     if (!file) return;
@@ -219,9 +262,24 @@ export default function AccountSettingsPage() {
           </span>
         </Row>
         <Row icon="download" label="Export a copy">
-          <Button variant="outline" size="sm" onClick={() => void backup.download()}>
-            Download .db
-          </Button>
+          <div className="flex flex-col items-end gap-1.5">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+              <input
+                type="checkbox"
+                checked={includeReceipts}
+                onChange={(e) => setIncludeReceipts(e.target.checked)}
+                className="accent-primary size-3.5"
+              />
+              <span className="text-muted-foreground">Include receipts (.finch)</span>
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void backup.download({ withAttachments: includeReceipts })}
+            >
+              {includeReceipts ? 'Download .finch' : 'Download .db'}
+            </Button>
+          </div>
         </Row>
         <Row icon="doc" label="Export transactions">
           <Button variant="outline" size="sm" onClick={() => void backup.downloadCsv()}>
@@ -232,7 +290,7 @@ export default function AccountSettingsPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".sqlite3,.db,application/x-sqlite3"
+            accept=".sqlite3,.db,.finch,.zip,application/x-sqlite3,application/zip"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
