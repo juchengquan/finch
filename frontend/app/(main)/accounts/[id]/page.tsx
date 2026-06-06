@@ -39,6 +39,7 @@ import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
 import { AccountHoldings } from '@/components/account-holdings';
 import { AccountForecast } from '@/components/account-forecast';
+import { ReconcileStatus } from '@/components/reconcile-status';
 import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
@@ -248,10 +249,13 @@ export default function AccountDetailPage() {
           )}
         </div>
 
-        <div className="mb-4 flex items-center justify-end">
-          <Button variant="outline" size="sm" onClick={openAdjust}>
-            <Icon name="edit" size={13} />Adjust balance
-          </Button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          {row && <ReconcileStatus account={row} />}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={openAdjust}>
+              <Icon name="edit" size={13} />Adjust balance
+            </Button>
+          </div>
         </div>
 
         {toConfirm.length > 0 && (
