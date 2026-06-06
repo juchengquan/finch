@@ -23,7 +23,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",

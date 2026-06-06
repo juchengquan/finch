@@ -1,30 +1,13 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
+import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
-import { seedDatabase } from '@/lib/db/seed';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
 import { convertToBase } from '@/lib/db/queries/rates';
+import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
-async function seeded(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
-  await seedDatabase(exec);
-  return exec;
-}
+const seeded = async (): Promise<Exec> => (await seededDb()).exec;
 
 const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);

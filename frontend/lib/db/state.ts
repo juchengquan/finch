@@ -1,16 +1,12 @@
 // The persistence bridge between the Zustand store and the relational SQLite
 // database. The store stays the in-memory working model; the database is its
-// persisted, queryable form. `serializeState` writes the store into a fresh
-// relational DB and exports the bytes (for OPFS/file); `deserializeState`
-// reads those bytes back into the store shape.
+// persisted, queryable form.
 //
 // Reference entities (ledgers/accounts/categories/…) come from the static seed;
 // the store's transactions become real rows; the remaining store slices
 // (pending/recurring/overrides) live in the transitional `app_state` table
 // until their own phase migrates them to real tables.
 
-import { getSqlite3, execFor, type OO1DB } from './sqlite';
-import { applySchema, migrate } from './schema';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import { rowToTx } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
@@ -136,41 +132,3 @@ async function readDisplayCurrencyByLedger(exec: Exec): Promise<Record<string, s
   }
 }
 
-/** Serialise store state into portable relational `.db` bytes. */
-export async function serializeState(state: PersistState): Promise<Uint8Array> {
-  const sqlite3 = await getSqlite3();
-  const db = new sqlite3.oo1.DB(':memory:') as unknown as OO1DB;
-  try {
-    const exec = execFor(db);
-    await applySchema(exec);
-    await buildState(exec, state);
-    await migrate(exec, { fresh: true }); // current schema → just stamp the version
-    return sqlite3.capi.sqlite3_js_db_export(db as never);
-  } finally {
-    db.close();
-  }
-}
-
-/** Parse relational `.db` bytes back into store state. */
-export async function deserializeState(bytes: Uint8Array): Promise<ProjectedState> {
-  const sqlite3 = await getSqlite3();
-  const db = new sqlite3.oo1.DB() as unknown as OO1DB;
-  try {
-    const p = sqlite3.wasm.allocFromTypedArray(bytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      db.pointer!,
-      'main',
-      p,
-      bytes.length,
-      bytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    if (rc) throw new Error(`Could not read database (code ${rc})`);
-    const exec = execFor(db);
-    await applySchema(exec); // ensure newer objects exist on older files
-    await migrate(exec, { fresh: false }); // bring older exports up to the current columns
-    return await projectState(exec);
-  } finally {
-    db.close();
-  }
-}

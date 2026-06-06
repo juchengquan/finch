@@ -1,30 +1,7 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from '@/lib/db/test-utils';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
-async function makeExec(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  return async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-}
-
-async function seeded(): Promise<Exec> {
-  const exec = await makeExec();
-  await applySchema(exec);
-  await seedDatabase(exec);
-  return exec;
-}
+const seeded = async () => (await seededDb()).exec;
 
 const num = (rows: Record<string, unknown>[], key = 'n') => Number(rows[0]?.[key] ?? 0);
 

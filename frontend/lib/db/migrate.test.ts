@@ -1,22 +1,9 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
 import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
+import { bareDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
-async function db(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const d = new sqlite3.oo1.DB(':memory:');
-  return async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    d.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-}
+const db = async (): Promise<Exec> => (await bareDb()).exec;
 
 const cols = async (exec: Exec, table: string) =>
   (await exec(`PRAGMA table_info(${table})`)).map((r) => String(r.name));

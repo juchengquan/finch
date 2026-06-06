@@ -82,8 +82,28 @@ export function _resetServerDbForTests(): void {
   _db = null;
 }
 
+// Best-effort graceful-shutdown checkpoint. SQLite auto-checkpoints when the
+// WAL grows past ~1000 pages (~4 MB), so the only thing this catches is the
+// "process killed before the next auto-checkpoint" case — small but worth a
+// few lines. Registered once per process; subsequent module reloads (Next.js
+// dev) re-install the handler, so we tag it on globalThis to dedupe.
+const SHUTDOWN_FLAG = Symbol.for('finch.db.shutdownRegistered');
+function registerShutdownCheckpoint(): void {
+  const g = globalThis as Record<symbol, unknown>;
+  if (g[SHUTDOWN_FLAG]) return;
+  g[SHUTDOWN_FLAG] = true;
+  const onExit = () => {
+    void closeLiveDb();
+  };
+  process.once('SIGTERM', onExit);
+  process.once('SIGINT', onExit);
+  process.once('beforeExit', onExit);
+}
+registerShutdownCheckpoint();
+
 /** Close the live connection (best-effort checkpoint first) and forget the
- *  cached promise. Used by import/restore before file-swapping. */
+ *  cached promise. Used by import/restore before file-swapping, and by the
+ *  shutdown hook above. */
 async function closeLiveDb(): Promise<void> {
   if (!_db) return;
   const cached = _db;

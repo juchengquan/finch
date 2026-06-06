@@ -51,15 +51,26 @@ export function driverName(): 'bun:sqlite' | 'better-sqlite3' {
     : 'better-sqlite3';
 }
 
+/** Strip string literals, line comments, and block comments before checking
+ *  for "real" semicolons. Without this, a SQL like
+ *  `GROUP_CONCAT(name, '; ')` would look multi-statement to a naive regex. */
+function looksMultiStatement(sql: string): boolean {
+  const stripped = sql
+    .replace(/'(?:[^']|'')*'/g, '') // single-quoted strings; SQLite escapes ' as ''
+    .replace(/--[^\n]*/g, '') // line comments
+    .replace(/\/\*[\s\S]*?\*\//g, ''); // block comments
+  // A real terminator followed by more non-whitespace content = multi-statement.
+  return /;\s*\S/.test(stripped);
+}
+
 /** Wrap the sync driver in the async `Exec` shape the existing query layer
- *  uses. The shim routes a query SQL (SELECT / PRAGMA / EXPLAIN / WITH …
- *  SELECT) through `.all()` and everything else through `.run()` — both
- *  engines speak this dialect. Multi-statement schema strings (the canonical
- *  `SCHEMA`) skip prepare entirely via the engine's `exec(sql)` batch path. */
+ *  uses. Routes single-statement SQL through `prepare` (query → `.all()`,
+ *  write → `.run()`); multi-statement schema strings (only the canonical
+ *  `SCHEMA` string and the PRAGMA bootstrap qualify) take the engine's
+ *  `db.exec(sql)` batch path. */
 export function execFor(db: SqliteDriver): Exec {
   return async (sql: string, bind?: SqlBind) => {
-    const looksMulti = (!bind || bind.length === 0) && /;\s*[^\s;]/.test(sql);
-    if (looksMulti) {
+    if ((!bind || bind.length === 0) && looksMultiStatement(sql)) {
       db.exec(sql);
       return [];
     }
@@ -67,7 +78,8 @@ export function execFor(db: SqliteDriver): Exec {
     const args = (bind ?? []) as unknown[];
     // Heuristic: anything starting with SELECT / PRAGMA / EXPLAIN / WITH …
     // returns rows. better-sqlite3's `.all()` throws on writer statements;
-    // bun:sqlite's `.all()` returns []. Using the heuristic keeps both happy.
+    // bun:sqlite's `.all()` returns []. Branching on the SQL prefix keeps
+    // both engines happy.
     if (/^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(sql)) {
       return stmt.all(...args) as Row[];
     }
