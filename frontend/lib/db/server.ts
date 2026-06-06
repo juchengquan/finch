@@ -432,3 +432,102 @@ export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: st
     await removeSidecars(tmp).catch(() => {});
   }
 }
+
+/**
+ * Export the server DB + every receipt attachment as a single `.finch` pack
+ * (PACK_FORMAT_PLAN §4). The DB snapshot uses the same VACUUM INTO + stamp
+ * dance as exportDbBytes; the attachment list is read from the **clone** so
+ * the pack is internally consistent (no row references a file we didn't
+ * include, no included file lacks a row).
+ */
+export async function exportPackBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
+  const { listAttachmentFiles } = await import('./queries/attachments');
+  const { resolveAttachmentPath } = await import('./paths');
+  const { buildPack } = await import('./pack');
+  const { SCHEMA_VERSION } = await import('./schema');
+
+  const db = await getServerDb();
+  const tmp = path.join(os.tmpdir(), `finch-export-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`);
+  db.driver.prepare('VACUUM INTO ?').run(tmp);
+  try {
+    let attachmentRows: { id: string; relPath: string }[] = [];
+    let rowCountsOut: Record<string, number> = {};
+
+    const clone = await openDb(tmp);
+    try {
+      applyPragmaBootstrap(clone);
+      const cloneExec = execFor(clone);
+      rowCountsOut = await rowCounts(cloneExec);
+      const checksum = await computeChecksum(cloneExec);
+      await stampExport(cloneExec, {
+        exportedAt: new Date().toISOString(),
+        exportedFrom: includeHostname() ? os.hostname() : null,
+        rowCounts: rowCountsOut,
+        checksum,
+      });
+      // Pull attachment pointers from the clone so the pack is consistent
+      // with the DB snapshot it ships with.
+      const files = await listAttachmentFiles(cloneExec);
+      attachmentRows = files.map((f) => ({ id: f.id, relPath: f.relPath }));
+      clone.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } finally {
+      clone.close();
+    }
+    const dbBytes = new Uint8Array(await fs.readFile(tmp));
+
+    // Resolve each attachment to its absolute disk path under FINCH_DB_DIR.
+    // resolveAttachmentPath refuses anything that escapes the attachments
+    // root, so a malformed rel_path can't redirect the pack to read elsewhere.
+    const attachmentFiles: { id: string; relPath: string; absPath: string }[] = [];
+    for (const att of attachmentRows) {
+      const abs = resolveAttachmentPath(att.relPath);
+      if (!abs) {
+        // Defensive: skip rather than throw — the row points outside the
+        // attachments root, which would have to be tampering at the DB level.
+        console.warn(`exportPackBytes: skipping bad rel_path ${att.relPath}`);
+        continue;
+      }
+      // Skip rows whose file is missing on disk (rare crash window where the
+      // DB outlived the file). The receiver would reject the pack on sha256
+      // mismatch anyway; better to omit cleanly.
+      try {
+        await fs.access(abs);
+      } catch {
+        console.warn(`exportPackBytes: skipping missing file ${att.relPath}`);
+        continue;
+      }
+      attachmentFiles.push({ id: att.id, relPath: att.relPath, absPath: abs });
+    }
+
+    const appVersion = await readAppVersion();
+    const built = await buildPack({
+      dbBytes,
+      attachmentFiles,
+      meta: {
+        appVersion,
+        schemaVersion: SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        exportedFrom: includeHostname()
+          ? { device: 'web', device_name: os.hostname() }
+          : { device: 'web' },
+        rowCounts: rowCountsOut,
+      },
+    });
+
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
+    return { bytes: built.bytes, filename: `finch-${ts}.finch` };
+  } finally {
+    await fs.unlink(tmp).catch(() => {});
+    await removeSidecars(tmp).catch(() => {});
+  }
+}
+
+async function readAppVersion(): Promise<string> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pkg = require('@/package.json') as { version?: string };
+    return String(pkg.version ?? '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
