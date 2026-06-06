@@ -64,6 +64,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     ]);
   const mobileTabIds = await readMobileTabIds(exec);
   const displayCurrencyByLedger = await readDisplayCurrencyByLedger(exec);
+  const backupConfig = await readBackupConfig(exec);
   const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
   // Cache canonical merchant names by counterparty id so renames on the
   // catalog follow history without touching `transactions.description`.
@@ -103,6 +104,7 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
     attachments,
     mobileTabIds,
     displayCurrencyByLedger,
+    backupConfig,
   };
 }
 
@@ -138,3 +140,41 @@ async function readDisplayCurrencyByLedger(exec: Exec): Promise<Record<string, s
   }
 }
 
+
+// Per-DB backup config. Persisted as JSON under app_state['backupConfig'] so
+// it travels with the database (a .finch pack carries it; restoring on
+// another device keeps the user's preferences). Defaults reflect the
+// pre-PR behaviour (one auto-backup per hour; keep the latest 14). Env vars
+// FINCH_BACKUP_MIN_INTERVAL_MS / FINCH_BACKUP_KEEP act as fallback defaults
+// only when the user hasn't picked anything.
+export interface BackupConfigSlice {
+  /** Minimum ms between auto-backups. 0 = on every change; -1 = off
+   *  (auto-backup disabled; user can still hit Backup now). */
+  frequencyMs: number;
+  /** Maximum number of backups kept on disk. */
+  retention: number;
+}
+
+export const BACKUP_CONFIG_DEFAULTS: BackupConfigSlice = {
+  frequencyMs: 60 * 60 * 1000, // 1h
+  retention: 14,
+};
+
+async function readBackupConfig(exec: Exec): Promise<BackupConfigSlice> {
+  const raw = await getAppState(exec, 'backupConfig');
+  if (!raw) return { ...BACKUP_CONFIG_DEFAULTS };
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ...BACKUP_CONFIG_DEFAULTS };
+    }
+    const freq = Number((parsed as { frequencyMs?: unknown }).frequencyMs);
+    const ret = Number((parsed as { retention?: unknown }).retention);
+    return {
+      frequencyMs: Number.isFinite(freq) ? Math.trunc(freq) : BACKUP_CONFIG_DEFAULTS.frequencyMs,
+      retention: Number.isFinite(ret) && ret > 0 ? Math.trunc(ret) : BACKUP_CONFIG_DEFAULTS.retention,
+    };
+  } catch {
+    return { ...BACKUP_CONFIG_DEFAULTS };
+  }
+}
