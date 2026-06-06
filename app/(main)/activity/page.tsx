@@ -48,10 +48,14 @@ export default function ActivityPage() {
   const [maxAmt, setMaxAmt] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
+  // Review-triage filter: when on, the list narrows to unreviewed confirmed
+  // rows so Activity becomes a "what still needs a look" queue.
+  const [reviewOnly, setReviewOnly] = useState(false);
   const allTxns = useFinanceStore((s) => s.transactions);
   const allTags = useFinanceStore((s) => s.tags);
   const allCategories = useFinanceStore((s) => s.categories);
   const bulkRecategorize = useFinanceStore((s) => s.bulkRecategorize);
+  const markAllReviewed = useFinanceStore((s) => s.markAllReviewed);
   const { searches: savedSearches, save: saveSearch, remove: deleteSavedSearch } = useSavedSearches();
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
@@ -103,8 +107,16 @@ export default function ActivityPage() {
     if (toDate && t.date > toDate) return false;
     if (minA != null && Number.isFinite(minA) && Math.abs(t.amount) < minA) return false;
     if (maxA != null && Number.isFinite(maxA) && Math.abs(t.amount) > maxA) return false;
+    if (reviewOnly && (t.pending || t.reviewedAt)) return false;
     return true;
   });
+
+  // Count of unreviewed confirmed rows in the active ledger — drives the
+  // "Needs review" toggle badge + the empty-queue celebration.
+  const unreviewedCount = allTxns.reduce(
+    (n, t) => n + ((t.ledgerId ?? 'personal') === activeId && !t.pending && !t.reviewedAt ? 1 : 0),
+    0,
+  );
 
   const clearRangeFilters = () => {
     setFromDate('');
@@ -235,7 +247,44 @@ export default function ActivityPage() {
             <Icon name={selectMode ? 'x' : 'check'} size={13} />
             {selectMode ? 'Cancel' : 'Select'}
           </button>
+          <button
+            type="button"
+            onClick={() => setReviewOnly((v) => !v)}
+            aria-label="Show only transactions that need review"
+            aria-pressed={reviewOnly}
+            className={cn(
+              'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
+              reviewOnly ? 'border-primary text-primary' : 'text-muted-foreground',
+            )}
+          >
+            <Icon name="doc" size={13} />
+            Needs review{unreviewedCount > 0 ? ` · ${unreviewedCount}` : ''}
+          </button>
         </div>
+
+        {reviewOnly && unreviewedCount > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <span className="text-muted-foreground text-[11px]">
+              {unreviewedCount} transaction{unreviewedCount === 1 ? '' : 's'} to review
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                markAllReviewed(activeId);
+                toast.success(`Marked ${unreviewedCount} reviewed`);
+              }}
+              className="text-primary text-[11px] font-medium underline-offset-2 hover:underline"
+            >
+              Mark all reviewed
+            </button>
+          </div>
+        )}
+        {reviewOnly && unreviewedCount === 0 && (
+          <div className="text-muted-foreground mb-4 flex items-center gap-1.5 text-[12px]">
+            <Icon name="check" size={13} className="text-success" />
+            All caught up — nothing to review.
+          </div>
+        )}
 
         {ledgerSearches.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -386,6 +435,13 @@ export default function ActivityPage() {
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
+                          {!selectMode && !t.pending && !t.reviewedAt && (
+                            <span
+                              className="bg-primary/70 size-1.5 shrink-0 rounded-full"
+                              aria-label="Needs review"
+                              title="Needs review"
+                            />
+                          )}
                           <span className="truncate text-sm font-medium">{t.merchant}</span>
                           {t.kind === 'refund' && <RefundBadge />}
                           {(() => {

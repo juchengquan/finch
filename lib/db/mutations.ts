@@ -467,6 +467,31 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       );
       return;
     }
+    case 'setReviewed': {
+      // Toggle a single transaction's review-triage flag. One UPDATE, no
+      // recompute — review status doesn't affect balances or spend.
+      const id = str(args.id);
+      const reviewed = args.reviewed === true;
+      await exec(
+        reviewed
+          ? "UPDATE transactions SET reviewed_at = datetime('now') WHERE id = ?"
+          : 'UPDATE transactions SET reviewed_at = NULL WHERE id = ?',
+        [id],
+      );
+      return;
+    }
+    case 'markAllReviewed': {
+      // Bulk-clear the review queue for a ledger (optionally scoped to one
+      // account). Marks every currently-unreviewed confirmed row reviewed.
+      const ledgerId = str(args.ledgerId || 'personal');
+      const accountId = args.accountId ? str(args.accountId) : null;
+      const where = accountId
+        ? 'ledger_id = ? AND account_id = ? AND reviewed_at IS NULL'
+        : 'ledger_id = ? AND reviewed_at IS NULL';
+      const bind = accountId ? [ledgerId, accountId] : [ledgerId];
+      await exec(`UPDATE transactions SET reviewed_at = datetime('now') WHERE ${where}`, bind);
+      return;
+    }
     case 'reconcileAccount': {
       // Stamp the reconcile checkpoint on the account; optionally post an
       // Adjustment for the remaining gap so the cleared balance lands exactly
@@ -925,6 +950,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         }
         if (patch.note !== undefined) { sets.push('notes = ?'); bind.push(patch.note); }
         if (patch.kind !== undefined) { sets.push('kind = ?'); bind.push(patch.kind); }
+        if (patch.reviewed) { sets.push("reviewed_at = datetime('now')"); }
 
         // Merge applied_rule_ids — preserve the previous list (audit trail);
         // append the rule id if it's not already there.
