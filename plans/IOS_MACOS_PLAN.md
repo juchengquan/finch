@@ -241,11 +241,20 @@ independently-testable pure function:
 > (the "finch-core" of §4.4), not inlined into views — so the parity test
 > suite (§12) can verify them against the TS originals.
 
-### 2.5 Receipt attachments + the `.finch` pack format (designed now)
+### 2.5 Receipt attachments + the `.finch` pack format (designed here; ✅ shipped on the web)
 
-The web app sketched receipt photos but never built them; this document
-**decides the shape now** so both apps + the file-pack sync model (§4.3)
-inherit a consistent structure from day one.
+> **Status update (post-PR #106, #107):** the design below was implemented
+> end-to-end on the **web app** — the `transaction_attachments` table, the
+> on-disk layout, and the `.finch` pack format with manifest validation
+> and atomic swap all match this section verbatim. Native apps inherit
+> the schema as-designed; the web-side implementation is the *canonical
+> reference* for shape (see `frontend/lib/db/schema.ts`,
+> `frontend/lib/db/pack.ts`, `frontend/lib/db/paths.ts`). Companion design
+> records: `plans/done/RECEIPT_PHOTOS_PLAN.md`, `plans/done/PACK_FORMAT_PLAN.md`.
+
+This section originally **decided the shape** so both apps + the file-pack
+sync model (§4.3) would inherit a consistent structure from day one. The
+web has now adopted it; native must match.
 
 **Key rule, called out emphatically: photos and PDFs are NEVER stored as
 blobs inside the SQLite file.** The DB stores **pointers** (relative path +
@@ -686,16 +695,21 @@ finch already computes, so the data work is mostly done.
   `lib/db/schema.ts` with a coordinated migration so packs round-trip
   unchanged between web and native.
 - **Cross-app implications for the web app.** Shipping this native plan
-  forces three coordinated web-app changes so the apps stay file-
-  compatible. These are tracked as separate web-app tasks but are
-  required for true interop:
-  1. **Add the `transaction_attachments` table** + a server-side
-     attachments directory (§2.5).
-  2. **Add ledger CRUD** to the web app (it currently ships with 4 seeded
-     ledgers and has no create/rename/delete mutation; decision §14).
-  3. **Teach `/api/export` and `/api/import` the `.finch` pack format**
-     (currently raw `.db` only) so the web app can read packs the native
-     apps write and vice-versa.
+  required three coordinated web-app changes so the apps stay file-
+  compatible. **Two are now shipped; one remains open.**
+  1. ✅ **Add the `transaction_attachments` table** + a server-side
+     attachments directory (§2.5) — **shipped via PR #106**
+     (`plans/done/RECEIPT_PHOTOS_PLAN.md`). Schema in
+     `frontend/lib/db/schema.ts`; resolved on-disk under `FINCH_DB_DIR`
+     via `frontend/lib/db/paths.ts`.
+  2. ⏳ **Add ledger CRUD** to the web app (currently 4 seeded ledgers, no
+     create/rename/delete mutation; decision §14). **Still open** — the
+     last cross-app implication; tracked as MASTER_PLAN open item.
+  3. ✅ **Teach `/api/export` and `/api/import` the `.finch` pack format**
+     (formerly raw `.db` only) — **shipped via PR #107**
+     (`plans/done/PACK_FORMAT_PLAN.md`). `GET /api/export?withAttachments=1`
+     emits a pack; `POST /api/import` magic-byte-routes packs vs bare DBs.
+     End-to-end byte-identical round-trip verified.
 
 ---
 
@@ -795,10 +809,15 @@ Milestones as coherent slices, each independently shippable:
    merchants/categories/tags admin, saved searches, bulk recategorise,
    FX/base tools.
 5. **Pack engine + iCloud Drive sync (§4.3, §2.5.3).** Implement the
-   `.finch` pack format end-to-end: build, validate, atomic swap, debounced
-   auto-pack, manual "Sync now," conflict-copy UX. The web app catches up on
-   the cross-app implications in §8 (pack support + attachments + ledger CRUD)
-   in the same phase so the apps stay file-compatible.
+   `.finch` pack format end-to-end on the native side: build, validate,
+   atomic swap, debounced auto-pack, manual "Sync now," conflict-copy UX.
+   **Web-side progress (2026-06-06):** the pack format itself + receipt
+   attachments shipped (PRs #106, #107); the on-disk shape and the
+   manifest contract are now the canonical reference for native to
+   match. Cross-app implications §8: 2 of 3 done (attachments + pack
+   format); **ledger CRUD on the web is the last remaining piece** and
+   should be picked up before or alongside this phase so native-created
+   ledgers round-trip cleanly.
 6. **Native upside — part 1 (§7).** App Intents/Siri, Share-Extension
    receipts (depends on §2.5 + phase 5), Spotlight, notifications, biometric
    lock.
@@ -823,6 +842,11 @@ language. Each points at the sections of the doc that now reflect it.
    validates it and unpacks. iCloud is used purely as a dumb file mover.
    Conflicts are last-writer-wins at the pack level (iCloud keeps a conflict
    copy if both devices wrote offline). → §4.3, §8, §9, §2.5.3.
+   **Pack format itself: ✅ shipped on the web (PR #107)** — the native
+   app reuses the same format end-to-end (build, parse, atomic-swap, manifest
+   schema, sha256 integrity). What remains for native is the **iCloud Drive
+   *delivery* layer** (the auto-pack debounce + folder-watcher + conflict-
+   copy UX). Reference implementation: `frontend/lib/db/pack.ts`.
 
 2. **Plain font, no editorial serif in v1.** Use the system sans-serif on
    Apple platforms (matching the live web look). Numerals tabular, Dynamic
@@ -840,7 +864,11 @@ language. Each points at the sections of the doc that now reflect it.
    PDFs live under `attachments/<transaction_id>/<attachment_id>.<ext>` and
    travel alongside the DB inside every `.finch` pack. This table is added
    to the shared schema so both apps adopt it together. → §2.5 (whole
-   subsection), §3 row 40, §8 cross-app implications.
+   subsection), §3 row 40, §8 cross-app implications. **✅ Shipped on the
+   web (PR #106)** — schema, upload + serve routes, EXIF-strip + HEIC→JPEG
+   transcode pipeline, transaction-detail UI + lightbox all live. Native
+   adopts the schema verbatim; the file pipeline (Share Extension intake +
+   PhotosPicker on iOS) is the part native still needs to build.
 
 5. **OS floor: iOS 26 / iPadOS 26 / macOS 26.** A modern floor lets the app
    use Swift Charts, App Intents, `@Observable`, `NavigationSplitView`, and
@@ -922,10 +950,11 @@ during the relevant phase.
   `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`; budgets
   `frontend/lib/budgets/*`; tokens `frontend/app/globals.css`; design intent
   `plans/frontend_design/`.
-- **Related plans:** `MASTER_PLAN.md` (what shipped); `RECEIPT_PHOTOS_PLAN.md`
-  (the web-side implementation of attachments built on §2.5 of this brief);
-  `PWA_PLAN.md` (superseded by §1.1 of this brief, kept as a fork-in-the-road
-  record); `FEATURE_IDEAS.md` / `INSPIRATION_IDEAS.md` (idea catalogs); and
-  the shipped design records in `plans/done/` —
+- **Related plans:** `MASTER_PLAN.md` (what shipped); `PWA_PLAN.md`
+  (superseded by §1.1 of this brief, kept as a fork-in-the-road record);
+  `FEATURE_IDEAS.md` / `INSPIRATION_IDEAS.md` (idea catalogs); and the
+  shipped design records in `plans/done/` —
+  `done/RECEIPT_PHOTOS_PLAN.md` (web-side attachments built on §2.5 of
+  this brief), `done/PACK_FORMAT_PLAN.md` (web-side `.finch` export/import),
   `done/RECONCILE_PLAN.md`, `done/RULES_ENGINE_PLAN.md`,
   `done/FILE_BACKED_DB_PLAN.md`.

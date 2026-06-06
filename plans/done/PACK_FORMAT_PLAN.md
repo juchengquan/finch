@@ -1,6 +1,13 @@
 # `.finch` pack format — scoping plan
 
-Status: **planning** — no code changes yet.
+Status: **shipped** (PR #107, 2026-06-06). This doc is kept as the design
+record. Every section below was implemented as designed; an end-to-end
+smoke confirmed byte-identical round-trip (`MASTER_PLAN.md` "Done since
+(post-PR-#82)").
+
+Companion plan: `plans/done/RECEIPT_PHOTOS_PLAN.md` (PR #106). Packs
+carry the attachments that work introduced — both apps adopt the same
+on-disk shape and the same pack manifest.
 
 > Cross-platform file-portability unit for finch: a single zip carrying the
 > SQLite database, its attachments folder, and a self-describing manifest.
