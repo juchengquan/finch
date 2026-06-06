@@ -189,6 +189,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- the engine skips rows it already generated (e.g. a rule's auto-transfer
   -- output must not itself trigger rules). null = the engine never touched it.
   applied_rule_ids   TEXT,
+  -- Review triage flag (INSPIRATION_IDEAS section 5.1). Timestamp set when the
+  -- user marks the row reviewed; null = needs review. Independent of status
+  -- and cleared_at: "I've looked at this and it's correct" is a different
+  -- question from "this is confirmed" or "this is on a statement". A new row
+  -- starts unreviewed unless a rule's mark_reviewed action clears it at insert.
+  reviewed_at        TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
 );
@@ -517,7 +523,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-09T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-10T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -645,6 +651,11 @@ const MIGRATIONS: Record<string, string[]> = {
        GROUP BY ledger_id, name, frequency, start_date
      )`,
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_unique ON budgets(ledger_id, name, frequency, start_date)',
+  ],
+  // Review triage flag (INSPIRATION_IDEAS section 5.1). One additive column;
+  // idempotent ADD COLUMN under the isAlreadyAppliedError swallow rule.
+  '2026-06-10T00:00:00Z': [
+    'ALTER TABLE transactions ADD COLUMN reviewed_at TEXT',
   ],
 };
 

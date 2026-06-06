@@ -1101,6 +1101,36 @@ test('setCleared toggles cleared_at and is independent of status', async () => {
   expect(status).toBe('confirmed'); // unaffected by setCleared
 });
 
+test('setReviewed toggles reviewed_at; markAllReviewed clears the ledger queue', async () => {
+  const exec = await seeded();
+  const [row] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' LIMIT 1");
+  const id = String(row.id);
+  // Seed rows start unreviewed.
+  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
+
+  await applyMutation(exec, 'setReviewed', { id, reviewed: true });
+  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).not.toBeNull();
+
+  await applyMutation(exec, 'setReviewed', { id, reviewed: false });
+  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
+
+  // markAllReviewed clears every unreviewed confirmed personal row.
+  const before = Number(
+    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL"))[0].n,
+  );
+  expect(before).toBeGreaterThan(0);
+  await applyMutation(exec, 'markAllReviewed', { ledgerId: 'personal' });
+  const after = Number(
+    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL"))[0].n,
+  );
+  expect(after).toBe(0);
+  // The family ledger is untouched (scope respected).
+  const family = Number(
+    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'family' AND reviewed_at IS NOT NULL"))[0].n,
+  );
+  expect(family).toBe(0);
+});
+
 test('reconcileAccount stamps the checkpoint without an adjustment when none is asked', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'reconcileAccount', {

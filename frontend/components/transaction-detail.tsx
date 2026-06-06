@@ -458,6 +458,7 @@ export function TransactionDetail({
   const tx = allTxns.find((t) => t.id === txId);
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const deleteTransaction = useFinanceStore((s) => s.deleteTransaction);
+  const setReviewed = useFinanceStore((s) => s.setReviewed);
   const storeCats = useFinanceStore((s) => s.categories);
   const rules = useFinanceStore((s) => s.rules);
   // Inline "create rule" prompt: after the user manually picks a new
@@ -713,6 +714,28 @@ export function TransactionDetail({
             <span>{r.v}</span>
           </div>
         ))}
+        {!tx.pending && (
+          <div className="border-border flex items-center justify-between border-t-[0.5px] py-3 text-[13px]">
+            <span className="text-muted-foreground">Review</span>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !tx.reviewedAt;
+                setReviewed(tx.id, next);
+                toast.success(next ? 'Marked reviewed' : 'Marked needs-review');
+              }}
+              className={cn(
+                'focus-ring inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium outline-none',
+                tx.reviewedAt
+                  ? 'bg-success/10 text-success'
+                  : 'bg-secondary text-muted-foreground',
+              )}
+            >
+              <Icon name={tx.reviewedAt ? 'check' : 'doc'} size={12} />
+              {tx.reviewedAt ? 'Reviewed' : 'Needs review'}
+            </button>
+          </div>
+        )}
       </div>
 
       {splits.length > 0 && (

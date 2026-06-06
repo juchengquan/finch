@@ -91,6 +91,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
     clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
     appliedRuleIds: parseRuleIds(r.applied_rule_ids),
+    reviewedAt: r.reviewed_at == null ? null : String(r.reviewed_at),
   };
 }
 
@@ -315,13 +316,16 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
   }
 
   const confirmedAt = status === 'confirmed' ? ts : null;
+  // A rule's mark_reviewed action stamps the row reviewed at insert; otherwise
+  // a new row starts unreviewed (null).
+  const reviewedAt = patch?.reviewed ? ts : null;
 
   await exec(
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
        description,category_id,counterparty_id,transfer_group_id,refunded_transaction_id,
-       kind,status,confirmed_at,currency,notes,source_template_id,applied_rule_ids,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       kind,status,confirmed_at,currency,notes,source_template_id,applied_rule_ids,reviewed_at,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, row.ledgerId, row.accountId, row.date, row.time ?? null,
       row.amount, amountBase, exchangeRate,
@@ -330,6 +334,7 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
       kind, status, confirmedAt,
       currency, notes, row.sourceTemplateId ?? null,
       appliedRuleIds ? JSON.stringify(appliedRuleIds) : null,
+      reviewedAt,
       ts, ts,
     ],
   );
@@ -382,9 +387,8 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
         );
       }
     }
-    // patch.reviewed is silently dropped — there's no `reviewed_at` column
-    // yet (it'll land with INSPIRATION_IDEAS §5.1 reviewed/unreviewed status).
-    // tagIdsRemove is also dropped: a fresh row has no tags to remove.
+    // patch.reviewed is applied above via reviewed_at on the INSERT itself.
+    // tagIdsRemove is dropped here: a fresh row has no tags to remove.
   }
 
   return id;
