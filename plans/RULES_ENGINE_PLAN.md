@@ -1,6 +1,7 @@
 # Conditional rules engine — scoping plan
 
-Status: **planning** — no code changes yet.
+Status: **shipped** (PRs #91, #94) — `rules` table + types + query layer, and the
+engine hooked into `insertTxRow`. This doc is kept as the design record.
 
 Today finch has two narrow categorisation aids: the **counterparty FK + verify**
 loop on Pending (a rename) and the **local-heuristic category suggestion** on
