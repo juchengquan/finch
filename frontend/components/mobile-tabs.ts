@@ -17,7 +17,6 @@ export const MAIN_TAB_CATALOG: MainTab[] = [
   { id: 'budgets', icon: 'target', label: 'Budgets', path: '/budgets' },
   { id: 'scheduled', icon: 'calendar', label: 'Scheduled', path: '/scheduled' },
   { id: 'insights', icon: 'chart', label: 'Insights', path: '/insights' },
-  { id: 'reports', icon: 'doc', label: 'Reports', path: '/reports' },
   { id: 'activity', icon: 'clock', label: 'Activity', path: '/activity' },
 ];
 
