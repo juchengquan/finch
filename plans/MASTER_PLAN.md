@@ -20,7 +20,8 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `database_design_en.md` — the canonical relational schema design (reference, not a feature plan).
 - `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
-- `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; §8 cross-app implications are **2 of 3 shipped** (attachments + pack format); ledger CRUD remains.
+- `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; **all three §8 cross-app implications are shipped** (attachments PR #106, pack format PR #107, ledger CRUD PR #109). §11 cross-references the web's i18n approach in `I18N_PLAN.md`.
+- `I18N_PLAN.md` — **new (2026-06-06)** — multi-language / localization for the web app. `next-intl` + `messages/<locale>.json` catalogs; English base + Simplified Chinese (`zh-CN`) for v1; translations live in app chrome only, **never in the database or `.finch` packs**; per-device persisted via `localStorage`. Server-side mutation errors get a `{ code, params }` shape so they translate client-side. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -352,10 +353,17 @@ below; what's still open is summarized here.
    ledger CRUD this PR) — native can now adopt the schema verbatim and
    build against a complete reference. **L (the build); the brief itself
    is done.**
-2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+2. **Multi-language / i18n** — `plans/I18N_PLAN.md` (2026-06-06).
+   `next-intl` + `messages/<locale>.json` catalogs; English base +
+   Simplified Chinese (`zh-CN`) for v1; translates app chrome only (never
+   user data); per-device locale preference in `localStorage`; structured
+   server-side mutation errors so toasts localise client-side. **No schema
+   change**; `.finch` packs are unaffected. **M — five-ish PR-sized
+   commits.**
+3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
-3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**

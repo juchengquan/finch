@@ -780,6 +780,22 @@ finch already computes, so the data work is mostly done.
   formatters; dates via `Date.FormatStyle`. Multi-currency is core, so never
   hard-code symbols. **RTL** layout support. The seed data is multi-currency
   (USD/SGD/CNY/JPY) — use it to test formatting breadth.
+  > **Cross-app note (2026-06-06):** the web app's i18n approach lives in
+  > `plans/I18N_PLAN.md` — `next-intl` + `messages/<locale>.json` catalogs,
+  > English base + Simplified Chinese (`zh-CN`) for v1. The web's *data*
+  > layer is locale-neutral: translations live in app chrome only, never in
+  > the database or in `.finch` packs. A pack built on Apple in Japanese
+  > opens on the web in Chinese with no translation churn (only user-typed
+  > category names etc. cross over, which is correct).
+  >
+  > **The Apple side is independent** — use the platform's native i18n
+  > (`Localizable.strings` / `Localizable.stringsdict` for chrome; CLDR
+  > plurals via `Foundation`; `Date.FormatStyle` / `Decimal.FormatStyle`
+  > for formatting). Catalogues don't need to mirror the web's JSON
+  > shape — keep them idiomatic Apple. **Decision to confirm during
+  > native build**: which locales ship on day 1. Web's `en + zh-CN`
+  > picks a floor; native MAY ship more from the start since Apple
+  > makes adding a locale cheap (just a new `.strings` bundle).
 - **Reduce Motion / Increase Contrast / Bold Text** honoured.
 
 ---
