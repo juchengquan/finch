@@ -22,8 +22,8 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — **new (2026-06-06)** — product + architecture direction brief for a future native iOS / macOS port; resolves 8 product decisions including iCloud Drive file-pack sync, the shared receipt-attachments schema, OS baseline (iOS/iPadOS/macOS 26), and ledger CRUD for both apps.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
-- `RECEIPT_PHOTOS_PLAN.md` — **new (2026-06-06)** — web-app implementation plan for attaching receipt photos / PDFs to transactions; builds on the shared schema in `IOS_MACOS_PLAN §2.5`. The pack/export piece was spun out into its own plan (next entry).
-- `PACK_FORMAT_PLAN.md` — **new (2026-06-06)** — the cross-platform `.finch` file-portability format (zip with manifest + DB + attachments). Web-app export/import implementation on top of the shape decided in `IOS_MACOS_PLAN §2.5.3`. Implement *after* `RECEIPT_PHOTOS_PLAN.md` ships — packs need the attachments table + on-disk folder layout the receipts work introduces.
+- ~~`RECEIPT_PHOTOS_PLAN.md`~~ → **shipped via PR #106** (2026-06-06); the plan stays in `plans/` as a design record for now (will move to `done/` in a future hygiene pass).
+- ~~`PACK_FORMAT_PLAN.md`~~ → **shipped via this PR** (2026-06-06); the `.finch` zip pack format end-to-end (export, import, manifest validation, atomic swap of DB + attachments).
 
 **Shipped design records (`plans/done/`):**
 
@@ -341,16 +341,7 @@ effort. The picks already landed are crossed off in the "Done since" coda
 below; what's still open is summarized here.
 
 **Current open items (high payoff):**
-1. **Receipt photos** (FEATURE_IDEAS §4.1) — attach an image / PDF to a
-   transaction. **Has a plan now: `plans/RECEIPT_PHOTOS_PLAN.md` (2026-06-06).**
-   Pointer-only schema (`transaction_attachments` — files NEVER stored as DB
-   blobs); bytes live under `${FINCH_DB_DIR}/attachments/`; new upload + serve
-   routes; lightbox + Attachments row in the transaction detail sheet; the
-   shared schema is `IOS_MACOS_PLAN.md §2.5`, the `.finch` export/import
-   format closes the cross-app file-portability loop. Reverses the earlier
-   "Receipt — coming soon" stub that was deleted as part of the cleanup pass.
-   **M, schema change.**
-2. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (2026-06-06).
+1. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (2026-06-06).
    Direction brief, not a build plan: inherited domain model, parity matrix,
    architecture decisions (GRDB on the verbatim schema, Swift port of the
    selectors w/ the web `bun test` suite as the parity oracle, iCloud Drive
@@ -359,15 +350,25 @@ below; what's still open is summarized here.
    both apps (the web ships with 4 seeded ledgers and no creation path —
    tracked as a cross-app implication in §8 of the doc). **L (the build);
    the brief itself is done.**
+2. **Ledger CRUD on the web app** — surfaced by the native plan (§8
+   cross-app implications). Currently 4 seeded ledgers with no create/rename/
+   delete mutation; required for file-pack interop so native-created ledgers
+   round-trip. **S–M, schema-adjacent (mutations + UI).**
 3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
 4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
-5. **Ledger CRUD on the web app** — surfaced by the native plan (§8
-   cross-app implications). Currently 4 seeded ledgers with no create/rename/
-   delete mutation; required for file-pack interop so native-created ledgers
-   round-trip. **S–M, schema-adjacent (mutations + UI).**
+
+⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **Receipt photos** (PR #106, 2026-06-06; FEATURE_IDEAS §4.1) — schema
+  + upload + serve + UI + lightbox. The cross-app file-portability story
+  hinged on this.
+- ✅ **`.finch` pack format** (this PR; PACK_FORMAT_PLAN.md) — extended
+  `/api/export?withAttachments=1` to build a `.finch` zip carrying the DB
+  + every receipt + an integrity manifest; `/api/import` detects pack vs
+  raw `.db` via magic bytes and atomically swaps both. Closes the
+  cross-app file-portability loop the iOS plan needed.
 
 ⊘ **Superseded — do not implement: PWA** (`plans/PWA_PLAN.md`). The plan was
 written when the database lived in the browser (OPFS-backed `sqlite-wasm`);
