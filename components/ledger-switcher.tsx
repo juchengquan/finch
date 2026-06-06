@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { useLedger } from '@/components/ledger-provider';
 import { useCurrency } from '@/components/currency-provider';
+import { useFinanceStore } from '@/lib/store';
+import { CURRENCIES as CURRENCY_RECORD } from '@/lib/data';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +17,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+
+const CURRENCY_CODES = Object.keys(CURRENCY_RECORD).sort();
+const DEFAULT_COLOR = '#c96442';
 
 export function LedgerSwitcher({
   sidebarOpen = true,
@@ -26,8 +51,10 @@ export function LedgerSwitcher({
   // The active chip shows the display currency (what amounts are shown in); the
   // dropdown list shows each ledger's own base currency.
   const { currency } = useCurrency();
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
+    <>
     <DropdownMenu>
       {sidebarOpen ? (
         <div
@@ -120,15 +147,26 @@ export function LedgerSwitcher({
                 <span className="truncate">{l.name}</span>
                 <span className="text-muted-foreground font-mono text-[10px]">{l.base}</span>
               </div>
-              <div className="text-muted-foreground truncate text-xs">{l.tagline}</div>
+              {l.tagline && (
+                <div className="text-muted-foreground truncate text-xs">{l.tagline}</div>
+              )}
+              {/* Live counts straight from the projected row (commit 1's
+                  subselects). Replaces the previous static-JSON numbers. */}
+              <div className="text-muted-foreground/80 font-mono text-[10px]">
+                {l.accounts} {l.accounts === 1 ? 'account' : 'accounts'} · {l.txns.toLocaleString()} {l.txns === 1 ? 'txn' : 'txns'}
+              </div>
             </div>
             {l.id === activeId && <Check className="text-primary mt-0.5 size-4 shrink-0" />}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => {
-            // TODO: open create-ledger flow (function to be wired later)
+          onSelect={(e) => {
+            // Stop the menu from auto-closing when we open the dialog; the
+            // close happens via the trigger pattern but the dialog handler
+            // wants to mount cleanly.
+            e.preventDefault();
+            setCreateOpen(true);
           }}
           className="text-muted-foreground gap-2.5 py-2"
         >
@@ -137,5 +175,135 @@ export function LedgerSwitcher({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <NewLedgerDialog open={createOpen} onOpenChange={setCreateOpen} />
+    </>
+  );
+}
+
+function NewLedgerDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const createLedger = useFinanceStore((s) => s.createLedger);
+  const { setActiveId } = useLedger();
+  const [name, setName] = useState('');
+  const [base, setBase] = useState('USD');
+  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [tagline, setTagline] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const reset = () => {
+    setName('');
+    setBase('USD');
+    setColor(DEFAULT_COLOR);
+    setTagline('');
+    setBusy(false);
+  };
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error('Name is required');
+      return;
+    }
+    setBusy(true);
+    try {
+      const id = createLedger({
+        name: trimmed,
+        base,
+        color,
+        tagline: tagline.trim() || null,
+      });
+      // Land the user in the new (empty) book immediately.
+      setActiveId(id);
+      toast.success(`Created "${trimmed}"`, { description: 'Switched to the new ledger.' });
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create ledger');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset();
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New ledger</DialogTitle>
+          <DialogDescription>
+            A separate set of books. Choose a base currency now — every transaction
+            you log here is stored in this currency. You can rename and recolor later.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 py-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="new-ledger-name">Name</Label>
+            <Input
+              id="new-ledger-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Studio · Side hustle · Trip to Japan…"
+              autoFocus
+              maxLength={40}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-ledger-base">Base currency</Label>
+              <Select value={base} onValueChange={setBase}>
+                <SelectTrigger id="new-ledger-base">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_CODES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="new-ledger-color">Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="new-ledger-color"
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="border-border h-9 w-12 cursor-pointer rounded-md border bg-transparent"
+                />
+                <span className="text-muted-foreground font-mono text-[11px]">{color}</span>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="new-ledger-tagline">Tagline (optional)</Label>
+            <Input
+              id="new-ledger-tagline"
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              placeholder="One-line description shown in the switcher"
+              maxLength={80}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={busy || !name.trim()}>
+            {busy ? 'Creating…' : 'Create ledger'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
