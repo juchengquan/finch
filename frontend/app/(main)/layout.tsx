@@ -18,9 +18,9 @@ const LEDGER_TABS = [
   { id: 'rules', icon: 'sparkle', label: 'Rules', path: '/rules' },
 ];
 
-// The pinned center button opens the add-expense sheet (see PageShell) rather
+// The pinned center button opens the add-expense dialog (see PageShell) rather
 // than navigating, so it sits between the user-chosen sections.
-const ADD_TAB = { id: 'add', icon: 'plus', label: 'Add', path: '/add', pinned: true };
+const ADD_TAB = { id: 'add', icon: 'plus', label: 'Add', pinned: true };
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

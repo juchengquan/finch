@@ -353,6 +353,27 @@ test('editing a foreign-currency transaction amount reconverts amount_base to le
   expect(Math.abs(Number(row.amount_base))).toBeLessThan(Math.abs(Number(row.amount)));
 });
 
+test('editing only the date re-locks exchange_rate + amount_base to the new date', async () => {
+  const exec = await seeded();
+  await exec(
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+  );
+  // Two distinct JPY rates so moving the date measurably changes the lock.
+  await applyMutation(exec, 'setExchangeRate', { date: '2026-05-20', currency: 'JPY', rate: 0.0070, source: 'manual' });
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY', merchant: 'Konbini', date: '2026-05-13', status: 'confirmed',
+  });
+  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw'");
+  await applyMutation(exec, 'updateTransaction', { id: String(id), patch: { date: '2026-05-20' } });
+  const [row] = await exec('SELECT date, amount, amount_base, exchange_rate FROM transactions WHERE id = ?', [String(id)]);
+  expect(String(row.date)).toBe('2026-05-20');
+  expect(Number(row.amount)).toBeCloseTo(-10000, 2); // native amount untouched
+  // The lock follows the row's own date: rate + base re-derived at 2026-05-20.
+  const expected = await convertToBase(exec, -10000, 'JPY', 'USD', '2026-05-20');
+  expect(Number(row.exchange_rate)).toBeCloseTo(0.007, 6);
+  expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
+});
+
 test('seed records each account opening balance and balances reconcile', async () => {
   const exec = await seeded();
   const [a] = await exec("SELECT opening_balance, current_balance FROM accounts WHERE id = 'cc'");

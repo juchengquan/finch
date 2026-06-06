@@ -453,7 +453,9 @@ export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[
  *     contributes to its balance). Cross-ledger moves are rejected.
  *   - `currency`  — change the row's native currency. The form's `amount`
  *     stays as the user entered it; amount_base + exchange_rate are re-derived
- *     against the new currency at the (possibly edited) date.
+ *     against the new currency at the (possibly edited) date. A `date`-only
+ *     edit re-derives them too — the locked rate must always be the rate on
+ *     the row's own date.
  *   - `status`    — flip pending ↔ confirmed. `confirmed_at` follows the flip
  *     (now on confirm, NULL on demote). The recompute step picks up the
  *     change in the account balance, since the balance sum is `confirmed`-only.
@@ -526,12 +528,17 @@ export async function updateTransaction(
     newAccountId = String(patch.account);
   }
 
-  // -- Currency: rewrite the row's native currency. The form's "amount" is
-  //    the user-entered figure in the new currency, so we keep the magnitude
-  //    but re-derive amount_base + exchange_rate. If `amount` is not in the
-  //    patch, the existing magnitude is preserved.
+  // -- Currency / amount / date: any of these invalidates the locked
+  //    conversion, so amount_base + exchange_rate are re-derived against the
+  //    effective currency at the effective date. Date matters because the
+  //    schema's invariant is that exchange_rate is the rate *on the row's own
+  //    date* (there is no separate exchange_rate_date column) — moving the
+  //    date without re-locking would leave a rate that belongs to the old
+  //    date. If `amount` is not in the patch, the existing magnitude is
+  //    preserved.
   const currencyChanged = patch.currency !== undefined && patch.currency !== oldCurrency;
-  if (currencyChanged || patch.amount !== undefined) {
+  const dateChanged = patch.date !== undefined && patch.date !== oldDate;
+  if (currencyChanged || dateChanged || patch.amount !== undefined) {
     let amountToStore: number;
     if (patch.amount !== undefined) {
       amountToStore = patch.amount;

@@ -9,16 +9,18 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useAddExpense } from '@/components/add-expense-sheet';
 
 // The set of pages we expose to the palette. `icon` reuses the existing string
 // shim in primitives.tsx so the UI stays consistent with the tab bar.
-const PAGES: { label: string; href: string; icon: string; keywords: string[] }[] = [
+// `action: 'add-expense'` opens the add-expense sheet instead of navigating.
+const PAGES: { label: string; href?: string; action?: 'add-expense'; icon: string; keywords: string[] }[] = [
   { label: 'Accounts', href: '/accounts', icon: 'wallet', keywords: ['balance', 'net worth'] },
   { label: 'Activity', href: '/activity', icon: 'doc', keywords: ['transactions', 'feed'] },
   { label: 'Budgets', href: '/budgets', icon: 'chart', keywords: ['spending', 'limit', 'goals', 'save', 'income'] },
   { label: 'Insights', href: '/insights', icon: 'sparkle', keywords: ['analytics', 'reports'] },
   { label: 'Scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming', 'subscriptions'] },
-  { label: 'Add', href: '/add', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
+  { label: 'Add', action: 'add-expense', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
   { label: 'Settings', href: '/settings', icon: 'cog', keywords: ['preferences'] },
   // Ledger admin
   { label: 'Pending', href: '/pending', icon: 'clock', keywords: ['confirm'] },
@@ -133,6 +135,7 @@ function PaletteBody({ close }: { close: () => void }) {
   const router = useRouter();
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
+  const { openAddExpense } = useAddExpense();
   const transactions = useFinanceStore((s) => s.transactions);
   const counterparties = useFinanceStore((s) => s.counterparties);
   const categories = useFinanceStore((s) => s.categories);
@@ -152,12 +155,13 @@ function PaletteBody({ close }: { close: () => void }) {
     ).slice(0, q ? 8 : 8);
     for (const p of pageMatches) {
       out.push({
-        key: `page:${p.href}`,
+        key: `page:${p.href ?? p.action}`,
         group: 'Pages',
         label: p.label,
         icon: p.icon,
         run: () => {
-          router.push(p.href);
+          if (p.action === 'add-expense') openAddExpense();
+          else if (p.href) router.push(p.href);
           close();
         },
       });
@@ -258,7 +262,7 @@ function PaletteBody({ close }: { close: () => void }) {
     }
 
     return out;
-  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, close]);
+  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, close]);
 
   // Group results in source order so the headings appear in the natural order
   // each kind was appended above. A Map preserves insertion order.

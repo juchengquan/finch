@@ -135,7 +135,9 @@ export function PageShell({
       href={tab.path ?? '/'}
       title={tab.label}
       className={cn(
-        'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] transition-colors',
+        // Fixed h-9 (not py): icon-only rows would otherwise be ~3.5px shorter
+        // than text rows, so icons creep upward cumulatively when collapsing.
+        'flex h-9 items-center gap-3 rounded-md px-2.5 text-[13px] transition-colors',
         isActivePath(tab.path)
           ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
           : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
@@ -192,16 +194,23 @@ export function PageShell({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        {/* overflow-x-hidden: overflow-y alone computes overflow-x to 'auto', which
+            flashes a horizontal scrollbar while the width transition runs with the
+            full-width (whitespace-nowrap) labels already rendered. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto">
           {tabs.length > 0 && <nav className="flex flex-col gap-1">{tabs.map(renderTab)}</nav>}
 
           {navGroups.map((group) => (
             <nav key={group.label} className="flex flex-col gap-1">
-              {sidebarOpen && (
-                <div className="text-muted-foreground px-2.5 pb-1 text-[10px] font-medium tracking-[0.08em] uppercase">
-                  {group.label}
-                </div>
-              )}
+              {/* Fixed-height in both states (label ↔ hairline) so the group's
+                  icons don't jump vertically when the label unmounts. */}
+              <div className="text-muted-foreground flex h-[19px] items-center px-2.5 pb-1 text-[10px] font-medium tracking-[0.08em] uppercase">
+                {sidebarOpen ? (
+                  group.label
+                ) : (
+                  <span aria-hidden className="bg-sidebar-border h-px w-4" />
+                )}
+              </div>
               {group.tabs.map(renderTab)}
             </nav>
           ))}
@@ -216,14 +225,18 @@ export function PageShell({
                 type="button"
                 aria-label="Account menu"
                 title={sidebarOpen ? undefined : user.name}
-                className={cn(
-                  'border-sidebar-border hover:bg-sidebar-accent mt-1 flex items-center gap-2.5 border-t px-2.5 py-2 transition-colors',
-                  sidebarOpen ? 'w-full text-left' : 'justify-center',
-                )}
+                // Left-anchored in both states (no justify-center): the aside's
+                // right border makes the collapsed content box 35px, so centered
+                // content lands at x=29.5 — off the icon column by half a pixel.
+                className="border-sidebar-border hover:bg-sidebar-accent mt-1 flex w-full items-center gap-2.5 border-t px-2.5 py-2 text-left transition-colors"
               >
-                <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full font-serif text-sm italic">
-                  {user.name.charAt(0)}
-                </div>
+                {/* w-4 wrapper: centers the 28px avatar on the 16px icon column
+                    (x=30) so it doesn't shift when the sidebar collapses. */}
+                <span className="flex w-4 shrink-0 justify-center">
+                  <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full font-serif text-sm italic">
+                    {user.name.charAt(0)}
+                  </div>
+                </span>
                 {sidebarOpen && (
                   <>
                     <div className="min-w-0 flex-1 text-xs leading-tight">
@@ -295,7 +308,7 @@ export function PageShell({
               'flex min-w-[56px] flex-col items-center gap-1',
               tab.id === activeTab ? 'text-foreground' : 'text-muted-foreground',
             );
-            // The pinned (+) tab opens the add-expense slider instead of navigating.
+            // The pinned (+) tab opens the add-expense dialog instead of navigating.
             if (tab.pinned) {
               return (
                 <button key={tab.id} type="button" aria-label={tab.label} onClick={openAddExpense} className={tabClass}>

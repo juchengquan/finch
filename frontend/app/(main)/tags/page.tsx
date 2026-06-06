@@ -76,7 +76,7 @@ export default function TagsPage() {
     <MobilePage
       header={<ScreenHeader title="Tags" />}
     >
-      <div className="px-5 pb-[120px]">
+      <div className="px-5 pb-[120px] md:pb-5">
         {/* Search + Add row (visible on both mobile and desktop, Categories-style) */}
         <div className="mb-3.5 flex items-center gap-2">
           <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
@@ -107,7 +107,10 @@ export default function TagsPage() {
         ) : filteredList.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
         ) : (
-          <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border">
+          // Desktop: cap to the viewport (below the 77px top bar + 24px shell
+          // padding + 52px search row) so the list scrolls internally instead
+          // of the page. Mobile keeps natural page scrolling.
+          <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border md:max-h-[calc(100dvh-180px)] md:overflow-y-auto">
             {filteredList.map((t) => (
               <div
                 key={t.id}

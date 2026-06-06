@@ -776,16 +776,18 @@ CREATE TABLE scheduled_splits (
 
 ---
 
-### 6.15 `exchange_rates` — FX rate lookup cache (USD-pivoted)
+### 6.15 `exchange_rates` — FX rate record (USD-pivoted, append-only)
 
-A **lookup cache**, not a permanent record. Each row stores `USD per 1 unit of currency` on a date; USD itself is the universal hub and is never stored. Cross-rate is derived as `rate(C → B) = rate(C) / rate(B)`.
+An **append-only record**, never pruned (a decade of daily rates for every supported currency is ~1 MB — there is no size problem to solve). Each row stores `USD per 1 unit of currency` on a date; USD itself is the universal hub and is never stored. Cross-rate is derived as `rate(C → B) = rate(C) / rate(B)`.
 
-Historical values for foreign-currency transactions are **not** read from this table — the rate is locked onto each transaction at insert time (`transactions.exchange_rate` + `transactions.amount_base`). The table is therefore safe to prune; it's kept on a rolling **90-day window** from the latest stored date (`pruneOldRates`, called on every `setExchangeRate`).
+Historical values for foreign-currency transactions are **not** read from this table on display — the rate is locked onto each transaction at insert time (`transactions.exchange_rate` + `transactions.amount_base`). But the table **is** the input whenever those locks are *re-derived*: `recomputeAmountBases` on a base-currency change, and `updateTransaction` on an amount/currency/**date** edit (a date-only edit re-locks too — the invariant is that `exchange_rate` is always the rate on the row's own date). Pruning would make those recomputes lossy for transactions older than the window; that's why the old rolling-90-day `pruneOldRates` was removed.
 
-Cache-miss lookup for `convertToBase`:
+Lookup for a date with no stored row (`rateToHub`):
 1. nearest stored rate on-or-before the txn date
-2. nearest stored rate on-or-after the txn date (covers backdates older than the window)
+2. nearest stored rate on-or-after the txn date (covers backdates before the first stored row)
 3. static `FALLBACK_USD_PER_UNIT` map (covers an empty table on a fresh DB)
+
+**Write-through:** the resolved rate is then pinned under the requested date (`source = 'derived'`, via `INSERT OR IGNORE` so a user-set row is never clobbered). A backdated conversion may use an approximated rate, but the approximation is *stable*: every future recompute at that date finds the pinned row and reproduces the same figure.
 
 ```sql
 CREATE TABLE exchange_rates (
@@ -802,7 +804,7 @@ CREATE TABLE exchange_rates (
 | `date` | TEXT NOT NULL · PK part | `YYYY-MM-DD` the rate applies to. |
 | `currency` | TEXT NOT NULL · PK part | ISO 4217 code. Never `USD` (the hub). |
 | `rate` | REAL NOT NULL | USD per 1 unit of `currency`. |
-| `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). |
+| `source` | TEXT | Where the rate came from (`manual`, `ECB`, etc.). `derived` marks a write-through pin: the nearest-available/fallback rate a conversion resolved for this date. |
 | (PK) | — | `(date, currency)` composite. |
 
 ---

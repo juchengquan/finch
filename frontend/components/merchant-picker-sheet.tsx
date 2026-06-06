@@ -3,18 +3,16 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/primitives';
-import { useIsDesktop } from '@/components/use-is-desktop';
 import { useFinanceStore } from '@/lib/store';
-import { cn } from '@/lib/utils';
 
 /** Resolution the picker returns to the caller. Mirrors the `confirmPendingWithMatch`
  *  action's accepted shapes, so the caller can pipe the result straight through. */
@@ -47,7 +45,6 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
   const [onResolveCb, setOnResolveCb] = useState<
     ((resolution: MerchantResolution | null) => void) | null
   >(null);
-  const isDesktop = useIsDesktop();
   const counterparties = useFinanceStore((s) => s.counterparties);
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
 
@@ -118,17 +115,16 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
   return (
     <MerchantPickerContext.Provider value={value}>
       {children}
-      <Sheet open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
-        <SheetContent
-          side={isDesktop ? 'right' : 'bottom'}
-          className={cn('gap-0 p-0', isDesktop ? 'w-full sm:max-w-md' : 'h-[92dvh] rounded-t-2xl')}
-        >
-          <SheetHeader className="border-border border-b px-5 py-4">
-            <SheetTitle className="font-serif text-xl italic">Merchant</SheetTitle>
-            <SheetDescription className="sr-only">
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
+        {/* Centered popout card, matching the other entity dialogs. Fixed height
+            (not max-h) so the card doesn't grow/shrink as the search narrows. */}
+        <DialogContent className="flex h-[70vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="border-border border-b px-5 py-4">
+            <DialogTitle className="font-serif text-xl italic">Merchant</DialogTitle>
+            <DialogDescription className="sr-only">
               Pick an existing merchant or create a new one.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="px-5 pt-4 pb-3">
               <div className="bg-secondary flex h-10 items-center gap-2.5 rounded-full px-3.5">
@@ -193,8 +189,8 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </MerchantPickerContext.Provider>
   );
 }

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { rateToHub, convertToBase, pruneOldRates, HUB_CURRENCY, RATE_RETENTION_DAYS } from '@/lib/db/queries/rates';
+import { rateToHub, convertToBase, HUB_CURRENCY } from '@/lib/db/queries/rates';
 import { addTransaction } from '@/lib/db/queries/transactions';
 import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
@@ -78,25 +78,47 @@ test('addTransaction converts a foreign amount and locks the rate', async () => 
   expect(Number(row.exchange_rate)).toBeCloseTo(0.00650, 6);
 });
 
-test('pruneOldRates drops rows older than the retention window from the latest stored date', async () => {
+test('write-through: a resolved fallback rate is pinned under the requested date', async () => {
   const exec = await seeded();
-  // Seed range is 2026-05-13 → 2026-05-24. With a 5-day window from 2026-05-24,
-  // everything before 2026-05-19 should be deleted.
-  const before = await exec('SELECT COUNT(*) AS n FROM exchange_rates');
-  expect(Number(before[0].n)).toBeGreaterThan(0);
-  await pruneOldRates(exec, 5);
-  const survivors = await exec("SELECT DISTINCT date FROM exchange_rates ORDER BY date");
-  for (const r of survivors) {
-    expect(String(r.date) >= '2026-05-19').toBe(true);
-  }
+  // 2024-01-01 predates the seed range (2026-05-13 →) — resolution falls
+  // forward to the earliest stored JPY rate (0.00650) and must pin it.
+  const rate = await rateToHub(exec, 'JPY', '2024-01-01');
+  expect(rate).toBeCloseTo(0.0065, 6);
+  const [pinned] = await exec(
+    "SELECT rate, source FROM exchange_rates WHERE currency = 'JPY' AND date = '2024-01-01'",
+  );
+  expect(Number(pinned.rate)).toBeCloseTo(0.0065, 6);
+  expect(String(pinned.source)).toBe('derived');
 });
 
-test('pruneOldRates with the default window is a no-op for a fresh seed', async () => {
+test('write-through: the pinned rate keeps old-date conversions stable when neighbors change', async () => {
   const exec = await seeded();
-  const before = Number((await exec('SELECT COUNT(*) AS n FROM exchange_rates'))[0].n);
-  await pruneOldRates(exec); // default RATE_RETENTION_DAYS = 90
-  const after = Number((await exec('SELECT COUNT(*) AS n FROM exchange_rates'))[0].n);
-  expect(after).toBe(before);
-  // Sanity-check the constant.
-  expect(RATE_RETENTION_DAYS).toBe(90);
+  const first = await convertToBase(exec, 1000, 'JPY', 'SGD', '2024-01-01');
+  // Rewrite the rates the original resolution fell forward to. Without the
+  // pin, re-running the same conversion would now produce a different figure.
+  await exec("UPDATE exchange_rates SET rate = 0.0099 WHERE currency = 'JPY' AND date >= '2026-01-01'");
+  const second = await convertToBase(exec, 1000, 'JPY', 'SGD', '2024-01-01');
+  expect(second.rate).toBeCloseTo(first.rate, 6);
+  expect(second.amountBase).toBeCloseTo(first.amountBase, 2);
+});
+
+test('write-through: never clobbers an exact user-set rate', async () => {
+  const exec = await seeded();
+  // Exact-date hit returns the stored row untouched (no 'derived' overwrite).
+  expect(await rateToHub(exec, 'JPY', '2026-05-24')).toBeCloseTo(0.0065, 6);
+  const [row] = await exec(
+    "SELECT rate, source FROM exchange_rates WHERE currency = 'JPY' AND date = '2026-05-24'",
+  );
+  expect(String(row.source)).not.toBe('derived');
+});
+
+test('write-through: static fallback for an unknown currency is pinned too', async () => {
+  const exec = await seeded();
+  // GBP has no seed rows → static FALLBACK_USD_PER_UNIT['GBP'] = 1.266, pinned.
+  expect(await rateToHub(exec, 'GBP', '2026-05-24')).toBeCloseTo(1.266, 4);
+  const [pinned] = await exec(
+    "SELECT rate, source FROM exchange_rates WHERE currency = 'GBP' AND date = '2026-05-24'",
+  );
+  expect(Number(pinned.rate)).toBeCloseTo(1.266, 4);
+  expect(String(pinned.source)).toBe('derived');
 });
