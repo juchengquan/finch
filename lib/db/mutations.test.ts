@@ -1194,3 +1194,32 @@ test('reconcileAccount with postAdjustment is a no-op on the adjustment when the
   );
   expect(Number(adj[0].c)).toBe(0); // no rows cleared → no remainder beyond tolerance.
 });
+
+test('duplicate guard: identical addTransaction is rejected with a friendly message', async () => {
+  const exec = await seeded();
+  const draft = {
+    ledgerId: 'personal', accountId: 'chk', amount: -12.5, currency: 'USD',
+    merchant: 'Double Latte', categoryId: 'food', date: '2026-05-20', time: '09:00',
+    status: 'confirmed' as const,
+  };
+  await applyMutation(exec, 'addTransaction', draft);
+  // Same account/date/time/amount/description → hits idx_txn_dedup.
+  await expect(applyMutation(exec, 'addTransaction', draft)).rejects.toThrow(/duplicate/i);
+  // A different time is a distinct row — allowed.
+  await applyMutation(exec, 'addTransaction', { ...draft, time: '09:01' });
+  const n = await exec(
+    "SELECT COUNT(*) AS c FROM transactions WHERE account_id='chk' AND description='Double Latte'",
+  );
+  expect(Number(n[0].c)).toBe(2);
+});
+
+test('duplicate guard: a second budget with the same name+cycle is rejected', async () => {
+  const exec = await seeded();
+  const b = { ledgerId: 'personal', name: 'Groceries', type: 'expense', amount: 600, frequency: 'monthly', startDate: '2026-05-01' };
+  await applyMutation(exec, 'createBudget', { id: 'bgt-a', ...b });
+  await expect(applyMutation(exec, 'createBudget', { id: 'bgt-b', ...b })).rejects.toThrow(/already exists/i);
+  // Same name, different start_date (cycle) is fine.
+  await applyMutation(exec, 'createBudget', { id: 'bgt-c', ...b, startDate: '2026-06-01' });
+  const rows = await exec("SELECT COUNT(*) AS c FROM budgets WHERE name = 'Groceries'");
+  expect(Number(rows[0].c)).toBe(2);
+});
