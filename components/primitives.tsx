@@ -7,6 +7,7 @@ import {
   ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, Menu, Bell, Wallet, ChartColumn, Settings,
   FileText, Target, Tag, Tags, Split, Pencil, Check, X, Calendar, Mic, Camera, Sparkles, Clock, Circle,
   Download, Upload, ArrowRightLeft, Coins, Trash2, Bookmark, Paperclip, Image as ImageIcon,
+  Banknote,
 } from 'lucide-react';
 
 import { useMoney } from '@/components/use-money';
@@ -21,7 +22,7 @@ const ICONS: Record<string, LucideIcon> = {
   chart: ChartColumn, cog: Settings, doc: FileText, target: Target, tag: Tag, tags: Tags, split: Split,
   edit: Pencil, pencil: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
   clock: Clock, download: Download, upload: Upload, swap: ArrowRightLeft, coins: Coins, trash: Trash2,
-  bookmark: Bookmark, paperclip: Paperclip, image: ImageIcon,
+  bookmark: Bookmark, paperclip: Paperclip, image: ImageIcon, banknote: Banknote,
 };
 
 interface IconProps {

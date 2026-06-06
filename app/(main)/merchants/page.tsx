@@ -99,7 +99,6 @@ export default function MerchantsPage() {
 
   const q = query.toLowerCase();
   const list = rows.filter((c) => !q || c.name.toLowerCase().includes(q));
-  const unverified = rows.filter((c) => !c.verified).length;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -127,20 +126,6 @@ export default function MerchantsPage() {
       header={<ScreenHeader title="Merchants" />}
     >
       <div className="px-5 pb-[120px] md:pb-5">
-        <div className="px-1 pb-[18px]">
-          <div className="flex items-baseline gap-3.5">
-            <div>
-              <div className="font-serif text-[40px] leading-none tracking-[-1.4px]">{rows.length}</div>
-              <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">STANDARDISED</div>
-            </div>
-            <div className="bg-border h-8 w-px" />
-            <div>
-              <div className="text-warning font-serif text-[40px] leading-none tracking-[-1.4px]">{unverified}</div>
-              <div className="text-muted-foreground mt-1 font-mono text-[9px] tracking-[1px]">UNVERIFIED</div>
-            </div>
-          </div>
-        </div>
-
         {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
         <div className="mb-3.5 flex items-center gap-2">
           <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
@@ -164,9 +149,9 @@ export default function MerchantsPage() {
         </div>
 
         {/* Desktop: cap to the viewport (below the 77px top bar + 24px shell
-            padding + ~76px stats block + 52px search row) so the list scrolls
-            internally instead of the page. Mobile keeps natural page scrolling. */}
-        <div className="flex flex-col md:max-h-[calc(100dvh-255px)] md:overflow-y-auto">
+            padding + 52px search row) so the list scrolls internally instead
+            of the page. Mobile keeps natural page scrolling. */}
+        <div className="flex flex-col md:max-h-[calc(100dvh-180px)] md:overflow-y-auto">
           {list.map((c, i) => (
             <MerchantRow
               key={c.id}

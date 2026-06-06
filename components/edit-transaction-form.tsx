@@ -48,6 +48,7 @@ export function EditTransactionForm({
   const storeAccts = useFinanceStore((s) => s.accounts);
   const storeCats = useFinanceStore((s) => s.categories);
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
+  const createCounterparty = useFinanceStore((s) => s.createCounterparty);
   const { openMerchantPicker } = useMerchantPicker();
 
   const tx = allTxns.find((t) => t.id === txId);
@@ -136,22 +137,20 @@ export function EditTransactionForm({
 
   return (
     <div className="flex flex-col gap-3.5 px-5 pt-4 pb-8">
-      <div className="text-center">
-        <div className="text-muted-foreground mb-3.5 font-mono text-[10px] tracking-[1.5px]">AMOUNT</div>
-        <div className="flex items-baseline justify-center gap-1">
-          <span className="text-muted-foreground font-serif text-[40px]">{currencySym}</span>
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-            inputMode="decimal"
-            aria-label="Amount" placeholder="0"
-            autoFocus
-            className="placeholder:text-muted-foreground focus-ring w-[5ch] bg-transparent text-center font-serif text-[72px] leading-none font-normal -tracking-[3px] outline-none"
-          />
-        </div>
-      </div>
-
       <div>
+        <Field icon="banknote" label="Amount">
+          <div className="flex items-baseline gap-1">
+            <span className="text-muted-foreground text-[15px]">{currencySym}</span>
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              inputMode="decimal"
+              aria-label="Amount" placeholder="0"
+              autoFocus
+              className="placeholder:text-muted-foreground w-24 bg-transparent text-right text-[15px] outline-none"
+            />
+          </div>
+        </Field>
         <Field icon="coins" label="Currency">
           <span className="text-muted-foreground text-[15px]" title="Follows the selected account">
             {accountCurrency}
@@ -162,10 +161,15 @@ export function EditTransactionForm({
             type="button"
             onClick={() =>
               openMerchantPicker(merchant, (res) => {
-                if (res) setMerchant(res.name);
+                if (!res) return;
+                // "Create new" returns only a name — create the counterparty
+                // row here so the save-time name resolution has something to
+                // link (the pending flow's server mutation does this itself).
+                if (res.kind === 'new') createCounterparty({ name: res.name, ledgerId });
+                setMerchant(res.name);
               })
             }
-            className="focus-ring flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
+            className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
             aria-label="Select merchant"
           >
             <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
@@ -210,7 +214,7 @@ export function EditTransactionForm({
             type="date" aria-label="Date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="focus-ring bg-transparent text-right text-[15px] outline-none"
+            className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
         <Field icon="clock" label="Time">
@@ -218,7 +222,7 @@ export function EditTransactionForm({
             type="time" aria-label="Time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="focus-ring bg-transparent text-right text-[15px] outline-none"
+            className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
         <Field icon="check" label="Status">
@@ -245,7 +249,7 @@ export function EditTransactionForm({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             aria-label="Note" placeholder="Optional"
-            className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-right text-[15px] outline-none"
+            className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
       </div>
