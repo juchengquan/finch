@@ -123,11 +123,16 @@ export function dailySpending(txns: Tx[], ledgerId: string, endDate: string, n: 
   if (!endDate) return [];
   const out: { date: string; value: number }[] = [];
   const by = new Map<string, number>();
-  const end = new Date(`${endDate}T00:00`);
+  // Parse as UTC (`Z`) and use UTC accessors so server (UTC) and client
+  // (any local zone) agree on the bucket boundaries — without this, an
+  // 84-day window rolls one day earlier on a UTC-8 client, and the
+  // CalendarHeatmap's per-cell <title> dates differ between server and
+  // client, tripping a React hydration mismatch.
+  const end = new Date(`${endDate}T00:00:00Z`);
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(end);
-    d.setDate(end.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    d.setUTCDate(end.getUTCDate() - i);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
     by.set(key, 0);
     out.push({ date: key, value: 0 });
   }

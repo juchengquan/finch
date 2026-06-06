@@ -28,6 +28,16 @@ const sumValues = (m: Record<string, number>) => Object.values(m).reduce((s, v) 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
+/** Day-of-week for a `YYYY-MM-DD` transaction date. Returns NaN for an
+ *  unparseable date — callers must guard with `Number.isFinite(dow)`
+ *  before using the result as an array index. Parses as UTC so server
+ *  (UTC) and client (any local zone) agree on the day; a Saturday in
+ *  Singapore would otherwise roll into Friday on a UTC server. */
+function dowOf(date: string): number {
+  const d = new Date(`${date}T00:00:00Z`);
+  return d.getUTCDay();
+}
+
 type Rule = (ctx: InsightCtx) => Insight | null;
 
 // Total spending this month vs last month.
@@ -103,7 +113,9 @@ const weekdaySkew: Rule = (ctx) => {
   let any = false;
   for (const t of ctx.transactions) {
     if (ledgerOf(t) !== ctx.ledgerId || t.pending || kindOf(t) !== 'expense') continue;
-    totals[new Date(`${t.date}T00:00`).getDay()] += -t.amount;
+    const dow = dowOf(t.date);
+    if (!Number.isFinite(dow)) continue;
+    totals[dow] += -t.amount;
     any = true;
   }
   if (!any) return null;
@@ -141,7 +153,8 @@ const weekendVsWeekday: Rule = (ctx) => {
     if (ledgerOf(t) !== ctx.ledgerId || t.pending || kindOf(t) !== 'expense') continue;
     if (!earliest || t.date < earliest) earliest = t.date;
     if (!latest || t.date > latest) latest = t.date;
-    const dow = new Date(`${t.date}T00:00`).getDay();
+    const dow = dowOf(t.date);
+    if (!Number.isFinite(dow)) continue;
     if (dow === 0 || dow === 6) weekendSum += -t.amount;
     else weekdaySum += -t.amount;
   }
@@ -151,8 +164,8 @@ const weekendVsWeekday: Rule = (ctx) => {
   // would under-count no-spend days and skew toward whichever segment is busier).
   let weekendDays = 0;
   let weekdayDays = 0;
-  const cursor = new Date(`${earliest}T00:00`);
-  const end = new Date(`${latest}T00:00`);
+  const cursor = new Date(`${earliest}T00:00:00Z`);
+  const end = new Date(`${latest}T00:00:00Z`);
   while (cursor <= end) {
     const dow = cursor.getDay();
     if (dow === 0 || dow === 6) weekendDays++;
@@ -183,7 +196,8 @@ const topCategoryByWeekday: Rule = (ctx) => {
   for (const t of ctx.transactions) {
     if (ledgerOf(t) !== ctx.ledgerId || t.pending || kindOf(t) !== 'expense') continue;
     if (!t.category) continue;
-    const dow = new Date(`${t.date}T00:00`).getDay();
+    const dow = dowOf(t.date);
+    if (!Number.isFinite(dow)) continue;
     byDay[dow][t.category] = (byDay[dow][t.category] ?? 0) + -t.amount;
   }
   let best: { dow: number; categoryId: string; share: number } | null = null;
@@ -245,7 +259,8 @@ const quietestDay: Rule = (ctx) => {
   const counts = new Array(7).fill(0);
   for (const t of ctx.transactions) {
     if (ledgerOf(t) !== ctx.ledgerId || t.pending || kindOf(t) !== 'expense') continue;
-    const dow = new Date(`${t.date}T00:00`).getDay();
+    const dow = dowOf(t.date);
+    if (!Number.isFinite(dow)) continue;
     totals[dow] += -t.amount;
     counts[dow]++;
   }

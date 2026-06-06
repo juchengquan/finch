@@ -76,10 +76,26 @@ export function execFor(db: SqliteDriver): Exec {
     }
     const stmt = db.prepare(sql);
     const args = (bind ?? []) as unknown[];
-    // Heuristic: anything starting with SELECT / PRAGMA / EXPLAIN / WITH …
-    // returns rows. better-sqlite3's `.all()` throws on writer statements;
-    // bun:sqlite's `.all()` returns []. Branching on the SQL prefix keeps
-    // both engines happy.
+    // Ask the engine whether the prepared statement returns data. better-sqlite3
+    // exposes a `reader` flag (true for SELECT / PRAGMA-getter / EXPLAIN /
+    // RETURNING-bearing writes, false for INSERT / UPDATE / DELETE / DDL /
+    // PRAGMA-setter); the engine's own answer is the ground truth, so the
+    // PRAGMA-setter pitfall (`.all()` throws "This statement does not return
+    // data. Use run() instead") can't trip us up. bun:sqlite doesn't expose
+    // `reader`, so fall through to the prefix heuristic for that engine.
+    const reader = (stmt as { reader?: boolean }).reader;
+    if (reader === true) {
+      return stmt.all(...args) as Row[];
+    }
+    if (reader === false) {
+      stmt.run(...args);
+      return [];
+    }
+    // Fallback heuristic for engines without `reader` (bun:sqlite). Anything
+    // starting with SELECT / PRAGMA / EXPLAIN / WITH returns rows; the
+    // remaining statements are writes. Note that bun:sqlite's `.all()` on a
+    // PRAGMA-setter returns [] rather than throwing, so this branch is safe
+    // on that engine even though the prefix matches PRAGMAs indiscriminately.
     if (/^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(sql)) {
       return stmt.all(...args) as Row[];
     }
