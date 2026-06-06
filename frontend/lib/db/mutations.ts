@@ -381,12 +381,17 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!acct) throw new Error('Account not found');
       const delta = r2(target - Number(acct.current_balance));
       if (delta === 0) return; // already at target — no-op
+      // `source` distinguishes a manual adjust from one posted by the
+      // reconcile flow's "post remainder" escape hatch; today it only
+      // affects the merchant label, but the value is preserved for future
+      // history filtering.
+      const source = args.source === 'reconcile' ? 'reconcile' : 'manual';
       await qAdd(exec, {
         ledgerId: String(acct.ledger_id),
         accountId,
         amount: delta,
         currency: String(acct.currency),
-        merchant: 'Balance adjustment',
+        merchant: source === 'reconcile' ? 'Reconciliation adjustment' : 'Balance adjustment',
         categoryId: null,
         date: args.date ? str(args.date) : new Date().toISOString().slice(0, 10),
         note: args.note ? str(args.note) : undefined,
@@ -415,6 +420,92 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           merged.earliestDate,
         );
       }
+      return;
+    }
+    case 'setCleared': {
+      // Toggle a single transaction's cleared-against-statement flag. One UPDATE,
+      // no recompute — clearing doesn't move balances.
+      const id = str(args.id);
+      const cleared = args.cleared === true;
+      await exec(
+        cleared
+          ? "UPDATE transactions SET cleared_at = datetime('now') WHERE id = ?"
+          : 'UPDATE transactions SET cleared_at = NULL WHERE id = ?',
+        [id],
+      );
+      return;
+    }
+    case 'reconcileAccount': {
+      // Stamp the reconcile checkpoint on the account; optionally post an
+      // Adjustment for the remaining gap so the cleared balance lands exactly
+      // on the statement target.
+      const accountId = str(args.accountId);
+      const statementBalance = Number(args.statementBalance);
+      if (!Number.isFinite(statementBalance)) throw new Error('Statement balance is required');
+      const statementDate = args.statementDate ? str(args.statementDate) : new Date().toISOString().slice(0, 10);
+      const postAdjustment = args.postAdjustment === true;
+
+      // Optional remainder. We compute it server-side from the actual cleared
+      // sum so the client can't trick us into posting a phantom delta.
+      if (postAdjustment) {
+        const [acct] = await exec(
+          'SELECT ledger_id, currency, opening_balance FROM accounts WHERE id = ?',
+          [accountId],
+        );
+        if (!acct) throw new Error('Account not found');
+        const opening = Number(acct.opening_balance ?? 0);
+        const [sum] = await exec(
+          `SELECT COALESCE(SUM(
+             CASE WHEN currency = ? THEN amount ELSE amount_base END
+           ), 0) AS s
+             FROM transactions
+            WHERE account_id = ?
+              AND status = 'confirmed'
+              AND cleared_at IS NOT NULL`,
+          [String(acct.currency), accountId],
+        );
+        const cleared = r2(opening + Number(sum.s));
+        const delta = r2(statementBalance - cleared);
+        if (Math.abs(delta) >= 0.005) {
+          await qAdd(exec, {
+            ledgerId: String(acct.ledger_id),
+            accountId,
+            amount: delta,
+            currency: String(acct.currency),
+            merchant: 'Reconciliation adjustment',
+            categoryId: null,
+            date: statementDate,
+            note: undefined,
+            status: 'confirmed',
+            kind: 'adjustment',
+          });
+          // Mark the adjustment itself as cleared — it's part of this
+          // reconciliation by construction. SQLite doesn't allow ORDER BY in
+          // UPDATE, so we pick the just-inserted id via a subquery.
+          await exec(
+            `UPDATE transactions
+                SET cleared_at = datetime('now')
+              WHERE id = (
+                SELECT id FROM transactions
+                 WHERE account_id = ?
+                   AND status = 'confirmed'
+                   AND kind = 'adjustment'
+                   AND cleared_at IS NULL
+                 ORDER BY created_at DESC
+                 LIMIT 1
+              )`,
+            [accountId],
+          );
+        }
+      }
+      await exec(
+        `UPDATE accounts
+            SET last_reconciled_at = ?,
+                last_reconciled_balance = ?,
+                updated_at = datetime('now')
+          WHERE id = ?`,
+        [statementDate, statementBalance, accountId],
+      );
       return;
     }
     case 'bulkRecategorize': {

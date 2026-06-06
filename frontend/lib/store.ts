@@ -45,6 +45,11 @@ export interface Tx {
   /** Ad-hoc category splits. When present, these override `category` /
    * `amount` for category aggregations (categorySpend / budgets / etc.). */
   splits?: TxSplit[];
+  /** Reconcile-to-statement clearing flag (RECONCILE_PLAN §2.1). Timestamp set
+   *  when the user ticks this row off against a real statement; absent =
+   *  uncleared. Independent of `pending` — a confirmed row can still be
+   *  uncleared (logged but not yet seen on a statement). */
+  clearedAt?: string | null;
 }
 
 export interface TxSplit {
@@ -193,6 +198,19 @@ interface FinanceState {
   addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }) => string;
   adjustAccountBalance: (accountId: string, targetBalance: number, note?: string) => void;
   updateTransaction: (id: string, patch: Partial<Tx>) => void;
+  /** Reconcile-to-statement: toggle a single row's cleared-against-statement
+   *  flag. Optimistic update + one-column server UPDATE. */
+  setCleared: (transactionId: string, cleared: boolean) => void;
+  /** Finalise a reconciliation: stamps the account checkpoint and, when
+   *  `postAdjustment` is true and a non-zero gap remains, posts an Adjustment
+   *  transaction equal to the remainder so the cleared balance lands exactly
+   *  on the statement target. */
+  reconcileAccount: (args: {
+    accountId: string;
+    statementBalance: number;
+    statementDate: string;
+    postAdjustment: boolean;
+  }) => void;
   /** Apply the same category to a batch of confirmed transactions in one
    *  server round-trip. `categoryId` of `null` clears the category. */
   bulkRecategorize: (ids: string[], categoryId: string | null) => void;
@@ -371,6 +389,33 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: s.transactions.map((t) => (idSet.has(t.id) ? { ...t, category: categoryId } : t)),
         }));
         syncMutation('bulkRecategorize', { ids, categoryId });
+      },
+
+      setCleared: (transactionId, cleared) => {
+        // Optimistic flip. Persist the same ISO timestamp the server would set
+        // so the UI's clearedBalance line stays consistent until the projection
+        // round-trip overwrites it.
+        const stamp = cleared ? new Date().toISOString() : null;
+        set((s) => ({
+          transactions: s.transactions.map((t) =>
+            t.id === transactionId ? { ...t, clearedAt: stamp } : t,
+          ),
+        }));
+        syncMutation('setCleared', { id: transactionId, cleared });
+      },
+
+      reconcileAccount: ({ accountId, statementBalance, statementDate, postAdjustment }) => {
+        // Optimistic checkpoint stamp; the remainder Adjustment + cleared
+        // flips on it arrive on the round-trip (we don't try to mirror the
+        // SUM-and-post logic client-side — it's all in the server case).
+        set((s) => ({
+          accounts: s.accounts.map((a) =>
+            a.id === accountId
+              ? { ...a, lastReconciledAt: statementDate, lastReconciledBalance: statementBalance }
+              : a,
+          ),
+        }));
+        syncMutation('reconcileAccount', { accountId, statementBalance, statementDate, postAdjustment });
       },
 
       deleteTransaction: (id) => {
