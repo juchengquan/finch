@@ -97,9 +97,9 @@ export default function AccountDetailPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
-  const [reconcileOpen, setReconcileOpen] = useState(false);
-  const [reconcileTarget, setReconcileTarget] = useState('');
-  const [reconcileNote, setReconcileNote] = useState('');
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustTarget, setAdjustTarget] = useState('');
+  const [adjustNote, setAdjustNote] = useState('');
   const [draft, setDraft] = useState({ name: '', type: 'savings' });
   const { openTransaction } = useTransactionSheet();
 
@@ -122,22 +122,22 @@ export default function AccountDetailPage() {
     toast.success('Account updated', { description: draft.name.trim() || name });
   };
 
-  const openReconcile = () => {
-    setReconcileTarget(String(balance));
-    setReconcileNote('');
-    setReconcileOpen(true);
+  const openAdjust = () => {
+    setAdjustTarget(String(balance));
+    setAdjustNote('');
+    setAdjustOpen(true);
   };
-  const submitReconcile = () => {
-    const target = parseFloat(reconcileTarget);
+  const submitAdjust = () => {
+    const target = parseFloat(adjustTarget);
     if (!Number.isFinite(target)) return void toast.error('Enter a target balance');
     if (Math.abs(target - balance) < 0.005) {
       toast.info('Already at this balance — nothing to adjust');
-      setReconcileOpen(false);
+      setAdjustOpen(false);
       return;
     }
-    adjustAccountBalance(accountId, target, reconcileNote.trim() || undefined);
-    toast.success('Balance reconciled', { description: `${name} → ${target.toLocaleString()}` });
-    setReconcileOpen(false);
+    adjustAccountBalance(accountId, target, adjustNote.trim() || undefined);
+    toast.success('Balance adjusted', { description: `${name} → ${target.toLocaleString()}` });
+    setAdjustOpen(false);
   };
 
   const doArchive = () => {
@@ -249,8 +249,8 @@ export default function AccountDetailPage() {
         </div>
 
         <div className="mb-4 flex items-center justify-end">
-          <Button variant="outline" size="sm" onClick={openReconcile}>
-            <Icon name="sync" size={13} />Reconcile balance
+          <Button variant="outline" size="sm" onClick={openAdjust}>
+            <Icon name="edit" size={13} />Adjust balance
           </Button>
         </div>
 
@@ -448,12 +448,13 @@ export default function AccountDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={reconcileOpen} onOpenChange={setReconcileOpen}>
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reconcile {name}</DialogTitle>
+            <DialogTitle>Adjust {name}</DialogTitle>
             <DialogDescription>
-              Set the actual balance — we&rsquo;ll record an adjustment for the difference.
+              Force the balance to a target value with a single adjustment entry — the blunt
+              path. For a guided session that ticks off real statement rows, use Reconcile.
               Adjustments don&rsquo;t count toward spending or income.
             </DialogDescription>
           </DialogHeader>
@@ -463,23 +464,23 @@ export default function AccountDetailPage() {
               <div className="text-muted-foreground text-sm">{balance.toLocaleString()}</div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="reconcile-target">Target balance</Label>
+              <Label htmlFor="adjust-target">Target balance</Label>
               <Input
-                id="reconcile-target"
+                id="adjust-target"
                 type="number"
                 inputMode="decimal"
-                value={reconcileTarget}
-                onChange={(e) => setReconcileTarget(e.target.value)}
+                value={adjustTarget}
+                onChange={(e) => setAdjustTarget(e.target.value)}
                 autoFocus
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="reconcile-note">Note (optional)</Label>
+              <Label htmlFor="adjust-note">Note (optional)</Label>
               <Input
-                id="reconcile-note"
-                value={reconcileNote}
-                onChange={(e) => setReconcileNote(e.target.value)}
-                placeholder="e.g. Manual reconcile after bank statement"
+                id="adjust-note"
+                value={adjustNote}
+                onChange={(e) => setAdjustNote(e.target.value)}
+                placeholder="e.g. Bank fee I missed"
               />
             </div>
           </div>
@@ -487,7 +488,7 @@ export default function AccountDetailPage() {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button onClick={submitReconcile}>Adjust</Button>
+            <Button onClick={submitAdjust}>Adjust</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
