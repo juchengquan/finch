@@ -118,16 +118,25 @@ function decomposeCondition(cond: Condition): { combinator: 'all' | 'any'; leave
   return { combinator: 'all', leaves: [defaultLeaf('merchant')] };
 }
 
-function makeDraft(rule: Rule | null): Draft {
+/** Optional seed for a fresh-rule draft. Used by the "always categorize X as
+ *  Y?" inline prompt to drop the user into the builder with the merchant +
+ *  category already filled in. Ignored when an existing rule is loaded. */
+export interface RulePrefill {
+  name?: string;
+  leaves?: Leaf[];
+  actions?: Action[];
+}
+
+function makeDraft(rule: Rule | null, prefill?: RulePrefill): Draft {
   if (!rule) {
     return {
-      name: '',
+      name: prefill?.name ?? '',
       priority: 100,
       isActive: true,
       runOnEdit: false,
       combinator: 'all',
-      leaves: [defaultLeaf('merchant')],
-      actions: [defaultAction('set_category')],
+      leaves: prefill?.leaves ?? [defaultLeaf('merchant')],
+      actions: prefill?.actions ?? [defaultAction('set_category')],
     };
   }
   const { combinator, leaves } = decomposeCondition(rule.condition);
@@ -148,10 +157,13 @@ export function RuleBuilderSheet({
   rule,
   open,
   onClose,
+  prefill,
 }: {
   rule: Rule | null;
   open: boolean;
   onClose: () => void;
+  /** Initial draft seed when creating a new rule; ignored for edits. */
+  prefill?: RulePrefill;
 }) {
   const { activeId } = useLedger();
   const categories = useFinanceStore((s) => s.categories);
@@ -162,14 +174,19 @@ export function RuleBuilderSheet({
   const createRule = useFinanceStore((s) => s.createRule);
   const updateRule = useFinanceStore((s) => s.updateRule);
 
-  const [draft, setDraft] = useState<Draft>(() => makeDraft(rule));
+  const [draft, setDraft] = useState<Draft>(() => makeDraft(rule, prefill));
 
-  // Reset the draft whenever the sheet (re)opens for a different rule.
-  const ruleId = rule?.id ?? null;
-  const [lastRuleId, setLastRuleId] = useState<string | null>(ruleId);
-  if (open && lastRuleId !== ruleId) {
-    setDraft(makeDraft(rule));
-    setLastRuleId(ruleId);
+  // Reset the draft whenever the sheet (re)opens for a different rule / new
+  // prefill. The key is "rule.id || prefill-fingerprint" so two distinct
+  // prefills produce distinct drafts even when both are new rules.
+  const prefillKey = prefill
+    ? JSON.stringify({ n: prefill.name, l: prefill.leaves, a: prefill.actions })
+    : '';
+  const draftKey = `${rule?.id ?? ''}|${prefillKey}`;
+  const [lastDraftKey, setLastDraftKey] = useState<string>(draftKey);
+  if (open && lastDraftKey !== draftKey) {
+    setDraft(makeDraft(rule, prefill));
+    setLastDraftKey(draftKey);
   }
 
   const ledgerCategories = categories.filter((c) => c.ledgerId === activeId);
