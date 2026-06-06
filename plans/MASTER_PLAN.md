@@ -8,7 +8,28 @@ and the current implementation in `frontend/`.
 > app's live data layer, served by a **server-side** SQLite database. See
 > `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-06-05._
+_Last updated: 2026-06-06._
+
+### Plans index
+
+What lives in `plans/` (active) vs `plans/done/` (shipped design records):
+
+**Active planning + reference (`plans/`):**
+
+- `MASTER_PLAN.md` — this file.
+- `database_design_en.md` — the canonical relational schema design (reference, not a feature plan).
+- `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
+- `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
+- `IOS_MACOS_PLAN.md` — **new (2026-06-06)** — product + architecture direction brief for a future native iOS / macOS port; resolves 8 product decisions including iCloud Drive file-pack sync, the shared receipt-attachments schema, OS baseline (iOS/iPadOS/macOS 26), and ledger CRUD for both apps.
+- `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
+- `RECEIPT_PHOTOS_PLAN.md` — **new (2026-06-06)** — web-app implementation plan for attaching receipt photos / PDFs to transactions; builds on the shared schema in `IOS_MACOS_PLAN §2.5`.
+
+**Shipped design records (`plans/done/`):**
+
+- `BUDGET_CYCLES_PLAN.md`, `CRUD_PARITY_PLAN.md`, `FX_CONVERSION_PLAN.md`, `IMPORT_EXPORT_PLAN.md`, `INSIGHTS_PLAN.md`, `MERCHANTS_LINK_PLAN.md`, `MULTI_CURRENCY_ACCOUNTS_PLAN.md`, `SETTINGS_AND_TRANSFERS_PLAN.md`, `SQLITE_INTEGRATION_PLAN.md`, `budgets_redesign.md` — earlier plans, all shipped.
+- `RECONCILE_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #90 + #101 (v2).
+- `RULES_ENGINE_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #91, #94 + the UI series in PR #102.
+- `FILE_BACKED_DB_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #96, #97, #99, #100 (the persistence runtime moved from in-memory `sqlite-wasm` to file-backed `better-sqlite3` with WAL).
 
 ---
 
@@ -17,12 +38,14 @@ _Last updated: 2026-06-05._
 **Stack (implemented):** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript ·
 Tailwind v4 · shadcn/ui (Radix) · lucide-react · next-themes (light/dark) · Bun.
 
-**Data layer:** a **server-side SQLite database** (the full
-`database_design_en.md` schema via `@sqlite.org/sqlite-wasm` in Node) is the
-source of truth, persisted to a file at `FINCH_DB_DIR`/`FINCH_DB_FILE`. The
-browser talks to it via API routes (`GET /api/state`, `POST /api/mutate`,
-`GET /api/db-info`); the Zustand store is a mirror that hydrates on load and
-syncs every mutation. Static reference seed still lives in `frontend/data/*.json`.
+**Data layer:** a **server-side, file-backed SQLite database** (the full
+`database_design_en.md` schema via **`better-sqlite3` with WAL** — see
+`plans/done/FILE_BACKED_DB_PLAN.md` for the persistence-runtime move from
+`sqlite-wasm`) is the source of truth, persisted to a file at
+`FINCH_DB_DIR`/`FINCH_DB_FILE`. The browser talks to it via API routes
+(`GET /api/state`, `POST /api/mutate`, `GET /api/db-info`); the Zustand store
+is a mirror that hydrates on load and syncs every mutation. Static reference
+seed still lives in `frontend/data/*.json`.
 
 **Shell & system:**
 - ✅ Single-render responsive shell (`PageShell`): desktop sidebar + header,
@@ -317,21 +340,41 @@ effort. The picks already landed are crossed off in the "Done since" coda
 below; what's still open is summarized here.
 
 **Current open items (high payoff):**
-1. **Receipt photos** (FEATURE_IDEAS §4.1) — attach an image to a transaction.
-   New `transaction_attachments` table; OPFS blob + IndexedDB pointer;
-   thumbnail in the detail sheet. Reverses the earlier "Receipt — coming soon"
-   stub that was deleted as part of the cleanup pass. **M, schema change.**
-2. **PWA** — turn finch into an installable, offline-capable app (cache the
-   shell + WASM via a service worker, request persistent storage). Scoping
-   doc at `plans/PWA_PLAN.md`; five open questions still to resolve. **M.**
-   _Note: the plan doc still describes the OPFS-backed client database the
-   app no longer uses — the data layer is now server-side SQLite. The
-   service-worker caching strategy needs to be revisited in that light._
+1. **Receipt photos** (FEATURE_IDEAS §4.1) — attach an image / PDF to a
+   transaction. **Has a plan now: `plans/RECEIPT_PHOTOS_PLAN.md` (2026-06-06).**
+   Pointer-only schema (`transaction_attachments` — files NEVER stored as DB
+   blobs); bytes live under `${FINCH_DB_DIR}/attachments/`; new upload + serve
+   routes; lightbox + Attachments row in the transaction detail sheet; the
+   shared schema is `IOS_MACOS_PLAN.md §2.5`, the `.finch` export/import
+   format closes the cross-app file-portability loop. Reverses the earlier
+   "Receipt — coming soon" stub that was deleted as part of the cleanup pass.
+   **M, schema change.**
+2. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (2026-06-06).
+   Direction brief, not a build plan: inherited domain model, parity matrix,
+   architecture decisions (GRDB on the verbatim schema, Swift port of the
+   selectors w/ the web `bun test` suite as the parity oracle, iCloud Drive
+   file-pack sync), Apple-platform upside (App Intents, Spotlight, biometric
+   lock, Share-Extension receipts). Tier 1 also requires **ledger CRUD** on
+   both apps (the web ships with 4 seeded ledgers and no creation path —
+   tracked as a cross-app implication in §8 of the doc). **L (the build);
+   the brief itself is done.**
 3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
 4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
+5. **Ledger CRUD on the web app** — surfaced by the native plan (§8
+   cross-app implications). Currently 4 seeded ledgers with no create/rename/
+   delete mutation; required for file-pack interop so native-created ledgers
+   round-trip. **S–M, schema-adjacent (mutations + UI).**
+
+⊘ **Superseded — do not implement: PWA** (`plans/PWA_PLAN.md`). The plan was
+written when the database lived in the browser (OPFS-backed `sqlite-wasm`);
+the data layer is now server-side and file-backed, so the §-by-§ caching
+strategy no longer applies. The native iOS/macOS direction
+(`plans/IOS_MACOS_PLAN.md §1.1`) explicitly supersedes the "PWA is good
+enough" judgement — reach the home screen via real native apps, not a wrapped
+web view.
 
 **Layout / a11y polish** ✅ shipped (PR #84) — dark `--muted-foreground`
 contrast bump to ~6:1 (WCAG AA), shared `<EmptyState />` across Accounts /
@@ -555,4 +598,53 @@ references to `plans/FEATURE_IDEAS.md` are in parentheses.
   `quietestDay` (counterpart to the existing `weekdaySkew` — the day-of-week
   that's reliably half the daily average). All gated on a minimum-data floor
   so they don't fire on stub ledgers.
+
+### Done since (post-PR-#82)
+
+The persistence-runtime upgrade + the reconcile-engine-rules feature triad +
+plan-folder hygiene. Cross-references to `plans/FEATURE_IDEAS.md` are in
+parentheses.
+
+- **File-backed SQLite + WAL** (PRs #96, #97, #99, #100) — the persistence
+  runtime moved from in-memory `@sqlite.org/sqlite-wasm` (whole-file snapshot
+  per mutation) to file-backed **`better-sqlite3`** with WAL
+  (`synchronous=NORMAL`). Every COMMIT fsyncs frames into `${file}-wal` and
+  auto-checkpoint drains them into the main file; no in-memory snapshot
+  dance. Export = `VACUUM INTO`; import = close conn → swap file → reopen.
+  Tests use `bun:sqlite` via a cross-runtime driver (`lib/db/driver.ts`)
+  behind the same `Exec` shape. Cuts per-mutation write cost from O(N bytes)
+  to row-level. Design record: `plans/done/FILE_BACKED_DB_PLAN.md`.
+- **Reconcile-to-statement v2** (PR #101) — "add missing transactions
+  during reconcile." The original flow forced a gap into an adjustment; v2
+  treats the gap as a real transaction the user forgot, making "add the
+  missing row" a first-class in-flow action (quick-add + auto-clear,
+  confirm-and-clear shortcut for pending rows, gap-framing copy). No schema
+  change — composes existing mutations. Design record:
+  `plans/done/RECONCILE_PLAN.md §10–11`.
+- **Rules-engine UI series** (PR #102) — finishes the conditional rules
+  feature with a read-only `/rules` page, the condition + action builder
+  sheet, a backfill ("Apply to existing") flow with a preview-N-matches
+  step, and an inline "create rule from this transaction" prompt after a
+  manual recategorize. Design record: `plans/done/RULES_ENGINE_PLAN.md`.
+- **Plan status reconciliation** (PR #103) — reconciled the Reconcile and
+  Rules Engine plans against shipped state with sharper status preambles
+  pointing at the implementing PRs. (Precursor to the plan-folder cleanup
+  in PR #105.)
+- **Reviewed / unreviewed status** (PR #104, INSPIRATION_IDEAS §5.1) — new
+  `transactions.reviewed_at` triage column, distinct from `status`
+  (confirmed/pending) and `cleared_at` (statement reconcile). Closes the
+  rules engine's `mark_reviewed` action (previously a no-op — there was no
+  column to set). UI: "Needs review · N" filter on Activity with bulk
+  mark-all-reviewed; primary dot on unreviewed rows; per-row toggle on the
+  transaction detail. Backfill action applies it too.
+- **iOS &amp; macOS direction brief + receipt-photos scoping plan** (PR #105) —
+  two new planning docs. `plans/IOS_MACOS_PLAN.md` is a direction brief for
+  a future native Apple port (inherited domain model, parity matrix,
+  architecture decisions, the `.finch` pack format for iCloud Drive
+  file-pack sync, 8 resolved decisions including OS baseline + the
+  receipt-attachments shared schema). `plans/RECEIPT_PHOTOS_PLAN.md`
+  scopes the web-app implementation of attachments on top of that shared
+  schema. Same PR also moved `RECONCILE_PLAN.md`, `RULES_ENGINE_PLAN.md`,
+  and `FILE_BACKED_DB_PLAN.md` from `plans/` to `plans/done/` (the three
+  recent shipped plans) and updated this file's Plans index.
 

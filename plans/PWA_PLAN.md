@@ -1,16 +1,29 @@
 # PWA — scoping / design plan
 
-Status: **planning** — no code changes yet.
+Status: ⊘ **superseded — do not implement.** Kept as a fork-in-the-road
+design record. See `plans/MASTER_PLAN.md §5` "Current open items" for the
+chosen direction.
 
-> ⚠️ **Doc predates the data-layer change.** This plan was written when the DB
-> ran client-side in the browser (OPFS-backed `sqlite-wasm`). That's no longer
-> true: the database is now **server-side and file-backed** (`better-sqlite3`
-> with WAL — see `FILE_BACKED_DB_PLAN.md`, shipped), reached over API routes.
-> So "offline" no longer means "the data is already local" — a true offline
-> PWA would need an offline *read* story (cached projections / a client mirror)
-> on top of shell+asset caching. The §-by-§ caching strategy below must be
-> re-derived against the server-side model before any code. Treat the sections
-> below as historical until that rework lands.
+> ⚠️ **Doc predates the data-layer change AND is superseded by the native
+> direction.** Two unrelated reasons this plan is no longer the path forward:
+>
+> 1. **Data layer moved server-side.** This plan was written when the DB ran
+>    client-side in the browser (OPFS-backed `sqlite-wasm`). That's no longer
+>    true — the database is now **server-side and file-backed**
+>    (`better-sqlite3` with WAL; see `plans/done/FILE_BACKED_DB_PLAN.md`,
+>    shipped), reached over API routes. "Offline" no longer means "the data
+>    is already local"; a true offline PWA would need a cached projection
+>    / client mirror on top of shell+asset caching. The §-by-§ caching
+>    strategy below would need a rewrite against the server-side model.
+>
+> 2. **Native iOS / macOS supersedes the install-to-home-screen story.**
+>    `plans/IOS_MACOS_PLAN.md §1.1` explicitly supersedes this plan's
+>    "PWA is good enough for install-to-home-screen" judgement. The chosen
+>    path is real native apps (SwiftUI, GRDB on the verbatim schema,
+>    iCloud Drive file-pack sync) — not a wrapped web view.
+>
+> The sections below are kept as a historical record of the fork in the road.
+> Treat as **archived**; do not start implementation.
 
 Turn finch into an installable, offline-capable Progressive Web App. This plan
 covers caching the **app shell + assets** so the app loads when the network is

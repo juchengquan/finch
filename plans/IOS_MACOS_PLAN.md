@@ -922,6 +922,10 @@ during the relevant phase.
   `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`; budgets
   `frontend/lib/budgets/*`; tokens `frontend/app/globals.css`; design intent
   `plans/frontend_design/`.
-- **Related plans:** `MASTER_PLAN.md` (what shipped), `RECONCILE_PLAN.md`,
-  `RULES_ENGINE_PLAN.md`, `FILE_BACKED_DB_PLAN.md`, `PWA_PLAN.md` (the
-  superseded "good enough" judgement), `FEATURE_IDEAS.md` / `INSPIRATION_IDEAS.md`.
+- **Related plans:** `MASTER_PLAN.md` (what shipped); `RECEIPT_PHOTOS_PLAN.md`
+  (the web-side implementation of attachments built on §2.5 of this brief);
+  `PWA_PLAN.md` (superseded by §1.1 of this brief, kept as a fork-in-the-road
+  record); `FEATURE_IDEAS.md` / `INSPIRATION_IDEAS.md` (idea catalogs); and
+  the shipped design records in `plans/done/` —
+  `done/RECONCILE_PLAN.md`, `done/RULES_ENGINE_PLAN.md`,
+  `done/FILE_BACKED_DB_PLAN.md`.
