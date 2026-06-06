@@ -37,6 +37,7 @@ import { MOCK, catById, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
+import { reconcileState } from '@/lib/reconcile';
 import { AccountHoldings } from '@/components/account-holdings';
 import { AccountForecast } from '@/components/account-forecast';
 import { ReconcileStatus } from '@/components/reconcile-status';
@@ -102,6 +103,14 @@ export default function AccountDetailPage() {
   const [adjustTarget, setAdjustTarget] = useState('');
   const [adjustNote, setAdjustNote] = useState('');
   const [draft, setDraft] = useState({ name: '', type: 'savings' });
+  // Reconcile-to-statement session state. Only one account-detail page is in
+  // reconcile mode at a time; entering mode swaps the truncated transaction
+  // list for a full ticking surface (see RECONCILE_PLAN §5.2).
+  const [reconcileMode, setReconcileMode] = useState(false);
+  const [statementBalance, setStatementBalance] = useState('');
+  const [statementDate, setStatementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const setCleared = useFinanceStore((s) => s.setCleared);
+  const reconcileAccount = useFinanceStore((s) => s.reconcileAccount);
   const { openTransaction } = useTransactionSheet();
 
   const name = row?.name ?? mock?.name ?? '';
@@ -127,6 +136,38 @@ export default function AccountDetailPage() {
     setAdjustTarget(String(balance));
     setAdjustNote('');
     setAdjustOpen(true);
+  };
+
+  // Reconcile session handlers — entering/exiting and finalising.
+  const openReconcile = () => {
+    // Default the statement balance to whatever the account thinks today (the
+    // common case: a recently-arrived statement matches reality and the user
+    // just confirms by ticking rows). The user overwrites it if it doesn't.
+    setStatementBalance(String(balance));
+    setStatementDate(new Date().toISOString().slice(0, 10));
+    setReconcileMode(true);
+  };
+  const exitReconcile = () => setReconcileMode(false);
+  const targetNumber = Number.parseFloat(statementBalance);
+  const recState = row && Number.isFinite(targetNumber)
+    ? reconcileState(row, allTxns, targetNumber)
+    : null;
+  const finishReconcile = (postAdjustment: boolean) => {
+    if (!row || !Number.isFinite(targetNumber)) {
+      return void toast.error('Enter a statement balance');
+    }
+    if (!statementDate) return void toast.error('Pick the statement date');
+    reconcileAccount({
+      accountId,
+      statementBalance: targetNumber,
+      statementDate,
+      postAdjustment,
+    });
+    toast.success(
+      postAdjustment ? 'Reconciled with adjustment' : 'Reconciled',
+      { description: `${name} → ${targetNumber.toLocaleString()}` },
+    );
+    exitReconcile();
   };
   const submitAdjust = () => {
     const target = parseFloat(adjustTarget);
@@ -255,10 +296,104 @@ export default function AccountDetailPage() {
             <Button variant="outline" size="sm" onClick={openAdjust}>
               <Icon name="edit" size={13} />Adjust balance
             </Button>
+            <Button variant="outline" size="sm" onClick={openReconcile} disabled={reconcileMode}>
+              <Icon name="check" size={13} />Reconcile
+            </Button>
           </div>
         </div>
 
-        {toConfirm.length > 0 && (
+        {reconcileMode && row && (
+          <div className="bg-card border-border mb-4 overflow-hidden rounded-[14px] border">
+            <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
+              <div className="text-sm font-semibold">Reconcile to statement</div>
+              <button
+                type="button"
+                onClick={exitReconcile}
+                aria-label="Cancel reconcile"
+                className="text-muted-foreground hover:text-foreground cursor-pointer text-[11px]"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 px-[18px] py-3.5">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="recon-balance" className="text-muted-foreground text-[11px]">
+                  Statement balance ({currency})
+                </Label>
+                <Input
+                  id="recon-balance"
+                  type="number"
+                  inputMode="decimal"
+                  value={statementBalance}
+                  onChange={(e) => setStatementBalance(e.target.value)}
+                  className="h-8 text-right font-mono text-[12px]"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="recon-date" className="text-muted-foreground text-[11px]">As of</Label>
+                <Input
+                  id="recon-date"
+                  type="date"
+                  value={statementDate}
+                  onChange={(e) => setStatementDate(e.target.value)}
+                  className="h-8 text-[12px]"
+                />
+              </div>
+            </div>
+            {recState && (
+              <div className="border-border space-y-2 border-t px-[18px] py-3.5">
+                <div className="flex items-baseline justify-between font-mono text-[11px]">
+                  <span className="text-muted-foreground">Cleared</span>
+                  <span>{fmtNative(recState.clearedBalance, currency)}</span>
+                </div>
+                <div className="flex items-baseline justify-between font-mono text-[11px]">
+                  <span className="text-muted-foreground">Target</span>
+                  <span>{fmtNative(recState.statementBalance, currency)}</span>
+                </div>
+                <div className="flex items-baseline justify-between font-mono text-[11px]">
+                  <span className="text-muted-foreground">Difference</span>
+                  <span className={cn(recState.balanced ? 'text-success' : 'text-warning')}>
+                    {recState.difference >= 0 ? '+' : '−'}
+                    {fmtNative(Math.abs(recState.difference), currency)}
+                  </span>
+                </div>
+                <div className="bg-secondary h-1.5 w-full overflow-hidden rounded-full">
+                  <span
+                    className={cn(
+                      'block h-full transition-all',
+                      recState.balanced ? 'bg-success' : 'bg-warning',
+                    )}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        recState.statementBalance === 0
+                          ? 0
+                          : Math.abs((recState.clearedBalance / recState.statementBalance) * 100),
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <div className="text-muted-foreground flex items-center justify-between text-[11px]">
+                  <span>
+                    {recState.clearedCount} cleared · {recState.unclearedCount} to review
+                  </span>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  {!recState.balanced && (
+                    <Button size="sm" variant="outline" onClick={() => finishReconcile(true)}>
+                      Post adjustment for {fmtNative(Math.abs(recState.difference), currency)}
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => finishReconcile(false)} disabled={!recState.balanced}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {toConfirm.length > 0 && !reconcileMode && (
           <div className="border-warning/30 bg-warning/5 mb-4 overflow-hidden rounded-[14px] border">
             <div className="border-warning/20 flex items-center justify-between border-b px-[18px] py-3.5">
               <div className="text-sm font-semibold">To confirm · {toConfirm.length}</div>
@@ -319,17 +454,38 @@ export default function AccountDetailPage() {
               <div className="text-sm font-semibold">All transactions · {txs.length}</div>
               <div className="text-muted-foreground flex cursor-pointer items-center gap-1 text-xs"><Icon name="filter" size={12}/>Filter</div>
             </div>
-            {txs.slice(0, 6).map((tx, i) => {
+            {(reconcileMode ? txs : txs.slice(0, 6)).map((tx, i) => {
               const cat = catById(tx.category);
               const inc = tx.amount > 0;
+              const cleared = Boolean(tx.clearedAt);
+              const handleClick = reconcileMode
+                ? () => setCleared(tx.id, !cleared)
+                : () => openTransaction(tx.id);
               return (
                 <button
                   key={tx.id}
                   type="button"
-                  onClick={() => openTransaction(tx.id)}
-                  className={cn('hover:bg-secondary/40 flex w-full cursor-pointer items-center gap-3 px-[18px] py-3 text-left', i && 'border-border border-t-[0.5px]')}
+                  onClick={handleClick}
+                  aria-pressed={reconcileMode ? cleared : undefined}
+                  className={cn(
+                    'hover:bg-secondary/40 flex w-full cursor-pointer items-center gap-3 px-[18px] py-3 text-left',
+                    i && 'border-border border-t-[0.5px]',
+                    reconcileMode && cleared && 'bg-success/5',
+                  )}
                 >
-                  <CatBar color={cat.color} />
+                  {reconcileMode ? (
+                    <span
+                      className={cn(
+                        'flex size-4 shrink-0 items-center justify-center rounded-full border',
+                        cleared ? 'bg-success border-success text-background' : 'border-border',
+                      )}
+                      aria-hidden
+                    >
+                      {cleared && <Icon name="check" size={10} />}
+                    </span>
+                  ) : (
+                    <CatBar color={cat.color} />
+                  )}
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[13px] font-medium">{tx.merchant}</span>
