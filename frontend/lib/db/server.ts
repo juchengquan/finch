@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { getSqlite3, execFor, type OO1DB } from './sqlite';
+import { openDb, execFor, applyPragmaBootstrap, type SqliteDriver } from './driver';
 import { applySchema, migrate } from './schema';
 import { seedDatabase } from './seed';
 import { projectState } from './state';
@@ -10,12 +11,16 @@ import { computeChecksum } from './checksum';
 import { rollBudgetsIfDue } from '@/lib/budgets/rollover';
 import type { Exec, ProjectedState } from './repo';
 
-// The authoritative database: a single in-memory SQLite connection held by the
-// Node server for the life of the process, loaded from a file on startup and
-// written back to that file after every change. The file location comes from
-// env vars so it can point at persistent storage:
+// The authoritative database: a single file-backed SQLite connection held by
+// the Node server for the life of the process. WAL is the durability boundary
+// (every COMMIT fsyncs frames) — there's no per-mutation full-file snapshot
+// any more. See FILE_BACKED_DB_PLAN §3.
+//
+// File location comes from env vars so it can point at persistent storage:
 //   FINCH_DB_DIR   directory (default: <cwd>/.data)
 //   FINCH_DB_FILE  filename  (default: finch.sqlite3)
+// The sidecar files SQLite manages alongside the main file are
+// `${FINCH_DB_FILE}-wal` and `-shm`.
 
 function dbFile(): { dir: string; full: string } {
   const dir = process.env.FINCH_DB_DIR || path.join(process.cwd(), '.data');
@@ -23,63 +28,43 @@ function dbFile(): { dir: string; full: string } {
   return { dir, full: path.join(dir, file) };
 }
 
+/** Remove the WAL sidecars alongside `full`, if they exist. Used after we
+ *  close a connection prior to swapping the underlying file (import / restore)
+ *  so the new file isn't accidentally paired with the old WAL on reopen. */
+async function removeSidecars(full: string): Promise<void> {
+  await fs.unlink(`${full}-wal`).catch(() => {});
+  await fs.unlink(`${full}-shm`).catch(() => {});
+}
+
 interface ServerDb {
   exec: Exec;
-  persist: () => Promise<void>;
+  driver: SqliteDriver;
   file: string;
 }
 
 let _db: Promise<ServerDb> | null = null;
 
 async function open(): Promise<ServerDb> {
-  const sqlite3 = await getSqlite3();
   const { dir, full } = dbFile();
   await fs.mkdir(dir, { recursive: true });
+  const isFresh = !existsSync(full);
 
-  let bytes: Uint8Array | null = null;
-  try {
-    const buf = await fs.readFile(full);
-    if (buf.byteLength > 0) bytes = new Uint8Array(buf);
-  } catch {
-    // No file yet — first run.
-  }
+  const driver = await openDb(full);
+  applyPragmaBootstrap(driver);
+  const exec = execFor(driver);
 
-  let db: OO1DB;
-  if (bytes) {
-    db = new sqlite3.oo1.DB() as unknown as OO1DB;
-    const p = sqlite3.wasm.allocFromTypedArray(bytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      db.pointer!,
-      'main',
-      p,
-      bytes.length,
-      bytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    if (rc) throw new Error(`Could not open ${full} (code ${rc})`);
-    await applySchema(execFor(db)); // ensure newer objects exist on older files
-    await migrate(execFor(db), { fresh: false }); // apply column migrations to old files
-  } else {
-    db = new sqlite3.oo1.DB(':memory:') as unknown as OO1DB;
-    const exec = execFor(db);
-    await applySchema(exec);
+  // applySchema's CREATE TABLE/INDEX IF NOT EXISTS statements are idempotent —
+  // they pick up any tables/indexes added since the file was last opened. Then
+  // migrate replays the ordered schema changes the version stamp says are due.
+  await applySchema(exec);
+  if (isFresh) {
     await seedDatabase(exec);
-    await migrate(exec, { fresh: true }); // stamp the version on the new file
+    await migrate(exec, { fresh: true });
+  } else {
+    await migrate(exec, { fresh: false });
   }
 
-  const exec = execFor(db);
-  const persist = async () => {
-    // Bump the metadata row's updated_at *before* serialising so the file's
-    // recorded timestamp matches the bytes on disk.
-    await bumpUpdated(exec);
-    await fs.mkdir(dir, { recursive: true });
-    const out = sqlite3.capi.sqlite3_js_db_export(db as never);
-    const tmp = `${full}.tmp`;
-    await fs.writeFile(tmp, Buffer.from(out));
-    await fs.rename(tmp, full);
-  };
-  await persist(); // make sure the file exists from the first boot
-  return { exec, persist, file: full };
+  return { exec, driver, file: full };
 }
 
 /** The shared server database, opened once per process. */
@@ -91,7 +76,29 @@ export function getServerDb(): Promise<ServerDb> {
 /** Test-only: drop the cached connection so the next getServerDb() reopens
  *  against (possibly-changed) FINCH_DB_DIR. Never call from app code. */
 export function _resetServerDbForTests(): void {
+  if (_db) {
+    _db.then((d) => d.driver.close()).catch(() => {});
+  }
   _db = null;
+}
+
+/** Close the live connection (best-effort checkpoint first) and forget the
+ *  cached promise. Used by import/restore before file-swapping. */
+async function closeLiveDb(): Promise<void> {
+  if (!_db) return;
+  const cached = _db;
+  _db = null;
+  try {
+    const d = await cached;
+    try {
+      d.driver.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch {
+      /* a busy/partial checkpoint is harmless; the open() path will recover */
+    }
+    d.driver.close();
+  } catch {
+    /* opening failed earlier — nothing live to close */
+  }
 }
 
 // Process-local mutex around writes + imports so a mutation can't interleave
@@ -120,27 +127,20 @@ export interface ImportValidation {
  *   - PRAGMA foreign_key_check passes
  *   - recorded checksum matches a freshly-computed one (catches tampering /
  *     truncation; only when a checksum was stamped)
+ *
+ * Implementation: writes the bytes to a tmp file (better-sqlite3 opens by
+ * path, not by buffer) and opens it with the same driver the live DB uses.
  */
 export async function validateImportBytes(bytes: Uint8Array): Promise<ImportValidation> {
-  // The SQLite header magic is the literal ASCII "SQLite format 3" followed by
-  // a NUL byte. Decode the first 15 bytes as latin1 (1:1 byte→char) and check.
   const header = Buffer.from(bytes.subarray(0, 15)).toString('latin1');
   if (bytes.length < 16 || header !== 'SQLite format 3' || bytes[15] !== 0) {
     return { ok: false, reason: "This doesn't look like a SQLite file." };
   }
-  const sqlite3 = await getSqlite3();
-  const probe = new sqlite3.oo1.DB() as unknown as OO1DB;
+  const probeFile = path.join(os.tmpdir(), `finch-probe-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`);
+  await fs.writeFile(probeFile, Buffer.from(bytes));
+  const probe = await openDb(probeFile);
   try {
-    const p = sqlite3.wasm.allocFromTypedArray(bytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      probe.pointer!,
-      'main',
-      p,
-      bytes.length,
-      bytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    if (rc) return { ok: false, reason: `Could not open the file (code ${rc}).` };
+    applyPragmaBootstrap(probe);
     const exec = execFor(probe);
 
     // applySchema is a no-op on tables that already exist; this lets us read
@@ -164,19 +164,15 @@ export async function validateImportBytes(bytes: Uint8Array): Promise<ImportVali
       return { ok: false, reason: `This backup is from a newer Finch (schema ${meta.schemaVersion}).` };
     }
 
-    // Smoke-check that the canonical tables exist after migrate.
     const requiredTables = ['ledgers', 'accounts', 'categories', 'transactions'];
     for (const t of requiredTables) {
       const info = await exec(`PRAGMA table_info(${t})`);
       if (info.length === 0) return { ok: false, reason: `Required table missing: ${t}` };
     }
 
-    // FK integrity post-migrate. PRAGMA foreign_key_check returns one row per
-    // violation; an empty result is the success case.
     const fkRows = await exec('PRAGMA foreign_key_check');
     if (fkRows.length > 0) return { ok: false, reason: 'Foreign-key check failed after migration.' };
 
-    // If the file carries a checksum, recompute and compare.
     if (meta.checksum) {
       const fresh = await computeChecksum(exec);
       if (fresh !== meta.checksum) {
@@ -187,6 +183,8 @@ export async function validateImportBytes(bytes: Uint8Array): Promise<ImportVali
     return { ok: true, metadata: meta };
   } finally {
     probe.close();
+    await fs.unlink(probeFile).catch(() => {});
+    await removeSidecars(probeFile).catch(() => {});
   }
 }
 
@@ -212,6 +210,13 @@ async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
 
   const backup = await autoBackup({ minIntervalMs: 0 }); // always snapshot
   const { full } = dbFile();
+
+  // Close the live connection so the OS file lock + WAL sidecars are released
+  // BEFORE we touch the file. Otherwise the rename could leave the old WAL
+  // paired with the new main file → corrupted next-open.
+  await closeLiveDb();
+  await removeSidecars(full);
+
   const incoming = `${full}.incoming`;
   try {
     await fs.writeFile(incoming, Buffer.from(bytes));
@@ -220,8 +225,7 @@ async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
     await fs.unlink(incoming).catch(() => {});
     throw err;
   }
-  // Drop the cached connection so the next request reopens against the new file.
-  _db = null;
+  // _db is already null from closeLiveDb; the next getServerDb() reopens.
   return { ok: true, metadata: v.metadata!, backupPath: backup.path };
 }
 
@@ -253,22 +257,27 @@ const todayUtc = () => new Date().toISOString().slice(0, 10);
 export async function readState(): Promise<ProjectedState> {
   return serialize(async () => {
     const db = await getServerDb();
-    const { rolled } = await rollBudgetsIfDue(db.exec, todayUtc());
-    if (rolled > 0) await db.persist();
+    await rollBudgetsIfDue(db.exec, todayUtc());
     return projectState(db.exec);
   });
 }
 
-/** Run a write against the server database, persist to file, return new state.
- *  Serialised against imports so a mutation can't interleave with a file swap.
- *  Runs the rollover catch-up before projecting so the response is consistent
- *  with what /api/state would return immediately afterwards. */
+/** Run a write against the server database, return new state. The write is
+ *  wrapped in a BEGIN/COMMIT pair so a partial mutation rolls back on throw —
+ *  WAL handles durability on COMMIT via the synchronous=NORMAL bootstrap. */
 export function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedState> {
   return serialize(async () => {
     const db = await getServerDb();
-    await fn(db.exec);
-    await rollBudgetsIfDue(db.exec, todayUtc());
-    await db.persist();
+    await db.exec('BEGIN');
+    try {
+      await fn(db.exec);
+      await rollBudgetsIfDue(db.exec, todayUtc());
+      await bumpUpdated(db.exec);
+      await db.exec('COMMIT');
+    } catch (err) {
+      await db.exec('ROLLBACK').catch(() => {});
+      throw err;
+    }
     return projectState(db.exec);
   });
 }
@@ -294,13 +303,9 @@ function fsSafeTimestamp(d: Date = new Date()): string {
 }
 
 export interface BackupEntry {
-  /** Absolute path to the backup file. */
   path: string;
-  /** Just the filename, for display. */
   name: string;
-  /** Bytes on disk. */
   size: number;
-  /** ISO 8601 mtime. */
   createdAt: string;
 }
 
@@ -337,14 +342,13 @@ async function pruneBackups(keep: number): Promise<void> {
 }
 
 /**
- * Copy the live server DB file to a timestamped sibling in the same directory:
+ * Snapshot the live server DB to a timestamped sibling:
  *   <FINCH_DB_DIR>/finch-YYYY-MM-DDTHH-MM-SSZ.sqlite3.bak
  *
- * Throttled: if the most-recent backup is younger than `minIntervalMs`
- * (default 1h, env FINCH_BACKUP_MIN_INTERVAL_MS), this returns that path
- * instead of writing a new one — keeps the disk from filling up when called
- * from a hot path. Retention prunes the oldest backups beyond
- * `FINCH_BACKUP_KEEP` (default 14).
+ * Uses VACUUM INTO so the backup is a clean, single-file snapshot taken
+ * atomically without quiescing the live writer (FILE_BACKED_DB_PLAN §4.2).
+ * Throttled by `minIntervalMs`; retention prunes oldest beyond
+ * FINCH_BACKUP_KEEP (default 14).
  */
 export async function autoBackup(opts?: { minIntervalMs?: number }): Promise<{ path: string }> {
   const minInterval = opts?.minIntervalMs ?? defaultMinInterval();
@@ -355,14 +359,12 @@ export async function autoBackup(opts?: { minIntervalMs?: number }): Promise<{ p
     if (ageMs < minInterval) return { path: newest.path };
   }
   const db = await getServerDb();
-  await db.persist(); // make sure the file on disk reflects the in-memory state
   const { dir } = dbFile();
   await fs.mkdir(dir, { recursive: true });
   const target = path.join(dir, `${BACKUP_PREFIX}${fsSafeTimestamp()}${BACKUP_SUFFIX}`);
-  // Write to a .tmp then rename so a crash mid-copy doesn't leave a partial file.
-  const tmp = `${target}.tmp`;
-  await fs.copyFile(db.file, tmp);
-  await fs.rename(tmp, target);
+  // Make sure no stale target exists from a previous failed run.
+  await fs.unlink(target).catch(() => {});
+  db.driver.prepare('VACUUM INTO ?').run(target);
   await pruneBackups(backupRetention());
   return { path: target };
 }
@@ -376,41 +378,37 @@ function includeHostname(): boolean {
 /**
  * Export a copy of the DB with provenance stamped into db_metadata
  * (exported_at, exported_from, row_counts, checksum). The live DB is not
- * mutated — stamps are applied to a fresh in-memory clone built from the
- * just-persisted bytes, then re-serialised.
+ * mutated — VACUUM INTO writes a clean snapshot to a tmp file, we stamp
+ * metadata on it, then read its bytes back.
  */
 export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
   const db = await getServerDb();
-  await db.persist();
-  const liveBytes = new Uint8Array(await fs.readFile(db.file));
-
-  // Open a throwaway clone to stamp metadata without touching the live DB.
-  const sqlite3 = await getSqlite3();
-  const clone = new sqlite3.oo1.DB() as unknown as OO1DB;
+  const tmp = path.join(os.tmpdir(), `finch-export-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`);
+  db.driver.prepare('VACUUM INTO ?').run(tmp);
   try {
-    const p = sqlite3.wasm.allocFromTypedArray(liveBytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      clone.pointer!,
-      'main',
-      p,
-      liveBytes.length,
-      liveBytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    if (rc) throw new Error(`Could not clone DB for export (code ${rc})`);
-    const cloneExec = execFor(clone);
-    const counts = await rowCounts(cloneExec);
-    const checksum = await computeChecksum(cloneExec);
-    await stampExport(cloneExec, {
-      exportedAt: new Date().toISOString(),
-      exportedFrom: includeHostname() ? os.hostname() : null,
-      rowCounts: counts,
-      checksum,
-    });
-    const stamped = sqlite3.capi.sqlite3_js_db_export(clone as never);
+    const clone = await openDb(tmp);
+    try {
+      applyPragmaBootstrap(clone);
+      const cloneExec = execFor(clone);
+      const counts = await rowCounts(cloneExec);
+      const checksum = await computeChecksum(cloneExec);
+      await stampExport(cloneExec, {
+        exportedAt: new Date().toISOString(),
+        exportedFrom: includeHostname() ? os.hostname() : null,
+        rowCounts: counts,
+        checksum,
+      });
+      // Drain the WAL into the snapshot file before reading so the bytes are
+      // self-contained and won't carry a stale -wal sidecar with them.
+      clone.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } finally {
+      clone.close();
+    }
+    const bytes = new Uint8Array(await fs.readFile(tmp));
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
-    return { bytes: new Uint8Array(stamped), filename: `finch-${ts}.sqlite3` };
+    return { bytes, filename: `finch-${ts}.sqlite3` };
   } finally {
-    clone.close();
+    await fs.unlink(tmp).catch(() => {});
+    await removeSidecars(tmp).catch(() => {});
   }
 }
