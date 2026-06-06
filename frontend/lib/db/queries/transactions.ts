@@ -6,6 +6,9 @@ import type { Exec } from '@/lib/db/repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './rates';
 import { resolveCounterpartyIdByName } from './counterparties';
+import { listActiveRules } from './rules';
+import { applyRules } from '@/lib/rules/engine';
+import type { RulePatch } from '@/lib/rules/types';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
  *  Each run of unicode letters/numbers becomes a case-folded prefix term
@@ -215,6 +218,10 @@ export interface NewTxRow {
   id?: string;
   /** Override created/updated/confirmed timestamps (seed uses SEED_TS). */
   timestamp?: string;
+  /** Bypass the rules engine for this insert. Used by seed (rules don't exist
+   *  during seeding) and as an escape hatch for rule-generated rows that must
+   *  not re-trigger rules (the infinite-loop guard). Default false. */
+  skipRules?: boolean;
 }
 
 /**
@@ -254,9 +261,58 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
   }
 
   // Counterparty: caller's value (including explicit null), otherwise resolve.
-  const counterpartyId = row.counterpartyId !== undefined
+  let counterpartyId: string | null = row.counterpartyId !== undefined
     ? row.counterpartyId
     : await resolveCounterpartyIdByName(exec, row.ledgerId, row.description);
+
+  // Rules engine (RULES_ENGINE_PLAN PR 3). Run after counterparty resolution
+  // (so a rule matching `counterparty_id` sees the resolved value) but before
+  // INSERT (so the row arrives pre-categorised in a single SQL roundtrip).
+  // The set_* outputs override the row's pre-rule field values; tag adds and
+  // splits land as a follow-up INSERT after the parent exists.
+  let categoryId: string | null = row.categoryId ?? null;
+  let description: string = row.description;
+  let notes: string | null = row.notes ?? null;
+  let kind: NewTxRow['kind'] = row.kind;
+  let appliedRuleIds: string[] | null = null;
+  let patch: RulePatch | null = null;
+
+  if (!row.skipRules) {
+    const rules = await listActiveRules(exec, row.ledgerId);
+    if (rules.length > 0) {
+      // Build the synthetic Tx the engine evaluates against. We supply every
+      // field a Leaf comparator might read; the engine itself never mutates it.
+      const synthetic: Tx = {
+        id,
+        merchant: description,
+        category: categoryId,
+        amount: amountBase,
+        nativeAmount: row.amount,
+        currency,
+        account: row.accountId,
+        date: row.date,
+        time: row.time ?? undefined,
+        note: notes ?? undefined,
+        pending: status === 'pending',
+        kind,
+        ledgerId: row.ledgerId,
+        transferGroupId: row.transferGroupId ?? undefined,
+        sourceTemplateId: row.sourceTemplateId ?? undefined,
+        refundedTransactionId: row.refundedTransactionId ?? undefined,
+        counterpartyId: counterpartyId ?? undefined,
+        tags: [],
+      };
+      patch = applyRules(synthetic, rules);
+      if (patch.appliedRuleIds.length > 0) {
+        if (patch.categoryId !== undefined) categoryId = patch.categoryId;
+        if (patch.counterpartyId !== undefined) counterpartyId = patch.counterpartyId;
+        if (patch.merchant !== undefined) description = patch.merchant;
+        if (patch.note !== undefined) notes = patch.note;
+        if (patch.kind !== undefined) kind = patch.kind;
+        appliedRuleIds = patch.appliedRuleIds;
+      }
+    }
+  }
 
   const confirmedAt = status === 'confirmed' ? ts : null;
 
@@ -264,20 +320,77 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
     `INSERT INTO transactions
       (id,ledger_id,account_id,date,time,amount,amount_base,exchange_rate,
        description,category_id,counterparty_id,transfer_group_id,refunded_transaction_id,
-       kind,status,confirmed_at,currency,notes,source_template_id,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       kind,status,confirmed_at,currency,notes,source_template_id,applied_rule_ids,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, row.ledgerId, row.accountId, row.date, row.time ?? null,
       row.amount, amountBase, exchangeRate,
-      row.description, row.categoryId ?? null, counterpartyId,
+      description, categoryId, counterpartyId,
       row.transferGroupId ?? null, row.refundedTransactionId ?? null,
-      row.kind, status, confirmedAt,
-      currency, row.notes ?? null, row.sourceTemplateId ?? null,
+      kind, status, confirmedAt,
+      currency, notes, row.sourceTemplateId ?? null,
+      appliedRuleIds ? JSON.stringify(appliedRuleIds) : null,
       ts, ts,
     ],
   );
+
+  // Post-insert effects: tag adds + splits run only when a rule patch produced
+  // them. Tags require the parent row to exist (FK); splits go through the
+  // existing setTransactionSplits helper which validates sum-to-parent.
+  if (patch && patch.appliedRuleIds.length > 0) {
+    if (patch.tagIdsAdd && patch.tagIdsAdd.length > 0) {
+      for (const tagId of patch.tagIdsAdd) {
+        await exec(
+          'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)',
+          [id, tagId],
+        );
+      }
+    }
+    if (patch.splits && patch.splits.length >= 2) {
+      // Convert fractions → native amounts. The last split absorbs the
+      // rounding remainder so the sum always equals the parent exactly
+      // (setTransactionSplits enforces the same penny tolerance).
+      let remaining = row.amount;
+      const nativeSplits = patch.splits.map((s, i, arr) => {
+        if (i === arr.length - 1) {
+          return { categoryId: s.categoryId, amount: r2(remaining), description: s.description ?? null };
+        }
+        const portion = r2(row.amount * s.fraction);
+        remaining = r2(remaining - portion);
+        return { categoryId: s.categoryId, amount: portion, description: s.description ?? null };
+      });
+      // Inline split insert: a single SELECT to lock the parent's amount_base
+      // ratio, then one INSERT per split. We don't call setTransactionSplits
+      // here because it issues its own DELETE that would also drop any splits
+      // a caller pre-staged for this row (currently none do, but the contract
+      // is simpler this way: rules only ever ADD splits to a fresh row).
+      const [parent] = await exec(
+        'SELECT amount, amount_base FROM transactions WHERE id = ?',
+        [id],
+      );
+      const ratio =
+        Number(parent.amount) !== 0
+          ? Number(parent.amount_base) / Number(parent.amount)
+          : 1;
+      for (let i = 0; i < nativeSplits.length; i++) {
+        const s = nativeSplits[i];
+        const sid = `${id}-s-${Date.now().toString(36)}-${i}`;
+        await exec(
+          `INSERT INTO transaction_splits (id, transaction_id, category_id, amount, amount_base, description, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [sid, id, s.categoryId, s.amount, r2(s.amount * ratio), s.description, i],
+        );
+      }
+    }
+    // patch.reviewed is silently dropped — there's no `reviewed_at` column
+    // yet (it'll land with INSPIRATION_IDEAS §5.1 reviewed/unreviewed status).
+    // tagIdsRemove is also dropped: a fresh row has no tags to remove.
+  }
+
   return id;
 }
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Insert a transaction; confirmed rows move the account balance via the insert trigger. */
 export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
