@@ -74,6 +74,10 @@ Extension for receipts, biometric lock, Spotlight, Handoff, a real macOS menu
 bar and keyboard model, and Apple-grade accessibility. A wrapper gets none of
 these well. **Direction: build native (SwiftUI), not a wrapped web view.**
 
+The same native posture unlocks the sync model the product wants —
+periodic zip "packs" of the database + receipt attachments dropped into
+**iCloud Drive** (§4.3 + §2.5.3) — which a web view can only approximate.
+
 ---
 
 ## 2. The domain model you are inheriting (the real spec)
@@ -101,7 +105,10 @@ from screenshots — read the source.
 All data is scoped to a **ledger**; ledgers never share rows. The entity set:
 
 - **ledger** — an isolated set of books with its own `base_currency`. Seeded
-  ledgers: personal, family, business, travel.
+  ledgers: personal, family, business, travel. **Decision (§14):** users MUST
+  be able to **create, rename, and delete** ledgers — this requires a matching
+  change to the **web app** too (it currently has 4 seeded ledgers with no
+  creation path; see §8 cross-app implications).
 - **account** — typed (`savings | credit_card | investment | cash | fx |
   virtual`), one fixed `currency`, an `opening_balance` (+ a locked
   `opening_balance_base`), a cached `current_balance` (derived — see §2.3), an
@@ -125,6 +132,11 @@ All data is scoped to a **ledger**; ledgers never share rows. The entity set:
   `applied_rule_ids` (JSON), and FTS-indexed `description`/`notes`.
 - **transaction_split** — ad-hoc category splits that override the parent's
   category in aggregations; split amounts MUST sum to the parent's.
+- **transaction_attachment** (added by this plan — §2.5) — pointer rows
+  (`rel_path`, `sha256`, mime, size) for receipt photos/PDFs attached to a
+  transaction. **Actual files are NEVER stored in the SQLite database** —
+  they live in an `attachments/<transaction_id>/` folder on disk and travel
+  inside the `.finch` pack (§2.5.3) alongside the DB.
 - **transfer_group** — the pairing row for a transfer's two legs; carries the
   from/to currencies + locked rate, never duplicating leg amounts.
 - **budget** — named expense limit or income target with a cycle
@@ -229,6 +241,100 @@ independently-testable pure function:
 > (the "finch-core" of §4.4), not inlined into views — so the parity test
 > suite (§12) can verify them against the TS originals.
 
+### 2.5 Receipt attachments + the `.finch` pack format (designed now)
+
+The web app sketched receipt photos but never built them; this document
+**decides the shape now** so both apps + the file-pack sync model (§4.3)
+inherit a consistent structure from day one.
+
+**Key rule, called out emphatically: photos and PDFs are NEVER stored as
+blobs inside the SQLite file.** The DB stores **pointers** (relative path +
+integrity hash); the bytes live in a sibling `attachments/` folder on disk
+and travel inside the `.finch` pack zip alongside the DB.
+
+#### 2.5.1 New table (added to the shared schema, both apps)
+
+```sql
+CREATE TABLE transaction_attachments (
+  id                TEXT PRIMARY KEY,         -- UUID
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  transaction_id    TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+  -- Path inside the pack AND inside the live attachments folder:
+  -- 'attachments/<transaction_id>/<id>.<ext>'. Bytes are NEVER in the DB.
+  rel_path          TEXT NOT NULL,
+  mime_type         TEXT NOT NULL,
+  byte_size         INTEGER NOT NULL,
+  sha256            TEXT NOT NULL,            -- integrity check on read
+  original_filename TEXT,                     -- preserved for UI
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX idx_attach_txn    ON transaction_attachments(transaction_id);
+CREATE INDEX idx_attach_ledger ON transaction_attachments(ledger_id);
+```
+
+- **Cascade behaviour:** deleting a transaction removes the DB row by
+  cascade; the orphaned file on disk is swept by the pack-builder (which
+  knows the live row set) and on a periodic vacuum, so every pack is
+  self-consistent (DB rows ↔ file inventory).
+- **Integrity:** `sha256` lets the app refuse a tampered or missing file
+  rather than silently render the wrong receipt.
+- **Shared schema:** this table lands in **both** the native app and the
+  web app's `lib/db/schema.ts`, on the same `SCHEMA_VERSION` lineage, so
+  packs round-trip cleanly. See §8 cross-app implications.
+
+#### 2.5.2 On-disk layout (live working files on a device)
+
+```
+<app-container>/
+├── finch.sqlite3
+├── finch.sqlite3-wal
+├── finch.sqlite3-shm
+└── attachments/
+    └── <transaction_id>/
+        ├── <attachment_id>.jpg
+        └── <attachment_id>.pdf
+```
+
+The native app writes attachments here directly (e.g. from the Share
+Extension or the photo picker); the web app's server-side equivalent
+stores them under a configured directory next to the DB. Either runtime
+produces the same shape.
+
+#### 2.5.3 The `.finch` pack format
+
+The unit of iCloud Drive sync (§4.3) and of cross-platform interop (§8).
+Plain ZIP container, with a `.finch` extension registered as a document
+type on iOS/macOS so Files and Finder open it in the app.
+
+```
+my-ledger.finch       (ZIP container)
+├── manifest.json     -- pack metadata + checksum + file inventory
+├── finch.sqlite3     -- VACUUM INTO'd before packing
+└── attachments/
+    └── <transaction_id>/
+        └── <attachment_id>.<ext>
+```
+
+`manifest.json` carries: pack-format version, `app_name`, `app_version`,
+`schema_version`, `exported_at`, `exported_from` (device id + name),
+`db_sha256`, `row_counts` (mirroring the existing `db_metadata`
+integrity guard — `lib/db/checksum.ts` generalises straight into this),
+and `attachment_count` + total bytes.
+
+- **Atomic swap on receive:** the receiving device unpacks to a tmp
+  directory, validates the manifest + every attachment's sha256, then
+  renames the working files into place. A failed validation leaves the
+  device's current data untouched.
+- **Conflict policy:** last-writer-wins at the pack level; iCloud Drive
+  surfaces a conflict copy when two devices wrote offline (§4.3).
+- **Size note:** packs include all attachments, so they can grow into the
+  tens of MB. iCloud Drive handles this fine; the cadence (§4.3) is
+  debounced to avoid thrashing.
+- **Backups doubles as the pack history.** Successive packs in a dated
+  folder are also the user's restore points (§9).
+
 ---
 
 ## 3. Feature parity matrix
@@ -278,6 +384,8 @@ at where the behaviour lives today.
 | 36 | Command palette (⌘K) | Jump-to-anything search | macOS ⌘K; iOS Spotlight (§7) | 2 (mac 1) | `command-palette.tsx` |
 | 37 | Responsive shell (sidebar/bottom-bar, breadcrumbs) | Adaptive nav (tab bar vs sidebar/split) | `TabView`/`NavigationSplitView` | 1 | `PageShell.tsx` |
 | 38 | Holdings management (add/edit/price/delete) | Position CRUD + price update | Form sheets | 2 | `account-holdings.tsx` |
+| 39 | **NEW — Ledger CRUD** (create / rename / delete; web app currently has none) | Full ledger CRUD on both apps; new mutations on the shared schema | Form sheet; settings row | 1 | (new — coordinated web change; see §8) |
+| 40 | **NEW — Receipt attachments** (capture / attach photo or PDF; view; delete) | Share Extension + in-app photo/PDF picker; thumbnail + viewer in tx detail | Share extension; `PhotosPicker`; `QuickLook` | 2 | §2.5; (web also adds attachment UI + a server-side attachments dir) |
 
 > Tiering is direction, not contract — the team MAY re-tier, but SHOULD keep
 > Tier 1 as a coherent "you can run your finances in this" slice.
@@ -329,14 +437,36 @@ How does a native install relate to the user's data and to the existing web app?
 | B. Thin client of the existing server | Consume `GET /api/state` + `POST /api/mutate`; server stays the source of truth | Reuses *all* server logic; near-zero logic re-implementation | Requires a hosted server + auth (neither exists); offline needs a cached mirror anyway; not "local-first" |
 | C. Local-first + optional sync | A on device, plus an opt-in sync engine (CloudKit private DB, or the existing server as a sync target) | Best UX; offline + multi-device | Most work; conflict resolution; the schema's string PKs complicate merge (§4.6) |
 
-**Direction: A now, with C as a planned later phase; avoid B as the primary
-model.** Local-first is the finch-native instinct and the only one that needs
-no infrastructure. Phase the sync engine (C) in *after* parity, and design for
-it from day one by adopting UUID PKs for native-created rows (§4.6) and keeping
-all mutations funnelled through one choke point (so a future sync log can
-observe them). The `/api/mutate` action contract (action-name + args → full
-`ProjectedState`) is a useful *reference* for that choke point's shape, and
-remains available if the team ever wants B for a specific deployment.
+**Decision: local-first + iCloud Drive *file-pack* sync (a hybrid of A + a
+specific form of C).** The on-device working files (SQLite DB +
+`attachments/` folder, §2.5) stay the source of truth. On a debounced
+schedule and on app background, the app **packs** them into a single
+`.finch` zip and writes the pack to a user-visible folder in the app's
+iCloud Drive container; iCloud Drive replicates the pack to the user's
+other devices; finch on the other device detects the newer pack (by
+`manifest.json`), validates it, and atomically swaps in the unpacked
+contents.
+
+- **Granularity:** the pack is the sync unit (one pack = the whole DB
+  with all ledgers + all attachments — see §2.5.3 for layout). Conflicts
+  are resolved at the pack level — **last-writer-wins**; iCloud surfaces
+  a "conflict copy" if two devices wrote offline. No row-level merge in v1.
+- **Cadence:** auto-pack on a debounce (e.g. ~30 s idle after a mutation,
+  and on background); a manual "Sync now" affordance is always available.
+- **What we trade away:** simultaneous offline edits on two devices means
+  one device's session is preserved as a conflict copy rather than merged.
+  Acceptable for a single-user product.
+- **Why not CloudKit row-level sync (the full option C):** more code, more
+  privacy surface, more conflict-merge edge cases. The file-pack approach
+  uses iCloud purely as a dumb file mover and keeps the "the file is the
+  source of truth" instinct intact.
+- **Why not the server (B):** there is no server to be a thin client of,
+  and standing one up would conflict with the no-account, no-infrastructure
+  product promise.
+
+UUID primary keys (§4.6) are still required — they keep a future
+row-level sync model possible without a schema break and reduce id
+collisions if two devices briefly diverge.
 
 > Note: `ProjectedState` returns the **whole** projection on every mutation —
 > fine at personal-finance data sizes, and a clean model for "recompute, then
@@ -384,6 +514,23 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   app generates **UUIDs** for new rows (PKs are `TEXT`, so they coexist with
   legacy ids), paying forward the §4.3-C sync option at no cost today.
 
+### 4.7 Platform baselines (decided)
+
+- **OS floor: iOS 26+, iPadOS 26+, macOS 26+.** A modern floor lets the app
+  use Swift Charts, App Intents, `@Observable`, `NavigationSplitView`, and
+  WidgetKit (when widgets are added — §7) without compatibility shims. Drops
+  users on older devices; acceptable in trade for a leaner codebase and the
+  full native surface in §7.
+
+### 4.8 macOS distribution (decided)
+
+- **Ship to the Mac App Store *and* as a notarised direct download.** Single
+  Xcode target, two distribution paths. App Store gives discovery and
+  auto-update; a notarised `.dmg`/`.pkg` direct download fits a local-first,
+  file-portable app and lets users who prefer non-store binaries install
+  without an Apple ID. (Direct distribution is also the friendlier story for
+  users wary of any app-store data policies on a finance app.)
+
 ---
 
 ## 5. Design system → native mapping
@@ -417,22 +564,20 @@ richer design intent (and the editorial serif) is in
   destructive, pending=warning), and both themes MUST follow the system
   light/dark setting by default with a manual override (mirrors `next-themes`).
 
-### 5.2 Typography (a real decision to make)
+### 5.2 Typography (decided: plain font)
 
 The **live web app maps both `--font-sans` and `--font-serif` to Inter** — i.e.
 the editorial *serif* in the prototype (`Instrument Serif`) was never actually
-shipped. The native app must choose:
+shipped.
 
-- **Option A (recommended): restore the editorial serif** for large display
-  numerals and section/hero titles (the prototype's intent — a warm,
-  un-banking feel), with the system font for body/UI and a mono for technical
-  rows (rates, ids). This is the stronger brand and is trivial on Apple
-  platforms (bundle the serif; use it only at display sizes).
-- Option B: match the shipped web look (system/Inter everywhere). Safer,
-  blander.
+**Decision: plain font (system sans-serif) in v1, matching the live web look.**
+Use the system font (San Francisco on Apple platforms — the same role Inter
+plays on web) for everything, with a system mono for technical rows (rates,
+ids). The editorial serif from the prototype is not in v1; it remains an option
+to revisit later as a deliberate brand-polish move.
 
-Either way: numerals MUST be **tabular/monospaced-figure** for column
-alignment, and all type MUST support **Dynamic Type** (§11).
+Regardless of the family choice: numerals MUST be **tabular/monospaced-figure**
+for column alignment, and all type MUST support **Dynamic Type** (§11).
 
 ### 5.3 Charts & primitives
 
@@ -488,11 +633,12 @@ finch already computes, so the data work is mostly done.
   `AddTransaction` intent over `FinchCore`; "What did I spend this week?" →
   surfaces `weeklyDigest`. Donate intents so Siri Suggestions learn the user's
   habitual entries (pairs with `recentExpenses`).
-- **Widgets (WidgetKit):** Home/Lock-Screen widgets for net worth + sparkline,
-  this-month budget rings, the month forecast, and the weekly digest. All are
-  existing selectors; widgets read the shared `.db` from an App Group container.
-- **Live Activities / Lock Screen:** optional "budget remaining this month"
-  glanceable; reconcile-session progress.
+- **Widgets (WidgetKit) — deferred to a later phase (decision §14).** The
+  widget candidates (net-worth sparkline, this-month budget ring,
+  month-forecast tile, weekly digest) all sit on top of existing selectors,
+  so the cost is UI + an App Group, not new logic. Held back to keep the
+  v1 native surface focused. Picked up in §13 phase 7.
+- **Live Activities / Lock Screen — deferred with widgets.** Same reasoning.
 - **Share Extension → receipts:** the long-deferred receipt-photo feature
   (`FEATURE_IDEAS §4.1`) is *natural* here — share a photo/PDF into finch to
   create/attach to a transaction. (Needs the `transaction_attachments` table
@@ -519,37 +665,60 @@ finch already computes, so the data work is mostly done.
 
 ## 8. Interop with the web app & data portability
 
-- **`.db` compatibility (primary interop):** because the native app reuses the
-  exact schema (§4.2) and version lineage (§4.6), a finch SQLite file is
-  portable both directions. Export = `VACUUM INTO` a temp file then hand to the
-  share sheet / Files; import = validate `db_metadata` (the checksum + row
-  counts integrity guard exists — `lib/db/checksum.ts`), then swap. **Requirement:**
-  honour the metadata integrity check on import; refuse a tampered/corrupt file
-  with a clear error.
+- **The `.finch` pack is the primary interop unit (§2.5.3).** A device
+  exports a pack to the share sheet or iCloud Drive; another device — or
+  the web app — opens that pack to import. The pack format is portable
+  in both directions and is the same artifact iCloud Drive replicates for
+  sync (§4.3). On import, the receiver MUST validate `manifest.json` (incl.
+  the existing checksum + row-counts guard, generalised from
+  `lib/db/checksum.ts`) and every attachment's sha256, then atomically
+  swap into place; refuse a tampered or partial pack with a clear error.
+- **Raw `.db` interop still works.** Users who only want the database (no
+  attachments) can export a bare `.sqlite3` via `VACUUM INTO` and import it
+  on either side; the `transaction_attachments` table is simply empty.
 - **CSV export:** reproduce `GET /api/export/transactions` (names + tags
-  resolved via joins) for a transactions CSV; offer via share sheet. (See
-  `lib/csv.ts`.)
+  resolved via joins); offer via the share sheet (`lib/csv.ts`).
 - **Backups:** the web app keeps timestamped backups (`/api/backups`,
-  `restore-backup`). Native SHOULD offer the same: periodic local snapshots +
-  optional iCloud Drive copy, restore-from-snapshot.
-- **No silent schema forks:** any new column/table the native app needs (e.g.
-  receipt attachments) MUST be added to the **shared** schema + migration
-  lineage so both apps stay file-compatible.
+  `restore-backup`). Native SHOULD offer the same shape — periodic local
+  pack snapshots in a dated folder, restore-from-snapshot.
+- **No silent schema forks.** Any new column or table either app needs
+  (notably **receipt attachments**, §2.5) MUST land in the shared
+  `lib/db/schema.ts` with a coordinated migration so packs round-trip
+  unchanged between web and native.
+- **Cross-app implications for the web app.** Shipping this native plan
+  forces three coordinated web-app changes so the apps stay file-
+  compatible. These are tracked as separate web-app tasks but are
+  required for true interop:
+  1. **Add the `transaction_attachments` table** + a server-side
+     attachments directory (§2.5).
+  2. **Add ledger CRUD** to the web app (it currently ships with 4 seeded
+     ledgers and has no create/rename/delete mutation; decision §14).
+  3. **Teach `/api/export` and `/api/import` the `.finch` pack format**
+     (currently raw `.db` only) so the web app can read packs the native
+     apps write and vice-versa.
 
 ---
 
 ## 9. Offline, persistence & backup
 
-- **The file is the source of truth** (as today). On-device SQLite in the app's
-  container; WAL mode is fine and matches the web's `better-sqlite3` setup.
+- **Local working files are the source of truth** (web-app style). On-device
+  SQLite + an `attachments/` folder in the app's container; WAL mode (matches
+  the web's `better-sqlite3` setup).
 - **Persistence is implicit** (it's a local file) — no "request persistent
   storage" dance the PWA needed.
-- **iCloud:** offer the `.db` (and backups) as documents in the app's iCloud
-  container for cross-device *file* sync — the local-first parallel to the
-  web's export/import. (True live multi-device sync is §4.3-C, later.)
-- **Crash/atomicity:** mutations run in transactions; the "mutate → re-derive →
-  publish" loop should treat a failed write as a no-op and never leave the
-  cached `current_balance` diverged (recompute on the same path the web app does).
+- **Sync via iCloud Drive packs (§4.3).** The auto-packer writes a `.finch`
+  pack to a user-visible folder in the app's iCloud Drive container on a
+  debounced schedule (~30 s idle after a mutation, and on app background)
+  and on an explicit "Sync now." iCloud Drive replicates the file; the
+  receiving device validates and atomically swaps in the unpacked contents.
+- **Backups doubled into the pack history.** Successive packs in a dated
+  folder are also the user's restore points — the same artifact serves
+  cross-device sync + local backup.
+- **Crash/atomicity:** mutations run in transactions; the "mutate →
+  re-derive → publish" loop treats a failed write as a no-op and never
+  leaves the cached `current_balance` diverged (recompute on the same path
+  the web app does). The pack swap is **atomic** — write to tmp, validate,
+  rename — so a half-finished sync never overwrites the working files.
 
 ---
 
@@ -560,12 +729,12 @@ finch already computes, so the data work is mostly done.
 - **Biometric app lock:** optional Face ID/Touch ID/Optic ID gate on launch and
   on sensitive actions (export, delete-all, base-currency change), with passcode
   fallback (`LocalAuthentication`).
-- **Encryption at rest:** evaluate **SQLCipher** (or rely on the iOS
-  file-protection class `complete`/`completeUnlessOpen`). **Direction:** at
-  minimum set strong file protection; offer SQLCipher as an opt-in for users who
-  want at-rest encryption, noting it complicates raw `.db` interop (document the
-  trade-off; an encrypted export is still importable by another finch instance
-  with the key, but not by the web app).
+- **Encryption at rest:** **Decision — file-protection only in v1.** Write
+  the live DB with `completeUnlessOpen` (readable while the app runs;
+  protected at rest when the device is locked + idle) and the pack with
+  `complete` (protected whenever the device is locked). No SQLCipher in
+  v1 — it complicates `.db` and pack interop with the web app, and no
+  threat model has been raised that justifies it. Revisit if one ever is.
 - **App Store privacy:** the nutrition label should be able to say "no data
   collected." Keep it that way — any future analytics MUST be opt-in and local.
 - **Exports leave the sandbox:** treat share/export as the moment data leaves
@@ -613,41 +782,106 @@ finch already computes, so the data work is mostly done.
 
 Milestones as coherent slices, each independently shippable:
 
-1. **`FinchCore` + read-only mirror.** GRDB on the shared schema; port the
-   projection + the §2.4 selectors; parity suite green; a read-only iPhone app
-   (Accounts/Activity/Budgets/Insights) over an imported `.db`.
-2. **Entry + core CRUD.** Add transaction (all kinds), transaction detail edits,
-   pending confirm, budgets, scheduled post-now. Now "usable for real."
-3. **Adaptive iPad/macOS.** `NavigationSplitView`, macOS menus/keyboard, ⌘K.
+1. **`FinchCore` + read-only mirror.** GRDB on the shared schema (incl. the
+   new `transaction_attachments` table, §2.5); port the projection + the §2.4
+   selectors; parity suite green; a read-only iPhone app
+   (Accounts/Activity/Budgets/Insights) over an imported `.db` or pack.
+2. **Entry + core CRUD.** Add transaction (all kinds), transaction detail
+   edits, pending confirm, budgets, scheduled post-now, **ledger CRUD**
+   (§2.1; coordinated web change in §8). Now "usable for real."
+3. **Adaptive iPad/macOS.** `NavigationSplitView`, macOS menus/keyboard, ⌘K;
+   both distribution paths set up (§4.8).
 4. **Power features.** Reconcile, rules engine + builder/backfill, transfers,
-   merchants/categories/tags admin, saved searches, bulk recategorise, FX/base
-   tools.
-5. **Native upside (§7).** App Intents, Widgets, Share-Extension receipts,
-   Spotlight, notifications, biometric lock.
-6. **Sync (§4.3-C), if pursued.** CloudKit or server sync atop the UUID-ready,
-   single-choke-point mutation layer.
+   merchants/categories/tags admin, saved searches, bulk recategorise,
+   FX/base tools.
+5. **Pack engine + iCloud Drive sync (§4.3, §2.5.3).** Implement the
+   `.finch` pack format end-to-end: build, validate, atomic swap, debounced
+   auto-pack, manual "Sync now," conflict-copy UX. The web app catches up on
+   the cross-app implications in §8 (pack support + attachments + ledger CRUD)
+   in the same phase so the apps stay file-compatible.
+6. **Native upside — part 1 (§7).** App Intents/Siri, Share-Extension
+   receipts (depends on §2.5 + phase 5), Spotlight, notifications, biometric
+   lock.
+7. **Native upside — part 2: Widgets / Live Activities / Watch.** Deferred
+   from phase 6 by decision (§14); same data layer, mostly UI on top.
+8. **Row-level sync (the full §4.3-C), if ever pursued.** CloudKit or
+   server sync atop the UUID-ready, single-choke-point mutation layer.
+   Not on the current roadmap; the pack model in phase 5 is the answer
+   for the foreseeable future.
 
 ---
 
-## 14. Open questions
+## 14. Resolved decisions (2026-06-06)
 
-1. **Sync ambition:** local-first only (file portability) for the foreseeable
-   future, or commit to §4.3-C and pick CloudKit vs server now (it changes the
-   ID + conflict design today)?
-2. **Typography:** restore the editorial serif (§5.2-A) or match the shipped
-   Inter look (B)?
-3. **At-rest encryption:** SQLCipher opt-in vs file-protection-only — and how to
-   message the interop trade-off?
-4. **Receipt attachments schema:** design `transaction_attachments` now (shared
-   across web + native) so the Share Extension has a home, or defer?
-5. **Minimum OS versions:** which iOS/iPadOS/macOS floor? (Gates Swift Charts,
-   App Intents, Observation, SwiftData-if-ever, WidgetKit features.)
-6. **macOS distribution:** App Store only, or also Developer-ID notarised direct
-   download (relevant for a local-first, file-portable app)?
-7. **Apple Watch & widgets scope:** which selectors get glanceable surfaces in
-   the first native-upside pass?
-8. **Ledger creation:** the web app never shipped a "New ledger" mutation (4
-   seeded ledgers). Does native add ledger CRUD, or inherit the same constraint?
+The eight open questions from the prior revision are answered here in plain
+language. Each points at the sections of the doc that now reflect it.
+
+1. **Sync via iCloud Drive *file packs* — not row-level sync.** The app
+   periodically zips the SQLite database + the `attachments/` folder into a
+   single `.finch` pack and writes it to a user-visible folder in the app's
+   iCloud Drive container. iCloud replicates the file; the other device
+   validates it and unpacks. iCloud is used purely as a dumb file mover.
+   Conflicts are last-writer-wins at the pack level (iCloud keeps a conflict
+   copy if both devices wrote offline). → §4.3, §8, §9, §2.5.3.
+
+2. **Plain font, no editorial serif in v1.** Use the system sans-serif on
+   Apple platforms (matching the live web look). Numerals tabular, Dynamic
+   Type throughout. The prototype's editorial serif remains an option to
+   revisit later. → §5.2.
+
+3. **Keep encryption simple.** Rely on the platform's file-protection
+   classes (`completeUnlessOpen` for the live DB, `complete` for the pack at
+   rest). No SQLCipher in v1; revisit only if a real threat model is
+   raised. → §10.
+
+4. **Receipt attachments are designed *now*, and the files live *outside*
+   the SQLite database.** A new `transaction_attachments` table stores
+   pointers only (`rel_path`, `sha256`, mime, size); the actual photos and
+   PDFs live under `attachments/<transaction_id>/<attachment_id>.<ext>` and
+   travel alongside the DB inside every `.finch` pack. This table is added
+   to the shared schema so both apps adopt it together. → §2.5 (whole
+   subsection), §3 row 40, §8 cross-app implications.
+
+5. **OS floor: iOS 26 / iPadOS 26 / macOS 26.** A modern floor lets the app
+   use Swift Charts, App Intents, `@Observable`, `NavigationSplitView`, and
+   WidgetKit without compatibility shims. → §4.7.
+
+6. **Mac distribution: both the Mac App Store *and* a notarised direct
+   download.** Single Xcode target, two distribution paths — App Store for
+   discovery and auto-update, notarised direct download for a local-first,
+   file-portable app and users who prefer non-store binaries. → §4.8.
+
+7. **Widgets deferred.** Native upside in v1 leads with App Intents/Siri,
+   Share-Extension receipts, Spotlight, notifications, and the biometric
+   lock. Widgets, Live Activities, and the Watch app come in a later
+   phase. → §7 (widgets bullet), §13 phase 7.
+
+8. **Ledger CRUD — *for both apps*.** Users can create, rename, and delete
+   ledgers. The web app currently ships with 4 seeded ledgers and no
+   creation path; that gap is closed as a coordinated cross-app change so
+   packs continue to round-trip. → §2.1 (ledger entity), §3 row 39, §8
+   cross-app implications.
+
+### 14.1 Smaller follow-up questions opened up by these decisions
+
+Recorded so they don't get lost — none are blockers; all can be settled
+during the relevant phase.
+
+- **Pack cadence + sweep policy.** What's the right idle-debounce (~30 s?)
+  before auto-packing, and how often do we sweep orphaned attachment files
+  off disk (every pack? a periodic vacuum?). Tune after first usage.
+- **Conflict-copy UX.** When iCloud surfaces a conflict copy, what does
+  the user see and what's the merge-or-discard affordance? An "open both,
+  compare counts, pick one" sheet is the natural first cut.
+- **`.finch` UTI + extension registration.** Register the document type as
+  a child of `UTType.zip` so Files/Finder/Quick Look know what to do.
+  Confirm during phase 5 (pack engine).
+- **Web-app pack support timing.** When does the web app gain pack
+  export/import + ledger CRUD + the attachments table — alongside native
+  phase 5, or earlier? A small product/release call.
+- **iCloud folder naming + visibility.** Show the folder in Files (so
+  users can copy a pack out) but keep it under the app's container — a
+  clear `finch/` subfolder. Confirm with a brief design pass.
 
 ## 15. Risks & mitigations
 
@@ -658,8 +892,10 @@ Milestones as coherent slices, each independently shippable:
 | Float vs Decimal money discrepancies vs web | Medium | Compute in Decimal, narrow to REAL at the boundary; cent-level parity assertions (§4.5) |
 | Reproducing bespoke charts (Sankey, heatmap) | Medium | Swift Charts where it fits; `Canvas` for the rest; snapshot tests (§5.3) |
 | SwiftData temptation erodes interop | Medium | Decision recorded: GRDB on the verbatim schema (§4.2) |
-| Encryption complicates portability | Low | Make SQLCipher opt-in, document the trade-off (§10) |
-| Scope creep into bank import / sync too early | Medium | Hold the §7 boundary; sync is a deliberate later phase (§4.3) |
+| Encryption choice constrains interop | Low | Decision recorded: file-protection only in v1 (§10); SQLCipher reconsidered only if a real threat model lands |
+| Scope creep into bank import / row-level sync too early | Medium | Hold the §7 boundary; pack-based sync (§4.3) is the answer for the foreseeable future |
+| Pack format drifts between web and native | Medium | Single shared `manifest.json` schema; checksum + per-file sha256; cross-app round-trip test (§8, §12) |
+| Orphaned attachment files accumulate on disk | Low | Pack-builder sweep + periodic vacuum keep on-disk files ↔ DB rows in sync (§2.5.1) |
 | macOS feels like a blown-up iPad | Low | NavigationSplitView + real menus/keyboard; Catalyst only as fallback (§4.1) |
 
 ## 16. Out of scope / non-goals
