@@ -9,6 +9,7 @@ import type { LedgerRow } from './queries/ledgers';
 import type { ExchangeRate } from './queries/system';
 import type { Tag } from './queries/tags';
 import type { Holding } from './queries/holdings';
+import type { Attachment } from './queries/attachments';
 import type { Rule } from '@/lib/rules/types';
 
 // A minimal async query interface so the same logic works against the in-memory
@@ -44,6 +45,10 @@ export interface ProjectedState extends PersistState {
   /** Conditional rules engine — per-ledger if-then rules consumed by
    *  applyRules() on insert. RULES_ENGINE_PLAN §2. */
   rules: Rule[];
+  /** Receipt attachments — pointer rows; bytes live on the server
+   *  filesystem and are reached via GET /api/attachments/:id.
+   *  RECEIPT_PHOTOS_PLAN §2.1. */
+  attachments: Attachment[];
   /** Ordered section ids for the mobile bottom bar. Empty = use the client default. */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */

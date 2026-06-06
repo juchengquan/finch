@@ -364,6 +364,29 @@ CREATE TABLE IF NOT EXISTS rules (
   updated_at   TEXT NOT NULL
 );
 
+-- Receipt attachments (RECEIPT_PHOTOS_PLAN section 2). Pointer rows ONLY —
+-- the actual photos/PDFs live on the server filesystem under the directory
+-- pointed at by the FINCH_DB_DIR env var (joined with rel_path), NEVER as
+-- DB blobs. rel_path is server-internal
+-- and deliberately omitted from the client projection; clients reach an
+-- attachment's bytes via GET /api/attachments/:id, which resolves the path
+-- server-side under a traversal guard. sha256 lets the app refuse a tampered
+-- or missing file and doubles as the integrity check the future .finch pack
+-- (PACK_FORMAT_PLAN) validates per attachment.
+CREATE TABLE IF NOT EXISTS transaction_attachments (
+  id                TEXT PRIMARY KEY,
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  transaction_id    TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+  rel_path          TEXT NOT NULL,
+  mime_type         TEXT NOT NULL,
+  byte_size         INTEGER NOT NULL,
+  sha256            TEXT NOT NULL,
+  original_filename TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
 -- Transitional store slices not yet migrated to real tables (pending, scheduled,
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
@@ -425,6 +448,8 @@ CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_templa
 CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_attach_txn    ON transaction_attachments(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_attach_ledger ON transaction_attachments(ledger_id);
 
 -- Dedup backstop: an exact-identical row can't be inserted twice. SQLite treats
 -- NULLs as distinct, so rows with a NULL time (e.g. scheduled auto-posts) never
@@ -523,7 +548,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-10T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-11T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -656,6 +681,27 @@ const MIGRATIONS: Record<string, string[]> = {
   // idempotent ADD COLUMN under the isAlreadyAppliedError swallow rule.
   '2026-06-10T00:00:00Z': [
     'ALTER TABLE transactions ADD COLUMN reviewed_at TEXT',
+  ],
+  // Receipt attachments (RECEIPT_PHOTOS_PLAN §2). New pointer-only table +
+  // two indexes. Bytes live on the server filesystem, not in the DB. All
+  // three statements are CREATE ... IF NOT EXISTS — idempotent under the
+  // isAlreadyAppliedError swallow rule, so re-runs are safe.
+  '2026-06-11T00:00:00Z': [
+    `CREATE TABLE IF NOT EXISTS transaction_attachments (
+       id                TEXT PRIMARY KEY,
+       ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+       transaction_id    TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+       kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+       rel_path          TEXT NOT NULL,
+       mime_type         TEXT NOT NULL,
+       byte_size         INTEGER NOT NULL,
+       sha256            TEXT NOT NULL,
+       original_filename TEXT,
+       created_at        TEXT NOT NULL,
+       updated_at        TEXT NOT NULL
+     )`,
+    'CREATE INDEX IF NOT EXISTS idx_attach_txn ON transaction_attachments(transaction_id)',
+    'CREATE INDEX IF NOT EXISTS idx_attach_ledger ON transaction_attachments(ledger_id)',
   ],
 };
 
