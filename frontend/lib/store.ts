@@ -13,6 +13,7 @@ import type { LedgerRow } from '@/lib/db/queries/ledgers';
 import type { ExchangeRate } from '@/lib/db/queries/system';
 import type { Tag } from '@/lib/db/queries/tags';
 import type { Holding } from '@/lib/db/queries/holdings';
+import type { Attachment } from '@/lib/db/queries/attachments';
 import type { Rule } from '@/lib/rules/types';
 
 export interface Tx {
@@ -201,6 +202,10 @@ interface FinanceState {
   /** Conditional rules engine — per-ledger if-then rules consumed by
    *  applyRules() on insert. See RULES_ENGINE_PLAN §2. */
   rules: Rule[];
+  /** Receipt attachments — pointer rows. The actual photos/PDFs live on
+   *  the server filesystem and are reached via GET /api/attachments/:id.
+   *  RECEIPT_PHOTOS_PLAN §2.1. */
+  attachments: Attachment[];
   /** Ordered section ids for the mobile bottom bar (empty = client default). */
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
@@ -364,6 +369,7 @@ export const useFinanceStore = create<FinanceState>()(
       tags: [],
       holdings: [],
       rules: [],
+      attachments: [],
       mobileTabIds: [],
       displayCurrencyByLedger: {},
 
