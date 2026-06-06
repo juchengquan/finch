@@ -107,3 +107,23 @@ test('reconcileState: foreign-currency row uses ledger-base amount (matches reco
   expect(s.clearedBalance).toBe(920);
   expect(s.balanced).toBe(true);
 });
+
+test('reconcileState: adding + clearing a missing row closes the difference (v2 flow)', () => {
+  // opening $100, one cleared −$25 → cleared $75; statement says $50, so we're
+  // $25 over → there's a missing −$25 expense not yet logged. Modelling the
+  // §10.2 quick-add: append that row already cleared, and the gap closes.
+  const a = acct({ openingBalance: 100 });
+  const before = reconcileState(a, [tx({ id: 'a', amount: -25, clearedAt: 'x' })], 50);
+  expect(before.difference).toBe(-25); // statement − cleared = 50 − 75
+  expect(before.balanced).toBe(false);
+
+  const after = reconcileState(
+    a,
+    [tx({ id: 'a', amount: -25, clearedAt: 'x' }), tx({ id: 'missing', amount: -25, clearedAt: 'now' })],
+    50,
+  );
+  expect(after.clearedBalance).toBe(50);
+  expect(after.difference).toBe(0);
+  expect(after.balanced).toBe(true);
+  expect(after.clearedCount).toBe(2);
+});

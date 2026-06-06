@@ -33,7 +33,7 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
-import { MOCK, catById, fmtNative } from '@/lib/data';
+import { MOCK, catById, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
@@ -45,7 +45,7 @@ import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
   const { active } = useLedger();
-  const { display, fmtFrom, toBase, fmt } = useMoney();
+  const { display, fmtFrom, toBase, fmt, base } = useMoney();
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
@@ -109,8 +109,17 @@ export default function AccountDetailPage() {
   const [reconcileMode, setReconcileMode] = useState(false);
   const [statementBalance, setStatementBalance] = useState('');
   const [statementDate, setStatementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Quick-add-missing-transaction state (RECONCILE_PLAN §10.2): an inline form
+  // inside reconcile mode that creates the row and auto-clears it so the
+  // difference closes immediately. Income vs expense follows the sign toggle.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMerchant, setAddMerchant] = useState('');
+  const [addAmount, setAddAmount] = useState('');
+  const [addExpense, setAddExpense] = useState(true);
   const setCleared = useFinanceStore((s) => s.setCleared);
   const reconcileAccount = useFinanceStore((s) => s.reconcileAccount);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const storeCategories = useFinanceStore((s) => s.categories);
   const { openTransaction } = useTransactionSheet();
 
   const name = row?.name ?? mock?.name ?? '';
@@ -168,6 +177,45 @@ export default function AccountDetailPage() {
       { description: `${name} → ${targetNumber.toLocaleString()}` },
     );
     exitReconcile();
+  };
+
+  // Add a missing transaction during reconcile, then auto-clear it so it counts
+  // toward the cleared balance immediately (§10.2(1)). The entry is in the
+  // account's currency; mirror add-expense-form's optimistic base figure (the
+  // server re-derives + locks it on sync). Defaults the category to the first
+  // expense/income category in the ledger; the user recategorises later.
+  const addMissing = () => {
+    const value = parseFloat(addAmount);
+    if (!value || Number.isNaN(value)) return void toast.error('Enter an amount');
+    if (!addMerchant.trim()) return void toast.error('Enter a merchant');
+    const signed = addExpense ? -Math.abs(value) : Math.abs(value);
+    const baseAmount = currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
+    const fallbackCat = storeCategories.find((c) => c.ledgerId === ledgerId)?.id ?? null;
+    const id = addTransaction({
+      merchant: addMerchant.trim(),
+      category: fallbackCat,
+      amount: baseAmount,
+      currency,
+      nativeAmount: signed,
+      account: accountId,
+      date: statementDate,
+      time: new Date().toTimeString().slice(0, 5),
+      note: '',
+      pending: false,
+      ledgerId,
+    });
+    setCleared(id, true); // auto-clear: it's on the statement, that's why we're adding it
+    toast.success('Added & cleared', { description: `${addMerchant.trim()} · ${fmtNative(Math.abs(value), currency)}` });
+    setAddMerchant('');
+    setAddAmount('');
+    setAddOpen(false);
+  };
+
+  // "It posted" shortcut on a pending row: confirm + clear in one tap (§10.2(2)).
+  const confirmAndClear = (txId: string) => {
+    confirmPending(txId);
+    setCleared(txId, true);
+    toast.success('Confirmed & cleared');
   };
   const submitAdjust = () => {
     const target = parseFloat(adjustTarget);
@@ -378,9 +426,64 @@ export default function AccountDetailPage() {
                     {recState.clearedCount} cleared · {recState.unclearedCount} to review
                   </span>
                 </div>
+                {!recState.balanced && (
+                  <p className="text-muted-foreground text-[11px]">
+                    You&apos;re {fmtNative(Math.abs(recState.difference), currency)}{' '}
+                    {recState.difference > 0 ? 'short' : 'over'} — likely a missing transaction. Add it
+                    below, or post an adjustment.
+                  </p>
+                )}
+
+                {/* Quick-add a missing transaction (§10.2(1)) — primary recovery. */}
+                {addOpen ? (
+                  <div className="border-border bg-secondary/40 space-y-2 rounded-lg border p-2.5">
+                    <div className="flex gap-2">
+                      <div role="tablist" aria-label="Direction" className="bg-secondary inline-flex rounded-full p-0.5 text-[11px]">
+                        {([['expense', true], ['income', false]] as const).map(([label, isExp]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="tab"
+                            aria-selected={addExpense === isExp}
+                            onClick={() => setAddExpense(isExp)}
+                            className={cn('rounded-full px-2.5 py-1 capitalize', addExpense === isExp ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Input
+                      aria-label="Merchant"
+                      placeholder="Merchant"
+                      value={addMerchant}
+                      onChange={(e) => setAddMerchant(e.target.value)}
+                      className="h-8 text-[12px]"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        aria-label={`Amount (${currency})`}
+                        type="number"
+                        inputMode="decimal"
+                        placeholder={`Amount (${currency})`}
+                        value={addAmount}
+                        onChange={(e) => setAddAmount(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') addMissing(); }}
+                        className="h-8 text-right font-mono text-[12px]"
+                      />
+                      <Button size="sm" onClick={addMissing}>Add</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" className="w-full" onClick={() => setAddOpen(true)}>
+                    <Icon name="plus" size={13} /> Add missing transaction
+                  </Button>
+                )}
+
                 <div className="flex justify-end gap-2 pt-1">
                   {!recState.balanced && (
-                    <Button size="sm" variant="outline" onClick={() => finishReconcile(true)}>
+                    <Button size="sm" variant="ghost" onClick={() => finishReconcile(true)}>
                       Post adjustment for {fmtNative(Math.abs(recState.difference), currency)}
                     </Button>
                   )}
@@ -390,6 +493,45 @@ export default function AccountDetailPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pending rows during reconcile: a "it posted" one-tap that confirms +
+            clears together (§10.2(2)). Pending rows can't be cleared while
+            pending, so this is the bridge. */}
+        {reconcileMode && toConfirm.length > 0 && (
+          <div className="border-border mb-4 overflow-hidden rounded-[14px] border">
+            <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
+              <div className="text-sm font-semibold">Pending · {toConfirm.length}</div>
+              <span className="text-muted-foreground text-[11px]">On your statement? Confirm &amp; clear</span>
+            </div>
+            {toConfirm.map((tx, i) => {
+              const cat = catById(tx.category);
+              const inc = tx.amount > 0;
+              return (
+                <div
+                  key={tx.id}
+                  className={cn('flex items-center gap-3 px-[18px] py-3', i && 'border-border border-t-[0.5px]')}
+                >
+                  <CatBar color={cat.color} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[13px] font-medium">{tx.merchant}</span>
+                      <StatusBadge status="pending" />
+                    </div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
+                  </div>
+                  <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')} />
+                  <Button
+                    size="sm" variant="outline" className="shrink-0"
+                    aria-label={`Confirm and clear ${tx.merchant}`}
+                    onClick={() => confirmAndClear(tx.id)}
+                  >
+                    Confirm &amp; clear
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
 

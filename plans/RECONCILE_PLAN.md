@@ -4,6 +4,14 @@ Status: **shipped** (PR #90) — guided reconcile flow + per-account checkpoint
 (`accounts.last_reconciled_at`/`_balance`) + `transactions.cleared_at`. This doc
 is kept as the design record.
 
+> **v2 scope (planning): "add missing transactions during reconcile".** The
+> shipped flow lets you tick rows and, for any leftover gap, *post an
+> adjustment* — which papers over the gap instead of finding it. In practice a
+> non-zero difference almost always means **a real transaction you forgot to
+> log**, not a mystery delta. v2 makes "add the missing row" a first-class
+> in-flow action so adjustment becomes the true last resort. **No schema change
+> required** (see §11). Specced in §10 below.
+
 finch already has a blunt *adjust-to-target* tool: the "Reconcile balance"
 dialog on account detail posts a single Adjustment delta to force the balance
 to a number (`adjustAccountBalance` in `mutations.ts`). That fixes the
@@ -272,3 +280,118 @@ UI (PRs 3-5):
   lands the account exactly on the statement balance.
 - The status badge reflects reconciled / never / edited-since states
   correctly.
+
+---
+
+# v2 — Add missing transactions during reconcile
+
+Status: **planning** — no code changes yet. Builds on the shipped flow above.
+
+## 10. Scope
+
+### 10.1 The gap this closes
+
+Today, reconcile mode (`app/(main)/accounts/[id]/page.tsx`) lets you tick
+rows and watch the difference bar. When the difference won't reach zero, the
+only in-flow action is **Post adjustment** (`finishReconcile(true)` →
+`reconcileAccount({ postAdjustment: true })`), which posts one opaque
+Adjustment delta. That fixes the number but loses the information: *which
+real-life transactions are missing*.
+
+v2 adds the missing half: **add (or confirm) the real transactions from
+inside reconcile mode**, watch each one close the gap, and reserve the
+adjustment for a genuinely unexplained remainder.
+
+### 10.2 In scope
+
+1. **Quick-add inside reconcile mode.** An "Add missing transaction" affordance
+   in the reconcile panel opens the existing add form pre-scoped to this
+   account, and on save the new row is **auto-cleared** so it immediately
+   counts toward the cleared balance and shrinks the difference. Implemented by
+   composing two primitives that already exist: `addTransaction(...)` returns
+   the new id → `setCleared(id, true)`.
+2. **Confirm-and-clear a pending row in one tap.** During reconcile you often
+   realise a *pending* row actually posted. Today pending rows are shown but
+   not tickable (they can't be "cleared" while pending). Add a single
+   "It posted — confirm & clear" action on a pending row that calls
+   `confirmPending(id)` then `setCleared(id, true)`. (Revisits open question
+   §7.2, which kept confirm and clear strictly separate — the reconcile context
+   is the case where doing both at once is exactly right.)
+3. **Gap framing.** When `difference ≠ 0`, reframe the copy from a bare number
+   to an actionable hint: a positive difference (statement higher than cleared)
+   → "You're {amount} short — likely a missing deposit/expense. Add it, or post
+   an adjustment." The **Add missing transaction** button is the primary action;
+   **Post adjustment** demotes to secondary while a gap looks explainable.
+
+### 10.3 Explicitly NOT in scope (keep these as-is)
+
+- **No merging of `status` (pending/confirmed) and `cleared_at`.** They stay two
+  independent axes — *did it happen* vs *did I see it on a statement*. v2 only
+  adds a one-tap shortcut that performs both transitions together; it does not
+  collapse the model. (This directly answers the original request's "check as
+  confirmed/nonconfirmed" phrasing: we keep them distinct on purpose.)
+- **No statement file import** (OFX/CSV/PDF) — unchanged from §8.
+- **No hard period lock** — unchanged (FEATURE_IDEAS §7.3).
+- **No auto-matching** of added rows to statement lines.
+
+### 10.4 UI sketch (extends §5.2)
+
+```
+┌─────────────────────────────────────────────┐
+│ Reconcile · Checking                    [✕]  │
+│ Statement balance [ 2,431.07 ] as of [Nov 30]│
+│ Cleared $2,418.55 · Target $2,431.07          │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░  You're $12.52 short       │
+│                       ↳ likely a missing row   │
+├───────────────────────────────────────────────┤
+│ ☑ Nov 28 Whole Foods            −$84.32       │
+│ ☐ Nov 26 Blue Bottle             −$6.75       │
+│ ⏳ Nov 25 Rent (pending)  [confirm & clear]    │  ← 10.2(2)
+├───────────────────────────────────────────────┤
+│ [ + Add missing transaction ]                  │  ← 10.2(1), primary
+│ Difference −$12.52   [ Post adjustment ] [Done]│  ← adjustment demoted
+└───────────────────────────────────────────────┘
+```
+
+- **Add missing transaction** reuses `AddExpenseForm` (the same component the
+  `/add` route and the add slider render), seeded with `account = this account`
+  and `date = statement date`. On `onSaved(id)` the page calls
+  `setCleared(id, true)` and stays in reconcile mode so the user can keep going.
+- The pending-row action appears only on rows where `tx.pending` is true.
+
+### 10.5 Work breakdown
+
+All client-side; no new mutations, no server changes.
+
+- `accounts/[id]/page.tsx`: add the quick-add entry point (open the existing
+  add form scoped to this account; auto-clear on save), the pending-row
+  "confirm & clear" action, and the gap-hint copy.
+- Possibly a thin wrapper around `AddExpenseForm` to default + lock the account
+  field and fire `onSaved(id)` — or reuse the form as-is if it already accepts
+  an initial account (check before building).
+- Tests: extend `reconcileState` coverage if any selector changes (none
+  expected); otherwise this is a UI-composition change verified by the existing
+  `setCleared` / `addTransaction` / `confirmPending` unit tests plus a manual
+  smoke. Add a small test asserting "add a row + clear it drives
+  `reconcileState.difference` to 0" if it can be expressed at the selector level.
+
+### 10.6 Shipping order
+
+One PR is fine — it's a UI composition over shipped mutations. If split:
+1. Quick-add + auto-clear + gap-hint copy (the core of the request).
+2. Pending-row confirm-and-clear shortcut.
+
+## 11. Schema impact — none
+
+v2 requires **no DB schema change**. Everything composes from columns and
+mutations that already shipped in PR #90 and earlier:
+
+| Need | Already exists |
+|---|---|
+| Mark a brand-new row as seen-on-statement | `transactions.cleared_at` + `setCleared` mutation |
+| Create the missing row | `addTransaction` (returns the new id) |
+| Confirm a pending row | `confirmPending` / `confirmPendingWithMatch` |
+| Cleared-balance + difference math | `reconcileState` selector (`lib/reconcile.ts`) |
+| Account checkpoint on finish | `accounts.last_reconciled_at` / `_balance` + `reconcileAccount` |
+
+The only code that moves is the reconcile-mode UI wiring these together.
