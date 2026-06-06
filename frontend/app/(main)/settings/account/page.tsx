@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState } from 'react';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -47,43 +47,19 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
   );
 }
 
-// Per-device "Include receipts in export" preference (PACK_FORMAT_PLAN §6.1).
-// Persisted to localStorage so it survives reloads on the same browser; the
-// choice isn't ledger data, mirroring the pattern saved-searches uses.
-const INCLUDE_RECEIPTS_KEY = 'finch.export.includeReceipts';
-function readIncludeReceipts(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(INCLUDE_RECEIPTS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-function subscribeIncludeReceipts(cb: () => void): () => void {
-  if (typeof window === 'undefined') return () => undefined;
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === INCLUDE_RECEIPTS_KEY) cb();
-  };
-  window.addEventListener('storage', onStorage);
-  return () => window.removeEventListener('storage', onStorage);
-}
-function useReceiptsPref(): [boolean, (next: boolean) => void] {
-  const value = useSyncExternalStore(
-    subscribeIncludeReceipts,
-    readIncludeReceipts,
-    () => false, // SSR snapshot
-  );
-  const set = useCallback((next: boolean) => {
-    try {
-      window.localStorage.setItem(INCLUDE_RECEIPTS_KEY, next ? '1' : '0');
-    } catch {
-      // localStorage unavailable / quota — fall back to no-op
-    }
-    // Same-tab updates: 'storage' fires only across tabs, so dispatch
-    // manually for the current tab.
-    window.dispatchEvent(new StorageEvent('storage', { key: INCLUDE_RECEIPTS_KEY }));
-  }, []);
-  return [value, set];
+// Auto-backup frequency presets (label -> ms). -1 = off. 0 = on every change.
+// Values map onto BackupConfigSlice.frequencyMs.
+const FREQ_OPTIONS: { label: string; ms: number }[] = [
+  { label: 'After every change', ms: 0 },
+  { label: 'At most hourly', ms: 60 * 60 * 1000 },
+  { label: 'At most daily', ms: 24 * 60 * 60 * 1000 },
+  { label: 'At most weekly', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: 'Off (manual only)', ms: -1 },
+];
+const RETENTION_OPTIONS = [5, 10, 14, 30, 50, 100];
+
+function freqLabelFor(ms: number): string {
+  return FREQ_OPTIONS.find((o) => o.ms === ms)?.label ?? `Every ${Math.round(ms / 60000)} min`;
 }
 
 export default function AccountSettingsPage() {
@@ -93,10 +69,10 @@ export default function AccountSettingsPage() {
   const [pendingFile, setPendingFile] = useState<{ file: File; metadata: DbMetadataView } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
   const [busy, setBusy] = useState(false);
-  // Per-device preference for the export format. Persisted via localStorage
-  // so it survives reloads on the same browser; the choice isn't ledger data
-  // and doesn't belong in the DB. PACK_FORMAT_PLAN §6.1.
-  const [includeReceipts, setIncludeReceipts] = useReceiptsPref();
+  // Backup config lives in app_state — travels with the database.
+  const backupConfig = useFinanceStore((s) => s.backupConfig);
+  const setBackupFrequency = useFinanceStore((s) => s.setBackupFrequency);
+  const setBackupRetention = useFinanceStore((s) => s.setBackupRetention);
 
   const onFilePicked = async (file: File) => {
     if (!file) return;
@@ -262,24 +238,9 @@ export default function AccountSettingsPage() {
           </span>
         </Row>
         <Row icon="download" label="Export a copy">
-          <div className="flex flex-col items-end gap-1.5">
-            <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
-              <input
-                type="checkbox"
-                checked={includeReceipts}
-                onChange={(e) => setIncludeReceipts(e.target.checked)}
-                className="accent-primary size-3.5"
-              />
-              <span className="text-muted-foreground">Include receipts (.finch)</span>
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void backup.download({ withAttachments: includeReceipts })}
-            >
-              {includeReceipts ? 'Download .finch' : 'Download .db'}
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={() => void backup.download()}>
+            Download .finch
+          </Button>
         </Row>
         <Row icon="doc" label="Export transactions">
           <Button variant="outline" size="sm" onClick={() => void backup.downloadCsv()}>
@@ -290,7 +251,7 @@ export default function AccountSettingsPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".sqlite3,.db,.finch,.zip,application/x-sqlite3,application/zip"
+            accept=".finch"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -305,6 +266,36 @@ export default function AccountSettingsPage() {
           >
             Choose file…
           </Button>
+        </Row>
+        <Row icon="clock" label="Backup frequency">
+          <Select
+            value={String(backupConfig.frequencyMs)}
+            onValueChange={(v) => setBackupFrequency(Number(v))}
+          >
+            <SelectTrigger className="h-8 w-[180px] text-[12px]">
+              <SelectValue>{freqLabelFor(backupConfig.frequencyMs)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {FREQ_OPTIONS.map((o) => (
+                <SelectItem key={o.ms} value={String(o.ms)}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Row>
+        <Row icon="doc" label="Backups kept">
+          <Select
+            value={String(backupConfig.retention)}
+            onValueChange={(v) => setBackupRetention(Number(v))}
+          >
+            <SelectTrigger className="h-8 w-[120px] text-[12px]">
+              <SelectValue>{backupConfig.retention} files</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {RETENTION_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} files</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Row>
         <Row icon="sync" label="Back up now">
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void onBackupNow()}>
