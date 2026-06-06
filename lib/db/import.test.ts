@@ -70,25 +70,22 @@ test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {
   // checksum without breaking the SQLite header itself.
   await getServerDb();
   const { bytes } = await exportDbBytes();
-  const { getSqlite3, execFor } = await import('./sqlite');
-  const sqlite3 = await getSqlite3();
-  const db = new sqlite3.oo1.DB();
+  const { openDb, execFor } = await import('./driver');
+  const tamperPath = path.join(os.tmpdir(), `finch-tamper-${Date.now()}.sqlite3`);
+  await fs.writeFile(tamperPath, Buffer.from(bytes));
+  const driver = await openDb(tamperPath);
   try {
-    const p = sqlite3.wasm.allocFromTypedArray(bytes);
-    const rc = sqlite3.capi.sqlite3_deserialize(
-      // The OO1DB shape from sqlite.ts is more constrained than the runtime
-      // value; cast through unknown for the typed-but-unused fields.
-      (db as unknown as { pointer: number }).pointer, 'main', p, bytes.length, bytes.length,
-      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-    );
-    expect(rc).toBe(0);
-    const exec = execFor(db as never);
+    const exec = execFor(driver);
     await exec("UPDATE accounts SET name = 'tampered' WHERE id = 'chk'");
-    const tampered = new Uint8Array(sqlite3.capi.sqlite3_js_db_export(db as never));
-    await expect(importDbBytes(tampered)).rejects.toThrow(/checksum|corrupted|tamper/i);
+    driver.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   } finally {
-    db.close();
+    driver.close();
   }
+  const tampered = new Uint8Array(await fs.readFile(tamperPath));
+  await expect(importDbBytes(tampered)).rejects.toThrow(/checksum|corrupted|tamper/i);
+  await fs.unlink(tamperPath).catch(() => {});
+  await fs.unlink(`${tamperPath}-wal`).catch(() => {});
+  await fs.unlink(`${tamperPath}-shm`).catch(() => {});
 });
 
 test('importDbBytes runs autoBackup before swapping', async () => {
