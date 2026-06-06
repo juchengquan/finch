@@ -44,6 +44,10 @@ export interface AccountRow {
   type: string;
   currency: string;
   balance: number;
+  /** Opening balance in the account's native currency. The starting point that
+   *  `recomputeAccount` walks forward through confirmed rows to land at
+   *  `current_balance`; same anchor the reconcile selector uses. */
+  openingBalance: number;
   /** Ledger-base value of the opening balance, locked at account creation. The
    *  cost-basis half of the unrealized-FX calculation: cost basis =
    *  openingBalanceBase + Σ amount_base of confirmed transactions. */
@@ -53,6 +57,12 @@ export interface AccountRow {
   includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
   color: string | null;
   sortOrder: number;
+  /** Date of the last successful reconcile-to-statement (`YYYY-MM-DD`), or null
+   *  when the account has never been reconciled. */
+  lastReconciledAt: string | null;
+  /** Statement balance the user matched at that date, in the account's native
+   *  currency. Paired with `lastReconciledAt`. */
+  lastReconciledBalance: number | null;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
@@ -60,9 +70,12 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 1' : 'WHERE a.is_active = 1';
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
+            a.opening_balance AS openingBalance,
             a.opening_balance_base AS openingBalanceBase,
             a.group_id AS groupId, g.name AS groupName, a.color,
-            a.sort_order AS sortOrder, a.include_in_net_worth AS inw
+            a.sort_order AS sortOrder, a.include_in_net_worth AS inw,
+            a.last_reconciled_at AS lastReconciledAt,
+            a.last_reconciled_balance AS lastReconciledBalance
        FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
       ${where}
       ORDER BY g.sort_order, a.sort_order, a.name`,
@@ -75,12 +88,15 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     type: String(r.type),
     currency: String(r.currency),
     balance: Number(r.balance),
+    openingBalance: Number(r.openingBalance ?? 0),
     openingBalanceBase: Number(r.openingBalanceBase ?? 0),
     groupId: r.groupId == null ? null : String(r.groupId),
     groupName: r.groupName == null ? null : String(r.groupName),
     includeInNetWorth: Number(r.inw),
     color: r.color == null ? null : String(r.color),
     sortOrder: Number(r.sortOrder ?? 0),
+    lastReconciledAt: r.lastReconciledAt == null ? null : String(r.lastReconciledAt),
+    lastReconciledBalance: r.lastReconciledBalance == null ? null : Number(r.lastReconciledBalance),
   }));
 }
 

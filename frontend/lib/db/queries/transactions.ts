@@ -86,6 +86,7 @@ export function rowToTx(r: Record<string, unknown>): Tx {
     sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
     refundedTransactionId: r.refunded_transaction_id == null ? undefined : String(r.refunded_transaction_id),
     counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
+    clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
   };
 }
 
