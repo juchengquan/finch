@@ -104,7 +104,7 @@ import type { Tx } from '@/lib/store';
 /** Merge a partial backup-config update into the app_state slice. Reads the
  *  existing JSON, overrides the named keys, writes back. Concurrent
  *  setBackupFrequency / setBackupRetention can't clobber each other this way.
- *  Defaults mirror `lib/db/state.ts::BACKUP_CONFIG_DEFAULTS`. */
+ *  Defaults mirror `lib/db/state.ts::readBackupConfig`. */
 async function mergeBackupConfig(
   exec: Exec,
   patch: Partial<{ frequencyMs: number; retention: number }>,

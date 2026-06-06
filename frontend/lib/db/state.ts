@@ -143,10 +143,12 @@ async function readDisplayCurrencyByLedger(exec: Exec): Promise<Record<string, s
 
 // Per-DB backup config. Persisted as JSON under app_state['backupConfig'] so
 // it travels with the database (a .finch pack carries it; restoring on
-// another device keeps the user's preferences). Defaults reflect the
-// pre-PR behaviour (one auto-backup per hour; keep the latest 14). Env vars
-// FINCH_BACKUP_MIN_INTERVAL_MS / FINCH_BACKUP_KEEP act as fallback defaults
-// only when the user hasn't picked anything.
+// another device keeps the user's preferences).
+//
+// Precedence (highest to lowest):
+//   1. app_state['backupConfig']                       — what the user picked
+//   2. FINCH_BACKUP_MIN_INTERVAL_MS / FINCH_BACKUP_KEEP — env-var fallback
+//   3. Hardcoded defaults (1h / 14)                    — final fallback
 export interface BackupConfigSlice {
   /** Minimum ms between auto-backups. 0 = on every change; -1 = off
    *  (auto-backup disabled; user can still hit Backup now). */
@@ -155,26 +157,37 @@ export interface BackupConfigSlice {
   retention: number;
 }
 
-export const BACKUP_CONFIG_DEFAULTS: BackupConfigSlice = {
-  frequencyMs: 60 * 60 * 1000, // 1h
-  retention: 14,
-};
+function envFallbackFrequencyMs(): number {
+  const v = Number(process.env.FINCH_BACKUP_MIN_INTERVAL_MS);
+  return Number.isFinite(v) && v >= 0 ? Math.trunc(v) : 60 * 60 * 1000;
+}
 
-async function readBackupConfig(exec: Exec): Promise<BackupConfigSlice> {
+function envFallbackRetention(): number {
+  const v = Number(process.env.FINCH_BACKUP_KEEP);
+  return Number.isFinite(v) && v > 0 ? Math.trunc(v) : 14;
+}
+
+/** Effective backup config = app_state if set, else env-var fallback, else
+ *  hardcoded defaults. Exported because the autoBackup runtime in server.ts
+ *  reads it too — single source of truth so the Settings UI shows exactly
+ *  what's in effect at runtime. */
+export async function readBackupConfig(exec: Exec): Promise<BackupConfigSlice> {
+  const frequencyDefault = envFallbackFrequencyMs();
+  const retentionDefault = envFallbackRetention();
   const raw = await getAppState(exec, 'backupConfig');
-  if (!raw) return { ...BACKUP_CONFIG_DEFAULTS };
+  if (!raw) return { frequencyMs: frequencyDefault, retention: retentionDefault };
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { ...BACKUP_CONFIG_DEFAULTS };
+      return { frequencyMs: frequencyDefault, retention: retentionDefault };
     }
     const freq = Number((parsed as { frequencyMs?: unknown }).frequencyMs);
     const ret = Number((parsed as { retention?: unknown }).retention);
     return {
-      frequencyMs: Number.isFinite(freq) ? Math.trunc(freq) : BACKUP_CONFIG_DEFAULTS.frequencyMs,
-      retention: Number.isFinite(ret) && ret > 0 ? Math.trunc(ret) : BACKUP_CONFIG_DEFAULTS.retention,
+      frequencyMs: Number.isFinite(freq) ? Math.trunc(freq) : frequencyDefault,
+      retention: Number.isFinite(ret) && ret > 0 ? Math.trunc(ret) : retentionDefault,
     };
   } catch {
-    return { ...BACKUP_CONFIG_DEFAULTS };
+    return { frequencyMs: frequencyDefault, retention: retentionDefault };
   }
 }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { openDb, execFor, applyPragmaBootstrap, type SqliteDriver } from './driver';
 import { applySchema, migrate } from './schema';
 import { seedDatabase } from './seed';
-import { projectState } from './state';
+import { projectState, readBackupConfig } from './state';
 import { bumpUpdated, rowCounts, stampExport } from './queries/metadata';
 import { computeChecksum } from './checksum';
 import { rollBudgetsIfDue } from '@/lib/budgets/rollover';
@@ -228,7 +228,7 @@ async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
   const v = await validateImportBytes(bytes);
   if (!v.ok) throw new Error(v.reason ?? 'Invalid file');
 
-  const backup = await autoBackup({ minIntervalMs: 0 }); // always snapshot
+  const backup = await autoBackup({ force: true }); // always snapshot — even if auto-backup is off
   const { full } = dbFile();
 
   // Close the live connection so the OS file lock + WAL sidecars are released
@@ -296,7 +296,7 @@ async function importPackBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
 
   // Snapshot the live DB so the swap is recoverable. (Attachments aren't
   // backed up here — see the rotation below.)
-  const backup = await autoBackup({ minIntervalMs: 0 });
+  const backup = await autoBackup({ force: true });
 
   const { dir, full } = dbFile();
   const liveAttachments = path.join(dir, 'attachments');
@@ -352,14 +352,21 @@ export function importPackBytes(bytes: Uint8Array): Promise<ImportResult> {
   return serialize(() => importPackBytesLocked(bytes));
 }
 
-/** Replace the live DB with the contents of a named backup file. */
+/** Replace the live DB with the contents of a named backup file. Routes by
+ *  magic bytes — `.finch.bak` (zip) goes through importPackBytesLocked
+ *  (restores DB + attachments); legacy `.sqlite3.bak` (bare DB) goes through
+ *  importDbBytesLocked. Files older than this PR remain restorable. */
 export function restoreBackup(name: string): Promise<ImportResult> {
   return serialize(async () => {
     const all = await listBackups();
     const entry = all.find((b) => b.name === name);
     if (!entry) throw new Error('Backup not found');
     const bytes = new Uint8Array(await fs.readFile(entry.path));
-    return importDbBytesLocked(bytes);
+    const { detectFileKind } = await import('./pack');
+    const kind = detectFileKind(bytes.subarray(0, 16));
+    if (kind === 'zip') return importPackBytesLocked(bytes);
+    if (kind === 'sqlite') return importDbBytesLocked(bytes);
+    throw new Error('Unrecognised backup format');
   });
 }
 
@@ -397,17 +404,20 @@ export function withWrite(fn: (exec: Exec) => Promise<void>): Promise<ProjectedS
 }
 
 // Auto-backup configuration. Backups are siblings of the live DB file with
-// timestamped names; retention keeps the most recent N. Tunable via env so a
-// deployment can dial up retention without a code change.
-const BACKUP_SUFFIX = '.sqlite3.bak';
+// timestamped names; retention keeps the most recent N.
+//
+// Format: `.finch.bak` packs (DB + receipts + manifest) going forward;
+// legacy `.sqlite3.bak` bare-DB backups are still readable on restore for
+// users with on-disk history from before this change.
+// Frequency + retention are read from app_state via `readBackupConfig`
+// (env vars are fallback defaults — see `lib/db/state.ts`).
+const BACKUP_NEW_SUFFIX = '.finch.bak';
+const BACKUP_LEGACY_SUFFIX = '.sqlite3.bak';
 const BACKUP_PREFIX = 'finch-';
-function backupRetention(): number {
-  const v = Number(process.env.FINCH_BACKUP_KEEP);
-  return Number.isFinite(v) && v > 0 ? Math.floor(v) : 14;
-}
-function defaultMinInterval(): number {
-  const v = Number(process.env.FINCH_BACKUP_MIN_INTERVAL_MS);
-  return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 60 * 60 * 1000; // 1h
+
+function isBackupName(name: string): boolean {
+  if (!name.startsWith(BACKUP_PREFIX)) return false;
+  return name.endsWith(BACKUP_NEW_SUFFIX) || name.endsWith(BACKUP_LEGACY_SUFFIX);
 }
 
 function fsSafeTimestamp(d: Date = new Date()): string {
@@ -423,7 +433,9 @@ export interface BackupEntry {
   createdAt: string;
 }
 
-/** List existing backup files in the data dir, newest first. */
+/** List existing backup files in the data dir, newest first. Includes both
+ *  the new `.finch.bak` packs and any legacy `.sqlite3.bak` bare-DB backups
+ *  still on disk. */
 export async function listBackups(): Promise<BackupEntry[]> {
   const { dir } = dbFile();
   let entries: string[];
@@ -432,7 +444,7 @@ export async function listBackups(): Promise<BackupEntry[]> {
   } catch {
     return [];
   }
-  const backups = entries.filter((n) => n.startsWith(BACKUP_PREFIX) && n.endsWith(BACKUP_SUFFIX));
+  const backups = entries.filter(isBackupName);
   const out: BackupEntry[] = [];
   for (const name of backups) {
     const full = path.join(dir, name);
@@ -457,30 +469,59 @@ async function pruneBackups(keep: number): Promise<void> {
 
 /**
  * Snapshot the live server DB to a timestamped sibling:
- *   <FINCH_DB_DIR>/finch-YYYY-MM-DDTHH-MM-SSZ.sqlite3.bak
+ *   <FINCH_DB_DIR>/finch-YYYY-MM-DDTHH-MM-SSZ.finch.bak
  *
- * Uses VACUUM INTO so the backup is a clean, single-file snapshot taken
- * atomically without quiescing the live writer (FILE_BACKED_DB_PLAN §4.2).
- * Throttled by `minIntervalMs`; retention prunes oldest beyond
- * FINCH_BACKUP_KEEP (default 14).
+ * Format is a `.finch` pack (DB + receipts + manifest, PACK_FORMAT_PLAN §3)
+ * so restoring brings receipts back too — not just the database. Frequency
+ * + retention come from app_state (`readBackupConfig`), env vars are
+ * fallback defaults.
+ *
+ * Gates (highest to lowest priority):
+ *   - `opts.force === true` — write a backup unconditionally, bypassing
+ *     both throttle and the "off" setting. Used by import-time safety
+ *     snapshots and by the user-pressed "Backup now" button.
+ *   - frequencyMs === -1 — auto-backup is off; return without writing.
+ *     `created: false` in the result.
+ *   - throttle: if the newest existing backup is younger than frequencyMs,
+ *     return its path with `created: false`.
+ *   - else: write a fresh pack; prune oldest beyond retention.
+ *
+ * Result.path is the file path that should be considered "the current
+ * backup," whether we wrote it just now or not. result.created is true
+ * iff a new file was just written.
  */
-export async function autoBackup(opts?: { minIntervalMs?: number }): Promise<{ path: string }> {
-  const minInterval = opts?.minIntervalMs ?? defaultMinInterval();
+export async function autoBackup(opts?: { force?: boolean }): Promise<{ path: string; created: boolean }> {
+  const db = await getServerDb();
+  const cfg = await readBackupConfig(db.exec);
+  const forced = opts?.force === true;
+
+  if (!forced && cfg.frequencyMs < 0) {
+    // Off — return the most recent existing backup (if any), or an empty
+    // marker the caller can detect via `created: false`.
+    const existing = await listBackups();
+    return { path: existing[0]?.path ?? '', created: false };
+  }
+
   const existing = await listBackups();
-  if (existing.length > 0 && minInterval > 0) {
+  if (!forced && existing.length > 0 && cfg.frequencyMs > 0) {
     const newest = existing[0];
     const ageMs = Date.now() - new Date(newest.createdAt).getTime();
-    if (ageMs < minInterval) return { path: newest.path };
+    if (ageMs < cfg.frequencyMs) return { path: newest.path, created: false };
   }
-  const db = await getServerDb();
+
   const { dir } = dbFile();
   await fs.mkdir(dir, { recursive: true });
-  const target = path.join(dir, `${BACKUP_PREFIX}${fsSafeTimestamp()}${BACKUP_SUFFIX}`);
-  // Make sure no stale target exists from a previous failed run.
+  const target = path.join(dir, `${BACKUP_PREFIX}${fsSafeTimestamp()}${BACKUP_NEW_SUFFIX}`);
   await fs.unlink(target).catch(() => {});
-  db.driver.prepare('VACUUM INTO ?').run(target);
-  await pruneBackups(backupRetention());
-  return { path: target };
+
+  // Build a .finch pack carrying the DB + every attachment + a manifest.
+  // exportPackBytes() handles VACUUM INTO + the metadata stamp + the
+  // attachment scan from the cloned DB (consistent snapshot).
+  const { bytes } = await exportPackBytes();
+  await fs.writeFile(target, Buffer.from(bytes));
+
+  await pruneBackups(cfg.retention);
+  return { path: target, created: true };
 }
 
 function includeHostname(): boolean {
