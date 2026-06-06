@@ -21,6 +21,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; §8 cross-app implications are **2 of 3 shipped** (attachments + pack format); ledger CRUD remains.
+- `LEDGER_CRUD_PLAN.md` — **new (2026-06-06)** — web-app side of the ledger CRUD decision (`IOS_MACOS_PLAN.md` §14.8, the remaining §8 item): create / rename / restyle / set-default / delete ledgers, DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete incl. attachment-file sweep.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -83,7 +84,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/color); delete leaves txns uncategorised. Colour is hex; a curated swatch picker maps OKLCH hues to hex at the standard palette. |
 | Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
-| Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) covers the practical need (pick a ledger); a full admin table for 4 hardcoded ledgers without a "New ledger" mutation would be half-baked theater. Reconsider if/when ledger creation lands. |
+| Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) covers the practical need (pick a ledger); a full admin table for 4 hardcoded ledgers without a "New ledger" mutation would be half-baked theater. Reconsider if/when ledger creation lands (now planned — see `LEDGER_CRUD_PLAN.md`). |
 | Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
 | Settings | Exchange-rate book | ✅ | Under **Settings › Ledger** (add/delete, sparkline, source badges); DB-backed. The "device/sync" piece was retired with the `sync_log` table — DB file is the source of truth, no multi-device sync to expose. |
 | Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
