@@ -393,7 +393,7 @@ at where the behaviour lives today.
 | 36 | Command palette (⌘K) | Jump-to-anything search | macOS ⌘K; iOS Spotlight (§7) | 2 (mac 1) | `command-palette.tsx` |
 | 37 | Responsive shell (sidebar/bottom-bar, breadcrumbs) | Adaptive nav (tab bar vs sidebar/split) | `TabView`/`NavigationSplitView` | 1 | `PageShell.tsx` |
 | 38 | Holdings management (add/edit/price/delete) | Position CRUD + price update | Form sheets | 2 | `account-holdings.tsx` |
-| 39 | **NEW — Ledger CRUD** (create / rename / delete; web app currently has none) | Full ledger CRUD on both apps; new mutations on the shared schema | Form sheet; settings row | 1 | (new — coordinated web change; see §8) |
+| 39 | Ledger CRUD (create / rename / restyle / set-default / delete) | Full ledger CRUD on both apps; mutations on the shared schema | Form sheet; settings row | 1 | `lib/db/queries/ledgers.ts`; `lib/db/mutations.ts` (createLedger / updateLedger / setDefaultLedger / deleteLedger); `components/ledger-switcher.tsx`; `app/(main)/settings/ledger/page.tsx`. Web ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md`. |
 | 40 | **NEW — Receipt attachments** (capture / attach photo or PDF; view; delete) | Share Extension + in-app photo/PDF picker; thumbnail + viewer in tx detail | Share extension; `PhotosPicker`; `QuickLook` | 2 | §2.5; (web also adds attachment UI + a server-side attachments dir) |
 
 > Tiering is direction, not contract — the team MAY re-tier, but SHOULD keep
@@ -706,9 +706,14 @@ finch already computes, so the data work is mostly done.
      (`plans/done/RECEIPT_PHOTOS_PLAN.md`). Schema in
      `frontend/lib/db/schema.ts`; resolved on-disk under `FINCH_DB_DIR`
      via `frontend/lib/db/paths.ts`.
-  2. ⏳ **Add ledger CRUD** to the web app (currently 4 seeded ledgers, no
-     create/rename/delete mutation; decision §14). **Still open** — the
-     last cross-app implication; tracked as MASTER_PLAN open item.
+  2. ✅ **Add ledger CRUD** to the web app — **shipped via
+     `plans/done/LEDGER_CRUD_PLAN.md`** (2026-06-06). Four new
+     mutations + matching store actions + DB-backed cosmetics + live
+     counts + per-device persisted active ledger + ordered cascade
+     delete with on-disk attachment sweep. The switcher's "New ledger"
+     dialog + Settings › Ledger edit/default/danger-zone-delete dialogs
+     surface them. Decision §14.8 satisfied; both apps will now have the
+     same CRUD surface on the shared schema.
   3. ✅ **Teach `/api/export` and `/api/import` the `.finch` pack format**
      (formerly raw `.db` only) — **shipped via PR #107**
      (`plans/done/PACK_FORMAT_PLAN.md`). `GET /api/export?withAttachments=1`

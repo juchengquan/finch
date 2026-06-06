@@ -21,7 +21,6 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; §8 cross-app implications are **2 of 3 shipped** (attachments + pack format); ledger CRUD remains.
-- `LEDGER_CRUD_PLAN.md` — **new (2026-06-06)** — web-app side of the ledger CRUD decision (`IOS_MACOS_PLAN.md` §14.8, the remaining §8 item): create / rename / restyle / set-default / delete ledgers, DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete incl. attachment-file sweep.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -32,6 +31,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `FILE_BACKED_DB_PLAN.md` — shipped via PRs #96, #97, #99, #100 (the persistence runtime moved from in-memory `sqlite-wasm` to file-backed `better-sqlite3` with WAL).
 - `RECEIPT_PHOTOS_PLAN.md` — **moved here 2026-06-06**; shipped via PR #106 (web-app receipt attachments end-to-end — schema + upload route + serve route + transaction-detail UI + lightbox).
 - `PACK_FORMAT_PLAN.md` — **moved here 2026-06-06**; shipped via PR #107 (the cross-platform `.finch` zip pack format end-to-end — build, parse, atomic swap of DB + attachments, magic-byte-routed import, Settings UI).
+- `LEDGER_CRUD_PLAN.md` — **moved here 2026-06-06**; shipped (this PR) — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
 
 ---
 
@@ -84,7 +84,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Categories admin | ✅ | **Create / edit / delete** (name/type/icon/color); delete leaves txns uncategorised. Colour is hex; a curated swatch picker maps OKLCH hues to hex at the standard palette. |
 | Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
-| Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) covers the practical need (pick a ledger); a full admin table for 4 hardcoded ledgers without a "New ledger" mutation would be half-baked theater. Reconsider if/when ledger creation lands (now planned — see `LEDGER_CRUD_PLAN.md`). |
+| Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) now does create + edit + set-default + delete (LEDGER_CRUD_PLAN, shipped 2026-06-06) — no separate admin table needed. |
 | Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
 | Settings | Exchange-rate book | ✅ | Under **Settings › Ledger** (add/delete, sparkline, source badges); DB-backed. The "device/sync" piece was retired with the `sync_log` table — DB file is the source of truth, no multi-device sync to expose. |
 | Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
@@ -347,18 +347,15 @@ below; what's still open is summarized here.
    architecture decisions (GRDB on the verbatim schema, Swift port of the
    selectors w/ the web `bun test` suite as the parity oracle, iCloud Drive
    file-pack sync), Apple-platform upside (App Intents, Spotlight, biometric
-   lock, Share-Extension receipts). Tier 1 also requires **ledger CRUD** on
-   both apps (the web ships with 4 seeded ledgers and no creation path —
-   tracked as a cross-app implication in §8 of the doc). **L (the build);
-   the brief itself is done.**
-2. **Ledger CRUD on the web app** — surfaced by the native plan (§8
-   cross-app implications). Currently 4 seeded ledgers with no create/rename/
-   delete mutation; required for file-pack interop so native-created ledgers
-   round-trip. **S–M, schema-adjacent (mutations + UI).**
-3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+   lock, Share-Extension receipts). **All three §8 cross-app implications
+   are now shipped on the web** (attachments PR #106, pack format PR #107,
+   ledger CRUD this PR) — native can now adopt the schema verbatim and
+   build against a complete reference. **L (the build); the brief itself
+   is done.**
+2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
-4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
@@ -681,8 +678,8 @@ parentheses.
   implications now show "2 of 3 shipped" with ledger CRUD as the only
   remaining item. Code audit confirmed every section of the two shipped
   plans matches the live frontend.
-- **Settings standardised on `.finch`; auto-backups configurable** (this
-  PR) — six items, all in service of one user-visible promise: "your
+- **Settings standardised on `.finch`; auto-backups configurable** (PR
+  #108) — six items, all in service of one user-visible promise: "your
   data lives in `.finch` files." (1) Export row collapses to a single
   **"Download .finch"** button (the prior checkbox+button combo was
   hard to discover next to a more prominent download affordance). (2)
@@ -702,4 +699,34 @@ parentheses.
   defaults — only used when the user hasn't picked anything. New
   `autoBackup({ force: true })` opt overrides both throttle and "off"
   for import-safety + user-pressed "Backup now."
+- **Ledger CRUD on the web** (this PR; `plans/done/LEDGER_CRUD_PLAN.md`)
+  — **closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`**.
+  Three commits matching the plan's §10 split:
+  (1) **Backend round-trip** — schema gains `ledgers.color` + `tagline`
+  (additive migration, `SCHEMA_VERSION` → `2026-06-12`); `LedgerRow`
+  carries projected cosmetics + live `accounts`/`txns` counts via
+  subselects; four new query helpers (`createLedger`,
+  `updateLedger`, `setDefaultLedger`, `deleteLedger`); four matching
+  mutations + optimistic store actions. `deleteLedger` is the careful
+  one: SAVEPOINT-wrapped ordered DELETEs from leaves up (attachments →
+  transactions → scheduled → rules → holdings → budgets → ... → ledger),
+  attachment `rel_path`s collected before delete and unlinked from disk
+  after; default reassignment when removing the default; the deleted
+  ledger's key swept from `app_state['displayCurrencyByLedger']`;
+  refuses the last ledger. +9 tests covering the cascade, counts,
+  default flip, last-ledger guard.
+  (2) **Provider + persistence** — `LedgerProvider` reads cosmetics +
+  counts from the projection (drops the static-JSON merge), with a
+  hashed-hue fallback for null colors; **active ledger persisted
+  per-device in `localStorage`** via `useSyncExternalStore` (SSR-safe);
+  derived effective active id during render handles the "persisted id
+  no longer in projection" cleanup case (no setState-in-effect cascade).
+  (3) **UI** — switcher: "New ledger" dialog (name + base currency +
+  color + tagline); live `N accounts · M txns` counts under each
+  dropdown row. Settings › Ledger gains "Name & appearance" Edit dialog,
+  "Make default" row (hidden when already default), and a Danger zone
+  with a typed-name confirm delete dialog showing the live blast radius.
+  Same PR also fixes a long-standing bug: `postScheduled` hardcoded
+  `ledgerId = 'personal'` — now reads the template's own `ledger_id`,
+  so templates in non-personal ledgers post into their right ledger.
 
