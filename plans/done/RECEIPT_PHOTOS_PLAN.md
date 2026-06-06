@@ -1,6 +1,11 @@
 # Receipt photos — scoping plan
 
-Status: **planning** — no code changes yet.
+Status: **shipped** (PR #106, 2026-06-06). This doc is kept as the design
+record. Every section below was implemented as designed; an end-to-end
+verification confirmed it (`MASTER_PLAN.md` "Done since (post-PR-#82)").
+
+The pack/export piece (§7) was spun out into its own plan and is now also
+shipped: see `plans/done/PACK_FORMAT_PLAN.md` (PR #107).
 
 > Web-app scoping doc for attaching receipt photos / PDFs to transactions.
 > The **shape of the data** (pointer-only table + on-disk layout + a portable

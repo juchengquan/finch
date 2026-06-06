@@ -28,7 +28,9 @@ export async function POST(req: Request) {
     } catch {
       // empty body — treat as throttled call
     }
-    const result = await autoBackup(force ? { minIntervalMs: 0 } : undefined);
+    // User-pressed "Backup now" forces a snapshot regardless of throttle or
+    // "off" setting; a routine call respects both.
+    const result = await autoBackup(force ? { force: true } : undefined);
     return NextResponse.json(result);
   } catch (err) {
     console.error('POST /api/backups failed', err);

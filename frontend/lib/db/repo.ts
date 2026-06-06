@@ -53,4 +53,7 @@ export interface ProjectedState extends PersistState {
   mobileTabIds: string[];
   /** Per-ledger display currency (ledgerId → currency). Missing = ledger's base. */
   displayCurrencyByLedger: Record<string, string>;
+  /** Backup frequency + retention. Persisted in app_state so the choice
+   *  travels with the database (every .finch pack carries it). */
+  backupConfig: import('./state').BackupConfigSlice;
 }

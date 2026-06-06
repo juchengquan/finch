@@ -20,17 +20,17 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `database_design_en.md` — the canonical relational schema design (reference, not a feature plan).
 - `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
-- `IOS_MACOS_PLAN.md` — **new (2026-06-06)** — product + architecture direction brief for a future native iOS / macOS port; resolves 8 product decisions including iCloud Drive file-pack sync, the shared receipt-attachments schema, OS baseline (iOS/iPadOS/macOS 26), and ledger CRUD for both apps.
+- `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; §8 cross-app implications are **2 of 3 shipped** (attachments + pack format); ledger CRUD remains.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
-- ~~`RECEIPT_PHOTOS_PLAN.md`~~ → **shipped via PR #106** (2026-06-06); the plan stays in `plans/` as a design record for now (will move to `done/` in a future hygiene pass).
-- ~~`PACK_FORMAT_PLAN.md`~~ → **shipped via this PR** (2026-06-06); the `.finch` zip pack format end-to-end (export, import, manifest validation, atomic swap of DB + attachments).
 
 **Shipped design records (`plans/done/`):**
 
 - `BUDGET_CYCLES_PLAN.md`, `CRUD_PARITY_PLAN.md`, `FX_CONVERSION_PLAN.md`, `IMPORT_EXPORT_PLAN.md`, `INSIGHTS_PLAN.md`, `MERCHANTS_LINK_PLAN.md`, `MULTI_CURRENCY_ACCOUNTS_PLAN.md`, `SETTINGS_AND_TRANSFERS_PLAN.md`, `SQLITE_INTEGRATION_PLAN.md`, `budgets_redesign.md` — earlier plans, all shipped.
-- `RECONCILE_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #90 + #101 (v2).
-- `RULES_ENGINE_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #91, #94 + the UI series in PR #102.
-- `FILE_BACKED_DB_PLAN.md` — **moved here 2026-06-06**; shipped via PRs #96, #97, #99, #100 (the persistence runtime moved from in-memory `sqlite-wasm` to file-backed `better-sqlite3` with WAL).
+- `RECONCILE_PLAN.md` — shipped via PRs #90 + #101 (v2).
+- `RULES_ENGINE_PLAN.md` — shipped via PRs #91, #94 + the UI series in PR #102.
+- `FILE_BACKED_DB_PLAN.md` — shipped via PRs #96, #97, #99, #100 (the persistence runtime moved from in-memory `sqlite-wasm` to file-backed `better-sqlite3` with WAL).
+- `RECEIPT_PHOTOS_PLAN.md` — **moved here 2026-06-06**; shipped via PR #106 (web-app receipt attachments end-to-end — schema + upload route + serve route + transaction-detail UI + lightbox).
+- `PACK_FORMAT_PLAN.md` — **moved here 2026-06-06**; shipped via PR #107 (the cross-platform `.finch` zip pack format end-to-end — build, parse, atomic swap of DB + attachments, magic-byte-routed import, Settings UI).
 
 ---
 
@@ -361,14 +361,16 @@ below; what's still open is summarized here.
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
-- ✅ **Receipt photos** (PR #106, 2026-06-06; FEATURE_IDEAS §4.1) — schema
-  + upload + serve + UI + lightbox. The cross-app file-portability story
-  hinged on this.
-- ✅ **`.finch` pack format** (this PR; PACK_FORMAT_PLAN.md) — extended
-  `/api/export?withAttachments=1` to build a `.finch` zip carrying the DB
-  + every receipt + an integrity manifest; `/api/import` detects pack vs
-  raw `.db` via magic bytes and atomically swaps both. Closes the
-  cross-app file-portability loop the iOS plan needed.
+- ✅ **Receipt photos** (PR #106, 2026-06-06; FEATURE_IDEAS §4.1; design
+  record `plans/done/RECEIPT_PHOTOS_PLAN.md`) — schema + upload + serve
+  + transaction-detail UI + lightbox.
+- ✅ **`.finch` pack format** (PR #107, 2026-06-06; design record
+  `plans/done/PACK_FORMAT_PLAN.md`) — extended `/api/export?withAttachments=1`
+  to build a `.finch` zip carrying the DB + every receipt + an integrity
+  manifest; `/api/import` detects pack vs raw `.db` via magic bytes and
+  atomically swaps both. **Closes the cross-app file-portability loop the
+  iOS plan needed.** Code audit (this PR) confirms every section of
+  RECEIPT_PHOTOS_PLAN.md and PACK_FORMAT_PLAN.md matches the live frontend.
 
 ⊘ **Superseded — do not implement: PWA** (`plans/PWA_PLAN.md`). The plan was
 written when the database lived in the browser (OPFS-backed `sqlite-wasm`);
@@ -649,4 +651,54 @@ parentheses.
   schema. Same PR also moved `RECONCILE_PLAN.md`, `RULES_ENGINE_PLAN.md`,
   and `FILE_BACKED_DB_PLAN.md` from `plans/` to `plans/done/` (the three
   recent shipped plans) and updated this file's Plans index.
+- **Receipt photos — full implementation** (PR #106, FEATURE_IDEAS §4.1) —
+  new `transaction_attachments` table (pointer rows only; files NEVER stored
+  as DB blobs — they live under `${FINCH_DB_DIR}/attachments/`). New
+  `POST /api/attachments` (multipart, sharp-based EXIF-strip + HEIC→JPEG
+  transcode + magic-byte mime sniff) and `GET /api/attachments/[id]` (streamed
+  serve with traversal guard). UI: `<AttachmentsRow>` on the transaction
+  detail (file picker w/ `capture="environment"` for mobile camera,
+  thumbnail strip), plus an `<AttachmentViewer>` lightbox (pinch-zoom images,
+  embed PDFs, keyboard nav, delete-via-toast). Schema bumped
+  `2026-06-10` → `2026-06-11`.
+- **`.finch` pack format — full implementation** (PR #107,
+  PACK_FORMAT_PLAN.md) — closes the cross-app file-portability loop the iOS
+  plan needed. New `lib/db/pack.ts` (pure build/parse/extract with manifest
+  schema, per-file sha256 integrity, path-traversal guards in BOTH the
+  manifest and the extract step). `GET /api/export?withAttachments=true`
+  now emits a `.finch` zip carrying the DB + every receipt + the manifest;
+  `POST /api/import` routes via magic bytes (`PK\\x03\\x04` = pack,
+  `SQLite format 3\\0` = bare DB) and atomically swaps both the DB and the
+  attachments folder with an `.old-<ts>` rotation. Settings UI gains an
+  "Include receipts (.finch)" checkbox; import file picker accepts
+  `.finch,.zip`. Back-compat: bare-`.db` round-trip still works.
+- **Plan-folder hygiene** (PR #108) — `RECEIPT_PHOTOS_PLAN.md` and
+  `PACK_FORMAT_PLAN.md` moved from `plans/` to `plans/done/`; both
+  preambles updated to "shipped." `IOS_MACOS_PLAN.md` §2.5, §8, §13, §14
+  refreshed to reflect that the shared schema + pack format are now live
+  on the web (canonical reference for native to match); §8 cross-app
+  implications now show "2 of 3 shipped" with ledger CRUD as the only
+  remaining item. Code audit confirmed every section of the two shipped
+  plans matches the live frontend.
+- **Settings standardised on `.finch`; auto-backups configurable** (this
+  PR) — six items, all in service of one user-visible promise: "your
+  data lives in `.finch` files." (1) Export row collapses to a single
+  **"Download .finch"** button (the prior checkbox+button combo was
+  hard to discover next to a more prominent download affordance). (2)
+  Import file picker `accept=".finch"` only; the server's magic-byte
+  router still accepts legacy `.sqlite3`/`.zip` drops for back-compat
+  but the UI is one format. (3) Auto-backups become **`.finch.bak`**
+  packs (DB + receipts + manifest) so a restore brings receipts back
+  too — not just the DB. `restoreBackup` reads both `.finch.bak` and
+  legacy `.sqlite3.bak` (magic-byte routing) so nothing on disk is
+  stranded. (4) **New "Backup frequency"** row in Settings (Select:
+  *After every change · At most hourly · daily · weekly · Off*) —
+  persisted in `app_state['backupConfig']` so the choice travels with
+  the database. (5) **New "Backups kept"** row (Select: 5/10/14/30/50/
+  100) — same persistence. (6) Plan docs refreshed (PACK_FORMAT_PLAN
+  postscript, IOS_MACOS_PLAN §8 + §9 + parity matrix row 33). Env vars
+  `FINCH_BACKUP_MIN_INTERVAL_MS`/`FINCH_BACKUP_KEEP` become fallback
+  defaults — only used when the user hasn't picked anything. New
+  `autoBackup({ force: true })` opt overrides both throttle and "off"
+  for import-safety + user-pressed "Backup now."
 

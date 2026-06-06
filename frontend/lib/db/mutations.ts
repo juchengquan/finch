@@ -101,6 +101,33 @@ import { unlink } from 'node:fs/promises';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
 
+/** Merge a partial backup-config update into the app_state slice. Reads the
+ *  existing JSON, overrides the named keys, writes back. Concurrent
+ *  setBackupFrequency / setBackupRetention can't clobber each other this way.
+ *  Defaults mirror `lib/db/state.ts::readBackupConfig`. */
+async function mergeBackupConfig(
+  exec: Exec,
+  patch: Partial<{ frequencyMs: number; retention: number }>,
+): Promise<void> {
+  const raw = await getAppState(exec, 'backupConfig');
+  let cur: { frequencyMs: number; retention: number } = { frequencyMs: 60 * 60 * 1000, retention: 14 };
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const f = Number((parsed as { frequencyMs?: unknown }).frequencyMs);
+        const r = Number((parsed as { retention?: unknown }).retention);
+        if (Number.isFinite(f)) cur.frequencyMs = Math.trunc(f);
+        if (Number.isFinite(r) && r > 0) cur.retention = Math.trunc(r);
+      }
+    } catch {
+      /* keep defaults */
+    }
+  }
+  cur = { ...cur, ...patch };
+  await setAppState(exec, 'backupConfig', JSON.stringify(cur));
+}
+
 /** Best-effort attachment-file cleanup. Called AFTER the DB row(s) are gone:
  *  if the unlink fails (missing file, EBUSY on Windows in dev, etc.) the
  *  orphan is harmless — `lib/db/queries/attachments.ts` will never surface a
@@ -1166,6 +1193,21 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       }
       map[ledgerId] = currency;
       await setAppState(exec, 'displayCurrencyByLedger', JSON.stringify(map));
+      return;
+    }
+    case 'setBackupFrequency': {
+      // frequencyMs: -1 = off, 0 = on every change, >0 = minimum interval.
+      // Merge into the existing slice so retention isn't clobbered.
+      const ms = Number(args.frequencyMs);
+      const next = Number.isFinite(ms) ? Math.trunc(ms) : 60 * 60 * 1000;
+      await mergeBackupConfig(exec, { frequencyMs: next });
+      return;
+    }
+    case 'setBackupRetention': {
+      // Number of `.finch.bak` files to keep on disk; must be >= 1.
+      const n = Number(args.retention);
+      const next = Number.isFinite(n) && n > 0 ? Math.trunc(n) : 14;
+      await mergeBackupConfig(exec, { retention: next });
       return;
     }
     case 'generateDueScheduled': {
