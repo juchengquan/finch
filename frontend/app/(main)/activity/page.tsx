@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
+import { useSavedSearches, type SavedSearch } from '@/lib/use-saved-searches';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { RefundBadge } from '@/components/refund-badge';
@@ -44,10 +46,13 @@ export default function ActivityPage() {
   const [toDate, setToDate] = useState('');
   const [minAmt, setMinAmt] = useState('');
   const [maxAmt, setMaxAmt] = useState('');
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
   const allTxns = useFinanceStore((s) => s.transactions);
   const allTags = useFinanceStore((s) => s.tags);
   const allCategories = useFinanceStore((s) => s.categories);
   const bulkRecategorize = useFinanceStore((s) => s.bulkRecategorize);
+  const { searches: savedSearches, save: saveSearch, remove: deleteSavedSearch } = useSavedSearches();
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
   const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
@@ -106,6 +111,42 @@ export default function ActivityPage() {
     setToDate('');
     setMinAmt('');
     setMaxAmt('');
+  };
+
+  // Saved searches (client-only, localStorage) scoped to the active ledger. Any
+  // non-default filter makes the current view "saveable"; the chips re-apply a
+  // stored set in one tap.
+  const ledgerSearches = savedSearches.filter((s) => s.ledgerId === activeId);
+  const hasActiveFilters = query.trim() !== '' || filter !== 'all' || tagFilter !== null || activeRangeCount > 0;
+
+  const applySavedSearch = (s: SavedSearch) => {
+    setQuery(s.query);
+    setFilter(s.direction);
+    setTagFilter(s.tagId);
+    setFromDate(s.fromDate);
+    setToDate(s.toDate);
+    setMinAmt(s.minAmount != null ? String(s.minAmount) : '');
+    setMaxAmt(s.maxAmount != null ? String(s.maxAmount) : '');
+    if (s.fromDate || s.toDate || s.minAmount != null || s.maxAmount != null) setFiltersOpen(true);
+  };
+
+  const confirmSaveSearch = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    saveSearch({
+      ledgerId: activeId,
+      name,
+      query: query.trim(),
+      direction: filter,
+      tagId: tagFilter,
+      fromDate,
+      toDate,
+      minAmount: minA != null && Number.isFinite(minA) ? minA : null,
+      maxAmount: maxA != null && Number.isFinite(maxA) ? maxA : null,
+    });
+    toast.success(`Saved “${name}”`);
+    setSaveName('');
+    setSaveOpen(false);
   };
 
   // Sort newest-first (date, then time) before grouping: the consecutive-run
@@ -170,6 +211,17 @@ export default function ActivityPage() {
             <Icon name="filter" size={13} />
             Filters{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
           </button>
+          {hasActiveFilters && !selectMode && (
+            <button
+              type="button"
+              onClick={() => setSaveOpen(true)}
+              aria-label="Save current filters as a search"
+              className="border-border text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium"
+            >
+              <Icon name="bookmark" size={13} />
+              Save
+            </button>
+          )}
           <button
             type="button"
             onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
@@ -184,6 +236,34 @@ export default function ActivityPage() {
             {selectMode ? 'Cancel' : 'Select'}
           </button>
         </div>
+
+        {ledgerSearches.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {ledgerSearches.map((s) => (
+              <span
+                key={s.id}
+                className="bg-secondary text-secondary-foreground flex items-center gap-1 rounded-lg py-1 pr-1 pl-2.5 text-[11px]"
+              >
+                <button
+                  type="button"
+                  onClick={() => applySavedSearch(s)}
+                  className="hover:text-foreground flex items-center gap-1"
+                >
+                  <Icon name="bookmark" size={11} />
+                  {s.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteSavedSearch(s.id)}
+                  aria-label={`Delete saved search ${s.name}`}
+                  className="hover:text-foreground text-muted-foreground flex size-4 items-center justify-center rounded-full"
+                >
+                  <Icon name="x" size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {filtersOpen && (
           <div className="bg-card border-border mb-4 flex flex-col gap-3 rounded-xl border p-3.5">
@@ -444,6 +524,34 @@ export default function ActivityPage() {
           </Select>
         </div>
       )}
+
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save search</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="saved-search-name" className="text-muted-foreground text-[11px]">Name</Label>
+            <Input
+              id="saved-search-name"
+              autoFocus
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmSaveSearch();
+              }}
+              placeholder="e.g. Subscriptions > $20"
+            />
+            <p className="text-muted-foreground text-[11px]">
+              Pinned on this device only — saved searches aren’t stored in your ledger or included in exports.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSaveOpen(false)}>Cancel</Button>
+            <Button onClick={confirmSaveSearch} disabled={!saveName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MobilePage>
   );
 }
