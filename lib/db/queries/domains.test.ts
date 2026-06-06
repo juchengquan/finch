@@ -1,11 +1,8 @@
 import { test, expect } from 'bun:test';
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
-import type { SqlValue } from '@sqlite.org/sqlite-wasm';
-import { applySchema } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
 import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
+import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
 // Confirmed, non-transfer/-adjustment cash flow for a month. Inlined here (and
@@ -26,20 +23,8 @@ async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) 
   return { income: Number(r.income ?? 0), expense: Number(r.expense ?? 0), net: Number(r.net ?? 0) };
 }
 
-const initSqlite = sqlite3InitModule as unknown as (
-  opts?: { print?: () => void; printErr?: () => void },
-) => ReturnType<typeof sqlite3InitModule>;
-
 async function seeded(): Promise<Exec> {
-  const sqlite3 = await initSqlite({ print() {}, printErr() {} });
-  const db = new sqlite3.oo1.DB(':memory:');
-  const exec: Exec = async (sql, bind) => {
-    const rows: Record<string, SqlValue>[] = [];
-    db.exec({ sql, bind: (bind ?? []) as SqlValue[], rowMode: 'object', resultRows: rows });
-    return rows;
-  };
-  await applySchema(exec);
-  await seedDatabase(exec);
+  const { exec } = await seededDb();
   return exec;
 }
 
