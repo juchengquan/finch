@@ -6,8 +6,25 @@ import { seedDatabase } from '@/lib/db/seed';
 import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
-import { monthlyCashFlow } from '@/lib/db/queries/reports';
 import type { Exec } from '@/lib/db/repo';
+
+// Confirmed, non-transfer/-adjustment cash flow for a month. Inlined here (and
+// in mutations.test.ts) after the production monthlyCashFlow query was retired —
+// no screen consumed it; it survives only as a test assertion of the amount_base
+// + kind bookkeeping.
+async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) {
+  const rows = await exec(
+    `SELECT
+       SUM(CASE WHEN kind = 'income' THEN amount_base ELSE 0 END) AS income,
+       SUM(CASE WHEN kind IN ('expense','refund') THEN amount_base ELSE 0 END) AS expense,
+       SUM(amount_base) AS net
+     FROM transactions
+     WHERE ledger_id = ? AND date LIKE ? AND kind NOT IN ('transfer','adjustment') AND status = 'confirmed'`,
+    [ledgerId, `${yearMonth}%`],
+  );
+  const r = rows[0] ?? {};
+  return { income: Number(r.income ?? 0), expense: Number(r.expense ?? 0), net: Number(r.net ?? 0) };
+}
 
 const initSqlite = sqlite3InitModule as unknown as (
   opts?: { print?: () => void; printErr?: () => void },

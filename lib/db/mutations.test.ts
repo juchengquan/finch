@@ -29,6 +29,24 @@ async function seeded(): Promise<Exec> {
 const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
 
+// Confirmed, non-transfer/-adjustment cash flow for a month. Inlined here (and
+// in domains.test.ts) after the production monthlyCashFlow query was retired —
+// no screen consumed it; it survives only as a test assertion of the
+// amount_base + kind bookkeeping (income vs expense vs refund).
+const monthlyCashFlow = async (exec: Exec, ledgerId: string, yearMonth: string) => {
+  const rows = await exec(
+    `SELECT
+       SUM(CASE WHEN kind = 'income' THEN amount_base ELSE 0 END) AS income,
+       SUM(CASE WHEN kind IN ('expense','refund') THEN amount_base ELSE 0 END) AS expense,
+       SUM(amount_base) AS net
+     FROM transactions
+     WHERE ledger_id = ? AND date LIKE ? AND kind NOT IN ('transfer','adjustment') AND status = 'confirmed'`,
+    [ledgerId, `${yearMonth}%`],
+  );
+  const r = rows[0] ?? {};
+  return { income: Number(r.income ?? 0), expense: Number(r.expense ?? 0), net: Number(r.net ?? 0) };
+};
+
 test('createTransfer makes paired rows that move both balances', async () => {
   const exec = await seeded();
   const chk0 = await balanceOf(exec, 'chk');
@@ -140,7 +158,6 @@ test('transfers are excluded from category spend and cash flow', async () => {
 test('a refund nets its category spend, lifts the balance, and stays out of income', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
-  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
   const food0 = (await categorySpend(exec, 'personal'))['food'] ?? 0;
   const chk0 = await balanceOf(exec, 'chk');
 
@@ -190,7 +207,6 @@ test('deleting the refunded expense orphans the refund (SET NULL); the refund su
 test('converting an income to a refund reclassifies it: nets category spend, drops from income, balance unchanged', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
-  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
 
   // A $200 grocery expense to offset against.
   await applyMutation(exec, 'addTransaction', {
@@ -654,7 +670,6 @@ test('adjustAccountBalance posts a marked delta and moves balance to the target'
 test('adjustments are excluded from category spend and cash flow', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
-  const { monthlyCashFlow } = await import('@/lib/db/queries/reports');
   const month = new Date().toISOString().slice(0, 7);
   const spendBefore = await categorySpend(exec, 'personal');
   const flowBefore = await monthlyCashFlow(exec, 'personal', month);
