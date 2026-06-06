@@ -258,6 +258,100 @@ export function importDbBytes(bytes: Uint8Array): Promise<ImportResult> {
   return serialize(() => importDbBytesLocked(bytes));
 }
 
+// Inner pack-swap — assumes the caller already holds the write-chain mutex.
+// PACK_FORMAT_PLAN §5: parse + extract pack to a staging dir (validates the
+// manifest + every per-file sha256), validate the extracted DB via the
+// existing path, autoBackup the live DB, then atomically swap both the
+// DB and the attachments folder.
+async function importPackBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
+  const cap = importMaxMb();
+  if (bytes.byteLength > cap * 1024 * 1024) {
+    throw new Error(`Upload too large (max ${cap} MB).`);
+  }
+
+  const { parsePack, extractPack } = await import('./pack');
+
+  // Validate the pack format + extract to a staging dir. extractPack
+  // verifies the DB + every attachment sha256.
+  const parsed = await parsePack(bytes);
+  const stagingDir = path.join(
+    os.tmpdir(),
+    `finch-pack-import-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  let extracted;
+  try {
+    extracted = await extractPack(parsed, stagingDir);
+  } catch (err) {
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+
+  // Validate the EXTRACTED DB via the existing path (schema, FK, checksum).
+  const dbBytes = new Uint8Array(await fs.readFile(extracted.dbPath));
+  const v = await validateImportBytes(dbBytes);
+  if (!v.ok) {
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    throw new Error(v.reason ?? 'Invalid DB inside pack');
+  }
+
+  // Snapshot the live DB so the swap is recoverable. (Attachments aren't
+  // backed up here — see the rotation below.)
+  const backup = await autoBackup({ minIntervalMs: 0 });
+
+  const { dir, full } = dbFile();
+  const liveAttachments = path.join(dir, 'attachments');
+
+  // Close the live connection so the OS file lock + WAL sidecars are
+  // released BEFORE we touch the file (same reason as importDbBytesLocked).
+  await closeLiveDb();
+  await removeSidecars(full);
+
+  const ts = fsSafeTimestamp();
+  const oldAttach = `${liveAttachments}.old-${ts}`;
+  let attachRotated = false;
+  const incoming = `${full}.incoming`;
+
+  try {
+    // 1) Stage the new DB bytes next to the live path, then rename in.
+    await fs.writeFile(incoming, Buffer.from(dbBytes));
+    await fs.rename(incoming, full);
+
+    // 2) Rotate the live attachments folder aside (if any), then move the
+    //    extracted one into place. extractPack always creates the
+    //    attachments dir even when empty, so the rename is uniform.
+    if (existsSync(liveAttachments)) {
+      await fs.rename(liveAttachments, oldAttach);
+      attachRotated = true;
+    }
+    await fs.rename(extracted.attachmentsDir, liveAttachments);
+  } catch (err) {
+    // Best-effort rollback. The DB is also recoverable via the autoBackup
+    // we took at the top of the function.
+    await fs.unlink(incoming).catch(() => {});
+    if (attachRotated) {
+      await fs.rm(liveAttachments, { recursive: true, force: true }).catch(() => {});
+      await fs.rename(oldAttach, liveAttachments).catch(() => {});
+    }
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+
+  // Successful swap — drop the rotated attachments folder. (Plan §5
+  // open question #3: "Keep N rotations or one? — one rotation only
+  // for v1, disk hygiene over fine-grained history.")
+  if (attachRotated) {
+    await fs.rm(oldAttach, { recursive: true, force: true }).catch(() => {});
+  }
+  await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+
+  return { ok: true, metadata: v.metadata!, backupPath: backup.path };
+}
+
+/** Public entry point for `.finch` pack imports. Mirrors `importDbBytes`. */
+export function importPackBytes(bytes: Uint8Array): Promise<ImportResult> {
+  return serialize(() => importPackBytesLocked(bytes));
+}
+
 /** Replace the live DB with the contents of a named backup file. */
 export function restoreBackup(name: string): Promise<ImportResult> {
   return serialize(async () => {
