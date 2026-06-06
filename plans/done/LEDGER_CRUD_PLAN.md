@@ -1,12 +1,19 @@
 # Ledger CRUD — plan
 
-Status: **proposed** (planning only — no code yet)
+Status: **shipped** (2026-06-06). This doc is kept as the design record. The
+implementation followed the §10 file touch list and the 3-commit split
+(backend round-trip → provider + persistence → UI), plus a documented
+postScheduled fix.
 Scope: `frontend/` (server-backed SQLite app)
 
 > Implements the web-app side of **`plans/IOS_MACOS_PLAN.md` §14.8** (resolved
 > decision: "Ledger CRUD — *for both apps*"; capability matrix §3 row 39). The
 > schema change here stays on the **shared `SCHEMA_VERSION` lineage** so `.finch`
 > packs keep round-tripping between the web and native apps.
+>
+> **Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`** — the
+> web now has the same ledger-CRUD surface the native plan calls for, so
+> native-created ledgers will round-trip through packs cleanly.
 
 Ledgers are the app's top-level books (Personal / Family / Side studio / …), yet
 they are the **only core entity with no CRUD**: you cannot create, rename,

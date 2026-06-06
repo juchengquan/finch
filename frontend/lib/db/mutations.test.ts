@@ -1361,3 +1361,152 @@ test('duplicate guard: a second budget with the same name+cycle is rejected', as
   const rows = await exec("SELECT COUNT(*) AS c FROM budgets WHERE name = 'Groceries'");
   expect(Number(rows[0].c)).toBe(2);
 });
+
+// -----------------------------------------------------------------------------
+// Ledger CRUD (LEDGER_CRUD_PLAN §9). Seeded DB has personal / family /
+// business / travel; tests below run end-to-end through applyMutation.
+// -----------------------------------------------------------------------------
+
+test('createLedger appears in listLedgers with zero counts; new rows update counts', async () => {
+  const exec = await seeded();
+  const { listLedgers, createLedger: qCreate } = await import('@/lib/db/queries/ledgers');
+
+  await applyMutation(exec, 'createLedger', {
+    id: 'studio', name: 'Studio', base: 'USD', color: '#8a6ba8', tagline: 'side projects',
+  });
+  let rows = await listLedgers(exec);
+  const studio = rows.find((r) => r.id === 'studio');
+  expect(studio).toBeTruthy();
+  expect(studio!.name).toBe('Studio');
+  expect(studio!.base).toBe('USD');
+  expect(studio!.color).toBe('#8a6ba8');
+  expect(studio!.accounts).toBe(0);
+  expect(studio!.txns).toBe(0);
+
+  // Add an account + a transaction under it; counts should reflect.
+  await applyMutation(exec, 'createAccount', {
+    id: 'st-chk', ledgerId: 'studio', name: 'Studio Checking', type: 'savings', currency: 'USD',
+    openingBalance: 1000, color: null,
+  });
+  await applyMutation(exec, 'addTransaction', {
+    ledgerId: 'studio', accountId: 'st-chk', amount: -10, amountBase: -10,
+    currency: 'USD', merchant: 'coffee', categoryId: null, date: '2026-05-15', status: 'confirmed', kind: 'expense',
+  });
+  rows = await listLedgers(exec);
+  const after = rows.find((r) => r.id === 'studio')!;
+  expect(after.accounts).toBe(1);
+  expect(after.txns).toBe(1);
+
+  // Avoid an unused-import lint when qCreate isn't called.
+  void qCreate;
+});
+
+test('createLedger rejects duplicate id, empty name, bad base', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'createLedger', { id: 'personal', name: 'Dup', base: 'USD' }),
+  ).rejects.toThrow(/already exists/i);
+  await expect(
+    applyMutation(exec, 'createLedger', { id: 'x', name: '   ', base: 'USD' }),
+  ).rejects.toThrow(/required/i);
+  await expect(
+    applyMutation(exec, 'createLedger', { id: 'x', name: 'Bad', base: 'us-d' }),
+  ).rejects.toThrow(/3-letter/i);
+});
+
+test('updateLedger renames + recolors; changeLedgerBase still works after', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'updateLedger', {
+    id: 'family', patch: { name: 'Household', color: '#3d6b46', tagline: 'shared' },
+  });
+  const [row] = await exec('SELECT name, color, tagline FROM ledgers WHERE id = ?', ['family']);
+  expect(String(row.name)).toBe('Household');
+  expect(String(row.color)).toBe('#3d6b46');
+  expect(String(row.tagline)).toBe('shared');
+
+  // Base change still works (and uses the new name in any logging).
+  await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'family', newBase: 'USD' });
+  const [after] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', ['family']);
+  expect(String(after.base_currency)).toBe('USD');
+});
+
+test('updateLedger rejects empty name', async () => {
+  const exec = await seeded();
+  await expect(
+    applyMutation(exec, 'updateLedger', { id: 'family', patch: { name: '   ' } }),
+  ).rejects.toThrow(/empty/i);
+});
+
+test('setDefaultLedger flips exactly one is_default', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'setDefaultLedger', { id: 'business' });
+  const rows = await exec('SELECT id, is_default FROM ledgers');
+  const defaults = rows.filter((r) => Number(r.is_default) === 1);
+  expect(defaults.length).toBe(1);
+  expect(String(defaults[0].id)).toBe('business');
+});
+
+test('deleteLedger removes every ledger-scoped row and leaves siblings untouched', async () => {
+  const exec = await seeded();
+  // Pre-counts for the surviving ledger.
+  const beforePersonal = Number((await exec(
+    "SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal'",
+  ))[0].n);
+
+  await applyMutation(exec, 'deleteLedger', { id: 'family' });
+
+  // Every per-ledger table is empty for family.
+  const tables = [
+    'transactions','scheduled_templates','budgets','budget_groups',
+    'accounts','account_groups','categories','tags','counterparties',
+    'rules','holdings','transfer_groups','transaction_attachments',
+  ];
+  for (const t of tables) {
+    const n = Number(
+      (await exec(`SELECT COUNT(*) AS n FROM ${t} WHERE ledger_id = ?`, ['family']))[0].n,
+    );
+    expect(n).toBe(0);
+  }
+  // Other ledgers' data is untouched.
+  const afterPersonal = Number((await exec(
+    "SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal'",
+  ))[0].n);
+  expect(afterPersonal).toBe(beforePersonal);
+  // The ledger row itself is gone.
+  const ledgerLeft = await exec('SELECT id FROM ledgers WHERE id = ?', ['family']);
+  expect(ledgerLeft.length).toBe(0);
+});
+
+test('deleteLedger of the default ledger promotes the first remaining by name', async () => {
+  const exec = await seeded();
+  // Seed has personal as default. The remaining ledger NAMES (not ids) sort:
+  // "Family" (id=family), "Japan '26" (id=travel), "Side studio" (id=business).
+  // First by name is "Family" -> id=family.
+  await applyMutation(exec, 'deleteLedger', { id: 'personal' });
+  const defaults = (await exec('SELECT id FROM ledgers WHERE is_default = 1')) as { id: string }[];
+  expect(defaults.length).toBe(1);
+  expect(String(defaults[0].id)).toBe('family');
+});
+
+test('deleteLedger cleans the displayCurrencyByLedger key', async () => {
+  const exec = await seeded();
+  await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'business', currency: 'USD' });
+  await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'family', currency: 'SGD' });
+  await applyMutation(exec, 'deleteLedger', { id: 'business' });
+
+  const { getAppState } = await import('@/lib/db/queries/appState');
+  const raw = await getAppState(exec, 'displayCurrencyByLedger');
+  expect(raw).toBeTruthy();
+  const map = JSON.parse(raw!) as Record<string, string>;
+  expect(map.business).toBeUndefined();
+  expect(map.family).toBe('SGD');
+});
+
+test('deleteLedger refuses the last ledger', async () => {
+  const exec = await seeded();
+  // Reduce to a single ledger.
+  for (const id of ['family', 'business', 'travel']) {
+    await applyMutation(exec, 'deleteLedger', { id });
+  }
+  await expect(applyMutation(exec, 'deleteLedger', { id: 'personal' })).rejects.toThrow(/last ledger/i);
+});

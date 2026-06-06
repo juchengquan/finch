@@ -51,7 +51,7 @@ type RateRow = { date: string; currency: string; rate: number; source?: string }
 
 const accounts = accountsData as AccountRow[];
 const categories = categoriesData as CategoryRow[];
-const ledgers = ledgersData as { id: string; name: string; base: string; isDefault: number }[];
+const ledgers = ledgersData as { id: string; name: string; base: string; isDefault: number; color?: string; tagline?: string }[];
 
 const baseOf = (ledgerId: string) => ledgers.find((l) => l.id === ledgerId)?.base ?? 'USD';
 
@@ -92,8 +92,8 @@ const isoDate = (d: string) => d.replace(/\//g, '-');
 export async function seedReference(exec: Exec): Promise<void> {
   for (const l of ledgers) {
     await exec(
-      'INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES (?,?,?,?,?,?)',
-      [l.id, l.name, l.base, l.isDefault ? 1 : 0, SEED_TS, SEED_TS],
+      'INSERT INTO ledgers (id,name,base_currency,is_default,color,tagline,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',
+      [l.id, l.name, l.base, l.isDefault ? 1 : 0, l.color ?? null, l.tagline ?? null, SEED_TS, SEED_TS],
     );
   }
 

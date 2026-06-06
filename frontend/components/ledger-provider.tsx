@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import ledgersData from '@/data/ledgers.json';
 import { useFinanceStore } from '@/lib/store';
 
@@ -13,7 +13,10 @@ export interface Ledger {
   isDefault: number;
   accounts: number;
   txns: number;
+  /** Always a string for the UI's convenience — defaults to a derived hue
+   *  when the projected row's `color` is null. */
   color: string;
+  /** Always a string — empty when the projected row has no tagline. */
   tagline: string;
 }
 
@@ -39,32 +42,93 @@ interface LedgerContextValue {
 
 const LedgerContext = createContext<LedgerContextValue | null>(null);
 
+// Per-device active-ledger preference (LEDGER_CRUD_PLAN §6). Persisted to
+// localStorage with this key so it survives reloads on the same browser; the
+// choice is a device/session preference (your phone on Family shouldn't flip
+// the desktop off Personal). A one-line swap to an `app_state` key would
+// flip this to ledger-data if cross-device sync ever becomes the call.
+const ACTIVE_LEDGER_KEY = 'finch.activeLedger';
+
+function readPersistedActiveId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_LEDGER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedActiveId(id: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(ACTIVE_LEDGER_KEY, id);
+  } catch {
+    /* localStorage unavailable / quota — fall back to no-op */
+  }
+  // Same-tab updates: the `storage` event only fires across tabs, dispatch
+  // manually so our useSyncExternalStore subscribers re-read in this tab.
+  window.dispatchEvent(new StorageEvent('storage', { key: ACTIVE_LEDGER_KEY }));
+}
+
+function subscribeActiveId(cb: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === ACTIVE_LEDGER_KEY) cb();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
+// Cheap deterministic hue from the id when the projected row has no color.
+// Hash the id to one of the chart-1..5 tokens so the fallback matches the
+// app palette.
+const FALLBACK_HUES = ['#c96442', '#5e7d5e', '#c89a3e', '#6b8ab0', '#8a6ba8'];
+function colorForId(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffffff;
+  return FALLBACK_HUES[Math.abs(h) % FALLBACK_HUES.length];
+}
+
 export function LedgerProvider({ children }: { children: ReactNode }) {
   const projected = useFinanceStore((s) => s.ledgers);
-  const [activeId, setActiveId] = useState(
-    STATIC.find((l) => l.isDefault)?.id ?? STATIC[0].id,
-  );
 
-  // Merge: live DB rows for name/base/isDefault; static JSON for cosmetic
-  // fields (color/tagline/accounts/txns). Falls back to pure static before
-  // the store hydrates so first paint isn't empty.
+  // Live DB rows take over once the store hydrates. STATIC is only the
+  // pre-hydration shape. Fallbacks: null color -> hashed hue from id; null
+  // tagline -> empty string.
   const ledgers = useMemo<Ledger[]>(() => {
     if (!projected.length) return STATIC;
-    const staticById = new Map(STATIC.map((s) => [s.id, s]));
-    return projected.map((p) => {
-      const cosmetic = staticById.get(p.id);
-      return {
-        id: p.id,
-        name: p.name,
-        base: p.base,
-        isDefault: p.isDefault,
-        accounts: cosmetic?.accounts ?? 0,
-        txns: cosmetic?.txns ?? 0,
-        color: cosmetic?.color ?? '#888',
-        tagline: cosmetic?.tagline ?? '',
-      };
-    });
+    return projected.map((p) => ({
+      id: p.id,
+      name: p.name,
+      base: p.base,
+      isDefault: p.isDefault,
+      accounts: p.accounts,
+      txns: p.txns,
+      color: p.color ?? colorForId(p.id),
+      tagline: p.tagline ?? '',
+    }));
   }, [projected]);
+
+  // useSyncExternalStore: SSR-safe read from localStorage with cross-tab
+  // updates via the storage event. Server snapshot is null so the first
+  // client render matches.
+  const persisted = useSyncExternalStore(
+    subscribeActiveId,
+    readPersistedActiveId,
+    () => null,
+  );
+
+  // Derive the effective active id during render — no setState-in-effect
+  // cascade. Use the persisted value when it points to a known ledger,
+  // otherwise fall back to the default (or first available).
+  const activeId =
+    persisted && ledgers.some((l) => l.id === persisted)
+      ? persisted
+      : (ledgers.find((l) => l.isDefault === 1) ?? ledgers[0])?.id ?? '';
+
+  const setActiveId = useCallback((id: string) => {
+    writePersistedActiveId(id);
+  }, []);
 
   const active = ledgers.find((l) => l.id === activeId) ?? ledgers[0];
 
