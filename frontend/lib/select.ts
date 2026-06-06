@@ -419,6 +419,58 @@ export function recentExpenses(txns: Tx[], ledgerId: string, limit = 5): RecentE
   return out.slice(0, limit).map((r) => r.row);
 }
 
+/** A confirmed transaction that looks like a likely duplicate of a draft. */
+export interface DuplicateMatch {
+  id: string;
+  merchant: string;
+  date: string;
+}
+
+/** Days on either side of the draft date that still count as "around the same
+ *  time" for the soft duplicate check. */
+const DUPLICATE_WINDOW_DAYS = 3;
+
+/**
+ * Soft duplicate detector for the Add form (#6). Returns an existing transaction
+ * that closely matches the draft — same account, same merchant (case-insensitive),
+ * same amount magnitude, within ±DUPLICATE_WINDOW_DAYS of the draft date — or
+ * null when nothing's close. This is a *nudge*, never a block: it deliberately
+ * ignores time-of-day and category so a near-miss the hard UNIQUE index (#5)
+ * would allow still gets flagged here. Pending and non-expense/income rows are
+ * skipped, as is the draft's own id (for the edit case).
+ */
+export function findDuplicate(
+  txns: Tx[],
+  ledgerId: string,
+  draft: { merchant: string; amount: number; accountId: string; date: string; excludeId?: string },
+): DuplicateMatch | null {
+  const merchant = draft.merchant.trim().toLowerCase();
+  if (!merchant) return null;
+  const mag = Math.abs(draft.amount);
+  if (!(mag > 0)) return null;
+  const day = draft.date.slice(0, 10);
+
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId) continue;
+    if (t.pending) continue;
+    if (draft.excludeId && t.id === draft.excludeId) continue;
+    if (t.account !== draft.accountId) continue;
+    const k = kindOf(t);
+    if (k !== 'expense' && k !== 'income') continue;
+    if (t.merchant.trim().toLowerCase() !== merchant) continue;
+    const native = Math.abs(t.nativeAmount ?? t.amount);
+    if (Math.abs(native - mag) > 0.005) continue;
+    if (Math.abs(dayDiff(t.date.slice(0, 10), day)) > DUPLICATE_WINDOW_DAYS) continue;
+    return { id: t.id, merchant: t.merchant, date: t.date };
+  }
+  return null;
+}
+
+/** Whole-day difference a−b between two YYYY-MM-DD dates (UTC). */
+function dayDiff(a: string, b: string): number {
+  return Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000);
+}
+
 // ---------------------------------------------------------------------------
 // Weekly digest — Sunday-night recap of the most recently completed Mon-Sun
 // window. Surfaces totals, top categories, biggest single expense, and how it

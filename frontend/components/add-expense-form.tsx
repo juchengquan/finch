@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { suggestCategory, recentExpenses } from '@/lib/select';
+import { suggestCategory, recentExpenses, findDuplicate } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };
@@ -127,6 +127,21 @@ export function AddExpenseForm({
     if (r.categoryId) setCategory(r.categoryId);
     setAccount(r.accountId);
   };
+
+  // Soft duplicate detector (#6): warn — never block — when the current draft
+  // matches an existing expense/income (same account + merchant + amount within
+  // ±3 days). Transfers have their own two-sided shape, so skip them here.
+  const duplicate = useMemo(() => {
+    if (type === 'transfer') return null;
+    const value = parseFloat(amount);
+    if (!merchant.trim() || !value || Number.isNaN(value)) return null;
+    return findDuplicate(storeTxns, activeId, {
+      merchant,
+      amount: value,
+      accountId: account,
+      date,
+    });
+  }, [type, amount, merchant, account, date, storeTxns, activeId]);
 
   const curOf = (id: string) => storeAccts.find((a) => a.id === id)?.currency ?? base;
   // The entry currency follows the selected account (an account holds one
@@ -390,6 +405,19 @@ export function AddExpenseForm({
           />
         </Field>
       </div>
+
+      {duplicate && (
+        <div
+          role="status"
+          className="border-warning/40 bg-warning/10 text-warning-foreground flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12px]"
+        >
+          <Icon name="bell" size={14} className="text-warning mt-0.5 shrink-0" />
+          <span>
+            Possible duplicate — <span className="font-medium">{duplicate.merchant}</span> for the same
+            amount on this account around {duplicate.date.slice(0, 10)}. Save again only if it’s a separate purchase.
+          </span>
+        </div>
+      )}
 
       <button
         type="button"

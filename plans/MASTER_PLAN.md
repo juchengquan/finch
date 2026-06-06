@@ -332,14 +332,27 @@ below; what's still open is summarized here.
    change. **M.**
 4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
-5. **Saved searches / smart filters** (FEATURE_IDEAS §7.2) — pin
-   "subscriptions > $20" as a chip on Activity, stored in `app_state`. **S.**
 
-**Layout / a11y polish (from the layout audit, deferred from #81):**
-- Dark mode `--muted-foreground` contrast bump for WCAG AA on cards
-  (single-token CSS change).
-- Shared `<EmptyState />` component for Accounts / Activity / Budgets.
-- Desktop breadcrumb truncation at 1024-1280px (`min-w-0 truncate`).
+**Layout / a11y polish** ✅ shipped (PR #84) — dark `--muted-foreground`
+contrast bump to ~6:1 (WCAG AA), shared `<EmptyState />` across Accounts /
+Activity / Budgets / Categories / Transfers, and desktop breadcrumb truncation
+in `PageShell`.
+
+**Saved searches** ✅ shipped (PR #89; FEATURE_IDEAS §7.2) — pin the current
+Activity filter set (search · direction · tag · date/amount range) as a named,
+per-ledger chip and re-apply it in one tap. **Client-only by decision** (a
+per-browser convenience, not ledger data): persisted to `localStorage` via a
+`useSyncExternalStore` hook, never written to the DB, the Zustand store, or
+exports — _not_ the `app_state` route the original §7.2 note assumed.
+- ⊘ **No-go: a ⌘K command-palette entry for saved searches.** The palette only
+  does `router.push(href)` jumps + self-contained action handlers; applying a
+  saved filter means "go to Activity *and* push filter state into its local
+  `useState`", which it can't do without either URL-param routing (a new
+  pattern nowhere else in the app) or lifting Activity's filter state to a
+  shared store. M-effort for an S-feature whose one-tap shortcut (the chip) is
+  already on the page the palette would navigate to. Revisit only if URL-param
+  routing lands for another reason, or saved searches need to be invoked from
+  outside Activity.
 
 **Recurring transfers** ✅ shipped — `generateDueScheduled` now materializes
 transfer templates too, calling `createTransfer` once per due date with the

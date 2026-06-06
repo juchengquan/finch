@@ -211,9 +211,11 @@ For the users who live in the app.
 of them." Every user has at least one persistent miscategorization eating
 reports.
 
-### 7.2 Saved searches / smart filters ⚡ S
+### 7.2 Saved searches / smart filters ⚡ S — ✅ shipped (PR #89)
 Pin "subscriptions > $20" or "uncategorized last 30d" as chips. Gmail
-labels for transactions.
+labels for transactions. Shipped client-only (localStorage, per-ledger);
+see MASTER_PLAN "Saved searches" for the implementation + the ⌘K-palette
+no-go.
 
 ### 7.3 Locking past periods ⚡ S 🗄️
 "This month is closed, don't edit." Prevents accidental drift on reconciled
@@ -356,8 +358,8 @@ want one that defines the next phase, **#2.1**.
 
 If we were ordering this for the next 6 months, a plausible shape:
 
-1. **Quick wins phase** — Repeat last (1.1), Bulk recategorize (7.1),
-   Saved searches (7.2), Spending velocity warning (2.5). Each S; all
+1. **Quick wins phase** — Repeat last (1.1), Bulk recategorize (7.1) ✅,
+   Saved searches (7.2) ✅, Spending velocity warning (2.5). Each S; all
    together = one PR each, week of work.
 2. **Cashflow phase** — 30/60/90 forecast (2.1), Low-balance alarm
    (2.2), Subscriptions audit (3.7). M each; 2–3 weeks.
