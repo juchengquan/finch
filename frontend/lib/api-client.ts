@@ -39,3 +39,36 @@ export async function fetchDbInfo(): Promise<{ path: string }> {
   if (!res.ok) throw new Error(`GET /api/db-info ${res.status}`);
   return (await res.json()) as { path: string };
 }
+
+/** Upload a receipt attachment (image / PDF) for a transaction. POSTs
+ *  multipart/form-data to `/api/attachments`; the server processes the
+ *  bytes (EXIF strip + JPEG transcode for images; passthrough for PDFs),
+ *  writes the file under FINCH_DB_DIR, inserts the pointer row, and
+ *  returns the fresh ProjectedState — same shape as `/api/mutate`.
+ *  RECEIPT_PHOTOS_PLAN §5.1. */
+export async function uploadAttachment(
+  transactionId: string,
+  file: File,
+): Promise<ProjectedState> {
+  const form = new FormData();
+  form.append('transactionId', transactionId);
+  form.append('file', file, file.name);
+  const res = await fetch(api('attachments'), { method: 'POST', body: form });
+  if (!res.ok) {
+    let message = `${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as ProjectedState;
+}
+
+/** Browser URL that serves the bytes of one attachment, with the stored
+ *  mime + the original filename in Content-Disposition. */
+export function attachmentUrl(id: string): string {
+  return api(`attachments/${encodeURIComponent(id)}`);
+}
