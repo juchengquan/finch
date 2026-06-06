@@ -295,6 +295,11 @@ interface FinanceState {
     },
   ) => void;
   deleteRule: (id: string) => void;
+  /** Apply one rule against every confirmed transaction in its ledger. The
+   *  server runs the same applyRules path as insertTxRow and persists the
+   *  patches via UPDATE / INSERT OR IGNORE; the client gets the fresh
+   *  projection back through the normal syncMutation path. */
+  backfillRule: (ruleId: string) => void;
   createScheduled: (input: { name: string; description?: string | null; type?: string; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; accountId: string; account?: string; fromAccountId?: string; from?: string; autoPost?: boolean; color?: string | null; category?: string | null; startDate?: string; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null; ledgerId?: string }) => string;
   updateScheduled: (id: string, patch: { name?: string; description?: string | null; amount?: number | null; frequency?: string; dayOfMonth?: number; weekDay?: number; autoPost?: number; color?: string | null; category?: string | null; endDate?: string | null; maxExecutions?: number | null; installmentTotal?: number | null }) => void;
   deleteScheduled: (id: string) => void;
@@ -853,6 +858,12 @@ export const useFinanceStore = create<FinanceState>()(
       deleteRule: (id) => {
         set((s) => ({ rules: s.rules.filter((r) => r.id !== id) }));
         syncMutation('deleteRule', { id });
+      },
+
+      backfillRule: (id) => {
+        // No optimistic update — the server re-projection lands the patched
+        // transactions + the rule's new last_applied_at on the round-trip.
+        syncMutation('backfillRule', { id });
       },
 
       createScheduled: (input) => {

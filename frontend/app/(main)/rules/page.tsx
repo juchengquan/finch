@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { describeActions, describeCondition } from '@/lib/rules/describe';
+import { applyRules } from '@/lib/rules/engine';
 import { RuleBuilderSheet } from '@/components/rule-builder-sheet';
 import { cn } from '@/lib/utils';
 import type { Rule } from '@/lib/rules/types';
@@ -33,10 +34,12 @@ export default function RulesPage() {
   const txns = useFinanceStore((s) => s.transactions);
   const updateRule = useFinanceStore((s) => s.updateRule);
   const deleteRule = useFinanceStore((s) => s.deleteRule);
+  const backfillRule = useFinanceStore((s) => s.backfillRule);
   const [openRule, setOpenRule] = useState<Rule | null>(null);
   const [builderRule, setBuilderRule] = useState<Rule | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Rule | null>(null);
+  const [confirmBackfill, setConfirmBackfill] = useState<Rule | null>(null);
 
   const openNewBuilder = () => {
     setBuilderRule(null);
@@ -59,6 +62,28 @@ export default function RulesPage() {
     deleteRule(r.id);
     toast.success(`Rule ${r.name ?? r.id} deleted`);
     setConfirmDelete(null);
+    setOpenRule(null);
+  };
+
+  // Client-side preview: run the rule against the projected confirmed
+  // transactions in this ledger so the user knows what they're about to
+  // touch BEFORE the server commits. Pure on the projected store.
+  const previewBackfill = (r: Rule) => {
+    const candidates = txns.filter((t) => (t.ledgerId ?? 'personal') === r.ledgerId && !t.pending);
+    const matched: typeof txns = [];
+    for (const t of candidates) {
+      const patch = applyRules(t, [r]);
+      if (patch.appliedRuleIds.includes(r.id)) matched.push(t);
+    }
+    return { matched, total: candidates.length };
+  };
+
+  const onBackfill = (r: Rule) => {
+    backfillRule(r.id);
+    toast.success(`Backfilling rule${r.name ? ` "${r.name}"` : ''}`, {
+      description: 'Server is applying the rule across history.',
+    });
+    setConfirmBackfill(null);
     setOpenRule(null);
   };
 
@@ -164,9 +189,57 @@ export default function RulesPage() {
         onEdit={openEditBuilder}
         onToggle={onToggle}
         onAskDelete={(r) => setConfirmDelete(r)}
+        onAskBackfill={(r) => setConfirmBackfill(r)}
       />
 
       <RuleBuilderSheet rule={builderRule} open={builderOpen} onClose={closeBuilder} />
+
+      <Dialog open={!!confirmBackfill} onOpenChange={(o) => !o && setConfirmBackfill(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply rule to existing transactions?</DialogTitle>
+            <DialogDescription>
+              This walks every confirmed transaction in this ledger and applies the rule&rsquo;s actions
+              to those that match. Splits aren&rsquo;t backfilled in this pass; everything else does land.
+            </DialogDescription>
+          </DialogHeader>
+          {confirmBackfill && (() => {
+            const { matched, total } = previewBackfill(confirmBackfill);
+            const samples = matched.slice(0, 5);
+            return (
+              <div className="text-sm">
+                <div className="mb-2">
+                  <span className="font-medium">{matched.length}</span> of <span className="font-medium">{total}</span>{' '}
+                  confirmed transactions match.
+                </div>
+                {samples.length > 0 ? (
+                  <ul className="bg-secondary text-muted-foreground space-y-0.5 rounded-md p-2 font-mono text-[11px]">
+                    {samples.map((t) => (
+                      <li key={t.id} className="truncate">
+                        {t.date} · {t.merchant} · ${Math.abs(t.nativeAmount ?? t.amount).toFixed(2)}
+                      </li>
+                    ))}
+                    {matched.length > samples.length && (
+                      <li className="italic">+{matched.length - samples.length} more</li>
+                    )}
+                  </ul>
+                ) : (
+                  <div className="text-muted-foreground italic">Nothing to apply — no matches in history.</div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={() => confirmBackfill && onBackfill(confirmBackfill)}>
+              <Icon name="check" size={14} />
+              Apply to existing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <DialogContent>
@@ -198,6 +271,7 @@ function RuleDetailSheet({
   onEdit,
   onToggle,
   onAskDelete,
+  onAskBackfill,
 }: {
   rule: Rule | null;
   onClose: () => void;
@@ -205,6 +279,7 @@ function RuleDetailSheet({
   onEdit: (r: Rule) => void;
   onToggle: (r: Rule) => void;
   onAskDelete: (r: Rule) => void;
+  onAskBackfill: (r: Rule) => void;
 }) {
   return (
     <Sheet open={!!rule} onOpenChange={(o) => !o && onClose()}>
@@ -224,6 +299,9 @@ function RuleDetailSheet({
               <Button size="sm" variant="outline" onClick={() => onToggle(rule)}>
                 <Icon name={rule.isActive ? 'x' : 'check'} size={13} />
                 {rule.isActive ? 'Disable' : 'Enable'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onAskBackfill(rule)}>
+                <Icon name="sync" size={13} />Apply to existing
               </Button>
               <Button size="sm" variant="outline" onClick={() => onAskDelete(rule)} className="text-destructive">
                 <Icon name="trash" size={13} />Delete

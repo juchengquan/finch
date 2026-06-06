@@ -856,6 +856,115 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       await qDeleteRule(exec, str(args.id));
       return;
     }
+    case 'backfillRule': {
+      // Apply one rule against every confirmed transaction in its ledger.
+      // Mirrors insertTxRow's post-rule plumbing: set_* fields move on the
+      // row, add_tag rows go into transaction_tags. Splits and category-
+      // change rollover invalidations are out of scope for this PR — set_*
+      // covers the 80% case (the "rename + categorise" workflow).
+      const ruleId = str(args.id);
+      const [{ listActiveRules }, { applyRules }, { resolveCounterpartyIdByName }] = await Promise.all([
+        import('./queries/rules'),
+        import('@/lib/rules/engine'),
+        import('./queries/counterparties'),
+      ]);
+      // Load just this rule from the DB (active OR inactive — explicit backfill
+      // shouldn't silently skip a disabled rule the user just enabled).
+      const ruleRows = await exec('SELECT * FROM rules WHERE id = ?', [ruleId]);
+      if (!ruleRows.length) throw new Error('Rule not found');
+      const { rowToRule } = await import('./queries/rules');
+      const rule = rowToRule(ruleRows[0]);
+
+      // We walk transactions in the rule's ledger only (FK is ON DELETE
+      // CASCADE; a deleted ledger can't have orphan rules), confirmed only
+      // (pending rows haven't really happened yet — the user can re-confirm
+      // to trigger them through the insert hook).
+      const { listActiveRules: _unused } = { listActiveRules }; void _unused;
+      const txnRows = await exec(
+        `SELECT id, ledger_id, account_id, date, amount, amount_base, description, category_id,
+                counterparty_id, currency, kind, notes, applied_rule_ids, time
+           FROM transactions
+          WHERE ledger_id = ? AND status = 'confirmed'`,
+        [rule.ledgerId],
+      );
+      let matched = 0;
+      for (const r of txnRows) {
+        // Build a minimal Tx synthesizing what evaluateCondition reads.
+        const tx = {
+          id: String(r.id),
+          merchant: String(r.description ?? ''),
+          category: r.category_id == null ? null : String(r.category_id),
+          amount: Number(r.amount_base),
+          nativeAmount: Number(r.amount),
+          currency: r.currency == null ? undefined : String(r.currency),
+          account: String(r.account_id),
+          date: String(r.date),
+          time: r.time == null ? undefined : String(r.time),
+          note: r.notes == null ? undefined : String(r.notes),
+          pending: false,
+          kind: r.kind == null ? undefined : (String(r.kind) as 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund'),
+          ledgerId: String(r.ledger_id),
+          counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
+        };
+        const patch = applyRules(tx, [rule]);
+        if (!patch.appliedRuleIds.includes(rule.id)) continue;
+        matched++;
+
+        // Apply the patch's set_* fields via a single UPDATE.
+        const sets: string[] = [];
+        const bind: (string | number | null)[] = [];
+        if (patch.categoryId !== undefined) { sets.push('category_id = ?'); bind.push(patch.categoryId); }
+        if (patch.counterpartyId !== undefined) { sets.push('counterparty_id = ?'); bind.push(patch.counterpartyId); }
+        if (patch.merchant !== undefined) {
+          sets.push('description = ?');
+          bind.push(patch.merchant);
+          // Re-resolve the counterparty link to match the new description.
+          const cpId = await resolveCounterpartyIdByName(exec, rule.ledgerId, patch.merchant);
+          sets.push('counterparty_id = ?');
+          bind.push(cpId);
+        }
+        if (patch.note !== undefined) { sets.push('notes = ?'); bind.push(patch.note); }
+        if (patch.kind !== undefined) { sets.push('kind = ?'); bind.push(patch.kind); }
+
+        // Merge applied_rule_ids — preserve the previous list (audit trail);
+        // append the rule id if it's not already there.
+        const prevRuleIds: string[] = (() => {
+          if (r.applied_rule_ids == null) return [];
+          try {
+            const v = JSON.parse(String(r.applied_rule_ids));
+            return Array.isArray(v) ? v.map(String) : [];
+          } catch {
+            return [];
+          }
+        })();
+        if (!prevRuleIds.includes(rule.id)) prevRuleIds.push(rule.id);
+        sets.push('applied_rule_ids = ?');
+        bind.push(JSON.stringify(prevRuleIds));
+
+        if (sets.length > 1 /* at least one user-visible field changed */) {
+          sets.push("updated_at = datetime('now')");
+          bind.push(tx.id);
+          await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
+        }
+        if (patch.tagIdsAdd?.length) {
+          for (const tagId of patch.tagIdsAdd) {
+            await exec(
+              'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)',
+              [tx.id, tagId],
+            );
+          }
+        }
+      }
+      // Stamp the rule's last_applied_at so the /rules row shows "N days ago".
+      const { markRuleApplied } = await import('./queries/rules');
+      await markRuleApplied(exec, rule.id);
+      // The result count travels back to the caller via the standard
+      // projectState response — the page derives "matched: N" from the
+      // updated applied_rule_ids on the transactions and the
+      // last_applied_at stamp on the rule.
+      void matched;
+      return;
+    }
     case 'createTag': {
       const name = str(args.name).trim();
       if (!name) throw new Error('Tag name is required');
