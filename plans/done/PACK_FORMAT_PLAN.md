@@ -9,6 +9,22 @@ Companion plan: `plans/done/RECEIPT_PHOTOS_PLAN.md` (PR #106). Packs
 carry the attachments that work introduced — both apps adopt the same
 on-disk shape and the same pack manifest.
 
+> **Postscript (follow-up PR, 2026-06-06):** the Settings UI was
+> standardised on `.finch` after this plan shipped — a single
+> "Download .finch" button (the bare-`.db` checkbox affordance was hard
+> to discover), and the import file picker narrowed to `accept=".finch"`.
+> Auto-backups also moved to **`.finch.bak`** packs (DB + receipts +
+> manifest) so a restore brings receipts back too — not just the
+> database. Frequency + retention became user-settable in Settings,
+> persisted in `app_state['backupConfig']` so they travel with the
+> database (every pack carries them). Env vars
+> `FINCH_BACKUP_MIN_INTERVAL_MS` / `FINCH_BACKUP_KEEP` became fallback
+> defaults, no longer the primary mechanism. Back-compat preserved:
+> `restoreBackup` still reads legacy `.sqlite3.bak` files on disk via
+> magic-byte detection. The server's `/api/export` route still accepts
+> the `?withAttachments=0` query for the bare-DB path so external
+> tooling isn't broken; no in-app caller uses it.
+
 > Cross-platform file-portability unit for finch: a single zip carrying the
 > SQLite database, its attachments folder, and a self-describing manifest.
 > The **shape** of the pack was decided in `IOS_MACOS_PLAN.md §2.5.3` as the

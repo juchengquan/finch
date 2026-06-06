@@ -672,7 +672,7 @@ parentheses.
   attachments folder with an `.old-<ts>` rotation. Settings UI gains an
   "Include receipts (.finch)" checkbox; import file picker accepts
   `.finch,.zip`. Back-compat: bare-`.db` round-trip still works.
-- **Plan-folder hygiene** (this PR) — `RECEIPT_PHOTOS_PLAN.md` and
+- **Plan-folder hygiene** (PR #108) — `RECEIPT_PHOTOS_PLAN.md` and
   `PACK_FORMAT_PLAN.md` moved from `plans/` to `plans/done/`; both
   preambles updated to "shipped." `IOS_MACOS_PLAN.md` §2.5, §8, §13, §14
   refreshed to reflect that the shared schema + pack format are now live
@@ -680,4 +680,25 @@ parentheses.
   implications now show "2 of 3 shipped" with ledger CRUD as the only
   remaining item. Code audit confirmed every section of the two shipped
   plans matches the live frontend.
+- **Settings standardised on `.finch`; auto-backups configurable** (this
+  PR) — six items, all in service of one user-visible promise: "your
+  data lives in `.finch` files." (1) Export row collapses to a single
+  **"Download .finch"** button (the prior checkbox+button combo was
+  hard to discover next to a more prominent download affordance). (2)
+  Import file picker `accept=".finch"` only; the server's magic-byte
+  router still accepts legacy `.sqlite3`/`.zip` drops for back-compat
+  but the UI is one format. (3) Auto-backups become **`.finch.bak`**
+  packs (DB + receipts + manifest) so a restore brings receipts back
+  too — not just the DB. `restoreBackup` reads both `.finch.bak` and
+  legacy `.sqlite3.bak` (magic-byte routing) so nothing on disk is
+  stranded. (4) **New "Backup frequency"** row in Settings (Select:
+  *After every change · At most hourly · daily · weekly · Off*) —
+  persisted in `app_state['backupConfig']` so the choice travels with
+  the database. (5) **New "Backups kept"** row (Select: 5/10/14/30/50/
+  100) — same persistence. (6) Plan docs refreshed (PACK_FORMAT_PLAN
+  postscript, IOS_MACOS_PLAN §8 + §9 + parity matrix row 33). Env vars
+  `FINCH_BACKUP_MIN_INTERVAL_MS`/`FINCH_BACKUP_KEEP` become fallback
+  defaults — only used when the user hasn't picked anything. New
+  `autoBackup({ force: true })` opt overrides both throttle and "off"
+  for import-safety + user-pressed "Backup now."
 

@@ -387,7 +387,7 @@ at where the behaviour lives today.
 | 30 | Tags admin | Tag CRUD w/ colour | `List` + edit | 2 | `tags/page.tsx` |
 | 31 | Rules: list, builder, backfill w/ preview, inline create-rule | Rule list; condition/action builder; backfill preview; "create rule" after manual recat | Form builder; sheet | 2–3 | `rules/page.tsx`, `rule-builder-sheet.tsx`, `lib/rules/*` |
 | 32 | Transaction detail: recat, split, tags, refund, review/cleared toggles, FX card, rule provenance, delete | Full detail w/ all inline edits + provenance | Detail sheet; menus; swipe | 1 | `transaction-detail.tsx` |
-| 33 | Settings/Account: theme, mobile-tab editor, sample data, DB card, export/import, backup/restore | Appearance, data/backup, export/import `.db`+`.csv` | Settings screen; Files/share | 1–2 | `settings/account/page.tsx` |
+| 33 | Settings/Account: theme, mobile-tab editor, sample data, DB card, export/import, backup/restore, backup-frequency + backups-kept | Appearance, data/backup, export/import `.finch` + `.csv`; auto-backups are `.finch.bak` packs; user-configurable frequency + retention persisted in app_state | Settings screen; Files/share | 1–2 | `settings/account/page.tsx` |
 | 34 | Settings/Ledger: active ledger, display currency, base-currency change, exchange rates | Ledger settings + FX book + base-change tool | Pickers; warned destructive action | 2 | `settings/ledger/page.tsx`, `exchange-rates.tsx` |
 | 35 | Ledger switcher | Switch active ledger (scopes everything) | Sheet / sidebar menu / macOS toolbar | 1 | `ledger-switcher.tsx` |
 | 36 | Command palette (⌘K) | Jump-to-anything search | macOS ⌘K; iOS Spotlight (§7) | 2 (mac 1) | `command-palette.tsx` |
@@ -687,9 +687,13 @@ finch already computes, so the data work is mostly done.
   on either side; the `transaction_attachments` table is simply empty.
 - **CSV export:** reproduce `GET /api/export/transactions` (names + tags
   resolved via joins); offer via the share sheet (`lib/csv.ts`).
-- **Backups:** the web app keeps timestamped backups (`/api/backups`,
-  `restore-backup`). Native SHOULD offer the same shape — periodic local
-  pack snapshots in a dated folder, restore-from-snapshot.
+- **Backups:** the web app keeps timestamped **`.finch.bak` packs** under
+  `${FINCH_DB_DIR}/finch-<ts>.finch.bak` (`/api/backups`, `restore-backup`).
+  Restoring a backup brings the database AND every receipt back. Frequency
+  + retention are user-configurable in Settings (persisted in `app_state`
+  → travel with the database in every pack). Native SHOULD offer the same
+  shape — periodic local pack snapshots in a dated folder, restore-from-
+  snapshot, same two settings exposed in the app's Settings.
 - **No silent schema forks.** Any new column or table either app needs
   (notably **receipt attachments**, §2.5) MUST land in the shared
   `lib/db/schema.ts` with a coordinated migration so packs round-trip
@@ -727,7 +731,9 @@ finch already computes, so the data work is mostly done.
   receiving device validates and atomically swaps in the unpacked contents.
 - **Backups doubled into the pack history.** Successive packs in a dated
   folder are also the user's restore points — the same artifact serves
-  cross-device sync + local backup.
+  cross-device sync + local backup. The web ships the same idea today
+  via `.finch.bak` files (frequency + retention persisted in `app_state`
+  so they travel with the database; see `done/PACK_FORMAT_PLAN.md`).
 - **Crash/atomicity:** mutations run in transactions; the "mutate →
   re-derive → publish" loop treats a failed write as a no-op and never
   leaves the cached `current_balance` diverged (recompute on the same path
