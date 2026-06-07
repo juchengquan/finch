@@ -128,14 +128,95 @@ test('categories: 2-level tree — parent_id wires children, build+rollup behave
   expect(rolled['food-groceries']).toBe(30); // children keep their own line too
 });
 
-test('createCategory rejects nesting under a row that already has a parent (no 3-level)', async () => {
+// CATEGORIES_LEVEL3_PLAN: depth-3 is now allowed; the cap is at 3.
+test('createCategory allows depth-3 (parent under a child) but rejects depth-4', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+
+  // Depth 3 OK: food (1) -> food-coffee (2) -> Espresso (3)
+  await applyMutation(exec, 'createCategory', {
+    ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
+  });
+  const cats = await listCategories(exec, 'personal');
+  const espresso = cats.find((c) => c.name === 'Espresso')!;
+  expect(espresso.parentId).toBe('food-coffee');
+
+  // Depth 4 rejected.
+  await expect(
+    applyMutation(exec, 'createCategory', {
+      ledgerId: 'personal', name: 'Doppio', parentId: espresso.id,
+    }),
+  ).rejects.toThrow(/three levels/i);
+});
+
+test('updateCategory subtree move: depth-3 subtree fits only under a top-level parent', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+
+  // Build a depth-3 chain under food: food -> food-coffee -> Espresso.
+  await applyMutation(exec, 'createCategory', {
+    ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
+  });
+
+  // Try to move food-coffee (depth 2, with a depth-3 child) under
+  // food-groceries (also depth 2). Would push Espresso to depth 4 -> reject.
+  await expect(
+    applyMutation(exec, 'updateCategory', {
+      id: 'food-coffee', patch: { parentId: 'food-groceries' },
+    }),
+  ).rejects.toThrow(/three levels/i);
+
+  // Same subtree under a TOP-LEVEL parent (rent) is fine — chain becomes
+  // rent -> food-coffee -> Espresso, depth 3.
+  await applyMutation(exec, 'updateCategory', {
+    id: 'food-coffee', patch: { parentId: 'rent' },
+  });
+  const cats = await listCategories(exec, 'personal');
+  expect(cats.find((c) => c.id === 'food-coffee')!.parentId).toBe('rent');
+});
+
+test('updateCategory rejects moving a node under its own descendant (cycle)', async () => {
   const exec = await seeded();
   const { applyMutation } = await import('@/lib/db/mutations');
   await expect(
-    applyMutation(exec, 'createCategory', {
-      ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
+    applyMutation(exec, 'updateCategory', {
+      id: 'food', patch: { parentId: 'food-coffee' },
     }),
-  ).rejects.toThrow(/two levels/i);
+  ).rejects.toThrow(/descendant/i);
+});
+
+test('rollupCategorySpend folds grandchild → child → parent (3-level)', async () => {
+  // Synthetic 3-level tree so the test is independent of the seed.
+  const cats = [
+    { id: 'food',  parentId: null },
+    { id: 'rest',  parentId: 'food' },
+    { id: 'japan', parentId: 'rest' },
+  ];
+  const { rollupCategorySpend } = await import('@/lib/db/queries/categories');
+  const rolled = rollupCategorySpend({ food: 10, rest: 20, japan: 30 }, cats);
+  expect(rolled.japan).toBe(30);          // leaf stays alone
+  expect(rolled.rest).toBe(20 + 30);       // child = own + grandchild
+  expect(rolled.food).toBe(10 + 20 + 30);  // root = own + child + grandchild
+});
+
+test('expandDescendants returns the configured ids plus every descendant', async () => {
+  const cats = [
+    { id: 'food',     parentId: null },
+    { id: 'rest',     parentId: 'food' },
+    { id: 'japan',    parentId: 'rest' },
+    { id: 'thai',     parentId: 'rest' },
+    { id: 'grocery',  parentId: 'food' },
+    { id: 'rent',     parentId: null },
+  ];
+  const { expandDescendants } = await import('@/lib/db/queries/categories');
+  const set = expandDescendants(['food'], cats);
+  expect(set).toEqual(new Set(['food', 'rest', 'japan', 'thai', 'grocery']));
+  // Already-deep ids stay (no double-add).
+  expect(expandDescendants(['japan'], cats)).toEqual(new Set(['japan']));
+  // Multiple roots merge.
+  expect(expandDescendants(['food', 'rent'], cats)).toEqual(
+    new Set(['food', 'rest', 'japan', 'thai', 'grocery', 'rent']),
+  );
 });
 
 test('deleteCategory promotes children to top-level (ON DELETE SET NULL)', async () => {

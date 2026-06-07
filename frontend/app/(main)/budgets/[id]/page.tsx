@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const { fmt } = useMoney();
   const allTxns = useFinanceStore((s) => s.transactions);
+  const allCategories = useFinanceStore((s) => s.categories);
   const removeBudget = useFinanceStore((s) => s.removeBudget);
   const contributeBudget = useFinanceStore((s) => s.contributeBudget);
   const { openTransaction } = useTransactionSheet();
@@ -41,7 +42,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
 
   const ledgerTxns = allTxns.filter((t) => (t.ledgerId ?? 'personal') === budget.ledgerId);
   const today = ledgerTxns.reduce((m, t) => (t.date > m ? t.date : m), '') || '2026-05-30';
-  const p = budgetProgress(budget, ledgerTxns, today);
+  const p = budgetProgress(budget, ledgerTxns, today, allCategories);
   const isIncome = budget.type === 'income';
   const oneShot = isIncome && budget.isRecurring === 0;
 

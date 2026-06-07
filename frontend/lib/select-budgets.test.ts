@@ -131,3 +131,27 @@ test('budgetProgress (one-shot income/goal) uses the manual saved accumulator', 
   expect(p.base).toBe(30000);
   expect(p.pct).toBe(40);
 });
+
+// CATEGORIES_LEVEL3_PLAN §4.2: a budget on a parent category catches
+// transactions categorised on its descendants when `categories` is passed.
+test('budgetProgress with categories[] recursively matches descendants', () => {
+  const b = budget({ type: 'expense', categoryIds: ['food'], amount: 500 });
+  const txns: Tx[] = [
+    tx({ amount: -10, date: '2026-05-01', category: 'food' }),
+    tx({ amount: -20, date: '2026-05-02', category: 'food-coffee' }),
+    tx({ amount: -30, date: '2026-05-03', category: 'food-coffee-espresso' }),
+    tx({ amount: -100, date: '2026-05-04', category: 'rent' }), // unrelated
+  ];
+  const cats = [
+    { id: 'food',                  parentId: null },
+    { id: 'food-coffee',           parentId: 'food' },
+    { id: 'food-coffee-espresso',  parentId: 'food-coffee' },
+    { id: 'rent',                  parentId: null },
+  ];
+  // With categories: the budget catches food + food-coffee + the espresso leaf.
+  const recursive = budgetProgress(b, txns, '2026-05-20', cats);
+  expect(recursive.used).toBe(60); // 10 + 20 + 30
+  // Without categories: legacy behaviour, only the direct `food` row matches.
+  const direct = budgetProgress(b, txns, '2026-05-20');
+  expect(direct.used).toBe(10);
+});

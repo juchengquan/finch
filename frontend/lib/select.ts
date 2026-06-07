@@ -9,6 +9,7 @@ import type { Transfer } from '@/lib/db/queries/transfers';
 import type { BudgetRow } from '@/lib/db/queries/budgets';
 import type { Holding } from '@/lib/db/queries/holdings';
 import { occurrencesUpTo } from '@/lib/recurrence';
+import { expandDescendants } from '@/lib/db/queries/categories';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
@@ -1221,27 +1222,45 @@ export interface BudgetProgress extends CycleWindow {
 }
 
 // Whether/how much of a transaction counts for a category filter, honouring
-// splits. Returns the signed base-currency amount that matches `categoryIds`
-// (empty set = whole transaction matches).
-function matchedAmount(t: Tx, categoryIds: string[]): number {
-  if (categoryIds.length === 0) return t.amount;
-  const set = new Set(categoryIds);
+// splits. Returns the signed base-currency amount that matches `matchSet`
+// (empty set = whole transaction matches — i.e. no category filter on the
+// budget). The caller pre-expands the budget's category_ids to include
+// descendants for recursive matching (CATEGORIES_LEVEL3_PLAN §4.2).
+function matchedAmount(t: Tx, matchSet: Set<string>): number {
+  if (matchSet.size === 0) return t.amount;
   if (t.splits && t.splits.length) {
     let sum = 0;
-    for (const s of t.splits) if (s.categoryId && set.has(s.categoryId)) sum += s.amountBase;
+    for (const s of t.splits) if (s.categoryId && matchSet.has(s.categoryId)) sum += s.amountBase;
     return sum;
   }
-  return t.category != null && set.has(t.category) ? t.amount : 0;
+  return t.category != null && matchSet.has(t.category) ? t.amount : 0;
 }
 
 /**
  * Progress for one named budget over its active cycle. Expense budgets sum
  * matching outflows; recurring income budgets sum matching inflows; one-shot
  * income/goal budgets use the manual `saved` accumulator (hybrid model).
+ *
+ * `categories` (optional) enables **recursive category matching** — a
+ * budget on `food` also catches transactions in `food › restaurants ›
+ * japanese`. Pass the projected list to opt in; omit for the legacy
+ * non-recursive behaviour (still useful for tests that don't care about
+ * descendant expansion).
  */
-export function budgetProgress(budget: BudgetRow, txns: Tx[], today: string): BudgetProgress {
+export function budgetProgress(
+  budget: BudgetRow,
+  txns: Tx[],
+  today: string,
+  categories: { id: string; parentId: string | null }[] = [],
+): BudgetProgress {
   const win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring);
   const accountSet = budget.accountIds.length ? new Set(budget.accountIds) : null;
+  // Pre-expand the budget's configured category ids to include every
+  // descendant, once. Falls back to just the configured set when no
+  // categories are passed (legacy behaviour for tests / external callers).
+  const matchSet = categories.length
+    ? expandDescendants(budget.categoryIds, categories)
+    : new Set(budget.categoryIds);
 
   let used = 0;
   const oneShotIncome = budget.type === 'income' && budget.isRecurring === 0;
@@ -1253,7 +1272,7 @@ export function budgetProgress(budget: BudgetRow, txns: Tx[], today: string): Bu
       if (t.pending || kindOf(t) === 'transfer' || kindOf(t) === 'adjustment') continue;
       if (t.date < win.from || t.date > win.to) continue;
       if (accountSet && !accountSet.has(t.account)) continue;
-      const amt = matchedAmount(t, budget.categoryIds);
+      const amt = matchedAmount(t, matchSet);
       if (budget.type === 'expense') {
         if (amt < 0) used += -amt;
       } else if (amt > 0) {
