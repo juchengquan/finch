@@ -60,9 +60,10 @@ test('round-trip: export then import on a fresh process restores identical state
   expect(result.backupPath.startsWith(tmpDir)).toBe(true);
 
   // The reopened DB has the same row counts the export stamped.
+  // §2: entries replaces transactions; CANONICAL_TABLES uses 'entries'.
   const db = await getServerDb();
-  const [{ n }] = await db.exec('SELECT COUNT(*) AS n FROM transactions');
-  expect(Number(n)).toBe(result.metadata.rowCounts?.transactions ?? -1);
+  const [{ n }] = await db.exec('SELECT COUNT(*) AS n FROM entries');
+  expect(Number(n)).toBe(result.metadata.rowCounts?.entries ?? -1);
 });
 
 test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {

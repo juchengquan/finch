@@ -98,7 +98,7 @@ BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS tr_post_sealed_update
-BEFORE UPDATE OF entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, sort_order ON postings
+BEFORE UPDATE OF entry_id, account_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, sort_order ON postings
 FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = NEW.entry_id) = 1
   OR (SELECT sealed FROM entries WHERE id = OLD.entry_id) = 1
 BEGIN

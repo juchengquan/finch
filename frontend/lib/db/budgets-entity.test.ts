@@ -258,7 +258,7 @@ test('deleteTransaction backdated into a rolled period invalidates', async () =>
     ledgerId: 'personal', accountId: 'chk', amount: -100, currency: 'USD',
     merchant: 'X', categoryId: 'food', date: '2026-04-10',
   });
-  const [tx] = await exec("SELECT id FROM transactions WHERE description = 'X' LIMIT 1");
+  const [tx] = await exec("SELECT id FROM entries WHERE description = 'X' LIMIT 1");
   const txId = String(tx.id);
   await exec("UPDATE budgets SET last_rolled_period = '2026-04-01', carry_forward = 200 WHERE id = 'bgt-inv-3'");
   await applyMutation(exec, 'deleteTransaction', { id: txId });

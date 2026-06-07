@@ -789,3 +789,17 @@ test('CATEGORIES_UPGRADE replays to a populated table after a mid-dance crash', 
   expect(rows.length).toBe(1); // the data survived the crash + replay
   expect(String(rows[0].id)).toBe('c1');
 });
+
+// Always-on audit: the full seeded DB must pass auditLedger with no problems.
+// This is the gate that catches any regression in the seed, postEntry, or
+// postings shape — the double-entry audit runs on every `bun test lib` invocation.
+test('always-on audit: seeded DB is double-entry clean (DOUBLE_ENTRY_PLAN §I7)', async () => {
+  const { exec } = await seededDb();
+  const problems = await auditLedger(exec, undefined, { checkBalances: true });
+  if (problems.length > 0) {
+    // Print diagnostics so failures are actionable in CI.
+    console.error('auditLedger found problems:');
+    for (const p of problems) console.error(` [${p.code}] entry=${p.entryId ?? '—'} ${p.detail}`);
+  }
+  expect(problems).toHaveLength(0);
+});

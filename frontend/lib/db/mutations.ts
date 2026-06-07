@@ -725,9 +725,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
             memo: acctLeg.memo == null ? null : String(acctLeg.memo),
           },
         ];
-        if (categoryId != null) {
-          legs.push({ categoryId, amountBase: -Number(acctLeg.amount_base) });
-        }
+        // Always include a category leg (categoryId = null = uncategorized is valid
+        // and satisfies the shape check for expense/income/refund entries).
+        legs.push({ categoryId: categoryId ?? null, amountBase: -Number(acctLeg.amount_base) });
         await rebuildEntry(exec, entryId, { legs });
       }
 
@@ -1264,6 +1264,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
             // Clear splits: rebuild with a single uncategorised category leg.
             legs.push({ categoryId: null, amountBase: -Number(acctLeg.amount_base) });
           } else {
+            // Must have at least two split rows to be meaningful.
+            if (splits.length === 1) {
+              throw new I18nError('error.split.minTwo', {}, 'Splits require at least two rows');
+            }
             // Validate that splits sum matches the account leg magnitude.
             const splitTotal = splits.reduce((acc, sp) => acc + Math.abs(sp.amount), 0);
             if (splitTotal > 0 && Math.abs(splitTotal - totalBase) > 0.005 * splits.length) {

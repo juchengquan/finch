@@ -71,24 +71,31 @@ test('FTS5 sync triggers: edits + deletes propagate to the index', async () => {
   const { addTransaction, updateTransaction, deleteTransactionRow } =
     await import('@/lib/db/queries/transactions');
 
-  const id = await addTransaction(exec, {
+  // addTransaction returns entry id; Tx.id = account-posting id (§2).
+  // Look up the posting id immediately so list-based assertions stay stable.
+  const entryId = await addTransaction(exec, {
     ledgerId: 'personal', accountId: 'chk', amount: -5,
     merchant: 'Quirkbird Coffee Cooperative', date: '2026-05-25',
   });
+  const [{ pid }] = await exec(
+    'SELECT id AS pid FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1',
+    [entryId],
+  ) as { pid: string }[];
+
   let res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
-  expect(res.some((t) => t.id === id)).toBe(true);
+  expect(res.some((t) => t.id === pid)).toBe(true);
 
   // Rename — old token shouldn't match the same row anymore.
-  await updateTransaction(exec, id, { merchant: 'Renamed Hideout' });
+  await updateTransaction(exec, entryId, { merchant: 'Renamed Hideout' });
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
-  expect(res.some((t) => t.id === id)).toBe(false);
+  expect(res.some((t) => t.id === pid)).toBe(false);
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
-  expect(res.some((t) => t.id === id)).toBe(true);
+  expect(res.some((t) => t.id === pid)).toBe(true);
 
   // Delete — fully gone from the index.
-  await deleteTransactionRow(exec, id);
+  await deleteTransactionRow(exec, entryId);
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
-  expect(res.some((t) => t.id === id)).toBe(false);
+  expect(res.some((t) => t.id === pid)).toBe(false);
 });
 
 test('counterparty resolver matches via COLLATE NOCASE (no LOWER in WHERE)', async () => {
@@ -145,9 +152,10 @@ test('delete removes a transaction from the list', async () => {
   const acctId = await deleteTransactionRow(exec, 't01');
   expect(acctId).toBeTruthy();
   const list = await listTransactions(exec, { ledgerId: 'personal' });
+  // t01 posting id = t01 (seed preserves ids); the deleted entry + all its postings cascade.
   expect(list.find((t) => t.id === 't01')).toBeUndefined();
-  // The row is really gone (hard delete), not just hidden.
-  expect((await exec("SELECT COUNT(*) AS n FROM transactions WHERE id = 't01'"))[0].n).toBe(0);
+  // §2: the entry is really gone (hard delete via CASCADE).
+  expect((await exec("SELECT COUNT(*) AS n FROM entries WHERE id = 't01'"))[0].n).toBe(0);
 });
 
 test('confirm flips a pending transaction and feeds the summary', async () => {
@@ -178,7 +186,8 @@ test("insertTxRow: defaults currency to the account's, derives amount_base via c
   const exec = await seeded();
   // Verify each default resolution fires when the caller leaves the field out.
   // `inv` is USD; the personal-ledger base is USD too, so amount_base == amount.
-  const id = await insertTxRow(exec, {
+  // insertTxRow returns entry id; query via entries + postings (§2).
+  const entryId = await insertTxRow(exec, {
     ledgerId: 'personal',
     accountId: 'inv',
     date: '2026-05-26',
@@ -186,13 +195,14 @@ test("insertTxRow: defaults currency to the account's, derives amount_base via c
     description: 'Blue Bottle Coffee',
     kind: 'expense',
   });
-  const [row] = await exec('SELECT * FROM transactions WHERE id = ?', [id]);
-  expect(String(row.currency)).toBe('USD');               // defaulted from account
-  expect(Number(row.amount_base)).toBeCloseTo(-100, 2);   // convertToBase ran
-  expect(Number(row.exchange_rate)).toBeCloseTo(1, 6);
-  expect(String(row.status)).toBe('confirmed');           // default status
-  expect(row.confirmed_at).not.toBeNull();                // stamped on confirmed rows
-  expect(row.source_template_id).toBeNull();
+  const [e] = await exec('SELECT * FROM entries WHERE id = ?', [entryId]);
+  const [p] = await exec('SELECT * FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId]);
+  expect(String(p.currency)).toBe('USD');               // defaulted from account
+  expect(Number(p.amount_base)).toBeCloseTo(-100, 2);   // convertToBase ran
+  expect(Number(p.exchange_rate)).toBeCloseTo(1, 6);
+  expect(String(e.status)).toBe('confirmed');           // default status
+  expect(e.confirmed_at).not.toBeNull();                // stamped on confirmed rows
+  expect(e.source_template_id).toBeNull();
 });
 
 test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance trigger', async () => {
@@ -201,7 +211,7 @@ test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance
   const before = Number(
     (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,
   );
-  await insertTxRow(exec, {
+  const entryId = await insertTxRow(exec, {
     ledgerId: 'personal',
     accountId: 'chk',
     date: '2026-05-26',
@@ -210,7 +220,8 @@ test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance
     kind: 'expense',
     status: 'pending',
   });
-  const [row] = await exec("SELECT confirmed_at FROM transactions WHERE description = 'Pending charge'");
+  // §2: confirmed_at lives on entries; query by entry id (returned by insertTxRow).
+  const [row] = await exec('SELECT confirmed_at FROM entries WHERE id = ?', [entryId]);
   expect(row.confirmed_at).toBeNull();
   const after = Number(
     (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,

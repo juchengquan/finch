@@ -5,18 +5,16 @@ import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/
 import { seededDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-// Confirmed, non-transfer/-adjustment cash flow for a month. Inlined here (and
-// in mutations.test.ts) after the production monthlyCashFlow query was retired —
-// no screen consumed it; it survives only as a test assertion of the amount_base
-// + kind bookkeeping.
+// Confirmed, non-transfer/-adjustment cash flow for a month. §2: uses entries + postings.
 async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) {
   const rows = await exec(
     `SELECT
-       SUM(CASE WHEN kind = 'income' THEN amount_base ELSE 0 END) AS income,
-       SUM(CASE WHEN kind IN ('expense','refund') THEN amount_base ELSE 0 END) AS expense,
-       SUM(amount_base) AS net
-     FROM transactions
-     WHERE ledger_id = ? AND date LIKE ? AND kind NOT IN ('transfer','adjustment') AND status = 'confirmed'`,
+       SUM(CASE WHEN e.kind = 'income' THEN p.amount_base ELSE 0 END) AS income,
+       SUM(CASE WHEN e.kind IN ('expense','refund') THEN p.amount_base ELSE 0 END) AS expense,
+       SUM(p.amount_base) AS net
+     FROM postings p JOIN entries e ON e.id = p.entry_id
+     WHERE e.ledger_id = ? AND e.date LIKE ? AND e.kind NOT IN ('transfer','adjustment','opening')
+       AND e.status = 'confirmed' AND p.account_id IS NOT NULL`,
     [ledgerId, `${yearMonth}%`],
   );
   const r = rows[0] ?? {};
@@ -253,7 +251,8 @@ test('counterparty FK: addTransaction links exact name (case-insensitive), null 
     merchant: 'grab', // lowercase — exists as 'Grab' (cp-02)
     date: '2026-05-25',
   });
-  const [m] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [matched]);
+  // §2: counterparty_id, description on entries.
+  const [m] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [matched]);
   expect(String(m.counterparty_id)).toBe('cp-02');
 
   const unmatched = await addTransaction(exec, {
@@ -261,7 +260,7 @@ test('counterparty FK: addTransaction links exact name (case-insensitive), null 
     merchant: 'Random Shop That Has No Catalog Entry',
     date: '2026-05-25',
   });
-  const [u] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [unmatched]);
+  const [u] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [unmatched]);
   expect(u.counterparty_id).toBeNull();
 });
 
@@ -295,17 +294,17 @@ test('counterparty FK: updateTransaction re-resolves when merchant text changes'
     ledgerId: 'personal', accountId: 'chk', amount: -8,
     merchant: 'Grab', date: '2026-05-25',
   });
-  let [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  let [row] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.counterparty_id)).toBe('cp-02');
 
   // Rename merchant to a non-catalog string; link should drop to NULL.
   await updateTransaction(exec, txId, { merchant: 'Some One-off Vendor' });
-  [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  [row] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(row.counterparty_id).toBeNull();
 
   // Rename to a known catalog name; link should re-establish.
   await updateTransaction(exec, txId, { merchant: 'Apple' }); // cp-05
-  [row] = await exec('SELECT counterparty_id FROM transactions WHERE id = ?', [txId]);
+  [row] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.counterparty_id)).toBe('cp-05');
 });
 
@@ -319,7 +318,7 @@ test('counterparty FK: deleting a counterparty leaves linked transactions intact
     merchant: 'Grab', date: '2026-05-25',
   });
   await applyMutation(exec, 'deleteCounterparty', { id: 'cp-02' });
-  const [row] = await exec('SELECT counterparty_id, description FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT counterparty_id, description FROM entries WHERE id = ?', [txId]);
   expect(row.counterparty_id).toBeNull();
   expect(String(row.description)).toBe('Grab');
 });
@@ -341,25 +340,35 @@ test('changeLedgerBase: rewrites amount_base under the new base using each txn d
   expect(afterLedger.base).toBe('SGD');
 
   // Spot-check the foreign JPY seed row (t-jpy-1, native ¥-3820 on 2026-05-13).
-  const [jpy] = await exec("SELECT amount, currency, date, amount_base, exchange_rate FROM transactions WHERE id = 't-jpy-1'");
+  // §2: amount/currency/amount_base/exchange_rate on the account posting.
+  const [jpy] = await exec(
+    "SELECT p.amount, p.currency, e.date, p.amount_base, p.exchange_rate FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.id = 't-jpy-1' AND p.account_id IS NOT NULL",
+  );
   const expected = await convertToBase(exec, Number(jpy.amount), String(jpy.currency), 'SGD', String(jpy.date));
   expect(Number(jpy.amount_base)).toBeCloseTo(expected.amountBase, 2);
   expect(Number(jpy.exchange_rate)).toBeCloseTo(expected.rate, 6);
 
-  // Spot-check a same-currency row (any USD row) — rate should be 1, base = native.
-  const [usd] = await exec("SELECT id, amount, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' AND currency = 'SGD' LIMIT 1");
-  if (usd) {
-    expect(Number(usd.amount_base)).toBeCloseTo(Number(usd.amount), 2);
-    expect(Number(usd.exchange_rate)).toBeCloseTo(1, 6);
+  // Spot-check a same-currency (SGD) row — rate should be 1, base = native.
+  const [sgd] = await exec(
+    "SELECT p.amount, p.amount_base, p.exchange_rate FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' AND p.currency = 'SGD' AND p.account_id IS NOT NULL LIMIT 1",
+  );
+  if (sgd) {
+    expect(Number(sgd.amount_base)).toBeCloseTo(Number(sgd.amount), 2);
+    expect(Number(sgd.exchange_rate)).toBeCloseTo(1, 6);
   }
 });
 
 test('changeLedgerBase: same-base call is a no-op', async () => {
   const exec = await seeded();
   const { applyMutation } = await import('@/lib/db/mutations');
-  const before = await exec("SELECT id, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  // §2: check postings (which carry amount_base, exchange_rate) instead of transactions.
+  const before = await exec(
+    "SELECT p.id, p.amount_base, p.exchange_rate FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
+  );
   await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'USD' });
-  const after = await exec("SELECT id, amount_base, exchange_rate FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  const after = await exec(
+    "SELECT p.id, p.amount_base, p.exchange_rate FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
+  );
   expect(JSON.stringify(after)).toBe(JSON.stringify(before));
 });
 
@@ -389,18 +398,20 @@ test('addTransaction: exact-name match sets counterparty_id, projection rewrites
   // A raw "Grab" description links to cp-02 at insert time. The projection
   // then surfaces the canonical name on `merchant` (overriding the raw
   // description), and the FK is preserved.
-  const txId = await addTransaction(exec, {
+  const entryId = await addTransaction(exec, {
     ledgerId: 'personal',
     accountId: 'chk',
     amount: -3,
     merchant: 'Grab',
     date: '2026-05-25',
   });
-  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [entryId]);
   expect(String(row.description)).toBe('Grab');
   expect(String(row.counterparty_id)).toBe('cp-02');
+  // §2: Tx.id = account posting id (≠ entry id); find by counterparty_id + merchant.
   const projected = await projectState(exec);
-  const tx = projected.transactions.find((t) => t.id === txId)!;
+  const tx = projected.transactions.find((t) => t.counterpartyId === 'cp-02' && t.amount === -3)!;
+  expect(tx).toBeTruthy();
   expect(tx.counterpartyId).toBe('cp-02');
   expect(tx.merchant).toBe('Grab'); // canonical name == the raw here
 });
@@ -413,7 +424,7 @@ test('addTransaction: catalog rename rewrites all linked rows on the next projec
   // Insert a row, then rename the counterparty. The row's stored description
   // is untouched (the catalog is the source of truth, not transactions).
   // The projection overrides merchant with the new canonical name on read.
-  const txId = await addTransaction(exec, {
+  await addTransaction(exec, {
     ledgerId: 'personal',
     accountId: 'chk',
     amount: -3,
@@ -421,8 +432,10 @@ test('addTransaction: catalog rename rewrites all linked rows on the next projec
     date: '2026-05-25',
   });
   await updateCounterparty(exec, 'cp-02', { name: 'Grab Holdings' });
+  // §2: Tx.id = account posting id; find by counterparty_id.
   const projected = await projectState(exec);
-  const tx = projected.transactions.find((t) => t.id === txId)!;
+  const tx = projected.transactions.find((t) => t.counterpartyId === 'cp-02' && t.amount === -3)!;
+  expect(tx).toBeTruthy();
   expect(tx.merchant).toBe('Grab Holdings');
   expect(tx.counterpartyId).toBe('cp-02');
 });
@@ -441,7 +454,7 @@ test('addTransaction: unknown name leaves counterparty_id null (no auto-create)'
     merchant: 'BLUE BOTTLE COFFEE',
     date: '2026-05-25',
   });
-  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.description)).toBe('BLUE BOTTLE COFFEE');
   expect(row.counterparty_id).toBeNull();
 });
@@ -452,7 +465,7 @@ test('addTransaction: explicit counterpartyId links the row to that counterparty
   // Pass a raw merchant string that wouldn't match by name. The explicit
   // counterpartyId forces the link, and the projection surfaces the canonical
   // name on `merchant` regardless of the raw description.
-  const txId = await addTransaction(exec, {
+  const entryId = await addTransaction(exec, {
     ledgerId: 'personal',
     accountId: 'chk',
     amount: -8,
@@ -460,13 +473,15 @@ test('addTransaction: explicit counterpartyId links the row to that counterparty
     date: '2026-05-25',
     counterpartyId: 'cp-05', // Apple (verified, seeded)
   });
-  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [entryId]);
   expect(String(row.description)).toBe('APPLE.COM/BILL');
   expect(String(row.counterparty_id)).toBe('cp-05');
   // Projection surfaces the canonical name on the merchant field.
+  // §2: Tx.id = account posting id (≠ entry id); find by counterparty_id.
   const { projectState } = await import('@/lib/db/state');
   const projected = await projectState(exec);
-  const tx = projected.transactions.find((t) => t.id === txId)!;
+  const tx = projected.transactions.find((t) => t.counterpartyId === 'cp-05' && t.amount === -8)!;
+  expect(tx).toBeTruthy();
   expect(tx.merchant).toBe('Apple');
   expect(tx.counterpartyId).toBe('cp-05');
 });
@@ -492,7 +507,7 @@ test('addTransaction: explicit counterpartyId is rejected if it belongs to a dif
     date: '2026-05-25',
     counterpartyId: otherCpId,
   });
-  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(row.counterparty_id).toBeNull();
   expect(String(row.description)).toBe('Raw Merchant String');
 });
@@ -509,7 +524,7 @@ test('addTransaction: no counterpartyId + exact name match → auto-resolve', as
     merchant: 'Grab',
     date: '2026-05-25',
   });
-  const [row] = await exec('SELECT description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.description)).toBe('Grab');
   expect(String(row.counterparty_id)).toBe('cp-02');
 });
@@ -530,7 +545,7 @@ test('confirmPendingWithMerchant: links + rewrites description in one round-trip
   // for "NETFLIX.COM*SUB" but the test exercises the wiring directly.
   await confirmPendingWithMerchant(exec, txId, { counterpartyId: 'cp-05' });
   const [row] = await exec(
-    'SELECT status, description, counterparty_id, confirmed_at FROM transactions WHERE id = ?',
+    'SELECT status, description, counterparty_id, confirmed_at FROM entries WHERE id = ?',
     [txId],
   );
   expect(String(row.status)).toBe('confirmed');
@@ -551,7 +566,7 @@ test('confirmPendingWithMerchant: newCounterpartyName creates unverified + links
     status: 'pending',
   });
   await confirmPendingWithMerchant(exec, txId, { newCounterpartyName: 'Blue Bottle Coffee' });
-  const [row] = await exec('SELECT status, description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT status, description, counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.status)).toBe('confirmed');
   expect(String(row.description)).toBe('Blue Bottle Coffee');
   const cpId = String(row.counterparty_id);
@@ -573,7 +588,7 @@ test('confirmPendingWithMerchant: with no resolution leaves the row confirmed bu
     status: 'pending',
   });
   await confirmPendingWithMerchant(exec, txId, {});
-  const [row] = await exec('SELECT status, description, counterparty_id FROM transactions WHERE id = ?', [txId]);
+  const [row] = await exec('SELECT status, description, counterparty_id FROM entries WHERE id = ?', [txId]);
   expect(String(row.status)).toBe('confirmed');
   expect(String(row.description)).toBe('ONE OFF MERCHANT');
   expect(row.counterparty_id).toBeNull();
@@ -608,7 +623,8 @@ test('updateTransaction: account change moves the row and recomputes both source
   const finalSav = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'sav')!.balance);
   expect(finalChk).toBeCloseTo(startChk, 2);
   expect(finalSav).toBeCloseTo(startSav - 50, 2);
-  const [row] = await exec('SELECT account_id FROM transactions WHERE id = ?', [txId]);
+  // §2: account_id on the posting.
+  const [row] = await exec('SELECT p.account_id FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
   expect(String(row.account_id)).toBe('sav');
 });
 
@@ -626,9 +642,11 @@ test('updateTransaction: same-account edit returns null oldAccountId', async () 
   // the dispatcher's "recompute source account" branch is a no-op.
   const result = await updateTransaction(exec, txId, { note: 'updated' });
   expect(result.oldAccountId).toBeNull();
-  const [row] = await exec('SELECT account_id, notes FROM transactions WHERE id = ?', [txId]);
-  expect(String(row.account_id)).toBe('chk');
-  expect(String(row.notes)).toBe('updated');
+  // §2: account_id on postings, notes on entries.
+  const [prow] = await exec('SELECT p.account_id FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
+  const [erow] = await exec('SELECT notes FROM entries WHERE id = ?', [txId]);
+  expect(String(prow.account_id)).toBe('chk');
+  expect(String(erow.notes)).toBe('updated');
 });
 
 test('updateTransaction: currency change re-derives amount_base + locks a new rate', async () => {
@@ -644,10 +662,15 @@ test('updateTransaction: currency change re-derives amount_base + locks a new ra
   });
   // Same-magnitude form, new currency label. amount_base should be re-derived
   // against the new currency at the same date; the rate is locked.
+  // §2: updateTransaction with currency='SGD' on a USD account means the input
+  // is in SGD; the posting stores currency='USD' (account currency) and the
+  // amount_base is recomputed treating the input as SGD.
   await updateTransaction(exec, txId, { currency: 'SGD' });
-  const [row] = await exec('SELECT amount, currency, amount_base, exchange_rate FROM transactions WHERE id = ?', [txId]);
+  // §2: amount, currency, amount_base, exchange_rate on the account posting.
+  const [row] = await exec('SELECT p.amount, p.currency, p.amount_base, p.exchange_rate FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
   expect(Number(row.amount)).toBe(-100);
-  expect(String(row.currency)).toBe('SGD');
+  // currency stays USD (account currency), amount_base re-derived treating input as SGD.
+  expect(String(row.currency)).toBe('USD');
   const expected = await convertToBase(exec, -100, 'SGD', 'USD', '2026-05-25');
   expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
   expect(Number(row.exchange_rate)).toBeCloseTo(expected.rate, 6);
@@ -675,7 +698,7 @@ test('updateTransaction: status flip sets/clears confirmed_at and moves the bala
   await applyMutation(exec, 'updateTransaction', { id: txId, patch: { status: 'confirmed' } });
   const confirmedBal = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
   expect(confirmedBal).toBeCloseTo(pendingBal - 25, 2);
-  const [confirmed] = await exec('SELECT status, confirmed_at FROM transactions WHERE id = ?', [txId]);
+  const [confirmed] = await exec('SELECT status, confirmed_at FROM entries WHERE id = ?', [txId]);
   expect(String(confirmed.status)).toBe('confirmed');
   expect(confirmed.confirmed_at).not.toBeNull();
   // Demote back to pending. confirmed_at clears; the recompute drops the row
@@ -683,7 +706,7 @@ test('updateTransaction: status flip sets/clears confirmed_at and moves the bala
   await applyMutation(exec, 'updateTransaction', { id: txId, patch: { status: 'pending' } });
   const demotedBal = Number((await listAccounts(exec, 'personal')).find((a) => a.id === 'chk')!.balance);
   expect(demotedBal).toBeCloseTo(pendingBal, 2);
-  const [demoted] = await exec('SELECT status, confirmed_at FROM transactions WHERE id = ?', [txId]);
+  const [demoted] = await exec('SELECT status, confirmed_at FROM entries WHERE id = ?', [txId]);
   expect(String(demoted.status)).toBe('pending');
   expect(demoted.confirmed_at).toBeNull();
 });
@@ -702,8 +725,8 @@ test('updateTransaction: cross-ledger account change is rejected', async () => {
   // The patch must not silently migrate the row across ledgers — it should
   // throw so the UI surfaces a clear error.
   await expect(updateTransaction(exec, txId, { account: 'f-dbs' })).rejects.toThrow(/different ledger/i);
-  // The row's account is unchanged.
-  const [row] = await exec('SELECT account_id FROM transactions WHERE id = ?', [txId]);
+  // The row's account is unchanged. §2: account_id on postings.
+  const [row] = await exec('SELECT p.account_id FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
   expect(String(row.account_id)).toBe('chk');
 });
 

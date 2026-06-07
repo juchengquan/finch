@@ -466,6 +466,23 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       });
     }
   }
+
+  // Accounts that had NO transactions never appeared in byAccount, so their
+  // opening balance was never posted. Do a second pass for those.
+  for (const a of accounts) {
+    if (byAccount.has(a.id)) continue; // already handled above
+    const open = opening.get(a.id) ?? a.balance ?? 0;
+    if (r2(open) !== 0) {
+      const ledgerId = a.ledger ?? 'personal';
+      await postOpening(exec, {
+        ledgerId,
+        accountId: a.id,
+        amount: open,
+        date: SEED_DATE,
+        timestamp: SEED_TS,
+      });
+    }
+  }
 }
 
 /** Create a complete fresh database (reference + seed transactions). */

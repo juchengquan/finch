@@ -67,6 +67,8 @@ export interface AddInput {
    *  name-based auto-resolve. The projection in `state.ts` still overwrites
    *  `merchant` with the canonical counterparty name on read. */
   counterpartyId?: string | null;
+  /** Bypass the rules engine for this insert. */
+  skipRules?: boolean;
 }
 
 /** Map a joined posting+entry row to the partial Tx shape.
@@ -138,9 +140,10 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
 
   const ph = entryIds.map(() => '?').join(',');
 
-  // 1. Category legs per entry (plain only — exclude equity).
+  // 1. Category legs per entry (plain only — exclude equity). Select p.id for
+  //    split-id fidelity (DOUBLE_ENTRY_PLAN §8.3: posting id = stable anchor).
   const catRows = await exec(
-    `SELECT p.entry_id, p.category_id, p.amount_base, p.sort_order
+    `SELECT p.id, p.entry_id, p.category_id, p.amount_base, p.sort_order
        FROM postings p
       WHERE p.entry_id IN (${ph}) AND p.account_id IS NULL
         AND (p.category_id IS NULL OR (
@@ -166,11 +169,12 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
   );
 
   // Build category map: entryId → plain category legs (sorted by sort_order).
-  const catsByEntry = new Map<string, Array<{ categoryId: string | null; amountBase: number; sortOrder: number }>>();
+  const catsByEntry = new Map<string, Array<{ id: string; categoryId: string | null; amountBase: number; sortOrder: number }>>();
   for (const cr of catRows) {
     const eid = String(cr.entry_id);
     const arr = catsByEntry.get(eid) ?? [];
     arr.push({
+      id: String(cr.id),
       categoryId: cr.category_id == null ? null : String(cr.category_id),
       amountBase: Number(cr.amount_base),
       sortOrder: Number(cr.sort_order),
@@ -234,8 +238,9 @@ export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): 
       tx.splits = legs
         .slice()
         .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((l, idx) => ({
-          id: `${eid}-split-${idx}`,
+        .map((l) => ({
+          // Use the stable posting id for split fidelity (DOUBLE_ENTRY_PLAN §8.3).
+          id: l.id,
           categoryId: l.categoryId,
           amount: -l.amountBase,
           amountBase: -l.amountBase,
@@ -376,6 +381,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
       notes: input.note || null,
       counterpartyId,
       refundedEntryId: input.refundedTransactionId ?? null,
+      skipRules: input.skipRules,
       legs: [{
         accountId: input.accountId,
         amount: convToAcct.amountBase,  // account-native
@@ -403,6 +409,7 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
     notes: input.note || null,
     counterpartyId,
     refundedEntryId: input.refundedTransactionId ?? null,
+    skipRules: input.skipRules,
   });
   return entryId;
 }
@@ -467,6 +474,7 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
     kind: row.kind as AddInput['kind'],
     refundedTransactionId: row.refundedTransactionId ?? null,
     counterpartyId: row.counterpartyId,
+    skipRules: row.skipRules,
   });
 }
 

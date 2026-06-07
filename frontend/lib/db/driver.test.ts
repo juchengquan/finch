@@ -35,7 +35,7 @@ test('execFor: PRAGMA getter (table_info) still returns rows through .all()', as
   // reader-based routing didn't accidentally turn every PRAGMA into a no-op.
   const { exec, close } = await freshDb();
   try {
-    const rows = await exec("PRAGMA table_info('transactions')");
+    const rows = await exec("PRAGMA table_info('entries')");
     expect(Array.isArray(rows)).toBe(true);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.some((r) => String(r.name) === 'id')).toBe(true);
@@ -97,7 +97,8 @@ test('execFor: applyPragmaBootstrap + applySchema together produce a usable DB',
     const tables = await exec("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
     const names = tables.map((r) => String(r.name));
     // Spot-check the core tables the queries/ layer depends on.
-    expect(names).toContain('transactions');
+    expect(names).toContain('entries');
+    expect(names).toContain('postings');
     expect(names).toContain('accounts');
     expect(names).toContain('categories');
   } finally {

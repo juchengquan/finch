@@ -26,11 +26,14 @@ test('fresh DB carries a db_metadata row stamped with the schema version', async
 test('rowCounts reports a count per canonical table; missing tables are 0', async () => {
   const exec = await fresh();
   const counts = await rowCounts(exec);
-  expect(counts.transactions).toBeGreaterThan(0);
+  // §2: CANONICAL_TABLES now uses entries/postings/entry_tags instead of
+  // transactions/transaction_splits/transaction_tags (DOUBLE_ENTRY_PLAN §7).
+  expect(counts.entries).toBeGreaterThan(0);    // entries replaces transactions
+  expect(counts.postings).toBeGreaterThan(0);   // postings is new
   expect(counts.accounts).toBeGreaterThan(0);
   expect(counts.categories).toBeGreaterThan(0);
-  // Tables we know exist but might be empty are still reported (>= 0).
-  expect(counts.transaction_splits).toBe(0);
+  // entry_tags replaces transaction_tags; 0 is fine (no seeded tags on entries).
+  expect(counts.entry_tags).toBeGreaterThanOrEqual(0);
 });
 
 test('computeChecksum is deterministic and changes when a row changes', async () => {
@@ -73,5 +76,6 @@ test('persist flow: stampExport writes provenance the next read can see', async 
   expect(meta!.exportedAt).toBe('2026-05-30T08:15:30Z');
   expect(meta!.exportedFrom).toBe('host-x');
   expect(meta!.checksum).toBe(checksum);
-  expect(meta!.rowCounts?.transactions).toBe(counts.transactions);
+  // §2: 'entries' replaces 'transactions' in CANONICAL_TABLES.
+  expect(meta!.rowCounts?.entries).toBe(counts.entries);
 });

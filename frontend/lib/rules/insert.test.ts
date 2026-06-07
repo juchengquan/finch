@@ -19,6 +19,23 @@ const baseRow = {
   kind: 'expense' as const,
 };
 
+// Helper: given the entry id returned by insertTxRow, retrieve the category leg's
+// category_id and the entry's applied_rule_ids.
+async function entryMeta(exec: Exec, entryId: string): Promise<{ categoryId: string | null; appliedRuleIds: string | null; reviewedAt: string | null }> {
+  const [e] = await exec('SELECT applied_rule_ids, reviewed_at FROM entries WHERE id = ?', [entryId]);
+  // The category comes from the category leg (account_id IS NULL).
+  const catLegs = await exec(
+    'SELECT category_id FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
+    [entryId],
+  );
+  const catLeg = catLegs[0];
+  return {
+    categoryId: catLeg?.category_id == null ? null : String(catLeg.category_id),
+    appliedRuleIds: e?.applied_rule_ids == null ? null : String(e.applied_rule_ids),
+    reviewedAt: e?.reviewed_at == null ? null : String(e.reviewed_at),
+  };
+}
+
 test('insertTxRow: a matching rule pre-categorises the row and records applied_rule_ids', async () => {
   const exec = await seeded();
   const cond: Condition = { field: 'merchant', op: 'contains', value: 'shell' };
@@ -26,12 +43,9 @@ test('insertTxRow: a matching rule pre-categorises the row and records applied_r
   await createRule(exec, 'shell-fuel', { ledgerId: 'personal', condition: cond, actions });
 
   const id = await insertTxRow(exec, { ...baseRow, description: 'Shell #247', categoryId: null });
-  const [row] = await exec(
-    'SELECT category_id, applied_rule_ids FROM transactions WHERE id = ?',
-    [id],
-  );
-  expect(String(row.category_id)).toBe('trans');
-  expect(JSON.parse(String(row.applied_rule_ids))).toEqual(['shell-fuel']);
+  const meta = await entryMeta(exec, id);
+  expect(meta.categoryId).toBe('trans');
+  expect(JSON.parse(meta.appliedRuleIds!)).toEqual(['shell-fuel']);
 });
 
 test('insertTxRow: amount-aware rules — Shell under $5 = Snacks, over = Fuel', async () => {
@@ -61,13 +75,13 @@ test('insertTxRow: amount-aware rules — Shell under $5 = Snacks, over = Fuel',
 
   const snackId = await insertTxRow(exec, { ...baseRow, description: 'Shell', amount: -4.5 });
   const fuelId = await insertTxRow(exec, { ...baseRow, description: 'Shell', amount: -48 });
-  const [snack] = await exec('SELECT category_id FROM transactions WHERE id = ?', [snackId]);
-  const [fuel] = await exec('SELECT category_id FROM transactions WHERE id = ?', [fuelId]);
-  expect(String(snack.category_id)).toBe('food');
-  expect(String(fuel.category_id)).toBe('trans');
+  const snack = await entryMeta(exec, snackId);
+  const fuel = await entryMeta(exec, fuelId);
+  expect(snack.categoryId).toBe('food');
+  expect(fuel.categoryId).toBe('trans');
 });
 
-test('insertTxRow: tag-add action inserts a transaction_tags row after the parent lands', async () => {
+test('insertTxRow: tag-add action inserts a entry_tags row after the parent lands', async () => {
   const exec = await seeded();
   await createRule(exec, 'biz-tag', {
     ledgerId: 'personal',
@@ -77,13 +91,13 @@ test('insertTxRow: tag-add action inserts a transaction_tags row after the paren
 
   const id = await insertTxRow(exec, { ...baseRow, notes: 'Lunch with client' });
   const tags = await exec(
-    'SELECT tag_id FROM transaction_tags WHERE transaction_id = ?',
+    'SELECT tag_id FROM entry_tags WHERE entry_id = ?',
     [id],
   );
   expect(tags.map((r) => String(r.tag_id))).toEqual(['tag-business']);
 });
 
-test('insertTxRow: split-action lays down transaction_splits summing to the parent', async () => {
+test('insertTxRow: split-action lays down category legs summing to the parent', async () => {
   const exec = await seeded();
   await createRule(exec, 'target-split', {
     ledgerId: 'personal',
@@ -100,14 +114,20 @@ test('insertTxRow: split-action lays down transaction_splits summing to the pare
   });
 
   const id = await insertTxRow(exec, { ...baseRow, description: 'Target', amount: -100 });
-  const splits = await exec(
-    'SELECT category_id, amount, amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+  // Category legs (account_id IS NULL) in sort_order, excluding fx-system legs.
+  const catLegs = await exec(
+    `SELECT p.category_id, p.amount, p.amount_base
+       FROM postings p
+       LEFT JOIN categories c ON c.id = p.category_id
+       WHERE p.entry_id = ? AND p.account_id IS NULL AND (c.system IS NULL OR c.system != 'fx')
+       ORDER BY p.sort_order`,
     [id],
   );
-  expect(splits.map((s) => String(s.category_id))).toEqual(['food', 'shop']);
-  // Sum of native amounts equals the parent's native amount.
-  const sum = splits.reduce((s, r) => s + Number(r.amount), 0);
-  expect(Math.round(sum * 100) / 100).toBe(-100);
+  expect(catLegs.map((s) => String(s.category_id))).toEqual(['food', 'shop']);
+  // Sum of category leg amounts (negated — category legs are the balancing side).
+  const sum = catLegs.reduce((s, r) => s + Number(r.amount), 0);
+  // Category legs are negative of the account leg (balance to 0). Sum ≈ +100.
+  expect(Math.abs(Math.round(sum * 100) / 100)).toBe(100);
 });
 
 test('insertTxRow: skipRules bypasses the engine entirely', async () => {
@@ -123,12 +143,9 @@ test('insertTxRow: skipRules bypasses the engine entirely', async () => {
     categoryId: 'misc',
     skipRules: true,
   });
-  const [row] = await exec(
-    'SELECT category_id, applied_rule_ids FROM transactions WHERE id = ?',
-    [id],
-  );
-  expect(String(row.category_id)).toBe('misc'); // untouched
-  expect(row.applied_rule_ids).toBeNull();
+  const meta = await entryMeta(exec, id);
+  expect(meta.categoryId).toBe('misc'); // untouched
+  expect(meta.appliedRuleIds).toBeNull();
 });
 
 test('insertTxRow: an inactive rule does not contribute', async () => {
@@ -140,12 +157,9 @@ test('insertTxRow: an inactive rule does not contribute', async () => {
     actions: [{ type: 'set_category', categoryId: 'trans' }],
   });
   const id = await insertTxRow(exec, { ...baseRow, description: 'Shell', categoryId: 'misc' });
-  const [row] = await exec(
-    'SELECT category_id, applied_rule_ids FROM transactions WHERE id = ?',
-    [id],
-  );
-  expect(String(row.category_id)).toBe('misc');
-  expect(row.applied_rule_ids).toBeNull();
+  const meta = await entryMeta(exec, id);
+  expect(meta.categoryId).toBe('misc');
+  expect(meta.appliedRuleIds).toBeNull();
 });
 
 test('insertTxRow: rule from a different ledger does not fire', async () => {
@@ -156,8 +170,8 @@ test('insertTxRow: rule from a different ledger does not fire', async () => {
     actions: [{ type: 'set_category', categoryId: 'food' }],
   });
   const id = await insertTxRow(exec, { ...baseRow, description: 'Shell', categoryId: 'misc' });
-  const [row] = await exec('SELECT category_id FROM transactions WHERE id = ?', [id]);
-  expect(String(row.category_id)).toBe('misc');
+  const meta = await entryMeta(exec, id);
+  expect(meta.categoryId).toBe('misc');
 });
 
 test('insertTxRow: a later (higher-priority-number) rule overrides an earlier set_category', async () => {
@@ -175,13 +189,10 @@ test('insertTxRow: a later (higher-priority-number) rule overrides an earlier se
     actions: [{ type: 'set_category', categoryId: 'shop' }],
   });
   const id = await insertTxRow(exec, { ...baseRow, description: 'Whole Foods' });
-  const [row] = await exec(
-    'SELECT category_id, applied_rule_ids FROM transactions WHERE id = ?',
-    [id],
-  );
-  expect(String(row.category_id)).toBe('shop');
+  const meta = await entryMeta(exec, id);
+  expect(meta.categoryId).toBe('shop');
   // Both ids in apply order — losing rule still recorded.
-  expect(JSON.parse(String(row.applied_rule_ids))).toEqual(['early', 'late']);
+  expect(JSON.parse(meta.appliedRuleIds!)).toEqual(['early', 'late']);
 });
 
 test('insertTxRow: a mark_reviewed rule stamps reviewed_at at insert', async () => {
@@ -193,8 +204,8 @@ test('insertTxRow: a mark_reviewed rule stamps reviewed_at at insert', async () 
   });
   const reviewed = await insertTxRow(exec, { ...baseRow, description: 'Netflix' });
   const unreviewed = await insertTxRow(exec, { ...baseRow, description: 'Spotify' });
-  const [a] = await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [reviewed]);
-  const [b] = await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [unreviewed]);
-  expect(a.reviewed_at).not.toBeNull();
-  expect(b.reviewed_at).toBeNull(); // no matching rule → stays unreviewed
+  const rev = await entryMeta(exec, reviewed);
+  const unrev = await entryMeta(exec, unreviewed);
+  expect(rev.reviewedAt).not.toBeNull();
+  expect(unrev.reviewedAt).toBeNull(); // no matching rule → stays unreviewed
 });

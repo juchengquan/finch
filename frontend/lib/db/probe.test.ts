@@ -78,8 +78,8 @@ test('probe (bun:sqlite): seedDatabase + a real insertTxRow round-trip works end
   const accounts = await listAccounts(exec, 'personal');
   expect(accounts.length).toBeGreaterThan(0);
 
-  // insertTxRow is the consolidated write path. If it works through the
-  // shim, the ~10 prod call sites fanning into it work too.
+  // insertTxRow is a shim over addTransaction → postSimple (entries chokepoint).
+  // Query via entries/postings instead of the dropped transactions table.
   const id = await insertTxRow(exec, {
     ledgerId: 'personal',
     accountId: accounts[0].id,
@@ -88,10 +88,11 @@ test('probe (bun:sqlite): seedDatabase + a real insertTxRow round-trip works end
     description: 'sync-engine probe',
     kind: 'expense',
   });
-  const [row] = (await exec('SELECT description, amount FROM transactions WHERE id = ?', [id])) as {
-    description: string;
-    amount: number;
-  }[];
+  // id is the ENTRY id; account posting carries amount (§2: entries/postings replace transactions).
+  const [row] = (await exec(
+    'SELECT e.description, p.amount FROM entries e JOIN postings p ON p.entry_id = e.id WHERE e.id = ? AND p.account_id IS NOT NULL',
+    [id],
+  )) as { description: string; amount: number }[];
   expect(row.description).toBe('sync-engine probe');
   expect(row.amount).toBe(-42.5);
 });

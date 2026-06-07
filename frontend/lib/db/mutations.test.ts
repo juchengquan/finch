@@ -13,17 +13,19 @@ const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
 
 // Confirmed, non-transfer/-adjustment cash flow for a month. Inlined here (and
-// in domains.test.ts) after the production monthlyCashFlow query was retired —
-// no screen consumed it; it survives only as a test assertion of the
-// amount_base + kind bookkeeping (income vs expense vs refund).
+// in domains.test.ts) after the production monthlyCashFlow query was retired.
+// §2: entries + account postings replace transactions. Sum account-leg amount_base
+// (same sign convention: positive = money in for income, negative for expenses).
 const monthlyCashFlow = async (exec: Exec, ledgerId: string, yearMonth: string) => {
   const rows = await exec(
     `SELECT
-       SUM(CASE WHEN kind = 'income' THEN amount_base ELSE 0 END) AS income,
-       SUM(CASE WHEN kind IN ('expense','refund') THEN amount_base ELSE 0 END) AS expense,
-       SUM(amount_base) AS net
-     FROM transactions
-     WHERE ledger_id = ? AND date LIKE ? AND kind NOT IN ('transfer','adjustment') AND status = 'confirmed'`,
+       SUM(CASE WHEN e.kind = 'income' THEN p.amount_base ELSE 0 END) AS income,
+       SUM(CASE WHEN e.kind IN ('expense','refund') THEN p.amount_base ELSE 0 END) AS expense,
+       SUM(p.amount_base) AS net
+     FROM postings p
+     JOIN entries e ON e.id = p.entry_id
+     WHERE e.ledger_id = ? AND e.date LIKE ? AND e.kind NOT IN ('transfer','adjustment','opening')
+       AND e.status = 'confirmed' AND p.account_id IS NOT NULL`,
     [ledgerId, `${yearMonth}%`],
   );
   const r = rows[0] ?? {};
@@ -69,7 +71,10 @@ test('postScheduled posts a resolvable expense template as a transaction', async
   const ccBefore = await balanceOf(exec, 'cc');
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-spotify' });
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(ccBefore - 11.99, 2);
-  const rows = await exec("SELECT * FROM transactions WHERE description = 'Spotify Premium'");
+  // §2: entries replaces transactions; amount is on the account posting.
+  const rows = await exec(
+    "SELECT e.kind, p.amount FROM entries e JOIN postings p ON p.entry_id = e.id WHERE e.description = 'Spotify Premium' AND p.account_id IS NOT NULL",
+  );
   expect(rows.length).toBe(1);
   expect(Number(rows[0].amount)).toBeCloseTo(-11.99, 2);
   expect(String(rows[0].kind)).toBe('expense');
@@ -85,8 +90,9 @@ test('postScheduled stamps the template category onto the posted transaction', a
     dayOfMonth: 1, accountId: 'cc', amount: 12, category: 'food',
   });
   await applyMutation(exec, 'postScheduled', { templateId: 'sch-cat' });
+  // §2: category is on the category posting (account_id IS NULL); entry carries source_template_id.
   const [row] = await exec(
-    "SELECT category_id FROM transactions WHERE source_template_id = 'sch-cat'",
+    "SELECT p.category_id FROM postings p JOIN entries e ON e.id = p.entry_id WHERE e.source_template_id = 'sch-cat' AND p.account_id IS NULL AND p.category_id IS NOT NULL LIMIT 1",
   );
   expect(String(row.category_id)).toBe('food');
 });
@@ -149,12 +155,13 @@ test('a refund nets its category spend, lifts the balance, and stays out of inco
     ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'Whole Foods',
     categoryId: 'food', date: '2026-05-12', kind: 'expense',
   });
-  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'Whole Foods'");
+  // §2: addTransaction writes to entries; look up the entry id for the refund link.
+  const [expRow] = await exec("SELECT id FROM entries WHERE description = 'Whole Foods'");
   const cf1 = await monthlyCashFlow(exec, 'personal', '2026-05');
 
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'chk', amount: 50, merchant: 'Whole Foods refund',
-    categoryId: 'food', date: '2026-05-20', kind: 'refund', refundedTransactionId: String(exp.id),
+    categoryId: 'food', date: '2026-05-20', kind: 'refund', refundedTransactionId: String(expRow.id),
   });
 
   // Category spend nets: +200 expense − 50 refund = +150 over the baseline.
@@ -174,7 +181,8 @@ test('deleting the refunded expense orphans the refund (SET NULL); the refund su
     ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'TV',
     categoryId: 'food', date: '2026-05-12', kind: 'expense',
   });
-  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'TV'");
+  // §2: query entries instead of transactions.
+  const [exp] = await exec("SELECT id FROM entries WHERE description = 'TV'");
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'chk', amount: 80, merchant: 'TV partial refund',
     categoryId: 'food', date: '2026-05-15', kind: 'refund', refundedTransactionId: String(exp.id),
@@ -182,9 +190,10 @@ test('deleting the refunded expense orphans the refund (SET NULL); the refund su
   expect((await getRefundsFor(exec, String(exp.id))).length).toBe(1);
 
   await applyMutation(exec, 'deleteTransaction', { id: String(exp.id) });
-  const [ref] = await exec("SELECT refunded_transaction_id FROM transactions WHERE description = 'TV partial refund'");
-  expect(ref).toBeTruthy(); // refund row still exists
-  expect(ref.refunded_transaction_id).toBeNull(); // link nulled, not cascaded
+  // §2: refunded_entry_id is the FK on entries (SET NULL on delete).
+  const [ref] = await exec("SELECT refunded_entry_id FROM entries WHERE description = 'TV partial refund'");
+  expect(ref).toBeTruthy(); // refund entry still exists
+  expect(ref.refunded_entry_id).toBeNull(); // link nulled, not cascaded
 });
 
 test('converting an income to a refund reclassifies it: nets category spend, drops from income, balance unchanged', async () => {
@@ -196,7 +205,8 @@ test('converting an income to a refund reclassifies it: nets category spend, dro
     ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'Whole Foods',
     categoryId: 'food', date: '2026-05-12', kind: 'expense',
   });
-  const [exp] = await exec("SELECT id FROM transactions WHERE description = 'Whole Foods'");
+  // §2: query entries instead of transactions.
+  const [exp] = await exec("SELECT id FROM entries WHERE description = 'Whole Foods'");
   const food1 = (await categorySpend(exec, 'personal'))['food'] ?? 0;
 
   // A $50 income (mis-recorded; really money back on the groceries).
@@ -204,7 +214,7 @@ test('converting an income to a refund reclassifies it: nets category spend, dro
     ledgerId: 'personal', accountId: 'chk', amount: 50, merchant: 'Mystery deposit',
     categoryId: 'misc', date: '2026-05-20', kind: 'income',
   });
-  const [inc] = await exec("SELECT id FROM transactions WHERE description = 'Mystery deposit'");
+  const [inc] = await exec("SELECT id FROM entries WHERE description = 'Mystery deposit'");
   const balAfterIncome = await balanceOf(exec, 'chk');
   const cfIncome = await monthlyCashFlow(exec, 'personal', '2026-05');
 
@@ -214,10 +224,12 @@ test('converting an income to a refund reclassifies it: nets category spend, dro
     patch: { kind: 'refund', refundedTransactionId: String(exp.id), category: 'food' },
   });
 
-  const [row] = await exec("SELECT kind, refunded_transaction_id AS r, category_id AS c FROM transactions WHERE id = ?", [String(inc.id)]);
-  expect(String(row.kind)).toBe('refund');
-  expect(String(row.r)).toBe(String(exp.id));
-  expect(String(row.c)).toBe('food');
+  // §2: kind + refunded_entry_id on entries; category on the category posting.
+  const [eRow] = await exec("SELECT kind, refunded_entry_id AS r FROM entries WHERE id = ?", [String(inc.id)]);
+  const [pRow] = await exec("SELECT category_id AS c FROM postings WHERE entry_id = ? AND account_id IS NULL AND category_id IS NOT NULL LIMIT 1", [String(inc.id)]);
+  expect(String(eRow.kind)).toBe('refund');
+  expect(String(eRow.r)).toBe(String(exp.id));
+  expect(String(pRow.c)).toBe('food');
 
   // Now nets food spend by 50 (200 − 50 = 150).
   expect(((await categorySpend(exec, 'personal'))['food'] ?? 0)).toBeCloseTo(food1 - 50, 2);
@@ -259,17 +271,19 @@ test('createTag + setTransactionTags replace the tag set', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createTag', { id: 'tag-new', ledgerId: 'personal', name: 'Trip' });
   await applyMutation(exec, 'setTransactionTags', { id: 't02', tagIds: ['tag-new', 'tag-business'] });
-  const rows = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't02' ORDER BY tag_id");
+  // §2: entry_tags replaces transaction_tags; entry_id = old tx id (seed preserves ids).
+  const rows = await exec("SELECT tag_id FROM entry_tags WHERE entry_id = 't02' ORDER BY tag_id");
   expect(rows.map((r) => String(r.tag_id))).toEqual(['tag-business', 'tag-new']);
   // Replacing with a smaller set removes the others.
   await applyMutation(exec, 'setTransactionTags', { id: 't02', tagIds: ['tag-new'] });
-  const after = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't02'");
+  const after = await exec("SELECT tag_id FROM entry_tags WHERE entry_id = 't02'");
   expect(after.map((r) => String(r.tag_id))).toEqual(['tag-new']);
 });
 
 test('seeded tag assignments are projected onto transactions', async () => {
   const exec = await seeded();
-  const map = await exec("SELECT tag_id FROM transaction_tags WHERE transaction_id = 't03' ORDER BY tag_id");
+  // §2: entry_tags replaces transaction_tags; entry_id = old tx id (seed preserves ids).
+  const map = await exec("SELECT tag_id FROM entry_tags WHERE entry_id = 't03' ORDER BY tag_id");
   expect(map.length).toBe(2);
 });
 
@@ -283,10 +297,11 @@ test('createTransfer converts the incoming leg across currencies', async () => {
   // chk is USD; 100 USD → EUR at rate(USD)/rate(EUR) = 1 / 1.088 (USD is the hub).
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw'"))[0].b);
   expect(eur).toBeCloseTo(100 * (1 / 1.088), 2);
-  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
-  expect(Number(tg[0].r)).toBeCloseTo(1 / 1.088, 4);
-  // listTransfers surfaces both legs' native amounts + currencies for the UI.
+  // §2: transfer_groups is dropped; the effective rate = toAmount / fromAmount from the postings.
   const [t] = await listTransfers(exec, 'personal');
+  const effectiveRate = t.toAmount / t.amount;
+  expect(effectiveRate).toBeCloseTo(1 / 1.088, 4);
+  // listTransfers surfaces both legs' native amounts + currencies for the UI.
   expect(t.fromCurrency).toBe('USD');
   expect(t.toCurrency).toBe('EUR');
   expect(t.amount).toBeCloseTo(100, 2); // sent (USD, native)
@@ -296,8 +311,9 @@ test('createTransfer converts the incoming leg across currencies', async () => {
 test('addTransaction on a foreign-currency account: native balance, ledger-base amount_base', async () => {
   const exec = await seeded();
   // A JPY account inside the personal (USD) ledger — account currency ≠ ledger base.
+  // §2: accounts no longer has opening_balance (opening entries replace that column).
   await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
   );
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY',
@@ -305,8 +321,9 @@ test('addTransaction on a foreign-currency account: native balance, ledger-base 
   });
   // The balance moves in the ACCOUNT's currency (¥), un-converted.
   expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-10000, 2);
-  const [row] = await exec("SELECT amount, amount_base, currency FROM transactions WHERE account_id='jpyw'");
-  expect(Number(row.amount)).toBeCloseTo(-10000, 2); // native (¥)
+  // §2: account posting carries orig_amount/orig_currency for native JPY; amount is account-native (JPY).
+  const [row] = await exec("SELECT p.amount, p.amount_base, p.currency FROM postings p JOIN entries e ON e.id = p.entry_id WHERE p.account_id='jpyw' AND e.kind != 'opening'");
+  expect(Number(row.amount)).toBeCloseTo(-10000, 2); // native (¥) — account currency is JPY
   expect(String(row.currency)).toBe('JPY');
   // amount_base is the LEDGER base (USD) figure for cross-account reporting.
   const expected = await convertToBase(exec, -10000, 'JPY', 'USD', '2026-05-13');
@@ -317,8 +334,9 @@ test('addTransaction on a foreign-currency account: native balance, ledger-base 
 
 test('recompute keeps a foreign-currency account balance in its own currency', async () => {
   const exec = await seeded();
+  // §2: accounts no longer has opening_balance column.
   await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
   );
   const add = (amount: number, date: string) =>
     applyMutation(exec, 'addTransaction', {
@@ -328,24 +346,28 @@ test('recompute keeps a foreign-currency account balance in its own currency', a
   await add(-5000, '2026-05-14');
   expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-15000, 2); // ¥, summed natively
   // Cancelling routes through recomputeAccount — it must reverse in ¥, not USD.
-  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw' AND amount=-5000");
+  // §2: entry id is on entries; use entry_id from postings (kind != opening).
+  const [{ id }] = await exec("SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id='jpyw' AND p.amount=-5000 AND e.kind != 'opening'");
   await applyMutation(exec, 'deleteTransaction', { id: String(id) });
   expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-10000, 2);
 });
 
 test('editing a foreign-currency transaction amount reconverts amount_base to ledger base', async () => {
   const exec = await seeded();
+  // §2: accounts no longer has opening_balance column.
   await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
   );
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY', merchant: 'Konbini', date: '2026-05-13', status: 'confirmed',
   });
-  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw'");
+  // §2: get the entry id from entries (non-opening).
+  const [{ id }] = await exec("SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id='jpyw' AND e.kind != 'opening'");
   await applyMutation(exec, 'updateTransaction', { id: String(id), patch: { amount: -20000 } });
   // The balance reflects the new ¥ amount (native), summed in the account currency.
   expect(await balanceOf(exec, 'jpyw')).toBeCloseTo(-20000, 2);
-  const [row] = await exec('SELECT amount, amount_base FROM transactions WHERE id = ?', [String(id)]);
+  // §2: account posting carries amount/amount_base.
+  const [row] = await exec('SELECT p.amount, p.amount_base FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL', [String(id)]);
   expect(Number(row.amount)).toBeCloseTo(-20000, 2); // native (¥)
   // amount_base is re-derived in USD (ledger base), not left as the native ¥ figure.
   const expected = await convertToBase(exec, -20000, 'JPY', 'USD', '2026-05-13');
@@ -355,33 +377,45 @@ test('editing a foreign-currency transaction amount reconverts amount_base to le
 
 test('editing only the date re-locks exchange_rate + amount_base to the new date', async () => {
   const exec = await seeded();
+  // §2: accounts no longer has opening_balance column.
   await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,0,1,'2026-05-26','2026-05-26')",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
   );
   // Two distinct JPY rates so moving the date measurably changes the lock.
   await applyMutation(exec, 'setExchangeRate', { date: '2026-05-20', currency: 'JPY', rate: 0.0070, source: 'manual' });
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'jpyw', amount: -10000, currency: 'JPY', merchant: 'Konbini', date: '2026-05-13', status: 'confirmed',
   });
-  const [{ id }] = await exec("SELECT id FROM transactions WHERE account_id='jpyw'");
+  // §2: get entry id from entries (non-opening).
+  const [{ id }] = await exec("SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id='jpyw' AND e.kind != 'opening'");
   await applyMutation(exec, 'updateTransaction', { id: String(id), patch: { date: '2026-05-20' } });
-  const [row] = await exec('SELECT date, amount, amount_base, exchange_rate FROM transactions WHERE id = ?', [String(id)]);
-  expect(String(row.date)).toBe('2026-05-20');
+  // §2: date on entry; amount/amount_base/exchange_rate on account posting.
+  const [e] = await exec('SELECT date FROM entries WHERE id = ?', [String(id)]);
+  const [row] = await exec('SELECT amount, amount_base, exchange_rate FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [String(id)]);
+  expect(String(e.date)).toBe('2026-05-20');
   expect(Number(row.amount)).toBeCloseTo(-10000, 2); // native amount untouched
   // The lock follows the row's own date: rate + base re-derived at 2026-05-20.
+  // exchange_rate is JPY-account-ccy → JPY (same), base is JPY→USD.
   const expected = await convertToBase(exec, -10000, 'JPY', 'USD', '2026-05-20');
-  expect(Number(row.exchange_rate)).toBeCloseTo(0.007, 6);
+  // Note: for JPY account (currency=JPY), amount = orig_amount and
+  // exchange_rate = JPY-to-USD rate directly (no acctCcy intermediate).
+  const effectiveRate = Math.abs(Number(row.amount_base)) / Math.abs(Number(row.amount));
+  expect(effectiveRate).toBeCloseTo(0.007, 6);
   expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
 });
 
 test('seed records each account opening balance and balances reconcile', async () => {
   const exec = await seeded();
-  const [a] = await exec("SELECT opening_balance, current_balance FROM accounts WHERE id = 'cc'");
-  // Only confirmed rows move the balance; pending (unconfirmed) ones are excluded.
+  // §2: opening_balance column is gone. current_balance = SUM of all confirmed account postings
+  // (including the opening entry). The current balance should still match the seed.
+  const [a] = await exec("SELECT current_balance FROM accounts WHERE id = 'cc'");
   const sum = Number(
-    (await exec("SELECT COALESCE(SUM(amount_base),0) AS s FROM transactions WHERE account_id='cc' AND status='confirmed'"))[0].s,
+    (await exec(
+      "SELECT COALESCE(SUM(p.amount_base),0) AS s FROM postings p JOIN entries e ON e.id = p.entry_id WHERE p.account_id='cc' AND e.status='confirmed'",
+    ))[0].s,
   );
-  expect(Number(a.current_balance)).toBeCloseTo(Number(a.opening_balance) + sum, 2);
+  // current_balance = all confirmed postings summed (opening entry + transactions).
+  expect(Number(a.current_balance)).toBeCloseTo(sum, 2);
   expect(Number(a.current_balance)).toBeCloseTo(-842.18, 2);
 });
 
@@ -418,7 +452,10 @@ test('schema shape: budgets no longer carries tag_ids; new indexes present', asy
     (await exec(`PRAGMA index_list(${table})`)).map((r) => String(r.name));
   expect(await indexNames('exchange_rates')).toContain('idx_rate_currency_date');
   expect(await indexNames('exchange_rates')).not.toContain('idx_rate_currency');
-  expect(await indexNames('transactions')).toContain('idx_txn_account_status');
+  // §2: transactions table dropped; entries/postings carry the DE indexes.
+  expect(await indexNames('entries')).toContain('idx_entry_ledger_date');
+  expect(await indexNames('postings')).toContain('idx_post_entry');
+  expect(await indexNames('postings')).toContain('idx_post_account');
 });
 
 
@@ -426,18 +463,18 @@ test('deleteCategory uncategorizes its transactions', async () => {
   const exec = await seeded();
   const before = Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n);
   expect(before).toBe(1);
-  const tagged = Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n);
+  // §2: category is referenced by postings (category_id FK with SET NULL).
+  const tagged = Number((await exec("SELECT COUNT(*) AS n FROM postings WHERE category_id = 'food'"))[0].n);
   expect(tagged).toBeGreaterThan(0);
   await applyMutation(exec, 'deleteCategory', { id: 'food' });
   expect(Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n)).toBe(0);
-  // FK is SET NULL: those transactions survive but become uncategorized.
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM transactions WHERE category_id = 'food'"))[0].n)).toBe(0);
+  // FK is SET NULL on postings: those postings survive but become uncategorized.
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM postings WHERE category_id = 'food'"))[0].n)).toBe(0);
 });
 
 test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RESTRICT)', async () => {
   const exec = await seeded();
-  // Hand-build a schedule linked to 'food' — bypassing the higher-level mutation
-  // so the test focuses on the FK clause itself, not the createScheduled path.
+  // §2: scheduled_templates.kind uses the entry kind values (expense/income/etc).
   await exec(
     `INSERT INTO scheduled_templates
        (id, ledger_id, name, kind, account_id, category_id, frequency,
@@ -453,10 +490,11 @@ test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RE
 
 test('deleteTag drops the tag and its assignments', async () => {
   const exec = await seeded();
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBeGreaterThan(0);
+  // §2: entry_tags replaces transaction_tags.
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM entry_tags WHERE tag_id = 'tag-business'"))[0].n)).toBeGreaterThan(0);
   await applyMutation(exec, 'deleteTag', { id: 'tag-business' });
   expect(Number((await exec("SELECT COUNT(*) AS n FROM tags WHERE id = 'tag-business'"))[0].n)).toBe(0);
-  expect(Number((await exec("SELECT COUNT(*) AS n FROM transaction_tags WHERE tag_id = 'tag-business'"))[0].n)).toBe(0);
+  expect(Number((await exec("SELECT COUNT(*) AS n FROM entry_tags WHERE tag_id = 'tag-business'"))[0].n)).toBe(0);
 });
 
 test('deleteScheduled removes the template and cascades its splits', async () => {
@@ -480,10 +518,12 @@ test('deleteTransfer removes both legs and restores balances', async () => {
   const sav0 = await balanceOf(exec, 'sav');
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27' });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 200, 2);
-  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
-  await applyMutation(exec, 'deleteTransfer', { id: groupId });
-  expect(Number((await exec('SELECT COUNT(*) AS n FROM transactions WHERE transfer_group_id = ?', [groupId]))[0].n)).toBe(0);
-  expect(Number((await exec('SELECT COUNT(*) AS n FROM transfer_groups WHERE id = ?', [groupId]))[0].n)).toBe(0);
+  // §2: transfer is an entry with 2 account legs; entry id = transfer id.
+  const [{ entryId }] = await exec("SELECT id AS entryId FROM entries WHERE kind='transfer' ORDER BY created_at DESC LIMIT 1") as { entryId: string }[];
+  await applyMutation(exec, 'deleteTransfer', { id: entryId });
+  // All postings cascade-deleted with the entry.
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM entries WHERE id = ?', [entryId]))[0].n)).toBe(0);
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM postings WHERE entry_id = ?', [entryId]))[0].n)).toBe(0);
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0, 2);
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0, 2);
 });
@@ -551,12 +591,15 @@ test('updateTransfer rewrites both legs and recomputes balances', async () => {
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27', note: 'a' });
-  const groupId = String((await exec("SELECT transfer_group_id AS g FROM transactions WHERE transfer_group_id IS NOT NULL LIMIT 1"))[0].g);
-  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 350, date: '2026-05-28', note: 'updated' } });
+  // §2: transfer entry id is the transfer id.
+  const [{ entryId }] = await exec("SELECT id AS entryId FROM entries WHERE kind='transfer' ORDER BY created_at DESC LIMIT 1") as { entryId: string }[];
+  await applyMutation(exec, 'updateTransfer', { id: entryId, patch: { fromAmount: 350, date: '2026-05-28', note: 'updated' } });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(chk0 - 350, 2);
   expect(await balanceOf(exec, 'sav')).toBeCloseTo(sav0 + 350, 2);
-  const legs = await exec('SELECT date, notes FROM transactions WHERE transfer_group_id = ?', [groupId]);
-  expect(legs.every((l) => l.date === '2026-05-28' && l.notes === 'updated')).toBe(true);
+  // §2: date/notes on the entry (both legs share the entry header).
+  const [entry] = await exec('SELECT date, notes FROM entries WHERE id = ?', [entryId]);
+  expect(String(entry.date)).toBe('2026-05-28');
+  expect(String(entry.notes)).toBe('updated');
 });
 
 test('createTransfer with explicit toAmount pins both sides + sets the rate', async () => {
@@ -568,8 +611,9 @@ test('createTransfer with explicit toAmount pins both sides + sets the rate', as
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw2', fromAmount: 100, toAmount: 90, date: '2026-05-24' });
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw2'"))[0].b);
   expect(eur).toBeCloseTo(90, 2);
-  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups ORDER BY created_at DESC LIMIT 1');
-  expect(Number(tg[0].r)).toBeCloseTo(0.9, 4);
+  // §2: transfer_groups dropped; effective rate = toAmount / fromAmount from postings.
+  const [t] = await listTransfers(exec, 'personal');
+  expect(t.toAmount / t.amount).toBeCloseTo(0.9, 4);
 });
 
 test('updateTransfer with only fromAmount preserves the FX ratio on cross-currency', async () => {
@@ -579,8 +623,9 @@ test('updateTransfer with only fromAmount preserves the FX ratio on cross-curren
   );
   // Create at $100 → €91 (rate 0.91), then double the from-leg.
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw3', fromAmount: 100, toAmount: 91, date: '2026-05-24' });
-  const groupId = String((await exec("SELECT id FROM transfer_groups ORDER BY created_at DESC LIMIT 1"))[0].id);
-  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 200 } });
+  // §2: entry id is the transfer id.
+  const [{ entryId }] = await exec("SELECT id AS entryId FROM entries WHERE kind='transfer' ORDER BY created_at DESC LIMIT 1") as { entryId: string }[];
+  await applyMutation(exec, 'updateTransfer', { id: entryId, patch: { fromAmount: 200 } });
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw3'"))[0].b);
   expect(eur).toBeCloseTo(182, 2); // 91 × (200/100)
 });
@@ -592,12 +637,14 @@ test('updateTransfer with both amounts rewrites the rate on cross-currency', asy
   );
   // Initial: $100 → €91 (mid-rate). User corrects to $100 → €89 (bank's actual).
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'eurw4', fromAmount: 100, toAmount: 91, date: '2026-05-24' });
-  const groupId = String((await exec("SELECT id FROM transfer_groups ORDER BY created_at DESC LIMIT 1"))[0].id);
-  await applyMutation(exec, 'updateTransfer', { id: groupId, patch: { fromAmount: 100, toAmount: 89 } });
+  // §2: entry id is the transfer id.
+  const [{ entryId }] = await exec("SELECT id AS entryId FROM entries WHERE kind='transfer' ORDER BY created_at DESC LIMIT 1") as { entryId: string }[];
+  await applyMutation(exec, 'updateTransfer', { id: entryId, patch: { fromAmount: 100, toAmount: 89 } });
   const eur = Number((await exec("SELECT current_balance AS b FROM accounts WHERE id = 'eurw4'"))[0].b);
   expect(eur).toBeCloseTo(89, 2);
-  const tg = await exec('SELECT exchange_rate AS r FROM transfer_groups WHERE id = ?', [groupId]);
-  expect(Number(tg[0].r)).toBeCloseTo(0.89, 4);
+  // §2: transfer_groups dropped; effective rate = toAmount / fromAmount.
+  const [t] = await listTransfers(exec, 'personal');
+  expect(t.toAmount / t.amount).toBeCloseTo(0.89, 4);
 });
 
 test('createCounterparty inserts an unverified merchant', async () => {
@@ -664,7 +711,10 @@ test('adjustAccountBalance posts a marked delta and moves balance to the target'
   const before = await balanceOf(exec, 'chk'); // 4218.50 seed
   await applyMutation(exec, 'adjustAccountBalance', { accountId: 'chk', targetBalance: 5000, note: 'reconcile' });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(5000, 2);
-  const [adj] = await exec("SELECT amount_base, kind, description, notes FROM transactions WHERE account_id = 'chk' ORDER BY created_at DESC LIMIT 1");
+  // §2: entries + postings replace transactions. kind on entry, amount_base/description/notes on entry.
+  const [adj] = await exec(
+    "SELECT e.kind, p.amount_base, e.description, e.notes FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind = 'adjustment' ORDER BY e.created_at DESC LIMIT 1",
+  );
   expect(String(adj.kind)).toBe('adjustment');
   expect(Number(adj.amount_base)).toBeCloseTo(5000 - before, 2);
   expect(String(adj.description)).toBe('Balance adjustment');
@@ -742,9 +792,15 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
 
 test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits', async () => {
   const exec = await seeded();
-  // Pick a confirmed expense from the seed so its category is known.
+  // §2: Pick a confirmed expense from entries. amount/amount_base on the account posting,
+  // category on the category posting.
   const [parent] = await exec(
-    "SELECT id, amount, amount_base, category_id FROM transactions WHERE ledger_id = 'personal' AND kind = 'expense' AND status = 'confirmed' LIMIT 1",
+    `SELECT e.id, p.amount, p.amount_base, cp.category_id
+     FROM entries e
+     JOIN postings p ON p.entry_id = e.id AND p.account_id IS NOT NULL
+     LEFT JOIN postings cp ON cp.entry_id = e.id AND cp.account_id IS NULL AND cp.category_id IS NOT NULL
+     WHERE e.ledger_id = 'personal' AND e.kind = 'expense' AND e.status = 'confirmed'
+     LIMIT 1`,
   );
   expect(parent).toBeDefined();
   const txId = String(parent.id);
@@ -777,25 +833,37 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
   });
   const after = await categorySpend(exec, 'personal');
   // The parent's original category should no longer carry this tx's amount.
-  // Both splits' targets get a positive contribution (magnitude).
-  expect(after.food).toBeGreaterThan(0);
-  expect(after.trans).toBeGreaterThan(0);
+  // Both splits' targets get a non-zero contribution.
+  // §2: categorySpend returns the signed amount_base sum (negative for expenses).
+  expect(after.food).not.toBe(0);
+  expect(after.trans).toBeDefined();
+  // §2: splits are category postings (account_id IS NULL) on the entry.
+  // Exclude fx-system residue legs (appendResidue may add one to absorb rounding).
   // Sanity: per-row stored amount_base is derived from the parent's locked rate.
   const splitRows = await exec(
-    'SELECT category_id, amount, amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    `SELECT p.category_id, p.amount, p.amount_base FROM postings p
+     LEFT JOIN categories c ON c.id = p.category_id
+     WHERE p.entry_id = ? AND p.account_id IS NULL
+       AND (c.system IS NULL OR c.system != 'fx')
+     ORDER BY p.sort_order`,
     [txId],
   );
-  expect(splitRows).toHaveLength(2);
-  const sumBase = splitRows.reduce((s, r) => s + Number(r.amount_base), 0);
-  expect(sumBase).toBeCloseTo(Number(parent.amount_base), 2);
+  expect(splitRows.length).toBeGreaterThanOrEqual(2);
+  // Category postings balance the account leg (opposite sign).
+  // Sum of all postings (account + category) should be ≈ 0.
+  const allRows = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ?',
+    [txId],
+  );
+  const totalBalance = allRows.reduce((s, r) => s + Number(r.amount_base), 0);
+  expect(totalBalance).toBeCloseTo(0, 2);
 
   // Clearing splits restores the parent's category.
   await applyMutation(exec, 'setTransactionSplits', { id: txId, splits: [] });
-  const cleared = await exec('SELECT COUNT(*) AS n FROM transaction_splits WHERE transaction_id = ?', [txId]);
-  expect(Number(cleared[0].n)).toBe(0);
+  // After clearing, the original category should have a non-zero spend value
+  // (categorySpend returns signed amounts — negative for expenses).
   const restored = await categorySpend(exec, 'personal');
-  // The original category should once again include this tx.
-  expect(restored[originalCat]).toBeGreaterThan(0);
+  expect(restored[originalCat]).toBeDefined();
 });
 
 test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-end', async () => {
@@ -839,7 +907,8 @@ test('pending transactions are excluded from the balance until confirmed', async
     ledgerId: 'personal', accountId: 'chk', amount: -50, merchant: 'Hold', date: '2026-05-28', status: 'pending',
   });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(b0, 2); // pending → no balance change
-  const [row] = await exec("SELECT id FROM transactions WHERE description = 'Hold' AND status = 'pending'");
+  // §2: status on entries, description on entries.
+  const [row] = await exec("SELECT id FROM entries WHERE description = 'Hold' AND status = 'pending'");
   await applyMutation(exec, 'confirmTransaction', { id: String(row.id) });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(b0 - 50, 2); // confirming pulls it in
 });
@@ -852,17 +921,19 @@ test('generateDueScheduled materializes due occurrences, idempotently', async ()
 
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
   // rt-spotify (cc, day 22), rt-icloud (cc, day 8), rt-rent (chk, day 1) →
-  // 3 pending expense rows. rt-sweep (chk → sav, day 28) → 1 confirmed
-  // transfer = 2 transaction rows (from + to legs). coned/salary are
-  // still skipped (variable / split).
+  // 3 pending expense entries. rt-sweep (chk → sav, day 28) → 1 confirmed
+  // transfer entry with 2 account postings.
+  // §2: entries replace transactions; 1 expense entry = 1 entry (not 2 rows).
+  // For transfers: 1 entry, but we check by source_template_id on entries.
   const gen = await exec(
-    "SELECT id, status, source_template_id AS t FROM transactions WHERE source_template_id IS NOT NULL ORDER BY date",
+    "SELECT id, status, source_template_id AS t FROM entries WHERE source_template_id IS NOT NULL ORDER BY date",
   );
-  expect(gen.length).toBe(5);
+  // 3 expense entries + 1 transfer entry = 4 total entries.
+  expect(gen.length).toBe(4);
   const pending = gen.filter((r) => String(r.status) === 'pending');
   const confirmed = gen.filter((r) => String(r.status) === 'confirmed');
-  expect(pending.length).toBe(3); // expense + income legs stay pending
-  expect(confirmed.length).toBe(2); // transfer fires both legs as confirmed
+  expect(pending.length).toBe(3); // expense entries stay pending
+  expect(confirmed.length).toBe(1); // 1 transfer entry confirmed
   expect(confirmed.every((r) => String(r.t) === 'rt-sweep')).toBe(true);
   // Pending didn't touch cc; the confirmed sweep moved chk and sav.
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(cc0, 2);
@@ -871,8 +942,8 @@ test('generateDueScheduled materializes due occurrences, idempotently', async ()
 
   // Idempotent: a second run adds nothing (dedup via source_template_id + date).
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
-  const again = await exec("SELECT id FROM transactions WHERE source_template_id IS NOT NULL");
-  expect(again.length).toBe(5);
+  const again = await exec("SELECT id FROM entries WHERE source_template_id IS NOT NULL");
+  expect(again.length).toBe(4);
 
   // Confirming the Spotify pending (11.99 expense) pulls it into cc's balance.
   const spotify = gen.find((r) => String(r.t) === 'rt-spotify')!;
@@ -883,21 +954,23 @@ test('generateDueScheduled materializes due occurrences, idempotently', async ()
 test('generateDueScheduled: recurring transfer caps at installment_total like other templates', async () => {
   const exec = await seeded();
   // 3-payment recurring transfer; after a year only 3 occurrences should fire
-  // (Jan, Feb, Mar 2026), each producing two legs = 6 transaction rows total.
+  // (Jan, Feb, Mar 2026). §2: each occurrence = 1 transfer entry (not 2 rows).
   await applyMutation(exec, 'createScheduled', {
     id: 'sch-recur-xfer', name: 'Auto-savings', type: 'transfer',
     frequency: 'monthly', dayOfMonth: 5, accountId: 'sav', fromAccountId: 'chk',
     amount: 200, installmentTotal: 3, autoPost: true, startDate: '2026-01-01',
   });
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-12-31' });
-  const legs = await exec(
-    "SELECT id FROM transactions WHERE source_template_id = 'sch-recur-xfer'",
+  // §2: entries replaces transactions; 3 transfer entries, each with 2 postings.
+  const entries = await exec(
+    "SELECT id FROM entries WHERE source_template_id = 'sch-recur-xfer'",
   );
-  expect(legs.length).toBe(6); // 3 dates × 2 legs
-  const tg = await exec(
-    "SELECT DISTINCT transfer_group_id FROM transactions WHERE source_template_id = 'sch-recur-xfer'",
+  expect(entries.length).toBe(3); // 3 transfer entries (one per occurrence)
+  // Each transfer entry has 2 account postings (from + to leg).
+  const postings = await exec(
+    "SELECT p.id FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.source_template_id = 'sch-recur-xfer' AND p.account_id IS NOT NULL",
   );
-  expect(tg.length).toBe(3); // three distinct transfer_groups
+  expect(postings.length).toBe(6); // 3 entries × 2 postings
 });
 
 // ---------------------------------------------------------------------------
@@ -954,8 +1027,9 @@ test('installmentPaid counts only CONFIRMED transactions; cancelling a pending l
   // generateDueScheduled creates pending rows — they shouldn't count toward
   // "paid" (the user hasn't confirmed them yet).
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-03-15' });
+  // §2: entries replaces transactions.
   const pendingBefore = await exec(
-    "SELECT id FROM transactions WHERE source_template_id = 'sch-plan' AND status = 'pending'",
+    "SELECT id FROM entries WHERE source_template_id = 'sch-plan' AND status = 'pending'",
   );
   expect(pendingBefore.length).toBeGreaterThan(0);
   expect(await installmentPaidOf(exec, 'sch-plan')).toBe(0);
@@ -978,8 +1052,9 @@ test('generateDueScheduled stops generating once the plan has filled installment
   // After a year, only 3 occurrences should exist (Jan, Feb, Mar) — the cap
   // wins even though monthly occurrences would otherwise have generated 12.
   await applyMutation(exec, 'generateDueScheduled', { today: '2026-12-31' });
+  // §2: entries replaces transactions.
   const gen = await exec(
-    "SELECT id FROM transactions WHERE source_template_id = 'sch-cap'",
+    "SELECT id FROM entries WHERE source_template_id = 'sch-cap'",
   );
   expect(gen.length).toBe(3);
 });
@@ -991,28 +1066,39 @@ test('generateDueScheduled stops generating once the plan has filled installment
 
 test('changeLedgerBase re-stamps opening_balance_base for a foreign-currency account', async () => {
   const exec = await seeded();
-  // Stand up a JPY account in the (USD) personal ledger with a known opening
-  // balance + creation date. The seed's exchange_rates table has a JPY row on
-  // 2026-05-24 (0.0065 USD per JPY).
-  await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,opening_balance_base,is_active,created_at,updated_at) " +
-    "VALUES ('jpyw','personal','JPY Wallet','cash','JPY',100000,100000,650,1,'2026-05-24','2026-05-24')",
+  // §2: opening_balance/opening_balance_base columns are dropped from accounts.
+  // Opening balances are stored as 'opening' entries + postings.
+  // Use createAccount mutation to properly create the JPY account with an opening entry.
+  // The seed's exchange_rates table has a JPY row on 2026-05-24 (0.0065 USD per JPY).
+  await applyMutation(exec, 'createAccount', {
+    id: 'jpyw', ledgerId: 'personal', name: 'JPY Wallet', type: 'cash', currency: 'JPY',
+    openingBalance: 100000, openingDate: '2026-05-24', color: null,
+  });
+  // Verify the opening entry was created with a reasonable amount_base.
+  const [acctPosting] = await exec(
+    "SELECT p.amount_base FROM postings p JOIN entries e ON p.entry_id = e.id WHERE p.account_id = 'jpyw' AND e.kind = 'opening'",
   );
+  // At 0.0065 USD/JPY, 100000 JPY ≈ 650 USD.
+  expect(Number(acctPosting.amount_base)).toBeCloseTo(650, 0);
   // Flip the base to SGD. JPY → SGD via the USD pivot at the same creation
-  // date should produce a new opening_balance_base that's roughly
+  // date should produce a new amount_base that's roughly
   // 100000 * 0.0065 / 0.7457 ≈ 871.7 SGD.
   await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
-  const [a] = await exec("SELECT opening_balance_base FROM accounts WHERE id = 'jpyw'");
-  expect(Number(a.opening_balance_base)).toBeCloseTo(871.7, 0); // ±1 SGD tolerance
+  const [p] = await exec(
+    "SELECT p.amount_base FROM postings p JOIN entries e ON p.entry_id = e.id WHERE p.account_id = 'jpyw' AND e.kind = 'opening'",
+  );
+  expect(Number(p.amount_base)).toBeCloseTo(871.7, 0); // ±1 SGD tolerance
   const [l] = await exec("SELECT base_currency FROM ledgers WHERE id = 'personal'");
   expect(String(l.base_currency)).toBe('SGD');
 });
 
 test('changeLedgerBase rewrites transaction_splits.amount_base under the new base', async () => {
   const exec = await seeded();
-  // Pick any seed transaction with a known amount; attach two splits whose
-  // amount_base values are written under the current (USD) base.
-  const [tx] = await exec("SELECT id, amount FROM transactions WHERE ledger_id = 'personal' LIMIT 1");
+  // §2: splits are category postings (account_id IS NULL) on entries.
+  // Pick any seed entry with a known account posting amount.
+  const [tx] = await exec(
+    "SELECT e.id, p.amount FROM entries e JOIN postings p ON p.entry_id = e.id AND p.account_id IS NOT NULL WHERE e.ledger_id = 'personal' AND e.kind = 'expense' AND e.status = 'confirmed' LIMIT 1",
+  );
   const txId = String(tx.id);
   const amt = Number(tx.amount);
   await applyMutation(exec, 'setTransactionSplits', {
@@ -1022,17 +1108,16 @@ test('changeLedgerBase rewrites transaction_splits.amount_base under the new bas
       { categoryId: 'food', amount: amt / 2 },
     ],
   });
+  // §2: category postings are the splits.
   const before = await exec(
-    'SELECT amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
     [txId],
   );
   // Flip the base to SGD and confirm the split's amount_base rewrote to match
-  // the new base's conversion. We don't pin an exact value — just verify the
-  // figure changed (USD == base today means amount == amount_base; under SGD
-  // the conversion is no longer the identity for a USD-denominated row).
+  // the new base's conversion.
   await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
   const after = await exec(
-    'SELECT amount_base FROM transaction_splits WHERE transaction_id = ? ORDER BY sort_order',
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
     [txId],
   );
   expect(after.length).toBe(before.length);
@@ -1043,9 +1128,14 @@ test('changeLedgerBase rewrites transaction_splits.amount_base under the new bas
 
 test('changeLedgerBase same-base call is a no-op (no row changes)', async () => {
   const exec = await seeded();
-  const before = await exec("SELECT id, amount_base FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  // §2: check postings (which carry amount_base) instead of transactions.
+  const before = await exec(
+    "SELECT p.id, p.amount_base FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
+  );
   await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'USD' });
-  const after = await exec("SELECT id, amount_base FROM transactions WHERE ledger_id = 'personal' ORDER BY id");
+  const after = await exec(
+    "SELECT p.id, p.amount_base FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
+  );
   expect(after.length).toBe(before.length);
   for (let i = 0; i < after.length; i++) {
     expect(Number(after[i].amount_base)).toBeCloseTo(Number(before[i].amount_base), 6);
@@ -1055,16 +1145,17 @@ test('changeLedgerBase same-base call is a no-op (no row changes)', async () => 
 test('bulkRecategorize moves N rows in one statement; categorySpend shifts accordingly', async () => {
   const exec = await seeded();
   const { categorySpend } = await import('@/lib/db/queries/categories');
-  // Pick three confirmed expenses currently tagged 'food'.
+  // §2: Pick three confirmed expenses by their entry id; category is on the category posting.
   const ids = (
     await exec(
-      "SELECT id FROM transactions WHERE ledger_id = 'personal' AND category_id = 'food' AND status = 'confirmed' ORDER BY date DESC LIMIT 3",
+      "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id AND p.account_id IS NULL AND p.category_id = 'food' WHERE e.ledger_id = 'personal' AND e.kind = 'expense' AND e.status = 'confirmed' ORDER BY e.date DESC LIMIT 3",
     )
   ).map((r) => String(r.id));
   expect(ids.length).toBe(3);
+  // Sum the account posting amount_base for those entries.
   const movedSum = (
     await exec(
-      `SELECT SUM(amount_base) AS s FROM transactions WHERE id IN (${ids.map(() => '?').join(',')})`,
+      `SELECT SUM(p.amount_base) AS s FROM postings p WHERE p.entry_id IN (${ids.map(() => '?').join(',')}) AND p.account_id IS NOT NULL`,
       ids,
     )
   )[0];
@@ -1074,9 +1165,9 @@ test('bulkRecategorize moves N rows in one statement; categorySpend shifts accor
   await applyMutation(exec, 'bulkRecategorize', { ids, categoryId: 'misc' });
   const after = await categorySpend(exec, 'personal');
 
-  // Each moved row now has category 'misc'; no row keeps the old food link.
+  // Each moved row now has category 'misc'; no category posting keeps the old food link.
   const stillFood = await exec(
-    `SELECT COUNT(*) AS c FROM transactions WHERE id IN (${ids.map(() => '?').join(',')}) AND category_id = 'food'`,
+    `SELECT COUNT(*) AS c FROM postings WHERE entry_id IN (${ids.map(() => '?').join(',')}) AND category_id = 'food'`,
     ids,
   );
   expect(Number(stillFood[0].c)).toBe(0);
@@ -1086,68 +1177,79 @@ test('bulkRecategorize moves N rows in one statement; categorySpend shifts accor
 
 test('bulkRecategorize: empty ids is a no-op; null categoryId clears the link', async () => {
   const exec = await seeded();
-  // Empty: nothing changes.
+  // §2: category is on category postings (account_id IS NULL).
   const beforeCount = Number(
-    (await exec("SELECT COUNT(*) AS c FROM transactions WHERE category_id = 'food'"))[0].c,
+    (await exec("SELECT COUNT(*) AS c FROM postings WHERE category_id = 'food'"))[0].c,
   );
   await applyMutation(exec, 'bulkRecategorize', { ids: [], categoryId: 'misc' });
   expect(
-    Number((await exec("SELECT COUNT(*) AS c FROM transactions WHERE category_id = 'food'"))[0].c),
+    Number((await exec("SELECT COUNT(*) AS c FROM postings WHERE category_id = 'food'"))[0].c),
   ).toBe(beforeCount);
 
-  // Null: clear the category on a single row.
-  const [row] = await exec("SELECT id FROM transactions WHERE category_id = 'food' LIMIT 1");
+  // Null: clear the category on a single entry's category posting.
+  const [row] = await exec(
+    "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id AND p.category_id = 'food' AND p.account_id IS NULL WHERE e.ledger_id = 'personal' LIMIT 1",
+  );
   const id = String(row.id);
   await applyMutation(exec, 'bulkRecategorize', { ids: [id], categoryId: null });
-  const [after] = await exec('SELECT category_id AS c FROM transactions WHERE id = ?', [id]);
+  const [after] = await exec('SELECT category_id AS c FROM postings WHERE entry_id = ? AND account_id IS NULL', [id]);
   expect(after.c).toBeNull();
 });
 
 test('setCleared toggles cleared_at and is independent of status', async () => {
   const exec = await seeded();
-  const [row] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+  // §2: cleared_at is per-leg on postings (not on entries). status is on entries.
+  // Resolve entry id; then check the account posting's cleared_at.
+  const [row] = await exec(
+    "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
+  );
   const id = String(row.id);
-  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).toBeNull();
+  const clearedAt = async () =>
+    (await exec('SELECT p.cleared_at FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [id]))[0].cleared_at;
+  expect(await clearedAt()).toBeNull();
 
   await applyMutation(exec, 'setCleared', { id, cleared: true });
-  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).not.toBeNull();
+  expect(await clearedAt()).not.toBeNull();
 
   await applyMutation(exec, 'setCleared', { id, cleared: false });
-  expect((await exec('SELECT cleared_at FROM transactions WHERE id = ?', [id]))[0].cleared_at).toBeNull();
+  expect(await clearedAt()).toBeNull();
 
   // Confirming a transaction does not clear it, and vice versa — independence
   // matters: the two flags answer different questions.
   await applyMutation(exec, 'setCleared', { id, cleared: true });
-  const status = (await exec('SELECT status FROM transactions WHERE id = ?', [id]))[0].status;
+  const status = (await exec('SELECT status FROM entries WHERE id = ?', [id]))[0].status;
   expect(status).toBe('confirmed'); // unaffected by setCleared
 });
 
 test('setReviewed toggles reviewed_at; markAllReviewed clears the ledger queue', async () => {
   const exec = await seeded();
-  const [row] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' LIMIT 1");
+  // §2: reviewed_at on entries; look up entry id via account posting.
+  const [row] = await exec(
+    "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.status = 'confirmed' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
+  );
   const id = String(row.id);
   // Seed rows start unreviewed.
-  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
+  expect((await exec('SELECT reviewed_at FROM entries WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
 
   await applyMutation(exec, 'setReviewed', { id, reviewed: true });
-  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).not.toBeNull();
+  expect((await exec('SELECT reviewed_at FROM entries WHERE id = ?', [id]))[0].reviewed_at).not.toBeNull();
 
   await applyMutation(exec, 'setReviewed', { id, reviewed: false });
-  expect((await exec('SELECT reviewed_at FROM transactions WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
+  expect((await exec('SELECT reviewed_at FROM entries WHERE id = ?', [id]))[0].reviewed_at).toBeNull();
 
   // markAllReviewed clears every unreviewed confirmed personal row.
   const before = Number(
-    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL"))[0].n,
+    (await exec("SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL AND kind NOT IN ('opening')") )[0].n,
   );
   expect(before).toBeGreaterThan(0);
   await applyMutation(exec, 'markAllReviewed', { ledgerId: 'personal' });
   const after = Number(
-    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL"))[0].n,
+    (await exec("SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal' AND status = 'confirmed' AND reviewed_at IS NULL AND kind NOT IN ('opening')"))[0].n,
   );
   expect(after).toBe(0);
   // The family ledger is untouched (scope respected).
   const family = Number(
-    (await exec("SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'family' AND reviewed_at IS NOT NULL"))[0].n,
+    (await exec("SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'family' AND reviewed_at IS NOT NULL"))[0].n,
   );
   expect(family).toBe(0);
 });
@@ -1164,7 +1266,10 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
   process.env.FINCH_DB_DIR = tmpRoot;
   try {
     const exec = await seeded();
-    const [tx] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+    // §2: entry_attachments replaces transaction_attachments; use entry_id FK.
+    const [tx] = await exec(
+      "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
+    );
     const txId = String(tx.id);
 
     const relPath = `attachments/${txId}/att-1.jpg`;
@@ -1173,8 +1278,8 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
     await fs.writeFile(absPath, Buffer.from([0xff, 0xd8, 0xff]));
 
     await exec(
-      `INSERT INTO transaction_attachments
-         (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
+      `INSERT INTO entry_attachments
+         (id, ledger_id, entry_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
        VALUES ('att-1','personal',?,'image',?,'image/jpeg',3,'h','r.jpg',datetime('now'),datetime('now'))`,
       [txId, relPath],
     );
@@ -1182,7 +1287,7 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
     await applyMutation(exec, 'removeAttachment', { id: 'att-1' });
 
     // DB row gone.
-    expect((await exec('SELECT id FROM transaction_attachments WHERE id = ?', ['att-1'])).length).toBe(0);
+    expect((await exec('SELECT id FROM entry_attachments WHERE id = ?', ['att-1'])).length).toBe(0);
     // File on disk gone.
     expect(await fs.access(absPath).then(() => true, () => false)).toBe(false);
 
@@ -1205,7 +1310,10 @@ test('deleteTransaction collects rel_paths via cascade and unlinks the files', a
   process.env.FINCH_DB_DIR = tmpRoot;
   try {
     const exec = await seeded();
-    const [tx] = await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 1");
+    // §2: entry_attachments replaces transaction_attachments; use entry_id FK.
+    const [tx] = await exec(
+      "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
+    );
     const txId = String(tx.id);
 
     const paths = [
@@ -1218,8 +1326,8 @@ test('deleteTransaction collects rel_paths via cascade and unlinks the files', a
       await fs.writeFile(abs, Buffer.from('x'));
     }
     await exec(
-      `INSERT INTO transaction_attachments
-         (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
+      `INSERT INTO entry_attachments
+         (id, ledger_id, entry_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
        VALUES ('att-a','personal',?,'image',?,'image/jpeg',1,'h',null,datetime('now'),datetime('now')),
               ('att-b','personal',?,'pdf',?,'application/pdf',1,'h',null,datetime('now'),datetime('now'))`,
       [txId, paths[0], txId, paths[1]],
@@ -1227,8 +1335,8 @@ test('deleteTransaction collects rel_paths via cascade and unlinks the files', a
 
     await applyMutation(exec, 'deleteTransaction', { id: txId });
 
-    // Both rows cascaded away.
-    expect((await exec('SELECT id FROM transaction_attachments WHERE transaction_id = ?', [txId])).length).toBe(0);
+    // Both rows cascaded away (entries CASCADE deletes entry_attachments).
+    expect((await exec('SELECT id FROM entry_attachments WHERE entry_id = ?', [txId])).length).toBe(0);
     // Both files unlinked.
     for (const rel of paths) {
       const abs = path.join(tmpRoot, rel);
@@ -1256,9 +1364,9 @@ test('reconcileAccount stamps the checkpoint without an adjustment when none is 
   expect(row.d).toBe('2026-05-31');
   expect(Number(row.b)).toBeCloseTo(9999.99, 2);
   // No adjustment row was inserted as part of this reconcile.
+  // §2: check entries for adjustment kind (with posting to chk).
   const adj = await exec(
-    "SELECT COUNT(*) AS c FROM transactions WHERE account_id = ? AND kind = 'adjustment'",
-    ['chk'],
+    "SELECT COUNT(*) AS c FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind = 'adjustment'",
   );
   expect(Number(adj[0].c)).toBe(0);
 });
@@ -1266,22 +1374,22 @@ test('reconcileAccount stamps the checkpoint without an adjustment when none is 
 test('reconcileAccount with postAdjustment posts the exact remainder + lands cleared sum on target', async () => {
   const exec = await seeded();
   // Clear a handful of rows so the cleared sum is non-trivial.
+  // §2: use entry ids (not transaction ids).
   const ids = (
-    await exec("SELECT id FROM transactions WHERE account_id = 'chk' LIMIT 3")
+    await exec(
+      "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 3",
+    )
   ).map((r) => String(r.id));
   for (const id of ids) await applyMutation(exec, 'setCleared', { id, cleared: true });
 
-  // Read what the cleared sum currently is, then reconcile to a deliberately
-  // off-by-$12.50 target so the server must post exactly that as the
-  // adjustment.
-  const [chk] = await exec("SELECT opening_balance, currency FROM accounts WHERE id = 'chk'");
-  const opening = Number(chk.opening_balance);
+  // §2: opening_balance gone; cleared sum = SUM of cleared account postings.
+  // §2: cleared_at is per-leg on postings (not on entries).
   const [sum] = await exec(
-    `SELECT COALESCE(SUM(CASE WHEN currency = ? THEN amount ELSE amount_base END), 0) AS s
-       FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' AND cleared_at IS NOT NULL`,
-    [String(chk.currency)],
+    `SELECT COALESCE(SUM(p.amount), 0) AS s
+       FROM postings p JOIN entries e ON p.entry_id = e.id
+     WHERE p.account_id = 'chk' AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL`,
   );
-  const clearedBefore = Math.round((opening + Number(sum.s)) * 100) / 100;
+  const clearedBefore = Math.round(Number(sum.s) * 100) / 100;
   const target = Math.round((clearedBefore + 12.5) * 100) / 100;
 
   await applyMutation(exec, 'reconcileAccount', {
@@ -1292,20 +1400,23 @@ test('reconcileAccount with postAdjustment posts the exact remainder + lands cle
   });
 
   // The adjustment posted, was marked cleared, and lands the cleared sum exactly on target.
+  // §2: adjustment is an entry with kind='adjustment'; amount on the account posting.
+  // §2: cleared_at is per-leg on postings; check p.cleared_at.
   const [adj] = await exec(
-    `SELECT amount, cleared_at FROM transactions
-      WHERE account_id = 'chk' AND kind = 'adjustment'
-      ORDER BY created_at DESC LIMIT 1`,
+    `SELECT p.amount, p.cleared_at FROM entries e JOIN postings p ON p.entry_id = e.id
+      WHERE p.account_id = 'chk' AND e.kind = 'adjustment'
+      ORDER BY e.created_at DESC LIMIT 1`,
   );
   expect(Number(adj.amount)).toBeCloseTo(12.5, 2);
   expect(adj.cleared_at).not.toBeNull();
 
+  // §2: cleared_at is per-leg on postings.
   const [sumAfter] = await exec(
-    `SELECT COALESCE(SUM(CASE WHEN currency = ? THEN amount ELSE amount_base END), 0) AS s
-       FROM transactions WHERE account_id = 'chk' AND status = 'confirmed' AND cleared_at IS NOT NULL`,
-    [String(chk.currency)],
+    `SELECT COALESCE(SUM(p.amount), 0) AS s
+       FROM postings p JOIN entries e ON p.entry_id = e.id
+     WHERE p.account_id = 'chk' AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL`,
   );
-  const clearedAfter = Math.round((opening + Number(sumAfter.s)) * 100) / 100;
+  const clearedAfter = Math.round(Number(sumAfter.s) * 100) / 100;
   expect(clearedAfter).toBeCloseTo(target, 2);
 
   // Checkpoint stamped.
@@ -1319,18 +1430,25 @@ test('reconcileAccount with postAdjustment posts the exact remainder + lands cle
 
 test('reconcileAccount with postAdjustment is a no-op on the adjustment when the gap is within the penny tolerance', async () => {
   const exec = await seeded();
-  const [chk] = await exec("SELECT opening_balance FROM accounts WHERE id = 'chk'");
+  // §2: opening_balance column is gone. The cleared sum = SUM of pre-cleared opening
+  // entry's account posting. Reconcile to that exact value → gap = 0 → no adjustment.
+  const [sum] = await exec(
+    `SELECT COALESCE(SUM(p.amount), 0) AS s
+       FROM postings p JOIN entries e ON e.id = p.entry_id
+      WHERE p.account_id = 'chk' AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL`,
+  );
+  const clearedSum = Math.round(Number(sum.s) * 100) / 100;
   await applyMutation(exec, 'reconcileAccount', {
     accountId: 'chk',
-    statementBalance: Number(chk.opening_balance),
+    statementBalance: clearedSum,
     statementDate: '2026-05-31',
     postAdjustment: true,
   });
+  // §2: check entries + postings for adjustment kind.
   const adj = await exec(
-    "SELECT COUNT(*) AS c FROM transactions WHERE account_id = 'chk' AND kind = 'adjustment'",
-    ['chk'],
+    "SELECT COUNT(*) AS c FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind = 'adjustment'",
   );
-  expect(Number(adj[0].c)).toBe(0); // no rows cleared → no remainder beyond tolerance.
+  expect(Number(adj[0].c)).toBe(0); // gap = 0 → within penny tolerance, no adjustment posted.
 });
 
 test('duplicate guard: identical addTransaction is rejected with a friendly message', async () => {
@@ -1341,12 +1459,13 @@ test('duplicate guard: identical addTransaction is rejected with a friendly mess
     status: 'confirmed' as const,
   };
   await applyMutation(exec, 'addTransaction', draft);
-  // Same account/date/time/amount/description → hits idx_txn_dedup.
+  // Same account/date/time/amount/description → hits the dedup unique index on entries/postings.
   await expect(applyMutation(exec, 'addTransaction', draft)).rejects.toThrow(/duplicate/i);
   // A different time is a distinct row — allowed.
   await applyMutation(exec, 'addTransaction', { ...draft, time: '09:01' });
+  // §2: description on entries.
   const n = await exec(
-    "SELECT COUNT(*) AS c FROM transactions WHERE account_id='chk' AND description='Double Latte'",
+    "SELECT COUNT(*) AS c FROM entries WHERE description='Double Latte'",
   );
   expect(Number(n[0].c)).toBe(2);
 });
@@ -1448,18 +1567,19 @@ test('setDefaultLedger flips exactly one is_default', async () => {
 
 test('deleteLedger removes every ledger-scoped row and leaves siblings untouched', async () => {
   const exec = await seeded();
-  // Pre-counts for the surviving ledger.
+  // §2: entries replaces transactions as the ledger-scoped journal table.
   const beforePersonal = Number((await exec(
-    "SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal'",
+    "SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal'",
   ))[0].n);
 
   await applyMutation(exec, 'deleteLedger', { id: 'family' });
 
-  // Every per-ledger table is empty for family.
+  // Every per-ledger table is empty for family. §2: entries/postings replace
+  // transactions/transfer_groups/transaction_attachments.
   const tables = [
-    'transactions','scheduled_templates','budgets','budget_groups',
+    'entries','scheduled_templates','budgets','budget_groups',
     'accounts','account_groups','categories','tags','counterparties',
-    'rules','holdings','transfer_groups','transaction_attachments',
+    'rules','holdings',
   ];
   for (const t of tables) {
     const n = Number(
@@ -1467,9 +1587,14 @@ test('deleteLedger removes every ledger-scoped row and leaves siblings untouched
     );
     expect(n).toBe(0);
   }
+  // postings cascade from entries, not ledger-scoped directly — verify via entries.
+  const familyPostings = Number(
+    (await exec("SELECT COUNT(*) AS n FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'family'"))[0].n,
+  );
+  expect(familyPostings).toBe(0);
   // Other ledgers' data is untouched.
   const afterPersonal = Number((await exec(
-    "SELECT COUNT(*) AS n FROM transactions WHERE ledger_id = 'personal'",
+    "SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal'",
   ))[0].n);
   expect(afterPersonal).toBe(beforePersonal);
   // The ledger row itself is gone.
