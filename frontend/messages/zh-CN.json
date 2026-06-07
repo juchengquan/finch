@@ -1442,6 +1442,9 @@
     "account": "账户",
     "ledger": "账本"
   },
+  "themeToggle": {
+    "aria": "切换主题"
+  },
   "shell": {
     "brand": "Finch",
     "search": "搜索",

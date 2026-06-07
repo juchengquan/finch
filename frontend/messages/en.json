@@ -1442,6 +1442,9 @@
     "account": "Account",
     "ledger": "Ledger"
   },
+  "themeToggle": {
+    "aria": "Toggle theme"
+  },
   "shell": {
     "brand": "Finch",
     "search": "Search",

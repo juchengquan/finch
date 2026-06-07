@@ -106,7 +106,7 @@ export function LedgerSwitcher({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="Switch ledger"
+            aria-label={t('switchAria')}
             title={active.name}
             className={cn(
               // border-transparent + pl-[9px] mirror the expanded chip's border
