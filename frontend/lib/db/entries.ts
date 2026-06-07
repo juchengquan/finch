@@ -763,7 +763,8 @@ export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBa
             SUM(CASE WHEN p.account_id IS NULL AND COALESCE(c.kind, '') != 'equity' THEN 1 ELSE 0 END) AS plain,
             SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'opening'    THEN 1 ELSE 0 END) AS eq_open,
             SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'adjustment' THEN 1 ELSE 0 END) AS eq_adj,
-            SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'fx'         THEN 1 ELSE 0 END) AS eq_fx
+            SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'fx'         THEN 1 ELSE 0 END) AS eq_fx,
+            SUM(CASE WHEN p.account_id IS NOT NULL AND p.amount <= 0 THEN 1 ELSE 0 END) AS neg_acct
        FROM entries e JOIN postings p ON p.entry_id = e.id LEFT JOIN categories c ON c.id = p.category_id
       WHERE 1=1 ${scope} GROUP BY e.id`, bind)) {
     const kind = String(r.kind);
@@ -772,10 +773,12 @@ export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBa
     const eqOpen = Number(r.eq_open);
     const eqAdj = Number(r.eq_adj);
     const eqFx = Number(r.eq_fx);
+    const negAcct = Number(r.neg_acct);
     const bad =
       (kind === 'transfer' && (acct !== 2 || plain > 0 || eqOpen + eqAdj > 0)) ||
       (kind === 'opening' && (acct !== 1 || plain > 0 || eqOpen < 1 || eqAdj > 0)) ||
       (kind === 'adjustment' && (acct !== 1 || plain > 0 || eqAdj < 1 || eqOpen > 0)) ||
+      (kind === 'refund' && negAcct > 0) ||
       (['income', 'expense', 'refund'].includes(kind) && (acct !== 1 || plain < 1 || eqOpen + eqAdj > 0));
     if (bad) {
       problems.push({

@@ -664,3 +664,40 @@ test('auditLedger detects seeded corruptions', async () => {
   expect(codes).toContain('kind-shape');   // a transfer with one account leg + a category leg
   expect(codes).toContain('trial-balance'); // the global sum is off too
 });
+
+test('auditLedger catches raw-SQL corruption classes the triggers cannot', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-au3', 'SGD', 'lt');
+  await addAccount(exec, 'a-px', 'SGD', 'personal');
+
+  // (a) refund-positivity drift: re-kind a sealed expense to refund, raw.
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-au3', amount: -5, date: '2026-06-06',
+    description: 'Re-kinded', categoryId: 'cat-t', skipRules: true,
+  });
+  await exec("UPDATE entries SET kind = 'refund' WHERE id = ?", [entryId]);
+
+  // (b) cross-ledger + base-identity: an unsealed raw entry with a leg from
+  // another ledger and a base-currency category leg whose amount ≠ base.
+  await exec("INSERT INTO entries (id,ledger_id,date,description,kind,status,sealed,created_at,updated_at) VALUES ('e-c1','lt','2026-06-06','c','expense','confirmed',0,datetime('now'),datetime('now'))");
+  await exec("INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order) VALUES ('p-c1','e-c1','a-px',NULL,-10,'SGD',-10,1,0)");
+  await exec("INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order) VALUES ('p-c2','e-c1',NULL,'cat-t',9,'SGD',10,1,1)");
+
+  // (c) currency-mismatch: simulate a guard hole (e.g. a buggy future import
+  // path) by dropping the insert trigger, then writing a USD-denominated leg
+  // on an SGD account.
+  await exec('DROP TRIGGER tr_post_currency_insert');
+  await exec("INSERT INTO entries (id,ledger_id,date,description,kind,status,sealed,created_at,updated_at) VALUES ('e-c2','lt','2026-06-06','c2','expense','confirmed',0,datetime('now'),datetime('now'))");
+  await exec("INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order) VALUES ('p-c3','e-c2','a-au3',NULL,-7,'USD',-7,1,0)");
+
+  // (d) cached-balance drift (the opt-in check).
+  await exec("UPDATE accounts SET current_balance = 123 WHERE id = 'a-au3'");
+
+  const codes = (await auditLedger(exec, 'lt', { checkBalances: true })).map((p) => p.code);
+  expect(codes).toContain('kind-shape');        // (a) negative refund
+  expect(codes).toContain('cross-ledger');      // (b) p-c1
+  expect(codes).toContain('base-identity');     // (b) p-c2
+  expect(codes).toContain('currency-mismatch'); // (c) p-c3
+  expect(codes).toContain('balance-drift');     // (d)
+});
