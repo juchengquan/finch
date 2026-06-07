@@ -713,10 +713,12 @@ export interface AuditProblem {
 }
 
 /** Read-only semantic sweep over the entries ledger (design doc §3.3 / I8).
- *  `checkBalances` stays false until PR B's cutover — before it, the legacy
- *  transactions table still drives accounts.current_balance, so comparing the
- *  cache against the postings sum would false-positive on every seeded account. */
+ *  Post-cutover (PR B) postings drive accounts.current_balance via the seal
+ *  trigger + recomputeAccountFromPostings, so the cache-vs-derived check is
+ *  on by default. Pass `checkBalances: false` only when intentionally exercising
+ *  the cache (e.g. a fixture that deliberately seeds drift to verify detection). */
 export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBalances?: boolean } = {}): Promise<AuditProblem[]> {
+  const checkBalances = opts.checkBalances ?? true;
   const problems: AuditProblem[] = [];
   const scope = ledgerId ? 'AND e.ledger_id = ?' : '';
   const bind = ledgerId ? [ledgerId] : [];
@@ -795,7 +797,7 @@ export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBa
   for (const r of tb) {
     if (Number(r.s) !== 0) problems.push({ code: 'trial-balance', detail: `ledger ${r.lid} trial balance is ${r.s}, not 0` });
   }
-  if (opts.checkBalances) {
+  if (checkBalances) {
     for (const r of await exec(
       `SELECT * FROM (
          SELECT a.id, a.current_balance AS cached, ROUND(COALESCE((
