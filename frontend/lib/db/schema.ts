@@ -447,6 +447,11 @@ export const APP_NAME = 'finch';
 //   SQLite won't parse a self-referential FK during the rename in FK=ON mode.
 export const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
   'PRAGMA foreign_keys = OFF',
+  // Modern ALTER semantics (pinned by applyPragmaBootstrap) re-parse every
+  // trigger on RENAME — and tr_post_balance references accounts, which is
+  // transiently dropped mid-dance. Legacy mode skips the re-parse; the
+  // staging rename needs no reference rewriting. See CATEGORIES_UPGRADE.
+  'PRAGMA legacy_alter_table = ON',
   `CREATE TABLE IF NOT EXISTS accounts_new (
      id                   TEXT PRIMARY KEY,
      ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -480,6 +485,7 @@ export const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
   'ALTER TABLE accounts_new RENAME TO accounts',
   'CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id)',
   'CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id)',
+  'PRAGMA legacy_alter_table = OFF',
   'PRAGMA foreign_keys = ON',
 ];
 
@@ -680,6 +686,14 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
 // else is a real migration failure and propagates.
 function isAlreadyAppliedError(err: unknown): boolean {
   const msg = String((err as { message?: unknown })?.message ?? err);
+  // NEVER swallow a trigger/view re-parse failure. Under modern ALTER
+  // semantics a RENAME re-parses every trigger; a failure surfaces as
+  // "error in trigger X: no such table/column …" — which the patterns below
+  // would otherwise match, silently skipping the RENAME and leaving the
+  // table MISSING (this is exactly how the cutover broke on Linux CI while
+  // passing on macOS, whose bun:sqlite build defaulted to legacy ALTER
+  // semantics). A re-parse failure is a real migration failure: abort.
+  if (/error in (trigger|view)/i.test(msg)) return false;
   // - "duplicate column name" — ADD COLUMN re-run
   // - "already exists" — CREATE TABLE / INDEX / TRIGGER re-run
   // - "no such column" — DROP COLUMN re-run after the column is gone

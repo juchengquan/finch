@@ -158,8 +158,17 @@ END;
 // between DROP categories and RENAME. (FK enforcement is OFF around the
 // dance so the staging table's self-referential parent_id FK parses while
 // both tables exist.)
+//
+// legacy_alter_table is toggled ON around the dance: under modern ALTER
+// semantics (SQLite ≥3.25, pinned OFF by applyPragmaBootstrap) RENAME
+// re-parses EVERY trigger in the schema, and any trigger referencing a
+// table/column that is transiently missing mid-dance aborts the RENAME with
+// "error in trigger …" — which the migration runner must not (and now does
+// not) swallow. Legacy semantics skip the re-parse; our staging rename needs
+// no reference rewriting, so legacy mode is exactly right here.
 export const CATEGORIES_UPGRADE: string[] = [
   'PRAGMA foreign_keys = OFF',
+  'PRAGMA legacy_alter_table = ON',
   `CREATE TABLE categories_new (
      id         TEXT PRIMARY KEY,
      ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -183,6 +192,7 @@ export const CATEGORIES_UPGRADE: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL',
   'CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id)',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_cat_system ON categories(ledger_id, system) WHERE system IS NOT NULL',
+  'PRAGMA legacy_alter_table = OFF',
   'PRAGMA foreign_keys = ON',
 ];
 

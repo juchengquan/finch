@@ -124,3 +124,19 @@ test('execFor: a single-statement PRAGMA setter actually executes (every engine 
     driver.close();
   }
 });
+
+test('applyPragmaBootstrap pins modern ALTER semantics on every engine build', async () => {
+  // The bun:sqlite DEFAULT for legacy_alter_table differs by BUILD (macOS ON,
+  // Linux OFF), which made the cutover's rebuild dances pass locally and fail
+  // in CI. The bootstrap pins it OFF so every environment — including this
+  // test suite — runs the strict re-parse semantics; the dances opt into
+  // legacy mode around their RENAMEs explicitly.
+  const driver = await openDb(':memory:');
+  const exec = execFor(driver);
+  try {
+    applyPragmaBootstrap(driver);
+    expect(await exec('PRAGMA legacy_alter_table')).toEqual([{ legacy_alter_table: 0 }]);
+  } finally {
+    driver.close();
+  }
+});

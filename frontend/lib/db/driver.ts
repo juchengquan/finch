@@ -120,7 +120,14 @@ export function applyPragmaBootstrap(db: SqliteDriver): void {
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous  = NORMAL;
     PRAGMA foreign_keys = ON;
+    PRAGMA legacy_alter_table = OFF;
     PRAGMA temp_store   = MEMORY;
     PRAGMA cache_size   = -8000;
   `);
+  // legacy_alter_table is pinned OFF (modern ALTER semantics: RENAME re-parses
+  // every trigger/view) because the DEFAULT differs by bun:sqlite BUILD —
+  // macOS ships ON, Linux ships OFF — which made the cutover's rebuild dances
+  // pass locally and fail in CI. Pinning it here makes every environment run
+  // the strict semantics; the dances explicitly toggle it ON around their
+  // RENAMEs (see CATEGORIES_UPGRADE / ACCOUNTS_DROP_OPENING_COLUMNS).
 }
