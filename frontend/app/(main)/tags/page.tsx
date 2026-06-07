@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
@@ -19,13 +20,14 @@ import { cn } from '@/lib/utils';
 const COLOR_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320].map(tagHex);
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useTranslations('tags');
   return (
     <div className="flex flex-wrap gap-1.5">
       {COLOR_CHOICES.map((c) => (
         <button
           key={c}
           type="button"
-          aria-label={`color ${c}`}
+          aria-label={t('colorAria', { color: c })}
           aria-pressed={value === c}
           onClick={() => onChange(c)}
           className={cn('size-7 rounded-full border-2 transition-transform', value === c ? 'border-foreground scale-110' : 'border-transparent')}
@@ -42,21 +44,23 @@ export default function TagsPage() {
   const createTag = useFinanceStore((s) => s.createTag);
   const updateTag = useFinanceStore((s) => s.updateTag);
   const deleteTag = useFinanceStore((s) => s.deleteTag);
+  const t = useTranslations('tags');
+  const tCommon = useTranslations('common');
 
-  const list = tags.filter((t) => t.ledgerId === activeId);
+  const list = tags.filter((tg) => tg.ledgerId === activeId);
 
   const [query, setQuery] = useState('');
   const q = query.toLowerCase();
-  const filteredList = q ? list.filter((t) => t.name.toLowerCase().includes(q)) : list;
+  const filteredList = q ? list.filter((tg) => tg.name.toLowerCase().includes(q)) : list;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState(DEFAULT_TAG_HEX);
   const submitCreate = () => {
     const n = name.trim();
-    if (!n) return void toast.error('Enter a tag name');
+    if (!n) return void toast.error(t('createDialog.createErrorEmpty'));
     createTag({ name: n, color, ledgerId: activeId });
-    toast.success('Tag created', { description: n });
+    toast.success(t('createDialog.createdToast'), { description: n });
     setName('');
     setColor(DEFAULT_TAG_HEX);
     setCreateOpen(false);
@@ -66,15 +70,15 @@ export default function TagsPage() {
   const submitEdit = () => {
     if (!editing) return;
     const n = editing.name.trim();
-    if (!n) return void toast.error('Enter a tag name');
+    if (!n) return void toast.error(t('createDialog.createErrorEmpty'));
     updateTag(editing.id, { name: n, color: editing.color });
-    toast.success('Tag updated', { description: n });
+    toast.success(t('editDialog.updatedToast'), { description: n });
     setEditing(null);
   };
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Tags" />}
+      header={<ScreenHeader title={t('title')} />}
     >
       <div className="px-5 pb-[120px] md:pb-5">
         {/* Search + Add row (visible on both mobile and desktop, Categories-style) */}
@@ -84,8 +88,8 @@ export default function TagsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search tags"
-              placeholder="Search tags…"
+              aria-label={t('searchAria')}
+              placeholder={t('searchPlaceholder')}
               className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
             />
           </div>
@@ -93,8 +97,8 @@ export default function TagsPage() {
             onClick={() => setCreateOpen(true)}
             size="icon"
             className="rounded-full"
-            aria-label="New tag"
-            title="New tag"
+            aria-label={t('newAria')}
+            title={t('newAria')}
           >
             <Icon name="plus" size={16} stroke={2} />
           </Button>
@@ -102,30 +106,30 @@ export default function TagsPage() {
 
         {list.length === 0 ? (
           <div className="text-muted-foreground rounded-[14px] border border-dashed py-10 text-center text-sm">
-            No tags yet — tap + to add one.
+            {t('emptyHint')}
           </div>
         ) : filteredList.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
+          <div className="text-muted-foreground py-8 text-center text-sm">{t('noMatches')}</div>
         ) : (
           // Desktop: cap to the viewport (below the 77px top bar + 24px shell
           // padding + 52px search row) so the list scrolls internally instead
           // of the page. Mobile keeps natural page scrolling.
           <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border md:max-h-[calc(100dvh-180px)] md:overflow-y-auto">
-            {filteredList.map((t) => (
+            {filteredList.map((tg) => (
               <div
-                key={t.id}
+                key={tg.id}
                 className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50"
               >
                 <span
                   className="size-2.5 shrink-0 rounded-full"
-                  style={{ background: t.color ?? DEFAULT_TAG_HEX }}
+                  style={{ background: tg.color ?? DEFAULT_TAG_HEX }}
                 />
-                <div className="min-w-0 flex-1 text-sm font-medium">{t.name}</div>
+                <div className="min-w-0 flex-1 text-sm font-medium">{tg.name}</div>
                 <RowActions
-                  onEdit={() => setEditing({ id: t.id, name: t.name, color: t.color ?? DEFAULT_TAG_HEX })}
-                  onDelete={() => { deleteTag(t.id); toast.success('Tag deleted', { description: t.name }); }}
-                  confirmTitle={`Delete ${t.name}?`}
-                  confirmDescription="The tag is removed from every transaction it's on. This can't be undone."
+                  onEdit={() => setEditing({ id: tg.id, name: tg.name, color: tg.color ?? DEFAULT_TAG_HEX })}
+                  onDelete={() => { deleteTag(tg.id); toast.success(t('deleteConfirm.deletedToast'), { description: tg.name }); }}
+                  confirmTitle={t('deleteConfirm.title', { name: tg.name })}
+                  confirmDescription={t('deleteConfirm.description')}
                 />
               </div>
             ))}
@@ -136,24 +140,24 @@ export default function TagsPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New tag</DialogTitle>
-            <DialogDescription>Add a tag to {active.name}.</DialogDescription>
+            <DialogTitle>{t('createDialog.title')}</DialogTitle>
+            <DialogDescription>{t('createDialog.description', { ledger: active.name })}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Reimbursable" autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
+              <Label>{t('createDialog.name')}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('createDialog.namePlaceholder')} autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Color</Label>
+              <Label>{t('createDialog.color')}</Label>
               <ColorPicker value={color} onChange={setColor} />
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitCreate}>Create</Button>
+            <Button onClick={submitCreate}>{tCommon('create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -161,26 +165,26 @@ export default function TagsPage() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit tag</DialogTitle>
-            <DialogDescription>Update the name or colour.</DialogDescription>
+            <DialogTitle>{t('editDialog.title')}</DialogTitle>
+            <DialogDescription>{t('editDialog.description')}</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Name</Label>
+                <Label>{t('createDialog.name')}</Label>
                 <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Color</Label>
+                <Label>{t('createDialog.color')}</Label>
                 <ColorPicker value={editing.color} onChange={(v) => setEditing((p) => (p ? { ...p, color: v } : p))} />
               </div>
             </div>
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitEdit}>Save</Button>
+            <Button onClick={submitEdit}>{tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

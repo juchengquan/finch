@@ -1,4 +1,70 @@
 {
+  "merchants": {
+    "title": "Merchants",
+    "searchAria": "Search merchants",
+    "searchPlaceholder": "Search merchants…",
+    "newAria": "New merchant",
+    "noMatches": "No matches",
+    "unverifiedChip": "UNVERIFIED",
+    "verifyButton": "Verify",
+    "verifiedToast": "{name} verified",
+    "createDialog": {
+      "title": "New merchant",
+      "description": "A standardised counterparty for matching transactions.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Starbucks",
+      "create": "Add",
+      "createErrorEmpty": "Enter a merchant name",
+      "createdToast": "Merchant added"
+    },
+    "editDialog": {
+      "title": "Edit merchant",
+      "description": "Rename this merchant.",
+      "updatedToast": "Merchant updated"
+    },
+    "deleteConfirm": {
+      "title": "Delete {name}?",
+      "description": "The merchant is removed; transactions that referenced it are left untouched.",
+      "deletedToast": "Merchant deleted"
+    }
+  },
+  "tags": {
+    "title": "Tags",
+    "searchAria": "Search tags",
+    "searchPlaceholder": "Search tags…",
+    "newAria": "New tag",
+    "emptyHint": "No tags yet — tap + to add one.",
+    "noMatches": "No matches",
+    "colorAria": "color {color}",
+    "createDialog": {
+      "title": "New tag",
+      "description": "Add a tag to {ledger}.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Reimbursable",
+      "color": "Color",
+      "createErrorEmpty": "Enter a tag name",
+      "createdToast": "Tag created"
+    },
+    "editDialog": {
+      "title": "Edit tag",
+      "description": "Update the name or colour.",
+      "updatedToast": "Tag updated"
+    },
+    "deleteConfirm": {
+      "title": "Delete {name}?",
+      "description": "The tag is removed from every transaction it's on. This can't be undone.",
+      "deletedToast": "Tag deleted"
+    }
+  },
+  "pending": {
+    "title": "Pending",
+    "filterAria": "Filter",
+    "items": "items",
+    "intro": "Confirm them to flow into your reports and balances. Or cancel to void.",
+    "empty": "All caught up — nothing pending.",
+    "confirmAll": "Confirm all",
+    "confirmedAllToast": "All items confirmed"
+  },
   "ledgerSwitcher": {
     "switchAria": "Switch ledger",
     "settingsAria": "Ledger settings",

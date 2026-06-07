@@ -1,4 +1,70 @@
 {
+  "merchants": {
+    "title": "商户",
+    "searchAria": "搜索商户",
+    "searchPlaceholder": "搜索商户…",
+    "newAria": "新建商户",
+    "noMatches": "无匹配",
+    "unverifiedChip": "未核验",
+    "verifyButton": "核验",
+    "verifiedToast": "{name} 已核验",
+    "createDialog": {
+      "title": "新建商户",
+      "description": "用于匹配交易的标准化对手方。",
+      "name": "名称",
+      "namePlaceholder": "例如:星巴克",
+      "create": "添加",
+      "createErrorEmpty": "请输入商户名称",
+      "createdToast": "商户已添加"
+    },
+    "editDialog": {
+      "title": "编辑商户",
+      "description": "重命名此商户。",
+      "updatedToast": "商户已更新"
+    },
+    "deleteConfirm": {
+      "title": "删除 {name}?",
+      "description": "此商户将被移除;引用它的交易不会被改动。",
+      "deletedToast": "商户已删除"
+    }
+  },
+  "tags": {
+    "title": "标签",
+    "searchAria": "搜索标签",
+    "searchPlaceholder": "搜索标签…",
+    "newAria": "新建标签",
+    "emptyHint": "暂无标签 —— 点击 + 添加。",
+    "noMatches": "无匹配",
+    "colorAria": "颜色 {color}",
+    "createDialog": {
+      "title": "新建标签",
+      "description": "为 {ledger} 添加一个标签。",
+      "name": "名称",
+      "namePlaceholder": "例如:可报销",
+      "color": "颜色",
+      "createErrorEmpty": "请输入标签名称",
+      "createdToast": "标签已创建"
+    },
+    "editDialog": {
+      "title": "编辑标签",
+      "description": "更新名称或颜色。",
+      "updatedToast": "标签已更新"
+    },
+    "deleteConfirm": {
+      "title": "删除 {name}?",
+      "description": "此标签会从所有附带它的交易中移除。此操作不可撤销。",
+      "deletedToast": "标签已删除"
+    }
+  },
+  "pending": {
+    "title": "待处理",
+    "filterAria": "筛选",
+    "items": "项",
+    "intro": "确认后会计入报表与余额。也可取消以作废。",
+    "empty": "都处理完了 —— 没有待处理的项目。",
+    "confirmAll": "全部确认",
+    "confirmedAllToast": "已全部确认"
+  },
   "ledgerSwitcher": {
     "switchAria": "切换账本",
     "settingsAria": "账本设置",
