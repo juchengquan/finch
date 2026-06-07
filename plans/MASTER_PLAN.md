@@ -8,7 +8,7 @@ and the current implementation in `frontend/`.
 > app's live data layer, served by a **server-side** SQLite database. See
 > `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-06-07._
+_Last updated: 2026-06-08._
 
 ### Plans index
 
@@ -34,7 +34,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `LEDGER_CRUD_PLAN.md` — moved here 2026-06-06; shipped via PR #109 — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
 - `CATEGORIES_LEVEL3_PLAN.md` — moved here 2026-06-06; shipped via PR #112 — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** — the cap is mutation-layer only. Backend gains a depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: every category `<Select>` renders labels as `Parent › Child › Leaf`; `/categories` admin page renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances; color inheritance walks up the chain to the nearest non-null ancestor.
 - `I18N_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #113 (foundation: `next-intl` + structured server-error shape `{ code, params }` + format helpers) + #115 (mass extraction of every surface + `zh-CN` coverage). Translations live in app chrome only; **never in the database or `.finch` packs** (the data layer stays locale-neutral, so packs round-trip across locales). Per-device persisted via `localStorage`. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
-- `DOUBLE_ENTRY_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #114 (PR A, additive core: chokepoint `lib/db/entries.ts` + entries/postings DDL constants in `lib/db/entries-schema.ts` + contract test suite, no production reads/writes yet) + #116 (PR B, the cutover: migration via `lib/db/cutover.ts`, projection rewrite in `lib/db/state.ts`, mutation rewires in `lib/db/mutations.ts`, read-path rewires across `lib/db/queries/*`, seed rewrite, FK re-points, `transactionSplits.ts` deletion). `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`. **Double-entry core, single-entry skin**: `transactions` / `transfer_groups` / `transaction_splits` replaced by `entries` + `postings` with a balanced-leg invariant + schema triggers + `auditLedger`; the client `Tx` projection is preserved so pages and selectors are untouched. PR C (audit-on-import wiring + the §10.7 net-worth-explained Insights panel + the §12 docs follow-up) is the remaining open work.
+- `DOUBLE_ENTRY_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #114 (PR A, additive core: chokepoint `lib/db/entries.ts` + entries/postings DDL constants in `lib/db/entries-schema.ts` + contract test suite, no production reads/writes yet) + #116 (PR B, the cutover: migration via `lib/db/cutover.ts`, projection rewrite in `lib/db/state.ts`, mutation rewires in `lib/db/mutations.ts`, read-path rewires across `lib/db/queries/*`, seed rewrite, FK re-points, `transactionSplits.ts` deletion) + PR C (audit-on-import wiring + the §10.7 net-worth-explained Insights panel + the §12 docs follow-up — design-doc v3, MASTER_PLAN sweep). `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`. **Double-entry core, single-entry skin**: `transactions` / `transfer_groups` / `transaction_splits` replaced by `entries` + `postings` with a balanced-leg invariant + schema triggers + `auditLedger`; the client `Tx` projection is preserved so pages and selectors are untouched.
 
 ---
 
@@ -362,17 +362,9 @@ below; what's still open is summarized here.
    change. **M.**
 3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
-4. **Double-entry follow-up — PR C** (`plans/done/DOUBLE_ENTRY_PLAN.md
-   §12 PR-C list`) — wire `auditLedger` into `/api/import` (semantic
-   integrity check after the byte checksum, before the atomic swap) and
-   `/api/db-info` (surface drift in Settings ▸ Data); the §10.7
-   "net-worth-explained" Insights panel (income − expenses + adjustments
-   + FX, now a SELECT over postings); align `netWorthSeries` /
-   `netWorthByMonth` with the `include_in_net_worth` filter (the F4
-   inconsistency, trivially fixable post-cutover); design-doc v3 +
-   MASTER_PLAN sweep. **S-M.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **Double-entry PR C — audit wiring + net-worth-explained + F4 fix** (this PR; closes `plans/done/DOUBLE_ENTRY_PLAN.md §12 PR-C`) — `auditLedger` is now wired into `GET /api/db-info` (problem count + first 50 problems surfaced in Settings ▸ Account ▸ Database; clean-DB shows "no problems found") and into `POST /api/import` for both bare-`.sqlite3` and `.finch` paths (audit runs on the swap candidate before any destructive operation; live DB stays untouched on failure). `mutations.test.ts` gained an `afterEach` hook that asserts `auditLedger` clean at the end of every scenario — cheap regression net across ~30 tests. F4 fix: `netWorthByMonth` and `netWorthSeries` now honour `include_in_net_worth`, aligning the Insights trend chart with the Accounts header. New `netWorthExplained` selector + `NetWorthExplainedCard` decompose monthly net-worth movement into income / expense / adjustment / FX via the postings-sum-to-zero residual, surfacing previously-invisible adjustments and FX drift on the Insights page. Settings page renders audit status next to the database path (PR #117 in MASTER_PLAN's PR-# space).
 - ✅ **Double-entry storage core** (PRs #114 + #116, 2026-06-07; design
   record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` /
   `transfer_groups` / `transaction_splits` replaced by `entries` +
@@ -389,7 +381,7 @@ below; what's still open is summarized here.
   FK re-points (`entry_tags`, `entry_attachments`, `entries_fts`).
   `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`; legacy tables
   dropped. PR C (audit wiring + net-worth-explained panel + docs
-  follow-up) is item #4 in the open list above.
+  follow-up) shipped as the entry above.
 - ✅ **Multi-language / i18n** (PR #113 foundation + PR #115 mass
   extraction; design record `plans/done/I18N_PLAN.md`) — `next-intl` +
   per-device `localStorage['finch.locale']` + auto-detect from
