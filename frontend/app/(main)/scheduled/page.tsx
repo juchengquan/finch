@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Money, Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,8 @@ function templateToDraft(t: ScheduledTemplate): DraftForm {
 export default function ScheduledPage() {
   const [view, setView] = useState({ y: 2026, m: 5 });
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const t = useTranslations('scheduled');
+  const tCommon = useTranslations('common');
   const { activeId } = useLedger();
   const scheduled = useFinanceStore((s) => s.scheduled);
   const allTxns = useFinanceStore((s) => s.transactions);
@@ -111,7 +114,7 @@ export default function ScheduledPage() {
 
   const submit = () => {
     const name = draft.name.trim();
-    if (!name) return void toast.error('Enter a name');
+    if (!name) return void toast.error(t('errors.nameRequired'));
     const amount = draft.amount.trim() === '' ? null : Number(draft.amount);
     const dayOfMonth = Number(draft.dayOfMonth) || 1;
     const weekDay = draft.weekDay !== '' ? Number(draft.weekDay) : undefined;
@@ -125,12 +128,12 @@ export default function ScheduledPage() {
     try {
       installmentTotal = parseInstallmentTotal(draft.installmentTotal);
     } catch (err) {
-      return void toast.error(err instanceof Error ? err.message : 'Invalid installment total');
+      return void toast.error(err instanceof Error ? err.message : t('errors.invalidInstallment'));
     }
     const description = draft.description.trim() || null;
     if (isNew) {
-      if (!draft.accountId) return void toast.error('Pick an account');
-      if (type === 'transfer' && !draft.fromAccountId) return void toast.error('Pick a source account');
+      if (!draft.accountId) return void toast.error(t('errors.accountRequired'));
+      if (type === 'transfer' && !draft.fromAccountId) return void toast.error(t('errors.fromAccountRequired'));
       const acctName = accounts.find((a) => a.id === draft.accountId)?.name ?? '';
       const fromName = accounts.find((a) => a.id === draft.fromAccountId)?.name;
       createScheduled({
@@ -154,7 +157,7 @@ export default function ScheduledPage() {
         installmentTotal,
         ledgerId: activeId,
       });
-      toast.success('Scheduled item added', { description: name });
+      toast.success(t('toasts.added'), { description: name });
     } else {
       updateScheduled(draft.id, {
         name,
@@ -170,7 +173,7 @@ export default function ScheduledPage() {
         maxExecutions,
         installmentTotal,
       });
-      toast.success('Scheduled item updated', { description: name });
+      toast.success(t('toasts.updated'), { description: name });
     }
     setOpen(false);
   };
@@ -221,10 +224,10 @@ export default function ScheduledPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Scheduled" trailing={<IconButton icon="plus" aria-label="New scheduled item" onClick={openCreate} />} />}
+      header={<ScreenHeader title={t('title')} trailing={<IconButton icon="plus" aria-label={t('newAria')} onClick={openCreate} />} />}
     >
       <div className="px-5 pb-[22px]">
-        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Upcoming</div>
+        <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{t('upcoming')}</div>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <Money
             value={netTotal}
@@ -232,7 +235,9 @@ export default function ScheduledPage() {
             className="font-serif text-4xl leading-none font-normal -tracking-[1.5px] sm:text-5xl sm:-tracking-[2px]"
           />
           <span className="text-success text-xs whitespace-nowrap">
-            + <Money value={totalIncoming} /> incoming
+            {t.rich('incoming', {
+              amount: () => <Money value={totalIncoming} />,
+            })}
           </span>
         </div>
       </div>
@@ -245,7 +250,7 @@ export default function ScheduledPage() {
               <Select value={String(view.m)} onValueChange={(v) => goTo(view.y, Number(v))}>
                 <SelectTrigger
                   size="sm"
-                  aria-label="Month"
+                  aria-label={t('month')}
                   className="h-7 gap-1 border-0 bg-transparent px-1.5 font-serif text-base italic shadow-none focus-visible:ring-0"
                 >
                   <SelectValue />
@@ -259,7 +264,7 @@ export default function ScheduledPage() {
               <Select value={String(view.y)} onValueChange={(v) => goTo(Number(v), view.m)}>
                 <SelectTrigger
                   size="sm"
-                  aria-label="Year"
+                  aria-label={t('year')}
                   className="h-7 gap-1 border-0 bg-transparent px-1.5 font-serif text-base italic shadow-none focus-visible:ring-0"
                 >
                   <SelectValue />
@@ -273,13 +278,13 @@ export default function ScheduledPage() {
             </div>
             <div className="flex items-center gap-1">
               <button
-                type="button" aria-label="Previous month" onClick={() => shift(-1)}
+                type="button" aria-label={t('prevMonth')} onClick={() => shift(-1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
                 <Icon name="chev-l" size={14} />
               </button>
               <button
-                type="button" aria-label="Next month" onClick={() => shift(1)}
+                type="button" aria-label={t('nextMonth')} onClick={() => shift(1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
                 <Icon name="chev" size={14} />
@@ -298,7 +303,7 @@ export default function ScheduledPage() {
               return (
                 <button
                   key={day}
-                  type="button" aria-label={`${MONTH_NAMES[view.m]} ${day}`} aria-pressed={isSelected}
+                  type="button" aria-label={t('calendarDayAria', { month: MONTH_NAMES[view.m], day })} aria-pressed={isSelected}
                   onClick={() => setSelectedDay((prev) => (prev === day ? null : day))}
                   className={cn(
                     'flex cursor-pointer flex-col items-center gap-1 rounded-md py-1 md:py-2.5',
@@ -321,10 +326,10 @@ export default function ScheduledPage() {
       <div className="flex flex-col gap-2.5 px-5 pb-[120px] md:px-0 md:pb-12">
         <div className="flex items-center justify-between px-1">
           <div className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
-            {selectedDay != null ? `${MONTH_NAMES[view.m]} ${selectedDay}` : 'Upcoming'}
+            {selectedDay != null ? `${MONTH_NAMES[view.m]} ${selectedDay}` : t('upcoming')}
           </div>
           <Button variant="outline" size="sm" className="h-7" onClick={openCreate}>
-            <Icon name="plus" size={13} />New
+            <Icon name="plus" size={13} />{t('newButton')}
           </Button>
         </div>
         {selectedDay != null ? (
@@ -336,24 +341,24 @@ export default function ScheduledPage() {
                   item={item}
                   status={occStatus(item.id, item.day)}
                   onEdit={openEdit}
-                  onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
+                  onDelete={() => { deleteScheduled(item.id); toast.success(t('toasts.deleted'), { description: item.name }); }}
                 />
               ))
             ) : (
               <div className="text-muted-foreground rounded-xl border border-dashed border-border py-4 text-center text-[12px]">
-                Nothing on this day
+                {t('nothingOnDay')}
               </div>
             )}
             {afterSelectedDay.length > 0 && (
               <>
-                <div className="text-muted-foreground mt-3 px-1 font-mono text-[10px] tracking-wider uppercase">Upcoming</div>
+                <div className="text-muted-foreground mt-3 px-1 font-mono text-[10px] tracking-wider uppercase">{t('upcoming')}</div>
                 {afterSelectedDay.map((item) => (
                   <ScheduledCard
                     key={item.id}
                     item={item}
                     status={occStatus(item.id, item.day)}
                     onEdit={openEdit}
-                    onDelete={() => { deleteScheduled(item.id); toast.success('Scheduled item deleted', { description: item.name }); }}
+                    onDelete={() => { deleteScheduled(item.id); toast.success(t('toasts.deleted'), { description: item.name }); }}
                   />
                 ))}
               </>
@@ -394,51 +399,51 @@ export default function ScheduledPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isNew ? 'New scheduled item' : 'Edit scheduled item'}</DialogTitle>
+            <DialogTitle>{isNew ? t('form.newTitle') : t('form.editTitle')}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
             <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5">
-              {TYPES.map((t) => (
+              {TYPES.map((tv) => (
                 <button
-                  key={t}
+                  key={tv}
                   type="button"
-                  onClick={() => setDraft({ ...draft, type: t })}
+                  onClick={() => setDraft({ ...draft, type: tv })}
                   className={cn(
-                    'flex-1 rounded-md py-1.5 text-[13px] font-medium transition-colors capitalize',
-                    draft.type === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                    'flex-1 rounded-md py-1.5 text-[13px] font-medium transition-colors',
+                    draft.type === tv ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {t}
+                  {t(`form.types.${tv}`)}
                 </button>
               ))}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
-              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Rent" autoFocus />
+              <Label>{t('form.name')}</Label>
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t('form.namePlaceholder')} autoFocus />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Shown on each posted transaction — defaults to the name" />
+              <Label>{t('form.description')} <span className="text-muted-foreground font-normal">{t('form.descriptionOptional')}</span></Label>
+              <Input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder={t('form.descriptionPlaceholder')} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Amount{draftCurrency ? <span className="text-muted-foreground font-normal"> · {draftCurrency}</span> : null}</Label>
+              <Label>{t('form.amount')}{draftCurrency ? <span className="text-muted-foreground font-normal">{t('form.amountSuffix', { currency: draftCurrency })}</span> : null}</Label>
               <Input type="number" inputMode="decimal" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0.00" />
             </div>
             {draft.type === 'transfer' ? (
               <>
                 <div className="flex flex-col gap-1.5">
-                  <Label>To account</Label>
+                  <Label>{t('form.toAccount')}</Label>
                   <Select value={draft.accountId} onValueChange={(v) => setDraft({ ...draft, accountId: v })}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={t('form.selectAccount')} /></SelectTrigger>
                     <SelectContent>
                       {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>From account</Label>
+                  <Label>{t('form.fromAccount')}</Label>
                   <Select value={draft.fromAccountId} onValueChange={(v) => setDraft({ ...draft, fromAccountId: v })}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={t('form.selectAccount')} /></SelectTrigger>
                     <SelectContent>
                       {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                     </SelectContent>
@@ -447,9 +452,9 @@ export default function ScheduledPage() {
               </>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <Label>Account</Label>
+                <Label>{t('form.account')}</Label>
                 <Select value={draft.accountId} onValueChange={(v) => setDraft({ ...draft, accountId: v })}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('form.selectAccount')} /></SelectTrigger>
                   <SelectContent>
                     {accounts.filter(a => a.ledgerId === activeId).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                   </SelectContent>
@@ -457,9 +462,9 @@ export default function ScheduledPage() {
               </div>
             )}
             <div className="flex flex-col gap-1.5">
-              <Label>Category</Label>
+              <Label>{t('form.category')}</Label>
               <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue placeholder={t('form.categoryNone')} /></SelectTrigger>
                 <SelectContent>
                   {(() => {
                     // Labels render as Parent › Child › Leaf so depth-3
@@ -475,30 +480,30 @@ export default function ScheduledPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Date</Label>
+              <Label>{t('form.date')}</Label>
               <Input type="datetime-local" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="sch-recurring">Recurring</Label>
+              <Label htmlFor="sch-recurring">{t('form.recurring')}</Label>
               <Switch id="sch-recurring" checked={draft.isRecurring} onCheckedChange={(v) => setDraft({ ...draft, isRecurring: v })} />
             </div>
             {draft.isRecurring && (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Frequency</Label>
+                    <Label>{t('form.frequency')}</Label>
                     <Select value={draft.frequency} onValueChange={(v) => setDraft({ ...draft, frequency: v })}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                        {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{t(`form.frequencies.${f}`)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   {(draft.frequency === 'weekly' || draft.frequency === 'biweekly') ? (
                     <div className="flex flex-col gap-1.5">
-                      <Label>Day of week</Label>
+                      <Label>{t('form.dayOfWeek')}</Label>
                       <Select value={draft.weekDay} onValueChange={(v) => setDraft({ ...draft, weekDay: v })}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder={t('form.selectPlaceholder')} /></SelectTrigger>
                         <SelectContent>
                           {WEEKDAY_LABELS.map((l, i) => <SelectItem key={i} value={String(i)}>{l}</SelectItem>)}
                         </SelectContent>
@@ -506,36 +511,36 @@ export default function ScheduledPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1.5">
-                      <Label>Day of month</Label>
+                      <Label>{t('form.dayOfMonth')}</Label>
                       <Input type="number" inputMode="numeric" min={1} max={31} value={draft.dayOfMonth} onChange={(e) => setDraft({ ...draft, dayOfMonth: e.target.value })} />
                     </div>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Repeat</Label>
-                    <Input type="number" inputMode="numeric" min={1} value={draft.maxExecutions} onChange={(e) => setDraft({ ...draft, maxExecutions: e.target.value })} placeholder="Infinite" />
+                    <Label>{t('form.repeat')}</Label>
+                    <Input type="number" inputMode="numeric" min={1} value={draft.maxExecutions} onChange={(e) => setDraft({ ...draft, maxExecutions: e.target.value })} placeholder={t('form.repeatPlaceholder')} />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Until date</Label>
+                    <Label>{t('form.untilDate')}</Label>
                     <Input type="datetime-local" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Installment plan</Label>
-                  <Input type="number" inputMode="numeric" min={1} value={draft.installmentTotal} onChange={(e) => setDraft({ ...draft, installmentTotal: e.target.value })} placeholder="e.g. 24 for a 24-month plan" />
-                  <p className="text-muted-foreground text-[11px]">Stops auto-posting after this many payments and shows progress. Leave blank for an ordinary recurring expense.</p>
+                  <Label>{t('form.installmentPlan')}</Label>
+                  <Input type="number" inputMode="numeric" min={1} value={draft.installmentTotal} onChange={(e) => setDraft({ ...draft, installmentTotal: e.target.value })} placeholder={t('form.installmentPlaceholder')} />
+                  <p className="text-muted-foreground text-[11px]">{t('form.installmentHint')}</p>
                 </div>
               </>
             )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Label htmlFor="rt-color">Color</Label>
+                <Label htmlFor="rt-color">{t('form.color')}</Label>
                 <input id="rt-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border size-9 cursor-pointer rounded-md border bg-transparent" />
               </div>
               {draft.type !== 'transfer' && (
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="rt-autopost">Auto-post</Label>
+                  <Label htmlFor="rt-autopost">{t('form.autoPost')}</Label>
                   <Switch id="rt-autopost" checked={draft.autoPost} onCheckedChange={(v) => setDraft({ ...draft, autoPost: v })} />
                 </div>
               )}
@@ -543,9 +548,9 @@ export default function ScheduledPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submit}>{isNew ? 'Add' : 'Save'}</Button>
+            <Button onClick={submit}>{isNew ? t('form.addButton') : tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -685,10 +690,21 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
 }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
   const categories = useFinanceStore((s) => s.categories);
+  const tCard = useTranslations('scheduled.card');
+  const tForm = useTranslations('scheduled.form');
+  const freqLabel = item.frequency === 'once'
+    ? tCard('once')
+    : (() => {
+        try {
+          return tForm(`frequencies.${item.frequency as 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly'}`);
+        } catch {
+          return item.frequency;
+        }
+      })();
   return (
     <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
       <div className="w-11 shrink-0 text-center">
-        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{item.frequency === 'once' ? 'once' : item.frequency}</div>
+        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{freqLabel}</div>
         <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
       </div>
       <div className="min-w-0 flex-1">
@@ -698,10 +714,10 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
         </div>
         <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="size-1.5 rounded-full" style={{ background: item.color }} />
-          {item.type}
+          {tForm(`types.${item.type as 'expense' | 'income' | 'transfer'}`)}
           {item.category ? <> · {categories.find(c => c.id === item.category)?.name ?? item.category}</> : null}
           {item.account ? <> · {item.account}</> : null}
-          {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span> : null}
+          {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">{tCard('autoChip')}</span> : null}
           {item.installmentTotal != null && (
             <span
               className={cn(
@@ -723,12 +739,12 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
       <div className="flex items-center gap-0.5">
         <RowActions
           onEdit={() => {
-            const t = scheduled.find((r) => r.id === item.id);
-            if (t) onEdit(t);
+            const tpl = scheduled.find((r) => r.id === item.id);
+            if (tpl) onEdit(tpl);
           }}
           onDelete={onDelete}
-          confirmTitle={`Delete ${item.name}?`}
-          confirmDescription="This removes the scheduled item from your calendar."
+          confirmTitle={tCard('deleteTitle', { name: item.name })}
+          confirmDescription={tCard('deleteDescription')}
         />
       </div>
     </div>

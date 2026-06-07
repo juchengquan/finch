@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Icon, Sparkline } from '@/components/primitives';
 import { useFinanceStore } from '@/lib/store';
 import { fmtNative } from '@/lib/data';
@@ -20,6 +21,7 @@ type Horizon = (typeof HORIZONS)[number];
 export function AccountForecast({ account }: { account: AccountRow }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
   const [horizon, setHorizon] = useState<Horizon>(30);
+  const t = useTranslations('accountForecast');
 
   const forecast = useMemo(
     () => accountForecast(account, scheduled, today(), horizon),
@@ -32,8 +34,8 @@ export function AccountForecast({ account }: { account: AccountRow }) {
   return (
     <div className="bg-card border-border overflow-hidden rounded-[14px] border">
       <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
-        <div className="text-sm font-semibold">Forecast</div>
-        <div role="tablist" aria-label="Forecast horizon" className="bg-secondary inline-flex rounded-full p-0.5 text-[11px]">
+        <div className="text-sm font-semibold">{t('title')}</div>
+        <div role="tablist" aria-label={t('horizonAria')} className="bg-secondary inline-flex rounded-full p-0.5 text-[11px]">
           {HORIZONS.map((h) => (
             <button
               key={h}
@@ -46,21 +48,21 @@ export function AccountForecast({ account }: { account: AccountRow }) {
                 horizon === h ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
               )}
             >
-              {h}d
+              {t('horizonLabel', { days: h })}
             </button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 px-[18px] py-3.5 text-[12px]">
-        <Stat label="Today" value={fmtNative(forecast.startingBalance, forecast.currency)} />
+        <Stat label={t('today')} value={fmtNative(forecast.startingBalance, forecast.currency)} />
         <Stat
-          label={`In ${horizon}d`}
+          label={t('inDays', { days: horizon })}
           value={fmtNative(forecast.endingBalance, forecast.currency)}
           accent={forecast.endingBalance >= forecast.startingBalance ? 'success' : 'destructive'}
         />
         <Stat
-          label="Low point"
+          label={t('lowPoint')}
           value={fmtNative(forecast.trough.balance, forecast.currency)}
           sub={willDip ? forecast.trough.date.slice(5).replace('-', '/') : '—'}
           accent={forecast.trough.balance < 0 ? 'destructive' : willDip ? 'warning' : undefined}
@@ -82,23 +84,25 @@ export function AccountForecast({ account }: { account: AccountRow }) {
       {forecast.events.length === 0 ? (
         <div className="border-border border-t px-[18px] py-4 text-center">
           <div className="text-muted-foreground text-[12px]">
-            No scheduled events in the next {horizon} days.
+            {t('noEvents', { days: horizon })}
           </div>
           <div className="text-muted-foreground/70 mt-1 text-[11px]">
-            Add a <Link href="/scheduled" className="underline">scheduled template</Link> to forecast future debits and credits.
+            {t.rich('addTemplate', {
+              link: (chunks) => <Link href="/scheduled" className="underline">{chunks}</Link>,
+            })}
           </div>
         </div>
       ) : (
         <div className="border-border border-t">
           <div className="text-muted-foreground border-border bg-secondary/30 border-b px-[18px] py-2 font-mono text-[10px] tracking-[1.2px]">
-            UPCOMING · {forecast.events.length}
+            {t('upcoming', { count: forecast.events.length })}
           </div>
           {forecast.events.slice(0, 8).map((e, i) => (
             <EventRow key={`${e.templateId}-${e.date}-${i}`} event={e} currency={forecast.currency} />
           ))}
           {forecast.events.length > 8 && (
             <div className="text-muted-foreground border-border border-t px-[18px] py-2 text-center text-[11px]">
-              +{forecast.events.length - 8} more in the next {horizon}d
+              {t('moreInHorizon', { count: forecast.events.length - 8, days: horizon })}
             </div>
           )}
         </div>

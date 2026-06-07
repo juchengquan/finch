@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -52,6 +53,9 @@ export default function LedgerSettingsPage() {
   const router = useRouter();
   const { currency, setCurrency } = useCurrency();
   const { ledgers, activeId, active, setActiveId } = useLedger();
+  const tLedger = useTranslations('settings.ledger');
+  const tAccount = useTranslations('settings.account');
+  const tCommon = useTranslations('common');
   const categoryCount = useFinanceStore(
     (s) => s.categories.filter((c) => c.ledgerId === activeId).length,
   );
@@ -73,40 +77,40 @@ export default function LedgerSettingsPage() {
   const confirmChange = () => {
     if (!pendingBase) return;
     changeLedgerBase(activeId, pendingBase);
-    toast.success(`Base currency changed to ${pendingBase}`, {
-      description: `${txnCount} transactions reconverted.`,
+    toast.success(tLedger('baseCurrencyToast', { currency: pendingBase }), {
+      description: tLedger('baseCurrencyToastDescription', { count: txnCount }),
     });
     setPendingBase(null);
   };
 
   const onMakeDefault = () => {
     setDefaultLedger(activeId);
-    toast.success(`${active.name} is now the default ledger.`);
+    toast.success(tLedger('defaultedToast', { name: active.name }));
   };
 
   const isLastLedger = ledgers.length <= 1;
 
   return (
     <MobilePage>
-      <ScreenHeader title="Settings" trailing={<SearchButton />} />
+      <ScreenHeader title={tAccount('title')} trailing={<SearchButton />} />
 
       <div className="px-5 pb-28">
         <SettingsTabs />
 
         <div className="text-muted-foreground pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Active ledger
+          {tLedger('activeSection')}
         </div>
         <div className="md:hidden">
           <LedgerSwitcher />
         </div>
         <div className="text-muted-foreground hidden pt-1 text-xs md:block">
-          Switch ledgers from the sidebar.
+          {tLedger('switchHint')}
         </div>
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-          This ledger
+          {tLedger('thisLedgerSection')}
         </div>
-        <Row icon="coins" label="Base currency">
+        <Row icon="coins" label={tLedger('baseCurrency')}>
           <Select
             value={active.base}
             onValueChange={(v) => {
@@ -126,12 +130,10 @@ export default function LedgerSettingsPage() {
           </Select>
         </Row>
         <div className="text-muted-foreground pt-2 text-xs">
-          Reporting currency for this ledger. Changing it rewrites every locked
-          conversion in {txnCount.toLocaleString()} transaction{txnCount === 1 ? '' : 's'}
-          {' '}using the rate on each transaction&rsquo;s own date.
+          {tLedger('baseCurrencyHint', { count: txnCount })}
         </div>
 
-        <Row icon="wallet" label="Display currency">
+        <Row icon="wallet" label={tLedger('displayCurrency')}>
           <Select value={currency} onValueChange={(v) => setCurrency(v as Currency)}>
             <SelectTrigger size="sm" className="w-24">
               <SelectValue />
@@ -145,34 +147,34 @@ export default function LedgerSettingsPage() {
             </SelectContent>
           </Select>
         </Row>
-        <Row icon="tag" label="Categories">
+        <Row icon="tag" label={tLedger('categoriesRow')}>
           <Link href="/categories" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12px]">
-            {categoryCount} {categoryCount === 1 ? 'category' : 'categories'}
+            {tLedger('categoriesCount', { count: categoryCount })}
             <Icon name="chev" size={11} />
           </Link>
         </Row>
-        <Row icon="pencil" label="Name &amp; appearance">
+        <Row icon="pencil" label={tLedger('nameAppearance')}>
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            Edit
+            {tLedger('editButton')}
           </Button>
         </Row>
         {active.isDefault !== 1 && (
-          <Row icon="check" label="Default ledger">
+          <Row icon="check" label={tLedger('defaultLedgerRow')}>
             <Button variant="outline" size="sm" onClick={onMakeDefault}>
-              Make default
+              {tLedger('makeDefaultButton')}
             </Button>
           </Row>
         )}
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Exchange rates
+          {tLedger('exchangeRatesSection')}
         </div>
         <ExchangeRates />
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Danger zone
+          {tLedger('dangerZoneSection')}
         </div>
-        <Row icon="trash" label="Delete this ledger">
+        <Row icon="trash" label={tLedger('deleteRow')}>
           <Button
             variant="outline"
             size="sm"
@@ -180,12 +182,12 @@ export default function LedgerSettingsPage() {
             onClick={() => setDeleteOpen(true)}
             className={cn(!isLastLedger && 'text-destructive hover:text-destructive')}
           >
-            Delete…
+            {tLedger('deleteButton')}
           </Button>
         </Row>
         {isLastLedger && (
           <div className="text-muted-foreground pt-1 text-xs">
-            You can&rsquo;t delete the only ledger. Create another first.
+            {tLedger('lastLedgerHint')}
           </div>
         )}
       </div>
@@ -193,19 +195,16 @@ export default function LedgerSettingsPage() {
       <Dialog open={!!pendingBase} onOpenChange={(o) => !o && setPendingBase(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change base currency to {pendingBase}?</DialogTitle>
+            <DialogTitle>{tLedger('baseChangeDialog.title', { currency: pendingBase ?? '' })}</DialogTitle>
             <DialogDescription>
-              Every locked <span className="font-mono">amount_base</span> in this ledger
-              ({txnCount.toLocaleString()} transactions) will be re-converted under
-              the new base, using the rate on each transaction&rsquo;s own date.
-              Account balances are then re-derived. Reversible by switching back.
+              {tLedger('baseChangeDialog.description', { count: txnCount })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={confirmChange}>Change base</Button>
+            <Button onClick={confirmChange}>{tLedger('baseChangeDialog.confirm')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -219,7 +218,7 @@ export default function LedgerSettingsPage() {
         currentTagline={active.tagline}
         onSave={(patch) => {
           updateLedger(activeId, patch);
-          toast.success('Updated');
+          toast.success(tLedger('editDialog.updatedToast'));
           setEditOpen(false);
         }}
       />
@@ -237,7 +236,7 @@ export default function LedgerSettingsPage() {
           const next = ledgers.find((l) => l.id !== activeId);
           deleteLedger(activeId);
           if (next) setActiveId(next.id);
-          toast.success(`Deleted "${oldName}"`);
+          toast.success(tLedger('deleteDialog.deletedToast', { name: oldName }));
           setDeleteOpen(false);
           // Navigate away from the deleted ledger's context.
           router.push('/');
@@ -297,6 +296,8 @@ function EditLedgerForm({
   onCancel: () => void;
   onSave: (patch: { name?: string; color?: string | null; tagline?: string | null }) => void;
 }) {
+  const tLedger = useTranslations('settings.ledger');
+  const tCommon = useTranslations('common');
   const [name, setName] = useState(currentName);
   const [color, setColor] = useState(currentColor);
   const [tagline, setTagline] = useState(currentTagline);
@@ -320,15 +321,14 @@ function EditLedgerForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Edit ledger</DialogTitle>
+        <DialogTitle>{tLedger('editDialog.title')}</DialogTitle>
         <DialogDescription>
-          Rename, recolor, or rewrite the tagline. Base currency is changed separately
-          (it rewrites every locked conversion).
+          {tLedger('editDialog.description')}
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-3 py-2">
         <div className="grid gap-1.5">
-          <Label htmlFor="edit-ledger-name">Name</Label>
+          <Label htmlFor="edit-ledger-name">{tLedger('editDialog.name')}</Label>
           <Input
             id="edit-ledger-name"
             value={name}
@@ -338,7 +338,7 @@ function EditLedgerForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="edit-ledger-color">Color</Label>
+          <Label htmlFor="edit-ledger-color">{tLedger('editDialog.color')}</Label>
           <div className="flex items-center gap-2">
             <input
               id="edit-ledger-color"
@@ -351,19 +351,19 @@ function EditLedgerForm({
           </div>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="edit-ledger-tagline">Tagline</Label>
+          <Label htmlFor="edit-ledger-tagline">{tLedger('editDialog.tagline')}</Label>
           <Input
             id="edit-ledger-tagline"
             value={tagline}
             onChange={(e) => setTagline(e.target.value)}
-            placeholder="One-line description shown in the switcher"
+            placeholder={tLedger('editDialog.taglinePlaceholder')}
             maxLength={80}
           />
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button onClick={onSubmit} disabled={!canSave}>Save</Button>
+        <Button variant="outline" onClick={onCancel}>{tCommon('cancel')}</Button>
+        <Button onClick={onSubmit} disabled={!canSave}>{tCommon('save')}</Button>
       </DialogFooter>
     </>
   );
@@ -415,26 +415,22 @@ function DeleteLedgerForm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const tLedger = useTranslations('settings.ledger');
+  const tCommon = useTranslations('common');
   const [typed, setTyped] = useState('');
   const matches = typed.trim() === ledgerName;
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="text-destructive">Delete &ldquo;{ledgerName}&rdquo;?</DialogTitle>
+        <DialogTitle className="text-destructive">{tLedger('deleteDialog.title', { name: ledgerName })}</DialogTitle>
         <DialogDescription>
-          This permanently deletes the ledger and everything in it:{' '}
-          <strong>{accountCount.toLocaleString()}</strong>{' '}
-          {accountCount === 1 ? 'account' : 'accounts'},{' '}
-          <strong>{txnCount.toLocaleString()}</strong>{' '}
-          {txnCount === 1 ? 'transaction' : 'transactions'}, and every budget,
-          scheduled item, rule, holding, receipt, and category scoped to it. Not
-          recoverable unless you restore from a backup.
+          {tLedger('deleteDialog.description', { accounts: accountCount, txns: txnCount })}
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-1.5 py-2">
         <Label htmlFor="delete-ledger-confirm">
-          Type <span className="font-mono text-[12px]">{ledgerName}</span> to confirm
+          {tLedger('deleteDialog.typeToConfirm', { name: ledgerName })}
         </Label>
         <Input
           id="delete-ledger-confirm"
@@ -446,9 +442,9 @@ function DeleteLedgerForm({
         />
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button variant="outline" onClick={onCancel}>{tCommon('cancel')}</Button>
         <Button variant="destructive" onClick={onConfirm} disabled={!matches}>
-          Delete ledger
+          {tLedger('deleteDialog.confirmButton')}
         </Button>
       </DialogFooter>
     </>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon, Money, CatBar } from '@/components/primitives';
 import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
@@ -53,6 +54,7 @@ function AccountGroupAccordion({
   onEditGroup?: (groupId: string) => void;
   onDeleteGroup?: (groupId: string) => void;
 }) {
+  const t = useTranslations('accounts');
   return (
     <Accordion type="multiple" defaultValue={defaultOpen}>
       {groups.map((g) => {
@@ -69,7 +71,7 @@ function AccountGroupAccordion({
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        aria-label={`Group actions: ${g.name}`}
+                        aria-label={t('groupActionsAria', { name: g.name })}
                         className="text-muted-foreground hover:text-foreground ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md"
                       >
                         <Icon name="dots" size={14} />
@@ -78,11 +80,11 @@ function AccountGroupAccordion({
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => onEditGroup!(g.id)}>
                         <Icon name="edit" size={14} />
-                        Rename
+                        {t('groupActions.rename')}
                       </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => onDeleteGroup!(g.id)}>
                         <Icon name="x" size={14} />
-                        Delete
+                        {t('groupActions.delete')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -98,7 +100,7 @@ function AccountGroupAccordion({
             </AccordionTrigger>
             <AccordionContent>
               {empty ? (
-                <EmptyState variant="card" size="sm" title="No accounts" />
+                <EmptyState variant="card" size="sm" title={t('emptyGroup')} />
               ) : (
                 <div className="bg-card border-border rounded-xl border">
                   {g.accounts.map((a, i) => {
@@ -144,6 +146,8 @@ export default function AccountsPage() {
   const { fmt, toBase } = useMoney();
   const { active, activeId } = useLedger();
   const { openTransaction } = useTransactionSheet();
+  const t = useTranslations('accounts');
+  const tCommon = useTranslations('common');
   const allTxns = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
   const accountGroups = useFinanceStore((s) => s.accountGroups);
@@ -178,7 +182,7 @@ export default function AccountsPage() {
       color: draft.color,
       ledgerId: activeId,
     });
-    toast.success('Account created', { description: name });
+    toast.success(t('createDialog.createdToast'), { description: name });
     setCreateOpen(false);
   };
 
@@ -223,10 +227,10 @@ export default function AccountsPage() {
     if (!name) return;
     if (groupDraft.id) {
       updateAccountGroup(groupDraft.id, { name });
-      toast.success('Group updated');
+      toast.success(t('groupDialog.updatedToast'));
     } else {
       createAccountGroup({ name, ledgerId: activeId });
-      toast.success('Group created', { description: name });
+      toast.success(t('groupDialog.createdToast'), { description: name });
     }
     setGroupDialogOpen(false);
   };
@@ -234,7 +238,7 @@ export default function AccountsPage() {
   const confirmDelete = () => {
     if (!confirmDeleteGroupId) return;
     deleteAccountGroup(confirmDeleteGroupId);
-    toast.success('Group deleted');
+    toast.success(t('deleteGroupDialog.deletedToast'));
     setConfirmDeleteGroupId(null);
   };
 
@@ -245,7 +249,7 @@ export default function AccountsPage() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="Add"
+            aria-label={t('addAria')}
             className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
           >
             <Icon name="plus" size={16} />
@@ -254,11 +258,11 @@ export default function AccountsPage() {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => openCreate()}>
             <Icon name="wallet" size={14} />
-            New account
+            {t('menu.newAccount')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openCreateGroup()}>
             <Icon name="tags" size={14} />
-            New group
+            {t('menu.newGroup')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -269,17 +273,17 @@ export default function AccountsPage() {
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New account</DialogTitle>
-          <DialogDescription>Added to {active.name}</DialogDescription>
+          <DialogTitle>{t('createDialog.title')}</DialogTitle>
+          <DialogDescription>{t('createDialog.description', { ledger: active.name })}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-name">Name</Label>
+            <Label htmlFor="new-name">{t('createDialog.name')}</Label>
             <Input id="new-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-type">Type</Label>
+              <Label htmlFor="new-type">{t('createDialog.type')}</Label>
               <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
                 <SelectTrigger id="new-type" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -288,7 +292,7 @@ export default function AccountsPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-group">Group</Label>
+              <Label htmlFor="new-group">{t('createDialog.group')}</Label>
               <Select value={draft.group} onValueChange={(v) => setDraft({ ...draft, group: v })}>
                 <SelectTrigger id="new-group" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -299,7 +303,7 @@ export default function AccountsPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-currency">Currency</Label>
+              <Label htmlFor="new-currency">{t('createDialog.currency')}</Label>
               <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
                 <SelectTrigger id="new-currency" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -308,20 +312,20 @@ export default function AccountsPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-balance">Opening balance ({draft.currency || active.base})</Label>
-              <Input id="new-balance" inputMode="decimal" value={draft.openingBalance} onChange={(e) => setDraft({ ...draft, openingBalance: e.target.value })} placeholder="0.00" />
+              <Label htmlFor="new-balance">{t('createDialog.openingBalance', { currency: draft.currency || active.base })}</Label>
+              <Input id="new-balance" inputMode="decimal" value={draft.openingBalance} onChange={(e) => setDraft({ ...draft, openingBalance: e.target.value })} placeholder={t('createDialog.openingBalancePlaceholder')} />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-color">Card color</Label>
+            <Label htmlFor="new-color">{t('createDialog.cardColor')}</Label>
             <input id="new-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="border-border h-9 w-full cursor-pointer rounded-md border bg-transparent" />
           </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">{tCommon('cancel')}</Button>
           </DialogClose>
-          <Button onClick={saveCreate} disabled={!draft.name.trim()}>Create</Button>
+          <Button onClick={saveCreate} disabled={!draft.name.trim()}>{tCommon('create')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -330,30 +334,28 @@ export default function AccountsPage() {
   if (ledgerAccounts.length === 0) {
     return (
       <MobilePage>
-        <ScreenHeader title="Accounts" trailing={trailing} />
+        <ScreenHeader title={t('title')} trailing={trailing} />
         <EmptyState
           variant="page"
           icon="wallet"
-          title={
-            <>
-              No accounts linked in <span className="text-foreground font-medium">{active.name}</span> yet.
-            </>
-          }
-          description="Add your first account to start tracking balances and transactions."
+          title={t.rich('empty.title', {
+            ledger: () => <span className="text-foreground font-medium">{active.name}</span>,
+          })}
+          description={t('empty.description')}
         />
         {createDialog}
 
         <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
+              <DialogTitle>{groupDraft.id ? t('groupDialog.editTitle') : t('groupDialog.newTitle')}</DialogTitle>
               <DialogDescription>
-                {groupDraft.id ? 'Rename this group.' : `Added to ${active.name}.`}
+                {groupDraft.id ? t('groupDialog.editDescription') : t('groupDialog.newDescription', { ledger: active.name })}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="group-name-empty">Name</Label>
+                <Label htmlFor="group-name-empty">{t('groupDialog.name')}</Label>
                 <Input
                   id="group-name-empty"
                   value={groupDraft.name}
@@ -364,10 +366,10 @@ export default function AccountsPage() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline">{tCommon('cancel')}</Button>
               </DialogClose>
               <Button onClick={saveGroup} disabled={!groupDraft.name.trim()}>
-                {groupDraft.id ? 'Save' : 'Create'}
+                {groupDraft.id ? tCommon('save') : tCommon('create')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -379,7 +381,7 @@ export default function AccountsPage() {
   const ungroupedAccts = ledgerAccounts.filter((a) => !a.group || !groupShells.some((g) => g.id === a.group));
   const groupedAccounts = [
     ...groupShells.map((g) => ({ id: g.id, name: g.name, accounts: ledgerAccounts.filter((a) => a.group === g.id) })),
-    ...(ungroupedAccts.length ? [{ id: UNGROUPED_ID, name: 'Ungrouped', accounts: ungroupedAccts }] : []),
+    ...(ungroupedAccts.length ? [{ id: UNGROUPED_ID, name: t('ungroupedLabel'), accounts: ungroupedAccts }] : []),
   ];
 
   const deleteTarget = confirmDeleteGroupId ? ledgerGroups.find((g) => g.id === confirmDeleteGroupId) : null;
@@ -387,7 +389,7 @@ export default function AccountsPage() {
 
   return (
     <MobilePage>
-      <ScreenHeader title="Accounts" trailing={trailing} />
+      <ScreenHeader title={t('title')} trailing={trailing} />
 
       <div className="px-5 pb-[120px] md:hidden">
         <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
@@ -397,22 +399,22 @@ export default function AccountsPage() {
         <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1.7fr_1fr]">
           <div className="min-w-0">
             <div className="mb-3 flex items-center justify-between">
-              <div className="font-serif text-lg italic">All accounts</div>
+              <div className="font-serif text-lg italic">{t('allAccounts')}</div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline">
                     <Icon name="plus" size={14} />
-                    New
+                    {t('newButton')}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => openCreate()}>
                     <Icon name="wallet" size={14} />
-                    New account
+                    {t('menu.newAccount')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => openCreateGroup()}>
                     <Icon name="tags" size={14} />
-                    New group
+                    {t('menu.newGroup')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -421,7 +423,7 @@ export default function AccountsPage() {
           </div>
 
           <aside className="min-w-0">
-            <div className="mb-3 font-serif text-lg italic">Recent activity</div>
+            <div className="mb-3 font-serif text-lg italic">{t('recentActivity')}</div>
             <div className="bg-card border-border overflow-hidden rounded-xl border">
               {[...ledgerTxns]
                 .sort((a, b) => b.date.localeCompare(a.date))
@@ -457,14 +459,14 @@ export default function AccountsPage() {
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{groupDraft.id ? 'Edit group' : 'New group'}</DialogTitle>
+            <DialogTitle>{groupDraft.id ? t('groupDialog.editTitle') : t('groupDialog.newTitle')}</DialogTitle>
             <DialogDescription>
-              {groupDraft.id ? 'Rename this group.' : `Added to ${active.name}.`}
+              {groupDraft.id ? t('groupDialog.editDescription') : t('groupDialog.newDescription', { ledger: active.name })}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="group-name">Name</Label>
+              <Label htmlFor="group-name">{t('groupDialog.name')}</Label>
               <Input
                 id="group-name"
                 value={groupDraft.name}
@@ -475,10 +477,10 @@ export default function AccountsPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
             <Button onClick={saveGroup} disabled={!groupDraft.name.trim()}>
-              {groupDraft.id ? 'Save' : 'Create'}
+              {groupDraft.id ? tCommon('save') : tCommon('create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -487,19 +489,19 @@ export default function AccountsPage() {
       <Dialog open={!!confirmDeleteGroupId} onOpenChange={(o) => !o && setConfirmDeleteGroupId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete group?</DialogTitle>
+            <DialogTitle>{t('deleteGroupDialog.title')}</DialogTitle>
             <DialogDescription>
               {deleteTarget?.name}
               {deleteTargetAcctCount > 0 && (
-                <> · {deleteTargetAcctCount} account{deleteTargetAcctCount === 1 ? '' : 's'} will move to Ungrouped.</>
+                <> · {t('deleteGroupDialog.moveHint', { count: deleteTargetAcctCount })}</>
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            <Button variant="destructive" onClick={confirmDelete}>{tCommon('delete')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

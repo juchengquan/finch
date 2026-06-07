@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { TransactionDetail } from '@/components/transaction-detail';
 
@@ -28,6 +29,7 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
   // content doesn't blank out mid-transition.
   const [open, setOpen] = useState(false);
   const [txId, setTxId] = useState<string | null>(null);
+  const t = useTranslations('txnSheet');
 
   const openTransaction = useCallback((id: string) => {
     setTxId(id);
@@ -42,10 +44,8 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto p-0 sm:max-w-md">
-          <DialogTitle className="sr-only">Transaction details</DialogTitle>
-          <DialogDescription className="sr-only">
-            View and edit the selected transaction.
-          </DialogDescription>
+          <DialogTitle className="sr-only">{t('title')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('description')}</DialogDescription>
           {txId && (
             <div className="px-5 pt-8 pb-8">
               <TransactionDetail txId={txId} onDeleted={close} />

@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { CURRENCIES } from '@/lib/data';
 import { categoryPath } from '@/lib/db/queries/categories';
@@ -51,8 +52,9 @@ export function EditTransactionForm({
   const updateTransaction = useFinanceStore((s) => s.updateTransaction);
   const createCounterparty = useFinanceStore((s) => s.createCounterparty);
   const { openMerchantPicker } = useMerchantPicker();
+  const t = useTranslations('editTxnForm');
 
-  const tx = allTxns.find((t) => t.id === txId);
+  const tx = allTxns.find((tx2) => tx2.id === txId);
 
   // The provider mounts this form with `key={txId}` (see edit-transaction-sheet
   // — "Only mount while open so each open starts from the row's current values")
@@ -85,7 +87,7 @@ export function EditTransactionForm({
 
   if (!tx) {
     return (
-      <div className="text-muted-foreground py-20 text-center text-sm">Transaction not found</div>
+      <div className="text-muted-foreground py-20 text-center text-sm">{t('notFound')}</div>
     );
   }
 
@@ -99,15 +101,15 @@ export function EditTransactionForm({
   const save = () => {
     const value = parseFloat(amount);
     if (!Number.isFinite(value) || value <= 0) {
-      toast.error('Enter an amount');
+      toast.error(t('errors.amount'));
       return;
     }
     if (!account) {
-      toast.error('Pick an account');
+      toast.error(t('errors.account'));
       return;
     }
     if (!date) {
-      toast.error('Pick a date');
+      toast.error(t('errors.date'));
       return;
     }
     // Re-apply the original sign. Refunds and incomes stay positive;
@@ -136,32 +138,32 @@ export function EditTransactionForm({
       note: note.trim() || undefined,
     };
     updateTransaction(tx.id, patch);
-    toast.success('Transaction updated');
+    toast.success(t('updatedToast'));
     onSaved?.();
   };
 
   return (
     <div className="flex flex-col gap-3.5 px-5 pt-4 pb-8">
       <div>
-        <Field icon="banknote" label="Amount">
+        <Field icon="banknote" label={t('amount')}>
           <div className="flex items-baseline gap-1">
             <span className="text-muted-foreground text-[15px]">{currencySym}</span>
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
               inputMode="decimal"
-              aria-label="Amount" placeholder="0"
+              aria-label={t('amountAria')} placeholder="0"
               autoFocus
               className="placeholder:text-muted-foreground w-24 bg-transparent text-right text-[15px] outline-none"
             />
           </div>
         </Field>
-        <Field icon="coins" label="Currency">
-          <span className="text-muted-foreground text-[15px]" title="Follows the selected account">
+        <Field icon="coins" label={t('currency')}>
+          <span className="text-muted-foreground text-[15px]" title={t('currencyHint')}>
             {accountCurrency}
           </span>
         </Field>
-        <Field icon="tag" label="Merchant">
+        <Field icon="tag" label={t('merchant')}>
           <button
             type="button"
             onClick={() =>
@@ -175,15 +177,15 @@ export function EditTransactionForm({
               })
             }
             className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
-            aria-label="Select merchant"
+            aria-label={t('merchantAria')}
           >
             <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
-              {merchant || 'Pick a merchant'}
+              {merchant || t('merchantPlaceholder')}
             </span>
             <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
           </button>
         </Field>
-        <Field icon="fork" label="Category">
+        <Field icon="fork" label={t('category')}>
           <Select
             value={category ?? 'uncategorized'}
             onValueChange={(v) => setCategory(v === 'uncategorized' ? null : v)}
@@ -200,7 +202,7 @@ export function EditTransactionForm({
             </SelectContent>
           </Select>
         </Field>
-        <Field icon="wallet" label="Account">
+        <Field icon="wallet" label={t('account')}>
           <Select value={account} onValueChange={setAccount}>
             <SelectTrigger size="sm" className="border-0 shadow-none">
               <SelectValue />
@@ -214,24 +216,24 @@ export function EditTransactionForm({
             </SelectContent>
           </Select>
         </Field>
-        <Field icon="calendar" label="Date">
+        <Field icon="calendar" label={t('date')}>
           <input
-            type="date" aria-label="Date"
+            type="date" aria-label={t('dateAria')}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
-        <Field icon="clock" label="Time">
+        <Field icon="clock" label={t('time')}>
           <input
-            type="time" aria-label="Time"
+            type="time" aria-label={t('timeAria')}
             value={time}
             onChange={(e) => setTime(e.target.value)}
             className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
-        <Field icon="check" label="Status">
-          <div role="tablist" aria-label="Status" className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
+        <Field icon="check" label={t('status')}>
+          <div role="tablist" aria-label={t('statusAria')} className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
             {(['confirmed', 'pending'] as const).map((s) => (
               <button
                 key={s}
@@ -240,20 +242,20 @@ export function EditTransactionForm({
                 aria-selected={status === s}
                 onClick={() => setStatus(s)}
                 className={cn(
-                  'rounded-full px-3 py-1 capitalize transition-colors',
+                  'rounded-full px-3 py-1 transition-colors',
                   status === s ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
                 )}
               >
-                {s === 'confirmed' ? 'Posted' : 'Pending'}
+                {s === 'confirmed' ? t('statusPosted') : t('statusPending')}
               </button>
             ))}
           </div>
         </Field>
-        <Field icon="edit" label="Note">
+        <Field icon="edit" label={t('note')}>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            aria-label="Note" placeholder="Optional"
+            aria-label={t('noteAria')} placeholder={t('notePlaceholder')}
             className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
@@ -264,7 +266,7 @@ export function EditTransactionForm({
         onClick={save}
         className="bg-foreground text-background mt-2 flex h-[54px] cursor-pointer items-center justify-center rounded-[27px] text-base font-medium -tracking-[0.2px]"
       >
-        Save changes
+        {t('save')}
       </button>
     </div>
   );

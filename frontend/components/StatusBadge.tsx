@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 // Pending vs done indicator for transactions and scheduled occurrences.
@@ -10,7 +13,7 @@ export function StatusBadge({
   status?: 'pending' | 'done' | 'upcoming';
   className?: string;
 }) {
-  const label = status === 'pending' ? 'Pending' : status === 'upcoming' ? 'Upcoming' : 'Done';
+  const t = useTranslations('badges');
   return (
     <span
       className={cn(
@@ -21,7 +24,7 @@ export function StatusBadge({
         className,
       )}
     >
-      {label}
+      {t(status)}
     </span>
   );
 }

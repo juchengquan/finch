@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { catById } from '@/lib/data';
 import { Icon } from './primitives';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ function weekLabel(start: string, end: string): string {
  *  digest to show (handed a null by the parent). */
 export function WeeklyDigestCard({ digest }: { digest: WeeklyDigest | null }) {
   const { fmt, short } = useMoney();
+  const t = useTranslations('weeklyDigest');
   if (!digest) return null;
 
   const { spent, income, net, vsPrevPct, vsAvgPct, avgSpent, topCategories, biggestExpense, txCount } = digest;
@@ -43,30 +45,29 @@ export function WeeklyDigestCard({ digest }: { digest: WeeklyDigest | null }) {
       <div className="mb-2 flex items-baseline justify-between">
         <div className="flex items-center gap-1.5 text-sm font-semibold">
           <Icon name="calendar" size={14} />
-          Last week
+          {t('title')}
         </div>
         <span className="text-muted-foreground font-mono text-[11px]">{weekLabel(digest.weekStart, digest.weekEnd)}</span>
       </div>
 
       <div className="mb-3 flex items-baseline gap-3">
         <span className="font-serif text-3xl -tracking-[0.5px]">{fmt(spent)}</span>
-        <span className="text-muted-foreground text-xs">spent</span>
-        {vsPrevPct != null && pctChip(vsPrevPct, 'vs last wk')}
+        <span className="text-muted-foreground text-xs">{t('spent')}</span>
+        {vsPrevPct != null && pctChip(vsPrevPct, t('vsLastWeek'))}
       </div>
 
       <div className="text-muted-foreground mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-        <span>{txCount} {txCount === 1 ? 'transaction' : 'transactions'}</span>
-        {income > 0 && <span className="text-success">+{short(income)} income</span>}
+        <span>{t('txnsCount', { count: txCount })}</span>
+        {income > 0 && <span className="text-success">{t('incomeChip', { amount: short(income) })}</span>}
         <span className={cn(net >= 0 ? 'text-success' : 'text-warning')}>
-          {net >= 0 ? '+' : '−'}
-          {short(Math.abs(net))} net
+          {net >= 0 ? t('netPositive', { amount: short(Math.abs(net)) }) : t('netNegative', { amount: short(Math.abs(net)) })}
         </span>
-        {vsAvgPct != null && <span>vs typical {short(avgSpent)}</span>}
+        {vsAvgPct != null && <span>{t('vsTypical', { amount: short(avgSpent) })}</span>}
       </div>
 
       {topCategories.length > 0 && (
         <div className="border-border border-t pt-3">
-          <div className="text-muted-foreground mb-2 font-mono text-[10px] uppercase tracking-wide">Top categories</div>
+          <div className="text-muted-foreground mb-2 font-mono text-[10px] uppercase tracking-wide">{t('topCategories')}</div>
           <div className="space-y-1.5">
             {topCategories.map((c) => {
               const cat = catById(c.categoryId);
@@ -85,7 +86,7 @@ export function WeeklyDigestCard({ digest }: { digest: WeeklyDigest | null }) {
 
       {biggestExpense && (
         <div className="border-border mt-3 flex items-baseline gap-1.5 border-t pt-3 text-[11px]">
-          <span className="text-muted-foreground font-mono uppercase tracking-wide">Biggest hit</span>
+          <span className="text-muted-foreground font-mono uppercase tracking-wide">{t('biggestHit')}</span>
           <span className="flex-1 truncate">{biggestExpense.merchant}</span>
           <span className="text-destructive font-mono tabular-nums">{short(biggestExpense.amount)}</span>
         </div>

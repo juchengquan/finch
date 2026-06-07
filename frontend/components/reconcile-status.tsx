@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { fmtNative } from '@/lib/data';
 import { cn } from '@/lib/utils';
@@ -29,28 +32,29 @@ export function ReconcileStatus({
   account: AccountRow;
   today?: Date;
 }) {
+  const t = useTranslations('reconcileStatus');
   if (!account.lastReconciledAt) {
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1.5 font-mono text-[11px]">
         <Icon name="check" size={11} />
-        Never reconciled
+        {t('never')}
       </span>
     );
   }
   const days = daysBetween(account.lastReconciledAt, today);
   const stale = days > STALE_AFTER_DAYS;
   const balance = account.lastReconciledBalance ?? 0;
-  const ago = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  const ago = days === 0 ? t('today') : days === 1 ? t('yesterday') : t('daysAgo', { count: days });
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 font-mono text-[11px]',
         stale ? 'text-warning' : 'text-success',
       )}
-      title={`Reconciled on ${account.lastReconciledAt}`}
+      title={t('title', { date: account.lastReconciledAt })}
     >
       <Icon name="check" size={11} />
-      Reconciled to {fmtNative(balance, account.currency)} · {ago}
+      {t('reconciledTo', { balance: fmtNative(balance, account.currency), when: ago })}
     </span>
   );
 }

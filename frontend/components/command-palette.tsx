@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,25 +12,26 @@ import { useLedger } from '@/components/ledger-provider';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { useAddExpense } from '@/components/add-expense-sheet';
 
-// The set of pages we expose to the palette. `icon` reuses the existing string
-// shim in primitives.tsx so the UI stays consistent with the tab bar.
+// The set of pages we expose to the palette. `labelKey` is looked up under
+// `nav.*` for visible text; `keywords` are matching aliases — kept English
+// because they're internal search aliases, not user-facing copy.
 // `action: 'add-expense'` opens the add-expense sheet instead of navigating.
-const PAGES: { label: string; href?: string; action?: 'add-expense'; icon: string; keywords: string[] }[] = [
-  { label: 'Accounts', href: '/accounts', icon: 'wallet', keywords: ['balance', 'net worth'] },
-  { label: 'Activity', href: '/activity', icon: 'doc', keywords: ['transactions', 'feed'] },
-  { label: 'Budgets', href: '/budgets', icon: 'chart', keywords: ['spending', 'limit', 'goals', 'save', 'income'] },
-  { label: 'Insights', href: '/insights', icon: 'sparkle', keywords: ['analytics', 'reports'] },
-  { label: 'Scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming', 'subscriptions'] },
-  { label: 'Add', action: 'add-expense', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
-  { label: 'Settings', href: '/settings', icon: 'cog', keywords: ['preferences'] },
+const PAGES: { labelKey: string; href?: string; action?: 'add-expense'; icon: string; keywords: string[] }[] = [
+  { labelKey: 'accounts', href: '/accounts', icon: 'wallet', keywords: ['balance', 'net worth'] },
+  { labelKey: 'activity', href: '/activity', icon: 'doc', keywords: ['transactions', 'feed'] },
+  { labelKey: 'budgets', href: '/budgets', icon: 'chart', keywords: ['spending', 'limit', 'goals', 'save', 'income'] },
+  { labelKey: 'insights', href: '/insights', icon: 'sparkle', keywords: ['analytics', 'reports'] },
+  { labelKey: 'scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming', 'subscriptions'] },
+  { labelKey: 'add', action: 'add-expense', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
+  { labelKey: 'settings', href: '/settings', icon: 'cog', keywords: ['preferences'] },
   // Ledger admin
-  { label: 'Pending', href: '/pending', icon: 'clock', keywords: ['confirm'] },
-  { label: 'Transfers', href: '/transfers', icon: 'swap', keywords: ['move'] },
-  { label: 'Merchants', href: '/merchants', icon: 'tag', keywords: ['counterparties'] },
-  { label: 'Scheduled', href: '/scheduled', icon: 'sync', keywords: ['templates'] },
-  { label: 'Categories', href: '/categories', icon: 'tags', keywords: [] },
-  { label: 'Tags', href: '/tags', icon: 'tag', keywords: [] },
-  { label: 'Exchange rates', href: '/settings/ledger', icon: 'coins', keywords: ['fx', 'exchange', 'rates', 'currency'] },
+  { labelKey: 'pending', href: '/pending', icon: 'clock', keywords: ['confirm'] },
+  { labelKey: 'transfers', href: '/transfers', icon: 'swap', keywords: ['move'] },
+  { labelKey: 'merchants', href: '/merchants', icon: 'tag', keywords: ['counterparties'] },
+  { labelKey: 'scheduled', href: '/scheduled', icon: 'sync', keywords: ['templates'] },
+  { labelKey: 'categories', href: '/categories', icon: 'tags', keywords: [] },
+  { labelKey: 'tags', href: '/tags', icon: 'tag', keywords: [] },
+  { labelKey: 'exchangeRates', href: '/settings/ledger', icon: 'coins', keywords: ['fx', 'exchange', 'rates', 'currency'] },
 ];
 
 interface CommandPaletteValue {
@@ -47,6 +49,7 @@ export function useCommandPalette(): CommandPaletteValue {
 /** Button that opens the palette. Replaces the placeholder search affordance in headers. */
 export function SearchButton({ className }: { className?: string }) {
   const { open } = useCommandPalette();
+  const tShell = useTranslations('shell');
   // 44px touch target on mobile (WCAG 2.5.5); 36px on desktop top bar where
   // the cursor handles precision and chrome density matters more.
   return (
@@ -54,7 +57,7 @@ export function SearchButton({ className }: { className?: string }) {
       variant="outline"
       size="icon"
       className={cn('size-11 rounded-full md:size-9', className)}
-      aria-label="Search"
+      aria-label={tShell('search')}
       onClick={open}
     >
       <Icon name="search" size={16} />
@@ -113,6 +116,7 @@ function CommandPaletteDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const tPalette = useTranslations('palette');
   // Body lives in a child component that mounts fresh each time `open` flips on,
   // so query/highlight reset to their initial values without a state-in-effect.
   return (
@@ -121,10 +125,8 @@ function CommandPaletteDialog({
         showCloseButton={false}
         className="top-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0 sm:rounded-2xl"
       >
-        <DialogTitle className="sr-only">Search and commands</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search transactions, accounts, and categories, or jump to a page.
-        </DialogDescription>
+        <DialogTitle className="sr-only">{tPalette('title')}</DialogTitle>
+        <DialogDescription className="sr-only">{tPalette('description')}</DialogDescription>
         {open && <PaletteBody close={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>
@@ -141,6 +143,9 @@ function PaletteBody({ close }: { close: () => void }) {
   const categories = useFinanceStore((s) => s.categories);
   const accounts = useFinanceStore((s) => s.accounts);
   const tags = useFinanceStore((s) => s.tags);
+  const tNav = useTranslations('nav');
+  const tGroups = useTranslations('palette.groups');
+  const tPalette = useTranslations('palette');
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -149,15 +154,19 @@ function PaletteBody({ close }: { close: () => void }) {
     const q = query.trim();
     const out: Result[] = [];
 
-    // Pages (filtered when there's a query).
-    const pageMatches = PAGES.filter(
-      (p) => matches(q, p.label) || p.keywords.some((k) => matches(q, k)),
-    ).slice(0, q ? 8 : 8);
+    // Pages (filtered when there's a query). The visible label flows through
+    // the active translation; the user's query is matched against both the
+    // localised label and the keyword aliases so "balance" still finds
+    // Accounts regardless of UI language.
+    const pageMatches = PAGES.filter((p) => {
+      const label = tNav(p.labelKey);
+      return matches(q, label) || p.keywords.some((k) => matches(q, k));
+    }).slice(0, q ? 8 : 8);
     for (const p of pageMatches) {
       out.push({
         key: `page:${p.href ?? p.action}`,
-        group: 'Pages',
-        label: p.label,
+        group: tGroups('pages'),
+        label: tNav(p.labelKey),
         icon: p.icon,
         run: () => {
           if (p.action === 'add-expense') openAddExpense();
@@ -176,7 +185,7 @@ function PaletteBody({ close }: { close: () => void }) {
       for (const t of txMatches) {
         out.push({
           key: `tx:${t.id}`,
-          group: 'Transactions',
+          group: tGroups('transactions'),
           label: t.merchant,
           hint: `${t.date} · ${t.amount < 0 ? '−' : '+'}${Math.abs(t.amount).toFixed(2)}`,
           icon: 'doc',
@@ -195,7 +204,7 @@ function PaletteBody({ close }: { close: () => void }) {
       for (const c of cpMatches) {
         out.push({
           key: `cp:${c.id}`,
-          group: 'Merchants',
+          group: tGroups('merchants'),
           label: c.name,
           icon: 'tag',
           run: () => {
@@ -213,7 +222,7 @@ function PaletteBody({ close }: { close: () => void }) {
       for (const c of catMatches) {
         out.push({
           key: `cat:${c.id}`,
-          group: 'Categories',
+          group: tGroups('categories'),
           label: c.name,
           icon: c.icon ?? 'tags',
           iconColor: c.color ?? undefined,
@@ -232,7 +241,7 @@ function PaletteBody({ close }: { close: () => void }) {
       for (const a of acctMatches) {
         out.push({
           key: `acct:${a.id}`,
-          group: 'Accounts',
+          group: tGroups('accounts'),
           label: a.name,
           icon: 'wallet',
           run: () => {
@@ -250,7 +259,7 @@ function PaletteBody({ close }: { close: () => void }) {
       for (const t of tagMatches) {
         out.push({
           key: `tag:${t.id}`,
-          group: 'Tags',
+          group: tGroups('tags'),
           label: t.name,
           icon: 'tag',
           run: () => {
@@ -262,7 +271,7 @@ function PaletteBody({ close }: { close: () => void }) {
     }
 
     return out;
-  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, close]);
+  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, close, tNav, tGroups]);
 
   // Group results in source order so the headings appear in the natural order
   // each kind was appended above. A Map preserves insertion order.
@@ -316,8 +325,8 @@ function PaletteBody({ close }: { close: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Search transactions, accounts, screens…"
-          aria-label="Command palette search"
+          placeholder={tPalette('placeholder')}
+          aria-label={tPalette('ariaLabel')}
           autoFocus
           className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-sm outline-none"
         />
@@ -327,7 +336,7 @@ function PaletteBody({ close }: { close: () => void }) {
       </div>
       <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-1">
         {results.length === 0 ? (
-          <div className="text-muted-foreground px-4 py-6 text-center text-sm">No results</div>
+          <div className="text-muted-foreground px-4 py-6 text-center text-sm">{tPalette('noResults')}</div>
         ) : (
           grouped.map(([group, items]) => (
             <div key={group} className="mb-1">
@@ -369,7 +378,7 @@ function PaletteBody({ close }: { close: () => void }) {
         )}
       </div>
       <div className="bg-muted/30 text-muted-foreground border-border flex items-center justify-between border-t px-4 py-2 text-[10px] font-mono">
-        <span>↑↓ navigate · ↵ select · esc close</span>
+        <span>{tPalette('shortcutsHint')}</span>
         <span>⌘K</span>
       </div>
     </>

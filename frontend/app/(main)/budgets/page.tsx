@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -46,6 +47,7 @@ function BudgetCard({
   fmt: (n: number) => string;
   categories: Parameters<typeof budgetProgress>[3];
 }) {
+  const t = useTranslations('budgets.card');
   const p = budgetProgress(budget, txns, today, categories);
   const isIncome = budget.type === 'income';
   const barPct = Math.min(p.pct, 100);
@@ -56,7 +58,7 @@ function BudgetCard({
           <div className="flex min-w-0 items-baseline gap-2">
             {budget.pendingAmount != null && (
               <span
-                aria-label="Amount change pending"
+                aria-label={t('pendingAria')}
                 className="bg-warning size-1.5 shrink-0 self-center rounded-full"
               />
             )}
@@ -77,10 +79,10 @@ function BudgetCard({
         </div>
         <div className={cn('mt-1 text-[11px]', p.over ? 'text-destructive' : 'text-muted-foreground')}>
           {isIncome
-            ? `${p.pct}% of target`
+            ? t('pctOfTarget', { pct: p.pct })
             : p.over
-              ? `${fmt(-p.remaining)} over`
-              : `${fmt(p.remaining)} left`}
+              ? t('over', { amount: fmt(-p.remaining) })
+              : t('left', { amount: fmt(p.remaining) })}
         </div>
       </div>
     </Link>
@@ -92,6 +94,8 @@ const EMPTY_GROUP_DRAFT = { id: null as string | null, name: '' };
 export default function BudgetsPage() {
   const { fmt } = useMoney();
   const { active, activeId } = useLedger();
+  const t = useTranslations('budgets');
+  const tCommon = useTranslations('common');
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgets = useFinanceStore((s) => s.budgets);
   const budgetGroups = useFinanceStore((s) => s.budgetGroups);
@@ -130,20 +134,20 @@ export default function BudgetsPage() {
   };
   const saveGroup = () => {
     const name = groupDraft.name.trim();
-    if (!name) return void toast.error('Enter a group name');
+    if (!name) return void toast.error(t('groupDialog.nameRequired'));
     if (groupDraft.id) {
       updateBudgetGroup(groupDraft.id, { name });
-      toast.success('Group updated');
+      toast.success(t('groupDialog.updatedToast'));
     } else {
       createBudgetGroup({ name, ledgerId: activeId });
-      toast.success('Group created', { description: name });
+      toast.success(t('groupDialog.createdToast'), { description: name });
     }
     setGroupOpen(false);
   };
   const confirmDelete = () => {
     if (!confirmDelGroup) return;
     deleteBudgetGroup(confirmDelGroup);
-    toast.success('Group deleted');
+    toast.success(t('deleteGroupDialog.deletedToast'));
     setConfirmDelGroup(null);
   };
 
@@ -151,11 +155,11 @@ export default function BudgetsPage() {
     <>
       <DropdownMenuItem onSelect={openCreate}>
         <Icon name="target" size={14} />
-        New budget
+        {t('menu.newBudget')}
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={openCreateGroup}>
         <Icon name="tags" size={14} />
-        New group
+        {t('menu.newGroup')}
       </DropdownMenuItem>
     </>
   );
@@ -167,7 +171,7 @@ export default function BudgetsPage() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label="Add"
+            aria-label={t('addAria')}
             className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
           >
             <Icon name="plus" size={16} />
@@ -178,6 +182,8 @@ export default function BudgetsPage() {
     </div>
   );
 
+  const tabLabel = t(`tabs.${tab}`);
+
   const renderGroup = (key: string, name: string, items: BudgetRow[], groupId: string | null) => (
     <div key={key} className="mb-5">
       <div className="mb-1.5 flex items-center justify-between px-1">
@@ -187,7 +193,7 @@ export default function BudgetsPage() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label={`Group actions: ${name}`}
+                aria-label={t('groupActionsAria', { name })}
                 className="text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md"
               >
                 <Icon name="dots" size={14} />
@@ -196,18 +202,18 @@ export default function BudgetsPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => openEditGroup(groupId, name)}>
                 <Icon name="edit" size={14} />
-                Rename
+                {t('groupActions.rename')}
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelGroup(groupId)}>
                 <Icon name="x" size={14} />
-                Delete
+                {t('groupActions.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
       {items.length === 0 ? (
-        <EmptyState variant="card" size="sm" title={`No ${tab} budgets`} />
+        <EmptyState variant="card" size="sm" title={t('emptyGroup', { type: tabLabel })} />
       ) : (
         <div className="md:grid md:grid-cols-2 md:gap-x-4">
           {items.map((b) => (
@@ -219,20 +225,20 @@ export default function BudgetsPage() {
   );
 
   return (
-    <MobilePage header={<ScreenHeader title="Budgets" trailing={trailing} />}>
+    <MobilePage header={<ScreenHeader title={t('title')} trailing={trailing} />}>
       <div className="flex items-center justify-between px-5 pt-1">
         <div className="bg-secondary mb-5 inline-flex rounded-full p-1">
-          {(['expense', 'income'] as BudgetType[]).map((t) => (
+          {(['expense', 'income'] as BudgetType[]).map((tv) => (
             <button
-              key={t}
+              key={tv}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tv)}
               className={cn(
-                'rounded-full px-4 py-1.5 text-[13px] font-medium capitalize transition-colors',
-                tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                'rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors',
+                tab === tv ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {t}
+              {t(`tabs.${tv}`)}
             </button>
           ))}
         </div>
@@ -242,7 +248,7 @@ export default function BudgetsPage() {
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" className="mb-5 hidden md:inline-flex">
               <Icon name="plus" size={14} />
-              New
+              {t('newButton')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">{addMenuItems}</DropdownMenuContent>
@@ -253,17 +259,16 @@ export default function BudgetsPage() {
         {typed.length === 0 && ledgerGroups.length === 0 ? (
           <EmptyState
             icon="target"
-            title={
-              <>
-                No {tab} budgets in <span className="text-foreground font-medium">{active.name}</span> yet
-              </>
-            }
-            description="Tap + to set a monthly cap or savings target."
+            title={t.rich('empty.title', {
+              type: tabLabel,
+              ledger: () => <span className="text-foreground font-medium">{active.name}</span>,
+            })}
+            description={t('empty.description')}
           />
         ) : (
           <>
             {ledgerGroups.map((g) => renderGroup(g.id, g.name, typed.filter((b) => b.groupId === g.id), g.id))}
-            {ungrouped.length > 0 && renderGroup('__ungrouped__', 'Ungrouped', ungrouped, null)}
+            {ungrouped.length > 0 && renderGroup('__ungrouped__', t('ungroupedLabel'), ungrouped, null)}
           </>
         )}
       </div>
@@ -273,11 +278,11 @@ export default function BudgetsPage() {
       <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{groupDraft.id ? 'Rename group' : 'New budget group'}</DialogTitle>
-            <DialogDescription>Buckets budgets on this screen, like account groups.</DialogDescription>
+            <DialogTitle>{groupDraft.id ? t('groupDialog.renameTitle') : t('groupDialog.newTitle')}</DialogTitle>
+            <DialogDescription>{t('groupDialog.description')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="bg-name">Name</Label>
+            <Label htmlFor="bg-name">{t('groupDialog.name')}</Label>
             <Input
               id="bg-name"
               value={groupDraft.name}
@@ -288,9 +293,9 @@ export default function BudgetsPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={saveGroup}>{groupDraft.id ? 'Save' : 'Create'}</Button>
+            <Button onClick={saveGroup}>{groupDraft.id ? tCommon('save') : tCommon('create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -298,17 +303,15 @@ export default function BudgetsPage() {
       <Dialog open={!!confirmDelGroup} onOpenChange={(o) => !o && setConfirmDelGroup(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete group?</DialogTitle>
-            <DialogDescription>
-              Budgets in this group are kept and become ungrouped. This can’t be undone.
-            </DialogDescription>
+            <DialogTitle>{t('deleteGroupDialog.title')}</DialogTitle>
+            <DialogDescription>{t('deleteGroupDialog.description')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
             <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+              {tCommon('delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

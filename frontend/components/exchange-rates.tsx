@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,8 @@ const SOURCES = ['ECB', 'Yahoo', 'manual'];
  * ledger reference data, so this lives under Settings › Ledger.
  */
 export function ExchangeRates() {
+  const t = useTranslations('exchangeRates');
+  const tCommon = useTranslations('common');
   const storeRates = useFinanceStore((s) => s.exchangeRates);
   const setExchangeRate = useFinanceStore((s) => s.setExchangeRate);
   const deleteExchangeRate = useFinanceStore((s) => s.deleteExchangeRate);
@@ -64,9 +67,9 @@ export function ExchangeRates() {
   };
   const submit = () => {
     const rate = Number(draft.rate);
-    if (!(rate > 0)) return void toast.error('Enter a rate greater than 0');
+    if (!(rate > 0)) return void toast.error(t('rateError'));
     setExchangeRate({ date: draft.date, currency: draft.currency, rate, source: draft.source });
-    toast.success(`${draft.currency} → USD set`, { description: `${rate} on ${draft.date}` });
+    toast.success(t('setToast', { currency: draft.currency }), { description: t('setDescription', { rate, date: draft.date }) });
     setOpen(false);
   };
 
@@ -84,8 +87,8 @@ export function ExchangeRates() {
           <Icon name="coins" size={14} />
         </div>
         <div className="flex-1 text-sm">
-          {byCurrency.length} {byCurrency.length === 1 ? 'currency' : 'currencies'}
-          {lastUpdated && <span className="text-muted-foreground"> · updated {lastUpdated}</span>}
+          {t('summary', { count: byCurrency.length })}
+          {lastUpdated && <span className="text-muted-foreground">{t('updatedSuffix', { date: lastUpdated })}</span>}
         </div>
         <Icon name={expanded ? 'chev-d' : 'chev'} size={13} className="text-muted-foreground" />
       </button>
@@ -103,16 +106,16 @@ export function ExchangeRates() {
                     SOURCE_STYLE[row.latest.source ?? ''] ?? 'bg-secondary text-muted-foreground',
                   )}
                 >
-                  {row.latest.source ?? 'manual'}
+                  {row.latest.source ?? t('manualFallback')}
                 </span>
                 <div className="w-24 text-right font-mono text-[13px] tabular-nums">{row.latest.rate.toFixed(5)}</div>
                 {editable && (
                   <button
                     type="button"
-                    aria-label={`Delete latest ${row.cur} rate`}
+                    aria-label={t('deleteLatestAria', { currency: row.cur })}
                     onClick={() => {
                       deleteExchangeRate(row.latest.date, row.cur);
-                      toast.success(`${row.cur} rate removed`, { description: row.latest.date });
+                      toast.success(t('removedToast', { currency: row.cur }), { description: row.latest.date });
                     }}
                     className="text-muted-foreground hover:text-destructive ml-1"
                   >
@@ -125,7 +128,7 @@ export function ExchangeRates() {
           <div className="mt-2.5 flex items-center justify-end px-1">
             <Button variant="outline" size="sm" onClick={openAdd}>
               <Icon name="plus" size={12} />
-              Add rate
+              {t('addRate')}
             </Button>
           </div>
         </>
@@ -134,16 +137,13 @@ export function ExchangeRates() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add exchange rate</DialogTitle>
-            <DialogDescription>
-              How many USD equals one unit of the foreign currency (USD-pivoted). Used by display
-              conversion and locked into new transactions at insert time.
-            </DialogDescription>
+            <DialogTitle>{t('dialog.title')}</DialogTitle>
+            <DialogDescription>{t('dialog.description')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Currency</Label>
+                <Label>{t('dialog.currency')}</Label>
                 <Select value={draft.currency} onValueChange={(v) => setDraft({ ...draft, currency: v })}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -160,7 +160,7 @@ export function ExchangeRates() {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="rate-date">Date</Label>
+                <Label htmlFor="rate-date">{t('dialog.date')}</Label>
                 <Input
                   id="rate-date"
                   type="date"
@@ -170,7 +170,7 @@ export function ExchangeRates() {
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rate-value">Rate (1 {draft.currency} = ? USD)</Label>
+              <Label htmlFor="rate-value">{t('dialog.rateLabel', { currency: draft.currency })}</Label>
               <Input
                 id="rate-value"
                 type="number"
@@ -183,7 +183,7 @@ export function ExchangeRates() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Source</Label>
+              <Label>{t('dialog.source')}</Label>
               <Select value={draft.source} onValueChange={(v) => setDraft({ ...draft, source: v })}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -200,9 +200,9 @@ export function ExchangeRates() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submit}>Save</Button>
+            <Button onClick={submit}>{tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
@@ -37,6 +38,7 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
   const confirmPendingWithMatch = useFinanceStore((s) => s.confirmPendingWithMatch);
   const cancelPending = useFinanceStore((s) => s.cancelPending);
   const { openMerchantPicker } = useMerchantPicker();
+  const t = useTranslations('pendingRow');
 
   // Project the store's `counterparties` into the matcher's shape. We re-run
   // the matcher only when the raw merchant or the catalog changes — the rest
@@ -65,18 +67,24 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
   const acct = acctById(tx.account);
   const isFx = tx.currency && tx.currency !== 'SGD' && tx.currency !== 'USD';
 
+  const resLabel = (r: MerchantResolution, raw: string): string => {
+    if (r.kind === 'new') return t('resolutionLabel.savedAs', { name: r.name });
+    if (r.name === raw) return t('resolutionLabel.confirmed');
+    return t('resolutionLabel.linkedTo', { name: r.name });
+  };
+
   const handleConfirm = () => {
     if (!resolution) {
-      toast.error('Pick or name a merchant first');
+      toast.error(t('errors.pickOrName'));
       return;
     }
     confirmPendingWithMatch(tx.id, resolution);
-    toast.success(`Confirmed ${acct?.name ?? ''} · ${resolutionLabel(resolution, tx.merchant)}`);
+    toast.success(t('toasts.confirmed', { account: acct?.name ?? '', label: resLabel(resolution, tx.merchant) }));
   };
 
   const handleCancel = () => {
     cancelPending(tx.id);
-    toast(`Voided ${tx.merchant}`);
+    toast(t('toasts.voided', { merchant: tx.merchant }));
   };
 
   const handlePick = (seedQuery: string) => {
@@ -109,7 +117,7 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
           <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
             {acct?.name ?? tx.account} · {tx.date.replace(/-/g, '/')}
             {tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat?.name ?? tx.category}
-            {isFx && <span className="text-warning font-mono text-[10px]">· FX</span>}
+            {isFx && <span className="text-warning font-mono text-[10px]">{t('fxChip')}</span>}
           </div>
           {tx.note && (
             <div className="bg-secondary text-secondary-foreground mt-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs">
@@ -146,11 +154,11 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
             )}
           >
             <Icon name="check" size={12} stroke={2} />
-            {confirmLabel(match, resolution)}
+            {t(`confirm.${confirmLabelKey(match, resolution)}`)}
           </button>
           <button
             type="button"
-            aria-label="Cancel"
+            aria-label={t('cancelAria')}
             onClick={handleCancel}
             className="border-border text-muted-foreground flex h-8 w-8 items-center justify-center rounded-[16px] border"
           >
@@ -173,11 +181,12 @@ interface MerchantRowProps {
 }
 
 function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, onClearOverride }: MerchantRowProps) {
+  const t = useTranslations('pendingRow');
   // If the user explicitly picked something, show that override.
   if (resolution) {
     return (
       <div className="mt-3 flex items-center gap-1.5">
-        <span className="text-muted-foreground text-[11px]">Merchant:</span>
+        <span className="text-muted-foreground text-[11px]">{t('merchantLabel')}</span>
         <button
           type="button"
           onClick={() => onPick(resolution.kind === 'new' ? resolution.name : tx.merchant)}
@@ -189,7 +198,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
         <button
           type="button"
           onClick={onClearOverride}
-          aria-label="Clear override"
+          aria-label={t('clearOverride')}
           className="text-muted-foreground hover:text-foreground ml-1 p-1"
         >
           <Icon name="x" size={11} />
@@ -201,7 +210,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
   if (match.kind === 'verified') {
     return (
       <div className="mt-3 flex items-center gap-1.5">
-        <span className="text-muted-foreground text-[11px]">Merchant:</span>
+        <span className="text-muted-foreground text-[11px]">{t('merchantLabel')}</span>
         <button
           type="button"
           onClick={() => onPick(tx.merchant)}
@@ -218,7 +227,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
   if (match.kind === 'unverified') {
     return (
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className="text-muted-foreground text-[11px]">Merchant:</span>
+        <span className="text-muted-foreground text-[11px]">{t('merchantLabel')}</span>
         <button
           type="button"
           onClick={() => onPick(tx.merchant)}
@@ -226,7 +235,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
         >
           {match.candidate.name}
           <span className="border-warning/40 rounded border px-1 py-0 font-mono text-[8px] tracking-[0.6px]">
-            UNVERIFIED
+            {t('unverified')}
           </span>
           <Icon name="chev" size={10} className="-rotate-180" />
         </button>
@@ -237,7 +246,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
   if (match.kind === 'ambiguous') {
     return (
       <div className="mt-3 flex flex-col gap-1.5">
-        <div className="text-muted-foreground text-[11px]">Pick a merchant:</div>
+        <div className="text-muted-foreground text-[11px]">{t('pickMerchant')}</div>
         <div className="flex flex-wrap gap-1.5">
           {match.candidates.map((c) => (
             <button
@@ -249,7 +258,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
               {c.name}
               {!c.verified && (
                 <span className="border-warning/40 text-warning rounded border px-1 py-0 font-mono text-[8px] tracking-[0.6px]">
-                  ?
+                  {t('ambiguousUnknown')}
                 </span>
               )}
             </button>
@@ -260,7 +269,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
             className="border-border text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs"
           >
             <Icon name="search" size={10} />
-            Other…
+            {t('other')}
           </button>
         </div>
       </div>
@@ -270,13 +279,13 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
   // match.kind === 'none' — inline name input.
   return (
     <div className="mt-3 flex items-center gap-1.5">
-      <span className="text-muted-foreground text-[11px]">Save as:</span>
+      <span className="text-muted-foreground text-[11px]">{t('saveAs')}</span>
       <input
         type="text"
         value={newName}
         onChange={(e) => onNewNameChange(e.target.value)}
-        placeholder="Merchant name"
-        aria-label="New merchant name"
+        placeholder={t('saveAsPlaceholder')}
+        aria-label={t('saveAsAria')}
         className="bg-secondary text-foreground placeholder:text-muted-foreground focus-ring h-7 min-w-0 flex-1 rounded-md border-0 px-2.5 text-xs outline-none"
       />
     </div>
@@ -304,14 +313,10 @@ function canConfirm(match: Match, resolution: MerchantResolution | null, newName
   return resolution !== null;
 }
 
-function confirmLabel(match: Match, resolution: MerchantResolution | null): string {
-  if (match.kind === 'unverified' && resolution?.kind === 'existing') return 'Confirm & verify';
-  if (match.kind === 'none') return 'Confirm & create';
-  return 'Confirm';
-}
-
-function resolutionLabel(r: MerchantResolution, raw: string): string {
-  return r.kind === 'new' ? `saved as ${r.name}` : r.name === raw ? 'confirmed' : `linked to ${r.name}`;
+function confirmLabelKey(match: Match, resolution: MerchantResolution | null): 'verify' | 'create' | 'default' {
+  if (match.kind === 'unverified' && resolution?.kind === 'existing') return 'verify';
+  if (match.kind === 'none') return 'create';
+  return 'default';
 }
 
 function hashHue(s: string): number {

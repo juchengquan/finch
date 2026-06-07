@@ -48,19 +48,19 @@ export function prevPeriod(period: string, frequency: Frequency, anchor: string)
   return periodOf(toYmd(addDays(fromYmd(from), -1)), frequency, anchor);
 }
 
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-/** Human-readable label for a period id — for UI headers. */
-export function periodLabel(period: string, frequency: Frequency, anchor: string): string {
+/** Human-readable label for a period id — for UI headers. Accepts an
+ *  optional `locale` so month/day formatting follows the active UI
+ *  language (defaults to undefined, which uses the runtime's default). */
+export function periodLabel(period: string, frequency: Frequency, anchor: string, locale?: string): string {
   const d = fromYmd(period);
   switch (frequency) {
     case 'daily':
-      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      return d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     case 'monthly':
       // Calendar-aligned monthly (anchor on day 1) → "April 2026".
       // Otherwise show the window range so the label matches what the user sees.
       if (fromYmd(anchor).getDate() === 1) {
-        return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+        return d.toLocaleDateString(locale, { year: 'numeric', month: 'long' });
       }
       break;
     case 'quarterly': {
@@ -88,7 +88,7 @@ export function periodLabel(period: string, frequency: Frequency, anchor: string
   const toD = fromYmd(to);
   const sameYear = d.getFullYear() === toD.getFullYear();
   const fmt = (x: Date, withYear: boolean) =>
-    x.toLocaleDateString('en-US', withYear
+    x.toLocaleDateString(locale, withYear
       ? { month: 'short', day: 'numeric', year: 'numeric' }
       : { month: 'short', day: 'numeric' });
   return `${fmt(d, !sameYear)} – ${fmt(toD, true)}`;

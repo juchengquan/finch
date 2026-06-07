@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,16 +42,21 @@ interface RowActionsProps {
 export function RowActions({
   onEdit,
   onDelete,
-  editLabel = 'Edit',
-  deleteLabel = 'Delete',
+  editLabel,
+  deleteLabel,
   confirmTitle,
   confirmDescription,
-  confirmLabel = 'Delete',
-  triggerLabel = 'More actions',
+  confirmLabel,
+  triggerLabel,
   align = 'end',
   className,
 }: RowActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const tCommon = useTranslations('common');
+  const resolvedEdit = editLabel ?? tCommon('edit');
+  const resolvedDelete = deleteLabel ?? tCommon('delete');
+  const resolvedConfirm = confirmLabel ?? tCommon('delete');
+  const resolvedTrigger = triggerLabel ?? tCommon('moreActions');
   return (
     <>
       <DropdownMenu>
@@ -59,7 +65,7 @@ export function RowActions({
             variant="ghost"
             size="icon"
             className={className ?? 'text-muted-foreground size-8 shrink-0 rounded-full'}
-            aria-label={triggerLabel}
+            aria-label={resolvedTrigger}
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
           >
             <Icon name="dots" size={16} />
@@ -68,12 +74,12 @@ export function RowActions({
         <DropdownMenuContent align={align}>
           {onEdit && (
             <DropdownMenuItem onSelect={() => onEdit()}>
-              <Icon name="edit" size={14} />{editLabel}
+              <Icon name="edit" size={14} />{resolvedEdit}
             </DropdownMenuItem>
           )}
           {onDelete && (
             <DropdownMenuItem variant="destructive" onSelect={() => setConfirmOpen(true)}>
-              <Icon name="trash" size={14} />{deleteLabel}
+              <Icon name="trash" size={14} />{resolvedDelete}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
@@ -87,10 +93,10 @@ export function RowActions({
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
             <Button variant="destructive" onClick={() => { onDelete?.(); setConfirmOpen(false); }}>
-              {confirmLabel}
+              {resolvedConfirm}
             </Button>
           </DialogFooter>
         </DialogContent>

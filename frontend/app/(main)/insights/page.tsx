@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Money, BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
 import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -30,11 +31,8 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const fullMonth = (ym: string) => (ym ? MONTH_LABELS[Number(ym.slice(5)) - 1] : '');
 const formatMonth = (ym: string) => (ym ? `${MONTH_LABELS[Number(ym.slice(5)) - 1]} ${ym.slice(0, 4)}` : '');
 
-const VIEWS = [
-  { id: 'trends', label: 'Trends' },
-  { id: 'breakdown', label: 'Breakdown' },
-] as const;
-type View = (typeof VIEWS)[number]['id'];
+const VIEW_IDS = ['trends', 'breakdown'] as const;
+type View = (typeof VIEW_IDS)[number];
 
 // Stacked horizontal bar that visualises the four forecast components
 // (mtd / unscheduled / scheduled) at their proportional widths.
@@ -55,13 +53,8 @@ function ForecastBar({ forecast }: { forecast: MonthForecast }) {
   );
 }
 
-const METRICS = [
-  { id: 'spending', label: 'Spending' },
-  { id: 'income', label: 'Income' },
-  { id: 'cashflow', label: 'Cashflow' },
-  { id: 'networth', label: 'Net worth' },
-] as const;
-type Metric = (typeof METRICS)[number]['id'];
+const METRIC_IDS = ['spending', 'income', 'cashflow', 'networth'] as const;
+type Metric = (typeof METRIC_IDS)[number];
 
 const RANGES = [
   { id: 3, label: '3M' },
@@ -75,6 +68,8 @@ export default function InsightsPage() {
   const [range, setRange] = useState<number>(12);
   const { activeId } = useLedger();
   const { fmt, toBase } = useMoney();
+  const t = useTranslations('insights');
+  const tWeekday = useTranslations('insightCards.weekdays');
   const { downloadCsv } = useBackup();
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -105,11 +100,13 @@ export default function InsightsPage() {
   const exportCsv = () => {
     void downloadCsv({ ledgerId: activeId, month: breakdownMonth || undefined })
       .then(() =>
-        toast.success('Transactions exported', {
-          description: breakdownMonth ? `${formatMonth(breakdownMonth)} · CSV` : 'CSV downloaded',
+        toast.success(t('breakdown.exportToast'), {
+          description: breakdownMonth
+            ? t('breakdown.exportDescription', { month: formatMonth(breakdownMonth) })
+            : t('breakdown.exportDownloaded'),
         }),
       )
-      .catch((err) => toast.error('Export failed', { description: String((err as Error).message ?? err) }));
+      .catch((err) => toast.error(t('breakdown.exportFailure'), { description: String((err as Error).message ?? err) }));
   };
 
   // Category reference (name + static seed budget) for the deltas comparison; the
@@ -138,6 +135,7 @@ export default function InsightsPage() {
     ledgerId: activeId,
     month,
     fmt: (n) => fmt(n),
+    weekdayName: (d) => tWeekday(String(d)),
   });
 
   // Month-over-month spending for the header (falls back to curated copy if there's
@@ -164,11 +162,11 @@ export default function InsightsPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Insights" trailing={<SearchButton />} />}
+      header={<ScreenHeader title={t('title')} trailing={<SearchButton />} />}
     >
       <div className="px-5 pb-[22px]">
         <PageHeader
-          label={momPct == null ? "Your spending" : momPct <= 0 ? "You're spending less" : "You're spending more"}
+          label={momPct == null ? t('headers.yourSpending') : momPct <= 0 ? t('headers.lessThanLast') : t('headers.moreThanLast')}
           value={
             <span className="font-serif text-[60px] leading-none -tracking-[2px]">
               {momPct == null ? fmt(curSpend) : `${momPct <= 0 ? '↓' : '↑'} ${Math.abs(momPct)}%`}
@@ -176,7 +174,7 @@ export default function InsightsPage() {
           }
           sublabel={
             <span className="text-secondary-foreground font-serif text-base italic">
-              {momPct == null ? 'this month' : 'than last month'}
+              {momPct == null ? t('headers.thisMonth') : t('headers.thanLastMonth')}
             </span>
           }
         />
@@ -184,20 +182,20 @@ export default function InsightsPage() {
 
       <div className="px-5 pb-[120px]">
         {/* Trends / Breakdown view toggle (Insights + the former Reports page). */}
-        <div role="tablist" aria-label="Insights view" className="bg-secondary mb-4 flex gap-1 rounded-full p-1">
-          {VIEWS.map((v) => (
+        <div role="tablist" aria-label={t('viewToggleAria')} className="bg-secondary mb-4 flex gap-1 rounded-full p-1">
+          {VIEW_IDS.map((v) => (
             <button
-              key={v.id}
+              key={v}
               type="button"
               role="tab"
-              aria-selected={view === v.id}
-              onClick={() => setView(v.id)}
+              aria-selected={view === v}
+              onClick={() => setView(v)}
               className={cn(
                 'h-8 flex-1 rounded-full text-xs font-medium transition-colors',
-                view === v.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+                view === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
               )}
             >
-              {v.label}
+              {t(`views.${v}`)}
             </button>
           ))}
         </div>
@@ -208,7 +206,7 @@ export default function InsightsPage() {
           <div className="md:grid md:grid-cols-[1fr_1.7fr] md:items-start md:gap-8">
             <div className="md:bg-card md:border-border md:rounded-xl md:border md:p-4">
               <div className="mb-2 flex items-center justify-between">
-                <div className="text-muted-foreground text-[10px] tracking-wider uppercase">Month</div>
+                <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{t('breakdown.monthLabel')}</div>
                 {breakdownMonths.length > 0 ? (
                   <Select value={breakdownMonth} onValueChange={setPickedMonth}>
                     <SelectTrigger className="border-border bg-card h-7 w-auto min-w-[110px] gap-1.5 rounded-full px-3 text-xs font-medium">
@@ -226,9 +224,9 @@ export default function InsightsPage() {
               </div>
               <div className="mb-4">
                 <PageHeader
-                  label="Spent"
+                  label={t('breakdown.spent')}
                   value={<Money value={breakdownTotal} mono={false} />}
-                  sublabel={`${breakdownCats.length} categories`}
+                  sublabel={t('breakdown.categoriesCount', { count: breakdownCats.length })}
                 />
               </div>
               <button
@@ -237,12 +235,12 @@ export default function InsightsPage() {
                 disabled={!breakdownMonth}
                 className="bg-secondary text-secondary-foreground flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-medium disabled:opacity-50"
               >
-                Export {breakdownMonth ? formatMonth(breakdownMonth) : 'month'} CSV
+                {breakdownMonth ? t('breakdown.exportMonth', { month: formatMonth(breakdownMonth) }) : t('breakdown.exportGeneric')}
               </button>
             </div>
             {breakdownTotal === 0 ? (
               <div className="text-muted-foreground border-border mt-4 rounded-xl border border-dashed py-10 text-center text-sm md:mt-0">
-                No spending in {formatMonth(breakdownMonth) || 'this ledger'}.
+                {t('breakdown.noSpending', { scope: formatMonth(breakdownMonth) || t('breakdown.scopeFallback') })}
               </div>
             ) : (
               <div className="md:bg-card md:border-border md:rounded-xl md:border md:px-4">
@@ -266,17 +264,17 @@ export default function InsightsPage() {
         <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="bg-secondary flex gap-1 rounded-full p-1">
-              {METRICS.map((m) => (
+              {METRIC_IDS.map((m) => (
                 <button
-                  key={m.id}
+                  key={m}
                   type="button"
-                  onClick={() => setMetric(m.id)}
+                  onClick={() => setMetric(m)}
                   className={cn(
                     'h-7 rounded-full px-3 text-xs font-medium transition-colors',
-                    metric === m.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+                    metric === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
                   )}
                 >
-                  {m.label}
+                  {t(`metrics.${m}`)}
                 </button>
               ))}
             </div>
@@ -336,11 +334,11 @@ export default function InsightsPage() {
               <div className="text-muted-foreground mt-2 flex gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5">
                   <span className="bg-success size-2 rounded-full" />
-                  Income
+                  {t('chartLegend.income')}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="bg-destructive size-2 rounded-full" />
-                  Expense
+                  {t('chartLegend.expense')}
                 </span>
               </div>
             </>
@@ -370,14 +368,14 @@ export default function InsightsPage() {
         {forecast && forecast.daysRemaining > 0 && (
           <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
             <div className="mb-2 flex items-baseline justify-between">
-              <div className="text-sm font-semibold">Spending forecast</div>
+              <div className="text-sm font-semibold">{t('forecast.title')}</div>
               <span className="text-muted-foreground text-[11px]">
-                day {forecast.daysElapsed} of {forecast.daysInMonth}
+                {t('forecast.dayOf', { elapsed: forecast.daysElapsed, total: forecast.daysInMonth })}
               </span>
             </div>
             <div className="mb-3 flex items-baseline gap-3">
               <span className="font-serif text-3xl -tracking-[0.5px]">{fmt(forecast.projected)}</span>
-              <span className="text-muted-foreground text-xs">projected</span>
+              <span className="text-muted-foreground text-xs">{t('forecast.projected')}</span>
               {forecastVsPrev != null && (
                 <span
                   className={cn(
@@ -385,7 +383,7 @@ export default function InsightsPage() {
                     forecastVsPrev > 0 ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success',
                   )}
                 >
-                  {forecastVsPrev > 0 ? '↑' : '↓'} {Math.abs(forecastVsPrev)}% vs {fullMonth(prevMonth(month))}
+                  {t('forecast.vsPrev', { dir: forecastVsPrev > 0 ? '↑' : '↓', pct: Math.abs(forecastVsPrev), month: fullMonth(prevMonth(month)) })}
                 </span>
               )}
             </div>
@@ -393,16 +391,16 @@ export default function InsightsPage() {
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="bg-primary size-2 rounded-full" />
-                Spent so far · {fmt(forecast.mtdSpent)}
+                {t('forecast.spentSoFar', { amount: fmt(forecast.mtdSpent) })}
               </span>
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="bg-muted-foreground size-2 rounded-full" />
-                Run-rate rest · {fmt(forecast.unscheduledRest)}
+                {t('forecast.runRateRest', { amount: fmt(forecast.unscheduledRest) })}
               </span>
               {forecast.scheduledRest > 0 && (
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <span className="bg-warning size-2 rounded-full" />
-                  Scheduled · {fmt(forecast.scheduledRest)}
+                  {t('forecast.scheduled', { amount: fmt(forecast.scheduledRest) })}
                 </span>
               )}
             </div>
@@ -412,12 +410,12 @@ export default function InsightsPage() {
         {flow && flow.income > 0 && flow.categories.length > 0 && (
           <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
             <div className="mb-2 flex items-baseline justify-between">
-              <div className="text-sm font-semibold">Where {fullMonth(month)} income went</div>
-              <span className="text-muted-foreground text-[11px]">{fmt(flow.income)} in</span>
+              <div className="text-sm font-semibold">{t('incomeFlow.title', { month: fullMonth(month) })}</div>
+              <span className="text-muted-foreground text-[11px]">{t('incomeFlow.incomeIn', { amount: fmt(flow.income) })}</span>
             </div>
             <div className="overflow-hidden">
               <Sankey
-                left={[{ name: 'Income', value: flow.income, color: 'var(--success)' }]}
+                left={[{ name: t('incomeFlow.incomeLabel'), value: flow.income, color: 'var(--success)' }]}
                 right={[
                   ...flow.categories.map((c) => ({
                     name: c.name,
@@ -425,7 +423,7 @@ export default function InsightsPage() {
                     color: c.color,
                   })),
                   ...(flow.saved > 0
-                    ? [{ name: 'Saved', value: flow.saved, color: 'var(--primary)' }]
+                    ? [{ name: t('incomeFlow.savedLabel'), value: flow.saved, color: 'var(--primary)' }]
                     : []),
                 ]}
                 width={520}
@@ -443,7 +441,7 @@ export default function InsightsPage() {
               {flow.saved > 0 && (
                 <span className="flex items-center gap-1.5">
                   <span className="bg-primary size-2 rounded-full" />
-                  Saved · {fmt(flow.saved)}
+                  {t('incomeFlow.savedTotal', { amount: fmt(flow.saved) })}
                 </span>
               )}
             </div>
@@ -453,8 +451,8 @@ export default function InsightsPage() {
         {heatmap.some((d) => d.value > 0) && (
           <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
             <div className="mb-2 flex items-baseline justify-between">
-              <div className="text-sm font-semibold">Daily spending</div>
-              <span className="text-muted-foreground text-[11px]">last 12 weeks</span>
+              <div className="text-sm font-semibold">{t('heatmap.title')}</div>
+              <span className="text-muted-foreground text-[11px]">{t('heatmap.last12Weeks')}</span>
             </div>
             <div className="overflow-x-auto">
               <CalendarHeatmap values={heatmap} />
@@ -465,20 +463,20 @@ export default function InsightsPage() {
         {insights.length > 0 ? (
           <div className="md:grid md:grid-cols-3 md:gap-3">
             {insights.map((ins) => (
-              <InsightCard key={ins.title} insight={ins} />
+              <InsightCard key={ins.title.key} insight={ins} />
             ))}
           </div>
         ) : (
           <div className="text-muted-foreground rounded-xl border border-dashed border-border py-8 text-center text-sm">
-            Add a few transactions to see insights.
+            {t('insightsEmpty')}
           </div>
         )}
 
         {categoryDeltas.length > 0 && (
           <div className="mt-[22px]">
             <div className="mb-2.5 flex items-baseline justify-between">
-              <div className="font-serif text-lg italic">{fullMonth(prevMonth(month))} vs {fullMonth(month)}</div>
-              <span className="text-muted-foreground text-[11px]">Top changes</span>
+              <div className="font-serif text-lg italic">{t('deltas.title', { prev: fullMonth(prevMonth(month)), cur: fullMonth(month) })}</div>
+              <span className="text-muted-foreground text-[11px]">{t('deltas.topChanges')}</span>
             </div>
             <AprVsMay data={categoryDeltas} />
           </div>
