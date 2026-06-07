@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
+import { useAppLocale } from '@/components/i18n-provider';
 import { Icon } from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,6 +91,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const { fmt } = useMoney();
   const t = useTranslations('budgets.form');
   const tCommon = useTranslations('common');
+  const { locale } = useAppLocale();
   const accounts = useFinanceStore((s) => s.accounts);
   const storeCats = useFinanceStore((s) => s.categories);
   const budgetGroups = useFinanceStore((s) => s.budgetGroups);
@@ -158,7 +160,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
           const today = new Date().toISOString().slice(0, 10);
           const current = periodOf(today, budget.frequency as Frequency, budget.startDate);
           const np = nextPeriod(current, budget.frequency as Frequency, budget.startDate);
-          return periodLabel(np, budget.frequency as Frequency, budget.startDate);
+          return periodLabel(np, budget.frequency as Frequency, budget.startDate, locale);
         } catch {
           return null;
         }

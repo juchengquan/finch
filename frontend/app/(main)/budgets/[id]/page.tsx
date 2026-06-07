@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
+import { useAppLocale } from '@/components/i18n-provider';
 import { Ring, Money, Icon, CatBar } from '@/components/primitives';
 import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
@@ -34,6 +35,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const t = useTranslations('budgets.detail');
   const tNav = useTranslations('nav');
   const tCommon = useTranslations('common');
+  const { locale } = useAppLocale();
   const allTxns = useFinanceStore((s) => s.transactions);
   const allCategories = useFinanceStore((s) => s.categories);
   const removeBudget = useFinanceStore((s) => s.removeBudget);
@@ -114,7 +116,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
               )}
             </div>
             <div className="text-muted-foreground mt-0.5 text-[11px]">
-              {periodLabel(p.from, budget.frequency as Frequency, budget.startDate)} · {p.from.replace(/-/g, '/')}–{p.to.replace(/-/g, '/')}
+              {periodLabel(p.from, budget.frequency as Frequency, budget.startDate, locale)} · {p.from.replace(/-/g, '/')}–{p.to.replace(/-/g, '/')}
             </div>
             {budget.pendingAmount != null && (
               <div className="text-warning bg-warning/10 mt-1.5 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px]">
@@ -125,6 +127,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
                     nextPeriod(p.from, budget.frequency as Frequency, budget.startDate),
                     budget.frequency as Frequency,
                     budget.startDate,
+                    locale,
                   ),
                 })}
               </div>
