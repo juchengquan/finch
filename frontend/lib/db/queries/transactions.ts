@@ -106,8 +106,7 @@ function legRowToTx(r: Record<string, unknown>): Tx {
   };
 }
 
-/** @deprecated alias for callers that still import rowToTx — forwards to legRowToTx.
- *  Remove once B4 sweep is complete. */
+/** @deprecated alias retained for callers that still import rowToTx — forwards to legRowToTx. */
 export const rowToTx = legRowToTx;
 
 /** Parse the applied_rule_ids JSON array column; undefined when null/corrupt. */
@@ -415,10 +414,8 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
 }
 
 /** @deprecated B3b: this wrapper is DEAD CODE — all callers now go through
- *  addTransaction → postSimple/postEntry. Retained because state.ts still
- *  imports it (B4 will remove it). Callers from different contexts (user add,
- *  transfer leg, scheduled post, auto-generated pending, seed bulk import) all
- *  funnel through `insertTxRow`; optional fields fall back to resolved values
+ *  addTransaction → postSimple/postEntry. Retained for tests that still use
+ *  the insertTxRow shim; optional fields fall back to resolved values
  *  (id, currency, amountBase/rate, counterpartyId, status, timestamp). */
 export interface NewTxRow {
   ledgerId: string;
@@ -456,8 +453,7 @@ export interface NewTxRow {
 }
 
 /** @deprecated insertTxRow is DEAD CODE as of B3b. All insert paths now go
- *  through addTransaction → postSimple/postEntry. Retained because state.ts
- *  still imports this type at B4 (will be removed then). */
+ *  through addTransaction → postSimple/postEntry. Retained as a test shim. */
 export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
   // Thin shim: delegate to addTransaction which uses postSimple/postEntry.
   return addTransaction(exec, {

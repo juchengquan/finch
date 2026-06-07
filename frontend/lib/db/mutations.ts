@@ -1059,8 +1059,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // change rollover invalidations are out of scope for this PR — set_*
       // covers the 80% case (the "rename + categorise" workflow).
       const ruleId = str(args.id);
-      const [{ listActiveRules }, { applyRules }, { resolveCounterpartyIdByName }] = await Promise.all([
-        import('./queries/rules'),
+      const [{ applyRules }, { resolveCounterpartyIdByName }] = await Promise.all([
         import('@/lib/rules/engine'),
         import('./queries/counterparties'),
       ]);
@@ -1076,7 +1075,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // haven't really happened yet — the user can re-confirm to trigger them
       // through the insert hook). Only plain income/expense/refund entries are
       // eligible (transfers and adjustments are structural, not user-categorised).
-      const { listActiveRules: _unused } = { listActiveRules }; void _unused;
       const entryRows = await exec(
         `SELECT e.id, e.ledger_id, e.date, e.time, e.description, e.kind,
                 e.notes, e.counterparty_id, e.applied_rule_ids,
@@ -1091,7 +1089,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       for (const r of entryRows) {
         // Build a minimal Tx synthesizing what evaluateCondition reads.
         const tx = {
-          id: String(r.id), // entry id; B4 will expose posting id instead
+          id: String(r.id), // entry id; the projection exposes the posting id via state.ts
           merchant: String(r.description ?? ''),
           category: r.category_id == null ? null : String(r.category_id),
           amount: Number(r.amount_base),

@@ -172,7 +172,7 @@ export default function TransfersPage() {
     <MobilePage header={<ScreenHeader title={t('title')} trailing={newTransferDialog} />}>
       <div className="px-5 pb-[120px]">
         <div className="px-1 pb-5">
-          <SchemaChip label="transfer_groups" />
+          <SchemaChip label="entries" />
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
             {transfers.length} <span className="text-muted-foreground italic">{t('transfers')}</span>
           </div>

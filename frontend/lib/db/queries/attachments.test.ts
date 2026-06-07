@@ -7,6 +7,7 @@ import {
   countAttachmentsForTransaction,
   insertAttachment,
   deleteAttachment,
+  resolveAttachmentTarget,
 } from '@/lib/db/queries/attachments';
 import { freshDb as freshTestDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
@@ -193,6 +194,40 @@ test('FK cascade on ledger delete removes the attachment rows', async () => {
   await exec(`UPDATE entries SET sealed = 0 WHERE ledger_id = 'personal'`);
   await exec('DELETE FROM ledgers WHERE id = ?', ['personal']);
   expect((await listAttachments(exec, 'personal')).length).toBe(0);
+});
+
+test('resolveAttachmentTarget resolves account-posting id, entry id, and returns null for unknown', async () => {
+  // The upload route uses this helper instead of the dropped `transactions` table.
+  const exec = await freshDb();
+
+  // t1-acct is the account-posting id for entry t1.
+  const byPosting = await resolveAttachmentTarget(exec, 't1-acct');
+  expect(byPosting).not.toBeNull();
+  expect(byPosting!.entryId).toBe('t1');
+  expect(byPosting!.ledgerId).toBe('personal');
+
+  // Passing the entry id directly also works.
+  const byEntry = await resolveAttachmentTarget(exec, 't1');
+  expect(byEntry).not.toBeNull();
+  expect(byEntry!.entryId).toBe('t1');
+  expect(byEntry!.ledgerId).toBe('personal');
+
+  // Unknown id returns null.
+  const miss = await resolveAttachmentTarget(exec, 'nope');
+  expect(miss).toBeNull();
+
+  // Confirm insertAttachment against the resolved entryId lands the correct row.
+  const target = byPosting!;
+  await insertAttachment(exec, {
+    ...sample,
+    id: 'att-resolved',
+    ledgerId: target.ledgerId,
+    transactionId: target.entryId,
+    relPath: `attachments/${target.entryId}/att-resolved.jpg`,
+  });
+  const row = await getAttachmentFile(exec, 'att-resolved');
+  expect(row).not.toBeNull();
+  expect(row!.transactionId).toBe('t1'); // entry_id stored on the row
 });
 
 test('CHECK constraint rejects an unknown kind', async () => {

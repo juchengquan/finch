@@ -6,6 +6,7 @@ import { withWrite } from '@/lib/db/server';
 import {
   insertAttachment,
   countAttachmentsForTransaction,
+  resolveAttachmentTarget,
 } from '@/lib/db/queries/attachments';
 import { resolveAttachmentPath } from '@/lib/db/paths';
 import { detectFile, processBytes } from '@/lib/attachments/process';
@@ -73,14 +74,14 @@ export async function POST(req: Request) {
     // are we under the per-tx cap?). Bundle with the insert in withWrite so
     // a failure here triggers ROLLBACK and the file write below never runs.
     const state = await withWrite(async (exec) => {
-      const txRows = await exec(
-        'SELECT id, ledger_id FROM transactions WHERE id = ?',
-        [transactionId],
-      );
-      if (!txRows.length) {
+      // Resolve the client's transactionId (account-posting id or entry id)
+      // to the owning entry + ledger. The legacy `transactions` table is gone;
+      // resolveAttachmentTarget looks up postings → entries (§4.2).
+      const target = await resolveAttachmentTarget(exec, transactionId);
+      if (!target) {
         throw new HttpError(404, 'Transaction not found');
       }
-      const ledgerId = String(txRows[0].ledger_id);
+      const { entryId, ledgerId } = target;
 
       const existingCount = await countAttachmentsForTransaction(exec, transactionId);
       if (existingCount >= maxPerTx()) {
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
       // path.posix.join keeps the rel_path forward-slashed for cross-platform
       // pack interop (PACK_FORMAT_PLAN); the on-disk path uses the OS sep
       // via resolveAttachmentPath.
-      const relPath = path.posix.join('attachments', transactionId, `${id}.${processed.outExt}`);
+      const relPath = path.posix.join('attachments', entryId, `${id}.${processed.outExt}`);
       const absPath = resolveAttachmentPath(relPath);
       if (!absPath) {
         // Defense-in-depth — should never trip with a server-built rel_path.
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
         await insertAttachment(exec, {
           id,
           ledgerId,
-          transactionId,
+          transactionId: entryId,
           kind: processed.outKind,
           relPath,
           mimeType: processed.outMime,

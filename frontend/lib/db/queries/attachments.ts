@@ -21,8 +21,8 @@ import { resolveEntryRef } from '@/lib/db/entries';
 export interface Attachment {
   id: string;
   ledgerId: string;
-  // B4: projection must map this to the account-posting id (Tx.id); for now
-  // this carries the ENTRY id, matching what the DB stores.
+  // transactionId carries the account-posting id as projected by state.ts;
+  // the entry→posting remap lives in state.ts's projection.
   transactionId: string;
   kind: 'image' | 'pdf';
   mimeType: string;
@@ -156,6 +156,21 @@ export async function insertAttachment(exec: Exec, p: InsertAttachmentParams): P
   );
 }
 
+/** Resolve the client's transaction ref (account-posting id or entry id) to
+ *  the owning entry + its ledger. Null when nothing matches. Used by the
+ *  upload route to validate existence and get ledgerId before the file write.
+ *  (The entry→posting remap lives in state.ts's projection.) */
+export async function resolveAttachmentTarget(
+  exec: Exec,
+  transactionId: string,
+): Promise<{ entryId: string; ledgerId: string } | null> {
+  const ref = await resolveEntryRef(exec, transactionId);
+  if (!ref) return null;
+  const [e] = await exec('SELECT id, ledger_id FROM entries WHERE id = ?', [ref.entryId]);
+  if (!e) return null;
+  return { entryId: String(e.id), ledgerId: String(e.ledger_id) };
+}
+
 /** Delete one attachment row. The caller is responsible for unlinking the
  *  file at `rel_path` — look it up via `getAttachmentFile` first. */
 export async function deleteAttachment(exec: Exec, id: string): Promise<void> {
@@ -174,8 +189,8 @@ function rowToAttachment(r: Record<string, unknown>): Attachment {
   return {
     id: String(r.id),
     ledgerId: String(r.ledger_id),
-    // entry_attachments stores entry_id; the Attachment.transactionId field
-    // carries this for now. B4: projection must remap to account-posting id.
+    // entry_attachments stores entry_id; state.ts's projection remaps this
+    // to the account-posting id so Attachment.transactionId matches Tx.id.
     transactionId: String(r.entry_id),
     kind,
     mimeType: String(r.mime_type),

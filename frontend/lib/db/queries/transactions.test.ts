@@ -229,6 +229,62 @@ test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance
   expect(after).toBeCloseTo(before, 2); // pending didn't move the balance
 });
 
+test('§10.4 categoryId filter matches split entries where one leg has that category', async () => {
+  // The legacy parent-only filter would have matched only the single category_id
+  // on the transactions row. The new filter uses EXISTS over all category postings,
+  // so a split entry (≥2 category legs) is found even when neither single leg
+  // is the "primary" category. §10.4
+  const exec = await seeded();
+
+  // Add a transaction that we will then manually split at the postings level.
+  // addTransaction creates one account leg + one category leg (food).
+  const entryId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -60,
+    merchant: 'Split Purchase',
+    categoryId: 'food',
+    date: '2026-05-27',
+  });
+
+  // Find the auto-created category posting (food leg) and the account posting id.
+  const [foodLeg] = await exec(
+    'SELECT id FROM postings WHERE entry_id = ? AND account_id IS NULL AND category_id = ?',
+    [entryId, 'food'],
+  ) as { id: string }[];
+  const [acctPostingRow] = await exec(
+    'SELECT id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1',
+    [entryId],
+  ) as { id: string }[];
+  const acctPostingId = String(acctPostingRow.id);
+
+  // Unseal so we can modify postings.
+  await exec(`UPDATE entries SET sealed = 0 WHERE id = ?`, [entryId]);
+  // Delete the original single-category leg.
+  await exec('DELETE FROM postings WHERE id = ?', [foodLeg.id]);
+  // Insert two category legs: food (-30) and shop (-30).
+  await exec(
+    `INSERT INTO postings (id, entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, sort_order)
+     VALUES ('sp-food', ?, NULL, 'food', 30, 'USD', 30, 1, 1),
+            ('sp-shop', ?, NULL, 'shop', 30, 'USD', 30, 1, 2)`,
+    [entryId, entryId],
+  );
+  // Re-seal.
+  await exec(`UPDATE entries SET sealed = 1 WHERE id = ?`, [entryId]);
+
+  // listTransactions with categoryId: 'food' must include this split entry.
+  const foodResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'food' });
+  expect(foodResults.some((t) => t.id === acctPostingId)).toBe(true);
+
+  // listTransactions with categoryId: 'shop' must also include it (second leg).
+  const shopResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'shop' });
+  expect(shopResults.some((t) => t.id === acctPostingId)).toBe(true);
+
+  // The entry must NOT appear under a category it has no leg for.
+  const otherResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'utilities' });
+  expect(otherResults.some((t) => t.id === acctPostingId)).toBe(false);
+});
+
 test("FTS5 search matches tokens with internal punctuation (O'Reilly, AT&T)", async () => {
   const exec = await seeded();
   // FTS5's unicode61 tokenizer splits "O'Reilly" into `o` + `reilly`; our
