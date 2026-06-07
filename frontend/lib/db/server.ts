@@ -353,8 +353,16 @@ async function importPackBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
 
   // DE §3.3: semantic-integrity check on the extracted DB before any
   // destructive operation. (The pack's own checksum + per-file sha256 verify
-  // bytes; auditLedger verifies semantics.)
-  await assertImportAuditClean(dbBytes);
+  // bytes; auditLedger verifies semantics.) Tear the staging tree down if the
+  // audit rejects — the function propagates the error after this block, so
+  // the cleanup must be here (the success path teardown further down is
+  // unreachable on throw).
+  try {
+    await assertImportAuditClean(dbBytes);
+  } catch (err) {
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
 
   // Snapshot the live DB so the swap is recoverable. (Attachments aren't
   // backed up here — see the rotation below.)
