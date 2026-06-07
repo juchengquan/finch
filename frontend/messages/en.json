@@ -1,0 +1,153 @@
+{
+  "settings": {
+    "account": {
+      "title": "Settings",
+      "language": {
+        "row": "Language",
+        "english": "English",
+        "chinese": "中文(简体)"
+      },
+      "backup": {
+        "section": "Backup & restore",
+        "dbInfo": {
+          "label": "Database file (server)",
+          "loading": "…"
+        },
+        "exportDb": {
+          "label": "Export a copy",
+          "button": "Download .finch"
+        },
+        "exportCsv": {
+          "label": "Export transactions",
+          "button": "Download .csv"
+        },
+        "importDb": {
+          "label": "Import database",
+          "button": "Choose file…",
+          "dialogTitle": "Import database?",
+          "dialogDescription": "Your data lives in a SQLite file on the server and syncs on every change. Importing replaces it. A snapshot of the current DB is saved first so you can undo this.",
+          "confirm": "Import",
+          "busy": "Importing…",
+          "cancel": "Cancel"
+        },
+        "frequency": {
+          "row": "Backup frequency",
+          "off": "Off (manual only)",
+          "everyChange": "After every change",
+          "hourly": "At most hourly",
+          "daily": "At most daily",
+          "weekly": "At most weekly"
+        },
+        "retention": {
+          "row": "Backups kept",
+          "files": "{count} files"
+        },
+        "backupNow": {
+          "label": "Back up now",
+          "button": "Snapshot",
+          "busy": "Snapshotting…",
+          "success": "Backup created",
+          "noop": "No backup created (auto-backup is off)"
+        },
+        "restore": {
+          "dialogTitle": "Restore this backup?",
+          "dialogDescription": "Replaces the current database with the contents of this backup. A snapshot of the live DB is created first so you can undo this.",
+          "confirm": "Restore"
+        }
+      }
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create"
+  },
+  "error": {
+    "required": {
+      "id": "id is required",
+      "name": "Name is required",
+      "budgetName": "Budget name is required",
+      "groupName": "Group name is required",
+      "accountName": "Account name is required",
+      "categoryName": "Category name is required",
+      "tagName": "Tag name is required",
+      "templateName": "Template name is required",
+      "merchantName": "Merchant name is required",
+      "ruleCondition": "Rule condition is required",
+      "splitAccount": "A split needs an account",
+      "account": "An account is required",
+      "investmentAccount": "An investment account is required",
+      "symbol": "Symbol is required",
+      "currency": "Currency is required",
+      "ledgerId": "ledgerId is required"
+    },
+    "notFound": {
+      "account": "Account not found",
+      "ledger": "Ledger not found",
+      "template": "Template not found",
+      "rule": "Rule not found",
+      "parentCategory": "Parent category does not exist",
+      "category": "Category does not exist"
+    },
+    "category": {
+      "depthCap": "Categories nest at most three levels deep",
+      "selfParent": "A category cannot be its own parent",
+      "underDescendant": "A category cannot be moved under its own descendant"
+    },
+    "transfer": {
+      "amountGt0": "Transfer amount must be greater than 0",
+      "sameAccount": "Pick two different accounts",
+      "receivedGt0": "Received amount must be greater than 0",
+      "sameCurrencyMismatch": "Same-currency transfer amounts must match"
+    },
+    "scheduled": {
+      "installmentDone": "\"{name}\" has finished its {total}-payment plan",
+      "missingAccount": "\"{name}\" is missing an account",
+      "variableAmount": "\"{name}\" has a variable amount — add it manually",
+      "noSplits": "No split amounts to post for \"{name}\""
+    },
+    "budget": {
+      "amountGt0": "Budget amount must be greater than 0",
+      "dateFormat": "startDate must be YYYY-MM-DD",
+      "unknownFreq": "Unknown frequency \"{freq}\"",
+      "invalidContribution": "Invalid contribution amount"
+    },
+    "adjust": {
+      "targetRequired": "Enter a target balance"
+    },
+    "reconcile": {
+      "statementBalance": "Statement balance is required"
+    },
+    "account": {
+      "unknownType": "Unknown account type \"{type}\"",
+      "splitTypeUnknown": "Unknown type \"{type}\"",
+      "splitFreqUnknown": "Unknown frequency \"{freq}\""
+    },
+    "holding": {
+      "sharesGt0": "Shares must be greater than 0",
+      "costBasisGte0": "Cost basis must be 0 or greater",
+      "notInvestment": "Holdings can only be added to an investment account",
+      "currencyMismatch": "Holding currency must match the account currency ({currency})",
+      "symbolEmpty": "Symbol cannot be empty",
+      "priceGte0": "Price must be 0 or greater"
+    },
+    "fx": {
+      "dateFormat": "Date must be YYYY-MM-DD",
+      "rateGt0": "Rate must be greater than 0",
+      "usdHub": "USD is the hub currency and is not stored"
+    },
+    "ledger": {
+      "baseISO": "base must be a 3-letter ISO code",
+      "newBaseISO": "newBase must be a 3-letter ISO code",
+      "duplicateId": "Ledger id already exists",
+      "nameEmpty": "Name cannot be empty"
+    },
+    "duplicate": {
+      "txn": "This looks like a duplicate — an identical transaction already exists.",
+      "budget": "A budget with this name and cycle already exists."
+    },
+    "unknownAction": "Unknown action: {action}"
+  }
+}
