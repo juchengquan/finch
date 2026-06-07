@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AddExpenseForm } from '@/components/add-expense-form';
 
@@ -20,6 +21,7 @@ export function useAddExpense(): AddExpenseValue {
 
 export function AddExpenseSheetProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const tAdd = useTranslations('add');
 
   const openAddExpense = useCallback(() => setOpen(true), []);
   const close = useCallback(() => setOpen(false), []);
@@ -35,8 +37,8 @@ export function AddExpenseSheetProvider({ children }: { children: React.ReactNod
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[720px] max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="border-border border-b px-5 py-4">
-            <DialogTitle className="font-serif text-xl italic">Add</DialogTitle>
-            <DialogDescription className="sr-only">Record an expense, income, or transfer.</DialogDescription>
+            <DialogTitle className="font-serif text-xl italic">{tAdd('sheetTitle')}</DialogTitle>
+            <DialogDescription className="sr-only">{tAdd('sheetDescription')}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* Only mount while open so the form starts blank on each open. */}

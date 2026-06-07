@@ -1,4 +1,95 @@
 {
+  "ledgerSwitcher": {
+    "switchAria": "切换账本",
+    "settingsAria": "账本设置",
+    "header": "账本",
+    "accountsCount": "{count} 个账户",
+    "txnsCount": "{count} 笔交易",
+    "newLedger": "新建账本",
+    "newDialog": {
+      "title": "新建账本",
+      "description": "另一套独立账本。请先选择基础货币 —— 此账本下记录的每笔交易都以该货币存储。名称与颜色稍后可修改。",
+      "name": "名称",
+      "namePlaceholder": "工作室 · 副业 · 日本之旅…",
+      "base": "基础货币",
+      "color": "颜色",
+      "tagline": "标语(可选)",
+      "taglinePlaceholder": "在切换器中显示的一句话描述",
+      "create": "创建账本",
+      "creating": "创建中…",
+      "nameRequired": "名称必填",
+      "createdToast": "已创建「{name}」",
+      "createdDescription": "已切换到新账本。",
+      "createFailure": "无法创建账本"
+    }
+  },
+  "txnSheet": {
+    "title": "交易详情",
+    "description": "查看并编辑所选交易。"
+  },
+  "add": {
+    "sheetTitle": "添加",
+    "sheetDescription": "记录一笔支出、收入或转账。",
+    "typeAria": "交易类型",
+    "types": {
+      "expense": "支出",
+      "income": "收入",
+      "transfer": "转账"
+    },
+    "recent": "最近",
+    "repeatAria": "重复 {merchant} {amount}",
+    "fields": {
+      "amount": "金额",
+      "amountAria": "金额",
+      "sent": "发出",
+      "currency": "货币",
+      "currencyHint": "跟随所选账户",
+      "merchant": "商户",
+      "merchantPlaceholder": "选择商户",
+      "merchantAria": "选择商户",
+      "category": "类别",
+      "account": "账户",
+      "from": "从",
+      "to": "到",
+      "recv": "收到 {currency}",
+      "recvAria": "收到金额",
+      "recvPlaceholder": "{currency} 金额",
+      "effectiveRate": "实际汇率:每 1 {from} = {rate} {to}",
+      "date": "日期",
+      "dateAria": "日期",
+      "note": "备注",
+      "noteAria": "备注",
+      "notePlaceholder": "可选"
+    },
+    "suggestion": {
+      "prefix": "建议:",
+      "aria": "使用建议类别 {name}"
+    },
+    "duplicateWarning": "可能重复 —— 该账户在 {date} 附近有同金额的 {merchant}。如果确为另一笔购买,请再次保存。",
+    "saveButton": {
+      "expense": "保存支出",
+      "income": "保存收入",
+      "transfer": "保存转账"
+    },
+    "errors": {
+      "amount": "请输入金额",
+      "accounts": "请选择两个账户",
+      "sameAccount": "请选择两个不同的账户",
+      "recvAmount": "请输入 {currency} 的收到金额"
+    },
+    "fallback": {
+      "income": "收入",
+      "untitled": "未命名",
+      "account": "账户"
+    },
+    "toasts": {
+      "transferCreated": "转账已创建",
+      "transferDescription": "{from} → {to} · {amount}",
+      "incomeAdded": "收入已添加",
+      "expenseAdded": "支出已添加",
+      "txnDescription": "{merchant} · {amount}"
+    }
+  },
   "settings": {
     "ledger": {
       "activeSection": "当前账本",

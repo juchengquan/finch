@@ -1,4 +1,95 @@
 {
+  "ledgerSwitcher": {
+    "switchAria": "Switch ledger",
+    "settingsAria": "Ledger settings",
+    "header": "Ledgers",
+    "accountsCount": "{count, plural, one {# account} other {# accounts}}",
+    "txnsCount": "{count, plural, one {# txn} other {# txns}}",
+    "newLedger": "New ledger",
+    "newDialog": {
+      "title": "New ledger",
+      "description": "A separate set of books. Choose a base currency now — every transaction you log here is stored in this currency. You can rename and recolor later.",
+      "name": "Name",
+      "namePlaceholder": "Studio · Side hustle · Trip to Japan…",
+      "base": "Base currency",
+      "color": "Color",
+      "tagline": "Tagline (optional)",
+      "taglinePlaceholder": "One-line description shown in the switcher",
+      "create": "Create ledger",
+      "creating": "Creating…",
+      "nameRequired": "Name is required",
+      "createdToast": "Created \"{name}\"",
+      "createdDescription": "Switched to the new ledger.",
+      "createFailure": "Could not create ledger"
+    }
+  },
+  "txnSheet": {
+    "title": "Transaction details",
+    "description": "View and edit the selected transaction."
+  },
+  "add": {
+    "sheetTitle": "Add",
+    "sheetDescription": "Record an expense, income, or transfer.",
+    "typeAria": "Transaction type",
+    "types": {
+      "expense": "expense",
+      "income": "income",
+      "transfer": "transfer"
+    },
+    "recent": "RECENT",
+    "repeatAria": "Repeat {merchant} {amount}",
+    "fields": {
+      "amount": "Amount",
+      "amountAria": "Amount",
+      "sent": "Sent",
+      "currency": "Currency",
+      "currencyHint": "Follows the selected account",
+      "merchant": "Merchant",
+      "merchantPlaceholder": "Pick a merchant",
+      "merchantAria": "Select merchant",
+      "category": "Category",
+      "account": "Account",
+      "from": "From",
+      "to": "To",
+      "recv": "Recv {currency}",
+      "recvAria": "Received amount",
+      "recvPlaceholder": "amount in {currency}",
+      "effectiveRate": "Effective rate: {rate} {to} per {from}",
+      "date": "Date",
+      "dateAria": "Date",
+      "note": "Note",
+      "noteAria": "Note",
+      "notePlaceholder": "Optional"
+    },
+    "suggestion": {
+      "prefix": "Suggested:",
+      "aria": "Use suggested category {name}"
+    },
+    "duplicateWarning": "Possible duplicate — {merchant} for the same amount on this account around {date}. Save again only if it's a separate purchase.",
+    "saveButton": {
+      "expense": "Save expense",
+      "income": "Save income",
+      "transfer": "Save transfer"
+    },
+    "errors": {
+      "amount": "Enter an amount",
+      "accounts": "Pick both accounts",
+      "sameAccount": "Pick two different accounts",
+      "recvAmount": "Enter the amount received in {currency}"
+    },
+    "fallback": {
+      "income": "Income",
+      "untitled": "Untitled",
+      "account": "account"
+    },
+    "toasts": {
+      "transferCreated": "Transfer created",
+      "transferDescription": "{from} → {to} · {amount}",
+      "incomeAdded": "Income added",
+      "expenseAdded": "Expense added",
+      "txnDescription": "{merchant} · {amount}"
+    }
+  },
   "settings": {
     "ledger": {
       "activeSection": "Active ledger",
