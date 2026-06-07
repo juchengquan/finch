@@ -342,3 +342,20 @@ test('cross-currency rule splits absorb base rounding — no phantom FX leg', as
   expect(Number(cats[0].amount_base)).toBe(66.67);
   expect(Number(cats[1].amount_base)).toBe(66.66);
 });
+
+test('an identical timed manual add collides; NULL time never collides', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-dd', 'SGD', 'lt');
+  const mk = (id: string, time: string | null) => postEntry(exec, {
+    id, ledgerId: 'lt', date: '2026-06-03', time, description: 'Coffee', kind: 'expense',
+    legs: [{ accountId: 'a-dd', amount: -6 }], autoBalanceCategoryId: 'cat-t', skipRules: true,
+  });
+  await mk('e-dd1', '08:30');
+  await expect(mk('e-dd2', '08:30')).rejects.toThrow('UNIQUE');
+  // NULL-time parity with the old idx_txn_dedup carve-out (scheduled posts):
+  await mk('e-dd3', null);
+  await mk('e-dd4', null);
+  const n = await exec("SELECT COUNT(*) AS n FROM entries WHERE description = 'Coffee'");
+  expect(Number(n[0].n)).toBe(3);
+});
