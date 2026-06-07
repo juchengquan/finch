@@ -73,6 +73,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_entry_dedup ON entries(ledger_id, dedup_ha
 CREATE INDEX IF NOT EXISTS idx_post_entry         ON postings(entry_id);
 CREATE INDEX IF NOT EXISTS idx_post_account       ON postings(account_id)  WHERE account_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_post_category      ON postings(category_id) WHERE category_id IS NOT NULL;
+
+-- Balance + shape check, fired by the seal UPDATE (two-phase write).
+CREATE TRIGGER IF NOT EXISTS tr_entry_seal BEFORE UPDATE OF sealed ON entries
+FOR EACH ROW WHEN NEW.sealed = 1 AND (
+     ROUND((SELECT COALESCE(SUM(amount_base), 0) FROM postings WHERE entry_id = NEW.id), 2) != 0
+  OR (SELECT COUNT(*) FROM postings WHERE entry_id = NEW.id) < 2
+  OR (SELECT COUNT(*) FROM postings WHERE entry_id = NEW.id AND account_id IS NOT NULL) < 1)
+BEGIN
+  SELECT RAISE(ABORT, 'Entry postings must balance');
+END;
+
+-- Sealed entries are immutable: INSERT and money/shape UPDATE and DELETE on
+-- their postings abort. cleared_at + memo are deliberately NOT in the UPDATE
+-- column list — per-leg clearing edits sealed entries. The WHEN subquery
+-- returns NULL once the parent entry row is gone, so the FK CASCADE from an
+-- entry delete passes the DELETE guard untouched.
+CREATE TRIGGER IF NOT EXISTS tr_post_sealed_insert BEFORE INSERT ON postings
+FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = NEW.entry_id) = 1
+BEGIN
+  SELECT RAISE(ABORT, 'Unseal the entry before editing postings');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_post_sealed_update
+BEFORE UPDATE OF entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, sort_order ON postings
+FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = NEW.entry_id) = 1
+BEGIN
+  SELECT RAISE(ABORT, 'Unseal the entry before editing postings');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_post_sealed_delete BEFORE DELETE ON postings
+FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = OLD.entry_id) = 1
+BEGIN
+  SELECT RAISE(ABORT, 'Unseal the entry before editing postings');
+END;
 `;
 
 // categories gains kind 'equity', loses kind 'transfer', gains the `system`

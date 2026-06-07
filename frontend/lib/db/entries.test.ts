@@ -71,3 +71,61 @@ test('CATEGORIES_UPGRADE re-kinds transfer categories and keeps the parent FK', 
   const [child] = await exec("SELECT parent_id FROM categories WHERE id = 'c-tr'");
   expect(child.parent_id).toBeNull();
 });
+
+// --- raw-SQL helpers for trigger-level tests (no chokepoint involved) ---
+const rawEntry = (exec: Exec, id: string, kind = 'expense', status = 'confirmed') =>
+  exec(
+    `INSERT INTO entries (id,ledger_id,date,description,kind,status,sealed,created_at,updated_at)
+     VALUES (?,?,'2026-06-01','raw',?,?,0,datetime('now'),datetime('now'))`,
+    [id, 'personal', kind, status],
+  );
+const rawLeg = (exec: Exec, id: string, entryId: string, accountId: string | null, categoryId: string | null, amount: number, base = amount, currency = 'SGD') =>
+  exec(
+    `INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,sort_order)
+     VALUES (?,?,?,?,?,?,?,1,0)`,
+    [id, entryId, accountId, categoryId, amount, currency, base],
+  );
+const seal = (exec: Exec, id: string) => exec('UPDATE entries SET sealed = 1 WHERE id = ?', [id]);
+
+test('seal rejects an unbalanced entry', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a1');
+  await rawEntry(exec, 'e-unbal');
+  await rawLeg(exec, 'p-u1', 'e-unbal', 'a1', null, -100);
+  await rawLeg(exec, 'p-u2', 'e-unbal', null, 'food', 90);
+  await expect(seal(exec, 'e-unbal')).rejects.toThrow('Entry postings must balance');
+});
+
+test('seal rejects fewer than two postings and entries with no account leg', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a2');
+  await rawEntry(exec, 'e-one');
+  await rawLeg(exec, 'p-o1', 'e-one', 'a2', null, 0);
+  await expect(seal(exec, 'e-one')).rejects.toThrow('Entry postings must balance');
+
+  await rawEntry(exec, 'e-nacct');
+  await rawLeg(exec, 'p-n1', 'e-nacct', null, 'food', -50);
+  await rawLeg(exec, 'p-n2', 'e-nacct', null, 'food', 50);
+  await expect(seal(exec, 'e-nacct')).rejects.toThrow('Entry postings must balance');
+});
+
+test('sealed postings are immutable except cleared_at/memo; cascade delete passes', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a3');
+  await rawEntry(exec, 'e-ok');
+  await rawLeg(exec, 'p-k1', 'e-ok', 'a3', null, -100);
+  await rawLeg(exec, 'p-k2', 'e-ok', null, 'food', 100);
+  await seal(exec, 'e-ok'); // balanced → succeeds
+
+  await expect(rawLeg(exec, 'p-k3', 'e-ok', 'a3', null, 1)).rejects.toThrow('Unseal');
+  await expect(exec('UPDATE postings SET amount = -90 WHERE id = ?', ['p-k1'])).rejects.toThrow('Unseal');
+  await expect(exec('DELETE FROM postings WHERE id = ?', ['p-k1'])).rejects.toThrow('Unseal');
+  // cleared_at + memo stay editable on sealed entries (setCleared needs this).
+  await exec("UPDATE postings SET cleared_at = datetime('now'), memo = 'cleared' WHERE id = ?", ['p-k1']);
+
+  // FK CASCADE from the entry delete passes the guards (parent row is gone
+  // first, so the guard's sealed-subquery returns NULL).
+  await exec('DELETE FROM entries WHERE id = ?', ['e-ok']);
+  const left = await exec("SELECT COUNT(*) AS n FROM postings WHERE entry_id = 'e-ok'");
+  expect(Number(left[0].n)).toBe(0);
+});
