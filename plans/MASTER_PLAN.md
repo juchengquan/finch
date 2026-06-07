@@ -354,20 +354,28 @@ below; what's still open is summarized here.
    ledger CRUD this PR) — native can now adopt the schema verbatim and
    build against a complete reference. **L (the build); the brief itself
    is done.**
-2. **Multi-language / i18n** — `plans/I18N_PLAN.md` (2026-06-06).
-   `next-intl` + `messages/<locale>.json` catalogs; English base +
-   Simplified Chinese (`zh-CN`) for v1; translates app chrome only (never
-   user data); per-device locale preference in `localStorage`; structured
-   server-side mutation errors so toasts localise client-side. **No schema
-   change**; `.finch` packs are unaffected. **M — five-ish PR-sized
-   commits.**
-3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
-4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **Multi-language / i18n** (PR #113 foundation + this PR; design
+  record `plans/done/I18N_PLAN.md`) — `next-intl` + per-device
+  `localStorage['finch.locale']` + auto-detect from `navigator.languages`.
+  English base catalog (100% coverage), Simplified Chinese (`zh-CN`)
+  shipping in lockstep. Server mutations throw structured `I18nError(code,
+  params, fallbackEnglish)`; the route serialises `{ error: { code,
+  params, message } }` and the client decodes via `fromWireError` so
+  toasts can localise without breaking unmigrated callers.
+  `useFormat()` + locale-aware `periodLabel` + structured `Insight`
+  (`{ key, params }`) round out the formatting layer; rule
+  `describeCondition` / `describeActions` take an optional `DescribeDict`
+  so the /rules page and rule-builder summary read in the active
+  language. App chrome is fully translated; `.finch` packs and user-typed
+  data (category names, merchant names, transaction notes) are
+  intentionally untouched.
 - ✅ **Receipt photos** (PR #106, 2026-06-06; FEATURE_IDEAS §4.1; design
   record `plans/done/RECEIPT_PHOTOS_PLAN.md`) — schema + upload + serve
   + transaction-detail UI + lightbox.
