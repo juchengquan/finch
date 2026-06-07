@@ -1,0 +1,67 @@
+{
+  "settings": {
+    "account": {
+      "title": "设置",
+      "language": {
+        "row": "语言",
+        "english": "English",
+        "chinese": "中文(简体)"
+      },
+      "backup": {
+        "section": "备份与恢复",
+        "dbInfo": {
+          "label": "数据库文件(服务器)",
+          "loading": "…"
+        },
+        "exportDb": {
+          "label": "导出副本",
+          "button": "下载 .finch"
+        },
+        "exportCsv": {
+          "label": "导出交易",
+          "button": "下载 .csv"
+        },
+        "importDb": {
+          "label": "导入数据库",
+          "button": "选择文件…",
+          "dialogTitle": "导入数据库?",
+          "dialogDescription": "你的数据保存在服务器上的 SQLite 文件中,每次更改都会同步。导入会替换它。当前数据库将先备份一次,以便撤销。",
+          "confirm": "导入",
+          "busy": "导入中…",
+          "cancel": "取消"
+        },
+        "frequency": {
+          "row": "备份频率",
+          "off": "关闭(仅手动)",
+          "everyChange": "每次更改后",
+          "hourly": "最多每小时",
+          "daily": "最多每天",
+          "weekly": "最多每周"
+        },
+        "retention": {
+          "row": "保留备份数",
+          "files": "{count} 个文件"
+        },
+        "backupNow": {
+          "label": "立即备份",
+          "button": "创建快照",
+          "busy": "正在备份…",
+          "success": "备份已创建",
+          "noop": "未创建备份(自动备份已关闭)"
+        },
+        "restore": {
+          "dialogTitle": "恢复此备份?",
+          "dialogDescription": "用此备份的内容替换当前数据库。当前数据库将先备份一次,以便撤销。",
+          "confirm": "恢复"
+        }
+      }
+    }
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建"
+  }
+}

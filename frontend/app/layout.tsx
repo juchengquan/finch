@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
+import { I18nProvider } from '@/components/i18n-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
@@ -56,6 +57,7 @@ export default function RootLayout({
     >
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+          <I18nProvider>
           <LedgerProvider>
             <StoreHydration />
             <SqliteBackupProvider>
@@ -76,6 +78,7 @@ export default function RootLayout({
               </MerchantPickerSheetProvider>
             </SqliteBackupProvider>
           </LedgerProvider>
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

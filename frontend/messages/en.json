@@ -1,0 +1,67 @@
+{
+  "settings": {
+    "account": {
+      "title": "Settings",
+      "language": {
+        "row": "Language",
+        "english": "English",
+        "chinese": "中文(简体)"
+      },
+      "backup": {
+        "section": "Backup & restore",
+        "dbInfo": {
+          "label": "Database file (server)",
+          "loading": "…"
+        },
+        "exportDb": {
+          "label": "Export a copy",
+          "button": "Download .finch"
+        },
+        "exportCsv": {
+          "label": "Export transactions",
+          "button": "Download .csv"
+        },
+        "importDb": {
+          "label": "Import database",
+          "button": "Choose file…",
+          "dialogTitle": "Import database?",
+          "dialogDescription": "Your data lives in a SQLite file on the server and syncs on every change. Importing replaces it. A snapshot of the current DB is saved first so you can undo this.",
+          "confirm": "Import",
+          "busy": "Importing…",
+          "cancel": "Cancel"
+        },
+        "frequency": {
+          "row": "Backup frequency",
+          "off": "Off (manual only)",
+          "everyChange": "After every change",
+          "hourly": "At most hourly",
+          "daily": "At most daily",
+          "weekly": "At most weekly"
+        },
+        "retention": {
+          "row": "Backups kept",
+          "files": "{count} files"
+        },
+        "backupNow": {
+          "label": "Back up now",
+          "button": "Snapshot",
+          "busy": "Snapshotting…",
+          "success": "Backup created",
+          "noop": "No backup created (auto-backup is off)"
+        },
+        "restore": {
+          "dialogTitle": "Restore this backup?",
+          "dialogDescription": "Replaces the current database with the contents of this backup. A snapshot of the live DB is created first so you can undo this.",
+          "confirm": "Restore"
+        }
+      }
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create"
+  }
+}
