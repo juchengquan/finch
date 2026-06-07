@@ -175,3 +175,24 @@ test('confirmed postings move the cached balance; pending do not', async () => {
   await seal(exec, 'e-pend');
   expect(await balanceOf(exec, 'a-bal')).toBe(-25.5); // unchanged
 });
+
+test('the currency guard also fires on UPDATE of an unsealed posting', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a-cu', 'SGD');
+  await rawEntry(exec, 'e-cu');
+  await rawLeg(exec, 'p-cu1', 'e-cu', 'a-cu', null, -5);
+  await expect(
+    exec("UPDATE postings SET currency = 'USD' WHERE id = 'p-cu1'"),
+  ).rejects.toThrow('account currency');
+});
+
+test('the balance trigger rounds accumulated cents', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a-rd');
+  await rawEntry(exec, 'e-rd');
+  await rawLeg(exec, 'p-rd1', 'e-rd', 'a-rd', null, -0.1);
+  await rawLeg(exec, 'p-rd2', 'e-rd', 'a-rd', null, -0.2);
+  await rawLeg(exec, 'p-rd3', 'e-rd', null, 'food', 0.3);
+  await seal(exec, 'e-rd');
+  expect(await balanceOf(exec, 'a-rd')).toBe(-0.3);
+});

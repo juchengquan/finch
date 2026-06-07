@@ -113,6 +113,9 @@ END;
 
 -- Account-leg currency guard (kills the old amount/amount_base mixing bug by
 -- construction — design doc F3/I3).
+-- (The missing-account COALESCE branch is unreachable in practice — the FK
+-- with ON DELETE RESTRICT guarantees the account row exists — kept as pure
+-- defense-in-depth.)
 CREATE TRIGGER IF NOT EXISTS tr_post_currency_insert BEFORE INSERT ON postings
 FOR EACH ROW WHEN NEW.account_id IS NOT NULL
   AND NEW.currency != COALESCE((SELECT currency FROM accounts WHERE id = NEW.account_id), NEW.currency)
