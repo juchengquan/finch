@@ -165,6 +165,113 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
   PRIMARY KEY (date, currency)
 );
 
+-- Unchanged-across-cutover tables that projectState (and auditLedger) query.
+-- Copied exactly from the canonical lib/db/schema.ts. Empty is fine; no seed
+-- rows needed — projectState lists them and returns empty slices.
+
+CREATE TABLE IF NOT EXISTS budget_groups (
+  id         TEXT PRIMARY KEY,
+  ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS budgets (
+  id                 TEXT PRIMARY KEY,
+  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  group_id           TEXT REFERENCES budget_groups(id) ON DELETE SET NULL,
+  name               TEXT,
+  kind               TEXT NOT NULL CHECK(kind IN ('income','expense')),
+  amount             REAL NOT NULL,
+  saved              REAL NOT NULL DEFAULT 0,
+  carry_forward      REAL NOT NULL DEFAULT 0,
+  frequency          TEXT NOT NULL CHECK(frequency IN ('daily','weekly','biweekly','monthly','quarterly','yearly')),
+  start_date         TEXT NOT NULL,
+  end_date           TEXT,
+  is_recurring       INTEGER NOT NULL DEFAULT 1,
+  rollover           INTEGER NOT NULL DEFAULT 0,
+  rollover_limit     REAL,
+  last_rolled_period TEXT,
+  pending_amount     REAL,
+  account_ids        TEXT,
+  category_ids       TEXT,
+  warning_pct        REAL NOT NULL DEFAULT 80,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_templates (
+  id                   TEXT PRIMARY KEY,
+  ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name                 TEXT,
+  description          TEXT,
+  kind                 TEXT NOT NULL CHECK(kind IN ('income','expense','transfer')),
+  amount               REAL,
+  amount_varies        INTEGER NOT NULL DEFAULT 0,
+  splits_enabled       INTEGER NOT NULL DEFAULT 0,
+  account_id           TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  from_account_id      TEXT REFERENCES accounts(id) ON DELETE RESTRICT,
+  category_id          TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  frequency            TEXT NOT NULL CHECK(frequency IN ('once','daily','weekly','biweekly','monthly','quarterly','yearly')),
+  day_of_month         INTEGER,
+  day_of_week          INTEGER,
+  start_date           TEXT NOT NULL,
+  end_date             TEXT,
+  next_run             TEXT,
+  last_run             TEXT,
+  auto_post            INTEGER NOT NULL DEFAULT 1,
+  is_active            INTEGER NOT NULL DEFAULT 1,
+  max_executions       INTEGER,
+  installment_total    INTEGER,
+  color                TEXT,
+  created_at           TEXT NOT NULL,
+  updated_at           TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_splits (
+  id           TEXT PRIMARY KEY,
+  template_id  TEXT NOT NULL REFERENCES scheduled_templates(id) ON DELETE CASCADE,
+  account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  amount_pct   REAL,
+  amount_abs   REAL,
+  category_id  TEXT REFERENCES categories(id) ON DELETE RESTRICT,
+  description  TEXT,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  CHECK (amount_pct IS NOT NULL OR amount_abs IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS holdings (
+  id              TEXT PRIMARY KEY,
+  ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol          TEXT NOT NULL,
+  name            TEXT,
+  shares          REAL NOT NULL DEFAULT 0,
+  cost_basis      REAL NOT NULL DEFAULT 0,
+  currency        TEXT NOT NULL,
+  last_price      REAL,
+  last_price_date TEXT,
+  notes           TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rules (
+  id              TEXT PRIMARY KEY,
+  ledger_id       TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name            TEXT,
+  priority        INTEGER NOT NULL DEFAULT 100,
+  condition       TEXT NOT NULL,
+  actions         TEXT NOT NULL,
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  run_on_edit     INTEGER NOT NULL DEFAULT 0,
+  last_applied_at TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS app_state (
   key        TEXT PRIMARY KEY,
   value      TEXT,
@@ -208,20 +315,40 @@ END;
 // ---------------------------------------------------------------------------
 // Helper: build a legacy-shaped in-memory DB, seed fixture data into the
 // legacy tables, then apply the DE schema on top so moveLegacyData can run.
+//
+// Options:
+//   pure: true — skip applyEntriesSchema/new-table DDL and write a
+//     db_metadata row at schema_version='2026-06-12T00:00:00Z' — a faithful
+//     pre-cutover file, exactly as the golden-projection test (Task B5) needs.
+//     Existing callers that pass no options (or pure=false) are unchanged and
+//     get the full DE schema applied on top as before.
 // ---------------------------------------------------------------------------
-export async function legacyFixtureDb(): Promise<{ exec: Exec; close: () => void }> {
+export async function legacyFixtureDb({ pure = false }: { pure?: boolean } = {}): Promise<{ exec: Exec; close: () => void }> {
   const db = await bareDb();
   const { exec } = db;
 
   // 1. Apply legacy DDL.
   await exec(LEGACY_SCHEMA);
 
-  // 2. Apply the DE schema (entries/postings/entry_tags + categories upgrade +
-  //    entry_attachments + entries_fts). applyEntriesSchema runs CATEGORIES_UPGRADE
-  //    which re-creates categories with kind='equity' support — the fixture wants this.
-  await applyEntriesSchema(exec);
-  await exec(ENTRY_ATTACHMENTS_DDL);
-  await exec(ENTRIES_FTS_DDL);
+  if (pure) {
+    // Pure mode: write a db_metadata row at a pre-cutover schema version so
+    // migrate() can identify the file as needing the 2026-06-14 migration.
+    // Do NOT apply the DE schema tables — the migration itself does that as
+    // part of the 2026-06-13 entry.
+    const metaNow = new Date().toISOString();
+    await exec(
+      `INSERT INTO db_metadata (id, app_name, schema_version, app_version, created_at, updated_at)
+       VALUES (1, 'finch', '2026-06-12T00:00:00Z', '0.0.0', ?, ?)`,
+      [metaNow, metaNow],
+    );
+  } else {
+    // 2. Apply the DE schema (entries/postings/entry_tags + categories upgrade +
+    //    entry_attachments + entries_fts). applyEntriesSchema runs CATEGORIES_UPGRADE
+    //    which re-creates categories with kind='equity' support — the fixture wants this.
+    await applyEntriesSchema(exec);
+    await exec(ENTRY_ATTACHMENTS_DDL);
+    await exec(ENTRIES_FTS_DDL);
+  }
 
   const now = "datetime('now')";
 
@@ -245,8 +372,14 @@ export async function legacyFixtureDb(): Promise<{ exec: Exec; close: () => void
     VALUES ('food','personal',NULL,'Food','expense',0,${now},${now}),
            ('income-cat','personal',NULL,'Salary','income',1,${now},${now})`);
 
-  // Ensure system categories (for auditLedger + moveLegacyData).
-  await ensureSystemCategories(exec, 'personal');
+  if (!pure) {
+    // Ensure system categories (for auditLedger + moveLegacyData).
+    // In pure mode the categories table is legacy-schema (no 'equity' kind, no
+    // system column) — ensureSystemCategories would fail. The migration path
+    // applies CATEGORIES_UPGRADE (via the 2026-06-13 entry) before calling
+    // moveLegacyData, which calls ensureSystemCategories internally.
+    await ensureSystemCategories(exec, 'personal');
+  }
 
   // Tags.
   await exec(`INSERT INTO tags (id,ledger_id,name,created_at,updated_at)

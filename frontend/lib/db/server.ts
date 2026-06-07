@@ -61,6 +61,18 @@ async function open(): Promise<ServerDb> {
     await seedDatabase(exec);
     await migrate(exec, { fresh: true });
   } else {
+    // One-time safety net for the double-entry cutover: if the file is on an
+    // older schema and the cutover migration hasn't run yet, snapshot it now
+    // so the user can restore by replacing the DB file with the .bak.
+    // VACUUM INTO writes an fsynced, WAL-clean copy; we skip if the bak
+    // already exists so a repeated open (e.g. after a crash mid-migration)
+    // doesn't overwrite a previously-good snapshot.
+    const bakPath = `${full}.pre-de.bak`;
+    const recordedVersionRows = await exec('SELECT schema_version FROM db_metadata WHERE id = 1').catch(() => []);
+    const recordedVersion = String(recordedVersionRows[0]?.schema_version ?? '');
+    if (needsCutoverSnapshot(recordedVersion) && !existsSync(bakPath)) {
+      driver.exec(`VACUUM INTO '${bakPath}'`);
+    }
     await migrate(exec, { fresh: false });
   }
 
@@ -665,4 +677,19 @@ async function readAppVersion(): Promise<string> {
   } catch {
     return '0.0.0';
   }
+}
+
+/**
+ * Pure predicate: returns true when a DB carrying `recordedVersion` needs a
+ * pre-double-entry cutover snapshot. Exported so it can be unit-tested without
+ * the filesystem / driver involved.
+ *
+ * The snapshot is taken whenever the recorded version is non-empty AND strictly
+ * older than the cutover migration key ('2026-06-14T00:00:00Z'). An empty
+ * string means the db_metadata row doesn't exist yet (very old or synthetic
+ * test DB) — we skip the snapshot in that case because there is nothing
+ * meaningful to preserve before any migration has run.
+ */
+export function needsCutoverSnapshot(recordedVersion: string): boolean {
+  return recordedVersion !== '' && recordedVersion < '2026-06-14T00:00:00Z';
 }

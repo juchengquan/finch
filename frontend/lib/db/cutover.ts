@@ -187,6 +187,13 @@ export interface CutoverResult {
  * cascade-deleted and re-inserted.
  */
 export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
+  // Replay safety: a crash after dropLegacyTables but before the version
+  // stamp replays this entry on a file whose legacy tables are already gone —
+  // there is nothing left to move. (Also lets the migration chain run over
+  // minimal synthetic fixtures in migrate.test.ts.)
+  const legacy = await exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'transactions'");
+  if (legacy.length === 0) return { entries: 0, postings: 0 };
+
   let entriesInserted = 0;
   let postingsInserted = 0;
 
