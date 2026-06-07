@@ -9,6 +9,9 @@ import { auditLedger } from '@/lib/db/entries';
 import type { Exec } from '@/lib/db/repo';
 
 const seeded = async (): Promise<Exec> => (await seededDb()).exec;
+// `seeded` is kept untracked on purpose (escape hatch for tests that intentionally
+// leave the ledger in a half-valid state). New tests should prefer
+// `seededTracked` below so the audit hook catches unintended drift.
 
 let lastExec: Exec | null = null;
 const seededTracked = async (): Promise<Exec> => {
@@ -23,7 +26,7 @@ afterEach(async () => {
   if (problems.length > 0) {
     const summary = problems
       .slice(0, 5)
-      .map((p) => `${p.code}${p.entryId ? ` (entry ${p.entryId})` : ''}: ${p.detail ?? ''}`)
+      .map((p) => `${p.code}${p.entryId ? ` (entry ${p.entryId})` : ''}: ${p.detail}`)
       .join('\n  ');
     throw new Error(
       `auditLedger reported ${problems.length} problem${problems.length === 1 ? '' : 's'} at end of test:\n  ${summary}${problems.length > 5 ? '\n  …' : ''}`,
