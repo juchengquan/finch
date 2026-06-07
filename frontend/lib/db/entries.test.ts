@@ -210,4 +210,8 @@ test('ensureSystemCategories is idempotent and per-ledger', async () => {
   expect(rows.map((r) => `${r.system}:${r.kind}`)).toEqual([
     'adjustment:equity', 'fx:equity', 'opening:equity',
   ]);
+
+  // Per-ledger isolation: another seeded ledger gets its own rows.
+  const c = await ensureSystemCategories(exec, 'family');
+  expect(c.opening).not.toBe(a.opening);
 });

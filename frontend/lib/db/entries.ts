@@ -30,7 +30,9 @@ export interface SystemCategoryIds {
  *  return their ids. Resolved by the `system` marker (rename-safe), never by
  *  id or name. Callers: tests now; seed / createLedger / migration in PR B. */
 export async function ensureSystemCategories(exec: Exec, ledgerId: string): Promise<SystemCategoryIds> {
-  const out: Record<string, string> = {};
+  // Filled key-by-key by the loop below — every SYSTEM_CATEGORIES.system is a
+  // key of SystemCategoryIds, so the assertion is satisfied by construction.
+  const out = {} as SystemCategoryIds;
   for (let i = 0; i < SYSTEM_CATEGORIES.length; i++) {
     const { system, name } = SYSTEM_CATEGORIES[i];
     const rows = await exec('SELECT id FROM categories WHERE ledger_id = ? AND system = ?', [ledgerId, system]);
@@ -46,5 +48,5 @@ export async function ensureSystemCategories(exec: Exec, ledgerId: string): Prom
     );
     out[system] = id;
   }
-  return out as unknown as SystemCategoryIds;
+  return out;
 }
