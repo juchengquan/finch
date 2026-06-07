@@ -147,11 +147,19 @@ END;
 // categories gains kind 'equity', loses kind 'transfer', gains the `system`
 // marker column. SQLite can't ALTER a CHECK — standard recreation dance
 // (mirrors the scheduled_templates rebuild in schema.ts's 2026-06-06 entry).
-// Re-runnable: each step is idempotent under the isAlreadyAppliedError rule
-// PR B's migration runner applies; in this PR tests run it once on a fresh DB.
+// Replay-safe by construction (audited in PR B): there is deliberately NO
+// staging-table drop — on a replay after a mid-dance crash the surviving
+// categories_new still holds the data; CREATE fails "already exists"
+// (swallowed by the migration runner), INSERT OR IGNORE tops up any missing
+// rows (or is swallowed when the source table is already gone), and the
+// RENAME promotes the populated staging table. A crash in ANY window
+// therefore replays to the correct end state — unlike a dance that drops
+// staging first, which silently promotes an EMPTY table after a crash
+// between DROP categories and RENAME. (FK enforcement is OFF around the
+// dance so the staging table's self-referential parent_id FK parses while
+// both tables exist.)
 export const CATEGORIES_UPGRADE: string[] = [
   'PRAGMA foreign_keys = OFF',
-  'DROP TABLE IF EXISTS categories_new',
   `CREATE TABLE categories_new (
      id         TEXT PRIMARY KEY,
      ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
@@ -165,7 +173,7 @@ export const CATEGORIES_UPGRADE: string[] = [
      created_at TEXT NOT NULL,
      updated_at TEXT NOT NULL
    )`,
-  `INSERT INTO categories_new (id, ledger_id, parent_id, name, kind, icon, color, sort_order, system, created_at, updated_at)
+  `INSERT OR IGNORE INTO categories_new (id, ledger_id, parent_id, name, kind, icon, color, sort_order, system, created_at, updated_at)
    SELECT id, ledger_id, parent_id, name,
           CASE WHEN kind = 'transfer' THEN 'expense' ELSE kind END,
           icon, color, sort_order, NULL, created_at, updated_at

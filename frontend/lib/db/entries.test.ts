@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { seededDb, bareDb } from '@/lib/db/test-utils';
-import { applyEntriesSchema } from '@/lib/db/entries-schema';
+import { applyEntriesSchema, CATEGORIES_UPGRADE } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
 import {
   ensureSystemCategories, postEntry,
@@ -740,4 +740,52 @@ test('auditLedger catches raw-SQL corruption classes the triggers cannot', async
   expect(codes).toContain('base-identity');     // (b) p-c2
   expect(codes).toContain('currency-mismatch'); // (c) p-c3
   expect(codes).toContain('balance-drift');     // (d)
+});
+
+test('CATEGORIES_UPGRADE replays to a populated table after a mid-dance crash', async () => {
+  // Stage a legacy-shaped DB (old categories CHECK incl. 'transfer').
+  const db = await bareDb();
+  const exec = db.exec;
+  await exec(
+    "CREATE TABLE ledgers (id TEXT PRIMARY KEY, name TEXT NOT NULL, base_currency TEXT NOT NULL DEFAULT 'SGD', is_default INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  );
+  await exec(
+    `CREATE TABLE categories (
+       id TEXT PRIMARY KEY,
+       ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+       parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+       name TEXT NOT NULL,
+       kind TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+       icon TEXT, color TEXT,
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+     )`,
+  );
+  await exec("INSERT INTO ledgers VALUES ('l1','L','SGD',1,datetime('now'),datetime('now'))");
+  await exec(
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Food','expense',NULL,NULL,0,datetime('now'),datetime('now'))",
+  );
+
+  // Mimic the migration runner's swallow rule for replays.
+  const swallow = async (sql: string) => {
+    try {
+      await exec(sql);
+    } catch (err) {
+      if (!/duplicate column name|already exists|no such (column|table|index)/i.test(String((err as Error).message))) throw err;
+    }
+  };
+
+  // Crash simulation: run the dance up to AND INCLUDING 'DROP TABLE categories',
+  // stopping before the RENAME — the worst-case window.
+  const dropIdx = CATEGORIES_UPGRADE.findIndex((s) => s === 'DROP TABLE categories');
+  expect(dropIdx).toBeGreaterThan(0);
+  for (const sql of CATEGORIES_UPGRADE.slice(0, dropIdx + 1)) await swallow(sql);
+
+  // Replay the WHOLE dance under the swallow rule (what the runner does after
+  // a crash, since the version was never stamped).
+  for (const sql of CATEGORIES_UPGRADE) await swallow(sql);
+
+  const rows = await exec('SELECT id, kind FROM categories');
+  expect(rows.length).toBe(1); // the data survived the crash + replay
+  expect(String(rows[0].id)).toBe('c1');
 });

@@ -785,11 +785,7 @@ const MIGRATIONS: Record<string, string[]> = {
   // idempotent under the isAlreadyAppliedError rule.
   // NOTE: ENTRIES_SCHEMA is listed first — it creates the entries/postings/
   // entry_tags tables that CATEGORIES_UPGRADE and subsequent steps reference.
-  // The CATEGORIES_UPGRADE recreation dance is not idempotent mid-run (DROP →
-  // CREATE → RENAME), but the migration runner only applies this entry to DBs
-  // whose schema_version < '2026-06-13', so a successful run stamps the version
-  // and never replays the dance. This matches the precedent of the 2026-06-06
-  // scheduled_templates rebuild.
+  // The CATEGORIES_UPGRADE dance is replay-safe by construction (see its comment in entries-schema.ts).
   '2026-06-13T00:00:00Z': [
     ENTRIES_SCHEMA,
     ...CATEGORIES_UPGRADE,
