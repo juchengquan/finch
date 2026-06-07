@@ -2,6 +2,7 @@
 // SQLite file; the store is a mirror hydrated from these calls.
 
 import type { ProjectedState } from '@/lib/db/repo';
+import { fromWireError } from '@/lib/i18n-error';
 
 const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
@@ -22,14 +23,19 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
     body: JSON.stringify({ action, args }),
   });
   if (!res.ok) {
-    let message = `${res.status}`;
+    // Errors may arrive as { error: string } (legacy throws / route layer
+    // problems) or { error: { code, params, message } } (I18nError from a
+    // migrated mutation site). I18N_PLAN §4.4 — fromWireError keeps
+    // existing `toast.error(err.message)` callers working AND attaches
+    // .code/.params for callers that opt into client-side localisation.
+    let wire: unknown = `${res.status}`;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body?.error) message = body.error;
+      const body = (await res.json()) as { error?: unknown };
+      if (body?.error != null) wire = body.error;
     } catch {
       // non-JSON error body
     }
-    throw new Error(message);
+    throw fromWireError(wire);
   }
   return (await res.json()) as ProjectedState;
 }

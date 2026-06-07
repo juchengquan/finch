@@ -1,0 +1,153 @@
+{
+  "settings": {
+    "account": {
+      "title": "设置",
+      "language": {
+        "row": "语言",
+        "english": "English",
+        "chinese": "中文(简体)"
+      },
+      "backup": {
+        "section": "备份与恢复",
+        "dbInfo": {
+          "label": "数据库文件(服务器)",
+          "loading": "…"
+        },
+        "exportDb": {
+          "label": "导出副本",
+          "button": "下载 .finch"
+        },
+        "exportCsv": {
+          "label": "导出交易",
+          "button": "下载 .csv"
+        },
+        "importDb": {
+          "label": "导入数据库",
+          "button": "选择文件…",
+          "dialogTitle": "导入数据库?",
+          "dialogDescription": "你的数据保存在服务器上的 SQLite 文件中,每次更改都会同步。导入会替换它。当前数据库将先备份一次,以便撤销。",
+          "confirm": "导入",
+          "busy": "导入中…",
+          "cancel": "取消"
+        },
+        "frequency": {
+          "row": "备份频率",
+          "off": "关闭(仅手动)",
+          "everyChange": "每次更改后",
+          "hourly": "最多每小时",
+          "daily": "最多每天",
+          "weekly": "最多每周"
+        },
+        "retention": {
+          "row": "保留备份数",
+          "files": "{count} 个文件"
+        },
+        "backupNow": {
+          "label": "立即备份",
+          "button": "创建快照",
+          "busy": "正在备份…",
+          "success": "备份已创建",
+          "noop": "未创建备份(自动备份已关闭)"
+        },
+        "restore": {
+          "dialogTitle": "恢复此备份?",
+          "dialogDescription": "用此备份的内容替换当前数据库。当前数据库将先备份一次,以便撤销。",
+          "confirm": "恢复"
+        }
+      }
+    }
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建"
+  },
+  "error": {
+    "required": {
+      "id": "id 必填",
+      "name": "名称必填",
+      "budgetName": "预算名称必填",
+      "groupName": "分组名称必填",
+      "accountName": "账户名称必填",
+      "categoryName": "类别名称必填",
+      "tagName": "标签名称必填",
+      "templateName": "模板名称必填",
+      "merchantName": "商户名称必填",
+      "ruleCondition": "规则条件必填",
+      "splitAccount": "拆分需要一个账户",
+      "account": "需要一个账户",
+      "investmentAccount": "需要一个投资账户",
+      "symbol": "代号必填",
+      "currency": "货币必填",
+      "ledgerId": "ledgerId 必填"
+    },
+    "notFound": {
+      "account": "未找到账户",
+      "ledger": "未找到账本",
+      "template": "未找到模板",
+      "rule": "未找到规则",
+      "parentCategory": "父类别不存在",
+      "category": "类别不存在"
+    },
+    "category": {
+      "depthCap": "类别最多嵌套三层",
+      "selfParent": "类别不能成为自己的父级",
+      "underDescendant": "类别不能移动到自己的后代之下"
+    },
+    "transfer": {
+      "amountGt0": "转账金额必须大于 0",
+      "sameAccount": "请选择两个不同的账户",
+      "receivedGt0": "收到金额必须大于 0",
+      "sameCurrencyMismatch": "同币种转账金额必须相等"
+    },
+    "scheduled": {
+      "installmentDone": "\"{name}\" 的 {total} 期分期付款已完成",
+      "missingAccount": "\"{name}\" 缺少账户",
+      "variableAmount": "\"{name}\" 金额可变 — 请手动添加",
+      "noSplits": "\"{name}\" 没有可发布的拆分金额"
+    },
+    "budget": {
+      "amountGt0": "预算金额必须大于 0",
+      "dateFormat": "startDate 必须为 YYYY-MM-DD 格式",
+      "unknownFreq": "未知频率 \"{freq}\"",
+      "invalidContribution": "无效的贡献金额"
+    },
+    "adjust": {
+      "targetRequired": "请输入目标余额"
+    },
+    "reconcile": {
+      "statementBalance": "对账单余额必填"
+    },
+    "account": {
+      "unknownType": "未知账户类型 \"{type}\"",
+      "splitTypeUnknown": "未知类型 \"{type}\"",
+      "splitFreqUnknown": "未知频率 \"{freq}\""
+    },
+    "holding": {
+      "sharesGt0": "股数必须大于 0",
+      "costBasisGte0": "成本基础必须不小于 0",
+      "notInvestment": "持仓只能添加到投资账户",
+      "currencyMismatch": "持仓货币必须与账户货币 ({currency}) 一致",
+      "symbolEmpty": "代号不能为空",
+      "priceGte0": "价格必须不小于 0"
+    },
+    "fx": {
+      "dateFormat": "日期必须为 YYYY-MM-DD 格式",
+      "rateGt0": "汇率必须大于 0",
+      "usdHub": "USD 是中转货币,不会被存储"
+    },
+    "ledger": {
+      "baseISO": "base 必须为 3 字母 ISO 代码",
+      "newBaseISO": "newBase 必须为 3 字母 ISO 代码",
+      "duplicateId": "账本 id 已存在",
+      "nameEmpty": "名称不能为空"
+    },
+    "duplicate": {
+      "txn": "看起来像重复 — 已存在一笔相同的交易。",
+      "budget": "已存在同名同周期的预算。"
+    },
+    "unknownAction": "未知操作: {action}"
+  }
+}

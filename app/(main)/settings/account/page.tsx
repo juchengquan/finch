@@ -7,6 +7,8 @@ import { SearchButton } from '@/components/command-palette';
 import { MobileTabsEditor } from '@/components/MobileTabsEditor';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { useTranslations } from 'next-intl';
+import { useAppLocale, SUPPORTED_LOCALES, type Locale } from '@/components/i18n-provider';
 import { useBackup, type BackupEntry, type ImportResult, type DbMetadataView } from '@/components/sqlite-backup-provider';
 import { useFinanceStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -48,23 +50,27 @@ function Row({ icon, label, children }: { icon: string; label: string; children:
 }
 
 // Auto-backup frequency presets (label -> ms). -1 = off. 0 = on every change.
-// Values map onto BackupConfigSlice.frequencyMs.
-const FREQ_OPTIONS: { label: string; ms: number }[] = [
-  { label: 'After every change', ms: 0 },
-  { label: 'At most hourly', ms: 60 * 60 * 1000 },
-  { label: 'At most daily', ms: 24 * 60 * 60 * 1000 },
-  { label: 'At most weekly', ms: 7 * 24 * 60 * 60 * 1000 },
-  { label: 'Off (manual only)', ms: -1 },
+// Values map onto BackupConfigSlice.frequencyMs. Labels come from the
+// i18n catalog at render time (`tBackup('frequency.<key>')`), so the
+// definition here is just the ms <-> key mapping.
+type FreqKey = 'everyChange' | 'hourly' | 'daily' | 'weekly' | 'off';
+const FREQ_OPTIONS: { key: FreqKey; ms: number }[] = [
+  { key: 'everyChange', ms: 0 },
+  { key: 'hourly', ms: 60 * 60 * 1000 },
+  { key: 'daily', ms: 24 * 60 * 60 * 1000 },
+  { key: 'weekly', ms: 7 * 24 * 60 * 60 * 1000 },
+  { key: 'off', ms: -1 },
 ];
 const RETENTION_OPTIONS = [5, 10, 14, 30, 50, 100];
-
-function freqLabelFor(ms: number): string {
-  return FREQ_OPTIONS.find((o) => o.ms === ms)?.label ?? `Every ${Math.round(ms / 60000)} min`;
-}
 
 export default function AccountSettingsPage() {
   const reset = useFinanceStore((s) => s.reset);
   const backup = useBackup();
+  // I18N_PLAN §4.2 — useAppLocale reads/writes the per-device locale; the
+  // useTranslations namespace gives keyed strings for the rows below.
+  const { locale, setLocale } = useAppLocale();
+  const tSettings = useTranslations('settings.account');
+  const tBackup = useTranslations('settings.account.backup');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<{ file: File; metadata: DbMetadataView } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
@@ -174,6 +180,23 @@ export default function AccountSettingsPage() {
         <Row icon="sparkle" label="Theme">
           <ThemeToggle />
         </Row>
+        <Row icon="doc" label={tSettings('language.row')}>
+          <Select
+            value={locale}
+            onValueChange={(v) => setLocale(v as Locale)}
+          >
+            <SelectTrigger size="sm" className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_LOCALES.map((l) => (
+                <SelectItem key={l} value={l}>
+                  {l === 'en' ? tSettings('language.english') : tSettings('language.chinese')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Row>
 
         <div className="md:hidden">
           <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
@@ -206,7 +229,7 @@ export default function AccountSettingsPage() {
         </div>
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Backup & restore
+          {tBackup('section')}
         </div>
         {backup.metadata && (
           <div className="bg-card border-border mb-2 rounded-xl border p-3.5 text-[11px]">
@@ -232,22 +255,22 @@ export default function AccountSettingsPage() {
             </div>
           </div>
         )}
-        <Row icon="doc" label="Database file (server)">
+        <Row icon="doc" label={tBackup('dbInfo.label')}>
           <span className="text-muted-foreground max-w-[60%] truncate text-right font-mono text-[11px]">
-            {backup.serverPath ?? '…'}
+            {backup.serverPath ?? tBackup('dbInfo.loading')}
           </span>
         </Row>
-        <Row icon="download" label="Export a copy">
+        <Row icon="download" label={tBackup('exportDb.label')}>
           <Button variant="outline" size="sm" onClick={() => void backup.download()}>
-            Download .finch
+            {tBackup('exportDb.button')}
           </Button>
         </Row>
-        <Row icon="doc" label="Export transactions">
+        <Row icon="doc" label={tBackup('exportCsv.label')}>
           <Button variant="outline" size="sm" onClick={() => void backup.downloadCsv()}>
-            Download .csv
+            {tBackup('exportCsv.button')}
           </Button>
         </Row>
-        <Row icon="upload" label="Import database">
+        <Row icon="upload" label={tBackup('importDb.label')}>
           <input
             ref={fileInputRef}
             type="file"
@@ -264,42 +287,46 @@ export default function AccountSettingsPage() {
             disabled={busy}
             onClick={() => fileInputRef.current?.click()}
           >
-            Choose file…
+            {tBackup('importDb.button')}
           </Button>
         </Row>
-        <Row icon="clock" label="Backup frequency">
+        <Row icon="clock" label={tBackup('frequency.row')}>
           <Select
             value={String(backupConfig.frequencyMs)}
             onValueChange={(v) => setBackupFrequency(Number(v))}
           >
             <SelectTrigger className="h-8 w-[180px] text-[12px]">
-              <SelectValue>{freqLabelFor(backupConfig.frequencyMs)}</SelectValue>
+              <SelectValue>
+                {tBackup(
+                  `frequency.${FREQ_OPTIONS.find((o) => o.ms === backupConfig.frequencyMs)?.key ?? 'off'}`,
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {FREQ_OPTIONS.map((o) => (
-                <SelectItem key={o.ms} value={String(o.ms)}>{o.label}</SelectItem>
+                <SelectItem key={o.ms} value={String(o.ms)}>{tBackup(`frequency.${o.key}`)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Row>
-        <Row icon="doc" label="Backups kept">
+        <Row icon="doc" label={tBackup('retention.row')}>
           <Select
             value={String(backupConfig.retention)}
             onValueChange={(v) => setBackupRetention(Number(v))}
           >
             <SelectTrigger className="h-8 w-[120px] text-[12px]">
-              <SelectValue>{backupConfig.retention} files</SelectValue>
+              <SelectValue>{tBackup('retention.files', { count: backupConfig.retention })}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {RETENTION_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{n} files</SelectItem>
+                <SelectItem key={n} value={String(n)}>{tBackup('retention.files', { count: n })}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Row>
-        <Row icon="sync" label="Back up now">
+        <Row icon="sync" label={tBackup('backupNow.label')}>
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void onBackupNow()}>
-            Snapshot
+            {busy ? tBackup('backupNow.busy') : tBackup('backupNow.button')}
           </Button>
         </Row>
         <Row icon="upload" label="Restore from backup">
