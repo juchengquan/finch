@@ -362,3 +362,113 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
   }
   return { entryId };
 }
+
+// --- Convenience wrappers (PR B's mutation cases call these) ----------------
+
+export interface SimpleEntryInput {
+  ledgerId: string;
+  accountId: string;
+  /** Signed, in the account's currency. */
+  amount: number;
+  date: string;
+  description: string;
+  categoryId?: string | null;
+  kind?: EntryKind;
+  time?: string | null;
+  notes?: string | null;
+  status?: EntryStatus;
+  refundedEntryId?: string | null;
+  sourceTemplateId?: string | null;
+  counterpartyId?: string | null;
+  skipRules?: boolean;
+  id?: string;
+  timestamp?: string;
+}
+
+/** One account leg + one auto-balanced category leg — today's addTransaction
+ *  shape. Kind defaults to income/expense by sign, like addTransaction. */
+export async function postSimple(exec: Exec, s: SimpleEntryInput): Promise<{ entryId: string }> {
+  const kind = s.kind ?? (s.amount > 0 ? 'income' : 'expense');
+  return postEntry(exec, {
+    id: s.id, ledgerId: s.ledgerId, date: s.date, time: s.time ?? null,
+    description: s.description, kind, status: s.status, notes: s.notes ?? null,
+    counterpartyId: s.counterpartyId, refundedEntryId: s.refundedEntryId ?? null,
+    sourceTemplateId: s.sourceTemplateId ?? null, skipRules: s.skipRules, timestamp: s.timestamp,
+    legs: [{ accountId: s.accountId, amount: s.amount }],
+    autoBalanceCategoryId: s.categoryId ?? null,
+  });
+}
+
+/** Two account legs (+ auto fx residue) — supersedes createTransfer +
+ *  transfer_groups. Per-leg memos carry the directional display labels; the
+ *  PR B projection surfaces `memo ?? entry.description` as the Tx merchant. */
+export async function postTransfer(exec: Exec, a: {
+  ledgerId?: string; fromAccountId: string; toAccountId: string;
+  fromAmount: number; toAmount?: number | null; date: string; time?: string | null;
+  note?: string | null; sourceTemplateId?: string | null; id?: string; timestamp?: string;
+}): Promise<{ entryId: string }> {
+  const fromAmount = Math.abs(Number(a.fromAmount));
+  if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
+  if (a.fromAccountId === a.toAccountId) throw new Error('Pick two different accounts');
+  const [from] = await exec('SELECT ledger_id, currency, name FROM accounts WHERE id = ?', [a.fromAccountId]);
+  const [to] = await exec('SELECT currency, name FROM accounts WHERE id = ?', [a.toAccountId]);
+  if (!from || !to) throw new Error('Account not found');
+  const ledgerId = a.ledgerId ?? String(from.ledger_id);
+  const fromCurrency = String(from.currency);
+  const toCurrency = String(to.currency);
+
+  let toAmount: number;
+  if (a.toAmount != null) {
+    toAmount = Math.abs(Number(a.toAmount));
+    if (!(toAmount > 0)) throw new Error('Received amount must be greater than 0');
+    if (fromCurrency === toCurrency && Math.abs(toAmount - fromAmount) > 0.005) {
+      throw new Error('Same-currency transfer amounts must match');
+    }
+  } else {
+    toAmount = (await convertToBase(exec, fromAmount, fromCurrency, toCurrency, a.date)).amountBase;
+  }
+
+  return postEntry(exec, {
+    id: a.id, ledgerId, date: a.date, time: a.time ?? null,
+    description: 'Transfer', kind: 'transfer', notes: a.note ?? null,
+    counterpartyId: null, skipRules: true,
+    sourceTemplateId: a.sourceTemplateId ?? null, timestamp: a.timestamp,
+    legs: [
+      { accountId: a.fromAccountId, amount: -fromAmount, memo: `Transfer to ${String(to.name)}` },
+      { accountId: a.toAccountId, amount: toAmount, memo: `Transfer from ${String(from.name)}` },
+    ],
+  });
+}
+
+/** Account delta against the adjustment equity category — supersedes the
+ *  kind='adjustment' row of adjustAccountBalance / reconcileAccount. */
+export async function postAdjustment(exec: Exec, a: {
+  ledgerId: string; accountId: string; delta: number; date: string;
+  note?: string | null; source?: 'manual' | 'reconcile'; id?: string; timestamp?: string;
+}): Promise<{ entryId: string }> {
+  if (!Number.isFinite(a.delta) || r2(a.delta) === 0) throw new Error('Adjustment must be non-zero');
+  const sys = await ensureSystemCategories(exec, a.ledgerId);
+  return postEntry(exec, {
+    id: a.id, ledgerId: a.ledgerId, date: a.date,
+    description: a.source === 'reconcile' ? 'Reconciliation adjustment' : 'Balance adjustment',
+    kind: 'adjustment', notes: a.note ?? null, counterpartyId: null, skipRules: true, timestamp: a.timestamp,
+    legs: [{ accountId: a.accountId, amount: r2(a.delta) }],
+    autoBalanceCategoryId: sys.adjustment,
+  });
+}
+
+/** The opening-balance entry (replaces accounts.opening_balance in PR B).
+ *  Pre-cleared (it IS the reconcile anchor); zero opening → no entry, null. */
+export async function postOpening(exec: Exec, o: {
+  ledgerId: string; accountId: string; amount: number; date: string; timestamp?: string;
+}): Promise<{ entryId: string } | null> {
+  if (r2(o.amount) === 0) return null;
+  const sys = await ensureSystemCategories(exec, o.ledgerId);
+  const ts = o.timestamp ?? new Date().toISOString();
+  return postEntry(exec, {
+    id: `open-${o.accountId}`, ledgerId: o.ledgerId, date: o.date,
+    description: 'Opening balance', kind: 'opening', counterpartyId: null, skipRules: true, timestamp: ts,
+    legs: [{ accountId: o.accountId, amount: r2(o.amount), clearedAt: ts }],
+    autoBalanceCategoryId: sys.opening,
+  });
+}

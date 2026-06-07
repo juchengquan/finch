@@ -2,7 +2,10 @@ import { test, expect } from 'bun:test';
 import { seededDb, freshDb } from '@/lib/db/test-utils';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
-import { ensureSystemCategories, postEntry } from '@/lib/db/entries';
+import {
+  ensureSystemCategories, postEntry,
+  postSimple, postTransfer, postAdjustment, postOpening,
+} from '@/lib/db/entries';
 
 // Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
 // data/*.json) with the PR-A additive schema applied on top. Base-sensitive
@@ -412,4 +415,78 @@ test('a rule can recategorize, split, and tag an incoming entry', async () => {
   // Rule-added tag landed in entry_tags (insertTxRow parity).
   const tags = await exec('SELECT tag_id FROM entry_tags WHERE entry_id = ?', [entryId]);
   expect(tags.map((t) => String(t.tag_id))).toEqual(['tag-t']);
+});
+
+test('postOpening books a pre-cleared opening entry; zero is a no-op', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-op', 'SGD', 'lt');
+  expect(await postOpening(exec, { ledgerId: 'lt', accountId: 'a-op', amount: 0, date: '2026-06-01' })).toBeNull();
+  const res = await postOpening(exec, { ledgerId: 'lt', accountId: 'a-op', amount: 250, date: '2026-06-01' });
+  expect(res?.entryId).toBe('open-a-op');
+  const [leg] = await exec('SELECT cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', ['open-a-op']);
+  expect(leg.cleared_at).not.toBeNull();
+  const [e] = await exec('SELECT kind, status FROM entries WHERE id = ?', ['open-a-op']);
+  expect(String(e.kind)).toBe('opening');
+  expect(await balanceOf(exec, 'a-op')).toBe(250);
+});
+
+test('postAdjustment books the delta against the adjustment equity category', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-adj', 'SGD', 'lt');
+  const sys = await ensureSystemCategories(exec, 'lt');
+  const { entryId } = await postAdjustment(exec, {
+    ledgerId: 'lt', accountId: 'a-adj', delta: -12.34, date: '2026-06-04', source: 'reconcile',
+  });
+  const [e] = await exec('SELECT kind, description FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.kind)).toBe('adjustment');
+  expect(String(e.description)).toBe('Reconciliation adjustment');
+  const eq = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND category_id = ?', [entryId, sys.adjustment]);
+  expect(Number(eq[0].amount_base)).toBe(12.34);
+  expect(await balanceOf(exec, 'a-adj')).toBe(-12.34);
+});
+
+test('postSimple defaults kind by sign', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-sim', 'SGD', 'lt');
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-sim', amount: 99, date: '2026-06-04',
+    description: 'Rebate', skipRules: true,
+  });
+  const [e] = await exec('SELECT kind FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.kind)).toBe('income');
+});
+
+test('postTransfer: same-currency equality, cross-currency residue, pinned toAmount', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-t1', 'SGD', 'lt');
+  await addAccount(exec, 'a-t2', 'SGD', 'lt');
+  await addAccount(exec, 'a-t3', 'USD', 'lt');
+  await ensureSystemCategories(exec, 'lt');
+
+  await expect(postTransfer(exec, {
+    fromAccountId: 'a-t1', toAccountId: 'a-t2', fromAmount: 100, toAmount: 90, date: '2026-06-04',
+  })).rejects.toThrow('Same-currency transfer amounts must match');
+
+  // Same currency: two legs, no residue.
+  const ok = await postTransfer(exec, { fromAccountId: 'a-t1', toAccountId: 'a-t2', fromAmount: 100, date: '2026-06-04' });
+  const legs = await exec('SELECT COUNT(*) AS n FROM postings WHERE entry_id = ?', [ok.entryId]);
+  expect(Number(legs[0].n)).toBe(2);
+  expect(await balanceOf(exec, 'a-t1')).toBe(-100);
+  expect(await balanceOf(exec, 'a-t2')).toBe(100);
+
+  // Cross-currency with a pinned (off-market) toAmount: each leg locks its own
+  // base; the difference lands on the fx equity leg, and the entry still
+  // balances exactly.
+  const x = await postTransfer(exec, {
+    fromAccountId: 'a-t1', toAccountId: 'a-t3', fromAmount: 135, toAmount: 100, date: '2026-06-04',
+  });
+  const sum = await exec('SELECT ROUND(SUM(amount_base),2) AS s FROM postings WHERE entry_id = ?', [x.entryId]);
+  expect(Math.abs(Number(sum[0].s))).toBe(0);
+  const memos = await exec('SELECT memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order', [x.entryId]);
+  expect(String(memos[0].memo)).toContain('Transfer to');
+  expect(String(memos[1].memo)).toContain('Transfer from');
 });
