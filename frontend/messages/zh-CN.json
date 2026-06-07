@@ -150,6 +150,19 @@
       },
       "createdToast": "转账已创建"
     },
+    "detail": {
+      "title": "转账",
+      "notFound": "未找到该转账",
+      "received": "→ 收到 {amount}",
+      "rateLocked": "汇率锁定 @ {rate} · {when}",
+      "posted": "已入账 · {when}",
+      "fromLine": "从 · {ledger} 账本",
+      "toLine": "到 · {ledger} 账本",
+      "rateField": "{rate} {from}→{to}",
+      "sameCurrency": "1(同币种)",
+      "amountBaseLocked": "{amount}(已锁定)",
+      "explainer": "汇率在导入时即锁定。两笔交易共用 amount_base,使跨账本报表保持一致。"
+    },
     "editDialog": {
       "title": "编辑转账",
       "description": "调整金额、日期或备注。余额会重新计算。",
@@ -393,6 +406,38 @@
       "rename": "重命名",
       "delete": "删除"
     },
+    "detail": {
+      "fallbackTitle": "预算",
+      "notFound": "未找到该预算。",
+      "saved": "已存",
+      "used": "已用",
+      "of": "/",
+      "carried": "(结转 +{amount})",
+      "pendingFromNext": "下一周期 {period} 的 {amount}",
+      "toGo": "还需 {amount}",
+      "over": "超出 {amount}",
+      "left": "剩余 {amount}",
+      "editButton": "编辑",
+      "contributeButton": "贡献",
+      "deleteButton": "删除",
+      "incomeTitle": "收入",
+      "transactionsTitle": "交易",
+      "manualOnly": "进度仅通过手动贡献跟踪。",
+      "noneInCycle": "本周期暂无交易",
+      "contributeDialog": {
+        "title": "添加到 {name}",
+        "description": "为该目标记录一笔贡献。",
+        "submit": "添加",
+        "addedToast": "贡献已添加",
+        "addedDescription": "{name} · +{amount}",
+        "amountError": "请输入大于 0 的金额"
+      },
+      "deleteDialog": {
+        "title": "删除该预算?",
+        "description": "{name} 将被永久删除。你的交易不受影响。",
+        "deletedToast": "预算已删除"
+      }
+    },
     "groupDialog": {
       "renameTitle": "重命名分组",
       "newTitle": "新建预算分组",
@@ -417,6 +462,108 @@
     "menu": {
       "newAccount": "新建账户",
       "newGroup": "新建分组"
+    },
+    "detail": {
+      "notFoundTitle": "未找到账户",
+      "notFoundHeader": "此处无账户",
+      "notFoundBody": "未找到 id 为 {id} 的账户。可能已被删除,或链接有误。",
+      "backToAccounts": "返回账户",
+      "detailsAria": "账户详情",
+      "editAria": "编辑账户",
+      "fxGain": "汇兑收益 {amount}",
+      "fxLoss": "汇兑损失 {amount}",
+      "holdingsLine": "+ 持仓 {holdings} · 合计 {total}",
+      "adjustBalance": "调整余额",
+      "reconcile": "对账",
+      "details": {
+        "type": "类型",
+        "currency": "货币",
+        "lastSync": "最近同步",
+        "lastSyncValue": "2 分钟前",
+        "linkedSince": "关联时间",
+        "linkedSinceValue": "2024 年 1 月"
+      },
+      "autoCategorize": "自动分类:开启",
+      "detailsHeaderShort": "账户详情",
+      "detailsDialog": {
+        "title": "账户详情",
+        "description": "该账户的元信息。",
+        "editButton": "编辑详情"
+      },
+      "editDialog": {
+        "title": "编辑账户",
+        "name": "名称",
+        "type": "类型",
+        "currency": "货币",
+        "currencyHint": "在账户创建时确定,无法更改。如需使用其他货币,请新建账户。",
+        "archive": "归档",
+        "updatedToast": "账户已更新"
+      },
+      "archiveDialog": {
+        "title": "归档 {name}?",
+        "description": "账户会从列表中隐藏,但其交易历史保留。无法从应用内撤销。",
+        "confirm": "归档",
+        "archivedToast": "账户已归档"
+      },
+      "adjustDialog": {
+        "title": "调整 {name}",
+        "description": "用一条调整分录直接把余额改到目标值 —— 较粗的做法。若要逐条对账单核对,请使用对账。调整不计入支出或收入。",
+        "currentBalance": "当前余额",
+        "targetBalance": "目标余额",
+        "noteOptional": "备注(可选)",
+        "notePlaceholder": "例如:漏掉的银行手续费",
+        "submit": "调整",
+        "targetError": "请输入目标余额",
+        "alreadyAtToast": "已经等于该值 —— 无需调整",
+        "adjustedToast": "余额已调整"
+      },
+      "reconcileCard": {
+        "title": "对账单核对",
+        "cancelAria": "取消对账",
+        "cancel": "取消",
+        "statementBalance": "对账单余额({currency})",
+        "asOf": "截至",
+        "cleared": "已清算",
+        "target": "目标",
+        "difference": "差额",
+        "summary": "已清算 {cleared} 笔 · 待复核 {toReview} 笔",
+        "shortBy": "差 {amount} —— 可能是漏记交易。请在下方补录,或登记一笔调整。",
+        "overBy": "多 {amount} —— 可能是漏记交易。请在下方补录,或登记一笔调整。",
+        "directionAria": "方向",
+        "expense": "支出",
+        "income": "收入",
+        "merchant": "商户",
+        "amountAria": "金额({currency})",
+        "amountPlaceholder": "金额({currency})",
+        "addButton": "添加",
+        "addCancel": "取消",
+        "addMissing": "补录漏掉的交易",
+        "postAdjustment": "登记 {amount} 的调整",
+        "doneButton": "完成",
+        "amountError": "请输入金额",
+        "merchantError": "请输入商户",
+        "addedClearedToast": "已添加并清算",
+        "statementBalanceError": "请输入对账单余额",
+        "statementDateError": "请选择对账单日期",
+        "reconciledToast": "已对账",
+        "reconciledWithAdjustmentToast": "已对账并补登调整"
+      },
+      "pending": {
+        "headerReconcile": "待处理 · {count}",
+        "subReconcile": "在对账单上吗?确认并清算",
+        "headerNormal": "待确认 · {count}",
+        "subNormal": "尚未计入余额",
+        "incomeFallback": "收入",
+        "confirmAndClearLabel": "确认并清算",
+        "confirmAndClearAria": "确认并清算 {merchant}",
+        "confirmAria": "确认 {merchant}",
+        "voidAria": "作废 {merchant}",
+        "confirmAndClearedToast": "已确认并清算",
+        "confirmedToast": "已确认 {merchant}",
+        "voidedToast": "已作废 {merchant}"
+      },
+      "allTransactions": "全部交易 · {count}",
+      "filterLabel": "筛选"
     },
     "groupActionsAria": "分组操作:{name}",
     "groupActions": {

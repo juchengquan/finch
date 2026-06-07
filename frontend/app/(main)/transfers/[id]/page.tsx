@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { fmtNative } from '@/lib/data';
@@ -16,15 +17,17 @@ export default function TransferDetailPage() {
   const id = params.id as string;
   const { active, activeId } = useLedger();
   const { base } = useMoney();
+  const t = useTranslations('transfers.detail');
+  const tNav = useTranslations('nav');
   const allTxns = useFinanceStore((s) => s.transactions);
   const accountRows = useFinanceStore((s) => s.accounts);
 
-  const tf = selectTransfers(allTxns, accountRows, activeId).find((t) => t.id === id);
+  const tf = selectTransfers(allTxns, accountRows, activeId).find((tr) => tr.id === id);
 
   if (!tf) {
     return (
-      <MobilePage header={<ScreenHeader title="Transfer" back backHref="/transfers" />}>
-        <div className="text-muted-foreground px-5 pt-16 text-center text-sm">Transfer not found</div>
+      <MobilePage header={<ScreenHeader title={t('title')} back backHref="/transfers" />}>
+        <div className="text-muted-foreground px-5 pt-16 text-center text-sm">{t('notFound')}</div>
       </MobilePage>
     );
   }
@@ -38,17 +41,17 @@ export default function TransferDetailPage() {
   // `amount_base` is the ledger-base figure both legs share. The store keeps each
   // leg's base in `amount` (native lives in `nativeAmount`), so read it off the
   // out-leg of this group.
-  const fromLeg = allTxns.find((t) => t.transferGroupId === id && t.amount < 0);
+  const fromLeg = allTxns.find((tx) => tx.transferGroupId === id && tx.amount < 0);
   const amountBase = fromLeg ? Math.abs(fromLeg.amount) : fromAmount;
   const ledgerLabel = active.name.toUpperCase();
   const whenStr = `${tf.date}${tf.time ? ` · ${tf.time}` : ''}`;
 
   return (
-    <MobilePage header={<ScreenHeader title="Transfer" back backHref="/transfers" />}>
+    <MobilePage header={<ScreenHeader title={t('title')} back backHref="/transfers" />}>
       <div className="px-5 pb-[120px]">
         <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground md:hidden">
           <Link href="/transfers" className="text-muted-foreground">
-            Transfers
+            {tNav('transfers')}
           </Link>
           <Icon name="chev" size={11} />
           <span className="font-mono text-foreground">{tf.id}</span>
@@ -59,11 +62,11 @@ export default function TransferDetailPage() {
             {fmtNative(fromAmount, tf.fromCurrency)}
           </div>
           <div className="mt-1.5 font-serif text-[18px] italic text-secondary-foreground">
-            → {fmtNative(toAmount, tf.toCurrency)} received
+            {t('received', { amount: fmtNative(toAmount, tf.toCurrency) })}
           </div>
           <div className="mt-3.5 inline-flex items-center gap-2 rounded-[14px] bg-secondary px-3 py-1.5 font-mono text-[10px] tracking-[0.6px] text-secondary-foreground">
             <Icon name="check" size={12} className="text-success" stroke={2}/>
-            {crossCurrency ? `RATE LOCKED @ ${rate} · ${whenStr}` : `POSTED · ${whenStr}`}
+            {crossCurrency ? t('rateLocked', { rate, when: whenStr }) : t('posted', { when: whenStr })}
           </div>
         </div>
 
@@ -73,7 +76,7 @@ export default function TransferDetailPage() {
               <Icon name="arrow-u" size={16} stroke={2}/>
             </div>
             <div className="flex-1">
-              <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">FROM · {ledgerLabel} LEDGER</div>
+              <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('fromLine', { ledger: ledgerLabel })}</div>
               <div className="mt-0.5 text-sm font-medium">{tf.fromName ?? '—'}</div>
             </div>
             <div className="font-sans text-base font-medium tabular-nums text-destructive">{fmtNative(-fromAmount, tf.fromCurrency)}</div>
@@ -83,7 +86,7 @@ export default function TransferDetailPage() {
               <Icon name="arrow-d" size={16} stroke={2}/>
             </div>
             <div className="flex-1">
-              <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">TO · {ledgerLabel} LEDGER</div>
+              <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('toLine', { ledger: ledgerLabel })}</div>
               <div className="mt-0.5 text-sm font-medium">{tf.toName ?? '—'}</div>
             </div>
             <div className="font-sans text-base font-medium tabular-nums text-success">{fmtNative(toAmount, tf.toCurrency, { signed: true })}</div>
@@ -93,8 +96,8 @@ export default function TransferDetailPage() {
         <div className="rounded-[14px] border border-border bg-card px-4 py-1">
           {[
             ['transfer_group_id', tf.id],
-            ['amount_base',       `${fmtNative(amountBase, base)} (locked)`],
-            ['exchange_rate',     crossCurrency ? `${rate} ${tf.fromCurrency}→${tf.toCurrency}` : '1 (same currency)'],
+            ['amount_base',       t('amountBaseLocked', { amount: fmtNative(amountBase, base) })],
+            ['exchange_rate',     crossCurrency ? t('rateField', { rate, from: tf.fromCurrency, to: tf.toCurrency }) : t('sameCurrency')],
             ['from_currency',     tf.fromCurrency],
             ['to_currency',       tf.toCurrency],
             ['time',              tf.time ?? '—'],
@@ -108,7 +111,7 @@ export default function TransferDetailPage() {
         </div>
 
         <div className="mt-3.5 px-1 text-[11px] leading-relaxed text-muted-foreground">
-          The exchange rate is locked at import time. Both transactions share <span className="font-mono text-secondary-foreground">amount_base</span> so reports across ledgers stay consistent.
+          {t('explainer')}
         </div>
       </div>
     </MobilePage>

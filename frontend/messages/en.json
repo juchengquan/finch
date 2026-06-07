@@ -150,6 +150,19 @@
       },
       "createdToast": "Transfer created"
     },
+    "detail": {
+      "title": "Transfer",
+      "notFound": "Transfer not found",
+      "received": "→ {amount} received",
+      "rateLocked": "RATE LOCKED @ {rate} · {when}",
+      "posted": "POSTED · {when}",
+      "fromLine": "FROM · {ledger} LEDGER",
+      "toLine": "TO · {ledger} LEDGER",
+      "rateField": "{rate} {from}→{to}",
+      "sameCurrency": "1 (same currency)",
+      "amountBaseLocked": "{amount} (locked)",
+      "explainer": "The exchange rate is locked at import time. Both transactions share amount_base so reports across ledgers stay consistent."
+    },
     "editDialog": {
       "title": "Edit transfer",
       "description": "Adjust the amount, date or note. Balances are recomputed.",
@@ -393,6 +406,38 @@
       "rename": "Rename",
       "delete": "Delete"
     },
+    "detail": {
+      "fallbackTitle": "Budget",
+      "notFound": "Budget not found.",
+      "saved": "SAVED",
+      "used": "USED",
+      "of": "of",
+      "carried": "(+{amount} carried)",
+      "pendingFromNext": "{amount} from {period}",
+      "toGo": "{amount} to go",
+      "over": "{amount} over",
+      "left": "{amount} left",
+      "editButton": "Edit",
+      "contributeButton": "Contribute",
+      "deleteButton": "Delete",
+      "incomeTitle": "Income",
+      "transactionsTitle": "Transactions",
+      "manualOnly": "Progress is tracked via manual contributions.",
+      "noneInCycle": "No transactions in this cycle yet",
+      "contributeDialog": {
+        "title": "Add to {name}",
+        "description": "Record a contribution toward this goal.",
+        "submit": "Add",
+        "addedToast": "Contribution added",
+        "addedDescription": "{name} · +{amount}",
+        "amountError": "Enter an amount greater than 0"
+      },
+      "deleteDialog": {
+        "title": "Delete budget?",
+        "description": "{name} will be permanently removed. Your transactions are unaffected.",
+        "deletedToast": "Budget deleted"
+      }
+    },
     "groupDialog": {
       "renameTitle": "Rename group",
       "newTitle": "New budget group",
@@ -417,6 +462,108 @@
     "menu": {
       "newAccount": "New account",
       "newGroup": "New group"
+    },
+    "detail": {
+      "notFoundTitle": "Account not found",
+      "notFoundHeader": "No account here",
+      "notFoundBody": "We couldn't find an account with id {id}. It may have been deleted, or the link is wrong.",
+      "backToAccounts": "Back to accounts",
+      "detailsAria": "Account details",
+      "editAria": "Edit account",
+      "fxGain": "FX gain {amount}",
+      "fxLoss": "FX loss {amount}",
+      "holdingsLine": "+ {holdings} in holdings · total {total}",
+      "adjustBalance": "Adjust balance",
+      "reconcile": "Reconcile",
+      "details": {
+        "type": "Type",
+        "currency": "Currency",
+        "lastSync": "Last sync",
+        "lastSyncValue": "2 min ago",
+        "linkedSince": "Linked since",
+        "linkedSinceValue": "Jan 2024"
+      },
+      "autoCategorize": "Auto-categorize: on",
+      "detailsHeaderShort": "ACCOUNT DETAILS",
+      "detailsDialog": {
+        "title": "Account details",
+        "description": "Metadata for this account.",
+        "editButton": "Edit details"
+      },
+      "editDialog": {
+        "title": "Edit account",
+        "name": "Name",
+        "type": "Type",
+        "currency": "Currency",
+        "currencyHint": "Set at creation and cannot be changed. Make a new account to use another currency.",
+        "archive": "Archive",
+        "updatedToast": "Account updated"
+      },
+      "archiveDialog": {
+        "title": "Archive {name}?",
+        "description": "The account is hidden from your lists but its transaction history is kept. You can't undo this from the app.",
+        "confirm": "Archive",
+        "archivedToast": "Account archived"
+      },
+      "adjustDialog": {
+        "title": "Adjust {name}",
+        "description": "Force the balance to a target value with a single adjustment entry — the blunt path. For a guided session that ticks off real statement rows, use Reconcile. Adjustments don't count toward spending or income.",
+        "currentBalance": "Current balance",
+        "targetBalance": "Target balance",
+        "noteOptional": "Note (optional)",
+        "notePlaceholder": "e.g. Bank fee I missed",
+        "submit": "Adjust",
+        "targetError": "Enter a target balance",
+        "alreadyAtToast": "Already at this balance — nothing to adjust",
+        "adjustedToast": "Balance adjusted"
+      },
+      "reconcileCard": {
+        "title": "Reconcile to statement",
+        "cancelAria": "Cancel reconcile",
+        "cancel": "Cancel",
+        "statementBalance": "Statement balance ({currency})",
+        "asOf": "As of",
+        "cleared": "Cleared",
+        "target": "Target",
+        "difference": "Difference",
+        "summary": "{cleared} cleared · {toReview} to review",
+        "shortBy": "You're {amount} short — likely a missing transaction. Add it below, or post an adjustment.",
+        "overBy": "You're {amount} over — likely a missing transaction. Add it below, or post an adjustment.",
+        "directionAria": "Direction",
+        "expense": "expense",
+        "income": "income",
+        "merchant": "Merchant",
+        "amountAria": "Amount ({currency})",
+        "amountPlaceholder": "Amount ({currency})",
+        "addButton": "Add",
+        "addCancel": "Cancel",
+        "addMissing": "Add missing transaction",
+        "postAdjustment": "Post adjustment for {amount}",
+        "doneButton": "Done",
+        "amountError": "Enter an amount",
+        "merchantError": "Enter a merchant",
+        "addedClearedToast": "Added & cleared",
+        "statementBalanceError": "Enter a statement balance",
+        "statementDateError": "Pick the statement date",
+        "reconciledToast": "Reconciled",
+        "reconciledWithAdjustmentToast": "Reconciled with adjustment"
+      },
+      "pending": {
+        "headerReconcile": "Pending · {count}",
+        "subReconcile": "On your statement? Confirm & clear",
+        "headerNormal": "To confirm · {count}",
+        "subNormal": "Not in your balance yet",
+        "incomeFallback": "Income",
+        "confirmAndClearLabel": "Confirm & clear",
+        "confirmAndClearAria": "Confirm and clear {merchant}",
+        "confirmAria": "Confirm {merchant}",
+        "voidAria": "Void {merchant}",
+        "confirmAndClearedToast": "Confirmed & cleared",
+        "confirmedToast": "Confirmed {merchant}",
+        "voidedToast": "Voided {merchant}"
+      },
+      "allTransactions": "All transactions · {count}",
+      "filterLabel": "Filter"
     },
     "groupActionsAria": "Group actions: {name}",
     "groupActions": {
