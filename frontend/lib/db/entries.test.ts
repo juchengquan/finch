@@ -428,6 +428,9 @@ test('postOpening books a pre-cleared opening entry; zero is a no-op', async () 
   expect(leg.cleared_at).not.toBeNull();
   const [e] = await exec('SELECT kind, status FROM entries WHERE id = ?', ['open-a-op']);
   expect(String(e.kind)).toBe('opening');
+  // Idempotent: a second call returns the same entry and books nothing new.
+  const again = await postOpening(exec, { ledgerId: 'lt', accountId: 'a-op', amount: 250, date: '2026-06-01' });
+  expect(again?.entryId).toBe('open-a-op');
   expect(await balanceOf(exec, 'a-op')).toBe(250);
 });
 
@@ -436,9 +439,12 @@ test('postAdjustment books the delta against the adjustment equity category', as
   await withTestLedger(exec);
   await addAccount(exec, 'a-adj', 'SGD', 'lt');
   const sys = await ensureSystemCategories(exec, 'lt');
-  const { entryId } = await postAdjustment(exec, {
+  // Sub-cent / zero deltas are a silent no-op (legacy adjustAccountBalance parity).
+  expect(await postAdjustment(exec, { ledgerId: 'lt', accountId: 'a-adj', delta: 0.004, date: '2026-06-04' })).toBeNull();
+  const res = await postAdjustment(exec, {
     ledgerId: 'lt', accountId: 'a-adj', delta: -12.34, date: '2026-06-04', source: 'reconcile',
   });
+  const entryId = res!.entryId;
   const [e] = await exec('SELECT kind, description FROM entries WHERE id = ?', [entryId]);
   expect(String(e.kind)).toBe('adjustment');
   expect(String(e.description)).toBe('Reconciliation adjustment');

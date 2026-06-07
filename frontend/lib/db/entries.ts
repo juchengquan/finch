@@ -445,8 +445,11 @@ export async function postTransfer(exec: Exec, a: {
 export async function postAdjustment(exec: Exec, a: {
   ledgerId: string; accountId: string; delta: number; date: string;
   note?: string | null; source?: 'manual' | 'reconcile'; id?: string; timestamp?: string;
-}): Promise<{ entryId: string }> {
-  if (!Number.isFinite(a.delta) || r2(a.delta) === 0) throw new Error('Adjustment must be non-zero');
+}): Promise<{ entryId: string } | null> {
+  if (!Number.isFinite(a.delta)) throw new Error('Adjustment must be a number');
+  // Zero (or sub-cent) delta = already at target: silent no-op, matching the
+  // legacy adjustAccountBalance's `if (delta === 0) return` semantics.
+  if (r2(a.delta) === 0) return null;
   const sys = await ensureSystemCategories(exec, a.ledgerId);
   return postEntry(exec, {
     id: a.id, ledgerId: a.ledgerId, date: a.date,
@@ -463,10 +466,15 @@ export async function postOpening(exec: Exec, o: {
   ledgerId: string; accountId: string; amount: number; date: string; timestamp?: string;
 }): Promise<{ entryId: string } | null> {
   if (r2(o.amount) === 0) return null;
+  const id = `open-${o.accountId}`;
+  // Idempotent: a replayed migration / double call returns the existing entry
+  // instead of tripping the PK constraint.
+  const existing = await exec('SELECT id FROM entries WHERE id = ?', [id]);
+  if (existing.length) return { entryId: id };
   const sys = await ensureSystemCategories(exec, o.ledgerId);
   const ts = o.timestamp ?? new Date().toISOString();
   return postEntry(exec, {
-    id: `open-${o.accountId}`, ledgerId: o.ledgerId, date: o.date,
+    id, ledgerId: o.ledgerId, date: o.date,
     description: 'Opening balance', kind: 'opening', counterpartyId: null, skipRules: true, timestamp: ts,
     legs: [{ accountId: o.accountId, amount: r2(o.amount), clearedAt: ts }],
     autoBalanceCategoryId: sys.opening,
