@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { seededDb } from '@/lib/db/test-utils';
+import { seededDb, freshDb } from '@/lib/db/test-utils';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
 
@@ -45,4 +45,29 @@ test('applyEntriesSchema creates the new tables and upgrades categories', async 
   // Seeded categories survived the rebuild.
   const food = await exec("SELECT kind FROM categories WHERE id = 'food'");
   expect(String(food[0].kind)).toBe('expense');
+});
+
+test('CATEGORIES_UPGRADE re-kinds transfer categories and keeps the parent FK', async () => {
+  // freshDb = canonical schema, no seed: the OLD categories CHECK still
+  // allows kind='transfer', so we can stage a pre-upgrade row.
+  const db = await freshDb();
+  const exec = db.exec;
+  await exec(
+    "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','SGD',1,datetime('now'),datetime('now'))",
+  );
+  await exec(
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES ('c-par','l1',NULL,'Parent','expense',NULL,NULL,0,datetime('now'),datetime('now'))",
+  );
+  await exec(
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES ('c-tr','l1','c-par','Old transfer','transfer',NULL,NULL,1,datetime('now'),datetime('now'))",
+  );
+  await applyEntriesSchema(exec);
+  const [tr] = await exec("SELECT kind, parent_id FROM categories WHERE id = 'c-tr'");
+  expect(String(tr.kind)).toBe('expense');
+  expect(String(tr.parent_id)).toBe('c-par');
+  // The self-referential FK survived the rebuild: deleting the parent
+  // promotes the child to top-level (SET NULL), not an error or cascade.
+  await exec("DELETE FROM categories WHERE id = 'c-par'");
+  const [child] = await exec("SELECT parent_id FROM categories WHERE id = 'c-tr'");
+  expect(child.parent_id).toBeNull();
 });

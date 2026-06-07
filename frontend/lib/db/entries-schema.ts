@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS entries (
   notes              TEXT,
   applied_rule_ids   TEXT,
   reviewed_at        TEXT,
-  -- Double-submit backstop (replaces idx_txn_dedup). NULL when time is NULL,
+  -- Double-submit backstop (the entries-layer mirror of transactions's
+  -- idx_txn_dedup, which still exists). NULL when time is NULL,
   -- reproducing the old index's "NULL time never collides" carve-out.
   dedup_hash         TEXT,
   -- Two-phase write flag: postings insert while sealed = 0, then the seal
