@@ -141,3 +141,11 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Local agent / tooling workspaces (per-user, never committed):
+#   .worktrees/  — git worktrees created via `git worktree add .worktrees/...`
+#   .claude/     — Claude Code settings + its managed worktrees dir
+#   docs/        — opencode / superpowers brainstorming + plan artifacts
+.worktrees/
+.claude/
+docs/
