@@ -15,8 +15,6 @@ import {
   type ScheduledPatch,
 } from './queries/scheduled';
 import {
-  recomputeAccount,
-  recomputeForTransaction,
   createAccount as qCreateAccount,
   updateAccount as qUpdateAccount,
   archiveAccount as qArchiveAccount,
@@ -38,7 +36,7 @@ import {
 } from './queries/rules';
 import type { Action, Condition, NewRule } from '@/lib/rules/types';
 import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
-import { setTransactionSplits as qSetTransactionSplits, type NewSplitInput } from './queries/transactionSplits';
+// qSetTransactionSplits removed: setTransactionSplits is now inline via rebuildEntry (B3b)
 import {
   deleteCounterparty as qDeleteCounterparty,
   updateCounterparty as qUpdateCounterparty,
@@ -74,7 +72,7 @@ import {
 } from './queries/budgetGroups';
 import { isAccountType } from '@/lib/account-types';
 import { parseInstallmentTotal } from '@/lib/installment';
-import { convertToBase } from './queries/rates';
+// convertToBase not needed in mutations.ts (used within entries.ts and transactions.ts adapters)
 import {
   createHolding as qCreateHolding,
   updateHolding as qUpdateHolding,
@@ -88,9 +86,13 @@ import {
   deleteTransactionRow as qDelete,
   confirmTransaction as qConfirm,
   confirmPendingWithMerchant as qConfirmWithMerchant,
-  insertTxRow,
   type AddInput,
 } from './queries/transactions';
+import {
+  postTransfer, postAdjustment, postSimple,
+  rebuildEntry, resolveEntryRef,
+  recomputeAccountFromPostings,
+} from './entries';
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
 import {
   deleteAttachment as qDeleteAttachment,
@@ -147,13 +149,15 @@ async function unlinkAttachmentFiles(relPaths: string[]): Promise<void> {
 
 const RESET_TABLES = [
   'holdings',
-  'transactions',
+  'entry_attachments',
+  'entry_tags',
+  'postings',
+  'entries',
   'scheduled_splits',
   'scheduled_templates',
   'tags',
   'budgets',
   'budget_groups',
-  'transfer_groups',
   'counterparties',
   'categories',
   'accounts',
@@ -186,7 +190,7 @@ function newId(prefix: string): string {
 // column from each backstop index (idx_txn_dedup / idx_budget_unique in
 // schema.ts, #5). Any other error propagates unchanged.
 const DEDUP_MESSAGES: { signature: string; code: string; message: string }[] = [
-  { signature: 'transactions.account_id, transactions.date', code: 'error.duplicate.txn', message: 'This looks like a duplicate — an identical transaction already exists.' },
+  { signature: 'entries.ledger_id, entries.dedup_hash', code: 'error.duplicate.txn', message: 'This looks like a duplicate — an identical transaction already exists.' },
   { signature: 'budgets.ledger_id, budgets.name', code: 'error.duplicate.budget', message: 'A budget with this name and cycle already exists.' },
 ];
 async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
@@ -292,7 +296,7 @@ async function postSingle(
   sourceTemplateId: string | null = null,
   categoryId: string | null = null,
 ): Promise<void> {
-  await insertTxRow(exec, {
+  await postSimple(exec, {
     ledgerId, accountId, date,
     amount, description, categoryId,
     kind: amount > 0 ? 'income' : 'expense',
@@ -356,8 +360,8 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null);
 }
 
-// Create a transfer: a transfer_group plus two confirmed transactions (out/in)
-// that share its id, so it moves both account balances and shows in Activity.
+// Create a transfer: delegates to postTransfer which creates an entry with two
+// account legs (DOUBLE_ENTRY_PLAN §6). No transfer_groups INSERT.
 async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const fromId = str(args.fromAccountId);
   const toId = str(args.toAccountId);
@@ -366,52 +370,33 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   const date = str(args.date);
   const time = args.time ? str(args.time) : null;
   const note = args.note ? str(args.note) : null;
-  // Optional link back to the scheduled template — set when this transfer was
-  // auto-generated (or manually posted) from a recurring entry. Stamped on
-  // both legs so the dedupe / cap math in generateDueScheduled works.
   const sourceTemplateId = args.sourceTemplateId ? str(args.sourceTemplateId) : null;
+
   if (!fromAmount) throw new I18nError('error.transfer.amountGt0', {}, 'Transfer amount must be greater than 0');
   if (fromId === toId) throw new I18nError('error.transfer.sameAccount', {}, 'Pick two different accounts');
 
-  const [from] = await exec('SELECT ledger_id, currency, name FROM accounts WHERE id = ?', [fromId]);
+  const [from] = await exec('SELECT currency, name FROM accounts WHERE id = ?', [fromId]);
   const [to] = await exec('SELECT currency, name FROM accounts WHERE id = ?', [toId]);
   if (!from || !to) throw new I18nError('error.notFound.account', {}, 'Account not found');
 
-  const ledgerId = String(from.ledger_id);
   const fromCurrency = String(from.currency);
   const toCurrency = String(to.currency);
-  // When `toAmount` isn't supplied, derive it (and the rate) from the rates
-  // table. When the caller pins it, use it verbatim and recompute the rate.
-  let toAmount: number;
-  let rate: number;
   if (explicitToAmount != null) {
     if (!(explicitToAmount > 0)) throw new I18nError('error.transfer.receivedGt0', {}, 'Received amount must be greater than 0');
     if (fromCurrency === toCurrency && Math.abs(explicitToAmount - fromAmount) > 0.005) {
       throw new I18nError('error.transfer.sameCurrencyMismatch', {}, 'Same-currency transfer amounts must match');
     }
-    toAmount = explicitToAmount;
-    rate = fromCurrency === toCurrency ? 1 : Math.round((toAmount / fromAmount) * 1e6) / 1e6;
-  } else {
-    const conv = await convertToBase(exec, fromAmount, fromCurrency, toCurrency, date);
-    toAmount = conv.amountBase;
-    rate = conv.rate;
   }
-  const tgId = newId('tg');
-  const ts = new Date().toISOString();
-  await exec(
-    'INSERT INTO transfer_groups (id,ledger_id,from_currency,to_currency,exchange_rate,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',
-    [tgId, ledgerId, fromCurrency, toCurrency, rate, note, ts, ts],
-  );
-  await insertTxRow(exec, {
-    ledgerId, accountId: fromId, date, time, amount: -fromAmount,
-    description: `Transfer to ${String(to.name)}`,
-    currency: fromCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
-    sourceTemplateId,
-  });
-  await insertTxRow(exec, {
-    ledgerId, accountId: toId, date, time, amount: toAmount,
-    description: `Transfer from ${String(from.name)}`,
-    currency: toCurrency, transferGroupId: tgId, notes: note, kind: 'transfer',
+
+  // postTransfer handles all validation + residue; re-raise with the same I18nError codes.
+  await postTransfer(exec, {
+    fromAccountId: fromId,
+    toAccountId: toId,
+    fromAmount,
+    toAmount: explicitToAmount,
+    date,
+    time,
+    note,
     sourceTemplateId,
   });
 }
@@ -446,14 +431,13 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
     let dates = occurrencesUpTo(template, today);
     if (!dates.length) continue;
 
-    const existing = await exec('SELECT date FROM transactions WHERE source_template_id = ?', [String(r.id)]);
+    // Dedup: check against entries table (source_template_id).
+    const existing = await exec('SELECT date FROM entries WHERE source_template_id = ?', [String(r.id)]);
     const have = new Set(existing.map((e) => String(e.date)));
     dates = dates.filter((d) => !have.has(d));
     const max = r.max_executions == null ? null : Number(r.max_executions);
     if (max != null) dates = dates.slice(0, Math.max(0, max - have.size));
-    // Installment plans cap at installment_total just like max_executions, so a
-    // 24-month phone contract stops generating after 24 occurrences without the
-    // user having to remember to flip is_active.
+    // Installment plans cap at installment_total just like max_executions.
     const installmentTotal = r.installment_total == null ? null : Number(r.installment_total);
     if (installmentTotal != null) dates = dates.slice(0, Math.max(0, installmentTotal - have.size));
     if (!dates.length) continue;
@@ -463,34 +447,28 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
     const description = String(r.description ?? r.name ?? '');
 
     if (type === 'transfer') {
-      // Cross-account recurring: one createTransfer per due date, both legs
-      // stamped with source_template_id so the dedupe + cap math above keeps
-      // working (the Set dedupes the two legs that share a date). Same-currency
-      // transfers infer the to-amount; cross-currency picks the rate at the
-      // occurrence date via convertToBase (matches the manual transfer path).
+      // Cross-account recurring: one postTransfer per due date.
       const fromAccountId = String(r.from_account_id);
       const fromAmount = Math.abs(Number(r.amount));
       const sourceTemplateId = String(r.id);
       for (const date of dates) {
-        await createTransfer(exec, {
+        await postTransfer(exec, {
           fromAccountId, toAccountId: acctId, fromAmount, date,
-          note: description || null, sourceTemplateId,
+          note: description || null, sourceTemplateId, timestamp: ts,
         });
       }
       continue;
     }
 
     const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
-    const kind = type === 'income' ? 'income' : 'expense';
     const categoryId = r.category_id == null ? null : String(r.category_id);
-    // Counterparty is resolved once per template (the description is the same
-    // for every occurrence); insertTxRow then receives a concrete id rather
-    // than re-running the lookup on each date.
+    // Counterparty resolved once per template (same description for every occurrence).
     const cpId = await resolveCounterpartyIdByName(exec, ledgerId, description);
     for (const date of dates) {
-      await insertTxRow(exec, {
+      await postSimple(exec, {
         ledgerId, accountId: acctId, date,
-        amount, description, categoryId, kind,
+        amount, description, categoryId,
+        kind: type === 'income' ? 'income' : 'expense',
         status: 'pending',
         sourceTemplateId: String(r.id),
         counterpartyId: cpId,
@@ -500,20 +478,30 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
   }
 }
 
-// Capture a transaction's date + every category/account it touches (parent +
-// transaction_splits). Used by the tx-mutation cases to feed
-// invalidateRollover() with the before/after state of an edit.
+// Capture a transaction's date + every category/account it touches.
+// Used by the tx-mutation cases to feed invalidateRollover() with the
+// before/after state of an edit. Now entries-based (B3b).
 async function txTouches(
   exec: Exec,
   id: string,
 ): Promise<{ date: string; accountId: string; categoryIds: string[] } | null> {
-  const [tx] = await exec('SELECT date, account_id, category_id FROM transactions WHERE id = ?', [id]);
-  if (!tx) return null;
-  const splits = await exec('SELECT category_id FROM transaction_splits WHERE transaction_id = ?', [id]);
+  const ref = await resolveEntryRef(exec, id);
+  if (!ref) return null;
+  const { entryId } = ref;
+  const [e] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
+  if (!e) return null;
+  const postings = await exec(
+    'SELECT account_id, category_id FROM postings WHERE entry_id = ?',
+    [entryId],
+  );
   const categoryIds = new Set<string>();
-  if (tx.category_id) categoryIds.add(String(tx.category_id));
-  for (const s of splits) if (s.category_id) categoryIds.add(String(s.category_id));
-  return { date: String(tx.date), accountId: String(tx.account_id), categoryIds: [...categoryIds] };
+  let accountId: string | null = null;
+  for (const p of postings) {
+    if (p.account_id != null && accountId == null) accountId = String(p.account_id);
+    if (p.category_id != null) categoryIds.add(String(p.category_id));
+  }
+  if (!accountId) return null;
+  return { date: String(e.date), accountId, categoryIds: [...categoryIds] };
 }
 
 function mergeTouches(
@@ -546,39 +534,30 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const accountId = str(args.accountId);
       const target = Number(args.targetBalance);
       if (!Number.isFinite(target)) throw new I18nError('error.adjust.targetRequired', {}, 'Enter a target balance');
-      const [acct] = await exec('SELECT ledger_id, current_balance, currency FROM accounts WHERE id = ?', [accountId]);
+      const [acct] = await exec('SELECT ledger_id, current_balance FROM accounts WHERE id = ?', [accountId]);
       if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
       const delta = r2(target - Number(acct.current_balance));
-      if (delta === 0) return; // already at target — no-op
-      // `source` distinguishes a manual adjust from one posted by the
-      // reconcile flow's "post remainder" escape hatch; today it only
-      // affects the merchant label, but the value is preserved for future
-      // history filtering.
+      // postAdjustment handles the zero no-op internally (returns null).
       const source = args.source === 'reconcile' ? 'reconcile' : 'manual';
-      await qAdd(exec, {
+      await postAdjustment(exec, {
         ledgerId: String(acct.ledger_id),
         accountId,
-        amount: delta,
-        currency: String(acct.currency),
-        merchant: source === 'reconcile' ? 'Reconciliation adjustment' : 'Balance adjustment',
-        categoryId: null,
+        delta,
         date: args.date ? str(args.date) : new Date().toISOString().slice(0, 10),
         note: args.note ? str(args.note) : undefined,
-        status: 'confirmed',
-        kind: 'adjustment',
+        source,
       });
       return;
     }
     case 'updateTransaction': {
       const id = str(args.id);
       const before = await txTouches(exec, id);
-      // qUpdate may return a non-null `oldAccountId` when the patch moved the
-      // row to a different account — in which case the source account's
-      // balance no longer includes this row and must be recomputed.
+      // qUpdate (entries adapter) handles all account recomputes internally via
+      // rebuildEntry. The returned oldAccountId tells us if recompute is needed
+      // for the OLD account — rebuildEntry already does the NEW account.
       const { oldAccountId } = await qUpdate(exec, id, args.patch as Parameters<typeof qUpdate>[2]);
-      await recomputeForTransaction(exec, id); // recompute the row's (now-NEW) account
       if (oldAccountId) {
-        await recomputeAccount(exec, oldAccountId);
+        await recomputeAccountFromPostings(exec, oldAccountId);
       }
       const after = await txTouches(exec, id);
       const merged = mergeTouches(before, after);
@@ -592,41 +571,52 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'setCleared': {
-      // Toggle a single transaction's cleared-against-statement flag. One UPDATE,
-      // no recompute — clearing doesn't move balances.
+      // Toggle a single posting's cleared-against-statement flag. Resolves the
+      // client's account-posting id to get the posting row id (§4.2).
       const id = str(args.id);
       const cleared = args.cleared === true;
+      const ref = await resolveEntryRef(exec, id);
+      const postingId = ref?.postingId ?? id;
       await exec(
         cleared
-          ? "UPDATE transactions SET cleared_at = datetime('now') WHERE id = ?"
-          : 'UPDATE transactions SET cleared_at = NULL WHERE id = ?',
-        [id],
+          ? "UPDATE postings SET cleared_at = datetime('now') WHERE id = ?"
+          : 'UPDATE postings SET cleared_at = NULL WHERE id = ?',
+        [postingId],
       );
       return;
     }
     case 'setReviewed': {
-      // Toggle a single transaction's review-triage flag. One UPDATE, no
-      // recompute — review status doesn't affect balances or spend.
+      // Toggle a single entry's review-triage flag.
       const id = str(args.id);
       const reviewed = args.reviewed === true;
+      const ref = await resolveEntryRef(exec, id);
+      const entryId = ref?.entryId ?? id;
       await exec(
         reviewed
-          ? "UPDATE transactions SET reviewed_at = datetime('now') WHERE id = ?"
-          : 'UPDATE transactions SET reviewed_at = NULL WHERE id = ?',
-        [id],
+          ? "UPDATE entries SET reviewed_at = datetime('now') WHERE id = ?"
+          : 'UPDATE entries SET reviewed_at = NULL WHERE id = ?',
+        [entryId],
       );
       return;
     }
     case 'markAllReviewed': {
-      // Bulk-clear the review queue for a ledger (optionally scoped to one
-      // account). Marks every currently-unreviewed confirmed row reviewed.
+      // Bulk-clear the review queue for a ledger (optionally scoped to one account).
       const ledgerId = str(args.ledgerId || 'personal');
       const accountId = args.accountId ? str(args.accountId) : null;
-      const where = accountId
-        ? 'ledger_id = ? AND account_id = ? AND reviewed_at IS NULL'
-        : 'ledger_id = ? AND reviewed_at IS NULL';
-      const bind = accountId ? [ledgerId, accountId] : [ledgerId];
-      await exec(`UPDATE transactions SET reviewed_at = datetime('now') WHERE ${where}`, bind);
+      if (accountId) {
+        // Scope to entries that have at least one account leg for this account.
+        await exec(
+          `UPDATE entries SET reviewed_at = datetime('now')
+            WHERE ledger_id = ? AND reviewed_at IS NULL
+              AND EXISTS (SELECT 1 FROM postings p WHERE p.entry_id = entries.id AND p.account_id = ?)`,
+          [ledgerId, accountId],
+        );
+      } else {
+        await exec(
+          `UPDATE entries SET reviewed_at = datetime('now') WHERE ledger_id = ? AND reviewed_at IS NULL`,
+          [ledgerId],
+        );
+      }
       return;
     }
     case 'reconcileAccount': {
@@ -637,59 +627,39 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const statementBalance = Number(args.statementBalance);
       if (!Number.isFinite(statementBalance)) throw new I18nError('error.reconcile.statementBalance', {}, 'Statement balance is required');
       const statementDate = args.statementDate ? str(args.statementDate) : new Date().toISOString().slice(0, 10);
-      const postAdjustment = args.postAdjustment === true;
+      const doPostAdjustment = args.postAdjustment === true;
 
-      // Optional remainder. We compute it server-side from the actual cleared
-      // sum so the client can't trick us into posting a phantom delta.
-      if (postAdjustment) {
-        const [acct] = await exec(
-          'SELECT ledger_id, currency, opening_balance FROM accounts WHERE id = ?',
+      if (doPostAdjustment) {
+        const [acct] = await exec('SELECT ledger_id FROM accounts WHERE id = ?', [accountId]);
+        if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
+        // Cleared sum from postings — no opening_balance term (opening entry is pre-cleared,
+        // so it's already in the sum per DOUBLE_ENTRY_PLAN §6).
+        const [sum] = await exec(
+          `SELECT COALESCE(SUM(p.amount), 0) AS s
+             FROM postings p JOIN entries e ON e.id = p.entry_id
+            WHERE p.account_id = ?
+              AND e.status = 'confirmed'
+              AND p.cleared_at IS NOT NULL`,
           [accountId],
         );
-        if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
-        const opening = Number(acct.opening_balance ?? 0);
-        const [sum] = await exec(
-          `SELECT COALESCE(SUM(
-             CASE WHEN currency = ? THEN amount ELSE amount_base END
-           ), 0) AS s
-             FROM transactions
-            WHERE account_id = ?
-              AND status = 'confirmed'
-              AND cleared_at IS NOT NULL`,
-          [String(acct.currency), accountId],
-        );
-        const cleared = r2(opening + Number(sum.s));
+        const cleared = r2(Number(sum.s));
         const delta = r2(statementBalance - cleared);
         if (Math.abs(delta) >= 0.005) {
-          await qAdd(exec, {
+          const adjResult = await postAdjustment(exec, {
             ledgerId: String(acct.ledger_id),
             accountId,
-            amount: delta,
-            currency: String(acct.currency),
-            merchant: 'Reconciliation adjustment',
-            categoryId: null,
+            delta,
             date: statementDate,
-            note: undefined,
-            status: 'confirmed',
-            kind: 'adjustment',
+            source: 'reconcile',
           });
-          // Mark the adjustment itself as cleared — it's part of this
-          // reconciliation by construction. SQLite doesn't allow ORDER BY in
-          // UPDATE, so we pick the just-inserted id via a subquery.
-          await exec(
-            `UPDATE transactions
-                SET cleared_at = datetime('now')
-              WHERE id = (
-                SELECT id FROM transactions
-                 WHERE account_id = ?
-                   AND status = 'confirmed'
-                   AND kind = 'adjustment'
-                   AND cleared_at IS NULL
-                 ORDER BY created_at DESC
-                 LIMIT 1
-              )`,
-            [accountId],
-          );
+          // Mark the new adjustment entry's account leg as cleared.
+          if (adjResult) {
+            await exec(
+              `UPDATE postings SET cleared_at = datetime('now')
+                WHERE entry_id = ? AND account_id IS NOT NULL`,
+              [adjResult.entryId],
+            );
+          }
         }
       }
       await exec(
@@ -706,26 +676,61 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // Category-only bulk update: amounts/dates/accounts don't move, so we
       // skip account balance recompute. Rollover IS affected — invalidate it
       // for both the old and the new category from the earliest affected date.
+      // Each id is an account-posting id; resolve to entryId + load the account
+      // leg, then rebuildEntry with the same account leg + the new category leg.
       const ids = Array.isArray(args.ids) ? args.ids.map(str) : [];
       const categoryId = args.categoryId == null ? null : str(args.categoryId);
       if (!ids.length) return;
-      const placeholders = ids.map(() => '?').join(',');
-      const before = await exec(
-        `SELECT category_id, date FROM transactions WHERE id IN (${placeholders})`,
-        ids,
-      );
-      await exec(
-        `UPDATE transactions SET category_id = ? WHERE id IN (${placeholders})`,
-        [categoryId, ...ids],
-      );
+
       const cats = new Set<string>();
       if (categoryId) cats.add(categoryId);
       let earliest = '';
-      for (const r of before) {
-        if (r.category_id != null) cats.add(String(r.category_id));
-        const d = String(r.date ?? '');
+
+      for (const id of ids) {
+        const ref = await resolveEntryRef(exec, id);
+        if (!ref) continue;
+        const { entryId } = ref;
+
+        const [entry] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
+        if (!entry) continue;
+        const d = String(entry.date ?? '');
         if (d && (!earliest || d < earliest)) earliest = d;
+
+        // Load the category legs to collect old category IDs for rollover.
+        const catLegs = await exec(
+          'SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
+          [entryId],
+        );
+        for (const leg of catLegs) cats.add(String(leg.category_id));
+
+        // Load the account leg to forward verbatim (amounts/account don't change).
+        const [acctLeg] = await exec(
+          `SELECT id, account_id, amount, amount_base, exchange_rate, currency, cleared_at, memo
+             FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
+          [entryId],
+        );
+        if (!acctLeg) continue;
+
+        // For split entries (≥2 category legs) the spec says: no-op on legs.
+        if (catLegs.length >= 2) continue;
+
+        const legs: import('./entries').LegInput[] = [
+          {
+            id: String(acctLeg.id),
+            accountId: String(acctLeg.account_id),
+            amount: Number(acctLeg.amount),
+            amountBase: Number(acctLeg.amount_base),
+            exchangeRate: Number(acctLeg.exchange_rate ?? 1),
+            clearedAt: acctLeg.cleared_at == null ? null : String(acctLeg.cleared_at),
+            memo: acctLeg.memo == null ? null : String(acctLeg.memo),
+          },
+        ];
+        if (categoryId != null) {
+          legs.push({ categoryId, amountBase: -Number(acctLeg.amount_base) });
+        }
+        await rebuildEntry(exec, entryId, { legs });
       }
+
       if (cats.size > 0 && earliest) {
         await invalidateRollover(exec, { categoryIds: [...cats], accountIds: [] }, earliest);
       }
@@ -738,10 +743,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // the rows are gone and we can't recover them. The actual unlinks run
       // at the bottom of this case, after the DB state is settled.
       const attachmentPaths = await qAttachmentPathsForTx(exec, id);
-      // Hard delete (tags/splits/attachments cascade); recompute the affected
-      // account after, using the id captured before the row is gone.
-      const acctId = await qDelete(exec, id);
-      if (acctId) await recomputeAccount(exec, acctId);
+      // Hard delete: deleteEntry (called by deleteTransactionRow) handles
+      // recomputeAccountFromPostings for every affected account internally.
+      await qDelete(exec, id);
       if (before) {
         await invalidateRollover(
           exec,
@@ -764,24 +768,30 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'confirmTransaction':
+      // qConfirm (entries adapter) calls recomputeAccountFromPostings internally.
       await qConfirm(exec, str(args.id));
-      // Confirming pulls the row into the balance (pending was excluded).
-      await recomputeForTransaction(exec, str(args.id));
       return;
     case 'confirmPendingWithMerchant': {
+      // qConfirmWithMerchant (entries adapter) calls recomputeAccountFromPostings internally.
       await qConfirmWithMerchant(exec, str(args.id), {
         counterpartyId: args.counterpartyId != null ? str(args.counterpartyId) : null,
         newCounterpartyName: args.newCounterpartyName != null ? str(args.newCounterpartyName) : null,
       });
-      await recomputeForTransaction(exec, str(args.id));
       return;
     }
     case 'confirmAllPending': {
-      const pendingAccts = await exec("SELECT DISTINCT account_id FROM transactions WHERE status = 'pending'");
-      await exec("UPDATE transactions SET status = 'confirmed', confirmed_at = ? WHERE status = 'pending'", [
-        new Date().toISOString(),
-      ]);
-      for (const r of pendingAccts) await recomputeAccount(exec, String(r.account_id));
+      // Collect affected account ids from postings before the UPDATE so we can
+      // recompute balances after all entries are confirmed.
+      const pendingAccts = await exec(
+        `SELECT DISTINCT p.account_id
+           FROM postings p JOIN entries e ON e.id = p.entry_id
+          WHERE e.status = 'pending' AND p.account_id IS NOT NULL`,
+      );
+      await exec(
+        "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE status = 'pending'",
+        [new Date().toISOString()],
+      );
+      for (const r of pendingAccts) await recomputeAccountFromPostings(exec, String(r.account_id));
       return;
     }
     // --- Named budgets (the redesign entity) + budget groups ---
@@ -1061,23 +1071,27 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const { rowToRule } = await import('./queries/rules');
       const rule = rowToRule(ruleRows[0]);
 
-      // We walk transactions in the rule's ledger only (FK is ON DELETE
-      // CASCADE; a deleted ledger can't have orphan rules), confirmed only
-      // (pending rows haven't really happened yet — the user can re-confirm
-      // to trigger them through the insert hook).
+      // Walk entries in the rule's ledger only (FK is ON DELETE CASCADE;
+      // a deleted ledger can't have orphan rules), confirmed only (pending rows
+      // haven't really happened yet — the user can re-confirm to trigger them
+      // through the insert hook). Only plain income/expense/refund entries are
+      // eligible (transfers and adjustments are structural, not user-categorised).
       const { listActiveRules: _unused } = { listActiveRules }; void _unused;
-      const txnRows = await exec(
-        `SELECT id, ledger_id, account_id, date, amount, amount_base, description, category_id,
-                counterparty_id, currency, kind, notes, applied_rule_ids, time
-           FROM transactions
-          WHERE ledger_id = ? AND status = 'confirmed'`,
+      const entryRows = await exec(
+        `SELECT e.id, e.ledger_id, e.date, e.time, e.description, e.kind,
+                e.notes, e.counterparty_id, e.applied_rule_ids,
+                p.account_id, p.amount, p.amount_base, p.currency, p.category_id
+           FROM entries e
+           JOIN postings p ON p.entry_id = e.id AND p.account_id IS NOT NULL
+          WHERE e.ledger_id = ? AND e.status = 'confirmed'
+            AND e.kind IN ('income', 'expense', 'refund')`,
         [rule.ledgerId],
       );
       let matched = 0;
-      for (const r of txnRows) {
+      for (const r of entryRows) {
         // Build a minimal Tx synthesizing what evaluateCondition reads.
         const tx = {
-          id: String(r.id),
+          id: String(r.id), // entry id; B4 will expose posting id instead
           merchant: String(r.description ?? ''),
           category: r.category_id == null ? null : String(r.category_id),
           amount: Number(r.amount_base),
@@ -1096,10 +1110,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         if (!patch.appliedRuleIds.includes(rule.id)) continue;
         matched++;
 
-        // Apply the patch's set_* fields via a single UPDATE.
+        // Apply the patch's set_* fields via a direct UPDATE on entries.
         const sets: string[] = [];
         const bind: (string | number | null)[] = [];
-        if (patch.categoryId !== undefined) { sets.push('category_id = ?'); bind.push(patch.categoryId); }
         if (patch.counterpartyId !== undefined) { sets.push('counterparty_id = ?'); bind.push(patch.counterpartyId); }
         if (patch.merchant !== undefined) {
           sets.push('description = ?');
@@ -1130,14 +1143,51 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
 
         if (sets.length > 1 /* at least one user-visible field changed */) {
           sets.push("updated_at = datetime('now')");
-          bind.push(tx.id);
-          await exec(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?`, bind);
+          bind.push(tx.id); // entry id
+          await exec(`UPDATE entries SET ${sets.join(', ')} WHERE id = ?`, bind);
         }
+
+        // set_category: use the bulkRecategorize technique — load account leg,
+        // rebuild with the new category leg.
+        if (patch.categoryId !== undefined) {
+          const [acctLeg] = await exec(
+            `SELECT id, account_id, amount, amount_base, exchange_rate, cleared_at, memo
+               FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
+            [tx.id],
+          );
+          if (acctLeg) {
+            const catLegs = await exec(
+              'SELECT category_id FROM postings WHERE entry_id = ? AND category_id IS NOT NULL',
+              [tx.id],
+            );
+            // No-op on splits (≥2 category legs) — mirrors bulkRecategorize parity.
+            if (catLegs.length < 2) {
+              const legs: import('./entries').LegInput[] = [
+                {
+                  id: String(acctLeg.id),
+                  accountId: String(acctLeg.account_id),
+                  amount: Number(acctLeg.amount),
+                  amountBase: Number(acctLeg.amount_base),
+                  exchangeRate: Number(acctLeg.exchange_rate ?? 1),
+                  clearedAt: acctLeg.cleared_at == null ? null : String(acctLeg.cleared_at),
+                  memo: acctLeg.memo == null ? null : String(acctLeg.memo),
+                },
+              ];
+              if (patch.categoryId != null) {
+                legs.push({ categoryId: patch.categoryId, amountBase: -Number(acctLeg.amount_base) });
+              } else {
+                legs.push({ categoryId: null, amountBase: -Number(acctLeg.amount_base) });
+              }
+              await rebuildEntry(exec, tx.id, { legs });
+            }
+          }
+        }
+
         if (patch.tagIdsAdd?.length) {
           for (const tagId of patch.tagIdsAdd) {
             await exec(
-              'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)',
-              [tx.id, tagId],
+              'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)',
+              [tx.id, tagId], // tx.id is the entry id here
             );
           }
         }
@@ -1163,16 +1213,21 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'setTransactionTags': {
       const txId = str(args.id);
       const tagIds = Array.isArray(args.tagIds) ? (args.tagIds as unknown[]).map(str) : [];
-      await exec('DELETE FROM transaction_tags WHERE transaction_id = ?', [txId]);
+      // Resolve account-posting id → entry id; fall back to the id itself if
+      // it already is an entry id (forward-compat with B4 callers).
+      const ref = await resolveEntryRef(exec, txId);
+      const entryId = ref?.entryId ?? txId;
+      await exec('DELETE FROM entry_tags WHERE entry_id = ?', [entryId]);
       for (const tagId of tagIds) {
-        await exec('INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)', [txId, tagId]);
+        await exec('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [entryId, tagId]);
       }
       return;
     }
     case 'setTransactionSplits': {
       const txId = str(args.id);
-      const raw = Array.isArray(args.splits) ? (args.splits as unknown[]) : [];
-      const splits: NewSplitInput[] = raw.map((s) => {
+      const rawSplits = Array.isArray(args.splits) ? (args.splits as unknown[]) : [];
+      type SplitInput = { categoryId: string | null; amount: number; description: string | null };
+      const splits: SplitInput[] = rawSplits.map((s) => {
         const o = s as Record<string, unknown>;
         return {
           categoryId: o.categoryId == null ? null : str(o.categoryId),
@@ -1180,8 +1235,61 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           description: o.description == null ? null : str(o.description),
         };
       });
+
       const before = await txTouches(exec, txId);
-      await qSetTransactionSplits(exec, txId, splits);
+      const ref = await resolveEntryRef(exec, txId);
+      if (ref) {
+        const { entryId } = ref;
+        // Load the account leg — forward verbatim (amounts/account don't change).
+        const [acctLeg] = await exec(
+          `SELECT id, account_id, amount, amount_base, exchange_rate, cleared_at, memo
+             FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
+          [entryId],
+        );
+        if (acctLeg) {
+          const totalBase = Math.abs(Number(acctLeg.amount_base));
+          const legs: import('./entries').LegInput[] = [
+            {
+              id: String(acctLeg.id),
+              accountId: String(acctLeg.account_id),
+              amount: Number(acctLeg.amount),
+              amountBase: Number(acctLeg.amount_base),
+              exchangeRate: Number(acctLeg.exchange_rate ?? 1),
+              clearedAt: acctLeg.cleared_at == null ? null : String(acctLeg.cleared_at),
+              memo: acctLeg.memo == null ? null : String(acctLeg.memo),
+            },
+          ];
+
+          if (splits.length === 0) {
+            // Clear splits: rebuild with a single uncategorised category leg.
+            legs.push({ categoryId: null, amountBase: -Number(acctLeg.amount_base) });
+          } else {
+            // Validate that splits sum matches the account leg magnitude.
+            const splitTotal = splits.reduce((acc, sp) => acc + Math.abs(sp.amount), 0);
+            if (splitTotal > 0 && Math.abs(splitTotal - totalBase) > 0.005 * splits.length) {
+              throw new I18nError('error.split.sumMismatch', {}, 'Split amounts must sum to the transaction total');
+            }
+            // Compute base ratio: if amounts in native currency, scale to base.
+            const baseRatio = splitTotal > 0 ? totalBase / splitTotal : 1;
+            // Last leg absorbs rounding remainders.
+            let usedBase = 0;
+            for (let i = 0; i < splits.length; i++) {
+              const sp = splits[i];
+              const isLast = i === splits.length - 1;
+              const spBase = isLast
+                ? r2(Number(acctLeg.amount_base) + usedBase) // absorb remainder (signed)
+                : r2(-Math.abs(sp.amount) * baseRatio * Math.sign(Number(acctLeg.amount_base)));
+              if (!isLast) usedBase += spBase;
+              legs.push({
+                categoryId: sp.categoryId,
+                amountBase: spBase,
+                memo: sp.description,
+              });
+            }
+          }
+          await rebuildEntry(exec, entryId, { legs });
+        }
+      }
       const after = await txTouches(exec, txId);
       const merged = mergeTouches(before, after);
       if (merged) {

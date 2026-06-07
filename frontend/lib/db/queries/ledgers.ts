@@ -10,7 +10,6 @@
 
 import type { Exec } from '@/lib/db/repo';
 import { convertToBase } from './rates';
-import { recomputeAccount } from './accounts';
 import { rebuildEntry, auditLedger, ensureSystemCategories } from '@/lib/db/entries';
 import { I18nError } from '@/lib/i18n-error';
 

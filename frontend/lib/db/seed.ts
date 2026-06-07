@@ -369,7 +369,6 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       const ledgerId = r.ledgerId;
       const base = baseOf(ledgerId);
       const sys = await getSys(ledgerId);
-      const kind = r.amountBase > 0 ? 'income' : 'expense';
 
       const cpId = await resolveCounterpartyIdByName(exec, ledgerId, t.merchant);
 
