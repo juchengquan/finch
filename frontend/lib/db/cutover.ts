@@ -68,6 +68,7 @@ interface RawLeg {
   exchangeRate: number;
   origAmount: number | null;
   origCurrency: string | null;
+  description?: string | null;
   memo: string | null;
   clearedAt: string | null;
 }
@@ -231,7 +232,7 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
 
     // Fetch the two transaction legs for this group.
     const legTxns = await exec(
-      'SELECT id, account_id, date, time, amount, currency, amount_base, exchange_rate, status, confirmed_at, notes, source_template_id, reviewed_at, created_at, updated_at FROM transactions WHERE transfer_group_id = ? ORDER BY date, id',
+      'SELECT id, account_id, date, time, amount, currency, amount_base, exchange_rate, status, confirmed_at, notes, source_template_id, reviewed_at, created_at, updated_at, description FROM transactions WHERE transfer_group_id = ? ORDER BY date, id',
       [entryId],
     );
 
@@ -257,7 +258,7 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
         : null;
     const bothConfirmed = legTxns.every((l) => String(l.status) === 'confirmed');
     const entryStatus = bothConfirmed ? 'confirmed' : 'pending';
-    const confirmedAt = legTxns.map((l) => (l.confirmed_at == null ? null : String(l.confirmed_at))).find((c) => c != null) ?? null;
+    const confirmedAt = entryStatus === 'pending' ? null : (legTxns.map((l) => (l.confirmed_at == null ? null : String(l.confirmed_at))).find((c) => c != null) ?? null); // a half-confirmed pair merges to pending — confirmed_at must not survive
     const entryNotes = tg.notes != null ? String(tg.notes) : (legTxns.map((l) => l.notes).find((n) => n != null) != null ? String(legTxns.map((l) => l.notes).find((n) => n != null)) : null);
     const sourceTemplateId = legTxns.map((l) => l.source_template_id).find((s) => s != null) != null ? String(legTxns.map((l) => l.source_template_id).find((s) => s != null)) : null;
     const createdAt = legTxns.map((l) => String(l.created_at)).sort()[0];
@@ -297,11 +298,6 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
         // amount_base (ledger base) stays locked as the row's existing figure.
       }
 
-      // Transfer memo: the leg's description = the old description field.
-      // The transactions table carries `description` for transfers; use it as memo.
-      const legDescRow = await exec('SELECT description FROM transactions WHERE id = ?', [legId]);
-      const memo = legDescRow.length && legDescRow[0].description != null ? String(legDescRow[0].description) : null;
-
       legs.push({
         id: legId,
         accountId: legAccountId,
@@ -312,7 +308,8 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
         exchangeRate,
         origAmount,
         origCurrency,
-        memo,
+        description: leg.description != null ? String(leg.description) : null,
+        memo: leg.description != null ? String(leg.description) : null,
         clearedAt: leg.cleared_at != null ? String(leg.cleared_at) : null,
       });
       touchedAccountIds.add(legAccountId);
