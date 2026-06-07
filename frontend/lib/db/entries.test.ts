@@ -309,3 +309,36 @@ test('postEntry keeps amount = amount_base on base-currency legs (I9)', async ()
   const legs = await exec('SELECT amount, amount_base FROM postings WHERE entry_id = ?', [entryId]);
   for (const l of legs) expect(Number(l.amount)).toBe(Number(l.amount_base));
 });
+
+test('cross-currency rule splits absorb base rounding — no phantom FX leg', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec); // ledger 'lt', base SGD
+  await addAccount(exec, 'a-xs', 'USD', 'lt');
+  const sys = await ensureSystemCategories(exec, 'lt');
+  // Pin a rate that makes USD→SGD = 1/0.75 = 1.333… (irrational per-leg r2 drift).
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-02','SGD',0.75,'manual')");
+  await exec(
+    `INSERT INTO rules (id,ledger_id,name,priority,condition,actions,is_active,run_on_edit,created_at,updated_at)
+     VALUES ('rule-xs','lt','halve',100,?,?,1,0,datetime('now'),datetime('now'))`,
+    [
+      JSON.stringify({ field: 'merchant', op: 'contains', value: 'Halves' }),
+      JSON.stringify([{ type: 'split', splits: [
+        { categoryId: 'cat-t', fraction: 0.5 },
+        { categoryId: null, fraction: 0.5 },
+      ] }]),
+    ],
+  );
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'Halves Mart', kind: 'expense',
+    legs: [{ accountId: 'a-xs', amount: -100 }], autoBalanceCategoryId: null,
+  });
+  const fx = await exec('SELECT COUNT(*) AS n FROM postings WHERE entry_id = ? AND category_id = ?', [entryId, sys.fx]);
+  expect(Number(fx[0].n)).toBe(0); // rounding absorbed by the last split, not minted as FX
+  const sum = await exec('SELECT ROUND(SUM(amount_base),2) AS s FROM postings WHERE entry_id = ?', [entryId]);
+  expect(Math.abs(Number(sum[0].s))).toBe(0);
+  const cats = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order', [entryId]);
+  expect(cats.length).toBe(2);
+  // −100 USD at 1.333… → base −133.33; halves: 66.67 + 66.66.
+  expect(Number(cats[0].amount_base)).toBe(66.67);
+  expect(Number(cats[1].amount_base)).toBe(66.66);
+});

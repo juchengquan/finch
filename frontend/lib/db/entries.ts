@@ -273,6 +273,7 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
     ? e.counterpartyId
     : await resolveCounterpartyIdByName(exec, e.ledgerId, description);
   let appliedRuleIds: string[] | null = null;
+  let tagIdsAdd: string[] | null = null;
   let reviewedAt: string | null = null;
 
   // Rules engine — income/expense/refund only, mirroring insertTxRow's hook.
@@ -309,13 +310,20 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
           const ratio = acctLeg.amount !== 0 ? acctLeg.amountBase / acctLeg.amount : 1;
           for (let i = legs.length - 1; i >= 0; i--) if (legs[i].accountId == null) legs.splice(i, 1);
           let remaining = acctLeg.amount;
+          // The last split absorbs the rounding remainder in BOTH native and
+          // base space — otherwise r2(-portion × ratio) drift would mint a
+          // phantom sys:fx-gain residue on cross-currency entries.
+          let remainingBase = acctLeg.amountBase;
           patch.splits.forEach((s, i, arr) => {
             const portion = i === arr.length - 1 ? r2(remaining) : r2(acctLeg.amount * s.fraction);
             remaining = r2(remaining - portion);
-            legs.push(categoryLeg(undefined, s.categoryId, r2(-portion * ratio), base, s.description ?? null));
+            const catBase = i === arr.length - 1 ? r2(-remainingBase) : r2(-portion * ratio);
+            remainingBase = r2(remainingBase + catBase);
+            legs.push(categoryLeg(undefined, s.categoryId, catBase, base, s.description ?? null));
           });
         }
         if (patch.reviewed) reviewedAt = ts;
+        if (patch.tagIdsAdd && patch.tagIdsAdd.length > 0) tagIdsAdd = patch.tagIdsAdd;
         appliedRuleIds = patch.appliedRuleIds;
       }
     }
@@ -337,6 +345,14 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
        dedupHash(e.date, e.time, description, legs), ts, ts],
     );
     await insertPostings(exec, entryId, legs);
+    // Rule-added tags land inside the same SAVEPOINT (the entry row exists,
+    // so the FK holds; mirrors insertTxRow's post-insert tag writes).
+    // tagIdsRemove is irrelevant on a fresh entry — nothing to remove.
+    if (tagIdsAdd) {
+      for (const tagId of tagIdsAdd) {
+        await exec('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [entryId, tagId]);
+      }
+    }
     await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]);
     await exec(`RELEASE ${sp}`);
   } catch (err) {
