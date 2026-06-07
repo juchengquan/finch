@@ -15,12 +15,14 @@ export interface CategoryRow {
   color: string | null;
 }
 
-/** List categories; pass a ledgerId to scope, or omit for all ledgers. */
+/** List categories; pass a ledgerId to scope, or omit for all ledgers.
+ *  Equity system rows (kind='equity') are excluded — they are hidden from
+ *  pickers and excluded from spend aggregations (DOUBLE_ENTRY_PLAN §2.3). */
 export async function listCategories(exec: Exec, ledgerId?: string): Promise<CategoryRow[]> {
   const rows = await exec(
     ledgerId
-      ? 'SELECT * FROM categories WHERE ledger_id = ? ORDER BY sort_order'
-      : 'SELECT * FROM categories ORDER BY ledger_id, sort_order',
+      ? "SELECT * FROM categories WHERE ledger_id = ? AND kind != 'equity' ORDER BY sort_order"
+      : "SELECT * FROM categories WHERE kind != 'equity' ORDER BY ledger_id, sort_order",
     ledgerId ? [ledgerId] : [],
   );
   return rows.map((r) => ({

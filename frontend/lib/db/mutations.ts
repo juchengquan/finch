@@ -4,6 +4,7 @@
 // pure SQL mutation; the API route persists the file and returns the new state.
 
 import type { Exec } from './repo';
+import { ensureSystemCategories } from './entries';
 import {
   getScheduled,
   deleteScheduled as qDeleteScheduled,
@@ -1419,6 +1420,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const tagline = args.tagline == null ? null : String(args.tagline);
       const { createLedger: qCreateLedger } = await import('./queries/ledgers');
       await qCreateLedger(exec, { id, name, base, color, tagline });
+      await ensureSystemCategories(exec, id);
       return;
     }
     case 'updateLedger': {

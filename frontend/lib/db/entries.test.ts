@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { seededDb, freshDb } from '@/lib/db/test-utils';
+import { seededDb, bareDb } from '@/lib/db/test-utils';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
 import {
@@ -9,15 +9,12 @@ import {
   deleteEntry, resolveEntryRef, auditLedger,
 } from '@/lib/db/entries';
 
-// Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
-// data/*.json) with the PR-A additive schema applied on top. Base-sensitive
-// tests don't rely on any seeded ledger's base: they build their own ledger
-// via withTestLedger (ledger base is user-chosen at create time).
-export const newDb = async (): Promise<Exec> => {
-  const db = await seededDb();
-  await applyEntriesSchema(db.exec);
-  return db.exec;
-};
+// Seeded in-memory DB with the canonical schema (B1 carries the DE core).
+// Base-sensitive tests don't rely on any seeded ledger's base: they build
+// their own ledger via withTestLedger (ledger base is user-chosen at create time).
+// Canonical schema (B1) already carries the DE core; applyEntriesSchema is
+// only for the legacy-file migration path now.
+export const newDb = async (): Promise<Exec> => (await seededDb()).exec;
 
 // Fresh, transaction-less account so balance assertions start from a clean 0
 // (seeded accounts already carry legacy-table balances).
@@ -52,7 +49,7 @@ export const withTestLedger = async (exec: Exec) => {
 export const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
 
-test('applyEntriesSchema creates the new tables and upgrades categories', async () => {
+test('canonical schema carries the DE tables and upgraded categories', async () => {
   const exec = await newDb();
   const names = (await exec(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entries','postings','entry_tags')",
@@ -75,11 +72,54 @@ test('applyEntriesSchema creates the new tables and upgrades categories', async 
   expect(String(food[0].kind)).toBe('expense');
 });
 
+// Legacy categories DDL (old CHECK allowing 'transfer', no 'system' column).
+// Inlined here so the migration-path coverage stays honest: we simulate a
+// pre-B1 DB without relying on the canonical schema (which now has 'equity').
+const LEGACY_LEDGERS_DDL = `
+CREATE TABLE IF NOT EXISTS ledgers (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, base_currency TEXT NOT NULL DEFAULT 'SGD',
+  is_default INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_CATEGORIES_DDL = `
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+  icon TEXT, color TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+// Minimal tables that ENTRIES_SCHEMA's FK references require (accounts,
+// counterparties, tags must exist so FK resolution doesn't fail on CREATE).
+const LEGACY_ACCOUNTS_DDL = `
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, type TEXT NOT NULL, currency TEXT NOT NULL DEFAULT 'SGD',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_COUNTERPARTIES_DDL = `
+CREATE TABLE IF NOT EXISTS counterparties (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL COLLATE NOCASE, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_TAGS_DDL = `
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+
 test('CATEGORIES_UPGRADE re-kinds transfer categories and keeps the parent FK', async () => {
-  // freshDb = canonical schema, no seed: the OLD categories CHECK still
-  // allows kind='transfer', so we can stage a pre-upgrade row.
-  const db = await freshDb();
+  // bareDb = no schema at all; we stage the legacy (pre-B1) shape manually so
+  // applyEntriesSchema's migration-path coverage remains honest.
+  const db = await bareDb();
   const exec = db.exec;
+  await exec('PRAGMA foreign_keys = ON');
+  await exec(LEGACY_LEDGERS_DDL);
+  await exec(LEGACY_CATEGORIES_DDL);
+  await exec(LEGACY_ACCOUNTS_DDL);
+  await exec(LEGACY_COUNTERPARTIES_DDL);
+  await exec(LEGACY_TAGS_DDL);
   await exec(
     "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','SGD',1,datetime('now'),datetime('now'))",
   );

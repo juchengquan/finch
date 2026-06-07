@@ -9,7 +9,8 @@ test('schema + seed loads the relational tables', async () => {
   const exec = await seeded();
   expect(num(await exec('SELECT count(*) AS n FROM ledgers'))).toBe(4);
   expect(num(await exec('SELECT count(*) AS n FROM accounts'))).toBe(6);
-  expect(num(await exec('SELECT count(*) AS n FROM categories'))).toBe(19);
+  // 19 user categories + 4 ledgers × 3 equity system categories (DOUBLE_ENTRY_PLAN §2.3)
+  expect(num(await exec('SELECT count(*) AS n FROM categories'))).toBe(31);
   expect(num(await exec('SELECT count(*) AS n FROM transactions'))).toBe(131);
   expect(num(await exec('SELECT count(*) AS n FROM counterparties'))).toBeGreaterThan(0);
 });

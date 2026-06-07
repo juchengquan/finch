@@ -13,6 +13,7 @@ import type { Tx } from '@/lib/store';
 import { convertToBase } from './queries/rates';
 import { resolveCounterpartyIdByName } from './queries/counterparties';
 import { insertTxRow } from './queries/transactions';
+import { ensureSystemCategories } from './entries';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import accountsData from '@/data/accounts.json';
 import accountGroupsData from '@/data/account-groups.json';
@@ -96,6 +97,9 @@ export async function seedReference(exec: Exec): Promise<void> {
       [l.id, l.name, l.base, l.isDefault ? 1 : 0, l.color ?? null, l.tagline ?? null, SEED_TS, SEED_TS],
     );
   }
+
+  // Every ledger gets its three equity system categories (DOUBLE_ENTRY_PLAN §2.3).
+  for (const l of ledgers) await ensureSystemCategories(exec, l.id);
 
   // Groups are shared across ledgers in the mock; seed them under the default
   // ledger (FK only requires the group row to exist, not a ledger match).

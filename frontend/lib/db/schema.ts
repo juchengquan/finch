@@ -9,6 +9,48 @@
 //
 // One file holds ALL ledgers; every per-ledger table carries `ledger_id`.
 
+import { ENTRIES_SCHEMA, CATEGORIES_UPGRADE } from './entries-schema';
+
+// Receipt attachments for the double-entry entries layer (PR B). Same
+// pointer-only design as transaction_attachments (RECEIPT_PHOTOS_PLAN §2),
+// which it replaces at cutover; rel_path stays server-internal.
+const ENTRY_ATTACHMENTS_DDL = `
+CREATE TABLE IF NOT EXISTS entry_attachments (
+  id                TEXT PRIMARY KEY,
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  entry_id          TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+  kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+  rel_path          TEXT NOT NULL,
+  mime_type         TEXT NOT NULL,
+  byte_size         INTEGER NOT NULL,
+  sha256            TEXT NOT NULL,
+  original_filename TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_eattach_entry  ON entry_attachments(entry_id);
+CREATE INDEX IF NOT EXISTS idx_eattach_ledger ON entry_attachments(ledger_id);`;
+
+// FTS over entries.description + notes (replaces transactions_fts at cutover).
+const ENTRIES_FTS_DDL = `
+CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
+  id UNINDEXED,
+  description,
+  notes,
+  tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_insert AFTER INSERT ON entries BEGIN
+  INSERT INTO entries_fts (id, description, notes)
+  VALUES (NEW.id, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_delete AFTER DELETE ON entries BEGIN
+  DELETE FROM entries_fts WHERE id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_update AFTER UPDATE OF description, notes ON entries BEGIN
+  UPDATE entries_fts SET description = COALESCE(NEW.description, ''), notes = COALESCE(NEW.notes, '')
+   WHERE id = NEW.id;
+END;`;
+
 export const SCHEMA = `
 PRAGMA foreign_keys = ON;
 
@@ -105,14 +147,20 @@ CREATE TABLE IF NOT EXISTS categories (
   -- level-2 parent is deleted, no rows are destroyed).
   parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   name       TEXT NOT NULL,
-  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','equity')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  -- Equity system rows (DOUBLE_ENTRY_PLAN §2.3): 'opening'/'adjustment'/'fx'
+  -- markers for the three per-ledger system categories. NULL = ordinary
+  -- user category. kind='equity' rows are hidden from pickers and excluded
+  -- from spend aggregations.
+  system     TEXT CHECK(system IN ('opening','adjustment','fx')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cat_system ON categories(ledger_id, system) WHERE system IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
   id         TEXT PRIMARY KEY,
@@ -423,6 +471,17 @@ CREATE TABLE IF NOT EXISTS db_metadata (
   checksum        TEXT
 );
 
+-- ===== Double-entry core (DOUBLE_ENTRY_PLAN; PR A #114, canonicalized in PR B) =====
+${ENTRIES_SCHEMA}
+
+-- Receipt attachments, re-pointed at entries (PR B). Same pointer-only design
+-- as transaction_attachments (RECEIPT_PHOTOS_PLAN §2), which it replaces at
+-- cutover; rel_path stays server-internal.
+${ENTRY_ATTACHMENTS_DDL}
+
+-- FTS over entries.description + notes (replaces transactions_fts at cutover).
+${ENTRIES_FTS_DDL}
+
 CREATE INDEX IF NOT EXISTS idx_ag_ledger ON account_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_budget_groups_ledger ON budget_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
@@ -558,7 +617,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-12T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-13T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -718,6 +777,24 @@ const MIGRATIONS: Record<string, string[]> = {
   '2026-06-12T00:00:00Z': [
     'ALTER TABLE ledgers ADD COLUMN color TEXT',
     'ALTER TABLE ledgers ADD COLUMN tagline TEXT',
+  ],
+  // Double-entry cutover, phase 1 (PR B / DOUBLE_ENTRY_PLAN §12): the DE core
+  // tables/triggers + the categories equity upgrade + entry_attachments +
+  // entries_fts land on existing files. Structures only — the data move and
+  // the legacy-table drops are the '2026-06-14' entry. Every statement is
+  // idempotent under the isAlreadyAppliedError rule.
+  // NOTE: ENTRIES_SCHEMA is listed first — it creates the entries/postings/
+  // entry_tags tables that CATEGORIES_UPGRADE and subsequent steps reference.
+  // The CATEGORIES_UPGRADE recreation dance is not idempotent mid-run (DROP →
+  // CREATE → RENAME), but the migration runner only applies this entry to DBs
+  // whose schema_version < '2026-06-13', so a successful run stamps the version
+  // and never replays the dance. This matches the precedent of the 2026-06-06
+  // scheduled_templates rebuild.
+  '2026-06-13T00:00:00Z': [
+    ENTRIES_SCHEMA,
+    ...CATEGORIES_UPGRADE,
+    ENTRY_ATTACHMENTS_DDL,
+    ENTRIES_FTS_DDL,
   ],
 };
 
