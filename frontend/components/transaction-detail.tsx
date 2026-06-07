@@ -38,6 +38,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useEditTransaction } from '@/components/edit-transaction-sheet';
+import { categoryPath } from '@/lib/db/queries/categories';
 
 interface SplitRow {
   key: string;
@@ -478,8 +479,14 @@ export function TransactionDetail({
   const { openEditTransaction } = useEditTransaction();
 
   // Category options come from the projected store, scoped to this tx's ledger.
+  // Labels render as `Parent › Child › Leaf` so the 3-level taxonomy
+  // (CATEGORIES_LEVEL3_PLAN §5.1) is unambiguous in the Select.
   const ledgerId = tx?.ledgerId ?? 'personal';
-  const cats = storeCats.filter((c) => c.ledgerId === ledgerId).map((x) => ({ id: x.id, name: x.name }));
+  const ledgerCats = storeCats.filter((c) => c.ledgerId === ledgerId);
+  const catByIdMap = new Map(ledgerCats.map((c) => [c.id, c]));
+  const cats = ledgerCats
+    .map((c) => ({ id: c.id, name: categoryPath(c, catByIdMap) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   if (!tx) {
     return (

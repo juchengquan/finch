@@ -201,12 +201,83 @@ async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Reject creating/moving a category under one that itself has a parent —
- *  the taxonomy is exactly 2 levels deep. */
+// Categories nest at most 3 levels (CATEGORIES_LEVEL3_PLAN).
+// The cap lives here, not in SQL — a self-referential CHECK is hard to
+// express cleanly in SQLite. The 10-hop ceiling in each walker is a safety
+// net against a malformed cycle in a hand-edited DB; real depth is ≤ 3.
+
+/** Depth of `id` from the root, counting `id` itself. Top-level = 1. */
+async function categoryDepth(exec: Exec, id: string): Promise<number> {
+  let cur: string | null = id;
+  let depth = 0;
+  for (let hop = 0; cur != null && hop < 10; hop++) {
+    const rows = await exec('SELECT parent_id FROM categories WHERE id = ?', [cur]);
+    if (!rows.length) throw new Error('Category does not exist');
+    depth++;
+    cur = rows[0].parent_id == null ? null : String(rows[0].parent_id);
+  }
+  return depth;
+}
+
+/** Max depth of the subtree rooted at `id`. A leaf = 1, with one level of
+ *  children = 2, with grandchildren = 3. BFS the descendants level-by-level. */
+async function subtreeDepth(exec: Exec, id: string): Promise<number> {
+  let frontier = [id];
+  let depth = 1;
+  for (let hop = 0; hop < 10; hop++) {
+    if (!frontier.length) break;
+    const placeholders = frontier.map(() => '?').join(',');
+    const rows = await exec(
+      `SELECT id FROM categories WHERE parent_id IN (${placeholders})`,
+      frontier,
+    );
+    if (!rows.length) break;
+    depth++;
+    frontier = rows.map((r) => String(r.id));
+  }
+  return depth;
+}
+
+/** Whether `candidateId` is `ancestorId` itself or sits anywhere in its
+ *  subtree. Used to forbid moving a node under its own descendant
+ *  (a fast cycle check). */
+async function isInSubtreeOf(
+  exec: Exec,
+  candidateId: string,
+  ancestorId: string,
+): Promise<boolean> {
+  let cur: string | null = candidateId;
+  for (let hop = 0; cur != null && hop < 10; hop++) {
+    if (cur === ancestorId) return true;
+    const rows = await exec('SELECT parent_id FROM categories WHERE id = ?', [cur]);
+    if (!rows.length) return false;
+    cur = rows[0].parent_id == null ? null : String(rows[0].parent_id);
+  }
+  return false;
+}
+
+/** Reject creating a child under a parent that would push the chain past
+ *  3 levels. Used by `createCategory` (new node = +1 level). */
 async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
-  const rows = await exec('SELECT parent_id FROM categories WHERE id = ?', [parentId]);
-  if (!rows.length) throw new Error('Parent category does not exist');
-  if (rows[0].parent_id != null) throw new Error('Categories nest only two levels deep');
+  const d = await categoryDepth(exec, parentId);
+  if (d >= 3) throw new Error('Categories nest at most three levels deep');
+}
+
+/** Reject moving the subtree rooted at `movingId` under `newParentId` when
+ *  the result would exceed 3 levels. Combines parent depth with the
+ *  subtree's own depth (a level-2 node with grandchildren can only land
+ *  under a top-level node — not under another level-2 node, which would
+ *  push the grandchildren to level 4). */
+async function assertSubtreeFitsUnder(
+  exec: Exec,
+  movingId: string,
+  newParentId: string,
+): Promise<void> {
+  const pd = await categoryDepth(exec, newParentId);
+  const sd = await subtreeDepth(exec, movingId);
+  if (pd + sd > 3) {
+    throw new Error('Categories nest at most three levels deep');
+  }
 }
 
 async function postSingle(
@@ -901,10 +972,18 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
       if (patch.parentId !== undefined && patch.parentId !== null) {
         if (patch.parentId === id) throw new Error('A category cannot be its own parent');
-        await assertCanBeParent(exec, patch.parentId);
-        // Re-parenting a row that itself has children would create 3 levels.
-        const kids = await exec('SELECT COUNT(*) AS n FROM categories WHERE parent_id = ?', [id]);
-        if (Number(kids[0]?.n ?? 0) > 0) throw new Error('Move or promote this category\'s children before nesting it under another parent');
+        // Cycle defence: the target parent must not live inside the moving
+        // subtree (else the move would orphan the chain into a loop).
+        if (await isInSubtreeOf(exec, patch.parentId, id)) {
+          throw new Error('A category cannot be moved under its own descendant');
+        }
+        // Depth defence: account for the moving subtree, not just the
+        // parent's depth. Replaces the old 2-level era guard that
+        // categorically refused to re-parent any node that itself had
+        // children — at 3 levels that's overcautious; a level-2 node
+        // with grandchildren can legitimately move under a top-level
+        // parent (the deepest leaf stays at depth 3).
+        await assertSubtreeFitsUnder(exec, id, patch.parentId);
       }
       await qUpdateCategory(exec, id, patch);
       return;

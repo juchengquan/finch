@@ -38,13 +38,15 @@ function BudgetCard({
   txns,
   today,
   fmt,
+  categories,
 }: {
   budget: BudgetRow;
   txns: Parameters<typeof budgetProgress>[1];
   today: string;
   fmt: (n: number) => string;
+  categories: Parameters<typeof budgetProgress>[3];
 }) {
-  const p = budgetProgress(budget, txns, today);
+  const p = budgetProgress(budget, txns, today, categories);
   const isIncome = budget.type === 'income';
   const barPct = Math.min(p.pct, 100);
   return (
@@ -93,6 +95,7 @@ export default function BudgetsPage() {
   const allTxns = useFinanceStore((s) => s.transactions);
   const budgets = useFinanceStore((s) => s.budgets);
   const budgetGroups = useFinanceStore((s) => s.budgetGroups);
+  const allCategories = useFinanceStore((s) => s.categories);
   const createBudgetGroup = useFinanceStore((s) => s.createBudgetGroup);
   const updateBudgetGroup = useFinanceStore((s) => s.updateBudgetGroup);
   const deleteBudgetGroup = useFinanceStore((s) => s.deleteBudgetGroup);
@@ -208,7 +211,7 @@ export default function BudgetsPage() {
       ) : (
         <div className="md:grid md:grid-cols-2 md:gap-x-4">
           {items.map((b) => (
-            <BudgetCard key={b.id} budget={b} txns={ledgerTxns} today={today} fmt={fmt} />
+            <BudgetCard key={b.id} budget={b} txns={ledgerTxns} today={today} fmt={fmt} categories={allCategories} />
           ))}
         </div>
       )}

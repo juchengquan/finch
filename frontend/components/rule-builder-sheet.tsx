@@ -13,6 +13,7 @@ import { useFinanceStore } from '@/lib/store';
 import { applyRules, evaluateCondition } from '@/lib/rules/engine';
 import { describeCondition, describeActions } from '@/lib/rules/describe';
 import { cn } from '@/lib/utils';
+import { categoryPath } from '@/lib/db/queries/categories';
 import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
 import type { Tx } from '@/lib/store';
 
@@ -189,7 +190,13 @@ export function RuleBuilderSheet({
     setLastDraftKey(draftKey);
   }
 
-  const ledgerCategories = categories.filter((c) => c.ledgerId === activeId);
+  // Labels render as `Parent › Child › Leaf` for unambiguous depth-3
+  // picks (CATEGORIES_LEVEL3_PLAN §5.1). Sorted by path so siblings cluster.
+  const ledgerCategoriesRaw = categories.filter((c) => c.ledgerId === activeId);
+  const ledgerCatByIdMap = new Map(ledgerCategoriesRaw.map((c) => [c.id, c]));
+  const ledgerCategories = ledgerCategoriesRaw
+    .map((c) => ({ id: c.id, name: categoryPath(c, ledgerCatByIdMap) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const ledgerAccounts = accounts.filter((a) => a.ledgerId === activeId);
   const ledgerCounterparties = counterparties.filter((c) => c.ledgerId === activeId);
   const ledgerTags = tags.filter((t) => t.ledgerId === activeId);

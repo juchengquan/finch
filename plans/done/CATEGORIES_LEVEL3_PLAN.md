@@ -1,6 +1,8 @@
 # 3-level categories — plan
 
-Status: **proposed** (planning only — no code yet)
+Status: **shipped** (2026-06-06). This doc is kept as the design record.
+The implementation followed the §7 commit split (backend + UI Select
+sweep + admin page) and the §9 file touch list.
 Scope: `frontend/` (server-backed SQLite app)
 
 > Relaxes the existing 2-level category constraint to **3 levels** (e.g.
