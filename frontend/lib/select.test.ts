@@ -57,6 +57,16 @@ test('netWorthSeries ends at the ledger total and ignores other ledgers', () => 
   expect(s[s.length - 1]).toBe(100);
 });
 
+test('netWorthSeries excludes accounts with includeInNetWorth=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+    { id: 'cc',  name: 'CC',  balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 0 } as AccountRow,
+  ];
+  const series = netWorthSeries([], accounts, 'personal');
+  // Last point IS the current total. Without filter: 500; with: 1000.
+  expect(series[series.length - 1]).toBe(1000);
+});
+
 test('balanceSeries walks the native (account-currency) amount when present', () => {
   // A ¥ account: the native amounts differ from the ledger-base Tx.amount.
   const txns = [
@@ -236,6 +246,16 @@ test('netWorthByMonth ignores other ledgers and returns [] for empty endMonth', 
   const out = netWorthByMonth(txns, accounts, 'personal', '2026-05', 1);
   expect(out[0].v).toBeCloseTo(100, 2); // family txn ignored
   expect(netWorthByMonth([], accounts, 'personal', '', 3)).toEqual([]);
+});
+
+test('netWorthByMonth excludes accounts with includeInNetWorth=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+    { id: 'cc',  name: 'CC',  balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 0 } as AccountRow,
+  ];
+  const series = netWorthByMonth([], accounts, 'personal', '2026-06', 3);
+  // Without the filter, total would be 500. With it, only chk counts → 1000.
+  expect(series[series.length - 1].v).toBe(1000);
 });
 
 test('selectTransactions filters by date range (from / to inclusive)', () => {
