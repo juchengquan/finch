@@ -1,4 +1,48 @@
 {
+  "budgets": {
+    "title": "Budgets",
+    "addAria": "Add",
+    "newButton": "New",
+    "tabs": {
+      "expense": "expense",
+      "income": "income"
+    },
+    "menu": {
+      "newBudget": "New budget",
+      "newGroup": "New group"
+    },
+    "ungroupedLabel": "Ungrouped",
+    "emptyGroup": "No {type} budgets",
+    "empty": {
+      "title": "No {type} budgets in {ledger} yet",
+      "description": "Tap + to set a monthly cap or savings target."
+    },
+    "card": {
+      "pendingAria": "Amount change pending",
+      "pctOfTarget": "{pct}% of target",
+      "over": "{amount} over",
+      "left": "{amount} left"
+    },
+    "groupActionsAria": "Group actions: {name}",
+    "groupActions": {
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "groupDialog": {
+      "renameTitle": "Rename group",
+      "newTitle": "New budget group",
+      "description": "Buckets budgets on this screen, like account groups.",
+      "name": "Name",
+      "nameRequired": "Enter a group name",
+      "createdToast": "Group created",
+      "updatedToast": "Group updated"
+    },
+    "deleteGroupDialog": {
+      "title": "Delete group?",
+      "description": "Budgets in this group are kept and become ungrouped. This can't be undone.",
+      "deletedToast": "Group deleted"
+    }
+  },
   "accounts": {
     "title": "Accounts",
     "allAccounts": "All accounts",

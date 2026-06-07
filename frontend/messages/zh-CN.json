@@ -1,4 +1,48 @@
 {
+  "budgets": {
+    "title": "预算",
+    "addAria": "添加",
+    "newButton": "新建",
+    "tabs": {
+      "expense": "支出",
+      "income": "收入"
+    },
+    "menu": {
+      "newBudget": "新建预算",
+      "newGroup": "新建分组"
+    },
+    "ungroupedLabel": "未分组",
+    "emptyGroup": "暂无{type}预算",
+    "empty": {
+      "title": "{ledger} 还没有{type}预算",
+      "description": "点击 + 设置每月上限或储蓄目标。"
+    },
+    "card": {
+      "pendingAria": "金额变更待生效",
+      "pctOfTarget": "已达目标 {pct}%",
+      "over": "超出 {amount}",
+      "left": "剩余 {amount}"
+    },
+    "groupActionsAria": "分组操作:{name}",
+    "groupActions": {
+      "rename": "重命名",
+      "delete": "删除"
+    },
+    "groupDialog": {
+      "renameTitle": "重命名分组",
+      "newTitle": "新建预算分组",
+      "description": "在此屏中将预算分组,类似账户分组。",
+      "name": "名称",
+      "nameRequired": "请输入分组名称",
+      "createdToast": "分组已创建",
+      "updatedToast": "分组已更新"
+    },
+    "deleteGroupDialog": {
+      "title": "删除分组?",
+      "description": "此分组下的预算会保留并变为未分组。此操作不可撤销。",
+      "deletedToast": "分组已删除"
+    }
+  },
   "accounts": {
     "title": "账户",
     "allAccounts": "全部账户",
