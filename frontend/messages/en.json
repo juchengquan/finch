@@ -53,6 +53,110 @@
       "updatedToast": "Category updated"
     }
   },
+  "ruleBuilder": {
+    "newTitle": "New rule",
+    "editTitle": "Edit rule",
+    "description": "Build the if-then logic for this rule.",
+    "kinds": {
+      "expense": "Expense",
+      "income": "Income",
+      "transfer": "Transfer",
+      "refund": "Refund",
+      "adjustment": "Adjustment"
+    },
+    "fields": {
+      "merchant": "Merchant",
+      "amount": "Amount",
+      "account_id": "Account",
+      "category_id": "Category",
+      "counterparty_id": "Counterparty",
+      "currency": "Currency",
+      "date_dow": "Day of week",
+      "date_dom": "Day of month",
+      "kind": "Kind",
+      "tag_id": "Tag",
+      "note": "Note"
+    },
+    "actions": {
+      "set_category": "Set category",
+      "add_tag": "Add tag",
+      "remove_tag": "Remove tag",
+      "set_counterparty": "Set counterparty",
+      "set_merchant": "Rename merchant",
+      "set_note": "Set note",
+      "set_kind": "Set kind",
+      "mark_reviewed": "Mark reviewed"
+    },
+    "weekdays": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "operators": {
+      "is": "is",
+      "isNull": "is empty",
+      "contains": "contains",
+      "startsWith": "starts with",
+      "between": "between"
+    },
+    "fieldLabels": {
+      "namePlaceholder": "e.g. Shell under $5 → Snacks",
+      "nameOptional": "Name (optional)",
+      "priority": "Priority",
+      "active": "Active",
+      "rerunOnEdit": "Re-run on edit",
+      "rerunOnEditTitle": "Re-fire when an existing transaction is edited (default off — safer)",
+      "when": "When",
+      "then": "Then",
+      "allOfThese": "ALL of these",
+      "anyOfThese": "ANY of these",
+      "addCondition": "+ Add condition",
+      "addAction": "+ Add action",
+      "removeConditionAria": "Remove condition",
+      "removeActionAria": "Remove action"
+    },
+    "placeholders": {
+      "text": "text",
+      "currency": "USD",
+      "noteText": "text in note",
+      "canonicalName": "canonical name",
+      "noteContent": "note text",
+      "pickA": "pick a {label}"
+    },
+    "refLabel": {
+      "account": "account",
+      "category": "category",
+      "counterparty": "counterparty",
+      "tag": "tag"
+    },
+    "test": {
+      "header": "Test against last {total} transactions",
+      "matches": "{count, plural, one {# match} other {# matches}}",
+      "moreCount": "+{count} more",
+      "noMatchesYet": "No matches yet — refine the conditions.",
+      "summary": "Summary"
+    },
+    "actionHints": {
+      "markReviewed": "No parameters — the row is marked reviewed.",
+      "split": "Splits are not yet editable in the builder; hand-craft via the API."
+    },
+    "footer": {
+      "saveChanges": "Save changes",
+      "createRule": "Create rule"
+    },
+    "errors": {
+      "noConditions": "Add at least one condition",
+      "noActions": "Add at least one action"
+    },
+    "toasts": {
+      "updated": "Rule {name} updated",
+      "created": "Rule {name} created"
+    }
+  },
   "rules": {
     "title": "Rules",
     "newAria": "New rule",
@@ -868,6 +972,67 @@
       "date": "Pick a date"
     },
     "updatedToast": "Transaction updated"
+  },
+  "holdings": {
+    "headerCount": "Holdings · {count}",
+    "addButton": "Add",
+    "emptyTitle": "No positions yet",
+    "emptySub": "Log a stock, ETF, or fund you hold to see its live valuation.",
+    "sharesLine": "{shares} shares · cost {cost}",
+    "atPrice": " · @ {price} on {date}",
+    "noQuote": "no quote",
+    "updatePriceAria": "Update {symbol} price",
+    "editAria": "Edit {symbol}",
+    "deleteAria": "Delete {symbol}",
+    "holdingsValue": "Holdings value",
+    "unrealized": "{amount} unrealized",
+    "approxPrefix": "≈ {amount}",
+    "deleteDialog": {
+      "title": "Delete {symbol}?",
+      "description": "The position is removed permanently. Transactions you logged for buys / sells / dividends are not touched.",
+      "removedToast": "Removed {symbol}"
+    },
+    "addDialog": {
+      "title": "Add a holding",
+      "description": "Log a stock, ETF, or fund position you hold in this account.",
+      "symbol": "Symbol",
+      "symbolPlaceholder": "VTI",
+      "currency": "Currency",
+      "nameOptional": "Name (optional)",
+      "namePlaceholder": "Vanguard Total Stock Market ETF",
+      "shares": "Shares",
+      "sharesPlaceholder": "50",
+      "costBasis": "Cost basis (total paid)",
+      "costBasisPlaceholder": "11250",
+      "priceOptional": "Current price (optional)",
+      "pricePlaceholder": "248.50",
+      "priceDate": "Price date",
+      "addButton": "Add",
+      "addedToast": "Added {symbol}",
+      "errors": {
+        "symbol": "Enter a symbol",
+        "sharesGt0": "Shares must be greater than 0",
+        "costGte0": "Cost basis must be 0 or greater",
+        "priceGte0": "Price must be 0 or greater"
+      }
+    },
+    "editDialog": {
+      "title": "Edit {symbol}",
+      "description": "Shares + cost basis. Update the price separately to refresh the live value.",
+      "updatedToast": "Updated {symbol}",
+      "updatedFallback": "holding"
+    },
+    "priceDialog": {
+      "title": "Update {symbol} price",
+      "description": "Per-share price in {currency}. Leave blank to clear the quote.",
+      "price": "Price",
+      "asOf": "As of",
+      "errors": {
+        "priceGte0": "Price must be 0 or greater",
+        "validDate": "Pick a valid date"
+      },
+      "updatedToast": "Price updated"
+    }
   },
   "attachments": {
     "receipts": "Receipts",

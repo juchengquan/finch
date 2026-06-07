@@ -53,6 +53,110 @@
       "updatedToast": "类别已更新"
     }
   },
+  "ruleBuilder": {
+    "newTitle": "新建规则",
+    "editTitle": "编辑规则",
+    "description": "构建该规则的「如果-那么」逻辑。",
+    "kinds": {
+      "expense": "支出",
+      "income": "收入",
+      "transfer": "转账",
+      "refund": "退款",
+      "adjustment": "调整"
+    },
+    "fields": {
+      "merchant": "商户",
+      "amount": "金额",
+      "account_id": "账户",
+      "category_id": "类别",
+      "counterparty_id": "对手方",
+      "currency": "货币",
+      "date_dow": "周几",
+      "date_dom": "每月几日",
+      "kind": "类型",
+      "tag_id": "标签",
+      "note": "备注"
+    },
+    "actions": {
+      "set_category": "设置类别",
+      "add_tag": "添加标签",
+      "remove_tag": "移除标签",
+      "set_counterparty": "设置对手方",
+      "set_merchant": "重命名商户",
+      "set_note": "设置备注",
+      "set_kind": "设置类型",
+      "mark_reviewed": "标为已复核"
+    },
+    "weekdays": {
+      "sun": "日",
+      "mon": "一",
+      "tue": "二",
+      "wed": "三",
+      "thu": "四",
+      "fri": "五",
+      "sat": "六"
+    },
+    "operators": {
+      "is": "等于",
+      "isNull": "为空",
+      "contains": "包含",
+      "startsWith": "以...开头",
+      "between": "介于"
+    },
+    "fieldLabels": {
+      "namePlaceholder": "例如:壳牌 < ¥30 → 零食",
+      "nameOptional": "名称(可选)",
+      "priority": "优先级",
+      "active": "启用",
+      "rerunOnEdit": "编辑时重新运行",
+      "rerunOnEditTitle": "已有交易被编辑时重新触发(默认关闭 —— 更安全)",
+      "when": "当",
+      "then": "则",
+      "allOfThese": "全部满足",
+      "anyOfThese": "任一满足",
+      "addCondition": "+ 添加条件",
+      "addAction": "+ 添加动作",
+      "removeConditionAria": "移除条件",
+      "removeActionAria": "移除动作"
+    },
+    "placeholders": {
+      "text": "文本",
+      "currency": "USD",
+      "noteText": "备注内文本",
+      "canonicalName": "规范名称",
+      "noteContent": "备注内容",
+      "pickA": "选择{label}"
+    },
+    "refLabel": {
+      "account": "账户",
+      "category": "类别",
+      "counterparty": "对手方",
+      "tag": "标签"
+    },
+    "test": {
+      "header": "对最近 {total} 笔交易进行测试",
+      "matches": "匹配 {count} 笔",
+      "moreCount": "+{count} 笔",
+      "noMatchesYet": "暂无匹配 —— 请细化条件。",
+      "summary": "摘要"
+    },
+    "actionHints": {
+      "markReviewed": "无参数 —— 该行会被标为已复核。",
+      "split": "构建器暂不支持拆分;请通过 API 手动构造。"
+    },
+    "footer": {
+      "saveChanges": "保存修改",
+      "createRule": "创建规则"
+    },
+    "errors": {
+      "noConditions": "请至少添加一个条件",
+      "noActions": "请至少添加一个动作"
+    },
+    "toasts": {
+      "updated": "规则 {name} 已更新",
+      "created": "规则 {name} 已创建"
+    }
+  },
   "rules": {
     "title": "规则",
     "newAria": "新建规则",
@@ -868,6 +972,67 @@
       "date": "请选择日期"
     },
     "updatedToast": "交易已更新"
+  },
+  "holdings": {
+    "headerCount": "持仓 · {count}",
+    "addButton": "添加",
+    "emptyTitle": "暂无持仓",
+    "emptySub": "登记你持有的股票、ETF 或基金,即可查看实时估值。",
+    "sharesLine": "{shares} 股 · 成本 {cost}",
+    "atPrice": " · 价 {price}({date})",
+    "noQuote": "无报价",
+    "updatePriceAria": "更新 {symbol} 价格",
+    "editAria": "编辑 {symbol}",
+    "deleteAria": "删除 {symbol}",
+    "holdingsValue": "持仓价值",
+    "unrealized": "未实现 {amount}",
+    "approxPrefix": "≈ {amount}",
+    "deleteDialog": {
+      "title": "删除 {symbol}?",
+      "description": "持仓将被永久删除。已记录的买入/卖出/分红交易不受影响。",
+      "removedToast": "已删除 {symbol}"
+    },
+    "addDialog": {
+      "title": "添加持仓",
+      "description": "在此账户下记录你持有的股票、ETF 或基金。",
+      "symbol": "代号",
+      "symbolPlaceholder": "VTI",
+      "currency": "货币",
+      "nameOptional": "名称(可选)",
+      "namePlaceholder": "Vanguard 全市场 ETF",
+      "shares": "股数",
+      "sharesPlaceholder": "50",
+      "costBasis": "成本(累计支付)",
+      "costBasisPlaceholder": "11250",
+      "priceOptional": "当前价格(可选)",
+      "pricePlaceholder": "248.50",
+      "priceDate": "价格日期",
+      "addButton": "添加",
+      "addedToast": "已添加 {symbol}",
+      "errors": {
+        "symbol": "请输入代号",
+        "sharesGt0": "股数必须大于 0",
+        "costGte0": "成本必须大于等于 0",
+        "priceGte0": "价格必须大于等于 0"
+      }
+    },
+    "editDialog": {
+      "title": "编辑 {symbol}",
+      "description": "调整股数与成本。请单独更新价格以刷新实时价值。",
+      "updatedToast": "已更新 {symbol}",
+      "updatedFallback": "持仓"
+    },
+    "priceDialog": {
+      "title": "更新 {symbol} 价格",
+      "description": "以 {currency} 计的每股价格。留空则清除报价。",
+      "price": "价格",
+      "asOf": "截至",
+      "errors": {
+        "priceGte0": "价格必须大于等于 0",
+        "validDate": "请选择有效日期"
+      },
+      "updatedToast": "价格已更新"
+    }
   },
   "attachments": {
     "receipts": "票据",
