@@ -6,7 +6,7 @@ import {
   ensureSystemCategories, postEntry,
   postSimple, postTransfer, postAdjustment, postOpening,
   rebuildEntry, recomputeAccountFromPostings,
-  deleteEntry, resolveEntryRef,
+  deleteEntry, resolveEntryRef, auditLedger,
 } from '@/lib/db/entries';
 
 // Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
@@ -637,4 +637,30 @@ test('resolveEntryRef resolves posting ids and entry ids', async () => {
   const byEntry = await resolveEntryRef(exec, entryId);
   expect(byEntry).toEqual({ entryId, postingId: String(leg.id), accountId: 'a-rr' });
   expect(await resolveEntryRef(exec, 'nope')).toBeNull();
+});
+
+test('auditLedger: a clean ledger reports no problems', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-au1', 'SGD', 'lt');
+  await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-au1', amount: -7, date: '2026-06-06',
+    description: 'Clean', categoryId: 'cat-t', skipRules: true,
+  });
+  expect(await auditLedger(exec, 'lt')).toEqual([]);
+});
+
+test('auditLedger detects seeded corruptions', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a-au2');
+  // Bypass the chokepoint: an unsealed, unbalanced, kind-mismatched entry.
+  await rawEntry(exec, 'e-bad', 'transfer');
+  await rawLeg(exec, 'p-bad1', 'e-bad', 'a-au2', null, -10);
+  await rawLeg(exec, 'p-bad2', 'e-bad', null, 'food', 3);
+  const problems = await auditLedger(exec, 'personal');
+  const codes = problems.map((p) => p.code);
+  expect(codes).toContain('unsealed');
+  expect(codes).toContain('unbalanced');
+  expect(codes).toContain('kind-shape');   // a transfer with one account leg + a category leg
+  expect(codes).toContain('trial-balance'); // the global sum is off too
 });

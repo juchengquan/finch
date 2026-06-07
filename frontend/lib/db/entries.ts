@@ -702,3 +702,104 @@ export async function resolveEntryRef(exec: Exec, id: string): Promise<EntryRef 
     accountId: leg?.account_id == null ? null : String(leg.account_id),
   };
 }
+
+export interface AuditProblem {
+  code: 'unsealed' | 'unbalanced' | 'too-few-legs' | 'no-account-leg' | 'currency-mismatch'
+      | 'cross-ledger' | 'base-identity' | 'kind-shape' | 'trial-balance' | 'balance-drift';
+  entryId?: string;
+  detail: string;
+}
+
+/** Read-only semantic sweep over the entries ledger (design doc §3.3 / I8).
+ *  `checkBalances` stays false until PR B's cutover — before it, the legacy
+ *  transactions table still drives accounts.current_balance, so comparing the
+ *  cache against the postings sum would false-positive on every seeded account. */
+export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBalances?: boolean } = {}): Promise<AuditProblem[]> {
+  const problems: AuditProblem[] = [];
+  const scope = ledgerId ? 'AND e.ledger_id = ?' : '';
+  const bind = ledgerId ? [ledgerId] : [];
+
+  for (const r of await exec(`SELECT e.id FROM entries e WHERE e.sealed = 0 ${scope}`, bind)) {
+    problems.push({ code: 'unsealed', entryId: String(r.id), detail: 'entry was never sealed (torn write)' });
+  }
+  for (const r of await exec(
+    `SELECT e.id, ROUND(SUM(p.amount_base), 2) AS s FROM entries e JOIN postings p ON p.entry_id = e.id
+      WHERE 1=1 ${scope} GROUP BY e.id HAVING ROUND(SUM(p.amount_base), 2) != 0`, bind)) {
+    problems.push({ code: 'unbalanced', entryId: String(r.id), detail: `postings sum to ${r.s}, not 0` });
+  }
+  for (const r of await exec(
+    `SELECT e.id, COUNT(p.id) AS n, SUM(CASE WHEN p.account_id IS NOT NULL THEN 1 ELSE 0 END) AS a
+       FROM entries e LEFT JOIN postings p ON p.entry_id = e.id
+      WHERE 1=1 ${scope} GROUP BY e.id HAVING n < 2 OR a < 1`, bind)) {
+    problems.push({
+      code: Number(r.a) < 1 ? 'no-account-leg' : 'too-few-legs',
+      entryId: String(r.id),
+      detail: `${r.n} postings, ${r.a} account legs`,
+    });
+  }
+  for (const r of await exec(
+    `SELECT p.id, e.id AS eid FROM postings p JOIN entries e ON e.id = p.entry_id JOIN accounts a ON a.id = p.account_id
+      WHERE p.currency != a.currency ${scope}`, bind)) {
+    problems.push({ code: 'currency-mismatch', entryId: String(r.eid), detail: `posting ${r.id} not in its account's currency` });
+  }
+  for (const r of await exec(
+    `SELECT p.id, e.id AS eid FROM postings p JOIN entries e ON e.id = p.entry_id
+       LEFT JOIN accounts a ON a.id = p.account_id
+       LEFT JOIN categories c ON c.id = p.category_id
+      WHERE ((p.account_id IS NOT NULL AND a.ledger_id != e.ledger_id)
+          OR (p.category_id IS NOT NULL AND c.ledger_id != e.ledger_id)) ${scope}`, bind)) {
+    problems.push({ code: 'cross-ledger', entryId: String(r.eid), detail: `posting ${r.id} references another ledger` });
+  }
+  for (const r of await exec(
+    `SELECT p.id, e.id AS eid FROM postings p JOIN entries e ON e.id = p.entry_id JOIN ledgers l ON l.id = e.ledger_id
+      WHERE p.currency = l.base_currency AND ROUND(p.amount - p.amount_base, 2) != 0 ${scope}`, bind)) {
+    problems.push({ code: 'base-identity', entryId: String(r.eid), detail: `posting ${r.id}: amount != amount_base in the base currency (I9)` });
+  }
+  // I7 kind↔shape: count account legs / plain-category legs / equity legs per
+  // entry and compare against the kind's contract.
+  for (const r of await exec(
+    `SELECT e.id, e.kind,
+            SUM(CASE WHEN p.account_id IS NOT NULL THEN 1 ELSE 0 END) AS acct,
+            SUM(CASE WHEN p.account_id IS NULL AND COALESCE(c.kind, '') != 'equity' THEN 1 ELSE 0 END) AS plain,
+            SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'opening'    THEN 1 ELSE 0 END) AS eq_open,
+            SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'adjustment' THEN 1 ELSE 0 END) AS eq_adj,
+            SUM(CASE WHEN COALESCE(c.kind, '') = 'equity' AND c.system = 'fx'         THEN 1 ELSE 0 END) AS eq_fx
+       FROM entries e JOIN postings p ON p.entry_id = e.id LEFT JOIN categories c ON c.id = p.category_id
+      WHERE 1=1 ${scope} GROUP BY e.id`, bind)) {
+    const kind = String(r.kind);
+    const acct = Number(r.acct);
+    const plain = Number(r.plain);
+    const eqOpen = Number(r.eq_open);
+    const eqAdj = Number(r.eq_adj);
+    const eqFx = Number(r.eq_fx);
+    const bad =
+      (kind === 'transfer' && (acct !== 2 || plain > 0 || eqOpen + eqAdj > 0)) ||
+      (kind === 'opening' && (acct !== 1 || plain > 0 || eqOpen < 1 || eqAdj > 0)) ||
+      (kind === 'adjustment' && (acct !== 1 || plain > 0 || eqAdj < 1 || eqOpen > 0)) ||
+      (['income', 'expense', 'refund'].includes(kind) && (acct !== 1 || plain < 1 || eqOpen + eqAdj > 0));
+    if (bad) {
+      problems.push({
+        code: 'kind-shape', entryId: String(r.id),
+        detail: `kind=${kind} but shape is acct=${acct} plain=${plain} eq=[${eqOpen},${eqAdj},${eqFx}]`,
+      });
+    }
+  }
+  const tb = await exec(
+    `SELECT e.ledger_id AS lid, ROUND(SUM(p.amount_base), 2) AS s
+       FROM postings p JOIN entries e ON e.id = p.entry_id WHERE 1=1 ${scope} GROUP BY e.ledger_id`, bind);
+  for (const r of tb) {
+    if (Number(r.s) !== 0) problems.push({ code: 'trial-balance', detail: `ledger ${r.lid} trial balance is ${r.s}, not 0` });
+  }
+  if (opts.checkBalances) {
+    for (const r of await exec(
+      `SELECT * FROM (
+         SELECT a.id, a.current_balance AS cached, ROUND(COALESCE((
+                  SELECT SUM(p.amount) FROM postings p JOIN entries e ON e.id = p.entry_id
+                   WHERE p.account_id = a.id AND e.status = 'confirmed'), 0), 2) AS derived
+           FROM accounts a ${ledgerId ? 'WHERE a.ledger_id = ?' : ''}
+       ) WHERE ROUND(cached - derived, 2) != 0`, bind)) {
+      problems.push({ code: 'balance-drift', detail: `account ${r.id}: cached ${r.cached} vs derived ${r.derived}` });
+    }
+  }
+  return problems;
+}
