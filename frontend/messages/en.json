@@ -728,6 +728,36 @@
       "deletedToast": "Tag deleted"
     }
   },
+  "pendingRow": {
+    "fxChip": "· FX",
+    "merchantLabel": "Merchant:",
+    "pickMerchant": "Pick a merchant:",
+    "saveAs": "Save as:",
+    "saveAsPlaceholder": "Merchant name",
+    "saveAsAria": "New merchant name",
+    "unverified": "UNVERIFIED",
+    "ambiguousUnknown": "?",
+    "other": "Other…",
+    "clearOverride": "Clear override",
+    "cancelAria": "Cancel",
+    "errors": {
+      "pickOrName": "Pick or name a merchant first"
+    },
+    "toasts": {
+      "confirmed": "Confirmed {account} · {label}",
+      "voided": "Voided {merchant}"
+    },
+    "confirm": {
+      "default": "Confirm",
+      "verify": "Confirm & verify",
+      "create": "Confirm & create"
+    },
+    "resolutionLabel": {
+      "savedAs": "saved as {name}",
+      "confirmed": "confirmed",
+      "linkedTo": "linked to {name}"
+    }
+  },
   "pending": {
     "title": "Pending",
     "filterAria": "Filter",
@@ -804,6 +834,67 @@
   "txnSheet": {
     "title": "Transaction details",
     "description": "View and edit the selected transaction."
+  },
+  "editTxnSheet": {
+    "title": "Edit",
+    "description": "Edit the selected transaction."
+  },
+  "editTxnForm": {
+    "notFound": "Transaction not found",
+    "amount": "Amount",
+    "amountAria": "Amount",
+    "currency": "Currency",
+    "currencyHint": "Follows the selected account",
+    "merchant": "Merchant",
+    "merchantAria": "Select merchant",
+    "merchantPlaceholder": "Pick a merchant",
+    "category": "Category",
+    "account": "Account",
+    "date": "Date",
+    "dateAria": "Date",
+    "time": "Time",
+    "timeAria": "Time",
+    "status": "Status",
+    "statusAria": "Status",
+    "statusPosted": "Posted",
+    "statusPending": "Pending",
+    "note": "Note",
+    "noteAria": "Note",
+    "notePlaceholder": "Optional",
+    "save": "Save changes",
+    "errors": {
+      "amount": "Enter an amount",
+      "account": "Pick an account",
+      "date": "Pick a date"
+    },
+    "updatedToast": "Transaction updated"
+  },
+  "attachments": {
+    "receipts": "Receipts",
+    "openAria": "Open {name}",
+    "openFallback": "attachment",
+    "attachReceiptAria": "Attach receipt",
+    "uploading": "Uploading…",
+    "attach": "Attach",
+    "attachedToast": "Receipt attached",
+    "uploadError": "Upload failed",
+    "fileFallback": "receipt",
+    "viewer": {
+      "titleFallback": "Receipt {id}",
+      "attachmentFallback": "Attachment {id}",
+      "pdf": "PDF",
+      "image": "Image",
+      "nOfTotal": " · {n} of {total}",
+      "downloadAria": "Download",
+      "deleteAria": "Delete",
+      "deletePrompt": "Delete this receipt?",
+      "deleteAction": "Delete",
+      "deletedToast": "Receipt deleted",
+      "prevAria": "Previous",
+      "prev": "Prev",
+      "nextAria": "Next",
+      "next": "Next"
+    }
   },
   "txnDetail": {
     "notFound": "Transaction not found",

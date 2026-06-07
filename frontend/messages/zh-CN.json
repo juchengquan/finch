@@ -728,6 +728,36 @@
       "deletedToast": "标签已删除"
     }
   },
+  "pendingRow": {
+    "fxChip": "· 外汇",
+    "merchantLabel": "商户:",
+    "pickMerchant": "选择商户:",
+    "saveAs": "保存为:",
+    "saveAsPlaceholder": "商户名称",
+    "saveAsAria": "新商户名称",
+    "unverified": "未核验",
+    "ambiguousUnknown": "?",
+    "other": "其他…",
+    "clearOverride": "清除覆盖",
+    "cancelAria": "取消",
+    "errors": {
+      "pickOrName": "请先选择或输入商户"
+    },
+    "toasts": {
+      "confirmed": "已确认 {account} · {label}",
+      "voided": "已作废 {merchant}"
+    },
+    "confirm": {
+      "default": "确认",
+      "verify": "确认并核验",
+      "create": "确认并创建"
+    },
+    "resolutionLabel": {
+      "savedAs": "已保存为 {name}",
+      "confirmed": "已确认",
+      "linkedTo": "已关联到 {name}"
+    }
+  },
   "pending": {
     "title": "待处理",
     "filterAria": "筛选",
@@ -804,6 +834,67 @@
   "txnSheet": {
     "title": "交易详情",
     "description": "查看并编辑所选交易。"
+  },
+  "editTxnSheet": {
+    "title": "编辑",
+    "description": "编辑所选交易。"
+  },
+  "editTxnForm": {
+    "notFound": "未找到该交易",
+    "amount": "金额",
+    "amountAria": "金额",
+    "currency": "货币",
+    "currencyHint": "跟随所选账户",
+    "merchant": "商户",
+    "merchantAria": "选择商户",
+    "merchantPlaceholder": "选择商户",
+    "category": "类别",
+    "account": "账户",
+    "date": "日期",
+    "dateAria": "日期",
+    "time": "时间",
+    "timeAria": "时间",
+    "status": "状态",
+    "statusAria": "状态",
+    "statusPosted": "已入账",
+    "statusPending": "待处理",
+    "note": "备注",
+    "noteAria": "备注",
+    "notePlaceholder": "可选",
+    "save": "保存修改",
+    "errors": {
+      "amount": "请输入金额",
+      "account": "请选择账户",
+      "date": "请选择日期"
+    },
+    "updatedToast": "交易已更新"
+  },
+  "attachments": {
+    "receipts": "票据",
+    "openAria": "打开 {name}",
+    "openFallback": "附件",
+    "attachReceiptAria": "附加票据",
+    "uploading": "上传中…",
+    "attach": "附加",
+    "attachedToast": "票据已附加",
+    "uploadError": "上传失败",
+    "fileFallback": "票据",
+    "viewer": {
+      "titleFallback": "票据 {id}",
+      "attachmentFallback": "附件 {id}",
+      "pdf": "PDF",
+      "image": "图片",
+      "nOfTotal": " · 第 {n} / {total} 张",
+      "downloadAria": "下载",
+      "deleteAria": "删除",
+      "deletePrompt": "删除该票据?",
+      "deleteAction": "删除",
+      "deletedToast": "票据已删除",
+      "prevAria": "上一张",
+      "prev": "上一张",
+      "nextAria": "下一张",
+      "next": "下一张"
+    }
   },
   "txnDetail": {
     "notFound": "未找到该交易",
