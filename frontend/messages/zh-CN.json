@@ -412,6 +412,68 @@
       "rename": "重命名",
       "delete": "删除"
     },
+    "form": {
+      "newTitle": "新建预算",
+      "editTitle": "编辑预算",
+      "expenseDescription": "在 {ledger} 中按上限跟踪支出。",
+      "incomeDescription": "在 {ledger} 中跟踪收入/储蓄进度。",
+      "types": {
+        "expense": "支出",
+        "income": "收入"
+      },
+      "name": "名称",
+      "expensePlaceholder": "例如:杂货",
+      "incomePlaceholder": "例如:工资、买车",
+      "target": "目标",
+      "limit": "上限",
+      "pendingChip": "{amount} 待生效",
+      "pendingChipWithPeriod": "{amount} 待生效 · {period}",
+      "clearPending": "清除",
+      "group": "分组",
+      "noGroup": "无分组",
+      "cycle": "周期",
+      "startDate": "起始日期",
+      "frequencies": {
+        "daily": "每日",
+        "weekly": "每周",
+        "biweekly": "每两周",
+        "monthly": "每月",
+        "quarterly": "每季",
+        "yearly": "每年"
+      },
+      "recurring": "循环",
+      "recurringSuffix": " · {hint}",
+      "recurringRepeats": "每个周期重复",
+      "recurringOneShotGoal": "一次性目标(手动贡献)",
+      "recurringOneTime": "一次性",
+      "rollover": "未用预算结转",
+      "rolloverDailyHint": "(每日周期不可用)",
+      "categories": "类别",
+      "accounts": "账户",
+      "chip": {
+        "summary": "· {count}",
+        "all": "· 全部",
+        "noneAvailable": "无可用项"
+      },
+      "hint": {
+        "cycleImmediate": "周期更改立即生效。",
+        "amountStaged": "金额更改将在 {period} 生效。",
+        "saveImmediate": "更改立即生效。",
+        "saveChanges": "保存更改。"
+      },
+      "errors": {
+        "name": "请输入预算名称",
+        "targetGt0": "请输入大于 0 的目标",
+        "limitGt0": "请输入大于 0 的上限"
+      },
+      "toasts": {
+        "created": "预算已创建",
+        "updated": "预算已更新",
+        "cycleUpdated": "周期已更新",
+        "amountStaged": "金额已暂存",
+        "stagedTakesEffect": "{period} 生效"
+      }
+    },
     "detail": {
       "fallbackTitle": "预算",
       "notFound": "未找到该预算。",
@@ -702,6 +764,113 @@
   "txnSheet": {
     "title": "交易详情",
     "description": "查看并编辑所选交易。"
+  },
+  "txnDetail": {
+    "notFound": "未找到该交易",
+    "heroLabels": {
+      "refundFrom": "退款来自",
+      "received": "你收到来自",
+      "spent": "你支出于"
+    },
+    "actions": {
+      "split": "拆分",
+      "splitCount": "拆分({count})",
+      "refund": "退款",
+      "toRefund": "转为退款",
+      "edit": "编辑",
+      "editAria": "编辑交易",
+      "delete": "删除"
+    },
+    "fx": {
+      "originalLabel": "原币 · {currency}",
+      "baseLabel": "基础 · {currency}(已锁定)",
+      "rateLocked": "汇率锁定 @ {rate} · {from}→{to} · {date}"
+    },
+    "ruleSuggestion": {
+      "prompt": "始终将 {merchant} 归类为 {category}?",
+      "createRule": "创建规则",
+      "dismissAria": "关闭"
+    },
+    "rows": {
+      "category": "类别",
+      "splitSummary": "拆分到 {count} 个类别",
+      "uncategorized": "未分类",
+      "account": "账户",
+      "refundOf": "退款对应",
+      "originalRemoved": "原交易已删除",
+      "status": "状态",
+      "pending": "待处理",
+      "posted": "已入账",
+      "note": "备注",
+      "review": "复核",
+      "reviewed": "已复核",
+      "needsReview": "待复核",
+      "reviewedToast": "已标为已复核",
+      "needsReviewToast": "已标为待复核",
+      "categoryUpdatedToast": "类别已更新"
+    },
+    "splits": {
+      "title": "拆分",
+      "uncategorized": "未分类",
+      "editorTitle": "编辑拆分",
+      "editorDescription": "将 {amount} 在各类别间分配。拆分总和必须等于交易金额。",
+      "categoryAria": "类别",
+      "amountAria": "金额",
+      "removeAria": "移除该拆分",
+      "addSplit": "添加拆分",
+      "balanceToTotal": "对齐总额",
+      "target": "目标 {amount}",
+      "short": "差 {amount}",
+      "over": "多 {amount}",
+      "balanced": "已平衡",
+      "clearSplits": "清除拆分",
+      "savedToast": "拆分已保存",
+      "saveError": "无法保存拆分",
+      "clearedToast": "拆分已清除"
+    },
+    "refundSection": {
+      "title": "退款",
+      "fullyRefunded": "已全额退款",
+      "refundedLabel": "已退款",
+      "refundedSummary": "{refunded} / {total}"
+    },
+    "refundDialog": {
+      "title": "为该购买登记退款",
+      "description": "记录从 {merchant} 返还的金额。会对冲原交易的类别,而不是计入收入。",
+      "amountLabel": "金额",
+      "amountWithCurrency": "金额 · {currency}",
+      "overWarning": "超过了原金额 {amount} —— 允许,但属异常。",
+      "category": "类别",
+      "toAccount": "目标账户",
+      "submit": "登记退款",
+      "amountError": "请输入退款金额",
+      "recordedToast": "退款已登记",
+      "refundMerchant": "退款 · {merchant}"
+    },
+    "convertDialog": {
+      "title": "转为退款",
+      "description": "将该笔 {amount} 由收入改为退款。请选择它所对冲的购买 —— 它将记入该购买的类别,而非收入。",
+      "searchAria": "搜索购买",
+      "searchPlaceholder": "按商户搜索购买…",
+      "noMatches": "无匹配购买",
+      "overWarning": "超过了原金额 {amount} —— 允许,但属异常。",
+      "submit": "转为退款",
+      "pickError": "请选择该笔对应的购买",
+      "convertedToast": "已转为退款",
+      "convertedDescription": "已关联到 {merchant}"
+    },
+    "tags": {
+      "title": "标签",
+      "addPlaceholder": "+ 标签",
+      "allApplied": "全部标签已应用",
+      "newPlaceholder": "新建标签…",
+      "create": "创建"
+    },
+    "deleteDialog": {
+      "title": "删除该交易?",
+      "description": "{merchant} · {amount} 将被永久删除。此操作不可撤销。",
+      "deletedToast": "交易已删除"
+    }
   },
   "add": {
     "sheetTitle": "添加",

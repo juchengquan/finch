@@ -412,6 +412,68 @@
       "rename": "Rename",
       "delete": "Delete"
     },
+    "form": {
+      "newTitle": "New budget",
+      "editTitle": "Edit budget",
+      "expenseDescription": "Track spending against a limit in {ledger}.",
+      "incomeDescription": "Track income/savings progress in {ledger}.",
+      "types": {
+        "expense": "expense",
+        "income": "income"
+      },
+      "name": "Name",
+      "expensePlaceholder": "e.g. Groceries",
+      "incomePlaceholder": "e.g. Salary, New car",
+      "target": "Target",
+      "limit": "Limit",
+      "pendingChip": "{amount} pending",
+      "pendingChipWithPeriod": "{amount} pending · {period}",
+      "clearPending": "Clear",
+      "group": "Group",
+      "noGroup": "No group",
+      "cycle": "Cycle",
+      "startDate": "Start date",
+      "frequencies": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "biweekly": "biweekly",
+        "monthly": "monthly",
+        "quarterly": "quarterly",
+        "yearly": "yearly"
+      },
+      "recurring": "Recurring",
+      "recurringSuffix": " · {hint}",
+      "recurringRepeats": "repeats each cycle",
+      "recurringOneShotGoal": "one-shot goal (manual contributions)",
+      "recurringOneTime": "one-time",
+      "rollover": "Roll over unused budget",
+      "rolloverDailyHint": " (not available for daily)",
+      "categories": "Categories",
+      "accounts": "Accounts",
+      "chip": {
+        "summary": "· {count}",
+        "all": "· all",
+        "noneAvailable": "None available"
+      },
+      "hint": {
+        "cycleImmediate": "Cycle change applies immediately.",
+        "amountStaged": "Amount change takes effect {period}.",
+        "saveImmediate": "Save changes immediately.",
+        "saveChanges": "Save changes."
+      },
+      "errors": {
+        "name": "Enter a budget name",
+        "targetGt0": "Enter a target greater than 0",
+        "limitGt0": "Enter a limit greater than 0"
+      },
+      "toasts": {
+        "created": "Budget created",
+        "updated": "Budget updated",
+        "cycleUpdated": "Cycle updated",
+        "amountStaged": "Amount staged",
+        "stagedTakesEffect": "Takes effect {period}"
+      }
+    },
     "detail": {
       "fallbackTitle": "Budget",
       "notFound": "Budget not found.",
@@ -702,6 +764,113 @@
   "txnSheet": {
     "title": "Transaction details",
     "description": "View and edit the selected transaction."
+  },
+  "txnDetail": {
+    "notFound": "Transaction not found",
+    "heroLabels": {
+      "refundFrom": "Refund from",
+      "received": "You received from",
+      "spent": "You spent at"
+    },
+    "actions": {
+      "split": "Split",
+      "splitCount": "Split ({count})",
+      "refund": "Refund",
+      "toRefund": "To refund",
+      "edit": "Edit",
+      "editAria": "Edit transaction",
+      "delete": "Delete"
+    },
+    "fx": {
+      "originalLabel": "ORIGINAL · {currency}",
+      "baseLabel": "BASE · {currency} (LOCKED)",
+      "rateLocked": "RATE LOCKED @ {rate} · {from}→{to} · {date}"
+    },
+    "ruleSuggestion": {
+      "prompt": "Always categorize {merchant} as {category}?",
+      "createRule": "Create rule",
+      "dismissAria": "Dismiss"
+    },
+    "rows": {
+      "category": "Category",
+      "splitSummary": "Split across {count} categories",
+      "uncategorized": "Uncategorized",
+      "account": "Account",
+      "refundOf": "Refund of",
+      "originalRemoved": "original removed",
+      "status": "Status",
+      "pending": "Pending",
+      "posted": "Posted",
+      "note": "Note",
+      "review": "Review",
+      "reviewed": "Reviewed",
+      "needsReview": "Needs review",
+      "reviewedToast": "Marked reviewed",
+      "needsReviewToast": "Marked needs-review",
+      "categoryUpdatedToast": "Category updated"
+    },
+    "splits": {
+      "title": "Splits",
+      "uncategorized": "Uncategorized",
+      "editorTitle": "Edit splits",
+      "editorDescription": "Allocate {amount} across categories. Splits must sum to the transaction amount.",
+      "categoryAria": "Category",
+      "amountAria": "Amount",
+      "removeAria": "Remove split",
+      "addSplit": "Add split",
+      "balanceToTotal": "Balance to total",
+      "target": "Target {amount}",
+      "short": "Short {amount}",
+      "over": "Over {amount}",
+      "balanced": "Balanced",
+      "clearSplits": "Clear splits",
+      "savedToast": "Splits saved",
+      "saveError": "Could not save splits",
+      "clearedToast": "Splits cleared"
+    },
+    "refundSection": {
+      "title": "Refunds",
+      "fullyRefunded": "Fully refunded",
+      "refundedLabel": "Refunded",
+      "refundedSummary": "{refunded} of {total}"
+    },
+    "refundDialog": {
+      "title": "Refund this purchase",
+      "description": "Records money coming back from {merchant}. It nets against the original's category, not income.",
+      "amountLabel": "Amount",
+      "amountWithCurrency": "Amount · {currency}",
+      "overWarning": "More than the original {amount} — allowed, but unusual.",
+      "category": "Category",
+      "toAccount": "To account",
+      "submit": "Record refund",
+      "amountError": "Enter a refund amount",
+      "recordedToast": "Refund recorded",
+      "refundMerchant": "Refund · {merchant}"
+    },
+    "convertDialog": {
+      "title": "Convert to refund",
+      "description": "Reclassifies this {amount} from income to a refund. Pick the purchase it offsets — it will net against that purchase's category instead of counting as income.",
+      "searchAria": "Search purchases",
+      "searchPlaceholder": "Search a purchase by merchant…",
+      "noMatches": "No matching purchases",
+      "overWarning": "More than the original {amount} — allowed, but unusual.",
+      "submit": "Convert to refund",
+      "pickError": "Pick the purchase this refunds",
+      "convertedToast": "Converted to refund",
+      "convertedDescription": "Linked to {merchant}"
+    },
+    "tags": {
+      "title": "Tags",
+      "addPlaceholder": "+ tag",
+      "allApplied": "All tags applied",
+      "newPlaceholder": "New tag…",
+      "create": "Create"
+    },
+    "deleteDialog": {
+      "title": "Delete transaction?",
+      "description": "{merchant} · {amount} will be permanently removed. This can't be undone.",
+      "deletedToast": "Transaction deleted"
+    }
   },
   "add": {
     "sheetTitle": "Add",
