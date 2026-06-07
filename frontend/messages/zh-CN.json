@@ -1,4 +1,67 @@
 {
+  "insights": {
+    "title": "洞察",
+    "viewToggleAria": "洞察视图",
+    "views": {
+      "trends": "趋势",
+      "breakdown": "明细"
+    },
+    "metrics": {
+      "spending": "支出",
+      "income": "收入",
+      "cashflow": "现金流",
+      "networth": "净资产"
+    },
+    "headers": {
+      "yourSpending": "本月支出",
+      "lessThanLast": "本月支出少了",
+      "moreThanLast": "本月支出多了",
+      "thisMonth": "本月",
+      "thanLastMonth": "比上月"
+    },
+    "breakdown": {
+      "monthLabel": "月份",
+      "spent": "已花",
+      "categoriesCount": "{count} 个类别",
+      "exportMonth": "导出 {month} CSV",
+      "exportGeneric": "导出该月 CSV",
+      "noSpending": "{scope}没有支出。",
+      "scopeFallback": "该账本",
+      "exportToast": "交易已导出",
+      "exportDescription": "{month} · CSV",
+      "exportDownloaded": "CSV 已下载",
+      "exportFailure": "导出失败"
+    },
+    "chartLegend": {
+      "income": "收入",
+      "expense": "支出"
+    },
+    "forecast": {
+      "title": "支出预测",
+      "dayOf": "第 {elapsed} 天 / 共 {total} 天",
+      "projected": "预计",
+      "vsPrev": "比 {month} {dir} {pct}%",
+      "spentSoFar": "已花费 · {amount}",
+      "runRateRest": "按当前节奏剩余 · {amount}",
+      "scheduled": "已计划 · {amount}"
+    },
+    "incomeFlow": {
+      "title": "{month}收入去向",
+      "incomeIn": "收入 {amount}",
+      "incomeLabel": "收入",
+      "savedLabel": "结余",
+      "savedTotal": "结余 · {amount}"
+    },
+    "heatmap": {
+      "title": "每日支出",
+      "last12Weeks": "近 12 周"
+    },
+    "insightsEmpty": "添加几笔交易后即可查看洞察。",
+    "deltas": {
+      "title": "{prev} vs {cur}",
+      "topChanges": "主要变化"
+    }
+  },
   "activity": {
     "title": "动态",
     "searchAria": "搜索交易",

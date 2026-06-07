@@ -1,4 +1,67 @@
 {
+  "insights": {
+    "title": "Insights",
+    "viewToggleAria": "Insights view",
+    "views": {
+      "trends": "Trends",
+      "breakdown": "Breakdown"
+    },
+    "metrics": {
+      "spending": "Spending",
+      "income": "Income",
+      "cashflow": "Cashflow",
+      "networth": "Net worth"
+    },
+    "headers": {
+      "yourSpending": "Your spending",
+      "lessThanLast": "You're spending less",
+      "moreThanLast": "You're spending more",
+      "thisMonth": "this month",
+      "thanLastMonth": "than last month"
+    },
+    "breakdown": {
+      "monthLabel": "Month",
+      "spent": "Spent",
+      "categoriesCount": "{count} categories",
+      "exportMonth": "Export {month} CSV",
+      "exportGeneric": "Export month CSV",
+      "noSpending": "No spending in {scope}.",
+      "scopeFallback": "this ledger",
+      "exportToast": "Transactions exported",
+      "exportDescription": "{month} · CSV",
+      "exportDownloaded": "CSV downloaded",
+      "exportFailure": "Export failed"
+    },
+    "chartLegend": {
+      "income": "Income",
+      "expense": "Expense"
+    },
+    "forecast": {
+      "title": "Spending forecast",
+      "dayOf": "day {elapsed} of {total}",
+      "projected": "projected",
+      "vsPrev": "{dir} {pct}% vs {month}",
+      "spentSoFar": "Spent so far · {amount}",
+      "runRateRest": "Run-rate rest · {amount}",
+      "scheduled": "Scheduled · {amount}"
+    },
+    "incomeFlow": {
+      "title": "Where {month} income went",
+      "incomeIn": "{amount} in",
+      "incomeLabel": "Income",
+      "savedLabel": "Saved",
+      "savedTotal": "Saved · {amount}"
+    },
+    "heatmap": {
+      "title": "Daily spending",
+      "last12Weeks": "last 12 weeks"
+    },
+    "insightsEmpty": "Add a few transactions to see insights.",
+    "deltas": {
+      "title": "{prev} vs {cur}",
+      "topChanges": "Top changes"
+    }
+  },
   "activity": {
     "title": "Activity",
     "searchAria": "Search transactions",
