@@ -148,3 +148,30 @@ test('a posting cannot be moved out of a sealed entry', async () => {
     exec("UPDATE postings SET entry_id = 'e-open' WHERE id = 'p-s1'"),
   ).rejects.toThrow('Unseal');
 });
+
+test('account legs must be in the account currency', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a-usd', 'USD');
+  await rawEntry(exec, 'e-ccy');
+  await expect(
+    rawLeg(exec, 'p-c1', 'e-ccy', 'a-usd', null, -100, -100, 'SGD'),
+  ).rejects.toThrow('account currency');
+  // Category legs are exempt (they're base-denominated, no account).
+  await rawLeg(exec, 'p-c2', 'e-ccy', null, 'food', 100, 100, 'SGD');
+});
+
+test('confirmed postings move the cached balance; pending do not', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a-bal');
+  await rawEntry(exec, 'e-conf', 'expense', 'confirmed');
+  await rawLeg(exec, 'p-b1', 'e-conf', 'a-bal', null, -25.5);
+  await rawLeg(exec, 'p-b2', 'e-conf', null, 'food', 25.5);
+  await seal(exec, 'e-conf');
+  expect(await balanceOf(exec, 'a-bal')).toBe(-25.5);
+
+  await rawEntry(exec, 'e-pend', 'expense', 'pending');
+  await rawLeg(exec, 'p-b3', 'e-pend', 'a-bal', null, -10);
+  await rawLeg(exec, 'p-b4', 'e-pend', null, 'food', 10);
+  await seal(exec, 'e-pend');
+  expect(await balanceOf(exec, 'a-bal')).toBe(-25.5); // unchanged
+});

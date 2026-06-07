@@ -110,6 +110,35 @@ FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = OLD.entry_id) = 1
 BEGIN
   SELECT RAISE(ABORT, 'Unseal the entry before editing postings');
 END;
+
+-- Account-leg currency guard (kills the old amount/amount_base mixing bug by
+-- construction — design doc F3/I3).
+CREATE TRIGGER IF NOT EXISTS tr_post_currency_insert BEFORE INSERT ON postings
+FOR EACH ROW WHEN NEW.account_id IS NOT NULL
+  AND NEW.currency != COALESCE((SELECT currency FROM accounts WHERE id = NEW.account_id), NEW.currency)
+BEGIN
+  SELECT RAISE(ABORT, 'Account posting must be in the account currency');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tr_post_currency_update BEFORE UPDATE OF account_id, currency ON postings
+FOR EACH ROW WHEN NEW.account_id IS NOT NULL
+  AND NEW.currency != COALESCE((SELECT currency FROM accounts WHERE id = NEW.account_id), NEW.currency)
+BEGIN
+  SELECT RAISE(ABORT, 'Account posting must be in the account currency');
+END;
+
+-- Cached balance: confirmed-entry account legs move it on INSERT, in the
+-- account's own currency — no currency CASE (cf. the old
+-- tr_update_account_balance). Edits/deletes recompute explicitly.
+CREATE TRIGGER IF NOT EXISTS tr_post_balance AFTER INSERT ON postings
+FOR EACH ROW WHEN NEW.account_id IS NOT NULL
+  AND (SELECT status FROM entries WHERE id = NEW.entry_id) = 'confirmed'
+BEGIN
+  UPDATE accounts
+     SET current_balance = ROUND(current_balance + NEW.amount, 2),
+         updated_at = datetime('now')
+   WHERE id = NEW.account_id;
+END;
 `;
 
 // categories gains kind 'equity', loses kind 'transfer', gains the `system`
