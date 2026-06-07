@@ -657,3 +657,48 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
   for (const id of touched) await recomputeAccountFromPostings(exec, id);
   return { touchedAccountIds: [...touched] };
 }
+
+/** Delete the whole entry (postings cascade; the sealed DELETE guard passes
+ *  because the parent row goes first), then recompute the touched accounts.
+ *  In PR B this is the one delete path — deleting any leg's Tx.id removes the
+ *  entire entry, killing the orphan-transfer-leg bug class (F1). */
+export async function deleteEntry(exec: Exec, entryId: string): Promise<{ touchedAccountIds: string[] }> {
+  const rows = await exec(
+    'SELECT DISTINCT account_id AS a FROM postings WHERE entry_id = ? AND account_id IS NOT NULL',
+    [entryId],
+  );
+  await exec('DELETE FROM entries WHERE id = ?', [entryId]);
+  const ids = rows.map((r) => String(r.a)).sort();
+  for (const id of ids) await recomputeAccountFromPostings(exec, id);
+  return { touchedAccountIds: ids };
+}
+
+export interface EntryRef {
+  entryId: string;
+  postingId: string | null;
+  accountId: string | null;
+}
+
+/** Boundary id resolver: the client's Tx.id is an ACCOUNT-POSTING id (design
+ *  doc §4.2); server code accepts either a posting id or an entry id. */
+export async function resolveEntryRef(exec: Exec, id: string): Promise<EntryRef | null> {
+  const [p] = await exec('SELECT id, entry_id, account_id FROM postings WHERE id = ?', [id]);
+  if (p) {
+    return {
+      entryId: String(p.entry_id),
+      postingId: String(p.id),
+      accountId: p.account_id == null ? null : String(p.account_id),
+    };
+  }
+  const [en] = await exec('SELECT id FROM entries WHERE id = ?', [id]);
+  if (!en) return null;
+  const [leg] = await exec(
+    'SELECT id, account_id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order LIMIT 1',
+    [id],
+  );
+  return {
+    entryId: id,
+    postingId: leg ? String(leg.id) : null,
+    accountId: leg?.account_id == null ? null : String(leg.account_id),
+  };
+}

@@ -6,6 +6,7 @@ import {
   ensureSystemCategories, postEntry,
   postSimple, postTransfer, postAdjustment, postOpening,
   rebuildEntry, recomputeAccountFromPostings,
+  deleteEntry, resolveEntryRef,
 } from '@/lib/db/entries';
 
 // Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
@@ -604,4 +605,36 @@ test('rebuildEntry re-stamps the dedup hash from the edited content', async () =
   const [e] = await exec("SELECT description, sealed FROM entries WHERE id = 'e-dh2'");
   expect(String(e.description)).toBe('Latte');
   expect(Number(e.sealed)).toBe(1);
+});
+
+test('deleteEntry removes the whole entry (both transfer legs) and recomputes', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-de1', 'SGD', 'lt');
+  await addAccount(exec, 'a-de2', 'SGD', 'lt');
+  const { entryId } = await postTransfer(exec, {
+    fromAccountId: 'a-de1', toAccountId: 'a-de2', fromAmount: 60, date: '2026-06-05',
+  });
+  const { touchedAccountIds } = await deleteEntry(exec, entryId);
+  expect(touchedAccountIds).toEqual(['a-de1', 'a-de2']);
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM postings WHERE entry_id = ?', [entryId]))[0].n)).toBe(0);
+  expect(Number((await exec('SELECT COUNT(*) AS n FROM entries WHERE id = ?', [entryId]))[0].n)).toBe(0);
+  expect(await balanceOf(exec, 'a-de1')).toBe(0);
+  expect(await balanceOf(exec, 'a-de2')).toBe(0);
+});
+
+test('resolveEntryRef resolves posting ids and entry ids', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-rr', 'SGD', 'lt');
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-rr', amount: -5, date: '2026-06-05',
+    description: 'Ref', categoryId: 'cat-t', skipRules: true,
+  });
+  const [leg] = await exec('SELECT id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId]);
+  const byPosting = await resolveEntryRef(exec, String(leg.id));
+  expect(byPosting).toEqual({ entryId, postingId: String(leg.id), accountId: 'a-rr' });
+  const byEntry = await resolveEntryRef(exec, entryId);
+  expect(byEntry).toEqual({ entryId, postingId: String(leg.id), accountId: 'a-rr' });
+  expect(await resolveEntryRef(exec, 'nope')).toBeNull();
 });
