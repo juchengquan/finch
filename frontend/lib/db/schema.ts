@@ -445,7 +445,7 @@ export const APP_NAME = 'finch';
 //   promotes the populated staging table. FK OFF/ON wrap is required because
 //   account_groups / ledgers are referenced by the staging table's FKs and
 //   SQLite won't parse a self-referential FK during the rename in FK=ON mode.
-const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
+export const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
   'PRAGMA foreign_keys = OFF',
   `CREATE TABLE IF NOT EXISTS accounts_new (
      id                   TEXT PRIMARY KEY,

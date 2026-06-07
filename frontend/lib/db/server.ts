@@ -71,7 +71,8 @@ async function open(): Promise<ServerDb> {
     const recordedVersionRows = await exec('SELECT schema_version FROM db_metadata WHERE id = 1').catch(() => []);
     const recordedVersion = String(recordedVersionRows[0]?.schema_version ?? '');
     if (needsCutoverSnapshot(recordedVersion) && !existsSync(bakPath)) {
-      driver.exec(`VACUUM INTO '${bakPath}'`);
+      // VACUUM INTO writes an fsynced, WAL-clean copy to bakPath.
+      driver.prepare('VACUUM INTO ?').run(bakPath);
     }
     await migrate(exec, { fresh: false });
   }

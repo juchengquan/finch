@@ -3,7 +3,7 @@ import { bareDb } from '@/lib/db/test-utils';
 import { moveLegacyData, dropLegacyTables } from '@/lib/db/cutover';
 import { auditLedger, ensureSystemCategories } from '@/lib/db/entries';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
-import { ENTRY_ATTACHMENTS_DDL, ENTRIES_FTS_DDL } from '@/lib/db/schema';
+import { ENTRY_ATTACHMENTS_DDL, ENTRIES_FTS_DDL, ACCOUNTS_DROP_OPENING_COLUMNS } from '@/lib/db/schema';
 import type { Exec } from '@/lib/db/repo';
 
 // ---------------------------------------------------------------------------
@@ -366,11 +366,24 @@ export async function legacyFixtureDb({ pure = false }: { pure?: boolean } = {})
   await exec(`INSERT OR IGNORE INTO exchange_rates (date,currency,rate) VALUES ('2026-05-03','SGD',0.74)`);
   await exec(`INSERT OR IGNORE INTO exchange_rates (date,currency,rate) VALUES ('2026-05-04','SGD',0.74)`);
   await exec(`INSERT OR IGNORE INTO exchange_rates (date,currency,rate) VALUES ('2026-05-05','SGD',0.74)`);
+  // Fix 3: GBP rate (USD-hub: 1 GBP = 1.27 USD). Used by the GBP F3 row below.
+  await exec(`INSERT OR IGNORE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-05-05','GBP',1.27,'manual')`);
 
   // Categories (old CHECK — 'transfer' kind is valid in legacy).
   await exec(`INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
     VALUES ('food','personal',NULL,'Food','expense',0,${now},${now}),
            ('income-cat','personal',NULL,'Salary','income',1,${now},${now})`);
+
+  if (pure) {
+    // Fix 4 (re-kind assertion): a 'transfer'-kind category, valid under the legacy
+    // CHECK, that CATEGORIES_UPGRADE must re-kind to 'expense'. Only in pure mode
+    // because non-pure fixtures apply applyEntriesSchema before inserting categories,
+    // so the new CHECK (no 'transfer') would reject this row at INSERT time.
+    await exec(
+      `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at)
+       VALUES ('old-transfer-cat','personal',NULL,'Moves','transfer',10,${now},${now})`,
+    );
+  }
 
   if (!pure) {
     // Ensure system categories (for auditLedger + moveLegacyData).
@@ -391,8 +404,10 @@ export async function legacyFixtureDb({ pure = false }: { pure?: boolean } = {})
   // current_balance starts at opening_balance (the legacy pattern: the trigger
   // `tr_update_account_balance` will increment it for each confirmed txn insert,
   // landing at the same value recomputeAccountFromPostings produces post-move).
-  // Expected final balances (trigger accumulation + opening):
-  //   a-main:  500(open) + 3000(inc) - 80(tg-x) - 135(tg-xc) = 3285 SGD
+  // Expected legacy trigger balances (trigger accumulation + opening):
+  //   a-main:  500(open) + 3000(inc) - 80(tg-x) - 135(tg-xc) - 25.4(gbp-f3→amount_base!) = 3259.6 SGD
+  //            §10.2 delta: the legacy trigger used amount_base (-25.4 USD) for the GBP row;
+  //            the cutover recomputes to -34.32 SGD (GBP→SGD via hub). Post-cutover = 3250.68 SGD.
   //   a-cc:    0(no open) - 120(exp) + 80(tg-x) + 30(refund) - 100(sx) = -110 SGD
   //   a-usd:   200(open) + 100.5(tg-xc) - 37(f3 → amount_base) = 263.5 USD
   //   a-plain: 0(no open) - 7(stray/adj) = -7 SGD  [t-pend pending, excluded]
@@ -456,6 +471,15 @@ export async function legacyFixtureDb({ pure = false }: { pure?: boolean } = {})
   // 9. F3 row: SGD-denominated row on a USD account (currency != account currency).
   await exec(`INSERT INTO transactions ${txCols} VALUES
     ('t-f3','personal','a-usd','2026-05-05',NULL,-50,-37,0.74,'foreign row','food',NULL,NULL,NULL,'expense','confirmed',${now},NULL,'SGD',NULL,NULL,NULL,NULL,${now},${now})`);
+
+  // 10. Fix 3 — TRUE 3-currency F3 row: GBP-denominated expense on the SGD account (a-main).
+  //     currency='GBP' != account currency 'SGD' != ledger base 'USD' → full cross-rate path.
+  //     amount=-20 GBP, amount_base=-25.4 USD (locked: -20 × 1.27), exchange_rate=1.27.
+  //     Legacy trigger: GBP != SGD → uses amount_base (-25.4) as if it were SGD — the old F3 bug.
+  //     Cutover F3 fix: convertToBase(-20, 'GBP', 'SGD') = -20 × (1.27/0.74) ≈ -34.32 SGD.
+  //     §10.2: the post-cutover a-main balance differs from the legacy figure by -8.92 SGD.
+  await exec(`INSERT INTO transactions ${txCols} VALUES
+    ('t-f3-gbp','personal','a-main','2026-05-05',NULL,-20,-25.4,1.27,'GBP expense on SGD acct','food',NULL,NULL,NULL,'expense','confirmed',${now},NULL,'GBP',NULL,NULL,NULL,NULL,${now},${now})`);
 
   // Tags on two transactions.
   await exec(`INSERT INTO transaction_tags (transaction_id, tag_id) VALUES
@@ -521,9 +545,20 @@ test('moveLegacyData: audit-clean, id-faithful, balance-preserving, idempotent',
     const [etags] = await exec('SELECT COUNT(*) AS n FROM entry_tags');
     expect(Number(etags.n)).toBe(Number(tagCount.n));
 
-    // Balances preserved exactly (recomputed from postings inside the move).
+    // Balances preserved for accounts without the legacy F3 bug.
+    // §10.2 — a-main is EXEMPTED: the GBP F3 row (t-f3-gbp) caused the legacy
+    // trigger to subtract amount_base (-25.4 USD) as if it were SGD. The cutover
+    // recomputes by converting -20 GBP → SGD via hub: -20 × (1.27/0.74) = -34.32 SGD.
+    // Legacy balance: 3259.6 SGD; post-cutover: 3250.68 SGD. Delta = -8.92 SGD.
     const after = await balances(exec);
-    for (const [id, b] of before) expect(after.get(id)).toBe(b);
+    for (const [id, b] of before) {
+      if (id === 'a-main') continue; // §10.2 — exempted below
+      expect(after.get(id), `account ${id} balance mismatch`).toBe(b);
+    }
+    // §10.2 explicit delta for a-main: legacy -25.4 (amount_base as SGD), cutover -34.32 (converted GBP→SGD).
+    const aMainLegacy = before.get('a-main')!;   // 3259.6 SGD (trigger used amount_base)
+    const aMainPost   = after.get('a-main')!;    // 3250.68 SGD (cutover: -20 GBP → -34.32 SGD)
+    expect(Math.round((aMainLegacy - aMainPost) * 100) / 100).toBe(8.92); // §10.2 delta = 8.92 SGD
 
     // Idempotent: a re-run changes nothing.
     const [e1] = await exec('SELECT COUNT(*) AS n FROM entries');
@@ -579,6 +614,60 @@ test('moveLegacyData maps transfers, strays, splits, F3 rows, and residue ids', 
     expect(String(f3.currency)).toBe('USD');
     expect(Number(f3.orig_amount)).toBe(-50);
     expect(String(f3.orig_currency)).toBe('SGD');
+
+    // (f) Fix 3 — TRUE 3-currency F3: GBP expense on SGD account.
+    //     The projected Tx's native figure is orig_amount (GBP), and the posting
+    //     is re-denominated into the account currency (SGD) via hub conversion.
+    const [f3gbp] = await exec("SELECT currency, orig_amount, orig_currency, amount_base FROM postings WHERE id = 't-f3-gbp'");
+    expect(String(f3gbp.orig_currency)).toBe('GBP');
+    expect(Number(f3gbp.orig_amount)).toBe(-20);
+    // Posting re-denominated into the account currency (SGD).
+    expect(String(f3gbp.currency)).toBe('SGD');
+    // Locked base amount_base (-25.4 USD) survived the cutover unchanged.
+    expect(Number(f3gbp.amount_base)).toBe(-25.4);
+  } finally {
+    close();
+  }
+});
+
+test('moveLegacyData replays safely after the accounts dance already ran', async () => {
+  // Fix 1 — guard against a crash between the accounts dance (ACCOUNTS_DROP_OPENING_COLUMNS)
+  // and dropLegacyTables. In that window, `transactions` is still present (so the
+  // no-legacy guard passes) but `accounts` no longer has `opening_balance`/`opening_balance_base`
+  // (the opening ENTRIES were created on the first pass). A re-open replays moveLegacyData
+  // and must not throw "no such column".
+  const { exec, close } = await legacyFixtureDb();
+  try {
+    // First pass: full successful move.
+    await moveLegacyData(exec);
+    const [e1] = await exec('SELECT COUNT(*) AS n FROM entries');
+
+    // Simulate the accounts dance running (as the 2026-06-14 migration does
+    // after moveLegacyData) but then crashing before dropLegacyTables.
+    // ACCOUNTS_DROP_OPENING_COLUMNS is replay-safe by its own construction.
+    for (const sql of ACCOUNTS_DROP_OPENING_COLUMNS) {
+      try { await exec(sql); } catch { /* ignore already-applied errors */ }
+    }
+
+    // Confirm the columns are gone.
+    const acctCols = (await exec("PRAGMA table_info('accounts')")).map((r) => String(r.name));
+    expect(acctCols).not.toContain('opening_balance');
+    expect(acctCols).not.toContain('opening_balance_base');
+    // transactions is still present (dropLegacyTables hasn't run yet).
+    const [txnTable] = await exec("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'");
+    expect(txnTable).toBeDefined();
+
+    // Second pass: must not throw, all entries are already sealed → 0 new inserts.
+    const res2 = await moveLegacyData(exec);
+    expect(res2.entries).toBe(0);
+    expect(res2.postings).toBe(0);
+
+    // Entry count unchanged.
+    const [e2] = await exec('SELECT COUNT(*) AS n FROM entries');
+    expect(Number(e2.n)).toBe(Number(e1.n));
+
+    // Audit still clean.
+    expect(await auditLedger(exec, undefined, { checkBalances: true })).toEqual([]);
   } finally {
     close();
   }

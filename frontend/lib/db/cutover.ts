@@ -210,10 +210,17 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
     sysByLedger.set(ledgerId, await ensureSystemCategories(exec, ledgerId));
   }
 
+  // Replay safety #2: a crash between the accounts dance and dropLegacyTables
+  // leaves transactions present but the opening columns already gone — the
+  // opening ENTRIES were created on the earlier pass (entryDone would skip
+  // them anyway), so read accounts without the columns and skip step 4.
+  const acctHasOpeningCol =
+    (await exec("SELECT 1 FROM pragma_table_info('accounts') WHERE name = 'opening_balance'")).length > 0;
+  const acctRows = acctHasOpeningCol
+    ? await exec('SELECT id, currency, ledger_id, opening_balance, opening_balance_base, created_at FROM accounts')
+    : await exec('SELECT id, currency, ledger_id, created_at FROM accounts');
+
   // Account maps: currency, ledger_id, opening_balance, opening_balance_base, created_at.
-  const acctRows = await exec(
-    'SELECT id, currency, ledger_id, opening_balance, opening_balance_base, created_at FROM accounts',
-  );
   const acctCurrency = new Map<string, string>();
   const acctLedger = new Map<string, string>();
   const acctOpening = new Map<string, number>();
@@ -223,8 +230,10 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
     const id = String(r.id);
     acctCurrency.set(id, String(r.currency));
     acctLedger.set(id, String(r.ledger_id));
-    acctOpening.set(id, Number(r.opening_balance));
-    acctOpeningBase.set(id, Number(r.opening_balance_base));
+    if (acctHasOpeningCol) {
+      acctOpening.set(id, Number(r.opening_balance));
+      acctOpeningBase.set(id, Number(r.opening_balance_base));
+    }
     acctCreatedAt.set(id, String(r.created_at));
   }
 
@@ -515,6 +524,8 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
 
   // -------------------------------------------------------------------------
   // 4. Opening entries: per account with non-zero opening_balance.
+  //    Skipped on replay when the accounts dance already removed the columns
+  //    (acctOpening is empty when acctHasOpeningCol is false).
   // -------------------------------------------------------------------------
   for (const [acctId, openingBalance] of acctOpening) {
     if (r2(openingBalance) === 0) continue;

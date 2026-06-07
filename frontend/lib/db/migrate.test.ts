@@ -160,8 +160,10 @@ test('the 2026-06-14 cutover migrates a legacy file end-to-end (golden projectio
   const { exec, close } = await legacyFixtureDb({ pure: true });
   try {
     // Capture pre-migration account balances (set by the legacy trigger as rows
-    // were inserted — these are the figures the DE world must reproduce).
-    //   a-main:  500(open) + 3000(inc) - 80(tg-x) - 135(tg-xc) = 3285 SGD
+    // were inserted — these are the figures the DE world must reproduce (except a-main).
+    //   a-main:  500(open) + 3000(inc) - 80(tg-x) - 135(tg-xc) - 25.4(gbp-f3→amount_base!) = 3259.6 SGD
+    //            §10.2: the legacy trigger used amount_base (-25.4 USD) for the GBP F3 row
+    //            (old F3 bug); the cutover recomputes to -34.32 SGD (GBP→SGD). Delta = -8.92.
     //   a-cc:    0 - 120(exp) + 80(tg-x) + 30(refund) - 100(sx) = -110 SGD
     //   a-usd:   200(open) + 100.5(tg-xc) - 37(F3 re-denom) = 263.5 USD
     //   a-plain: 0 - 7(stray/adj) = -7 SGD  [t-pend pending, excluded from trigger]
@@ -252,20 +254,37 @@ test('the 2026-06-14 cutover migrates a legacy file end-to-end (golden projectio
     expect(f3!.currency).toBe('SGD');
     expect(f3!.nativeAmount).toBe(-50);
 
+    // 3g. Fix 3 — TRUE 3-currency F3 Tx: GBP expense on SGD account (a-main).
+    //     Tx.currency === 'GBP' (the original currency stored as orig_currency → Tx.currency);
+    //     Tx.nativeAmount === -20 (the original GBP amount); Tx.account === 'a-main' (SGD).
+    //     The posting currency is SGD (re-denominated), and amount_base (-25.4 USD) survived.
+    const f3gbp = txById.get('t-f3-gbp');
+    expect(f3gbp).toBeDefined();
+    expect(f3gbp!.account).toBe('a-main');
+    expect(f3gbp!.currency).toBe('GBP');
+    expect(f3gbp!.nativeAmount).toBe(-20);
+    // Verify the posting: account-leg currency is SGD (account's currency), amount_base = -25.4 USD.
+    const [f3gbpPosting] = await exec("SELECT currency, amount_base FROM postings WHERE id = 't-f3-gbp'");
+    expect(String(f3gbpPosting.currency)).toBe('SGD');
+    expect(Number(f3gbpPosting.amount_base)).toBe(-25.4);
+
     // 3f. No Tx has kind 'opening' (opening entries are excluded from projectState).
     // Cast through string — 'opening' is not in Tx['kind'] by design; the assertion
     // is a runtime guard confirming the projection filter is correct.
     expect(state.transactions.some((t) => (t.kind as string) === 'opening')).toBe(false);
 
     // -------------------------------------------------------------------------
-    // 4. Balances preserved per account.
-    //    Recomputed postings sum == legacy trigger-accumulated figures.
+    // 4. Balances preserved per account (except a-main — §10.2 exemption).
     //
-    // F3 caveat: the legacy balance trigger used `amount_base` for the F3 row
-    // (currency != account currency → falls through to ELSE branch → amount_base = -37).
-    // The cutover re-denominates to account currency but since a-usd IS the ledger
-    // base, amount = amount_base = -37 USD. So the post-cutover balance is also 263.5
-    // — no normalization delta. We assert exact equality for all accounts.
+    // a-usd F3 caveat: the legacy trigger used `amount_base` for the original t-f3 row
+    // (currency='SGD' != account currency 'USD' → amount_base = -37). The cutover
+    // re-denominates to account currency but since a-usd IS the ledger base,
+    // amount = amount_base = -37 USD. Post-cutover balance = 263.5 — exact equality holds.
+    //
+    // §10.2 — a-main is EXEMPTED: the GBP F3 row (t-f3-gbp) caused the legacy trigger
+    // to subtract amount_base (-25.4 USD) as if it were SGD (old F3 bug). The cutover
+    // recomputes -20 GBP → SGD via hub: -20 × (1.27/0.74) = -34.32 SGD.
+    // Legacy balance: 3259.6 SGD; post-cutover: 3250.68 SGD. Delta = -8.92 SGD.
     // -------------------------------------------------------------------------
     const postMigBalances = new Map(
       (await exec('SELECT id, current_balance FROM accounts')).map((r) => [
@@ -274,17 +293,28 @@ test('the 2026-06-14 cutover migrates a legacy file end-to-end (golden projectio
       ]),
     );
     for (const [id, preBal] of preMigBalances) {
+      if (id === 'a-main') continue; // §10.2 — exempted below
       const postBal = postMigBalances.get(id);
       expect(postBal, `account ${id} balance mismatch after migration`).toBe(preBal);
     }
+    // §10.2 explicit delta for a-main: legacy -25.4 (amount_base used as SGD by old trigger),
+    // cutover -34.32 (GBP→SGD conversion: -20 × (1.27/0.74)). Delta = 8.92 SGD.
+    const aMainLegacy = preMigBalances.get('a-main')!;   // 3259.6 SGD (trigger used amount_base)
+    const aMainPost   = postMigBalances.get('a-main')!;  // 3250.68 SGD (cutover: -20 GBP → -34.32 SGD)
+    expect(Math.round((aMainLegacy - aMainPost) * 100) / 100).toBe(8.92); // §10.2 delta = 8.92 SGD
 
     // -------------------------------------------------------------------------
     // 5. Transfer-kind category re-kinded to 'expense'.
-    //    The fixture doesn't use a 'transfer' category, but CATEGORIES_UPGRADE
-    //    always runs as part of 2026-06-13 — verify the upgraded kind CHECK
-    //    allows 'equity' and disallows 'transfer'.
+    //    Fix 4: the fixture now carries a real 'transfer'-kind category
+    //    ('old-transfer-cat', added only in pure mode). CATEGORIES_UPGRADE
+    //    re-kinds it to 'expense' via the INSERT ... CASE WHEN dance.
     // -------------------------------------------------------------------------
-    // After upgrade, inserting a 'transfer' kind should fail.
+    // Fix 4: assert that the fixture's 'transfer'-kind category was re-kinded.
+    const [reKinded] = await exec(`SELECT kind FROM categories WHERE id = 'old-transfer-cat'`);
+    expect(reKinded).toBeDefined();
+    expect(String(reKinded.kind)).toBe('expense');
+
+    // After upgrade, inserting a NEW 'transfer' kind should fail (CHECK constraint).
     let threw = false;
     try {
       await exec(
