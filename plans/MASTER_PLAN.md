@@ -8,7 +8,7 @@ and the current implementation in `frontend/`.
 > app's live data layer, served by a **server-side** SQLite database. See
 > `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-06-06._
+_Last updated: 2026-06-07._
 
 ### Plans index
 
@@ -20,8 +20,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `database_design_en.md` — the canonical relational schema design (reference, not a feature plan).
 - `FEATURE_IDEAS.md` — categorized backlog of ~50 feature ideas.
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
-- `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; **all three §8 cross-app implications are shipped** (attachments PR #106, pack format PR #107, ledger CRUD PR #109). §11 cross-references the web's i18n approach in `I18N_PLAN.md`.
-- `I18N_PLAN.md` — **new (2026-06-06)** — multi-language / localization for the web app. `next-intl` + `messages/<locale>.json` catalogs; English base + Simplified Chinese (`zh-CN`) for v1; translations live in app chrome only, **never in the database or `.finch` packs**; per-device persisted via `localStorage`. Server-side mutation errors get a `{ code, params }` shape so they translate client-side. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
+- `IOS_MACOS_PLAN.md` — (refreshed 2026-06-07) product + architecture direction brief for a future native iOS / macOS port. §2 rewritten storage-first under the now-shipped **double-entry storage model** (`SCHEMA_VERSION = 2026-06-14T00:00:00Z`; see `plans/done/DOUBLE_ENTRY_PLAN.md` for the design record). §2.6 records the `Tx` projection contract native MUST emit; §4.6 the migration discipline; §4.9 the `auditLedger` audit-parity requirement. All three §8 cross-app implications shipped (attachments PR #106, pack format PR #107, ledger CRUD PR #109). §11 cross-references the web's now-shipped i18n approach in `plans/done/I18N_PLAN.md`.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -30,10 +29,12 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `RECONCILE_PLAN.md` — shipped via PRs #90 + #101 (v2).
 - `RULES_ENGINE_PLAN.md` — shipped via PRs #91, #94 + the UI series in PR #102.
 - `FILE_BACKED_DB_PLAN.md` — shipped via PRs #96, #97, #99, #100 (the persistence runtime moved from in-memory `sqlite-wasm` to file-backed `better-sqlite3` with WAL).
-- `RECEIPT_PHOTOS_PLAN.md` — **moved here 2026-06-06**; shipped via PR #106 (web-app receipt attachments end-to-end — schema + upload route + serve route + transaction-detail UI + lightbox).
-- `PACK_FORMAT_PLAN.md` — **moved here 2026-06-06**; shipped via PR #107 (the cross-platform `.finch` zip pack format end-to-end — build, parse, atomic swap of DB + attachments, magic-byte-routed import, Settings UI).
-- `LEDGER_CRUD_PLAN.md` — **moved here 2026-06-06**; shipped (this PR) — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
-- `CATEGORIES_LEVEL3_PLAN.md` — **moved here 2026-06-06**; shipped (this PR) — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** — the cap is mutation-layer only. Backend gains a depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: every category `<Select>` renders labels as `Parent › Child › Leaf`; `/categories` admin page renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances; color inheritance walks up the chain to the nearest non-null ancestor.
+- `RECEIPT_PHOTOS_PLAN.md` — moved here 2026-06-06; shipped via PR #106 (web-app receipt attachments end-to-end — schema + upload route + serve route + transaction-detail UI + lightbox).
+- `PACK_FORMAT_PLAN.md` — moved here 2026-06-06; shipped via PR #107 (the cross-platform `.finch` zip pack format end-to-end — build, parse, atomic swap of DB + attachments, magic-byte-routed import, Settings UI).
+- `LEDGER_CRUD_PLAN.md` — moved here 2026-06-06; shipped via PR #109 — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
+- `CATEGORIES_LEVEL3_PLAN.md` — moved here 2026-06-06; shipped via PR #112 — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** — the cap is mutation-layer only. Backend gains a depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: every category `<Select>` renders labels as `Parent › Child › Leaf`; `/categories` admin page renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances; color inheritance walks up the chain to the nearest non-null ancestor.
+- `I18N_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #113 (foundation: `next-intl` + structured server-error shape `{ code, params }` + format helpers) + #115 (mass extraction of every surface + `zh-CN` coverage). Translations live in app chrome only; **never in the database or `.finch` packs** (the data layer stays locale-neutral, so packs round-trip across locales). Per-device persisted via `localStorage`. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
+- `DOUBLE_ENTRY_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #114 (PR A, additive core: chokepoint `lib/db/entries.ts` + entries/postings DDL constants in `lib/db/entries-schema.ts` + contract test suite, no production reads/writes yet) + #116 (PR B, the cutover: migration via `lib/db/cutover.ts`, projection rewrite in `lib/db/state.ts`, mutation rewires in `lib/db/mutations.ts`, read-path rewires across `lib/db/queries/*`, seed rewrite, FK re-points, `transactionSplits.ts` deletion). `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`. **Double-entry core, single-entry skin**: `transactions` / `transfer_groups` / `transaction_splits` replaced by `entries` + `postings` with a balanced-leg invariant + schema triggers + `auditLedger`; the client `Tx` projection is preserved so pages and selectors are untouched. PR C (audit-on-import wiring + the §10.7 net-worth-explained Insights panel + the §12 docs follow-up) is the remaining open work.
 
 ---
 
@@ -344,38 +345,66 @@ effort. The picks already landed are crossed off in the "Done since" coda
 below; what's still open is summarized here.
 
 **Current open items (high payoff):**
-1. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (2026-06-06).
-   Direction brief, not a build plan: inherited domain model, parity matrix,
-   architecture decisions (GRDB on the verbatim schema, Swift port of the
-   selectors w/ the web `bun test` suite as the parity oracle, iCloud Drive
-   file-pack sync), Apple-platform upside (App Intents, Spotlight, biometric
-   lock, Share-Extension receipts). **All three §8 cross-app implications
-   are now shipped on the web** (attachments PR #106, pack format PR #107,
-   ledger CRUD this PR) — native can now adopt the schema verbatim and
-   build against a complete reference. **L (the build); the brief itself
-   is done.**
+1. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (refreshed 2026-06-07).
+   Direction brief, not a build plan: inherited domain model under the now-
+   shipped double-entry storage, parity matrix, architecture decisions
+   (GRDB on the verbatim schema, Swift port of the chokepoint + selectors
+   w/ the web `bun test` suite as the parity oracle, `auditLedger` as the
+   audit-parity contract, iCloud Drive file-pack sync), Apple-platform
+   upside (App Intents, Spotlight, biometric lock, Share-Extension
+   receipts). **All three §8 cross-app implications shipped on the web**
+   (attachments PR #106, pack format PR #107, ledger CRUD PR #109);
+   `SCHEMA_VERSION = '2026-06-14T00:00:00Z'` after the DE cutover
+   (PRs #114 + #116). Native can now adopt the schema verbatim and build
+   against a complete reference. **L (the build); the brief itself is done.**
 2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
 3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
+4. **Double-entry follow-up — PR C** (`plans/done/DOUBLE_ENTRY_PLAN.md
+   §12 PR-C list`) — wire `auditLedger` into `/api/import` (semantic
+   integrity check after the byte checksum, before the atomic swap) and
+   `/api/db-info` (surface drift in Settings ▸ Data); the §10.7
+   "net-worth-explained" Insights panel (income − expenses + adjustments
+   + FX, now a SELECT over postings); align `netWorthSeries` /
+   `netWorthByMonth` with the `include_in_net_worth` filter (the F4
+   inconsistency, trivially fixable post-cutover); design-doc v3 +
+   MASTER_PLAN sweep. **S-M.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
-- ✅ **Multi-language / i18n** (PR #113 foundation + this PR; design
-  record `plans/done/I18N_PLAN.md`) — `next-intl` + per-device
-  `localStorage['finch.locale']` + auto-detect from `navigator.languages`.
-  English base catalog (100% coverage), Simplified Chinese (`zh-CN`)
-  shipping in lockstep. Server mutations throw structured `I18nError(code,
-  params, fallbackEnglish)`; the route serialises `{ error: { code,
-  params, message } }` and the client decodes via `fromWireError` so
-  toasts can localise without breaking unmigrated callers.
-  `useFormat()` + locale-aware `periodLabel` + structured `Insight`
-  (`{ key, params }`) round out the formatting layer; rule
-  `describeCondition` / `describeActions` take an optional `DescribeDict`
-  so the /rules page and rule-builder summary read in the active
-  language. App chrome is fully translated; `.finch` packs and user-typed
-  data (category names, merchant names, transaction notes) are
-  intentionally untouched.
+- ✅ **Double-entry storage core** (PRs #114 + #116, 2026-06-07; design
+  record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` /
+  `transfer_groups` / `transaction_splits` replaced by `entries` +
+  `postings` with a balanced-leg invariant + schema triggers (seal /
+  posting-currency / cached-balance) + a typed `auditLedger` semantic
+  sweep. The client `Tx` projection is preserved as a single-entry skin
+  (`lib/db/state.ts`), so pages, selectors, and the UI vocabulary
+  (expense / income / transfer — never "debit/credit") are untouched.
+  PR A added the chokepoint module (`lib/db/entries.ts`) + entries DDL
+  constants (`lib/db/entries-schema.ts`) + the contract test suite, with
+  no production writes; PR B did the cutover — migration via
+  `lib/db/cutover.ts` (per-entry sealed-write, id-preserving), mutation
+  delegation, read-path rewires across `lib/db/queries/*`, seed rewrite,
+  FK re-points (`entry_tags`, `entry_attachments`, `entries_fts`).
+  `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`; legacy tables
+  dropped. PR C (audit wiring + net-worth-explained panel + docs
+  follow-up) is item #4 in the open list above.
+- ✅ **Multi-language / i18n** (PR #113 foundation + PR #115 mass
+  extraction; design record `plans/done/I18N_PLAN.md`) — `next-intl` +
+  per-device `localStorage['finch.locale']` + auto-detect from
+  `navigator.languages`. English base catalog (100% coverage),
+  Simplified Chinese (`zh-CN`) shipping in lockstep. Server mutations
+  throw structured `I18nError(code, params, fallbackEnglish)`; the route
+  serialises `{ error: { code, params, message } }` and the client
+  decodes via `fromWireError` so toasts can localise without breaking
+  unmigrated callers. `useFormat()` + locale-aware `periodLabel` +
+  structured `Insight` (`{ key, params }`) round out the formatting
+  layer; rule `describeCondition` / `describeActions` take an optional
+  `DescribeDict` so the /rules page and rule-builder summary read in the
+  active language. App chrome is fully translated; `.finch` packs and
+  user-typed data (category names, merchant names, transaction notes)
+  are intentionally untouched.
 - ✅ **Receipt photos** (PR #106, 2026-06-06; FEATURE_IDEAS §4.1; design
   record `plans/done/RECEIPT_PHOTOS_PLAN.md`) — schema + upload + serve
   + transaction-detail UI + lightbox.

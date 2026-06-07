@@ -22,8 +22,8 @@ record in `plans/`. Last updated: 2026-06-07._
 > **What changed since 2026-06-06 (the prior revision):**
 >
 > - **3-level categories shipped** (PR #112, `plans/done/CATEGORIES_LEVEL3_PLAN.md`) — the taxonomy is now ≤ 3 levels deep, enforced in the mutation layer (no schema change). §2.1 (entity row) and §3 row 29 updated.
-> - **i18n shipped** (PRs #113 + #115, `plans/I18N_PLAN.md`) — `next-intl` foundation + structured server-error shape `{ code, params }` + mass extraction of every surface + initial `zh-CN` coverage. The data layer is locale-neutral; `.finch` packs are unaffected. §11 updated.
-> - **Double-entry storage migration in progress** (PR #114 + the `feat/double-entry-cutover` branch, `plans/DOUBLE_ENTRY_PLAN.md`) — `transactions` / `transfer_groups` / `transaction_splits` are being replaced by **`entries` + `postings`** with a balanced-leg invariant + schema triggers + a `auditLedger` semantic-integrity sweep. The client `Tx` projection contract is deliberately preserved as a single-entry skin. **This is the structural change for native:** §2 is rewritten storage-first under DE, §2.6 records the projection contract, §4.6 carries the migration discipline, §4.9 carries the audit-parity requirement.
+> - **i18n shipped** (PRs #113 + #115, `plans/done/I18N_PLAN.md`) — `next-intl` foundation + structured server-error shape `{ code, params }` + mass extraction of every surface + initial `zh-CN` coverage. The data layer is locale-neutral; `.finch` packs are unaffected. §11 updated.
+> - **Double-entry storage migration shipped** (PRs #114 + #116; design record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` / `transfer_groups` / `transaction_splits` replaced by **`entries` + `postings`** with a balanced-leg invariant, schema triggers, and an `auditLedger` semantic sweep. The client `Tx` projection is preserved as a single-entry skin. **Structural change for native:** §2 is rewritten storage-first, §2.6 is the projection contract, §4.6 is the migration discipline, §4.9 is the audit-parity requirement.
 >
 > Cross-app interop is unchanged by any of the above — the `.finch` pack format and the shared `SCHEMA_VERSION` lineage are the contract; what's inside is now DE-shaped, that's all (§8).
 
@@ -86,16 +86,16 @@ The same native posture unlocks the sync model the product wants —
 periodic zip "packs" of the database + receipt attachments dropped into
 **iCloud Drive** (§4.3 + §2.5.3) — which a web view can only approximate.
 
-> **DE note (added 2026-06-07):** the double-entry storage migration in
-> progress on the web (`plans/DOUBLE_ENTRY_PLAN.md`) doesn't change the
-> cross-app interop contract — the `.finch` pack still carries a SQLite
-> DB on the shared `SCHEMA_VERSION` lineage; the canonical tables inside
-> are now `entries` / `postings` / `entry_tags` / `entry_attachments`
-> instead of the legacy `transactions` / `transfer_groups` /
-> `transaction_splits` / `transaction_tags` / `transaction_attachments`
-> trio. Migrations run when a swapped-in file is opened (§4.6), so packs
-> written before the cutover still import. The native plan inherits the
-> DE-era schema as canonical; §2 is rewritten storage-first to reflect it.
+> **DE note:** the double-entry storage migration (PRs #114 + #116,
+> `plans/done/DOUBLE_ENTRY_PLAN.md`) doesn't change the cross-app interop
+> contract — the `.finch` pack still carries a SQLite DB on the shared
+> `SCHEMA_VERSION` lineage; the canonical tables inside are `entries` /
+> `postings` / `entry_tags` / `entry_attachments` instead of the legacy
+> `transactions` / `transfer_groups` / `transaction_splits` /
+> `transaction_tags` / `transaction_attachments` trio. Migrations run when
+> a swapped-in file is opened (§4.6), so pre-DE packs still import.
+> Native inherits the DE-era schema as canonical; §2 is rewritten storage-
+> first to reflect it.
 
 ---
 
@@ -107,9 +107,10 @@ from screenshots — read the source.
 | Concern | Canonical source in `frontend/` | What it is |
 |---|---|---|
 | Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` (canonical) + `lib/db/entries-schema.ts` (DE additions) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
-| Schema rationale & business rules | `plans/database_design_en.md` + `plans/DOUBLE_ENTRY_PLAN.md` | The design doc behind the schema (decisions #18–#25 etc.) + the double-entry rewrite (§2-§3 invariants, §8 migration) |
+| Schema rationale & business rules | `plans/database_design_en.md` + `plans/done/DOUBLE_ENTRY_PLAN.md` | The design doc behind the schema (decisions #18–#25 etc.) + the double-entry rewrite (§2-§3 invariants, §8 migration) |
 | Server projection contract (the `Tx` shape) | `lib/db/state.ts` (`projectState`) | The exact `Tx` / `AccountRow` shape the client consumes — see §2.6 |
 | **Write chokepoint** | `lib/db/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
+| **Cutover (the migration)** | `lib/db/cutover.ts` | The DOUBLE_ENTRY_PLAN §8.2 data-move builder: manual sealed inserts for id-fidelity, torn-write repair, per-entry idempotence guard. Replayed inside the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` — see §4.6 |
 | Mutations (the user-facing write API) | `lib/db/mutations.ts` | Every server-side action and its effects; under DE these delegate to the chokepoint |
 | Pure derivations (the read brains) | `lib/select.ts`, `lib/derive.ts` | All computed figures — see §2.4 |
 | Rules engine | `lib/rules/{engine,types,describe}.ts` | Condition/Action model + evaluator |
@@ -119,12 +120,12 @@ from screenshots — read the source.
 | FX conversion | `lib/fx.ts`, `components/use-money.ts` | Rate lookup + base↔display conversion |
 | Installments | `lib/installment.ts` | Finite-plan progress derivation |
 | Counterparty matching | `lib/matcher/counterparty.ts` | Name-resolution on write |
-| **Migration discipline** | `lib/db/schema.ts` (`SCHEMA_VERSION` + `MIGRATIONS`) | ISO-datetime version lineage + additive-migration runner; the DE cutover stamps `2026-06-12T00:00:00Z` — see §4.6 |
+| **Migration discipline** | `lib/db/schema.ts` (`SCHEMA_VERSION` + `MIGRATIONS`) | ISO-datetime version lineage + additive-migration runner; the DE cutover stamps `2026-06-14T00:00:00Z` — see §4.6 |
 
 ### 2.1 Entities (and the relationships that matter)
 
 All data is scoped to a **ledger**; ledgers never share rows. The entity set
-below reflects the **double-entry storage model** (`plans/DOUBLE_ENTRY_PLAN.md`);
+below reflects the **double-entry storage model** (`plans/done/DOUBLE_ENTRY_PLAN.md`);
 the user-facing `Tx` shape that surfaces in selectors and the UI is described
 separately in §2.6.
 
@@ -314,10 +315,10 @@ wrong one. They are non-negotiable.
 > Swift-side Decimal-to-REAL discipline ever slips, `auditLedger` (§4.9)
 > catches it instead of silently corrupting balances.
 
-### 2.3.1 The balanced-entry invariants (added by DE)
+### 2.3.1 The balanced-entry invariants
 
 Under double-entry the eight invariants above stay true; nine more land at the
-storage layer, lifted from `plans/DOUBLE_ENTRY_PLAN.md §2.4`. These are
+storage layer, mirroring `plans/done/DOUBLE_ENTRY_PLAN.md §2.4`. These are
 **enforced by schema triggers** (the seal trigger fires when the chokepoint
 UPDATEs `sealed = 1`; the posting triggers guard currency + sealed-
 immutability), so a native port that reuses the verbatim schema (§4.2)
@@ -382,24 +383,20 @@ independently-testable pure function:
 
 ### 2.5 Receipt attachments + the `.finch` pack format (designed here; ✅ shipped on the web)
 
-> **Status update (post-PR #106, #107):** the design below was implemented
-> end-to-end on the **web app** — the attachments table, the on-disk
-> layout, and the `.finch` pack format with manifest validation and atomic
-> swap all match this section verbatim. Native apps inherit the schema
-> as-designed; the web-side implementation is the *canonical reference* for
-> shape (see `frontend/lib/db/schema.ts`, `frontend/lib/db/pack.ts`,
-> `frontend/lib/db/paths.ts`). Companion design records:
-> `plans/done/RECEIPT_PHOTOS_PLAN.md`, `plans/done/PACK_FORMAT_PLAN.md`.
->
-> **DE rename (2026-06-07):** under double-entry the table renames from
-> `transaction_attachments` to `entry_attachments` and the FK column from
-> `transaction_id` to `entry_id`. **Crucially, the DE migration reuses the
-> legacy transaction id as the entry id** (§4.6, `DOUBLE_ENTRY_PLAN.md §8.3`
-> "id stability summary"), so the on-disk path
-> `attachments/<entry_id>/<attachment_id>.<ext>` is byte-identical to the
-> pre-DE `attachments/<transaction_id>/...` for any row that existed before
-> the cutover — pack files round-trip across the cutover unchanged, pointer
-> integrity (`sha256`) survives.
+> **Status:** designed in this section; ✅ shipped on the web end-to-end —
+> the attachments table (`entry_attachments` under DE; see §2.5.1), the
+> on-disk layout (`attachments/<entry_id>/...`; see §2.5.2), and the
+> `.finch` pack format with manifest validation + atomic swap (§2.5.3)
+> all match this section verbatim. Native apps inherit the schema as-
+> designed; the web-side implementation is the *canonical reference* for
+> shape (`frontend/lib/db/schema.ts`, `frontend/lib/db/pack.ts`,
+> `frontend/lib/db/paths.ts`). The DE cutover (PRs #114 + #116) reused
+> legacy transaction ids as entry ids per `DOUBLE_ENTRY_PLAN §8.3`, so
+> on-disk attachment paths are byte-identical across the cutover and
+> pre-DE packs round-trip on either app unchanged after migration.
+> Companion design records: `plans/done/RECEIPT_PHOTOS_PLAN.md` (web-
+> side attachments, PR #106), `plans/done/PACK_FORMAT_PLAN.md` (`.finch`
+> format, PR #107).
 
 This section originally **decided the shape** so both apps + the file-pack
 sync model (§4.3) would inherit a consistent structure from day one. The
@@ -544,10 +541,11 @@ MUST reproduce:
 > projection. The categories admin and category pickers MUST hide them too
 > (resolve by the `system` column, never by id or name; rename-safe).
 
-> **PR-B adapter preconditions (carried from `DOUBLE_ENTRY_PLAN.md`
-> PR-A review).** When a mutation rewrites legs via the chokepoint's
-> `rebuildEntry`, it MUST: (a) forward each account leg's `cleared_at`
-> — omission silently un-clears a reconciled row — and (b) pass explicit
+> **Adapter preconditions for `rebuildEntry`** — code-level disciplines
+> enforced in `frontend/lib/db/entries.ts` (and its consumers in
+> `lib/db/mutations.ts`). When a mutation rewrites legs via the chokepoint's
+> `rebuildEntry`, it MUST: (a) forward each account leg's `cleared_at` —
+> omission silently un-clears a reconciled row — and (b) pass explicit
 > `amountBase` values when the entry carries user-pinned rates that a date
 > edit must preserve (the default re-locks from the rates table). Native
 > ports of `updateTransfer` and `updateTransaction` MUST honour both.
@@ -731,32 +729,25 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   **UUIDv4** precisely for a multi-device sync model. **Direction:** native
   app generates **UUIDs** for new rows (PKs are `TEXT`, so they coexist with
   legacy ids), paying forward the §4.3-C sync option at no cost today.
-- **The double-entry migration (added 2026-06-07).** `SCHEMA_VERSION` is
-  bumped to `2026-06-12T00:00:00Z` by the DE cutover
-  (`plans/DOUBLE_ENTRY_PLAN.md §8`). A native install that imports a pre-DE
-  `.finch` pack from the web (or vice versa) will, on opening the swapped-in
-  file, run the same MIGRATIONS entry — which:
-  1. Takes a defensive `VACUUM INTO '<file>.pre-de.bak'` snapshot before the
-     data move (this is the largest migration the project has shipped; the
-     snapshot is the rollback path).
-  2. Creates `entries` / `postings` / `entry_tags` / `entry_attachments` /
-     `entries_fts` tables + indexes + the seal/posting/balance triggers.
-  3. Rebuilds `categories` with the new CHECK (`equity` added, `transfer`
-     dropped) and the `system` column; re-kinds any user-created
-     `'transfer'` categories to `'expense'`; calls `ensureSystemCategories`
-     per ledger.
-  4. Migrates singles / transfers / splits / strays / foreign-currency rows
-     / opening balances per `DOUBLE_ENTRY_PLAN.md §8.2`, **reusing legacy
-     row ids as new entry / posting ids** (the id-stability table in §8.3 of
-     that plan).
-  5. Backfills `entries_fts`; drops the legacy tables + FTS + triggers.
-  6. Recomputes every account; runs `auditLedger` (§4.9) and **aborts the
-     migration on any problem** — the `.pre-de.bak` snapshot is the rollback.
-
-  Native and web MUST run a byte-identical migration step here so the same
-  DB migrates once, consistently, regardless of which app opens it first.
-  The migration is idempotent on a DB already at the new version (the
-  "already applied" swallow handles repeats).
+- **The double-entry migration.** `SCHEMA_VERSION` is bumped to
+  `2026-06-14T00:00:00Z` by the DE cutover (PRs #114 + #116,
+  `plans/done/DOUBLE_ENTRY_PLAN.md §8`). A native install that opens a
+  pre-DE `.finch` pack from the web (or vice versa) runs the same
+  `MIGRATIONS` entry — defensive `VACUUM INTO '<file>.pre-de.bak'`
+  snapshot, fresh entries / postings / entry_tags / entry_attachments /
+  entries_fts tables + indexes + triggers, category-table rebuild for the
+  new CHECK + `system` column, per-ledger `ensureSystemCategories`, then
+  the §8.2 data-move via `frontend/lib/db/cutover.ts` (per-entry sealed-
+  write, id-preserving so client ids stay bit-identical across the
+  cutover — id-stability table at `DOUBLE_ENTRY_PLAN §8.3`),
+  `entries_fts` backfill, drop legacy tables, recompute every account,
+  `auditLedger` clean-or-abort. The `.pre-de.bak` snapshot is the
+  rollback. Native and web MUST run a byte-identical migration step so
+  the same DB migrates once, consistently, regardless of which app opens
+  it first; the migration is idempotent on a DB already at the new
+  version. Implementation reference: `frontend/lib/db/cutover.ts` (top-
+  of-file comment carries the id-fidelity table and the torn-write repair
+  rationale).
 
 ### 4.7 Platform baselines (decided)
 
@@ -779,7 +770,7 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
 
 **Direction (required):** native MUST implement `auditLedger` in `FinchCore`,
 ported from `lib/db/entries.ts::auditLedger`
-(`plans/DOUBLE_ENTRY_PLAN.md §3.3`). It is a read-only sweep returning typed
+(`plans/done/DOUBLE_ENTRY_PLAN.md §3.3`). It is a read-only sweep returning typed
 problems:
 
 - Unbalanced entries (I1 violations beyond rounding) and unsealed entries
@@ -958,7 +949,7 @@ finch already computes, so the data work is mostly done.
 ## 8. Interop with the web app & data portability
 
 > **DE note (added 2026-06-07):** the double-entry storage migration in
-> progress on the web (`plans/DOUBLE_ENTRY_PLAN.md`) does NOT change the
+> progress on the web (`plans/done/DOUBLE_ENTRY_PLAN.md`) does NOT change the
 > cross-app interop contract. The `.finch` pack is still a SQLite DB on the
 > shared `SCHEMA_VERSION` lineage; the canonical tables inside are now
 > `entries` / `postings` / `entry_tags` / `entry_attachments` instead of
@@ -1078,7 +1069,7 @@ finch already computes, so the data work is mostly done.
   (USD/SGD/CNY/JPY) — use it to test formatting breadth.
   > **Cross-app note (updated 2026-06-07):** the web app's i18n approach
   > is ✅ **shipped via PR #113 (foundation) + PR #115 (mass extraction +
-  > `zh-CN` coverage)**; design record `plans/I18N_PLAN.md`. Stack:
+  > `zh-CN` coverage)**; design record `plans/done/I18N_PLAN.md`. Stack:
   > `next-intl` + `messages/<locale>.json` catalogs, English base + Simplified
   > Chinese (`zh-CN`) for v1, ICU MessageFormat plurals, structured server-
   > error shape `{ code, params }` so mutation errors translate client-
@@ -1123,7 +1114,7 @@ finch already computes, so the data work is mostly done.
 - **Golden `.db` fixtures:** check in a sample finch `.db` (or generate from the
   shared seed) and assert open/migrate/project round-trips, plus cross-app
   interop (write on web, read on native). The migration must be a no-op on a
-  DB already at `2026-06-12T00:00:00Z`; `auditLedger` must report clean after
+  DB already at `2026-06-14T00:00:00Z`; `auditLedger` must report clean after
   every round-trip.
 - **Snapshot tests** for key screens in light/dark, a few Dynamic Type sizes,
   and iPhone/iPad/Mac size classes.
@@ -1140,7 +1131,7 @@ Milestones as coherent slices, each independently shippable:
 1. **`FinchCore` + read-only mirror over the DE schema.** GRDB on the verbatim
    shared schema (entries + postings + entry_tags + entry_attachments +
    entries_fts + the seal/posting/balance triggers, §2.1) at
-   `SCHEMA_VERSION = 2026-06-12T00:00:00Z`. Seed the three system equity
+   `SCHEMA_VERSION = 2026-06-14T00:00:00Z`. Seed the three system equity
    categories per ledger via `ensureSystemCategories`. Port the `Tx`
    projection (§2.6), the §2.4 selectors, and `auditLedger` (§4.9). Parity
    suite green incl. projection-parity + audit-parity (§12). A read-only
@@ -1151,9 +1142,9 @@ Milestones as coherent slices, each independently shippable:
    (§2.1; web-side ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md` PR #109).
    Entry CRUD goes through a Swift port of the `lib/db/entries.ts`
    chokepoint (`postEntry` / `rebuildEntry` / `deleteEntry`) — the same
-   single write path the web uses. The two PR-B adapter preconditions
-   called out in §2.6 (forward `cleared_at`; pass explicit `amountBase` for
-   pinned rates) apply verbatim. Now "usable for real."
+   single write path the web uses. The two `rebuildEntry` adapter
+   preconditions called out in §2.6 (forward `cleared_at`; pass explicit
+   `amountBase` for pinned rates) apply verbatim. Now "usable for real."
 3. **Adaptive iPad/macOS.** `NavigationSplitView`, macOS menus/keyboard, ⌘K;
    both distribution paths set up (§4.8).
 4. **Power features.** Reconcile, rules engine + builder/backfill, transfers,
@@ -1222,9 +1213,6 @@ language. Each points at the sections of the doc that now reflect it.
    transcode pipeline, transaction-detail UI + lightbox all live. Native
    adopts the schema verbatim; the file pipeline (Share Extension intake +
    PhotosPicker on iOS) is the part native still needs to build.
-   _(Subsequently renamed to `entry_attachments` + path
-   `attachments/<entry_id>/...` by the DE migration — ids are reused, so
-   on-disk paths are stable across the cutover; §2.5.1, §4.6.)_
 
 5. **OS floor: iOS 26 / iPadOS 26 / macOS 26.** A modern floor lets the app
    use Swift Charts, App Intents, `@Observable`, `NavigationSplitView`, and
@@ -1281,7 +1269,7 @@ during the relevant phase.
 | Pack format drifts between web and native | Medium | Single shared `manifest.json` schema; checksum + per-file sha256; cross-app round-trip test (§8, §12) |
 | Orphaned attachment files accumulate on disk | Low | Pack-builder sweep + periodic vacuum keep on-disk files ↔ DB rows in sync (§2.5.1) |
 | macOS feels like a blown-up iPad | Low | NavigationSplitView + real menus/keyboard; Catalyst only as fallback (§4.1) |
-| DE migration outcome divergence between web and native | Medium | Single shared `MIGRATIONS` lineage stamped `2026-06-12T00:00:00Z`; cross-app round-trip test (§8 + §12) opens a web-migrated DB on native (and vice versa) and asserts the second-side migration is a no-op + `auditLedger` clean. Defensive `VACUUM INTO '<file>.pre-de.bak'` snapshot is the rollback (§4.6). |
+| DE migration outcome divergence between web and native | Medium | Single shared `MIGRATIONS` lineage stamped `2026-06-14T00:00:00Z`; cross-app round-trip test (§8 + §12) opens a web-migrated DB on native (and vice versa) and asserts the second-side migration is a no-op + `auditLedger` clean. Defensive `VACUUM INTO '<file>.pre-de.bak'` snapshot is the rollback (§4.6). |
 | `auditLedger` divergence between web and native | Low | Single Swift port of the audit SQL; golden DB fixtures with seeded corruptions (one per problem class) assert the same typed problem set on both sides (§4.9 + §12 audit parity). |
 | Native write path bypasses the entries chokepoint | Medium | All write surfaces (CRUD, App Intents, Share Extension, scheduled posting) MUST go through the Swift port of `postEntry` / `rebuildEntry` / `deleteEntry` (§2.6, §7); the schema triggers + audit are the second line of defence, but architecting around the chokepoint is the first. |
 
@@ -1305,7 +1293,7 @@ during the relevant phase.
 - **Entry / posting / sealed / dedup_hash / residue leg / system equity
   category / `auditLedger` / chokepoint** — the double-entry vocabulary.
   Defined in §2.1, §2.2, §2.3.1, §2.6, and §4.9 of this brief; canonically
-  in `plans/DOUBLE_ENTRY_PLAN.md §2-§3`.
+  in `plans/done/DOUBLE_ENTRY_PLAN.md §2-§3`.
 - **Canonical code references:** canonical schema `frontend/lib/db/schema.ts`
   (+ DE additions `frontend/lib/db/entries-schema.ts`); write chokepoint
   `frontend/lib/db/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
