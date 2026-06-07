@@ -62,7 +62,57 @@
     "save": "保存",
     "delete": "删除",
     "edit": "编辑",
-    "create": "创建"
+    "create": "创建",
+    "add": "添加",
+    "back": "返回",
+    "done": "完成",
+    "loading": "加载中…"
+  },
+  "nav": {
+    "accounts": "账户",
+    "budgets": "预算",
+    "scheduled": "计划",
+    "insights": "洞察",
+    "activity": "动态",
+    "reports": "报表",
+    "goals": "目标",
+    "add": "添加",
+    "settings": "设置",
+    "pending": "待处理",
+    "merchants": "商户",
+    "categories": "类别",
+    "tags": "标签",
+    "rules": "规则",
+    "transfers": "转账",
+    "exchangeRates": "汇率",
+    "ledgerGroup": "账本"
+  },
+  "shell": {
+    "brand": "Finch",
+    "search": "搜索",
+    "expandSidebar": "展开侧栏",
+    "collapseSidebar": "折叠侧栏",
+    "primaryNav": "主导航",
+    "addExpense": "添加支出",
+    "accountMenu": "账户菜单",
+    "breadcrumb": "面包屑",
+    "userLabel": "个人"
+  },
+  "palette": {
+    "title": "搜索与命令",
+    "description": "搜索交易、账户和类别,或跳转到页面。",
+    "placeholder": "搜索交易、账户、页面…",
+    "ariaLabel": "命令面板搜索",
+    "noResults": "无结果",
+    "shortcutsHint": "↑↓ 导航 · ↵ 选择 · esc 关闭",
+    "groups": {
+      "pages": "页面",
+      "transactions": "交易",
+      "merchants": "商户",
+      "categories": "类别",
+      "accounts": "账户",
+      "tags": "标签"
+    }
   },
   "error": {
     "required": {

@@ -62,7 +62,57 @@
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
-    "create": "Create"
+    "create": "Create",
+    "add": "Add",
+    "back": "Back",
+    "done": "Done",
+    "loading": "Loading…"
+  },
+  "nav": {
+    "accounts": "Accounts",
+    "budgets": "Budgets",
+    "scheduled": "Scheduled",
+    "insights": "Insights",
+    "activity": "Activity",
+    "reports": "Reports",
+    "goals": "Goals",
+    "add": "Add",
+    "settings": "Settings",
+    "pending": "Pending",
+    "merchants": "Merchants",
+    "categories": "Categories",
+    "tags": "Tags",
+    "rules": "Rules",
+    "transfers": "Transfers",
+    "exchangeRates": "Exchange rates",
+    "ledgerGroup": "Ledger"
+  },
+  "shell": {
+    "brand": "Finch",
+    "search": "Search",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "primaryNav": "Primary navigation",
+    "addExpense": "Add expense",
+    "accountMenu": "Account menu",
+    "breadcrumb": "Breadcrumb",
+    "userLabel": "Personal"
+  },
+  "palette": {
+    "title": "Search and commands",
+    "description": "Search transactions, accounts, and categories, or jump to a page.",
+    "placeholder": "Search transactions, accounts, screens…",
+    "ariaLabel": "Command palette search",
+    "noResults": "No results",
+    "shortcutsHint": "↑↓ navigate · ↵ select · esc close",
+    "groups": {
+      "pages": "Pages",
+      "transactions": "Transactions",
+      "merchants": "Merchants",
+      "categories": "Categories",
+      "accounts": "Accounts",
+      "tags": "Tags"
+    }
   },
   "error": {
     "required": {

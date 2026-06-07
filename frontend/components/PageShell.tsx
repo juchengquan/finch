@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 
 import { Icon } from './primitives';
 import { Button } from '@/components/ui/button';
@@ -41,21 +42,21 @@ interface Brand {
 }
 
 // Detail routes (`/<section>/<id>`) that show a breadcrumb in the desktop
-// header. The current segment's display name is resolved at render time
-// (some sections look up live store rows; see `crumb` below) rather than via
-// these static name() fallbacks alone.
-const BREADCRUMB_SECTIONS: Record<string, { label: string; name: (id: string) => string }> = {
-  accounts: { label: 'Accounts', name: (id) => acctById(id).name || id },
-  budgets: { label: 'Budgets', name: (id) => id },
-  transfers: { label: 'Transfers', name: (id) => id },
-  scheduled: { label: 'Scheduled', name: (id) => id },
+// header. The label is looked up from `nav.<section>`; `name` resolves the
+// detail row's display string (live store row when available).
+const BREADCRUMB_SECTIONS: Record<string, { navKey: string; name: (id: string) => string }> = {
+  accounts: { navKey: 'accounts', name: (id) => acctById(id).name || id },
+  budgets: { navKey: 'budgets', name: (id) => id },
+  transfers: { navKey: 'transfers', name: (id) => id },
+  scheduled: { navKey: 'scheduled', name: (id) => id },
 };
 
 // Header titles for top-level routes that aren't represented in the nav, so
-// they still get a name. Nav routes derive their title from the tab/link label.
-const EXTRA_TITLES: Record<string, string> = {
-  add: 'Add expense',
-  settings: 'Settings',
+// they still get a name. Maps a path segment to the catalog key under
+// `shell` (free text title) or `nav` (one of the nav labels).
+const EXTRA_TITLES: Record<string, { ns: 'shell' | 'nav'; key: string }> = {
+  add: { ns: 'shell', key: 'addExpense' },
+  settings: { ns: 'nav', key: 'settings' },
 };
 
 interface PageShellProps {
@@ -92,6 +93,8 @@ export function PageShell({
   const accounts = useFinanceStore((s) => s.accounts);
   const budgets = useFinanceStore((s) => s.budgets);
   const tabBarTabs = mobileTabs ?? tabs;
+  const tNav = useTranslations('nav');
+  const tShell = useTranslations('shell');
 
   const segments = pathname.split('/').filter(Boolean);
   const section = BREADCRUMB_SECTIONS[segments[0]];
@@ -109,7 +112,7 @@ export function PageShell({
   const crumb =
     section && segments[1]
       ? {
-          label: section.label,
+          label: tNav(section.navKey),
           parent: `/${segments[0]}`,
           current: liveCurrent || section.name(segments[1]),
         }
@@ -124,9 +127,10 @@ export function PageShell({
   // Title shown in the desktop header for top-level (non-detail) routes: the
   // matching nav item's label, an explicit name for off-nav routes, else the
   // group default passed via `headerTitle`.
+  const extraTitle = EXTRA_TITLES[segments[0]];
   const pageTitle =
     [...tabs, ...navGroups.flatMap((g) => g.tabs)].find((item) => isActivePath(item.path))?.label ??
-    EXTRA_TITLES[segments[0]] ??
+    (extraTitle ? (extraTitle.ns === 'shell' ? tShell(extraTitle.key) : tNav(extraTitle.key)) : undefined) ??
     headerTitle;
 
   const renderTab = (tab: Tab) => (
@@ -156,7 +160,7 @@ export function PageShell({
   return (
     <div className="bg-background text-foreground flex h-[100dvh] overflow-hidden font-sans">
       <aside
-        aria-label="Primary navigation"
+        aria-label={tShell('primaryNav')}
         className={cn(
           'bg-sidebar text-sidebar-foreground border-sidebar-border hidden h-[100dvh] shrink-0 flex-col gap-1 overflow-hidden border-r px-3 py-5 transition-[width] duration-200 md:flex',
           sidebarOpen ? 'w-[220px]' : 'w-[60px]',
@@ -166,7 +170,7 @@ export function PageShell({
           {brand?.toggleable ? (
             <button
               type="button"
-              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              aria-label={sidebarOpen ? tShell('collapseSidebar') : tShell('expandSidebar')}
               aria-expanded={sidebarOpen}
               onClick={onSidebarToggle}
               className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-md px-2.5 py-2 transition-colors"
@@ -176,7 +180,7 @@ export function PageShell({
               </span>
               {sidebarOpen && (
                 <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
-                  {brand?.label ?? 'Finch'}
+                  {brand?.label ?? tShell('brand')}
                 </span>
               )}
             </button>
@@ -187,7 +191,7 @@ export function PageShell({
               </div>
               {sidebarOpen && (
                 <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
-                  {brand?.label ?? 'Finch'}
+                  {brand?.label ?? tShell('brand')}
                 </span>
               )}
             </div>
@@ -223,7 +227,7 @@ export function PageShell({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Account menu"
+                aria-label={tShell('accountMenu')}
                 title={sidebarOpen ? undefined : user.name}
                 // Left-anchored in both states (no justify-center): the aside's
                 // right border makes the collapsed content box 35px, so centered
@@ -252,7 +256,7 @@ export function PageShell({
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Icon name="cog" size={16} />
-                  Settings
+                  {tNav('settings')}
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -268,7 +272,7 @@ export function PageShell({
             // them whole; `truncate` on the current segment takes the spill.
             // Without this, a long account name pushed the right-side actions
             // onto a second row at 1024-1280px viewport widths.
-            <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+            <nav aria-label={tShell('breadcrumb')} className="flex min-w-0 flex-1 items-center gap-2 text-sm">
               <Link href={crumb.parent} className="text-muted-foreground shrink-0 hover:text-foreground">
                 {crumb.label}
               </Link>
@@ -284,8 +288,8 @@ export function PageShell({
               <Button
                 onClick={openAddExpense}
                 size="icon"
-                aria-label="Add expense"
-                title="Add expense"
+                aria-label={tShell('addExpense')}
+                title={tShell('addExpense')}
                 className="rounded-full"
               >
                 <Icon name="plus" size={16} stroke={2} />
@@ -300,7 +304,7 @@ export function PageShell({
 
       {tabBarTabs.length > 0 && (
         <nav
-          aria-label="Main navigation"
+          aria-label={tShell('primaryNav')}
           className="border-border bg-background fixed inset-x-0 bottom-0 z-50 flex h-[88px] items-start justify-around border-t px-2 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
         >
           {tabBarTabs.map((tab) => {
