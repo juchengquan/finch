@@ -1459,6 +1459,9 @@
       }
     }
   },
+  "ui": {
+    "dialogClose": "关闭"
+  },
   "common": {
     "cancel": "取消",
     "save": "保存",

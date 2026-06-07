@@ -1458,6 +1458,9 @@
       }
     }
   },
+  "ui": {
+    "dialogClose": "Close"
+  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",
