@@ -1,11 +1,75 @@
 {
   "settings": {
+    "ledger": {
+      "activeSection": "Active ledger",
+      "switchHint": "Switch ledgers from the sidebar.",
+      "thisLedgerSection": "This ledger",
+      "baseCurrency": "Base currency",
+      "baseCurrencyHint": "Reporting currency for this ledger. Changing it rewrites every locked conversion in {count, plural, one {# transaction} other {# transactions}} using the rate on each transaction's own date.",
+      "baseCurrencyToast": "Base currency changed to {currency}",
+      "baseCurrencyToastDescription": "{count, plural, one {# transaction} other {# transactions}} reconverted.",
+      "displayCurrency": "Display currency",
+      "categoriesRow": "Categories",
+      "categoriesCount": "{count, plural, one {# category} other {# categories}}",
+      "nameAppearance": "Name & appearance",
+      "editButton": "Edit",
+      "defaultLedgerRow": "Default ledger",
+      "makeDefaultButton": "Make default",
+      "defaultedToast": "{name} is now the default ledger.",
+      "exchangeRatesSection": "Exchange rates",
+      "dangerZoneSection": "Danger zone",
+      "deleteRow": "Delete this ledger",
+      "deleteButton": "Delete…",
+      "lastLedgerHint": "You can't delete the only ledger. Create another first.",
+      "baseChangeDialog": {
+        "title": "Change base currency to {currency}?",
+        "description": "Every locked amount_base in this ledger ({count, plural, one {# transaction} other {# transactions}}) will be re-converted under the new base, using the rate on each transaction's own date. Account balances are then re-derived. Reversible by switching back.",
+        "confirm": "Change base"
+      },
+      "editDialog": {
+        "title": "Edit ledger",
+        "description": "Rename, recolor, or rewrite the tagline. Base currency is changed separately (it rewrites every locked conversion).",
+        "name": "Name",
+        "color": "Color",
+        "tagline": "Tagline",
+        "taglinePlaceholder": "One-line description shown in the switcher",
+        "updatedToast": "Updated"
+      },
+      "deleteDialog": {
+        "title": "Delete \"{name}\"?",
+        "description": "This permanently deletes the ledger and everything in it: {accounts, plural, one {# account} other {# accounts}}, {txns, plural, one {# transaction} other {# transactions}}, and every budget, scheduled item, rule, holding, receipt, and category scoped to it. Not recoverable unless you restore from a backup.",
+        "typeToConfirm": "Type {name} to confirm",
+        "confirmButton": "Delete ledger",
+        "deletedToast": "Deleted \"{name}\""
+      }
+    },
     "account": {
       "title": "Settings",
+      "appearance": "Appearance",
+      "theme": "Theme",
       "language": {
         "row": "Language",
         "english": "English",
         "chinese": "中文(简体)"
+      },
+      "bottomBar": {
+        "section": "Bottom bar",
+        "hint": "Choose and reorder the four sections in your bottom navigation. The center Add button is always shown."
+      },
+      "data": {
+        "section": "Data",
+        "sampleRow": "Sample data",
+        "resetButton": "Reset",
+        "resetSuccess": "Sample data restored",
+        "hint": "Your changes are saved on this device. Reset restores the original sample data."
+      },
+      "metadata": {
+        "title": "Database",
+        "app": "App:",
+        "schema": "Schema:",
+        "updated": "Updated:",
+        "rows": "Rows:",
+        "rowsSummary": "{txns} txns · {accounts} accounts · {categories} categories"
       },
       "backup": {
         "section": "Backup & restore",
@@ -50,10 +114,29 @@
           "noop": "No backup created (auto-backup is off)"
         },
         "restore": {
+          "row": "Restore from backup",
+          "noBackups": "No backups yet",
+          "pickPlaceholder": "Pick backup",
           "dialogTitle": "Restore this backup?",
           "dialogDescription": "Replaces the current database with the contents of this backup. A snapshot of the live DB is created first so you can undo this.",
-          "confirm": "Restore"
-        }
+          "dialogDescriptionDetail": "Restoring {name} ({date} · {size}) will replace your current database. A snapshot of the current state will be saved automatically before the swap.",
+          "confirm": "Restore",
+          "busy": "Restoring…",
+          "success": "Backup restored",
+          "successDescription": "Previous data backed up to {file}",
+          "failure": "Restore failed"
+        },
+        "importDialog": {
+          "description": "This will replace your current database with the contents of {name}. A backup of your current data will be saved automatically before the swap.",
+          "fileSize": "File size: {size}. The file is validated (SQLite header, schema version, foreign keys, checksum) before it replaces your live database.",
+          "importSuccess": "Database imported",
+          "importSuccessDescription": "Previous data backed up to {file}",
+          "importFailure": "Import failed"
+        },
+        "backupNowToast": {
+          "failure": "Backup failed"
+        },
+        "hint": "Your data lives in a SQLite file on the server and syncs on every change. Importing replaces the live file — a snapshot of the current state is saved automatically before the swap."
       }
     }
   },

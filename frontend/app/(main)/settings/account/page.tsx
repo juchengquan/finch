@@ -71,6 +71,7 @@ export default function AccountSettingsPage() {
   const { locale, setLocale } = useAppLocale();
   const tSettings = useTranslations('settings.account');
   const tBackup = useTranslations('settings.account.backup');
+  const tCommon = useTranslations('common');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<{ file: File; metadata: DbMetadataView } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
@@ -122,15 +123,15 @@ export default function AccountSettingsPage() {
     setBusy(true);
     try {
       const r: ImportResult = await backup.importFile(pendingFile.file);
-      toast.success('Database imported', {
-        description: `Previous data backed up to ${r.backupPath.split(/[\\/]/).pop()}`,
+      toast.success(tBackup('importDialog.importSuccess'), {
+        description: tBackup('importDialog.importSuccessDescription', { file: r.backupPath.split(/[\\/]/).pop() ?? '' }),
       });
       setPendingFile(null);
       // Force a fresh server projection by reloading — the server cache was
       // dropped on swap and the store needs to re-hydrate from the new file.
       setTimeout(() => window.location.reload(), 800);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Import failed');
+      toast.error(err instanceof Error ? err.message : tBackup('importDialog.importFailure'));
     } finally {
       setBusy(false);
     }
@@ -141,13 +142,13 @@ export default function AccountSettingsPage() {
     setBusy(true);
     try {
       const r = await backup.restore(restoreTarget.name);
-      toast.success('Backup restored', {
-        description: `Previous data backed up to ${r.backupPath.split(/[\\/]/).pop()}`,
+      toast.success(tBackup('restore.success'), {
+        description: tBackup('restore.successDescription', { file: r.backupPath.split(/[\\/]/).pop() ?? '' }),
       });
       setRestoreTarget(null);
       setTimeout(() => window.location.reload(), 800);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Restore failed');
+      toast.error(err instanceof Error ? err.message : tBackup('restore.failure'));
     } finally {
       setBusy(false);
     }
@@ -157,9 +158,9 @@ export default function AccountSettingsPage() {
     setBusy(true);
     try {
       const r = await backup.backupNow();
-      toast.success('Backup created', { description: r.path.split(/[\\/]/).pop() });
+      toast.success(tBackup('backupNow.success'), { description: r.path.split(/[\\/]/).pop() });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Backup failed');
+      toast.error(err instanceof Error ? err.message : tBackup('backupNowToast.failure'));
     } finally {
       setBusy(false);
     }
@@ -167,7 +168,7 @@ export default function AccountSettingsPage() {
 
   return (
     <MobilePage>
-      <ScreenHeader title="Settings" trailing={<SearchButton />} />
+      <ScreenHeader title={tSettings('title')} trailing={<SearchButton />} />
 
       <div className="px-5">
         <SettingsTabs />
@@ -175,9 +176,9 @@ export default function AccountSettingsPage() {
 
       <div className="px-5 pb-28">
         <div className="text-muted-foreground pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Appearance
+          {tSettings('appearance')}
         </div>
-        <Row icon="sparkle" label="Theme">
+        <Row icon="sparkle" label={tSettings('theme')}>
           <ThemeToggle />
         </Row>
         <Row icon="doc" label={tSettings('language.row')}>
@@ -200,32 +201,31 @@ export default function AccountSettingsPage() {
 
         <div className="md:hidden">
           <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-            Bottom bar
+            {tSettings('bottomBar.section')}
           </div>
           <MobileTabsEditor />
           <div className="text-muted-foreground pt-2 text-xs">
-            Choose and reorder the four sections in your bottom navigation. The center
-            Add button is always shown.
+            {tSettings('bottomBar.hint')}
           </div>
         </div>
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
-          Data
+          {tSettings('data.section')}
         </div>
-        <Row icon="sync" label="Sample data">
+        <Row icon="sync" label={tSettings('data.sampleRow')}>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
               reset();
-              toast.success('Sample data restored');
+              toast.success(tSettings('data.resetSuccess'));
             }}
           >
-            Reset
+            {tSettings('data.resetButton')}
           </Button>
         </Row>
         <div className="text-muted-foreground pt-2 text-xs">
-          Your changes are saved on this device. Reset restores the original sample data.
+          {tSettings('data.hint')}
         </div>
 
         <div className="text-muted-foreground pt-6 pb-2 font-mono text-[10px] tracking-wider uppercase">
@@ -233,23 +233,25 @@ export default function AccountSettingsPage() {
         </div>
         {backup.metadata && (
           <div className="bg-card border-border mb-2 rounded-xl border p-3.5 text-[11px]">
-            <div className="text-muted-foreground mb-1.5 font-mono uppercase tracking-wider text-[10px]">Database</div>
+            <div className="text-muted-foreground mb-1.5 font-mono uppercase tracking-wider text-[10px]">{tSettings('metadata.title')}</div>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               <span>
-                <span className="text-muted-foreground">App:</span> v{backup.metadata.appVersion}
+                <span className="text-muted-foreground">{tSettings('metadata.app')}</span> v{backup.metadata.appVersion}
               </span>
               <span>
-                <span className="text-muted-foreground">Schema:</span> {backup.metadata.schemaVersion}
+                <span className="text-muted-foreground">{tSettings('metadata.schema')}</span> {backup.metadata.schemaVersion}
               </span>
               <span>
-                <span className="text-muted-foreground">Updated:</span> {fmtDate(backup.metadata.updatedAt)}
+                <span className="text-muted-foreground">{tSettings('metadata.updated')}</span> {fmtDate(backup.metadata.updatedAt)}
               </span>
               {backup.metadata.rowCounts && (
                 <span>
-                  <span className="text-muted-foreground">Rows:</span>{' '}
-                  {backup.metadata.rowCounts.transactions ?? 0} txns ·{' '}
-                  {backup.metadata.rowCounts.accounts ?? 0} accounts ·{' '}
-                  {backup.metadata.rowCounts.categories ?? 0} categories
+                  <span className="text-muted-foreground">{tSettings('metadata.rows')}</span>{' '}
+                  {tSettings('metadata.rowsSummary', {
+                    txns: backup.metadata.rowCounts.transactions ?? 0,
+                    accounts: backup.metadata.rowCounts.accounts ?? 0,
+                    categories: backup.metadata.rowCounts.categories ?? 0,
+                  })}
                 </span>
               )}
             </div>
@@ -329,16 +331,16 @@ export default function AccountSettingsPage() {
             {busy ? tBackup('backupNow.busy') : tBackup('backupNow.button')}
           </Button>
         </Row>
-        <Row icon="upload" label="Restore from backup">
+        <Row icon="upload" label={tBackup('restore.row')}>
           {backup.backups.length === 0 ? (
-            <span className="text-muted-foreground text-[11px]">No backups yet</span>
+            <span className="text-muted-foreground text-[11px]">{tBackup('restore.noBackups')}</span>
           ) : (
             <Select
               value=""
               onValueChange={(name) => setRestoreTarget(backup.backups.find((b) => b.name === name) ?? null)}
             >
               <SelectTrigger size="sm" className="w-[170px]">
-                <SelectValue placeholder="Pick backup" />
+                <SelectValue placeholder={tBackup('restore.pickPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {backup.backups.map((b) => (
@@ -351,33 +353,27 @@ export default function AccountSettingsPage() {
           )}
         </Row>
         <div className="text-muted-foreground pt-2 text-xs">
-          Your data lives in a SQLite file on the server and syncs on every change. Importing
-          replaces the live file — a snapshot of the current state is saved automatically before
-          the swap.
+          {tBackup('hint')}
         </div>
       </div>
 
       <Dialog open={!!pendingFile} onOpenChange={(o) => !o && !busy && setPendingFile(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import database?</DialogTitle>
+            <DialogTitle>{tBackup('importDb.dialogTitle')}</DialogTitle>
             <DialogDescription>
-              This will replace your current database with the contents of{' '}
-              <span className="font-mono">{pendingFile?.file.name}</span>. A backup of your
-              current data will be saved automatically before the swap.
+              {tBackup('importDialog.description', { name: pendingFile?.file.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="text-muted-foreground bg-secondary/40 rounded-lg p-3 text-[12px]">
-            File size: {pendingFile ? fmtBytes(pendingFile.file.size) : ''}.
-            The file is validated (SQLite header, schema version, foreign keys, checksum) before
-            it replaces your live database.
+            {tBackup('importDialog.fileSize', { size: pendingFile ? fmtBytes(pendingFile.file.size) : '' })}
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" disabled={busy}>Cancel</Button>
+              <Button variant="outline" disabled={busy}>{tCommon('cancel')}</Button>
             </DialogClose>
             <Button onClick={() => void confirmImport()} disabled={busy}>
-              {busy ? 'Importing…' : 'Import'}
+              {busy ? tBackup('importDb.busy') : tBackup('importDb.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -386,24 +382,22 @@ export default function AccountSettingsPage() {
       <Dialog open={!!restoreTarget} onOpenChange={(o) => !o && !busy && setRestoreTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Restore this backup?</DialogTitle>
+            <DialogTitle>{tBackup('restore.dialogTitle')}</DialogTitle>
             <DialogDescription>
-              {restoreTarget && (
-                <>
-                  Restoring <span className="font-mono">{restoreTarget.name}</span> (
-                  {fmtDate(restoreTarget.createdAt)} · {fmtBytes(restoreTarget.size)}) will
-                  replace your current database. A snapshot of the current state will be saved
-                  automatically before the swap.
-                </>
-              )}
+              {restoreTarget &&
+                tBackup('restore.dialogDescriptionDetail', {
+                  name: restoreTarget.name,
+                  date: fmtDate(restoreTarget.createdAt),
+                  size: fmtBytes(restoreTarget.size),
+                })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" disabled={busy}>Cancel</Button>
+              <Button variant="outline" disabled={busy}>{tCommon('cancel')}</Button>
             </DialogClose>
             <Button onClick={() => void confirmRestore()} disabled={busy}>
-              {busy ? 'Restoring…' : 'Restore'}
+              {busy ? tBackup('restore.busy') : tBackup('restore.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

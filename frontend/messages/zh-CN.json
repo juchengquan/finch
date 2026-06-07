@@ -1,11 +1,75 @@
 {
   "settings": {
+    "ledger": {
+      "activeSection": "当前账本",
+      "switchHint": "在侧栏切换账本。",
+      "thisLedgerSection": "此账本",
+      "baseCurrency": "基础货币",
+      "baseCurrencyHint": "此账本的报告货币。更改后会按每笔交易自身日期的汇率,重新计算该账本下全部 {count} 笔交易的锁定折算金额。",
+      "baseCurrencyToast": "基础货币已改为 {currency}",
+      "baseCurrencyToastDescription": "已重新折算 {count} 笔交易。",
+      "displayCurrency": "显示货币",
+      "categoriesRow": "类别",
+      "categoriesCount": "{count} 个类别",
+      "nameAppearance": "名称与外观",
+      "editButton": "编辑",
+      "defaultLedgerRow": "默认账本",
+      "makeDefaultButton": "设为默认",
+      "defaultedToast": "{name} 已设为默认账本。",
+      "exchangeRatesSection": "汇率",
+      "dangerZoneSection": "危险操作",
+      "deleteRow": "删除此账本",
+      "deleteButton": "删除…",
+      "lastLedgerHint": "无法删除唯一的账本。请先创建另一个。",
+      "baseChangeDialog": {
+        "title": "将基础货币改为 {currency}?",
+        "description": "此账本的全部锁定 amount_base({count} 笔交易)将按每笔交易自身日期的汇率,在新的基础下重新折算。账户余额会同步重新计算。可通过切回原货币恢复。",
+        "confirm": "更改基础"
+      },
+      "editDialog": {
+        "title": "编辑账本",
+        "description": "重命名、改色或修改标语。基础货币需单独更改(它会重写所有锁定的折算金额)。",
+        "name": "名称",
+        "color": "颜色",
+        "tagline": "标语",
+        "taglinePlaceholder": "在切换器中显示的一句话描述",
+        "updatedToast": "已更新"
+      },
+      "deleteDialog": {
+        "title": "删除「{name}」?",
+        "description": "这将永久删除该账本及其全部内容:{accounts} 个账户、{txns} 笔交易,以及其所属的全部预算、计划项、规则、持仓、票据和类别。除非从备份恢复,否则无法挽回。",
+        "typeToConfirm": "输入 {name} 以确认",
+        "confirmButton": "删除账本",
+        "deletedToast": "已删除「{name}」"
+      }
+    },
     "account": {
       "title": "设置",
+      "appearance": "外观",
+      "theme": "主题",
       "language": {
         "row": "语言",
         "english": "English",
         "chinese": "中文(简体)"
+      },
+      "bottomBar": {
+        "section": "底部导航",
+        "hint": "选择并排列底部导航的四个分区。中间的添加按钮始终显示。"
+      },
+      "data": {
+        "section": "数据",
+        "sampleRow": "示例数据",
+        "resetButton": "重置",
+        "resetSuccess": "示例数据已恢复",
+        "hint": "更改保存在此设备上。重置将恢复原始示例数据。"
+      },
+      "metadata": {
+        "title": "数据库",
+        "app": "应用:",
+        "schema": "结构:",
+        "updated": "更新时间:",
+        "rows": "行数:",
+        "rowsSummary": "{txns} 条交易 · {accounts} 个账户 · {categories} 个类别"
       },
       "backup": {
         "section": "备份与恢复",
@@ -50,10 +114,29 @@
           "noop": "未创建备份(自动备份已关闭)"
         },
         "restore": {
+          "row": "从备份恢复",
+          "noBackups": "暂无备份",
+          "pickPlaceholder": "选择备份",
           "dialogTitle": "恢复此备份?",
           "dialogDescription": "用此备份的内容替换当前数据库。当前数据库将先备份一次,以便撤销。",
-          "confirm": "恢复"
-        }
+          "dialogDescriptionDetail": "恢复 {name}({date} · {size})将替换当前数据库。当前数据库将先自动备份一次,以便撤销。",
+          "confirm": "恢复",
+          "busy": "正在恢复…",
+          "success": "备份已恢复",
+          "successDescription": "原数据已备份至 {file}",
+          "failure": "恢复失败"
+        },
+        "importDialog": {
+          "description": "将用 {name} 的内容替换当前数据库。当前数据库将先自动备份一次,以便撤销。",
+          "fileSize": "文件大小:{size}。导入前会校验文件(SQLite 头、结构版本、外键、校验和),然后才替换当前数据库。",
+          "importSuccess": "数据库已导入",
+          "importSuccessDescription": "原数据已备份至 {file}",
+          "importFailure": "导入失败"
+        },
+        "backupNowToast": {
+          "failure": "备份失败"
+        },
+        "hint": "你的数据保存在服务器上的 SQLite 文件中,每次更改都会同步。导入会替换它 — 替换前会自动保存一次当前状态的快照。"
       }
     }
   },
