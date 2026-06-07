@@ -128,12 +128,13 @@ async function insertSealedEntry(exec: Exec, hdr: EntryHeader, legs: RawLeg[]): 
 }
 
 /** Append an FX residue leg when Σ amountBase is not zero (§5.1 / I1).
- *  Threshold 0.005 — same as postEntry's appendResidue. */
-function appendResidueIfNeeded(legs: RawLeg[], fxCategoryId: string, base: string): void {
+ *  Threshold 0.005 — same as postEntry's appendResidue.
+ *  The residue leg id is `${entryId}-fx` (canonical per §8.3). */
+function appendResidueIfNeeded(legs: RawLeg[], fxCategoryId: string, base: string, entryId: string): void {
   const residue = r2(legs.reduce((s, l) => s + l.amountBase, 0));
   if (Math.abs(residue) >= 0.005) {
     legs.push({
-      id: `${legs[0].id}-fx`,
+      id: `${entryId}-fx`,
       accountId: null,
       categoryId: fxCategoryId,
       amount: r2(-residue),
@@ -283,8 +284,15 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
       if (legCurrency !== acctCcy) {
         origAmount = amount;
         origCurrency = legCurrency;
-        const conv = await convertToBase(exec, amount, legCurrency, acctCcy, String(leg.date));
-        amount = conv.amountBase; // re-denominated native in account currency
+        if (acctCcy === base) {
+          // Account is in the ledger base: amount_base IS already the native
+          // figure in that currency — use it directly to satisfy I9 (amount ==
+          // amount_base when currency == base_currency).
+          amount = amountBase;
+        } else {
+          const conv = await convertToBase(exec, amount, legCurrency, acctCcy, String(leg.date));
+          amount = conv.amountBase; // re-denominated native in account currency
+        }
         currency = acctCcy;
         // amount_base (ledger base) stays locked as the row's existing figure.
       }
@@ -311,7 +319,7 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
     }
 
     // Residue leg.
-    appendResidueIfNeeded(legs, sys.fx, base);
+    appendResidueIfNeeded(legs, sys.fx, base, entryId);
 
     const hdr: EntryHeader = {
       id: entryId,
@@ -378,8 +386,15 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
     if (txnCurrency !== acctCcy) {
       origAmount = amount;
       origCurrency = txnCurrency;
-      const conv = await convertToBase(exec, amount, txnCurrency, acctCcy, txnDate);
-      amount = conv.amountBase; // re-denominated native in account currency
+      if (acctCcy === base) {
+        // Account is in the ledger base: amount_base IS already the native
+        // figure in that currency — use it directly to satisfy I9 (amount ==
+        // amount_base when currency == base_currency).
+        amount = amountBase;
+      } else {
+        const conv = await convertToBase(exec, amount, txnCurrency, acctCcy, txnDate);
+        amount = conv.amountBase; // re-denominated native in account currency
+      }
       currency = acctCcy;
     }
 
@@ -456,7 +471,7 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
         });
       }
       // Residue rule for cross-currency rounding.
-      appendResidueIfNeeded(legs, sys.fx, base);
+      appendResidueIfNeeded(legs, sys.fx, base, txnId);
     }
 
     const hdr: EntryHeader = {
@@ -533,7 +548,7 @@ export async function moveLegacyData(exec: Exec): Promise<CutoverResult> {
     ];
 
     // Residue rule (covers historical rounding in opening_balance_base).
-    appendResidueIfNeeded(legs, sys.fx, base);
+    appendResidueIfNeeded(legs, sys.fx, base, entryId);
 
     const hdr: EntryHeader = {
       id: entryId,
