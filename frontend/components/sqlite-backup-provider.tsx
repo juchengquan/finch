@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetchDbInfo } from '@/lib/api-client';
-import type { AuditProblem } from '@/lib/db/entries';
+import type { DbAudit } from '@/lib/db/entries';
 
 const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
@@ -38,7 +38,7 @@ export interface ImportResult {
 
 interface BackupContextValue {
   serverPath: string | null;
-  audit: { problems: AuditProblem[]; problemCount: number; checkedAt: string } | null;
+  audit: DbAudit | null;
   metadata: DbMetadataView | null;
   backups: BackupEntry[];
   download: () => Promise<void>;
@@ -72,7 +72,7 @@ export function useBackup(): BackupContextValue {
 
 export function SqliteBackupProvider({ children }: { children: React.ReactNode }) {
   const [serverPath, setServerPath] = useState<string | null>(null);
-  const [audit, setAudit] = useState<{ problems: AuditProblem[]; problemCount: number; checkedAt: string } | null>(null);
+  const [audit, setAudit] = useState<DbAudit | null>(null);
   const [metadata, setMetadata] = useState<DbMetadataView | null>(null);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerDb } from '@/lib/db/server';
-import { auditLedger, type AuditProblem } from '@/lib/db/entries';
+import { auditLedger, type DbAudit } from '@/lib/db/entries';
 import { readMetadata } from '@/lib/db/queries/metadata';
 
 export const runtime = 'nodejs';
@@ -11,11 +11,7 @@ const MAX_PROBLEMS = 50;
 export interface DbInfoResponse {
   path: string;
   schemaVersion: string;
-  audit: {
-    problems: AuditProblem[];
-    problemCount: number;
-    checkedAt: string;
-  };
+  audit: DbAudit;
 }
 
 export async function GET() {

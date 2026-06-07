@@ -712,6 +712,15 @@ export interface AuditProblem {
   detail: string;
 }
 
+/** The audit-summary shape carried by /api/db-info, the backup-provider
+ *  context, and the Settings ▸ Audit Row. One alias so all three reference
+ *  the same field set. */
+export interface DbAudit {
+  problems: AuditProblem[];
+  problemCount: number;
+  checkedAt: string;
+}
+
 /** Read-only semantic sweep over the entries ledger (design doc §3.3 / I8).
  *  Post-cutover, postings drive accounts.current_balance via the post-insert
  *  `tr_post_balance` trigger (entries-schema.ts) plus explicit
