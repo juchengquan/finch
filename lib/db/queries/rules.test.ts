@@ -97,8 +97,9 @@ test('schema shape: rules table + index + applied_rule_ids column exist', async 
       'is_active', 'run_on_edit', 'last_applied_at', 'created_at', 'updated_at',
     ]),
   );
-  const txnCols = (await exec('PRAGMA table_info(transactions)')).map((r) => String(r.name));
-  expect(txnCols).toContain('applied_rule_ids');
+  // applied_rule_ids is on entries in the double-entry schema.
+  const entryCols = (await exec('PRAGMA table_info(entries)')).map((r) => String(r.name));
+  expect(entryCols).toContain('applied_rule_ids');
   const idx = (await exec('PRAGMA index_list(rules)')).map((r) => String(r.name));
   expect(idx).toContain('idx_rules_ledger_active');
 });

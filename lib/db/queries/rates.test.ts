@@ -70,12 +70,22 @@ test('addTransaction converts a foreign amount and locks the rate', async () => 
     merchant: 'Yodobashi',
     date: '2026-05-24',
   });
-  const [row] = await exec('SELECT amount, amount_base, exchange_rate, currency FROM transactions WHERE id = ?', [id]);
-  expect(Number(row.amount)).toBe(-3820);
-  expect(String(row.currency)).toBe('JPY');
+  // §2: query via entries + postings instead of transactions.
+  // Foreign-currency addTransaction stores orig_amount/orig_currency; amount is the
+  // account-native (USD) amount; amount_base is ledger-base (USD == account-native here).
+  // exchange_rate = account-ccy → ledger-base rate (1.0 for USD→USD). The effective
+  // JPY→USD rate = |amount_base / orig_amount|.
+  const [row] = await exec(
+    'SELECT p.orig_amount, p.orig_currency, p.amount, p.amount_base FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL',
+    [id],
+  );
+  expect(Number(row.orig_amount)).toBe(-3820);
+  expect(String(row.orig_currency)).toBe('JPY');
   // JPY → USD direct: rate = rate(JPY) / rate(USD) = 0.00650 / 1.
   expect(Number(row.amount_base)).toBeCloseTo(-3820 * 0.00650, 2);
-  expect(Number(row.exchange_rate)).toBeCloseTo(0.00650, 6);
+  // The effective rate locked at the date (derivable from orig/base amounts).
+  const effectiveRate = Math.abs(Number(row.amount_base)) / Math.abs(Number(row.orig_amount));
+  expect(effectiveRate).toBeCloseTo(0.00650, 6);
 });
 
 test('write-through: a resolved fallback rate is pinned under the requested date', async () => {

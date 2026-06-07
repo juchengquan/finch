@@ -9,6 +9,50 @@
 //
 // One file holds ALL ledgers; every per-ledger table carries `ledger_id`.
 
+import { ENTRIES_SCHEMA, CATEGORIES_UPGRADE } from './entries-schema';
+
+// Receipt attachments for the double-entry entries layer (PR B). Same
+// pointer-only design as transaction_attachments (RECEIPT_PHOTOS_PLAN §2),
+// which it replaces at cutover; rel_path stays server-internal.
+// Also consumed by legacyFixtureDb() in cutover.test.ts.
+export const ENTRY_ATTACHMENTS_DDL = `
+CREATE TABLE IF NOT EXISTS entry_attachments (
+  id                TEXT PRIMARY KEY,
+  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  entry_id          TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+  kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+  rel_path          TEXT NOT NULL,
+  mime_type         TEXT NOT NULL,
+  byte_size         INTEGER NOT NULL,
+  sha256            TEXT NOT NULL,
+  original_filename TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_eattach_entry  ON entry_attachments(entry_id);
+CREATE INDEX IF NOT EXISTS idx_eattach_ledger ON entry_attachments(ledger_id);`;
+
+// FTS over entries.description + notes (replaces transactions_fts at cutover).
+// Also consumed by legacyFixtureDb() in cutover.test.ts.
+export const ENTRIES_FTS_DDL = `
+CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
+  id UNINDEXED,
+  description,
+  notes,
+  tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_insert AFTER INSERT ON entries BEGIN
+  INSERT INTO entries_fts (id, description, notes)
+  VALUES (NEW.id, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_delete AFTER DELETE ON entries BEGIN
+  DELETE FROM entries_fts WHERE id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS tr_entry_fts_update AFTER UPDATE OF description, notes ON entries BEGIN
+  UPDATE entries_fts SET description = COALESCE(NEW.description, ''), notes = COALESCE(NEW.notes, '')
+   WHERE id = NEW.id;
+END;`;
+
 export const SCHEMA = `
 PRAGMA foreign_keys = ON;
 
@@ -53,19 +97,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   name                 TEXT NOT NULL,
   type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
   currency             TEXT NOT NULL DEFAULT 'SGD',
-  -- Cached running balance. Kept in sync by recomputeAccount() — see
-  -- queries/accounts.ts. Treat as derived state; opening_balance is the
-  -- source of truth for the starting point.
+  -- Cached running balance. Kept in sync by recomputeAccountFromPostings() —
+  -- see queries/accounts.ts and lib/db/entries.ts. Treat as derived state;
+  -- the opening entry (open-<id>) is the source of truth for the starting
+  -- point and is included in the postings sum.
   current_balance      REAL NOT NULL DEFAULT 0,
-  opening_balance      REAL NOT NULL DEFAULT 0,
-  -- Ledger-base value of opening_balance, locked at account creation using the
-  -- rate on the creation date. Stays put when the FX rate moves later, so the
-  -- account's cost basis (opening_balance_base + Σ amount_base of confirmed
-  -- transactions) is stable. The drift between cost basis and the live
-  -- (current_balance × today's rate) figure is the unrealized FX gain/loss.
-  -- Re-stamped only when the ledger's base currency itself changes (see
-  -- recomputeAmountBases).
-  opening_balance_base REAL NOT NULL DEFAULT 0,
   color                TEXT,
   -- Sort order within the account group (and within "ungrouped"). Smaller
   -- values come first.
@@ -105,14 +141,20 @@ CREATE TABLE IF NOT EXISTS categories (
   -- level-2 parent is deleted, no rows are destroyed).
   parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   name       TEXT NOT NULL,
-  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+  kind       TEXT NOT NULL CHECK(kind IN ('expense','income','equity')),
   icon       TEXT,
   color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  -- Equity system rows (DOUBLE_ENTRY_PLAN §2.3): 'opening'/'adjustment'/'fx'
+  -- markers for the three per-ledger system categories. NULL = ordinary
+  -- user category. kind='equity' rows are hidden from pickers and excluded
+  -- from spend aggregations.
+  system     TEXT CHECK(system IN ('opening','adjustment','fx')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id) WHERE parent_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cat_system ON categories(ledger_id, system) WHERE system IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
   id         TEXT PRIMARY KEY,
@@ -121,12 +163,6 @@ CREATE TABLE IF NOT EXISTS tags (
   color      TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS transaction_tags (
-  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  tag_id         TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (transaction_id, tag_id)
 );
 
 CREATE TABLE IF NOT EXISTS counterparties (
@@ -141,88 +177,6 @@ CREATE TABLE IF NOT EXISTS counterparties (
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );
-
--- Grouping row for a transfer's two transaction legs. The amounts live on the
--- legs (each leg's native amount plus amount_base); this row only carries the
--- currencies, the locked from-to rate, and a shared note. listTransfers
--- reconstructs the figures from the legs, so no amount is duplicated here.
-CREATE TABLE IF NOT EXISTS transfer_groups (
-  id            TEXT PRIMARY KEY,
-  ledger_id     TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  from_currency TEXT NOT NULL,
-  to_currency   TEXT NOT NULL,
-  exchange_rate REAL,
-  notes         TEXT,
-  created_at    TEXT NOT NULL,
-  updated_at    TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS transactions (
-  id                 TEXT PRIMARY KEY,
-  ledger_id          TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  account_id         TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  date               TEXT NOT NULL,
-  time               TEXT,
-  amount             REAL NOT NULL,
-  amount_base        REAL NOT NULL,
-  -- Rate used to derive amount_base from amount at txn time; locked so a later
-  -- rates-table edit doesn't reshape history. The rate's effective date is the
-  -- txn's own date column — we don't carry a separate exchange_rate_date.
-  exchange_rate      REAL NOT NULL,
-  description        TEXT,
-  category_id        TEXT REFERENCES categories(id) ON DELETE SET NULL,
-  -- Link to the canonical counterparty when one matches. NULL = free-text
-  -- merchant (one-off, or no catalog entry). Renames on the counterparty
-  -- follow history automatically because display picks the canonical name
-  -- via this FK in projectState. SET NULL on delete: deleting a merchant
-  -- leaves the transaction with its plain description text intact.
-  counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
-  transfer_group_id  TEXT REFERENCES transfer_groups(id) ON DELETE SET NULL,
-  -- A refund row's link back to the original expense it offsets. SET NULL on
-  -- delete: if the original expense is removed, the refund survives as an
-  -- orphan (the money really did come back). One expense can have many refunds.
-  refunded_transaction_id TEXT REFERENCES transactions(id) ON DELETE SET NULL,
-  kind               TEXT NOT NULL DEFAULT 'expense' CHECK(kind IN ('income','expense','transfer','adjustment','refund')),
-  status             TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed')),
-  confirmed_at       TEXT,
-  source_template_id TEXT,
-  currency           TEXT NOT NULL DEFAULT 'SGD',
-  notes              TEXT,
-  -- Reconcile-to-statement clearing flag (RECONCILE_PLAN section 2.1).
-  -- Timestamp set when the user ticks this row off against a real statement;
-  -- null = uncleared. Independent of the status column: a confirmed
-  -- transaction can still be uncleared (logged but not yet seen on a statement).
-  cleared_at         TEXT,
-  -- Rules-engine observability (RULES_ENGINE_PLAN section 2.2). JSON array of
-  -- rule ids that touched this row, in apply order. Answers "why is this
-  -- Groceries?" on the detail sheet and doubles as the infinite-loop guard:
-  -- the engine skips rows it already generated (e.g. a rule's auto-transfer
-  -- output must not itself trigger rules). null = the engine never touched it.
-  applied_rule_ids   TEXT,
-  -- Review triage flag (INSPIRATION_IDEAS section 5.1). Timestamp set when the
-  -- user marks the row reviewed; null = needs review. Independent of status
-  -- and cleared_at: "I've looked at this and it's correct" is a different
-  -- question from "this is confirmed" or "this is on a statement". A new row
-  -- starts unreviewed unless a rule's mark_reviewed action clears it at insert.
-  reviewed_at        TEXT,
-  created_at         TEXT NOT NULL,
-  updated_at         TEXT NOT NULL
-);
-
--- Ad-hoc category splits for one transaction. When a row has splits, the
--- splits override the parent transaction's category in aggregations: the
--- parent's category_id stays as a default but isn't used while splits exist.
--- Splits' amounts (native + base) must sum to the parent's amount/amount_base.
-CREATE TABLE IF NOT EXISTS transaction_splits (
-  id             TEXT PRIMARY KEY,
-  transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  category_id    TEXT REFERENCES categories(id) ON DELETE SET NULL,
-  amount         REAL NOT NULL,
-  amount_base    REAL NOT NULL,
-  description    TEXT,
-  sort_order     INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_txn_splits_tx ON transaction_splits(transaction_id);
 
 CREATE TABLE IF NOT EXISTS budgets (
   id                 TEXT PRIMARY KEY,
@@ -374,29 +328,6 @@ CREATE TABLE IF NOT EXISTS rules (
   updated_at   TEXT NOT NULL
 );
 
--- Receipt attachments (RECEIPT_PHOTOS_PLAN section 2). Pointer rows ONLY —
--- the actual photos/PDFs live on the server filesystem under the directory
--- pointed at by the FINCH_DB_DIR env var (joined with rel_path), NEVER as
--- DB blobs. rel_path is server-internal
--- and deliberately omitted from the client projection; clients reach an
--- attachment's bytes via GET /api/attachments/:id, which resolves the path
--- server-side under a traversal guard. sha256 lets the app refuse a tampered
--- or missing file and doubles as the integrity check the future .finch pack
--- (PACK_FORMAT_PLAN) validates per attachment.
-CREATE TABLE IF NOT EXISTS transaction_attachments (
-  id                TEXT PRIMARY KEY,
-  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  transaction_id    TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
-  rel_path          TEXT NOT NULL,
-  mime_type         TEXT NOT NULL,
-  byte_size         INTEGER NOT NULL,
-  sha256            TEXT NOT NULL,
-  original_filename TEXT,
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
-);
-
 -- Transitional store slices not yet migrated to real tables (pending, scheduled,
 -- and the override maps). Each later phase moves a key out of here into its
 -- proper table. Holds one JSON value per key.
@@ -423,6 +354,17 @@ CREATE TABLE IF NOT EXISTS db_metadata (
   checksum        TEXT
 );
 
+-- ===== Double-entry core (DOUBLE_ENTRY_PLAN; PR A #114, canonicalized in PR B) =====
+${ENTRIES_SCHEMA}
+
+-- Receipt attachments, re-pointed at entries (PR B). Same pointer-only design
+-- as transaction_attachments (RECEIPT_PHOTOS_PLAN §2), which it replaces at
+-- cutover; rel_path stays server-internal.
+${ENTRY_ATTACHMENTS_DDL}
+
+-- FTS over entries.description + notes (replaces transactions_fts at cutover).
+${ENTRIES_FTS_DDL}
+
 CREATE INDEX IF NOT EXISTS idx_ag_ledger ON account_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_budget_groups_ledger ON budget_groups(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
@@ -434,16 +376,6 @@ CREATE INDEX IF NOT EXISTS idx_counterparty_ledger ON counterparties(ledger_id);
 -- "WHERE ledger_id = ? AND name = ?" short-circuit to an index seek for the
 -- per-write counterparty lookup. Without it the resolver scans every row.
 CREATE INDEX IF NOT EXISTS idx_counterparty_ledger_name ON counterparties(ledger_id, name);
-CREATE INDEX IF NOT EXISTS idx_txn_ledger_date ON transactions(ledger_id, date);
-CREATE INDEX IF NOT EXISTS idx_txn_account_date ON transactions(account_id, date);
--- recomputeAccount filters by (account_id, status='confirmed') with no date
--- predicate; the broader (account_id, date) index above is more than we need.
-CREATE INDEX IF NOT EXISTS idx_txn_account_status ON transactions(account_id, status);
-CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
-CREATE INDEX IF NOT EXISTS idx_txn_transfer_group ON transactions(transfer_group_id);
-CREATE INDEX IF NOT EXISTS idx_txn_pending ON transactions(ledger_id, status) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_txntag_txn ON transaction_tags(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_txntag_tag ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
@@ -454,71 +386,13 @@ CREATE INDEX IF NOT EXISTS idx_rate_date ON exchange_rates(date);
 CREATE INDEX IF NOT EXISTS idx_rate_currency_date ON exchange_rates(currency, date DESC);
 CREATE INDEX IF NOT EXISTS idx_holdings_ledger ON holdings(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
-CREATE INDEX IF NOT EXISTS idx_txn_source_template ON transactions(source_template_id) WHERE source_template_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_txn_refunded ON transactions(refunded_transaction_id) WHERE refunded_transaction_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_txn_counterparty ON transactions(counterparty_id) WHERE counterparty_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_rules_ledger_active ON rules(ledger_id, is_active);
-CREATE INDEX IF NOT EXISTS idx_attach_txn    ON transaction_attachments(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_attach_ledger ON transaction_attachments(ledger_id);
-
--- Dedup backstop: an exact-identical row can't be inserted twice. SQLite treats
--- NULLs as distinct, so rows with a NULL time (e.g. scheduled auto-posts) never
--- collide here — the guard only bites genuine same-minute manual duplicates,
--- which is what the Add form's soft duplicate detector steers users away from
--- first. Mirrors database_design_en.md's transactions UNIQUE.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_dedup ON transactions(account_id, date, time, amount, description);
 
 -- One named budget per (ledger, name, cycle). Stops a double-submit or a
 -- copy-paste from silently creating two identical budgets that both match the
 -- same transactions. Legacy NULL-named rows are no longer created, but NULLs
 -- would be distinct here anyway.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_unique ON budgets(ledger_id, name, frequency, start_date);
-
--- Confirmed inserts move the account balance by their delta (in the account's
--- currency: the native amount when the entry is in that currency, else the
--- ledger-base figure for a foreign entry on a base-currency account). Pending
--- rows don't move it; recomputeAccount() handles confirm/edit/delete.
-CREATE TRIGGER IF NOT EXISTS tr_update_account_balance
-AFTER INSERT ON transactions
-FOR EACH ROW
-WHEN NEW.status = 'confirmed'
-BEGIN
-  UPDATE accounts
-  SET current_balance = ROUND(current_balance +
-        (CASE WHEN NEW.currency = (SELECT currency FROM accounts WHERE id = NEW.account_id)
-              THEN NEW.amount ELSE NEW.amount_base END), 2),
-      updated_at = datetime('now')
-  WHERE id = NEW.account_id;
-END;
-
--- Inverted-index search over transactions.description + notes via FTS5. Lets
--- the Activity / Cmd-K search use indexed prefix matching instead of a
--- full-table LIKE '%term%' scan. tokenize='unicode61 remove_diacritics 2'
--- folds accents (sushi/sushí, cafe/café) and case. The id column is
--- UNINDEXED — stored for the JOIN back but not tokenized.
-CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
-  id UNINDEXED,
-  description,
-  notes,
-  tokenize='unicode61 remove_diacritics 2'
-);
-
--- Sync triggers keep the FTS shadow in lock-step with transactions.
-CREATE TRIGGER IF NOT EXISTS tr_txn_fts_insert AFTER INSERT ON transactions BEGIN
-  INSERT INTO transactions_fts (id, description, notes)
-  VALUES (NEW.id, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS tr_txn_fts_delete AFTER DELETE ON transactions BEGIN
-  DELETE FROM transactions_fts WHERE id = OLD.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS tr_txn_fts_update AFTER UPDATE OF description, notes ON transactions BEGIN
-  UPDATE transactions_fts
-     SET description = COALESCE(NEW.description, ''),
-         notes       = COALESCE(NEW.notes, '')
-   WHERE id = NEW.id;
-END;
 
 -- Defense-in-depth guard for holdings.account_id: the row's account MUST be
 -- an investment-type account. The mutation handler already enforces this, but
@@ -558,13 +432,67 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-12T00:00:00Z';
+export const SCHEMA_VERSION = '2026-06-14T00:00:00Z';
 export const APP_NAME = 'finch';
+
+// Replay-safe recreation dance for accounts: removes the opening_balance and
+// opening_balance_base columns (they became opening entries in the cutover).
+// Pattern mirrors CATEGORIES_UPGRADE in entries-schema.ts:
+//   NO staging drop — on a replay after a mid-dance crash the surviving
+//   accounts_new still holds the data; the CREATE fails "already exists"
+//   (swallowed by the migration runner), INSERT OR IGNORE tops up any missing
+//   rows (or is a no-op when the source table is already gone), and the RENAME
+//   promotes the populated staging table. FK OFF/ON wrap is required because
+//   account_groups / ledgers are referenced by the staging table's FKs and
+//   SQLite won't parse a self-referential FK during the rename in FK=ON mode.
+export const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
+  'PRAGMA foreign_keys = OFF',
+  // Modern ALTER semantics (pinned by applyPragmaBootstrap) re-parse every
+  // trigger on RENAME — and tr_post_balance references accounts, which is
+  // transiently dropped mid-dance. Legacy mode skips the re-parse; the
+  // staging rename needs no reference rewriting. See CATEGORIES_UPGRADE.
+  'PRAGMA legacy_alter_table = ON',
+  `CREATE TABLE IF NOT EXISTS accounts_new (
+     id                   TEXT PRIMARY KEY,
+     ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+     group_id             TEXT REFERENCES account_groups(id) ON DELETE SET NULL,
+     name                 TEXT NOT NULL,
+     type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
+     currency             TEXT NOT NULL DEFAULT 'SGD',
+     current_balance      REAL NOT NULL DEFAULT 0,
+     color                TEXT,
+     sort_order           INTEGER NOT NULL DEFAULT 0,
+     include_in_net_worth INTEGER NOT NULL DEFAULT 1,
+     is_active            INTEGER NOT NULL DEFAULT 1,
+     archived_at          TEXT,
+     last_reconciled_at      TEXT,
+     last_reconciled_balance REAL,
+     created_at           TEXT NOT NULL,
+     updated_at           TEXT NOT NULL
+   )`,
+  // INSERT OR IGNORE: replay-safe — if accounts_new already has the rows (a
+  // previous partial run), OR IGNORE skips them; if the source accounts table
+  // is already gone (post-RENAME), the SELECT returns 0 rows harmlessly.
+  `INSERT OR IGNORE INTO accounts_new
+     (id, ledger_id, group_id, name, type, currency, current_balance,
+      color, sort_order, include_in_net_worth, is_active, archived_at,
+      last_reconciled_at, last_reconciled_balance, created_at, updated_at)
+   SELECT id, ledger_id, group_id, name, type, currency, current_balance,
+          color, sort_order, include_in_net_worth, is_active, archived_at,
+          last_reconciled_at, last_reconciled_balance, created_at, updated_at
+   FROM accounts`,
+  'DROP TABLE accounts',
+  'ALTER TABLE accounts_new RENAME TO accounts',
+  'CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id)',
+  'CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id)',
+  'PRAGMA legacy_alter_table = OFF',
+  'PRAGMA foreign_keys = ON',
+];
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
 // Applied in lex (== chronological) order for versions strictly greater than a
 // database's recorded schema_version.
-const MIGRATIONS: Record<string, string[]> = {
+const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> = {
   // accounts.opening_balance_base shipped in the unrealized-FX work (#66) but the
   // SCHEMA_VERSION wasn't bumped, so databases created in the window between the
   // baseline and #66 report the baseline version yet lack the column — and
@@ -719,6 +647,35 @@ const MIGRATIONS: Record<string, string[]> = {
     'ALTER TABLE ledgers ADD COLUMN color TEXT',
     'ALTER TABLE ledgers ADD COLUMN tagline TEXT',
   ],
+  // Double-entry cutover, phase 1 (PR B / DOUBLE_ENTRY_PLAN §12): the DE core
+  // tables/triggers + the categories equity upgrade + entry_attachments +
+  // entries_fts land on existing files. Structures only — the data move and
+  // the legacy-table drops are the '2026-06-14' entry. Every statement is
+  // idempotent under the isAlreadyAppliedError rule.
+  // NOTE: ENTRIES_SCHEMA is listed first — it creates the entries/postings/
+  // entry_tags tables that CATEGORIES_UPGRADE and subsequent steps reference.
+  // The CATEGORIES_UPGRADE dance is replay-safe by construction (see its comment in entries-schema.ts).
+  '2026-06-13T00:00:00Z': [
+    ENTRIES_SCHEMA,
+    ...CATEGORIES_UPGRADE,
+    ENTRY_ATTACHMENTS_DDL,
+    ENTRIES_FTS_DDL,
+  ],
+  // Double-entry cutover, phase 2 (PR B): move every legacy row into
+  // entries/postings (id-faithful — see cutover.ts), rebuild accounts without
+  // the opening-balance columns (the figures became opening ENTRIES), then
+  // drop the legacy tables. moveLegacyData recomputes balances and runs the
+  // full auditLedger, THROWING on any problem — a failed audit aborts the
+  // version (it is never stamped) and the pre-migration .pre-de.bak snapshot
+  // (server.ts) is the rollback. Replay-safe: the move skips/repairs
+  // per-entry, the accounts dance follows the no-staging-drop pattern, and
+  // the drops are IF EXISTS.
+  '2026-06-14T00:00:00Z': async (exec) => {
+    const { moveLegacyData, dropLegacyTables } = await import('./cutover');
+    await moveLegacyData(exec);
+    for (const sql of ACCOUNTS_DROP_OPENING_COLUMNS) await runMigrationStmt(exec, sql);
+    await dropLegacyTables(exec);
+  },
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be
@@ -729,6 +686,14 @@ const MIGRATIONS: Record<string, string[]> = {
 // else is a real migration failure and propagates.
 function isAlreadyAppliedError(err: unknown): boolean {
   const msg = String((err as { message?: unknown })?.message ?? err);
+  // NEVER swallow a trigger/view re-parse failure. Under modern ALTER
+  // semantics a RENAME re-parses every trigger; a failure surfaces as
+  // "error in trigger X: no such table/column …" — which the patterns below
+  // would otherwise match, silently skipping the RENAME and leaving the
+  // table MISSING (this is exactly how the cutover broke on Linux CI while
+  // passing on macOS, whose bun:sqlite build defaulted to legacy ALTER
+  // semantics). A re-parse failure is a real migration failure: abort.
+  if (/error in (trigger|view)/i.test(msg)) return false;
   // - "duplicate column name" — ADD COLUMN re-run
   // - "already exists" — CREATE TABLE / INDEX / TRIGGER re-run
   // - "no such column" — DROP COLUMN re-run after the column is gone
@@ -792,7 +757,9 @@ export async function migrate(exec: ExecFn, opts: { fresh: boolean }): Promise<v
   );
   for (const version of Object.keys(MIGRATIONS).sort()) {
     if (version <= cur) continue;
-    for (const sql of MIGRATIONS[version] ?? []) await runMigrationStmt(exec, sql);
+    const entry = MIGRATIONS[version];
+    if (typeof entry === 'function') await entry(exec);
+    else for (const sql of entry ?? []) await runMigrationStmt(exec, sql);
   }
   await ensureMetadataRow(exec, SCHEMA_VERSION);
 }

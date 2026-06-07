@@ -2,7 +2,37 @@ import { test, expect } from 'bun:test';
 import { migrate } from '@/lib/db/schema';
 import { rollBudgetsIfDue, invalidateRollover } from '@/lib/budgets/rollover';
 import { seededDb } from '@/lib/db/test-utils';
+import { insertTxRow } from '@/lib/db/queries/transactions';
 import type { Exec } from '@/lib/db/repo';
+
+/** Delete all entries (and their postings via CASCADE) that have a category
+ *  leg with the given categoryId within the date range. */
+async function deleteEntriesForCategory(
+  exec: Exec,
+  categoryId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  // Unseal matching entries first so the cascade isn't blocked.
+  await exec(
+    `UPDATE entries SET sealed = 0
+     WHERE date BETWEEN ? AND ?
+       AND EXISTS (
+         SELECT 1 FROM postings p
+         WHERE p.entry_id = entries.id AND p.category_id = ?
+       )`,
+    [from, to, categoryId],
+  );
+  await exec(
+    `DELETE FROM entries
+     WHERE date BETWEEN ? AND ?
+       AND EXISTS (
+         SELECT 1 FROM postings p
+         WHERE p.entry_id = entries.id AND p.category_id = ?
+       )`,
+    [from, to, categoryId],
+  );
+}
 
 async function seeded(): Promise<Exec> {
   const { exec } = await seededDb();
@@ -82,12 +112,12 @@ test('rollover OFF: just advances last_rolled_period', async () => {
 test('rollover ON: April leftover becomes May carry_forward', async () => {
   const exec = await seeded();
   await insertBudget(exec, 'b-on', { amount: 700, rollover: 1, categoryIds: ['food'] });
-  // Wipe seeded April food txns, replace with a controlled $400 spend.
-  await exec("DELETE FROM transactions WHERE category_id = 'food' AND date BETWEEN '2026-04-01' AND '2026-04-30'");
-  await exec(
-    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at,updated_at)
-     VALUES ('t-apr-1','personal','chk','2026-04-10',-400,-400,1,'Groceries','food','confirmed','USD','2026-04-10','2026-04-10')`,
-  );
+  // Wipe seeded April food entries, replace with a controlled $400 spend.
+  await deleteEntriesForCategory(exec, 'food', '2026-04-01', '2026-04-30');
+  await insertTxRow(exec, {
+    ledgerId: 'personal', accountId: 'chk', date: '2026-04-10',
+    amount: -400, description: 'Groceries', kind: 'expense', categoryId: 'food', skipRules: true,
+  });
   await rollBudgetsIfDue(exec, '2026-05-15');
   const b = await readBudget(exec, 'b-on');
   expect(b.lastRolledPeriod).toBe('2026-04-01');
@@ -99,7 +129,7 @@ test('rollover_limit caps the carry-forward', async () => {
   const exec = await seeded();
   await insertBudget(exec, 'b-cap', { amount: 700, rollover: 1, rolloverLimit: 100, categoryIds: ['food'] });
   // No April food spend → would otherwise carry $700, but cap holds at $100.
-  await exec("DELETE FROM transactions WHERE category_id = 'food' AND date BETWEEN '2026-04-01' AND '2026-04-30'");
+  await deleteEntriesForCategory(exec, 'food', '2026-04-01', '2026-04-30');
   await rollBudgetsIfDue(exec, '2026-05-15');
   const b = await readBudget(exec, 'b-cap');
   expect(b.carryForward).toBe(100);
@@ -129,11 +159,11 @@ test('pending_amount activates at the boundary (rollover on)', async () => {
   const exec = await seeded();
   await insertBudget(exec, 'b-pending-roll', { amount: 700, rollover: 1, categoryIds: ['food'] });
   await exec("UPDATE budgets SET pending_amount = 850 WHERE id = 'b-pending-roll'");
-  await exec("DELETE FROM transactions WHERE category_id = 'food' AND date BETWEEN '2026-04-01' AND '2026-04-30'");
-  await exec(
-    `INSERT INTO transactions (id,ledger_id,account_id,date,amount,amount_base,exchange_rate,description,category_id,status,currency,created_at,updated_at)
-     VALUES ('t-apr-2','personal','chk','2026-04-10',-200,-200,1,'Groceries','food','confirmed','USD','2026-04-10','2026-04-10')`,
-  );
+  await deleteEntriesForCategory(exec, 'food', '2026-04-01', '2026-04-30');
+  await insertTxRow(exec, {
+    ledgerId: 'personal', accountId: 'chk', date: '2026-04-10',
+    amount: -200, description: 'Groceries', kind: 'expense', categoryId: 'food', skipRules: true,
+  });
   await rollBudgetsIfDue(exec, '2026-05-15');
   const b = await readBudget(exec, 'b-pending-roll');
   // April used amount=700 to compute leftover = 700 - 200 = 500. Then

@@ -1,4 +1,4 @@
-// Tags: list, plus the transaction→tags map. Create / assign in mutations.ts.
+// Tags: list, edit, delete. Create / assign in mutations.ts.
 
 import type { Exec } from '@/lib/db/repo';
 
@@ -45,13 +45,3 @@ export async function deleteTag(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM tags WHERE id = ?', [id]);
 }
 
-/** Map of transaction id → tag ids. */
-export async function transactionTagMap(exec: Exec): Promise<Record<string, string[]>> {
-  const rows = await exec('SELECT transaction_id, tag_id FROM transaction_tags');
-  const m: Record<string, string[]> = {};
-  for (const r of rows) {
-    const txId = String(r.transaction_id);
-    (m[txId] ??= []).push(String(r.tag_id));
-  }
-  return m;
-}

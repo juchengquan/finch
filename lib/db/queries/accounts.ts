@@ -3,38 +3,27 @@
 
 import type { Exec } from '@/lib/db/repo';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
-import { convertToBase } from './rates';
+import { recomputeAccountFromPostings, postOpening, deleteEntry, resolveEntryRef } from '@/lib/db/entries';
+import { I18nError } from '@/lib/i18n-error';
+// convertToBase removed — opening_balance derivation now uses postOpening (entries layer)
 
 /**
- * Recompute an account's current_balance from its opening balance + confirmed
- * transactions. The insert trigger moves the balance for new confirmed rows, so
- * any edit/confirm/delete that changes the confirmed set must call this.
- *
- * Only `confirmed` rows move the balance: `pending` (unconfirmed) transactions
- * are excluded so they don't affect accounts until confirmed. The delta is taken
- * in the account's currency (native amount when the entry is in that currency,
- * else the ledger-base figure for a foreign entry on a base-currency account).
+ * Recompute an account's current_balance from confirmed postings.
+ * Delegates to recomputeAccountFromPostings (DOUBLE_ENTRY_PLAN §3.2).
+ * Keep this export — many call sites reference it; only the body changes.
  */
 export async function recomputeAccount(exec: Exec, accountId: string): Promise<void> {
-  const acc = await exec('SELECT opening_balance, currency FROM accounts WHERE id = ?', [accountId]);
-  if (!acc.length) return;
-  const accountCurrency = String(acc[0].currency ?? 'USD');
-  let running = Number(acc[0].opening_balance ?? 0);
-  const rows = await exec(
-    "SELECT amount, amount_base, currency FROM transactions WHERE account_id = ? AND status = 'confirmed'",
-    [accountId],
-  );
-  for (const r of rows) {
-    const delta = String(r.currency) === accountCurrency ? Number(r.amount) : Number(r.amount_base);
-    running = Math.round((running + delta) * 100) / 100;
-  }
-  await exec("UPDATE accounts SET current_balance = ?, updated_at = datetime('now') WHERE id = ?", [running, accountId]);
+  // One-line delegate to the entries-layer chokepoint (postings is the source
+  // of truth; opening entry is included in the sum — no separate seed term).
+  await recomputeAccountFromPostings(exec, accountId);
 }
 
-/** Recompute the account that the given transaction belongs to (if any). */
+/** Recompute the account that the given entry/posting ref belongs to (if any).
+ *  Resolves via resolveEntryRef so callers updated in B3b still work by
+ *  passing either a posting id or an entry id. */
 export async function recomputeForTransaction(exec: Exec, txnId: string): Promise<void> {
-  const rows = await exec('SELECT account_id FROM transactions WHERE id = ?', [txnId]);
-  if (rows.length) await recomputeAccount(exec, String(rows[0].account_id));
+  const ref = await resolveEntryRef(exec, txnId);
+  if (ref?.accountId) await recomputeAccount(exec, ref.accountId);
 }
 
 export interface AccountRow {
@@ -70,13 +59,17 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
   const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 1' : 'WHERE a.is_active = 1';
   const rows = await exec(
     `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
-            a.opening_balance AS openingBalance,
-            a.opening_balance_base AS openingBalanceBase,
+            -- Opening balance projected from the opening entry's account leg (id-agnostic):
+            -- avoids storing a redundant column; postOpening is the write path.
+            COALESCE(op.amount, 0) AS openingBalance,
+            COALESCE(op.amount_base, 0) AS openingBalanceBase,
             a.group_id AS groupId, g.name AS groupName, a.color,
             a.sort_order AS sortOrder, a.include_in_net_worth AS inw,
             a.last_reconciled_at AS lastReconciledAt,
             a.last_reconciled_balance AS lastReconciledBalance
-       FROM accounts a LEFT JOIN account_groups g ON a.group_id = g.id
+       FROM accounts a
+       LEFT JOIN account_groups g ON a.group_id = g.id
+       LEFT JOIN postings op ON op.entry_id = 'open-' || a.id AND op.account_id = a.id
       ${where}
       ORDER BY g.sort_order, a.sort_order, a.name`,
     ledgerId ? [ledgerId] : [],
@@ -161,14 +154,13 @@ export interface NewAccount {
   color: string | null;
 }
 
-/** Insert a new account; current_balance starts at the opening balance.
+/** Insert a new account; current_balance starts at 0.
  *  Sort_order is appended after the existing rows in the same group (or
  *  ungrouped bucket) so new accounts land at the bottom of the list.
  *
- *  opening_balance is the native figure the user typed; opening_balance_base
- *  locks its ledger-base equivalent at today's rate. The base figure stays
- *  put when FX moves later, so the account's cost basis is stable and any
- *  drift from the live valuation shows up as unrealized FX gain/loss. */
+ *  When openingBalance ≠ 0, a postOpening entry (pre-cleared, dated today)
+ *  is posted and recomputeAccount brings current_balance to the opening figure.
+ *  The opening entry IS the cost-basis anchor (DOUBLE_ENTRY_PLAN §6). */
 export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   const rows = await exec(
     a.groupId == null
@@ -178,16 +170,16 @@ export async function createAccount(exec: Exec, a: NewAccount): Promise<void> {
   );
   const sortOrder = Number(rows[0]?.n ?? 0);
   const inw = defaultIncludeInNetWorth(a.type);
-  const lRows = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [a.ledgerId]);
-  const ledgerBase = String(lRows[0]?.base_currency ?? a.currency);
   const today = new Date().toISOString().slice(0, 10);
-  const { amountBase: openingBase } = await convertToBase(exec, a.openingBalance, a.currency, ledgerBase, today);
   await exec(
     `INSERT INTO accounts
-       (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'),datetime('now'))`,
-    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.openingBalance, a.openingBalance, openingBase, a.color, sortOrder, inw],
+       (id,ledger_id,group_id,name,type,currency,current_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,0,?,?,?,1,datetime('now'),datetime('now'))`,
+    [a.id, a.ledgerId, a.groupId, a.name, a.type, a.currency, a.color, sortOrder, inw],
   );
+  if (a.openingBalance !== 0) {
+    await postOpening(exec, { ledgerId: a.ledgerId, accountId: a.id, amount: a.openingBalance, date: today });
+  }
 }
 
 /** Soft-delete: keep transaction history, drop the account from the active list.
@@ -207,9 +199,30 @@ export async function unarchiveAccount(exec: Exec, id: string): Promise<void> {
   );
 }
 
-/** Hard delete — only safe when the account has no transactions (FK is RESTRICT). */
+/** Hard delete — only safe when the account has no postings beyond the
+ *  optional opening entry. If the ONLY postings are from the opening entry,
+ *  auto-delete that entry first, then delete the account. If there are other
+ *  postings (real transactions), throw so the caller can archive instead. */
 export async function deleteAccount(exec: Exec, id: string): Promise<void> {
-  const [{ n }] = await exec('SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?', [id]) as { n: number }[];
-  if (Number(n) > 0) throw new Error('Account has transactions — archive it instead');
+  const [{ total }] = (await exec('SELECT COUNT(*) AS total FROM postings WHERE account_id = ?', [id])) as { total: number }[];
+  const totalCount = Number(total);
+
+  if (totalCount > 0) {
+    // Count postings that are NOT part of the opening entry.
+    const openEntryId = `open-${id}`;
+    const [{ other }] = (await exec(
+      'SELECT COUNT(*) AS other FROM postings WHERE account_id = ? AND entry_id != ?',
+      [id, openEntryId],
+    )) as { other: number }[];
+    if (Number(other) > 0) {
+      throw new I18nError(
+        'error.account.hasTransactions',
+        {},
+        'Account has transactions — archive it instead',
+      );
+    }
+    // Only the opening entry exists — delete it first.
+    await deleteEntry(exec, openEntryId);
+  }
   await exec('DELETE FROM accounts WHERE id = ?', [id]);
 }

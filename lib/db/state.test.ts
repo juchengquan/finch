@@ -64,10 +64,11 @@ test('projected state carries attachments (empty by default; populated when pres
 
   // Add one against an existing seed transaction; it must show up in the
   // projection in the client-safe shape (no rel_path).
+  // §2: entry_attachments replaces transaction_attachments; entry_id = old tx id.
   const seedTxId = sample.transactions[0].id;
   await exec(
-    `INSERT INTO transaction_attachments
-       (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size,
+    `INSERT INTO entry_attachments
+       (id, ledger_id, entry_id, kind, rel_path, mime_type, byte_size,
         sha256, original_filename, created_at, updated_at)
      VALUES ('att-x', 'personal', ?, 'image', 'attachments/x/att-x.jpg',
              'image/jpeg', 1234, 'h', 'receipt.jpg', datetime('now'), datetime('now'))`,

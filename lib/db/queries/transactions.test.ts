@@ -71,24 +71,31 @@ test('FTS5 sync triggers: edits + deletes propagate to the index', async () => {
   const { addTransaction, updateTransaction, deleteTransactionRow } =
     await import('@/lib/db/queries/transactions');
 
-  const id = await addTransaction(exec, {
+  // addTransaction returns entry id; Tx.id = account-posting id (§2).
+  // Look up the posting id immediately so list-based assertions stay stable.
+  const entryId = await addTransaction(exec, {
     ledgerId: 'personal', accountId: 'chk', amount: -5,
     merchant: 'Quirkbird Coffee Cooperative', date: '2026-05-25',
   });
+  const [{ pid }] = await exec(
+    'SELECT id AS pid FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1',
+    [entryId],
+  ) as { pid: string }[];
+
   let res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
-  expect(res.some((t) => t.id === id)).toBe(true);
+  expect(res.some((t) => t.id === pid)).toBe(true);
 
   // Rename — old token shouldn't match the same row anymore.
-  await updateTransaction(exec, id, { merchant: 'Renamed Hideout' });
+  await updateTransaction(exec, entryId, { merchant: 'Renamed Hideout' });
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'quirkbird' });
-  expect(res.some((t) => t.id === id)).toBe(false);
+  expect(res.some((t) => t.id === pid)).toBe(false);
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
-  expect(res.some((t) => t.id === id)).toBe(true);
+  expect(res.some((t) => t.id === pid)).toBe(true);
 
   // Delete — fully gone from the index.
-  await deleteTransactionRow(exec, id);
+  await deleteTransactionRow(exec, entryId);
   res = await listTransactions(exec, { ledgerId: 'personal', query: 'hideout' });
-  expect(res.some((t) => t.id === id)).toBe(false);
+  expect(res.some((t) => t.id === pid)).toBe(false);
 });
 
 test('counterparty resolver matches via COLLATE NOCASE (no LOWER in WHERE)', async () => {
@@ -145,9 +152,10 @@ test('delete removes a transaction from the list', async () => {
   const acctId = await deleteTransactionRow(exec, 't01');
   expect(acctId).toBeTruthy();
   const list = await listTransactions(exec, { ledgerId: 'personal' });
+  // t01 posting id = t01 (seed preserves ids); the deleted entry + all its postings cascade.
   expect(list.find((t) => t.id === 't01')).toBeUndefined();
-  // The row is really gone (hard delete), not just hidden.
-  expect((await exec("SELECT COUNT(*) AS n FROM transactions WHERE id = 't01'"))[0].n).toBe(0);
+  // §2: the entry is really gone (hard delete via CASCADE).
+  expect((await exec("SELECT COUNT(*) AS n FROM entries WHERE id = 't01'"))[0].n).toBe(0);
 });
 
 test('confirm flips a pending transaction and feeds the summary', async () => {
@@ -178,7 +186,8 @@ test("insertTxRow: defaults currency to the account's, derives amount_base via c
   const exec = await seeded();
   // Verify each default resolution fires when the caller leaves the field out.
   // `inv` is USD; the personal-ledger base is USD too, so amount_base == amount.
-  const id = await insertTxRow(exec, {
+  // insertTxRow returns entry id; query via entries + postings (§2).
+  const entryId = await insertTxRow(exec, {
     ledgerId: 'personal',
     accountId: 'inv',
     date: '2026-05-26',
@@ -186,13 +195,14 @@ test("insertTxRow: defaults currency to the account's, derives amount_base via c
     description: 'Blue Bottle Coffee',
     kind: 'expense',
   });
-  const [row] = await exec('SELECT * FROM transactions WHERE id = ?', [id]);
-  expect(String(row.currency)).toBe('USD');               // defaulted from account
-  expect(Number(row.amount_base)).toBeCloseTo(-100, 2);   // convertToBase ran
-  expect(Number(row.exchange_rate)).toBeCloseTo(1, 6);
-  expect(String(row.status)).toBe('confirmed');           // default status
-  expect(row.confirmed_at).not.toBeNull();                // stamped on confirmed rows
-  expect(row.source_template_id).toBeNull();
+  const [e] = await exec('SELECT * FROM entries WHERE id = ?', [entryId]);
+  const [p] = await exec('SELECT * FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId]);
+  expect(String(p.currency)).toBe('USD');               // defaulted from account
+  expect(Number(p.amount_base)).toBeCloseTo(-100, 2);   // convertToBase ran
+  expect(Number(p.exchange_rate)).toBeCloseTo(1, 6);
+  expect(String(e.status)).toBe('confirmed');           // default status
+  expect(e.confirmed_at).not.toBeNull();                // stamped on confirmed rows
+  expect(e.source_template_id).toBeNull();
 });
 
 test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance trigger', async () => {
@@ -201,7 +211,7 @@ test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance
   const before = Number(
     (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,
   );
-  await insertTxRow(exec, {
+  const entryId = await insertTxRow(exec, {
     ledgerId: 'personal',
     accountId: 'chk',
     date: '2026-05-26',
@@ -210,12 +220,69 @@ test('insertTxRow: pending status leaves confirmed_at NULL and skips the balance
     kind: 'expense',
     status: 'pending',
   });
-  const [row] = await exec("SELECT confirmed_at FROM transactions WHERE description = 'Pending charge'");
+  // §2: confirmed_at lives on entries; query by entry id (returned by insertTxRow).
+  const [row] = await exec('SELECT confirmed_at FROM entries WHERE id = ?', [entryId]);
   expect(row.confirmed_at).toBeNull();
   const after = Number(
     (await exec("SELECT current_balance AS b FROM accounts WHERE id = 'chk'"))[0].b,
   );
   expect(after).toBeCloseTo(before, 2); // pending didn't move the balance
+});
+
+test('§10.4 categoryId filter matches split entries where one leg has that category', async () => {
+  // The legacy parent-only filter would have matched only the single category_id
+  // on the transactions row. The new filter uses EXISTS over all category postings,
+  // so a split entry (≥2 category legs) is found even when neither single leg
+  // is the "primary" category. §10.4
+  const exec = await seeded();
+
+  // Add a transaction that we will then manually split at the postings level.
+  // addTransaction creates one account leg + one category leg (food).
+  const entryId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -60,
+    merchant: 'Split Purchase',
+    categoryId: 'food',
+    date: '2026-05-27',
+  });
+
+  // Find the auto-created category posting (food leg) and the account posting id.
+  const [foodLeg] = await exec(
+    'SELECT id FROM postings WHERE entry_id = ? AND account_id IS NULL AND category_id = ?',
+    [entryId, 'food'],
+  ) as { id: string }[];
+  const [acctPostingRow] = await exec(
+    'SELECT id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1',
+    [entryId],
+  ) as { id: string }[];
+  const acctPostingId = String(acctPostingRow.id);
+
+  // Unseal so we can modify postings.
+  await exec(`UPDATE entries SET sealed = 0 WHERE id = ?`, [entryId]);
+  // Delete the original single-category leg.
+  await exec('DELETE FROM postings WHERE id = ?', [foodLeg.id]);
+  // Insert two category legs: food (-30) and shop (-30).
+  await exec(
+    `INSERT INTO postings (id, entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, sort_order)
+     VALUES ('sp-food', ?, NULL, 'food', 30, 'USD', 30, 1, 1),
+            ('sp-shop', ?, NULL, 'shop', 30, 'USD', 30, 1, 2)`,
+    [entryId, entryId],
+  );
+  // Re-seal.
+  await exec(`UPDATE entries SET sealed = 1 WHERE id = ?`, [entryId]);
+
+  // listTransactions with categoryId: 'food' must include this split entry.
+  const foodResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'food' });
+  expect(foodResults.some((t) => t.id === acctPostingId)).toBe(true);
+
+  // listTransactions with categoryId: 'shop' must also include it (second leg).
+  const shopResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'shop' });
+  expect(shopResults.some((t) => t.id === acctPostingId)).toBe(true);
+
+  // The entry must NOT appear under a category it has no leg for.
+  const otherResults = await listTransactions(exec, { ledgerId: 'personal', categoryId: 'utilities' });
+  expect(otherResults.some((t) => t.id === acctPostingId)).toBe(false);
 });
 
 test("FTS5 search matches tokens with internal punctuation (O'Reilly, AT&T)", async () => {

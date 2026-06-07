@@ -45,31 +45,38 @@ export interface TxExportFilter {
   month?: string;
 }
 
-/** Transactions with account/category names + tag list, newest first. */
+/** Transactions with account/category names + tag list, newest first.
+ *  One row per account leg; opening entries excluded. */
 export async function transactionExportRows(exec: Exec, filter: TxExportFilter = {}): Promise<TxExportRow[]> {
-  const where: string[] = [];
+  const where: string[] = ['p.account_id IS NOT NULL', "e.kind != 'opening'"];
   const bind: (string | number)[] = [];
   if (filter.ledgerId) {
-    where.push('t.ledger_id = ?');
+    where.push('e.ledger_id = ?');
     bind.push(filter.ledgerId);
   }
   if (filter.month) {
-    where.push('t.date LIKE ?');
+    where.push('e.date LIKE ?');
     bind.push(`${filter.month}%`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const rows = await exec(
-    `SELECT t.date, t.time, t.ledger_id AS ledger,
-            a.name AS account, t.description AS merchant, c.name AS category,
-            t.amount, t.currency, t.amount_base AS amountBase, t.status, t.kind, t.notes AS note,
+    `SELECT e.date, e.time, e.ledger_id AS ledger,
+            a.name AS account,
+            COALESCE(p.memo, e.description) AS merchant,
+            (SELECT cc.name
+               FROM postings cp
+               JOIN categories cc ON cc.id = cp.category_id
+              WHERE cp.entry_id = e.id AND cp.account_id IS NULL AND cc.kind != 'equity'
+              ORDER BY ABS(cp.amount_base) DESC LIMIT 1) AS category,
+            p.amount, p.currency, p.amount_base AS amountBase, e.status, e.kind, e.notes AS note,
             (SELECT GROUP_CONCAT(tg.name, '; ')
-               FROM transaction_tags tt JOIN tags tg ON tt.tag_id = tg.id
-              WHERE tt.transaction_id = t.id) AS tags
-       FROM transactions t
-       LEFT JOIN accounts a ON t.account_id = a.id
-       LEFT JOIN categories c ON t.category_id = c.id
+               FROM entry_tags et JOIN tags tg ON et.tag_id = tg.id
+              WHERE et.entry_id = e.id) AS tags
+       FROM postings p
+       JOIN entries e ON e.id = p.entry_id
+       LEFT JOIN accounts a ON p.account_id = a.id
       ${whereSql}
-      ORDER BY t.date DESC, t.time DESC, t.created_at DESC`,
+      ORDER BY e.date DESC, e.time DESC, e.created_at DESC`,
     bind,
   );
   return rows.map((r) => ({

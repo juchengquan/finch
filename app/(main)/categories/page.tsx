@@ -36,7 +36,7 @@ import {
 } from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 
-const TYPES = ['expense', 'income', 'transfer'] as const;
+const TYPES = ['expense', 'income'] as const;
 const ICON_CHOICES = ['fork', 'home', 'car', 'bag', 'film', 'heart', 'sync', 'tag', 'coins', 'wallet', 'chart', 'doc'];
 // Curated palette of category colours, precomputed from the legacy hue list at
 // the standard category lightness/chroma so the picker keeps its palette feel.

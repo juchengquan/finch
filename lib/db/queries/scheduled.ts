@@ -5,7 +5,7 @@
 import type { Exec } from '@/lib/db/repo';
 import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
 
-// installment_paid is derived: count the CONFIRMED transactions linked back
+// installment_paid is derived: count the CONFIRMED entries linked back
 // via source_template_id. Pending rows wait for the user's confirm action and
 // shouldn't inflate "X of Y paid". Cancelled pending rows are deleted outright,
 // so the count naturally stays in sync without any bookkeeping. The aggregate
@@ -13,7 +13,7 @@ import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
 // high template counts.
 const INSTALLMENT_PAID_JOIN = `LEFT JOIN (
   SELECT source_template_id, COUNT(*) AS n
-    FROM transactions
+    FROM entries
    WHERE source_template_id IS NOT NULL AND status = 'confirmed'
    GROUP BY source_template_id
 ) p ON p.source_template_id = t.id`;
