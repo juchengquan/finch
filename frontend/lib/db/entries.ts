@@ -481,6 +481,24 @@ export async function postOpening(exec: Exec, o: {
   });
 }
 
+/** Map a raw postings row back to the ResolvedLeg shape (validation/hashing
+ *  over EXISTING legs without a rewrite). */
+function rowToResolved(r: Record<string, unknown>): ResolvedLeg {
+  return {
+    id: String(r.id),
+    accountId: r.account_id == null ? null : String(r.account_id),
+    categoryId: r.category_id == null ? null : String(r.category_id),
+    amount: Number(r.amount),
+    currency: String(r.currency),
+    amountBase: Number(r.amount_base),
+    exchangeRate: Number(r.exchange_rate),
+    origAmount: r.orig_amount == null ? null : Number(r.orig_amount),
+    origCurrency: r.orig_currency == null ? null : String(r.orig_currency),
+    memo: r.memo == null ? null : String(r.memo),
+    clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
+  };
+}
+
 /** current_balance from the postings ledger (opening entry included — there
  *  is no opening_balance seed term). PR B swaps queries/accounts.ts's
  *  recomputeAccount over to this. */
@@ -507,7 +525,10 @@ export interface EntryPatch {
   counterpartyId?: string | null;
   refundedEntryId?: string | null;
   /** Full replacement of ALL legs. Omit to keep them (a date edit still
-   *  re-locks account-leg bases at the new date — the locked-rate invariant). */
+   *  re-locks account-leg bases at the new date — the locked-rate invariant).
+   *  Callers MUST re-supply each account leg's `clearedAt` (and any pinned
+   *  `amountBase`) — omitted fields are reset, silently un-clearing a
+   *  reconciled leg or re-deriving a user-pinned rate. */
   legs?: LegInput[];
 }
 
@@ -553,6 +574,7 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
     bind.push(ts, entryId);
     await exec(`UPDATE entries SET ${sets.join(', ')} WHERE id = ?`, bind);
 
+    let rebuiltLegs: ResolvedLeg[] | null = null;
     if (mustRebuildLegs) {
       let inputs: LegInput[];
       if (patch.legs !== undefined) {
@@ -605,7 +627,24 @@ export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatc
       validateShape(kind, resolved, await categoryMeta(exec, resolved));
       await insertPostings(exec, entryId, resolved);
       for (const l of resolved) if (l.accountId != null) touched.add(l.accountId);
+      rebuiltLegs = resolved;
     }
+
+    if (!mustRebuildLegs && patch.kind !== undefined && patch.kind !== String(cur.kind)) {
+      // A kind-only edit must still satisfy I7 — the seal trigger checks
+      // balance, not kind↔shape, so validate against the existing legs.
+      const current = oldLegs.map(rowToResolved);
+      validateShape(kind, current, await categoryMeta(exec, current));
+    }
+
+    // Re-stamp the dedup hash from the entry's EFFECTIVE content — an edited
+    // entry must collide (or not) on what it now says, not what it once said.
+    // Editing an entry into an exact duplicate of another trips the UNIQUE
+    // index right here, rolling the whole edit back.
+    const effTime = patch.time !== undefined ? patch.time ?? null : cur.time == null ? null : String(cur.time);
+    const effDesc = patch.description !== undefined ? patch.description : cur.description == null ? '' : String(cur.description);
+    const hashLegs = rebuiltLegs ?? oldLegs.map(rowToResolved);
+    await exec('UPDATE entries SET dedup_hash = ? WHERE id = ?', [dedupHash(date, effTime, effDesc, hashLegs), entryId]);
 
     await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]);
     await exec(`RELEASE ${sp}`);

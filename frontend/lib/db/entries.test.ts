@@ -560,3 +560,48 @@ test('rebuildEntry: legs replacement rebalances and recomputes both accounts', a
   expect(await balanceOf(exec, 'a-rb3')).toBe(0);   // old account released
   expect(await balanceOf(exec, 'a-rb4')).toBe(-10); // new account charged
 });
+
+test('recomputeAccountFromPostings restores a corrupted cached balance', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-rc', 'SGD', 'lt');
+  await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-rc', amount: -33.33, date: '2026-06-05',
+    description: 'Drift', categoryId: 'cat-t', skipRules: true,
+  });
+  await exec("UPDATE accounts SET current_balance = 999 WHERE id = 'a-rc'");
+  await recomputeAccountFromPostings(exec, 'a-rc');
+  expect(await balanceOf(exec, 'a-rc')).toBe(-33.33);
+});
+
+test('rebuildEntry rejects a kind change that contradicts the leg shape', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-kv', 'SGD', 'lt');
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-kv', amount: -7, date: '2026-06-05',
+    description: 'Negative', categoryId: 'cat-t', skipRules: true,
+  });
+  await expect(rebuildEntry(exec, entryId, { kind: 'refund' })).rejects.toThrow('refund must be positive');
+  const [e] = await exec('SELECT kind, sealed FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.kind)).toBe('expense'); // the whole edit rolled back
+  expect(Number(e.sealed)).toBe(1);
+});
+
+test('rebuildEntry re-stamps the dedup hash from the edited content', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-dh', 'SGD', 'lt');
+  const mk = (id: string, desc: string) => postSimple(exec, {
+    id, ledgerId: 'lt', accountId: 'a-dh', amount: -9, date: '2026-06-05', time: '09:00',
+    description: desc, categoryId: 'cat-t', skipRules: true,
+  });
+  await mk('e-dh1', 'Tea');
+  await mk('e-dh2', 'Latte');
+  // Editing e-dh2 into an exact duplicate of e-dh1 must collide…
+  await expect(rebuildEntry(exec, 'e-dh2', { description: 'Tea' })).rejects.toThrow('UNIQUE');
+  // …and the rejected edit rolled back wholesale.
+  const [e] = await exec("SELECT description, sealed FROM entries WHERE id = 'e-dh2'");
+  expect(String(e.description)).toBe('Latte');
+  expect(Number(e.sealed)).toBe(1);
+});
