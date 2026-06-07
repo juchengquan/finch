@@ -210,13 +210,44 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   }
 
   // Header-only patch (date/time/note without amounts).
+  // §6 PR-B precondition: pinned bank rates survive date edits — whenever
+  // patch.date is present we pass explicit legs with the stored amount_base and
+  // exchange_rate so rebuildEntry never enters its re-lock branch.
   const headerPatch: import('@/lib/db/entries').EntryPatch = {};
   if (patch.date !== undefined) headerPatch.date = patch.date;
   if (patch.time !== undefined) headerPatch.time = patch.time ?? null;
   if (patch.note !== undefined) headerPatch.notes = patch.note ?? null;
-  if (Object.keys(headerPatch).length > 0) {
-    await rebuildEntry(exec, entryId, headerPatch);
+  if (Object.keys(headerPatch).length === 0) return;
+
+  if (patch.date !== undefined) {
+    // Date-carrying patch: supply explicit legs to prevent rate re-lock.
+    const fromBase = Number(fromLeg.amount_base);
+    const toBase = Number(toLeg.amount_base);
+    const fromRate = Number(fromLeg.exchange_rate);
+    const toRate = Number(toLeg.exchange_rate);
+    headerPatch.legs = [
+      {
+        id: String(fromLeg.id),
+        accountId: String(fromLeg.account_id),
+        amount: Number(fromLeg.amount),
+        amountBase: fromBase,
+        exchangeRate: fromRate,
+        clearedAt: fromLeg.cleared_at == null ? null : String(fromLeg.cleared_at),
+        memo: fromLeg.memo == null ? null : String(fromLeg.memo),
+      },
+      {
+        id: String(toLeg.id),
+        accountId: String(toLeg.account_id),
+        amount: Number(toLeg.amount),
+        amountBase: toBase,
+        exchangeRate: toRate,
+        clearedAt: toLeg.cleared_at == null ? null : String(toLeg.cleared_at),
+        memo: toLeg.memo == null ? null : String(toLeg.memo),
+      },
+    ];
   }
+
+  await rebuildEntry(exec, entryId, headerPatch);
 }
 
 /**

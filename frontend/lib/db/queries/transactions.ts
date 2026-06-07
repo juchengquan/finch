@@ -595,8 +595,8 @@ export async function updateTransaction(
   const [newAcctRow] = await exec('SELECT currency FROM accounts WHERE id = ?', [newAccountId]);
   const newAcctCcy = String(newAcctRow?.currency ?? String(oldAcctLeg.currency));
 
-  const nativeAmount = patch.amount !== undefined ? patch.amount : Number(oldAcctLeg.amount);
-  const legCurrency = patch.currency ?? (patch.account !== undefined ? newAcctCcy : String(oldAcctLeg.currency));
+  const nativeTypedAmount = patch.amount !== undefined ? patch.amount : Number(oldAcctLeg.amount);
+  const patchCcy = patch.currency ?? (patch.account !== undefined ? newAcctCcy : String(oldAcctLeg.currency));
 
   // Re-lock when amount/currency/date/account changed.
   const willRelock = patch.amount !== undefined || patch.currency !== undefined
@@ -604,24 +604,40 @@ export async function updateTransaction(
 
   let resolvedAmountBase: number;
   let resolvedRate: number;
-  if (willRelock) {
+  // §5.2: when the effective patch currency differs from the account's currency,
+  // the user typed a foreign amount — mirror addTransaction's §5.2 two-step
+  // conversion (foreign → account ccy → ledger base) and carry orig_* fields.
+  let origAmount: number | null;
+  let origCurrency: string | null;
+  let nativeAmount: number; // amount stored on the account leg (in account currency)
+
+  if (willRelock && patchCcy !== newAcctCcy) {
+    // §5.2: foreign-currency input — two-step conversion to preserve orig fields.
     const effectiveDate = patch.date ?? String(cur.date);
-    const conv = await convertToBase(exec, nativeAmount, legCurrency, ledgerBase, effectiveDate);
+    const convToAcct = await convertToBase(exec, nativeTypedAmount, patchCcy, newAcctCcy, effectiveDate);
+    const convToBase2 = await convertToBase(exec, convToAcct.amountBase, newAcctCcy, ledgerBase, effectiveDate);
+    nativeAmount = convToAcct.amountBase;  // account-native
+    resolvedAmountBase = convToBase2.amountBase;
+    resolvedRate = convToBase2.rate;
+    origAmount = nativeTypedAmount;
+    origCurrency = patchCcy;
+  } else if (willRelock) {
+    const effectiveDate = patch.date ?? String(cur.date);
+    const conv = await convertToBase(exec, nativeTypedAmount, patchCcy, ledgerBase, effectiveDate);
+    nativeAmount = nativeTypedAmount;
     resolvedAmountBase = conv.amountBase;
     resolvedRate = conv.rate;
+    // Preserve existing orig fields (no currency flip).
+    origAmount = oldAcctLeg.orig_amount == null ? null : Number(oldAcctLeg.orig_amount);
+    origCurrency = oldAcctLeg.orig_currency == null ? null : String(oldAcctLeg.orig_currency);
   } else {
-    // Pure category change: preserve the locked base/rate.
+    // Pure category change: preserve the locked base/rate and orig fields.
+    nativeAmount = nativeTypedAmount;
     resolvedAmountBase = Number(oldAcctLeg.amount_base);
     resolvedRate = Number(oldAcctLeg.exchange_rate);
+    origAmount = oldAcctLeg.orig_amount == null ? null : Number(oldAcctLeg.orig_amount);
+    origCurrency = oldAcctLeg.orig_currency == null ? null : String(oldAcctLeg.orig_currency);
   }
-
-  // Orig fields: preserve if currency unchanged, clear if currency flips.
-  const origAmount = (patch.currency !== undefined && patch.currency !== String(oldAcctLeg.currency))
-    ? null
-    : (oldAcctLeg.orig_amount == null ? null : Number(oldAcctLeg.orig_amount));
-  const origCurrency = (patch.currency !== undefined && patch.currency !== String(oldAcctLeg.currency))
-    ? null
-    : (oldAcctLeg.orig_currency == null ? null : String(oldAcctLeg.orig_currency));
 
   // Splits: if ≥2 plain category legs and patch.category is set, no-op on
   // legs (legacy parity — sets the ignored parent default).

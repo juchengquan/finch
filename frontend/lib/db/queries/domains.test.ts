@@ -666,14 +666,19 @@ test('updateTransaction: currency change re-derives amount_base + locks a new ra
   // is in SGD; the posting stores currency='USD' (account currency) and the
   // amount_base is recomputed treating the input as SGD.
   await updateTransaction(exec, txId, { currency: 'SGD' });
-  // §2: amount, currency, amount_base, exchange_rate on the account posting.
-  const [row] = await exec('SELECT p.amount, p.currency, p.amount_base, p.exchange_rate FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
-  expect(Number(row.amount)).toBe(-100);
-  // currency stays USD (account currency), amount_base re-derived treating input as SGD.
+  // §5.2: currency='SGD' on a USD account → foreign-currency input path.
+  // Posting stores: currency=USD (account), amount=SGD→USD conversion,
+  // amount_base=USD (ledger base=USD so same), orig_amount=-100, orig_currency='SGD'.
+  const [row] = await exec('SELECT p.amount, p.currency, p.amount_base, p.exchange_rate, p.orig_amount, p.orig_currency FROM postings p WHERE p.entry_id = ? AND p.account_id IS NOT NULL LIMIT 1', [txId]);
+  // currency stays USD (account currency), amount is the converted USD figure.
   expect(String(row.currency)).toBe('USD');
-  const expected = await convertToBase(exec, -100, 'SGD', 'USD', '2026-05-25');
-  expect(Number(row.amount_base)).toBeCloseTo(expected.amountBase, 2);
-  expect(Number(row.exchange_rate)).toBeCloseTo(expected.rate, 6);
+  const convToUsd = await convertToBase(exec, -100, 'SGD', 'USD', '2026-05-25');
+  expect(Number(row.amount)).toBeCloseTo(convToUsd.amountBase, 2);
+  // amount_base = converted to USD (=ledger base); same figure since acct ccy == ledger base.
+  expect(Number(row.amount_base)).toBeCloseTo(convToUsd.amountBase, 2);
+  // §5.2: orig_amount + orig_currency carry the typed foreign input.
+  expect(Number(row.orig_amount)).toBe(-100);
+  expect(String(row.orig_currency)).toBe('SGD');
 });
 
 test('updateTransaction: status flip sets/clears confirmed_at and moves the balance', async () => {

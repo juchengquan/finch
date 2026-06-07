@@ -539,6 +539,57 @@ test('postTransfer: same-currency equality, cross-currency residue, pinned toAmo
   expect(String(memos[1].memo)).toContain('Transfer from');
 });
 
+test('updateTransfer: a date-only edit preserves pinned cross-currency bases', async () => {
+  // §6 PR-B precondition: pinned bank rates survive date edits (proven by probe:
+  // pinned base 739.26 → 499.50 on a pure date edit before this fix).
+  const exec = await newDb();
+  await withTestLedger(exec); // ledger 'lt', base SGD
+  await addAccount(exec, 'a-pin-sgd', 'SGD', 'lt');
+  await addAccount(exec, 'a-pin-usd', 'USD', 'lt');
+  await ensureSystemCategories(exec, 'lt');
+  // Seed a rate so convertToBase can resolve USD→SGD (needed by postTransfer).
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-04','SGD',0.7,'manual')");
+
+  // Post a cross-currency transfer with a pinned toAmount (off-market rate).
+  // SGD leg: -135 SGD; USD leg: +100 USD. The pinned exchange_rate on each leg
+  // is what the bank actually used — NOT the mid-rate in exchange_rates table.
+  const { entryId } = await postTransfer(exec, {
+    fromAccountId: 'a-pin-sgd', toAccountId: 'a-pin-usd',
+    fromAmount: 135, toAmount: 100, date: '2026-06-04',
+  });
+
+  // Capture both account legs' amount_base before the date edit.
+  const legsBefore = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order',
+    [entryId],
+  );
+  const fromBaseBefore = Number(legsBefore[0].amount_base);
+  const toBaseBefore = Number(legsBefore[1].amount_base);
+  expect(legsBefore.length).toBe(2);
+
+  // Date-only edit: change to a different date that has a different mid-rate.
+  // If rebuildEntry re-locks from the rates table, amount_base would change.
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-20','SGD',0.4,'manual')");
+  const { updateTransfer } = await import('@/lib/db/queries/transfers');
+  await updateTransfer(exec, entryId, { date: '2026-06-20' });
+
+  // Both legs' amount_base must be UNCHANGED (pinned rate survived the date edit).
+  const legsAfter = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order',
+    [entryId],
+  );
+  expect(Number(legsAfter[0].amount_base)).toBeCloseTo(fromBaseBefore, 4);
+  expect(Number(legsAfter[1].amount_base)).toBeCloseTo(toBaseBefore, 4);
+
+  // Entry date is updated.
+  const [e] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.date)).toBe('2026-06-20');
+
+  // The entry still balances (Σ amount_base = 0).
+  const [sum] = await exec('SELECT ROUND(SUM(amount_base),2) AS s FROM postings WHERE entry_id = ?', [entryId]);
+  expect(Math.abs(Number(sum.s))).toBe(0);
+});
+
 test('rebuildEntry: header-only patch keeps legs; status flip recomputes', async () => {
   const exec = await newDb();
   await withTestLedger(exec);
