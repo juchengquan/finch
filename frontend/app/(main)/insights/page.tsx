@@ -17,6 +17,7 @@ import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/InsightCard';
 import { AprVsMay } from '@/components/AprVsMay';
 import { WeeklyDigestCard } from '@/components/weekly-digest-card';
+import { NetWorthExplainedCard } from '@/components/net-worth-explained-card';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useBackup } from '@/components/sqlite-backup-provider';
@@ -406,6 +407,8 @@ export default function InsightsPage() {
             </div>
           </div>
         )}
+
+        <NetWorthExplainedCard />
 
         {flow && flow.income > 0 && flow.categories.length > 0 && (
           <div className="bg-card border-border mb-4 rounded-xl border p-3.5">

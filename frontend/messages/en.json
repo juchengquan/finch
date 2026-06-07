@@ -505,6 +505,16 @@
     "deltas": {
       "title": "{prev} vs {cur}",
       "topChanges": "Top changes"
+    },
+    "netWorthExplained": {
+      "title": "Net-worth explained",
+      "subtitle": "What moved your net worth, by month — income, spending, adjustments, and FX drift.",
+      "income": "Income",
+      "expense": "Expense",
+      "adjustment": "Adjustment",
+      "fx": "FX gain/loss",
+      "chartAria": "Net-worth movement, six months, stacked by month around the zero axis",
+      "netLatest": "Last month net: {value}"
     }
   },
   "activity": {
