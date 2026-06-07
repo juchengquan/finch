@@ -13,6 +13,15 @@ const W = 320;
 const H = 160;
 const COL_GAP = 6;
 
+// Bucket color palette (income / expense / adjustment / fx) — shared by the
+// chart segments and the legend so they can't drift.
+const BUCKET_COLORS = [
+  'var(--color-chart-2)',
+  'var(--color-chart-1)',
+  'var(--color-chart-3)',
+  'var(--color-chart-4)',
+] as const;
+
 type Bucket = { key: 'income' | 'expense' | 'adjustment' | 'fx'; value: number; color: string };
 
 /** DE §10.7 net-worth-explained panel. Decomposes the last 6 months of
@@ -48,10 +57,10 @@ export function NetWorthExplainedCard() {
   //   adjustment is signed as-is (either direction)
   //   fx         is signed as-is (residual, only non-zero on cross-currency flows)
   const columns: Bucket[][] = series.map((s) => [
-    { key: 'income', value: s.income, color: 'var(--color-chart-2)' },
-    { key: 'expense', value: -s.expense, color: 'var(--color-chart-1)' },
-    { key: 'adjustment', value: s.adjustment, color: 'var(--color-chart-3)' },
-    { key: 'fx', value: s.fx, color: 'var(--color-chart-4)' },
+    { key: 'income', value: s.income, color: BUCKET_COLORS[0] },
+    { key: 'expense', value: -s.expense, color: BUCKET_COLORS[1] },
+    { key: 'adjustment', value: s.adjustment, color: BUCKET_COLORS[2] },
+    { key: 'fx', value: s.fx, color: BUCKET_COLORS[3] },
   ]);
 
   // Domain for the y axis: max sum-of-positives vs |sum-of-negatives| across all months.
@@ -111,7 +120,7 @@ export function NetWorthExplainedCard() {
           <li key={key} className="flex items-center gap-1.5">
             <span
               className="inline-block size-3 rounded-sm"
-              style={{ background: `var(--color-chart-${[2, 1, 3, 4][i]})` }}
+              style={{ background: BUCKET_COLORS[i] }}
             />
             {t(key)}
           </li>
