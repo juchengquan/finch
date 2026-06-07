@@ -1396,6 +1396,13 @@
           "label": "Database file (server)",
           "loading": "…"
         },
+        "audit": {
+          "label": "Audit",
+          "loading": "Checking…",
+          "clean": "No problems found",
+          "problems": "{count, plural, one {# problem} other {# problems}}",
+          "more": "+ {count} more"
+        },
         "exportDb": {
           "label": "Export a copy",
           "button": "Download .finch"

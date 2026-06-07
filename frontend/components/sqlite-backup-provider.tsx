@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetchDbInfo } from '@/lib/api-client';
+import type { AuditProblem } from '@/lib/db/entries';
 
 const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
@@ -37,6 +38,7 @@ export interface ImportResult {
 
 interface BackupContextValue {
   serverPath: string | null;
+  audit: { problems: AuditProblem[]; problemCount: number; checkedAt: string } | null;
   metadata: DbMetadataView | null;
   backups: BackupEntry[];
   download: () => Promise<void>;
@@ -52,6 +54,7 @@ const noop = async () => {};
 
 const BackupContext = createContext<BackupContextValue>({
   serverPath: null,
+  audit: null,
   metadata: null,
   backups: [],
   download: noop,
@@ -69,6 +72,7 @@ export function useBackup(): BackupContextValue {
 
 export function SqliteBackupProvider({ children }: { children: React.ReactNode }) {
   const [serverPath, setServerPath] = useState<string | null>(null);
+  const [audit, setAudit] = useState<{ problems: AuditProblem[]; problemCount: number; checkedAt: string } | null>(null);
   const [metadata, setMetadata] = useState<DbMetadataView | null>(null);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
 
@@ -98,7 +102,10 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     void fetchDbInfo()
       .then((info) => {
-        if (!cancelled) setServerPath(info.path);
+        if (!cancelled) {
+          setServerPath(info.path);
+          setAudit(info.audit);
+        }
       })
       .catch((err) => console.error('Could not read db info', err));
     void fetch(`${base}/api/export/metadata`)
@@ -193,6 +200,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     <BackupContext.Provider
       value={{
         serverPath,
+        audit,
         metadata,
         backups,
         download,

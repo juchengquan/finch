@@ -1397,6 +1397,13 @@
           "label": "数据库文件(服务器)",
           "loading": "…"
         },
+        "audit": {
+          "label": "审计",
+          "loading": "检查中…",
+          "clean": "未发现问题",
+          "problems": "{count} 个问题",
+          "more": "另有 {count} 个"
+        },
         "exportDb": {
           "label": "导出副本",
           "button": "下载 .finch"
