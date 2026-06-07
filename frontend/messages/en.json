@@ -1,4 +1,70 @@
 {
+  "activity": {
+    "title": "Activity",
+    "searchAria": "Search transactions",
+    "searchPlaceholder": "Search transactions",
+    "filters": {
+      "all": "All",
+      "out": "Out",
+      "in": "In"
+    },
+    "toggleFilters": "Toggle filters",
+    "filtersLabel": "Filters",
+    "saveSearch": "Save",
+    "saveSearchAria": "Save current filters as a search",
+    "selectMode": {
+      "enter": "Select",
+      "exit": "Cancel",
+      "enterAria": "Select transactions to recategorize",
+      "exitAria": "Exit select mode",
+      "selectedCount": "{count} selected",
+      "selectAll": "Select all {total}",
+      "recategorizePlaceholder": "Recategorize…",
+      "regionAria": "Bulk recategorize",
+      "appliedToast": "Set category to {category} on {count, plural, one {# transaction} other {# transactions}}"
+    },
+    "reviewToggle": "Needs review",
+    "reviewToggleAria": "Show only transactions that need review",
+    "reviewCount": "{count, plural, one {# transaction to review} other {# transactions to review}}",
+    "markAllReviewed": "Mark all reviewed",
+    "markedReviewedToast": "Marked {count} reviewed",
+    "reviewEmpty": "All caught up — nothing to review.",
+    "deleteSavedSearchAria": "Delete saved search {name}",
+    "filterPanel": {
+      "from": "From",
+      "to": "To",
+      "minAmount": "Min amount",
+      "maxAmount": "Max amount",
+      "clear": "Clear"
+    },
+    "empty": {
+      "title": "No transactions",
+      "filteredDescription": "Nothing matches the current filters. Clear them to see all rows.",
+      "freshDescription": "Add an expense to get started — it'll show up here."
+    },
+    "row": {
+      "needsReview": "Needs review",
+      "pending": "pending",
+      "uncategorized": "Uncategorized"
+    },
+    "table": {
+      "date": "Date",
+      "merchant": "Merchant",
+      "category": "Category",
+      "account": "Account",
+      "status": "Status",
+      "amount": "Amount",
+      "pending": "Pending",
+      "posted": "Posted"
+    },
+    "saveDialog": {
+      "title": "Save search",
+      "name": "Name",
+      "namePlaceholder": "e.g. Subscriptions > $20",
+      "hint": "Pinned on this device only — saved searches aren't stored in your ledger or included in exports.",
+      "savedToast": "Saved \"{name}\""
+    }
+  },
   "budgets": {
     "title": "Budgets",
     "addAria": "Add",
@@ -398,7 +464,8 @@
     "add": "Add",
     "back": "Back",
     "done": "Done",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "moreActions": "More actions"
   },
   "nav": {
     "accounts": "Accounts",
@@ -428,7 +495,8 @@
     "addExpense": "Add expense",
     "accountMenu": "Account menu",
     "breadcrumb": "Breadcrumb",
-    "userLabel": "Personal"
+    "userLabel": "Personal",
+    "goBack": "Go back"
   },
   "palette": {
     "title": "Search and commands",

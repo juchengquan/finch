@@ -1,4 +1,70 @@
 {
+  "activity": {
+    "title": "动态",
+    "searchAria": "搜索交易",
+    "searchPlaceholder": "搜索交易",
+    "filters": {
+      "all": "全部",
+      "out": "支出",
+      "in": "收入"
+    },
+    "toggleFilters": "切换筛选",
+    "filtersLabel": "筛选",
+    "saveSearch": "保存",
+    "saveSearchAria": "保存当前筛选为搜索",
+    "selectMode": {
+      "enter": "选择",
+      "exit": "取消",
+      "enterAria": "选择交易以批量改类",
+      "exitAria": "退出选择模式",
+      "selectedCount": "已选 {count}",
+      "selectAll": "全选 {total}",
+      "recategorizePlaceholder": "改类别…",
+      "regionAria": "批量改类别",
+      "appliedToast": "已将 {count} 笔交易的类别改为 {category}"
+    },
+    "reviewToggle": "待复核",
+    "reviewToggleAria": "仅显示需要复核的交易",
+    "reviewCount": "{count} 笔待复核",
+    "markAllReviewed": "全部标为已复核",
+    "markedReviewedToast": "已将 {count} 笔标为已复核",
+    "reviewEmpty": "都处理完了 —— 没有待复核的项目。",
+    "deleteSavedSearchAria": "删除已保存搜索 {name}",
+    "filterPanel": {
+      "from": "起",
+      "to": "止",
+      "minAmount": "最小金额",
+      "maxAmount": "最大金额",
+      "clear": "清除"
+    },
+    "empty": {
+      "title": "暂无交易",
+      "filteredDescription": "没有匹配当前筛选的项目。清除筛选可查看全部。",
+      "freshDescription": "添加一笔支出开始记账 —— 它会出现在这里。"
+    },
+    "row": {
+      "needsReview": "待复核",
+      "pending": "待处理",
+      "uncategorized": "未分类"
+    },
+    "table": {
+      "date": "日期",
+      "merchant": "商户",
+      "category": "类别",
+      "account": "账户",
+      "status": "状态",
+      "amount": "金额",
+      "pending": "待处理",
+      "posted": "已入账"
+    },
+    "saveDialog": {
+      "title": "保存搜索",
+      "name": "名称",
+      "namePlaceholder": "例如:订阅 > ¥150",
+      "hint": "仅保存在此设备上 —— 保存的搜索不计入账本,也不会出现在导出中。",
+      "savedToast": "已保存「{name}」"
+    }
+  },
   "budgets": {
     "title": "预算",
     "addAria": "添加",
@@ -398,7 +464,8 @@
     "add": "添加",
     "back": "返回",
     "done": "完成",
-    "loading": "加载中…"
+    "loading": "加载中…",
+    "moreActions": "更多操作"
   },
   "nav": {
     "accounts": "账户",
@@ -428,7 +495,8 @@
     "addExpense": "添加支出",
     "accountMenu": "账户菜单",
     "breadcrumb": "面包屑",
-    "userLabel": "个人"
+    "userLabel": "个人",
+    "goBack": "返回"
   },
   "palette": {
     "title": "搜索与命令",
