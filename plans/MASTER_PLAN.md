@@ -22,7 +22,6 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `INSPIRATION_IDEAS.md` — broader product-direction brainstorm.
 - `IOS_MACOS_PLAN.md` — (2026-06-06) product + architecture direction brief for a future native iOS / macOS port. §2.5 (shared attachment schema + `.finch` pack format) is now **implemented on the web**; **all three §8 cross-app implications are shipped** (attachments PR #106, pack format PR #107, ledger CRUD PR #109). §11 cross-references the web's i18n approach in `I18N_PLAN.md`.
 - `I18N_PLAN.md` — **new (2026-06-06)** — multi-language / localization for the web app. `next-intl` + `messages/<locale>.json` catalogs; English base + Simplified Chinese (`zh-CN`) for v1; translations live in app chrome only, **never in the database or `.finch` packs**; per-device persisted via `localStorage`. Server-side mutation errors get a `{ code, params }` shape so they translate client-side. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
-- `CATEGORIES_LEVEL3_PLAN.md` — **new (2026-06-06)** — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** (the 2-level cap lives in mutation layer only). Backend depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: `<Select>` widgets render labels as `Parent › Child › Leaf` (flat list with separators, no tree picker); `/categories` admin page gains a sub-subcategory affordance. SQL trigger for depth invariant noted as future work but skipped in v1.
 - `PWA_PLAN.md` — **explicitly superseded** by `IOS_MACOS_PLAN.md`. Kept as a fork-in-the-road record; do not implement.
 
 **Shipped design records (`plans/done/`):**
@@ -34,6 +33,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `RECEIPT_PHOTOS_PLAN.md` — **moved here 2026-06-06**; shipped via PR #106 (web-app receipt attachments end-to-end — schema + upload route + serve route + transaction-detail UI + lightbox).
 - `PACK_FORMAT_PLAN.md` — **moved here 2026-06-06**; shipped via PR #107 (the cross-platform `.finch` zip pack format end-to-end — build, parse, atomic swap of DB + attachments, magic-byte-routed import, Settings UI).
 - `LEDGER_CRUD_PLAN.md` — **moved here 2026-06-06**; shipped (this PR) — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
+- `CATEGORIES_LEVEL3_PLAN.md` — **moved here 2026-06-06**; shipped (this PR) — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** — the cap is mutation-layer only. Backend gains a depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: every category `<Select>` renders labels as `Parent › Child › Leaf`; `/categories` admin page renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances; color inheritance walks up the chain to the nearest non-null ancestor.
 
 ---
 
@@ -87,7 +87,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started · ⊘ intentionally dropped
 | Ledger | Tags admin | ✅ | **Create / edit / delete** (name + color); assignments cascade on delete. Colour storage matches categories (hex). |
 | Ledger | Ledger switcher (bottom sheet) | ✅ | Per-ledger base currency; sidebar + Settings; scopes Activity/derived figures |
 | Ledger | Ledger admin table (desktop) | ⊘ | Dropped from the roadmap. The Ledger switcher (sidebar + bottom sheet) now does create + edit + set-default + delete (LEDGER_CRUD_PLAN, shipped 2026-06-06) — no separate admin table needed. |
-| Ledger | Category tree (2-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children). `/categories` renders parent cards with subcategory rows + a "new subcategory" affordance per card. Both levels are bookable; `rollupCategorySpend` folds child totals into the parent for rollup reports. Mutations enforce "no grandchildren". |
+| Ledger | Category tree (≤ 3-level) | ✅ | `categories.parent_id` (SET NULL on delete = promote children, recursively safe). `/categories` renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances. Every level is bookable; `rollupCategorySpend` walks the tree (grandchild → child → parent); a budget on a parent matches descendants recursively. Mutations enforce a depth-3 cap (`CATEGORIES_LEVEL3_PLAN`). |
 | Settings | Exchange-rate book | ✅ | Under **Settings › Ledger** (add/delete, sparkline, source badges); DB-backed. The "device/sync" piece was retired with the `sync_log` table — DB file is the source of truth, no multi-device sync to expose. |
 | Ledger | FX transaction detail | ⊘ | Dedicated `/fx` page retired — FX info embedded directly into transaction detail: a dual-amount card (Original · {currency} / Base · {ledger base} LOCKED) + a rate-locked badge appear in `<TransactionDetail>` whenever `currency ≠ ledger base`. Silent in lists; full audit on tap. |
 | System | Multi-palette / font / density tweaks panel | ⊘ | Deliberately replaced by light/dark (prior decision) |
@@ -361,18 +361,10 @@ below; what's still open is summarized here.
    server-side mutation errors so toasts localise client-side. **No schema
    change**; `.finch` packs are unaffected. **M — five-ish PR-sized
    commits.**
-3. **3-level categories** — `plans/CATEGORIES_LEVEL3_PLAN.md` (2026-06-06).
-   Relax the existing 2-level taxonomy cap to a 3-level hard cap (e.g.
-   `Food › Restaurants › Japanese`). **No schema change** — the cap is
-   mutation-layer-only today. Recursive `rollupCategorySpend` + recursive
-   budget category-id matching (a budget on `food` now also catches
-   `food › restaurants › japanese`); `<Select>` labels render as
-   `Parent › Child › Leaf`; `/categories` admin page gains the
-   sub-subcategory affordance. **S–M — 3 code commits + 1 docs.**
-4. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
+3. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
-5. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+4. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
@@ -746,4 +738,40 @@ parentheses.
   Same PR also fixes a long-standing bug: `postScheduled` hardcoded
   `ledgerId = 'personal'` — now reads the template's own `ledger_id`,
   so templates in non-personal ledgers post into their right ledger.
+- **3-level categories** (this PR; `plans/done/CATEGORIES_LEVEL3_PLAN.md`)
+  — relax the 2-level taxonomy cap to a 3-level hard cap (e.g.
+  `Food › Restaurants › Japanese`). **No schema change** — the cap is
+  mutation-layer-only; the `categories.parent_id` doc comment is the
+  only schema-file touch.
+  (1) **Backend** — `assertCanBeParent` rewritten as a depth check;
+  new `assertSubtreeFitsUnder` for the move case (a level-2 node with
+  grandchildren can only land under a top-level parent); new
+  `isInSubtreeOf` cycle defence; removed the old "can't move a node
+  with children" hard block (`assertSubtreeFitsUnder` covers it
+  correctly). `rollupCategorySpend` rewritten as a memoised tree walk;
+  new `expandDescendants` helper; `budgetProgress` signature gains
+  an optional `categories[]` parameter so a budget on a parent
+  catches every descendant at match time (the behaviour change for
+  existing 2-level budgets is benign — they catch what users usually
+  already wanted). New `categoryPath`, `resolveCategoryColor`
+  helpers. **+6 tests** (depth-3 OK / depth-4 rejected, subtree move
+  guard, cycle, 3-level rollup, expandDescendants, recursive budget
+  match).
+  (2) **UI Select sweep** — mechanical: every category `<Select>`
+  renders labels as `Parent › Child › Leaf`, sorted by path so
+  siblings cluster (transaction detail recategorize, split editor,
+  Add transaction, Edit transaction, rule builder condition + action
+  pickers, budget filter ChipMultiSelect, scheduled template form).
+  (3) **/categories admin page** — `buildCategoryTree` replaced
+  inline with a 3-level forest; rendering adds sub-subcategory rows
+  + inline "+" affordances on top-level and subcategory rows (the
+  affordance hides when the chain is already at depth 3); search
+  walks all three levels with force-expand on intermediate matches;
+  edit-dialog parent picker accepts every category whose depth +
+  the editing subtree's depth ≤ 3 (and isn't inside the editing
+  subtree), labels via `categoryPath`. The previous "hide the
+  parent picker when the node has children" gate is gone — the
+  depth math handles it correctly. Color inheritance walks up the
+  ancestor chain via `resolveCategoryColor` (was a one-level
+  fallback).
 
