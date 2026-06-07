@@ -23,46 +23,71 @@ export interface Transfer {
   note: string | null;
 }
 
-// B4: read path (listTransfers) is rewritten to query entries+postings.
-// For now the read path keeps its legacy SQL body — it's intentionally left
-// unedited (B4's scope).
 export async function listTransfers(exec: Exec, ledgerId: string): Promise<Transfer[]> {
-  const rows = await exec(
-    `SELECT
-       t.transfer_group_id AS id,
-       MAX(t.date) AS date,
-       MAX(t.time) AS time,
-       MAX(CASE WHEN t.amount < 0 THEN -t.amount END) AS amount,
-       MAX(CASE WHEN t.amount > 0 THEN t.amount END) AS toAmount,
-       MAX(CASE WHEN t.amount < 0 THEN t.currency END) AS fromCurrency,
-       MAX(CASE WHEN t.amount > 0 THEN t.currency END) AS toCurrency,
-       MAX(CASE WHEN t.amount < 0 THEN t.account_id END) AS fromId,
-       MAX(CASE WHEN t.amount > 0 THEN t.account_id END) AS toId,
-       MAX(t.notes) AS note
-     FROM transactions t
-     WHERE t.ledger_id = ? AND t.transfer_group_id IS NOT NULL
-     GROUP BY t.transfer_group_id
-     ORDER BY date DESC`,
+  // Transfer entries: kind='transfer' with ≥2 account legs in the ledger.
+  const entryRows = await exec(
+    `SELECT e.id, e.date, e.time, e.notes
+       FROM entries e
+      WHERE e.ledger_id = ? AND e.kind = 'transfer'
+      ORDER BY e.date DESC, e.time DESC`,
     [ledgerId],
   );
-  if (rows.length === 0) return [];
+  if (entryRows.length === 0) return [];
 
+  const entryIds = entryRows.map((e) => String(e.id));
+  const ph = entryIds.map(() => '?').join(',');
+
+  // Load all account legs for these entries.
+  const legRows = await exec(
+    `SELECT p.entry_id, p.id AS pid, p.account_id, p.amount, p.amount_base, p.currency
+       FROM postings p
+      WHERE p.entry_id IN (${ph}) AND p.account_id IS NOT NULL
+      ORDER BY p.entry_id, p.sort_order`,
+    entryIds,
+  );
+
+  // Load account names.
   const accts = await exec('SELECT id, name FROM accounts WHERE ledger_id = ?', [ledgerId]);
   const nameById = new Map(accts.map((a) => [String(a.id), String(a.name)]));
-  return rows.map((r) => ({
-    id: String(r.id),
-    date: String(r.date),
-    time: r.time == null ? null : String(r.time),
-    amount: Number(r.amount ?? 0),
-    toAmount: Number(r.toAmount ?? 0),
-    fromCurrency: r.fromCurrency == null ? 'USD' : String(r.fromCurrency),
-    toCurrency: r.toCurrency == null ? 'USD' : String(r.toCurrency),
-    fromAccountId: r.fromId == null ? null : String(r.fromId),
-    toAccountId: r.toId == null ? null : String(r.toId),
-    fromName: r.fromId == null ? null : nameById.get(String(r.fromId)) ?? null,
-    toName: r.toId == null ? null : nameById.get(String(r.toId)) ?? null,
-    note: r.note == null ? null : String(r.note),
-  }));
+
+  // Group legs by entry.
+  const legsByEntry = new Map<string, Array<Record<string, unknown>>>();
+  for (const l of legRows) {
+    const eid = String(l.entry_id);
+    const arr = legsByEntry.get(eid) ?? [];
+    arr.push(l);
+    legsByEntry.set(eid, arr);
+  }
+
+  const result: Transfer[] = [];
+  for (const e of entryRows) {
+    const eid = String(e.id);
+    const legs = legsByEntry.get(eid) ?? [];
+    if (legs.length < 2) continue;
+
+    // from = negative leg, to = positive leg.
+    const fromLeg = legs.find((l) => Number(l.amount) < 0) ?? legs[0];
+    const toLeg = legs.find((l) => Number(l.amount) > 0) ?? legs[1];
+
+    const fromAccountId = fromLeg.account_id == null ? null : String(fromLeg.account_id);
+    const toAccountId = toLeg.account_id == null ? null : String(toLeg.account_id);
+
+    result.push({
+      id: eid,
+      date: String(e.date),
+      time: e.time == null ? null : String(e.time),
+      amount: Math.abs(Number(fromLeg.amount)),
+      toAmount: Math.abs(Number(toLeg.amount)),
+      fromCurrency: String(fromLeg.currency ?? 'USD'),
+      toCurrency: String(toLeg.currency ?? 'USD'),
+      fromAccountId,
+      toAccountId,
+      fromName: fromAccountId == null ? null : nameById.get(fromAccountId) ?? null,
+      toName: toAccountId == null ? null : nameById.get(toAccountId) ?? null,
+      note: e.notes == null ? null : String(e.notes),
+    });
+  }
+  return result;
 }
 
 export interface TransferPatch {

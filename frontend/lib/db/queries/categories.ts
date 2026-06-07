@@ -104,27 +104,29 @@ export interface CategorySpend {
 }
 
 /**
- * Confirmed expense total per category. LEFT-JOINs `transaction_splits` so a
- * tx with splits emits one row per split (its category + its amount), while a
- * tx without splits falls back to the parent's category + amount via COALESCE.
+ * Confirmed expense total per category. Queries plain category legs from
+ * postings (account_id IS NULL, non-equity) so split entries automatically
+ * emit one row per category leg.
  *
  * The result is **leaf-keyed**: each row's id is the category it was filed
  * against. Parents with children appear here only with their own direct
- * transactions (parents are bookable). Use `rollupCategorySpend` to fold
+ * entries (parents are bookable). Use `rollupCategorySpend` to fold
  * children into their parents for rollup reports.
  */
 export async function categorySpend(exec: Exec, ledgerId: string): Promise<Record<string, number>> {
   const rows = await exec(
-    `SELECT COALESCE(ts.category_id, t.category_id) AS id,
-            SUM(COALESCE(ts.amount_base, t.amount_base) * -1) AS spent
-       FROM transactions t
-       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-      WHERE t.ledger_id = ? AND t.kind IN ('expense','refund')
-        AND t.status = 'confirmed' AND COALESCE(ts.category_id, t.category_id) IS NOT NULL
-      GROUP BY COALESCE(ts.category_id, t.category_id)`,
+    `SELECT p.category_id AS id, ROUND(SUM(p.amount_base), 2) AS spent
+       FROM postings p
+       JOIN entries e   ON e.id = p.entry_id
+       JOIN categories c ON c.id = p.category_id
+      WHERE e.ledger_id = ? AND e.kind IN ('expense','refund') AND e.status = 'confirmed'
+        AND p.account_id IS NULL AND c.kind != 'equity' AND p.category_id IS NOT NULL
+      GROUP BY p.category_id`,
     [ledgerId],
   );
   const m: Record<string, number> = {};
+  // Posting sign convention: category leg for an expense is positive (offsets
+  // the negative account leg). The result is already positive spent — no *-1.
   for (const r of rows) m[String(r.id)] = Number(r.spent);
   return m;
 }
@@ -231,12 +233,13 @@ export function resolveCategoryColor(
 /** Confirmed expense totals per category for a month (e.g. '2026-05'). */
 export async function monthlyByCategory(exec: Exec, ledgerId: string, yearMonth: string): Promise<CategorySpend[]> {
   const rows = await exec(
-    `SELECT c.id, c.name, SUM(COALESCE(ts.amount_base, t.amount_base) * -1) AS spent
-       FROM transactions t
-       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-       JOIN categories c ON c.id = COALESCE(ts.category_id, t.category_id)
-      WHERE t.ledger_id = ? AND t.date LIKE ?
-        AND t.kind IN ('expense','refund') AND t.status = 'confirmed'
+    `SELECT c.id, c.name, ROUND(SUM(p.amount_base), 2) AS spent
+       FROM postings p
+       JOIN entries e ON e.id = p.entry_id
+       JOIN categories c ON c.id = p.category_id
+      WHERE e.ledger_id = ? AND e.date LIKE ?
+        AND e.kind IN ('expense','refund') AND e.status = 'confirmed'
+        AND p.account_id IS NULL AND c.kind != 'equity' AND p.category_id IS NOT NULL
       GROUP BY c.id ORDER BY spent DESC`,
     [ledgerId, `${yearMonth}%`],
   );

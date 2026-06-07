@@ -69,34 +69,44 @@ export interface AddInput {
   counterpartyId?: string | null;
 }
 
-export function rowToTx(r: Record<string, unknown>): Tx {
-  // The store/derive `amount` is the ledger-base figure (DB `amount_base`);
-  // DB `amount` is the native amount the user entered, kept for display.
-  const amount = Number(r.amount_base);
-  const nativeAmount = Number(r.amount);
+/** Map a joined posting+entry row to the partial Tx shape.
+ *  Enrichment (category / splits / transferGroupId / refund / tags) is added
+ *  by `enrichLegTxs` — callers MUST pass through that helper before returning
+ *  Tx objects to the outside world. */
+function legRowToTx(r: Record<string, unknown>): Tx {
+  // p.amount_base is the ledger-base signed figure (store's `amount`).
+  // p.amount (orig_amount ?? p.amount) is the native figure for display.
+  const amount = Number(r.p_base);
+  const nativeAmount = Number(r.orig_amount ?? r.p_amount);
+  const currency = r.orig_currency != null ? String(r.orig_currency)
+    : r.p_ccy != null ? String(r.p_ccy) : undefined;
   return {
-    id: String(r.id),
-    merchant: String(r.description ?? ''),
-    category: r.category_id === null || r.category_id === undefined ? null : String(r.category_id),
+    id: String(r.pid),
+    merchant: String(r.p_memo ?? r.description ?? ''),
+    category: null, // filled by enrichLegTxs
     amount,
-    currency: r.currency == null ? undefined : String(r.currency),
+    currency,
     nativeAmount,
-    account: String(r.account_id),
+    account: String(r.p_account),
     date: String(r.date),
     time: r.time == null ? undefined : String(r.time),
     note: r.notes == null ? undefined : String(r.notes),
     pending: String(r.status) === 'pending',
     kind: String(r.kind) as Tx['kind'],
     ledgerId: String(r.ledger_id),
-    transferGroupId: r.transfer_group_id == null ? undefined : String(r.transfer_group_id),
+    // transferGroupId filled by enrichLegTxs (multi-account-leg entries)
     sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
-    refundedTransactionId: r.refunded_transaction_id == null ? undefined : String(r.refunded_transaction_id),
+    // refundedTransactionId filled by enrichLegTxs
     counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
-    clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
+    clearedAt: r.p_cleared == null ? null : String(r.p_cleared),
     appliedRuleIds: parseRuleIds(r.applied_rule_ids),
     reviewedAt: r.reviewed_at == null ? null : String(r.reviewed_at),
   };
 }
+
+/** @deprecated alias for callers that still import rowToTx — forwards to legRowToTx.
+ *  Remove once B4 sweep is complete. */
+export const rowToTx = legRowToTx;
 
 /** Parse the applied_rule_ids JSON array column; undefined when null/corrupt. */
 function parseRuleIds(raw: unknown): string[] | undefined {
@@ -109,65 +119,218 @@ function parseRuleIds(raw: unknown): string[] | undefined {
   }
 }
 
+/** Base SELECT joining account postings to their entry header.
+ *  Excludes opening entries and category legs (account_id IS NOT NULL). */
+const BASE_SELECT = `
+  SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
+         p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
+         e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
+         e.refunded_entry_id, e.source_template_id, e.notes, e.applied_rule_ids, e.reviewed_at,
+         e.created_at AS e_created_at
+    FROM postings p JOIN entries e ON e.id = p.entry_id
+   WHERE p.account_id IS NOT NULL AND e.kind != 'opening'
+`;
+
+/** Shared enrichment: category, splits, transferGroupId, refundedTransactionId,
+ *  tags — all resolved in 4 batched queries over the entry-id set. */
+export async function enrichLegTxs(exec: Exec, rows: Tx[], entryIds: string[]): Promise<Tx[]> {
+  if (entryIds.length === 0) return rows;
+
+  const ph = entryIds.map(() => '?').join(',');
+
+  // 1. Category legs per entry (plain only — exclude equity).
+  const catRows = await exec(
+    `SELECT p.entry_id, p.category_id, p.amount_base, p.sort_order
+       FROM postings p
+      WHERE p.entry_id IN (${ph}) AND p.account_id IS NULL
+        AND (p.category_id IS NULL OR (
+          SELECT c.kind FROM categories c WHERE c.id = p.category_id
+        ) != 'equity')
+      ORDER BY p.entry_id, p.sort_order`,
+    entryIds,
+  );
+
+  // 2. Account-leg count per entry (detects transfers: ≥2 account legs).
+  const acctCountRows = await exec(
+    `SELECT p.entry_id, COUNT(*) AS n
+       FROM postings p
+      WHERE p.entry_id IN (${ph}) AND p.account_id IS NOT NULL
+      GROUP BY p.entry_id`,
+    entryIds,
+  );
+
+  // 3. Tags per entry.
+  const tagRows = await exec(
+    `SELECT et.entry_id, et.tag_id FROM entry_tags et WHERE et.entry_id IN (${ph})`,
+    entryIds,
+  );
+
+  // Build category map: entryId → plain category legs (sorted by sort_order).
+  const catsByEntry = new Map<string, Array<{ categoryId: string | null; amountBase: number; sortOrder: number }>>();
+  for (const cr of catRows) {
+    const eid = String(cr.entry_id);
+    const arr = catsByEntry.get(eid) ?? [];
+    arr.push({
+      categoryId: cr.category_id == null ? null : String(cr.category_id),
+      amountBase: Number(cr.amount_base),
+      sortOrder: Number(cr.sort_order),
+    });
+    catsByEntry.set(eid, arr);
+  }
+
+  // Build account-leg-count map.
+  const acctCountMap = new Map<string, number>();
+  for (const ac of acctCountRows) acctCountMap.set(String(ac.entry_id), Number(ac.n));
+
+  // Build tag map: entryId → tag ids.
+  const tagsByEntry = new Map<string, string[]>();
+  for (const tr of tagRows) {
+    const eid = String(tr.entry_id);
+    const arr = tagsByEntry.get(eid) ?? [];
+    arr.push(String(tr.tag_id));
+    tagsByEntry.set(eid, arr);
+  }
+
+  // Collect refunded_entry_ids that need resolution (raw entry ids).
+  const refEntryIds = rows
+    .filter((r) => r.refundedTransactionId != null)
+    .map((r) => r.refundedTransactionId as string);
+
+  const refPostingMap = new Map<string, string>();
+  if (refEntryIds.length > 0) {
+    const refPh = refEntryIds.map(() => '?').join(',');
+    const refRows = await exec(
+      `SELECT p.entry_id, p.id AS pid
+         FROM postings p
+        WHERE p.entry_id IN (${refPh}) AND p.account_id IS NOT NULL
+        ORDER BY p.sort_order
+        LIMIT ${refEntryIds.length}`,
+      refEntryIds,
+    );
+    // Use first account leg per entry.
+    for (const rr of refRows) {
+      const eid = String(rr.entry_id);
+      if (!refPostingMap.has(eid)) refPostingMap.set(eid, String(rr.pid));
+    }
+  }
+
+  // Enrich each row in place.
+  for (let i = 0; i < rows.length; i++) {
+    const tx = rows[i];
+    const eid = entryIds[i];
+
+    // category / splits
+    const legs = catsByEntry.get(eid) ?? [];
+    if (legs.length === 0) {
+      tx.category = null;
+    } else if (legs.length === 1) {
+      tx.category = legs[0].categoryId;
+    } else {
+      // ≥2 plain legs → category = largest |amount_base| leg
+      const dominant = legs.reduce((best, l) =>
+        Math.abs(l.amountBase) > Math.abs(best.amountBase) ? l : best, legs[0]);
+      tx.category = dominant.categoryId;
+      // splits in sort_order; negate amounts back to legacy parent-signed convention
+      tx.splits = legs
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((l, idx) => ({
+          id: `${eid}-split-${idx}`,
+          categoryId: l.categoryId,
+          amount: -l.amountBase,
+          amountBase: -l.amountBase,
+          description: null,
+        }));
+    }
+
+    // transferGroupId: entry id when ≥2 account legs
+    const acctCount = acctCountMap.get(eid) ?? 1;
+    if (acctCount >= 2) tx.transferGroupId = eid;
+
+    // refundedTransactionId: resolve raw entry id → first account-posting id
+    if (tx.refundedTransactionId != null) {
+      const resolved = refPostingMap.get(tx.refundedTransactionId);
+      if (resolved) tx.refundedTransactionId = resolved;
+    }
+
+    // tags
+    const tags = tagsByEntry.get(eid);
+    if (tags && tags.length > 0) tx.tags = tags;
+  }
+
+  return rows;
+}
+
 /** List transactions for a ledger with optional search / filters. */
 export async function listTransactions(exec: Exec, opts: ListOptions): Promise<Tx[]> {
-  const where: string[] = ['ledger_id = ?'];
+  const where: string[] = ['e.ledger_id = ?'];
   const bind: (string | number | null)[] = [opts.ledgerId];
 
-  if (opts.direction === 'in') where.push('amount > 0');
-  if (opts.direction === 'out') where.push('amount < 0');
+  if (opts.direction === 'in') where.push('p.amount > 0');
+  if (opts.direction === 'out') where.push('p.amount < 0');
   if (opts.query) {
     const fts = toFts5Query(opts.query);
     if (fts) {
-      // Inverted-index lookup via the transactions_fts shadow (description + notes).
-      // Tokens are matched as prefixes, AND-joined — "blue bottle" ⇒ blue* AND bottle*.
-      where.push('id IN (SELECT id FROM transactions_fts WHERE transactions_fts MATCH ?)');
+      where.push('e.id IN (SELECT id FROM entries_fts WHERE entries_fts MATCH ?)');
       bind.push(fts);
     }
   }
   if (opts.accountId) {
-    where.push('account_id = ?');
+    where.push('p.account_id = ?');
     bind.push(opts.accountId);
   }
   if (opts.categoryId) {
-    where.push('category_id = ?');
+    where.push(`EXISTS (SELECT 1 FROM postings cp
+      JOIN categories cc ON cc.id = cp.category_id
+      WHERE cp.entry_id = e.id AND cp.account_id IS NULL AND cp.category_id = ?)`);
     bind.push(opts.categoryId);
   }
   if (opts.status) {
-    where.push('status = ?');
+    where.push('e.status = ?');
     bind.push(opts.status);
   }
   if (opts.from) {
-    where.push('date >= ?');
+    where.push('e.date >= ?');
     bind.push(opts.from);
   }
   if (opts.to) {
-    where.push('date <= ?');
+    where.push('e.date <= ?');
     bind.push(opts.to);
   }
   if (opts.minAmount != null) {
-    where.push('ABS(amount_base) >= ?');
+    where.push('ABS(p.amount_base) >= ?');
     bind.push(opts.minAmount);
   }
   if (opts.maxAmount != null) {
-    where.push('ABS(amount_base) <= ?');
+    where.push('ABS(p.amount_base) <= ?');
     bind.push(opts.maxAmount);
   }
 
-  let sql = `SELECT * FROM transactions WHERE ${where.join(' AND ')} ORDER BY date DESC, time DESC`;
+  const extraWhere = where.length > 0 ? ` AND ${where.join(' AND ')}` : '';
+  let sql = `${BASE_SELECT}${extraWhere} ORDER BY e.date DESC, e.time DESC, e.created_at DESC, p.sort_order`;
   if (opts.limit != null) {
     sql += ' LIMIT ?';
     bind.push(opts.limit);
     sql += ' OFFSET ?';
     bind.push(opts.offset ?? 0);
   }
-  const rows = await exec(sql, bind);
-  return rows.map(rowToTx);
+  const rawRows = await exec(sql, bind);
+  const partials = rawRows.map(legRowToTx);
+  const entryIds = rawRows.map((r) => String(r.eid));
+  return enrichLegTxs(exec, partials, entryIds);
 }
 
 export async function getTransaction(exec: Exec, id: string): Promise<Tx | null> {
-  const rows = await exec('SELECT * FROM transactions WHERE id = ?', [id]);
-  return rows[0] ? rowToTx(rows[0]) : null;
+  // Accept posting id or fall back to entry id.
+  let rawRows = await exec(`${BASE_SELECT} AND p.id = ?`, [id]);
+  if (!rawRows.length) {
+    rawRows = await exec(`${BASE_SELECT} AND e.id = ? LIMIT 1`, [id]);
+  }
+  if (!rawRows.length) return null;
+  const partial = legRowToTx(rawRows[0]);
+  const entryId = String(rawRows[0].eid);
+  const enriched = await enrichLegTxs(exec, [partial], [entryId]);
+  return enriched[0] ?? null;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -310,11 +473,18 @@ export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
 /** Refunds linked back to an original expense (newest first). Used by the
  *  transaction detail page to show "refunded $X" against the original. */
 export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[]> {
-  const rows = await exec(
-    "SELECT * FROM transactions WHERE refunded_transaction_id = ? AND kind = 'refund' ORDER BY date DESC, time DESC",
-    [originalId],
+  // Resolve the caller's id (may be a posting id or entry id) to an entry id.
+  const ref = await resolveEntryRef(exec, originalId);
+  const entryId = ref?.entryId ?? originalId;
+
+  const rawRows = await exec(
+    `${BASE_SELECT} AND e.refunded_entry_id = ? AND e.kind = 'refund'
+     ORDER BY e.date DESC, e.time DESC`,
+    [entryId],
   );
-  return rows.map(rowToTx);
+  const partials = rawRows.map(legRowToTx);
+  const eids = rawRows.map((r) => String(r.eid));
+  return enrichLegTxs(exec, partials, eids);
 }
 
 /**
