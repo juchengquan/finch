@@ -69,6 +69,7 @@ export default function InsightsPage() {
   const { activeId } = useLedger();
   const { fmt, toBase } = useMoney();
   const t = useTranslations('insights');
+  const tWeekday = useTranslations('insightCards.weekdays');
   const { downloadCsv } = useBackup();
   const transactions = useFinanceStore((s) => s.transactions);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -134,6 +135,7 @@ export default function InsightsPage() {
     ledgerId: activeId,
     month,
     fmt: (n) => fmt(n),
+    weekdayName: (d) => tWeekday(String(d)),
   });
 
   // Month-over-month spending for the header (falls back to curated copy if there's
@@ -461,7 +463,7 @@ export default function InsightsPage() {
         {insights.length > 0 ? (
           <div className="md:grid md:grid-cols-3 md:gap-3">
             {insights.map((ins) => (
-              <InsightCard key={ins.title} insight={ins} />
+              <InsightCard key={ins.title.key} insight={ins} />
             ))}
           </div>
         ) : (

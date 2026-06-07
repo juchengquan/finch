@@ -34,6 +34,8 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   ...over,
 });
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 const baseCtx = (over: Partial<InsightCtx>): InsightCtx => ({
   transactions: [],
   categories: [],
@@ -42,6 +44,7 @@ const baseCtx = (over: Partial<InsightCtx>): InsightCtx => ({
   ledgerId: 'personal',
   month: '',
   fmt: (n) => `$${n.toFixed(2)}`,
+  weekdayName: (d) => WEEKDAYS[d] ?? '?',
   ...over,
 });
 
@@ -58,8 +61,9 @@ test('spending trend compares this month to last', () => {
     ],
     categories: [{ id: 'food', name: 'Food', budget: 1000 }],
   });
-  const trend = generateInsights(ctx).find((i) => i.title.includes('vs last month'));
-  expect(trend?.title).toBe('Spending down 20% vs last month');
+  const trend = generateInsights(ctx).find((i) => i.title.key === 'spendingDown' || i.title.key === 'spendingUp');
+  expect(trend?.title.key).toBe('spendingDown');
+  expect(trend?.title.params?.pct).toBe(20);
   expect(trend?.tone).toBe('pos');
 });
 
@@ -72,16 +76,16 @@ test('over-budget category surfaces as a warning, worst first', () => {
     ],
   });
   const out = generateInsights(ctx);
-  const over = out.find((i) => i.title.endsWith('over budget'));
+  const over = out.find((i) => i.title.key === 'overBudget');
   expect(over?.tone).toBe('warn');
-  expect(over?.title).toBe('Food over budget'); // 20 over beats Fun's 10 over
+  expect(over?.title.params?.name).toBe('Food'); // 20 over beats Fun's 10 over
 });
 
 test('pending insight reports count and total', () => {
   const ctx = baseCtx({ transactions: [tx({ pending: true, amount: -30 }), tx({ pending: true, amount: -20 })] });
-  const p = generateInsights(ctx).find((i) => i.title.includes('pending'));
-  expect(p?.title).toBe('2 pending to review');
-  expect(p?.body).toContain('$50.00');
+  const p = generateInsights(ctx).find((i) => i.title.key === 'pending');
+  expect(p?.title.params?.count).toBe(2);
+  expect(p?.body.params?.total).toBe('$50.00');
 });
 
 test('goal progress picks the closest-to-funded goal', () => {
@@ -91,8 +95,9 @@ test('goal progress picks the closest-to-funded goal', () => {
       { id: 'g2', name: 'Trip', target: 1000, saved: 900 },
     ],
   });
-  const g = generateInsights(ctx).find((i) => i.title.includes('funded'));
-  expect(g?.title).toBe('Trip is 90% funded');
+  const g = generateInsights(ctx).find((i) => i.title.key === 'goalProgress');
+  expect(g?.title.params?.name).toBe('Trip');
+  expect(g?.title.params?.pct).toBe(90);
   expect(g?.tone).toBe('pos');
 });
 
@@ -101,9 +106,9 @@ test('net-worth trend reflects direction', () => {
     accounts: [acct({ id: 'cc', balance: 100 })],
     transactions: [tx({ amount: -40, account: 'cc', date: '2026-05-10' })],
   });
-  const nw = generateInsights(ctx).find((i) => i.title.toLowerCase().includes('net worth'));
+  const nw = generateInsights(ctx).find((i) => i.title.key === 'netWorthDown' || i.title.key === 'netWorthUp');
   // ends at 100, opened at 140 → down over the period.
-  expect(nw?.title).toBe('Net worth dipped');
+  expect(nw?.title.key).toBe('netWorthDown');
   expect(nw?.tone).toBe('warn');
 });
 
@@ -137,9 +142,9 @@ test('weekendVsWeekday fires when weekend per-day spend ≥ 1.5× weekday', () =
     txns.push(tx({ date: iso, amount: amt, category: 'food' }));
   }
   const out = generateInsights(baseCtx({ transactions: txns }));
-  const wk = out.find((i) => i.title.includes('Weekends cost'));
+  const wk = out.find((i) => i.title.key === 'weekendVsWeekday');
   expect(wk).toBeDefined();
-  expect(wk!.body).toContain('×');
+  expect(String(wk!.body.params?.ratio)).toMatch(/\d/);
 });
 
 test('weekendVsWeekday stays silent when weekend/weekday spend is balanced', () => {
@@ -150,15 +155,10 @@ test('weekendVsWeekday stays silent when weekend/weekday spend is balanced', () 
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     txns.push(tx({ date: iso, amount: -20, category: 'food' }));
   }
-  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.startsWith('Weekend'))).toBeUndefined();
+  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.key === 'weekendVsWeekday')).toBeUndefined();
 });
 
 test('topCategoryByWeekday surfaces the dominant category on its weekday', () => {
-  // Five Saturdays of $50 dining + one $10 grocery each → dining ≈ 83% of Saturday spend.
-  const txns: Tx[] = [];
-  for (let w = 0; w < 5; w++) {
-    txns.push(tx({ date: `2026-05-0${2 + w * 7 > 9 ? '' : '0'}${2 + w * 7}`.slice(0, 10), amount: -50, category: 'dining' }));
-  }
   // Saturdays in May 2026 are 5/2, 5/9, 5/16, 5/23, 5/30.
   const saturdays = ['2026-05-02', '2026-05-09', '2026-05-16', '2026-05-23', '2026-05-30'];
   const rows = saturdays.flatMap((d) => [
@@ -176,9 +176,11 @@ test('topCategoryByWeekday surfaces the dominant category on its weekday', () =>
       ],
     }),
   );
-  const card = out.find((i) => i.title.includes('Saturdays are mostly'));
-  expect(card?.title).toBe('Saturdays are mostly Dining out');
-  expect(card?.body).toMatch(/83%|84%/); // 250/300 = 83.3%
+  const card = out.find((i) => i.title.key === 'topCategoryByWeekday');
+  expect(card?.title.params?.day).toBe('Saturday');
+  expect(card?.title.params?.name).toBe('Dining out');
+  // 250/300 = 83.3%
+  expect([83, 84]).toContain(Number(card?.body.params?.pct));
 });
 
 test('endOfMonthBump fires when days 23-31 outspend earlier-month days per capita', () => {
@@ -193,7 +195,7 @@ test('endOfMonthBump fires when days 23-31 outspend earlier-month days per capit
     }
   }
   const out = generateInsights(baseCtx({ transactions: txns }));
-  expect(out.find((i) => i.title.includes('End-of-month'))).toBeDefined();
+  expect(out.find((i) => i.title.key === 'endOfMonthBump')).toBeDefined();
 });
 
 test('endOfMonthBump stays silent without ≥ 3 months of history', () => {
@@ -201,7 +203,7 @@ test('endOfMonthBump stays silent without ≥ 3 months of history', () => {
     tx({ date: '2026-05-25', amount: -1000, category: 'rent' }),
     tx({ date: '2026-05-10', amount: -10, category: 'food' }),
   ];
-  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.includes('End-of-month'))).toBeUndefined();
+  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.key === 'endOfMonthBump')).toBeUndefined();
 });
 
 test('quietestDay fires when one weekday is reliably below half the daily average', () => {
@@ -220,14 +222,14 @@ test('quietestDay fires when one weekday is reliably below half the daily averag
   for (const dates of Object.values(samplesByDow))
     for (const d of dates) txns.push(tx({ date: d, amount: -10, category: 'food' }));
   const out = generateInsights(baseCtx({ transactions: txns }));
-  const card = out.find((i) => i.title.includes('quietest'));
-  expect(card?.title).toBe('Tuesdays are your quietest');
+  const card = out.find((i) => i.title.key === 'quietestDay');
+  expect(card?.title.params?.day).toBe('Tuesday');
   expect(card?.tone).toBe('pos');
 });
 
 test('quietestDay stays silent below 25 expense rows', () => {
   const txns = Array.from({ length: 10 }, () => tx({ date: '2026-05-04', amount: -10 }));
-  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.includes('quietest'))).toBeUndefined();
+  expect(generateInsights(baseCtx({ transactions: txns })).find((i) => i.title.key === 'quietestDay')).toBeUndefined();
 });
 
 // Regression for the /insights page TypeError: `topCategoryByWeekday` does

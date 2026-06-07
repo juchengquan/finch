@@ -358,6 +358,41 @@
       "deleted": "计划项已删除"
     }
   },
+  "insightCards": {
+    "weekdays": {
+      "0": "周日",
+      "1": "周一",
+      "2": "周二",
+      "3": "周三",
+      "4": "周四",
+      "5": "周五",
+      "6": "周六"
+    },
+    "spendingDown": "本月支出比上月少 {pct}%",
+    "spendingUp": "本月支出比上月多 {pct}%",
+    "spendingBody": "本月 {cur} 对比上月 {prev}。",
+    "overBudget": "{name} 超出预算",
+    "overBudgetBody": "已用 {spent} / {budget} —— 超出 {over}。",
+    "pending": "{count} 笔待复核",
+    "pendingBody": "{total} 待在「待处理」页面确认。",
+    "topCategory": "{name} 是你的最大支出类别",
+    "topCategoryBody": "{amount} —— 占本期支出 {pct}%。",
+    "weekendVsWeekday": "周末花得比工作日多",
+    "weekendVsWeekdayBody": "周末日均花费是工作日的 {ratio} 倍({weekend} vs {weekday})。",
+    "topCategoryByWeekday": "{day}主要花在{name}",
+    "topCategoryByWeekdayBody": "{day}支出中有 {pct}% 用于{name}。",
+    "endOfMonthBump": "月末更猛",
+    "endOfMonthBumpBody": "23-31 日的日均支出是月初的 {ratio} 倍。",
+    "weekdaySkew": "{day}是你最爱花的日子",
+    "weekdaySkewBody": "你在{day}的支出是日均的 {ratio} 倍。",
+    "quietestDay": "{day}是你最安静的日子",
+    "quietestDayBody": "你在{day}的支出比日均少 {pct}%。",
+    "goalProgress": "{name} 已完成 {pct}%",
+    "goalProgressBody": "已存 {saved} / 目标 {target}。",
+    "netWorthUp": "净资产呈上升趋势",
+    "netWorthDown": "净资产下滑",
+    "netWorthBody": "本期变化 {sign}{delta}。"
+  },
   "insights": {
     "title": "洞察",
     "viewToggleAria": "洞察视图",

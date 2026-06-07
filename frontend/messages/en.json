@@ -358,6 +358,41 @@
       "deleted": "Scheduled item deleted"
     }
   },
+  "insightCards": {
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "spendingDown": "Spending down {pct}% vs last month",
+    "spendingUp": "Spending up {pct}% vs last month",
+    "spendingBody": "{cur} this month vs {prev} last month.",
+    "overBudget": "{name} over budget",
+    "overBudgetBody": "At {spent} of {budget} — {over} over.",
+    "pending": "{count} pending to review",
+    "pendingBody": "{total} awaiting confirmation on the Pending screen.",
+    "topCategory": "{name} leads your spending",
+    "topCategoryBody": "{amount} — {pct}% of expenses this period.",
+    "weekendVsWeekday": "Weekends cost more than weekdays",
+    "weekendVsWeekdayBody": "Weekend days run {ratio}× weekday spend ({weekend} vs {weekday} per day).",
+    "topCategoryByWeekday": "{day}s are mostly {name}",
+    "topCategoryByWeekdayBody": "{pct}% of your {day} spending goes to {name}.",
+    "endOfMonthBump": "End-of-month runs hotter",
+    "endOfMonthBumpBody": "Days 23-31 average {ratio}× your earlier-month spend per day.",
+    "weekdaySkew": "{day}s are your spendy days",
+    "weekdaySkewBody": "You spend {ratio}× the daily average on {day}s.",
+    "quietestDay": "{day}s are your quietest",
+    "quietestDayBody": "You spend {pct}% less on {day}s than the daily average.",
+    "goalProgress": "{name} is {pct}% funded",
+    "goalProgressBody": "{saved} of {target} saved.",
+    "netWorthUp": "Net worth is trending up",
+    "netWorthDown": "Net worth dipped",
+    "netWorthBody": "{sign}{delta} across this period's activity."
+  },
   "insights": {
     "title": "Insights",
     "viewToggleAria": "Insights view",
