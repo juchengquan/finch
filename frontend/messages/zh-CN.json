@@ -1,4 +1,73 @@
 {
+  "scheduled": {
+    "title": "计划",
+    "newAria": "新建计划项",
+    "upcoming": "即将到期",
+    "incoming": "+ {amount} 入账",
+    "month": "月份",
+    "year": "年份",
+    "prevMonth": "上一月",
+    "nextMonth": "下一月",
+    "calendarDayAria": "{month} {day} 日",
+    "newButton": "新建",
+    "nothingOnDay": "当日无计划",
+    "form": {
+      "newTitle": "新建计划项",
+      "editTitle": "编辑计划项",
+      "types": {
+        "expense": "支出",
+        "income": "收入",
+        "transfer": "转账"
+      },
+      "name": "名称",
+      "namePlaceholder": "例如:房租",
+      "description": "描述",
+      "descriptionOptional": "(可选)",
+      "descriptionPlaceholder": "每次入账时显示 —— 默认与名称相同",
+      "amount": "金额",
+      "amountSuffix": " · {currency}",
+      "toAccount": "目标账户",
+      "fromAccount": "来源账户",
+      "account": "账户",
+      "selectAccount": "选择账户",
+      "category": "类别",
+      "categoryNone": "无",
+      "date": "日期",
+      "recurring": "重复",
+      "frequency": "频率",
+      "frequencies": {
+        "daily": "每日",
+        "weekly": "每周",
+        "biweekly": "每两周",
+        "monthly": "每月",
+        "quarterly": "每季",
+        "yearly": "每年"
+      },
+      "dayOfWeek": "周几",
+      "selectPlaceholder": "选择",
+      "dayOfMonth": "每月几日",
+      "repeat": "次数",
+      "repeatPlaceholder": "无限",
+      "untilDate": "截止日期",
+      "installmentPlan": "分期计划",
+      "installmentPlaceholder": "例如 24 表示 24 期",
+      "installmentHint": "在该期数后停止自动入账并显示进度。一般循环开支可留空。",
+      "color": "颜色",
+      "autoPost": "自动入账",
+      "addButton": "添加"
+    },
+    "errors": {
+      "nameRequired": "请输入名称",
+      "accountRequired": "请选择账户",
+      "fromAccountRequired": "请选择来源账户",
+      "invalidInstallment": "分期总数无效"
+    },
+    "toasts": {
+      "added": "计划项已添加",
+      "updated": "计划项已更新",
+      "deleted": "计划项已删除"
+    }
+  },
   "insights": {
     "title": "洞察",
     "viewToggleAria": "洞察视图",

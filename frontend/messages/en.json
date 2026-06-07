@@ -1,4 +1,73 @@
 {
+  "scheduled": {
+    "title": "Scheduled",
+    "newAria": "New scheduled item",
+    "upcoming": "Upcoming",
+    "incoming": "+ {amount} incoming",
+    "month": "Month",
+    "year": "Year",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "calendarDayAria": "{month} {day}",
+    "newButton": "New",
+    "nothingOnDay": "Nothing on this day",
+    "form": {
+      "newTitle": "New scheduled item",
+      "editTitle": "Edit scheduled item",
+      "types": {
+        "expense": "expense",
+        "income": "income",
+        "transfer": "transfer"
+      },
+      "name": "Name",
+      "namePlaceholder": "e.g. Rent",
+      "description": "Description",
+      "descriptionOptional": "(optional)",
+      "descriptionPlaceholder": "Shown on each posted transaction — defaults to the name",
+      "amount": "Amount",
+      "amountSuffix": " · {currency}",
+      "toAccount": "To account",
+      "fromAccount": "From account",
+      "account": "Account",
+      "selectAccount": "Select account",
+      "category": "Category",
+      "categoryNone": "None",
+      "date": "Date",
+      "recurring": "Recurring",
+      "frequency": "Frequency",
+      "frequencies": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "biweekly": "biweekly",
+        "monthly": "monthly",
+        "quarterly": "quarterly",
+        "yearly": "yearly"
+      },
+      "dayOfWeek": "Day of week",
+      "selectPlaceholder": "Select",
+      "dayOfMonth": "Day of month",
+      "repeat": "Repeat",
+      "repeatPlaceholder": "Infinite",
+      "untilDate": "Until date",
+      "installmentPlan": "Installment plan",
+      "installmentPlaceholder": "e.g. 24 for a 24-month plan",
+      "installmentHint": "Stops auto-posting after this many payments and shows progress. Leave blank for an ordinary recurring expense.",
+      "color": "Color",
+      "autoPost": "Auto-post",
+      "addButton": "Add"
+    },
+    "errors": {
+      "nameRequired": "Enter a name",
+      "accountRequired": "Pick an account",
+      "fromAccountRequired": "Pick a source account",
+      "invalidInstallment": "Invalid installment total"
+    },
+    "toasts": {
+      "added": "Scheduled item added",
+      "updated": "Scheduled item updated",
+      "deleted": "Scheduled item deleted"
+    }
+  },
   "insights": {
     "title": "Insights",
     "viewToggleAria": "Insights view",
