@@ -227,8 +227,10 @@ function validateShape(kind: EntryKind, legs: ResolvedLeg[], meta: Map<string, {
 }
 
 /** Double-submit backstop. NULL when time is NULL — parity with the old
- *  idx_txn_dedup, whose NULL time never collided (scheduled auto-posts). */
-function dedupHash(date: string, time: string | null | undefined, description: string, legs: ResolvedLeg[]): string | null {
+ *  idx_txn_dedup, whose NULL time never collided (scheduled auto-posts).
+ *  Exported for cutover.ts, which assembles legs from raw DB rows (not the
+ *  full ResolvedLeg shape); it only reads accountId + amount. */
+export function dedupHash(date: string, time: string | null | undefined, description: string, legs: Array<{ accountId: string | null; amount: number }>): string | null {
   if (time == null) return null;
   const acct = legs
     .filter((l) => l.accountId != null)

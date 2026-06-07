@@ -877,6 +877,7 @@ export function TransactionDetail({
             <DialogTitle>{t('deleteDialog.title')}</DialogTitle>
             <DialogDescription>
               {t('deleteDialog.description', { merchant: tx.merchant, amount: fmt(Math.abs(tx.amount)) })}
+              {tx.transferGroupId ? ` ${t('deleteDialog.transferHint')}` : ''}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

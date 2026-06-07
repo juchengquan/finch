@@ -7,11 +7,12 @@ import {
   countAttachmentsForTransaction,
   insertAttachment,
   deleteAttachment,
+  resolveAttachmentTarget,
 } from '@/lib/db/queries/attachments';
 import { freshDb as freshTestDb } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-/** Seeded ledger + account + one transaction the attachments can FK to. */
+/** Seeded ledger + account + entries the attachments can FK to. */
 async function freshDb(): Promise<Exec> {
   const { exec } = await freshTestDb();
   await exec(
@@ -20,14 +21,37 @@ async function freshDb(): Promise<Exec> {
             ('family',  'Family',  'SGD',datetime('now'),datetime('now'))`,
   );
   await exec(
-    `INSERT INTO accounts (id, ledger_id, name, type, currency, opening_balance, opening_balance_base, created_at, updated_at)
-     VALUES ('chk', 'personal', 'Checking', 'savings', 'USD', 0, 0, datetime('now'), datetime('now'))`,
+    `INSERT INTO account_groups (id, ledger_id, name, sort_order, created_at, updated_at)
+     VALUES ('cash', 'personal', 'Cash', 0, datetime('now'), datetime('now')),
+            ('cash-fam', 'family', 'Cash', 0, datetime('now'), datetime('now'))`,
   );
   await exec(
-    `INSERT INTO transactions (id, ledger_id, account_id, date, amount, amount_base, exchange_rate, currency, created_at, updated_at)
-     VALUES ('t1','personal','chk','2026-05-15',-10,-10,1,'USD',datetime('now'),datetime('now')),
-            ('t2','personal','chk','2026-05-16',-20,-20,1,'USD',datetime('now'),datetime('now'))`,
+    `INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, color, include_in_net_worth, is_active, created_at, updated_at)
+     VALUES ('chk', 'personal', 'cash', 'Checking', 'savings', 'USD', 0, null, 1, 1, datetime('now'), datetime('now'))`,
   );
+  // Insert entries directly (sealed=0 so no balance check trigger fires on the headers).
+  // We only need the entry rows to exist as FK targets for attachments.
+  await exec(
+    `INSERT INTO entries (id, ledger_id, date, kind, status, sealed, created_at, updated_at)
+     VALUES ('t1','personal','2026-05-15','expense','confirmed',1,datetime('now'),datetime('now')),
+            ('t2','personal','2026-05-16','expense','confirmed',1,datetime('now'),datetime('now'))`,
+  );
+  // Postings to satisfy the seal trigger (sum must ≈ 0, ≥ 2 rows, ≥ 1 account leg).
+  // We set sealed=1 on insert, so we need to bypass the trigger.
+  // Instead: pre-seal by using sealed=0 then updating — or just leave sealed=1 since
+  // we inserted entries directly (no trigger fired on INSERT INTO entries).
+  // The tr_post_sealed_insert fires on postings INSERT when entry.sealed=1, so we
+  // must insert postings BEFORE sealing. Re-do: insert entries with sealed=0,
+  // insert postings, then seal.
+  await exec(`UPDATE entries SET sealed = 0 WHERE id IN ('t1','t2')`);
+  await exec(
+    `INSERT INTO postings (id, entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, sort_order)
+     VALUES ('t1-acct','t1','chk',null,-10,'USD',-10,1,0),
+            ('t1-cat', 't1',null,null,10,'USD',10,1,1),
+            ('t2-acct','t2','chk',null,-20,'USD',-20,1,0),
+            ('t2-cat', 't2',null,null,20,'USD',20,1,1)`,
+  );
+  await exec(`UPDATE entries SET sealed = 1 WHERE id IN ('t1','t2')`);
   return exec;
 }
 
@@ -65,14 +89,22 @@ test('insertAttachment + listAttachments: round-trips the projected fields, omit
 
 test('listAttachments without a ledgerId returns all ledgers', async () => {
   const exec = await freshDb();
+  // Insert a family account and entry.
   await exec(
-    `INSERT INTO accounts (id, ledger_id, name, type, currency, opening_balance, opening_balance_base, created_at, updated_at)
-     VALUES ('fam-chk','family','Family Checking','savings','SGD',0,0,datetime('now'),datetime('now'))`,
+    `INSERT INTO accounts (id, ledger_id, group_id, name, type, currency, current_balance, color, include_in_net_worth, is_active, created_at, updated_at)
+     VALUES ('fam-chk','family','cash-fam','Family Checking','savings','SGD',0,null,1,1,datetime('now'),datetime('now'))`,
   );
   await exec(
-    `INSERT INTO transactions (id, ledger_id, account_id, date, amount, amount_base, exchange_rate, currency, created_at, updated_at)
-     VALUES ('t-fam','family','fam-chk','2026-05-15',-30,-30,1,'SGD',datetime('now'),datetime('now'))`,
+    `INSERT INTO entries (id, ledger_id, date, kind, status, sealed, created_at, updated_at)
+     VALUES ('t-fam','family','2026-05-15','expense','confirmed',0,datetime('now'),datetime('now'))`,
   );
+  await exec(
+    `INSERT INTO postings (id, entry_id, account_id, amount, currency, amount_base, exchange_rate, sort_order)
+     VALUES ('t-fam-a','t-fam','fam-chk',-30,'SGD',-30,1,0),
+            ('t-fam-c','t-fam',null,30,'SGD',30,1,1)`,
+  );
+  await exec(`UPDATE entries SET sealed = 1 WHERE id = 't-fam'`);
+
   await insertAttachment(exec, sample);
   await insertAttachment(exec, { ...sample, id: 'att-fam', ledgerId: 'family', transactionId: 't-fam', relPath: 'attachments/t-fam/att-fam.jpg' });
 
@@ -137,13 +169,17 @@ test('deleteAttachment removes one row', async () => {
   expect(await getAttachmentFile(exec, 'att-1')).toBeNull();
 });
 
-test('FK cascade on transaction delete removes the attachment rows', async () => {
+test('FK cascade on entry delete removes the attachment rows', async () => {
   const exec = await freshDb();
   await insertAttachment(exec, sample);
   await insertAttachment(exec, { ...sample, id: 'att-2', relPath: 'attachments/t1/att-2.pdf', kind: 'pdf', mimeType: 'application/pdf' });
   expect(await countAttachmentsForTransaction(exec, 't1')).toBe(2);
 
-  await exec('DELETE FROM transactions WHERE id = ?', ['t1']);
+  // Unseal the entry so CASCADE works (sealed postings guard only blocks INSERT/UPDATE/DELETE on postings).
+  // Actually the entry DELETE cascades to entry_attachments (FK ON DELETE CASCADE), not via postings.
+  // But we need to unseal first to allow postings to be deleted by cascade.
+  await exec(`UPDATE entries SET sealed = 0 WHERE id = 't1'`);
+  await exec('DELETE FROM entries WHERE id = ?', ['t1']);
   expect(await countAttachmentsForTransaction(exec, 't1')).toBe(0);
   expect(await getAttachmentFile(exec, 'att-1')).toBeNull();
 });
@@ -153,9 +189,45 @@ test('FK cascade on ledger delete removes the attachment rows', async () => {
   await insertAttachment(exec, sample);
   expect((await listAttachments(exec, 'personal')).length).toBe(1);
 
-  // Ledger delete cascades through accounts → transactions → attachments.
+  // Ledger delete cascades through accounts → entries → attachments.
+  // Must unseal entries first to allow cascade.
+  await exec(`UPDATE entries SET sealed = 0 WHERE ledger_id = 'personal'`);
   await exec('DELETE FROM ledgers WHERE id = ?', ['personal']);
   expect((await listAttachments(exec, 'personal')).length).toBe(0);
+});
+
+test('resolveAttachmentTarget resolves account-posting id, entry id, and returns null for unknown', async () => {
+  // The upload route uses this helper instead of the dropped `transactions` table.
+  const exec = await freshDb();
+
+  // t1-acct is the account-posting id for entry t1.
+  const byPosting = await resolveAttachmentTarget(exec, 't1-acct');
+  expect(byPosting).not.toBeNull();
+  expect(byPosting!.entryId).toBe('t1');
+  expect(byPosting!.ledgerId).toBe('personal');
+
+  // Passing the entry id directly also works.
+  const byEntry = await resolveAttachmentTarget(exec, 't1');
+  expect(byEntry).not.toBeNull();
+  expect(byEntry!.entryId).toBe('t1');
+  expect(byEntry!.ledgerId).toBe('personal');
+
+  // Unknown id returns null.
+  const miss = await resolveAttachmentTarget(exec, 'nope');
+  expect(miss).toBeNull();
+
+  // Confirm insertAttachment against the resolved entryId lands the correct row.
+  const target = byPosting!;
+  await insertAttachment(exec, {
+    ...sample,
+    id: 'att-resolved',
+    ledgerId: target.ledgerId,
+    transactionId: target.entryId,
+    relPath: `attachments/${target.entryId}/att-resolved.jpg`,
+  });
+  const row = await getAttachmentFile(exec, 'att-resolved');
+  expect(row).not.toBeNull();
+  expect(row!.transactionId).toBe('t1'); // entry_id stored on the row
 });
 
 test('CHECK constraint rejects an unknown kind', async () => {
@@ -163,8 +235,8 @@ test('CHECK constraint rejects an unknown kind', async () => {
   let threw = false;
   try {
     await exec(
-      `INSERT INTO transaction_attachments
-         (id, ledger_id, transaction_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
+      `INSERT INTO entry_attachments
+         (id, ledger_id, entry_id, kind, rel_path, mime_type, byte_size, sha256, original_filename, created_at, updated_at)
        VALUES ('bad', 'personal', 't1', 'video', 'x', 'video/mp4', 1, 'h', null, datetime('now'), datetime('now'))`,
     );
   } catch {

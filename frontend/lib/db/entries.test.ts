@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
-import { seededDb, freshDb } from '@/lib/db/test-utils';
-import { applyEntriesSchema } from '@/lib/db/entries-schema';
+import { seededDb, bareDb } from '@/lib/db/test-utils';
+import { applyEntriesSchema, CATEGORIES_UPGRADE } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
 import {
   ensureSystemCategories, postEntry,
@@ -9,22 +9,19 @@ import {
   deleteEntry, resolveEntryRef, auditLedger,
 } from '@/lib/db/entries';
 
-// Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
-// data/*.json) with the PR-A additive schema applied on top. Base-sensitive
-// tests don't rely on any seeded ledger's base: they build their own ledger
-// via withTestLedger (ledger base is user-chosen at create time).
-export const newDb = async (): Promise<Exec> => {
-  const db = await seededDb();
-  await applyEntriesSchema(db.exec);
-  return db.exec;
-};
+// Seeded in-memory DB with the canonical schema (B1 carries the DE core).
+// Base-sensitive tests don't rely on any seeded ledger's base: they build
+// their own ledger via withTestLedger (ledger base is user-chosen at create time).
+// Canonical schema (B1) already carries the DE core; applyEntriesSchema is
+// only for the legacy-file migration path now.
+export const newDb = async (): Promise<Exec> => (await seededDb()).exec;
 
 // Fresh, transaction-less account so balance assertions start from a clean 0
 // (seeded accounts already carry legacy-table balances).
 export const addAccount = async (exec: Exec, id: string, currency = 'SGD', ledgerId = 'personal') => {
   await exec(
-    `INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,NULL,?,'savings',?,0,0,0,0,1,1,datetime('now'),datetime('now'))`,
+    `INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,NULL,?,'savings',?,0,0,1,1,datetime('now'),datetime('now'))`,
     [id, ledgerId, id, currency],
   );
 };
@@ -52,7 +49,7 @@ export const withTestLedger = async (exec: Exec) => {
 export const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
 
-test('applyEntriesSchema creates the new tables and upgrades categories', async () => {
+test('canonical schema carries the DE tables and upgraded categories', async () => {
   const exec = await newDb();
   const names = (await exec(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entries','postings','entry_tags')",
@@ -75,11 +72,54 @@ test('applyEntriesSchema creates the new tables and upgrades categories', async 
   expect(String(food[0].kind)).toBe('expense');
 });
 
+// Legacy categories DDL (old CHECK allowing 'transfer', no 'system' column).
+// Inlined here so the migration-path coverage stays honest: we simulate a
+// pre-B1 DB without relying on the canonical schema (which now has 'equity').
+const LEGACY_LEDGERS_DDL = `
+CREATE TABLE IF NOT EXISTS ledgers (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, base_currency TEXT NOT NULL DEFAULT 'SGD',
+  is_default INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_CATEGORIES_DDL = `
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+  icon TEXT, color TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+// Minimal tables that ENTRIES_SCHEMA's FK references require (accounts,
+// counterparties, tags must exist so FK resolution doesn't fail on CREATE).
+const LEGACY_ACCOUNTS_DDL = `
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, type TEXT NOT NULL, currency TEXT NOT NULL DEFAULT 'SGD',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_COUNTERPARTIES_DDL = `
+CREATE TABLE IF NOT EXISTS counterparties (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL COLLATE NOCASE, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+const LEGACY_TAGS_DDL = `
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY, ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);`;
+
 test('CATEGORIES_UPGRADE re-kinds transfer categories and keeps the parent FK', async () => {
-  // freshDb = canonical schema, no seed: the OLD categories CHECK still
-  // allows kind='transfer', so we can stage a pre-upgrade row.
-  const db = await freshDb();
+  // bareDb = no schema at all; we stage the legacy (pre-B1) shape manually so
+  // applyEntriesSchema's migration-path coverage remains honest.
+  const db = await bareDb();
   const exec = db.exec;
+  await exec('PRAGMA foreign_keys = ON');
+  await exec(LEGACY_LEDGERS_DDL);
+  await exec(LEGACY_CATEGORIES_DDL);
+  await exec(LEGACY_ACCOUNTS_DDL);
+  await exec(LEGACY_COUNTERPARTIES_DDL);
+  await exec(LEGACY_TAGS_DDL);
   await exec(
     "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','SGD',1,datetime('now'),datetime('now'))",
   );
@@ -499,6 +539,57 @@ test('postTransfer: same-currency equality, cross-currency residue, pinned toAmo
   expect(String(memos[1].memo)).toContain('Transfer from');
 });
 
+test('updateTransfer: a date-only edit preserves pinned cross-currency bases', async () => {
+  // §6 PR-B precondition: pinned bank rates survive date edits (proven by probe:
+  // pinned base 739.26 → 499.50 on a pure date edit before this fix).
+  const exec = await newDb();
+  await withTestLedger(exec); // ledger 'lt', base SGD
+  await addAccount(exec, 'a-pin-sgd', 'SGD', 'lt');
+  await addAccount(exec, 'a-pin-usd', 'USD', 'lt');
+  await ensureSystemCategories(exec, 'lt');
+  // Seed a rate so convertToBase can resolve USD→SGD (needed by postTransfer).
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-04','SGD',0.7,'manual')");
+
+  // Post a cross-currency transfer with a pinned toAmount (off-market rate).
+  // SGD leg: -135 SGD; USD leg: +100 USD. The pinned exchange_rate on each leg
+  // is what the bank actually used — NOT the mid-rate in exchange_rates table.
+  const { entryId } = await postTransfer(exec, {
+    fromAccountId: 'a-pin-sgd', toAccountId: 'a-pin-usd',
+    fromAmount: 135, toAmount: 100, date: '2026-06-04',
+  });
+
+  // Capture both account legs' amount_base before the date edit.
+  const legsBefore = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order',
+    [entryId],
+  );
+  const fromBaseBefore = Number(legsBefore[0].amount_base);
+  const toBaseBefore = Number(legsBefore[1].amount_base);
+  expect(legsBefore.length).toBe(2);
+
+  // Date-only edit: change to a different date that has a different mid-rate.
+  // If rebuildEntry re-locks from the rates table, amount_base would change.
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-20','SGD',0.4,'manual')");
+  const { updateTransfer } = await import('@/lib/db/queries/transfers');
+  await updateTransfer(exec, entryId, { date: '2026-06-20' });
+
+  // Both legs' amount_base must be UNCHANGED (pinned rate survived the date edit).
+  const legsAfter = await exec(
+    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order',
+    [entryId],
+  );
+  expect(Number(legsAfter[0].amount_base)).toBeCloseTo(fromBaseBefore, 4);
+  expect(Number(legsAfter[1].amount_base)).toBeCloseTo(toBaseBefore, 4);
+
+  // Entry date is updated.
+  const [e] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.date)).toBe('2026-06-20');
+
+  // The entry still balances (Σ amount_base = 0).
+  const [sum] = await exec('SELECT ROUND(SUM(amount_base),2) AS s FROM postings WHERE entry_id = ?', [entryId]);
+  expect(Math.abs(Number(sum.s))).toBe(0);
+});
+
 test('rebuildEntry: header-only patch keeps legs; status flip recomputes', async () => {
   const exec = await newDb();
   await withTestLedger(exec);
@@ -700,4 +791,66 @@ test('auditLedger catches raw-SQL corruption classes the triggers cannot', async
   expect(codes).toContain('base-identity');     // (b) p-c2
   expect(codes).toContain('currency-mismatch'); // (c) p-c3
   expect(codes).toContain('balance-drift');     // (d)
+});
+
+test('CATEGORIES_UPGRADE replays to a populated table after a mid-dance crash', async () => {
+  // Stage a legacy-shaped DB (old categories CHECK incl. 'transfer').
+  const db = await bareDb();
+  const exec = db.exec;
+  await exec(
+    "CREATE TABLE ledgers (id TEXT PRIMARY KEY, name TEXT NOT NULL, base_currency TEXT NOT NULL DEFAULT 'SGD', is_default INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  );
+  await exec(
+    `CREATE TABLE categories (
+       id TEXT PRIMARY KEY,
+       ledger_id TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+       parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+       name TEXT NOT NULL,
+       kind TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
+       icon TEXT, color TEXT,
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+     )`,
+  );
+  await exec("INSERT INTO ledgers VALUES ('l1','L','SGD',1,datetime('now'),datetime('now'))");
+  await exec(
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Food','expense',NULL,NULL,0,datetime('now'),datetime('now'))",
+  );
+
+  // Mimic the migration runner's swallow rule for replays.
+  const swallow = async (sql: string) => {
+    try {
+      await exec(sql);
+    } catch (err) {
+      if (!/duplicate column name|already exists|no such (column|table|index)/i.test(String((err as Error).message))) throw err;
+    }
+  };
+
+  // Crash simulation: run the dance up to AND INCLUDING 'DROP TABLE categories',
+  // stopping before the RENAME — the worst-case window.
+  const dropIdx = CATEGORIES_UPGRADE.findIndex((s) => s === 'DROP TABLE categories');
+  expect(dropIdx).toBeGreaterThan(0);
+  for (const sql of CATEGORIES_UPGRADE.slice(0, dropIdx + 1)) await swallow(sql);
+
+  // Replay the WHOLE dance under the swallow rule (what the runner does after
+  // a crash, since the version was never stamped).
+  for (const sql of CATEGORIES_UPGRADE) await swallow(sql);
+
+  const rows = await exec('SELECT id, kind FROM categories');
+  expect(rows.length).toBe(1); // the data survived the crash + replay
+  expect(String(rows[0].id)).toBe('c1');
+});
+
+// Always-on audit: the full seeded DB must pass auditLedger with no problems.
+// This is the gate that catches any regression in the seed, postEntry, or
+// postings shape — the double-entry audit runs on every `bun test lib` invocation.
+test('always-on audit: seeded DB is double-entry clean (DOUBLE_ENTRY_PLAN §I7)', async () => {
+  const { exec } = await seededDb();
+  const problems = await auditLedger(exec, undefined, { checkBalances: true });
+  if (problems.length > 0) {
+    // Print diagnostics so failures are actionable in CI.
+    console.error('auditLedger found problems:');
+    for (const p of problems) console.error(` [${p.code}] entry=${p.entryId ?? '—'} ${p.detail}`);
+  }
+  expect(problems).toHaveLength(0);
 });

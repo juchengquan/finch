@@ -35,7 +35,7 @@ test('execFor: PRAGMA getter (table_info) still returns rows through .all()', as
   // reader-based routing didn't accidentally turn every PRAGMA into a no-op.
   const { exec, close } = await freshDb();
   try {
-    const rows = await exec("PRAGMA table_info('transactions')");
+    const rows = await exec("PRAGMA table_info('entries')");
     expect(Array.isArray(rows)).toBe(true);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.some((r) => String(r.name) === 'id')).toBe(true);
@@ -97,9 +97,45 @@ test('execFor: applyPragmaBootstrap + applySchema together produce a usable DB',
     const tables = await exec("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
     const names = tables.map((r) => String(r.name));
     // Spot-check the core tables the queries/ layer depends on.
-    expect(names).toContain('transactions');
+    expect(names).toContain('entries');
+    expect(names).toContain('postings');
     expect(names).toContain('accounts');
     expect(names).toContain('categories');
+  } finally {
+    driver.close();
+  }
+});
+
+test('execFor: a single-statement PRAGMA setter actually executes (every engine build)', async () => {
+  // Regression pin for the CI-only cutover failures: the bun:sqlite fallback
+  // used to route PRAGMA setters through `.all()`, which executes them on the
+  // macOS build but NOT on the Linux build — the migration dances' FK toggles
+  // silently no-opped there. Setters must go through `.run()`.
+  const driver = await openDb(':memory:');
+  const exec = execFor(driver);
+  try {
+    applyPragmaBootstrap(driver); // foreign_keys = ON
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 1 }]);
+    await exec('PRAGMA foreign_keys = OFF'); // single statement → prepare path
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 0 }]);
+    await exec('PRAGMA foreign_keys = ON');
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 1 }]);
+  } finally {
+    driver.close();
+  }
+});
+
+test('applyPragmaBootstrap pins modern ALTER semantics on every engine build', async () => {
+  // The bun:sqlite DEFAULT for legacy_alter_table differs by BUILD (macOS ON,
+  // Linux OFF), which made the cutover's rebuild dances pass locally and fail
+  // in CI. The bootstrap pins it OFF so every environment — including this
+  // test suite — runs the strict re-parse semantics; the dances opt into
+  // legacy mode around their RENAMEs explicitly.
+  const driver = await openDb(':memory:');
+  const exec = execFor(driver);
+  try {
+    applyPragmaBootstrap(driver);
+    expect(await exec('PRAGMA legacy_alter_table')).toEqual([{ legacy_alter_table: 0 }]);
   } finally {
     driver.close();
   }

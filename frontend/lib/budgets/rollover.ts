@@ -60,35 +60,37 @@ async function spentInRange(
   from: string,
   to: string,
 ): Promise<number> {
+  // Query against plain category legs of expense/refund entries.
+  // The transfers-kind gate replaces the legacy transfer_group_id IS NULL check.
   const where: string[] = [
-    't.ledger_id = ?',
-    't.date BETWEEN ? AND ?',
-    // expense + refund both count (refund's positive amount_base nets the spend
-    // down via the * -1 in the SUM below); income/transfer/adjustment excluded.
-    "t.kind IN ('expense','refund')",
-    't.transfer_group_id IS NULL',
-    "t.status = 'confirmed'",
+    'e.ledger_id = ?',
+    'e.date BETWEEN ? AND ?',
+    "e.kind IN ('expense','refund')",
+    "e.status = 'confirmed'",
+    'p.account_id IS NULL',
+    "(p.category_id IS NULL OR (SELECT c.kind FROM categories c WHERE c.id = p.category_id) != 'equity')",
   ];
   const bind: (string | number)[] = [budget.ledger_id, from, to];
 
   // category_ids = [] is treated as "matches every category".
   if (budget.category_ids.length) {
     const placeholders = budget.category_ids.map(() => '?').join(',');
-    where.push(`COALESCE(ts.category_id, t.category_id) IN (${placeholders})`);
+    where.push(`p.category_id IN (${placeholders})`);
     bind.push(...budget.category_ids);
   }
   if (budget.account_ids.length) {
     const placeholders = budget.account_ids.map(() => '?').join(',');
-    where.push(`t.account_id IN (${placeholders})`);
+    where.push(`EXISTS (SELECT 1 FROM postings ap WHERE ap.entry_id = e.id AND ap.account_id IN (${placeholders}))`);
     bind.push(...budget.account_ids);
   }
   const rows = await exec(
-    `SELECT COALESCE(SUM(COALESCE(ts.amount_base, t.amount_base) * -1), 0) AS spent
-       FROM transactions t
-       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+    `SELECT COALESCE(ROUND(SUM(p.amount_base), 2), 0) AS spent
+       FROM postings p
+       JOIN entries e ON e.id = p.entry_id
       WHERE ${where.join(' AND ')}`,
     bind,
   );
+  // Posting sign: category leg for an expense is positive (no negation needed).
   return Number(rows[0]?.spent ?? 0);
 }
 

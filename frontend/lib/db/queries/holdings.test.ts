@@ -128,8 +128,10 @@ test('account ON DELETE CASCADE: hard-deleting an account takes its holdings', a
   // The seed `inv` has transactions, so a hard delete is blocked. Create a fresh
   // account with no transactions to exercise the FK cascade cleanly.
   const now = new Date().toISOString();
+  // §2: accounts no longer has opening_balance/opening_balance_base columns (opening
+  // entries are the source of truth for starting balances — DOUBLE_ENTRY_PLAN §2.5).
   await exec(
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,opening_balance,opening_balance_base,is_active,created_at,updated_at) VALUES ('br2','personal','Brokerage 2','investment','USD',0,0,0,1,?,?)",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('br2','personal','Brokerage 2','investment','USD',0,1,?,?)",
     [now, now],
   );
   await createHolding(exec, {

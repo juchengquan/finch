@@ -8,7 +8,7 @@
 // until their own phase migrates them to real tables.
 
 import { seedReference, insertTransactions, seedTransactionTags } from './seed';
-import { rowToTx } from './queries/transactions';
+import { enrichLegTxs } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listAccountGroups } from './queries/accountGroups';
 import { listCategories } from './queries/categories';
@@ -17,9 +17,8 @@ import { listBudgetGroups } from './queries/budgetGroups';
 import { listCounterparties } from './queries/counterparties';
 import { listLedgers } from './queries/ledgers';
 import { listExchangeRates } from './queries/system';
-import { listTags, transactionTagMap } from './queries/tags';
+import { listTags } from './queries/tags';
 import { listRules } from './queries/rules';
-import { splitsByTransaction } from './queries/transactionSplits';
 import { listScheduled } from './queries/scheduled';
 import { listHoldings } from './queries/holdings';
 import { listAttachments } from './queries/attachments';
@@ -43,9 +42,58 @@ export async function buildState(exec: Exec, state: PersistState): Promise<void>
 
 /** Read the full app state (reference/derived data + the live transactions). */
 export async function projectState(exec: Exec): Promise<ProjectedState> {
-  const txRows = await exec('SELECT * FROM transactions ORDER BY date DESC, time DESC');
-  const transactions: Tx[] = txRows.map(rowToTx);
-  const [ledgers, accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, tagMap, scheduled, holdings, rules, attachments] =
+  // Load account postings joined to their entry headers (opening excluded).
+  const BASE_SELECT = `
+    SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
+           p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
+           e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
+           e.refunded_entry_id, e.source_template_id, e.notes, e.applied_rule_ids, e.reviewed_at,
+           e.created_at AS e_created_at
+      FROM postings p JOIN entries e ON e.id = p.entry_id
+     WHERE p.account_id IS NOT NULL AND e.kind != 'opening'
+     ORDER BY e.date DESC, e.time DESC, e.created_at DESC, p.sort_order
+  `;
+  const txRawRows = await exec(BASE_SELECT, []);
+
+  // Map each raw row into a partial Tx (category/splits/tags filled by enrichLegTxs).
+  const partials: Tx[] = txRawRows.map((r) => {
+    const amount = Number(r.p_base);
+    const nativeAmount = Number(r.orig_amount ?? r.p_amount);
+    const currency = r.orig_currency != null ? String(r.orig_currency)
+      : r.p_ccy != null ? String(r.p_ccy) : undefined;
+    return {
+      id: String(r.pid),
+      merchant: String(r.p_memo ?? r.description ?? ''),
+      category: null,
+      amount,
+      currency,
+      nativeAmount,
+      account: String(r.p_account),
+      date: String(r.date),
+      time: r.time == null ? undefined : String(r.time),
+      note: r.notes == null ? undefined : String(r.notes),
+      pending: String(r.status) === 'pending',
+      kind: String(r.kind) as Tx['kind'],
+      ledgerId: String(r.ledger_id),
+      sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
+      refundedTransactionId: r.refunded_entry_id == null ? undefined : String(r.refunded_entry_id),
+      counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
+      clearedAt: r.p_cleared == null ? null : String(r.p_cleared),
+      appliedRuleIds: (() => {
+        const raw = r.applied_rule_ids;
+        if (raw == null) return undefined;
+        try {
+          const v = JSON.parse(String(raw));
+          return Array.isArray(v) ? v.map(String) : undefined;
+        } catch { return undefined; }
+      })(),
+      reviewedAt: r.reviewed_at == null ? null : String(r.reviewed_at),
+    };
+  });
+  const entryIds = txRawRows.map((r) => String(r.eid));
+  const transactions = await enrichLegTxs(exec, partials, entryIds);
+
+  const [ledgers, accounts, accountGroups, namedBudgets, budgetGroups, categories, counterparties, exchangeRates, tags, scheduled, holdings, rules, rawAttachments] =
     await Promise.all([
       listLedgers(exec),
       listAccounts(exec),
@@ -56,7 +104,6 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
       listCounterparties(exec),
       listExchangeRates(exec),
       listTags(exec),
-      transactionTagMap(exec),
       listScheduled(exec),
       listHoldings(exec),
       listRules(exec),
@@ -65,28 +112,30 @@ export async function projectState(exec: Exec): Promise<ProjectedState> {
   const mobileTabIds = await readMobileTabIds(exec);
   const displayCurrencyByLedger = await readDisplayCurrencyByLedger(exec);
   const backupConfig = await readBackupConfig(exec);
-  const splitMap = await splitsByTransaction(exec, transactions.map((t) => t.id));
+
   // Cache canonical merchant names by counterparty id so renames on the
-  // catalog follow history without touching `transactions.description`.
+  // catalog follow history without touching `entries.description`.
   const cpNameById = new Map(counterparties.map((c) => [c.id, c.name]));
   for (const t of transactions) {
-    const ids = tagMap[t.id];
-    if (ids) t.tags = ids;
-    const splits = splitMap.get(t.id);
-    if (splits && splits.length) {
-      t.splits = splits.map((s) => ({
-        id: s.id,
-        categoryId: s.categoryId,
-        amount: s.amount,
-        amountBase: s.amountBase,
-        description: s.description,
-      }));
-    }
     if (t.counterpartyId) {
       const canonical = cpNameById.get(t.counterpartyId);
       if (canonical) t.merchant = canonical;
     }
   }
+
+  // Remap attachment transactionId from entry_id to account-posting id.
+  // The client keys attachments by Tx.id (= account-posting id). Build a map
+  // entry_id → first account-posting id (by sort_order) from the raw rows.
+  const entryToPostingId = new Map<string, string>();
+  for (const r of txRawRows) {
+    const eid = String(r.eid);
+    if (!entryToPostingId.has(eid)) entryToPostingId.set(eid, String(r.pid));
+  }
+  const attachments = rawAttachments.map((a) => {
+    const postingId = entryToPostingId.get(a.transactionId);
+    return postingId ? { ...a, transactionId: postingId } : a;
+  });
+
   return {
     transactions,
     ledgers,
