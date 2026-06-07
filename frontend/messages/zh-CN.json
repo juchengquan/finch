@@ -53,6 +53,58 @@
       "updatedToast": "类别已更新"
     }
   },
+  "ruleDescribe": {
+    "weekdays": { "0": "日", "1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六" },
+    "fields": {
+      "merchant": "商户",
+      "amount": "金额",
+      "account_id": "账户",
+      "category_id": "类别",
+      "counterparty_id": "对手方",
+      "currency": "货币",
+      "date_dow": "周几",
+      "date_dom": "每月几日",
+      "kind": "类型",
+      "tag_id": "标签",
+      "note": "备注"
+    },
+    "ops": {
+      "is": "等于",
+      "isEmpty": "为空",
+      "contains": "包含",
+      "startsWith": "以…开头",
+      "between": "介于",
+      "weekday": "周几",
+      "hasTag": "含标签",
+      "hasAnyTag": "含任一标签",
+      "hasAllTags": "含全部标签"
+    ,
+      "noteContains": "备注含"
+    },
+    "conditions": {
+      "always": "(始终)",
+      "never": "(从不)",
+      "and": " 且 ",
+      "or": " 或 ",
+      "not": "非 "
+    },
+    "actions": {
+      "clearCategory": "清除类别",
+      "setCategory": "设置类别 →",
+      "clearCounterparty": "清除对手方",
+      "setCounterparty": "设置对手方 →",
+      "renameMerchant": "重命名商户 →",
+      "setNote": "设置备注 →",
+      "setKind": "设置类型 →",
+      "addTag": "添加标签",
+      "removeTag": "移除标签",
+      "markReviewed": "标为已复核",
+      "split": "拆分:",
+      "uncategorized": "未分类",
+      "noActions": "(无动作)",
+      "separator": " · "
+    }
+  },
   "ruleBuilder": {
     "newTitle": "新建规则",
     "editTitle": "编辑规则",

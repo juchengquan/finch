@@ -13,6 +13,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { applyRules, evaluateCondition } from '@/lib/rules/engine';
 import { describeCondition, describeActions } from '@/lib/rules/describe';
+import { useDescribeDict } from '@/lib/rules/use-describe-dict';
 import { cn } from '@/lib/utils';
 import { categoryPath } from '@/lib/db/queries/categories';
 import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
@@ -164,6 +165,7 @@ export function RuleBuilderSheet({
   const { activeId } = useLedger();
   const t = useTranslations('ruleBuilder');
   const tCommon = useTranslations('common');
+  const describeDict = useDescribeDict();
   const categories = useFinanceStore((s) => s.categories);
   const accounts = useFinanceStore((s) => s.accounts);
   const counterparties = useFinanceStore((s) => s.counterparties);
@@ -425,7 +427,7 @@ export function RuleBuilderSheet({
                 {t('test.summary')}
               </div>
               <div className="text-foreground mt-1 font-mono text-[11px]">
-                {describeCondition(condition)} → {describeActions(draft.actions)}
+                {describeCondition(condition, describeDict)} → {describeActions(draft.actions, describeDict)}
               </div>
             </div>
           </section>

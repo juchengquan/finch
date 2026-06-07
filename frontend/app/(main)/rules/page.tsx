@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { describeActions, describeCondition } from '@/lib/rules/describe';
+import { useDescribeDict } from '@/lib/rules/use-describe-dict';
 import { applyRules } from '@/lib/rules/engine';
 import { RuleBuilderSheet } from '@/components/rule-builder-sheet';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ export default function RulesPage() {
   const t = useTranslations('rules');
   const tCommon = useTranslations('common');
   const relativeDays = useRelativeDays();
+  const describeDict = useDescribeDict();
   const rules = useFinanceStore((s) => s.rules);
   const txns = useFinanceStore((s) => s.transactions);
   const updateRule = useFinanceStore((s) => s.updateRule);
@@ -167,10 +169,10 @@ export default function RulesPage() {
                         )}
                       </div>
                       <div className="text-muted-foreground mt-0.5 truncate font-mono text-[11px]">
-                        {describeCondition(r.condition)}
+                        {describeCondition(r.condition, describeDict)}
                       </div>
                       <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
-                        → {describeActions(r.actions)}
+                        → {describeActions(r.actions, describeDict)}
                       </div>
                     </div>
                     <div className="text-muted-foreground shrink-0 text-right font-mono text-[10px] tabular-nums">
@@ -195,6 +197,7 @@ export default function RulesPage() {
         onAskDelete={(r) => setConfirmDelete(r)}
         onAskBackfill={(r) => setConfirmBackfill(r)}
         relativeDays={relativeDays}
+        describeDict={describeDict}
       />
 
       <RuleBuilderSheet rule={builderRule} open={builderOpen} onClose={closeBuilder} />
@@ -271,6 +274,7 @@ function RuleDetailSheet({
   onAskDelete,
   onAskBackfill,
   relativeDays,
+  describeDict,
 }: {
   rule: Rule | null;
   onClose: () => void;
@@ -280,6 +284,7 @@ function RuleDetailSheet({
   onAskDelete: (r: Rule) => void;
   onAskBackfill: (r: Rule) => void;
   relativeDays: (iso: string | null) => string | null;
+  describeDict: ReturnType<typeof useDescribeDict>;
 }) {
   const t = useTranslations('rules.detail');
   return (
@@ -323,7 +328,7 @@ function RuleDetailSheet({
                 {t('condition')}
               </div>
               <pre className="bg-secondary rounded-md p-3 font-mono text-[11px] whitespace-pre-wrap">
-                {describeCondition(rule.condition)}
+                {describeCondition(rule.condition, describeDict)}
               </pre>
             </div>
             <div>

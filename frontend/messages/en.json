@@ -53,6 +53,57 @@
       "updatedToast": "Category updated"
     }
   },
+  "ruleDescribe": {
+    "weekdays": { "0": "Sun", "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat" },
+    "fields": {
+      "merchant": "merchant",
+      "amount": "amount",
+      "account_id": "account",
+      "category_id": "category",
+      "counterparty_id": "counterparty",
+      "currency": "currency",
+      "date_dow": "day-of-week",
+      "date_dom": "day-of-month",
+      "kind": "kind",
+      "tag_id": "tag",
+      "note": "note"
+    },
+    "ops": {
+      "is": "is",
+      "isEmpty": "is empty",
+      "contains": "contains",
+      "startsWith": "starts with",
+      "between": "between",
+      "weekday": "weekday",
+      "hasTag": "has tag",
+      "hasAnyTag": "has any tag in",
+      "hasAllTags": "has all tags",
+      "noteContains": "note contains"
+    },
+    "conditions": {
+      "always": "(always)",
+      "never": "(never)",
+      "and": " AND ",
+      "or": " OR ",
+      "not": "NOT "
+    },
+    "actions": {
+      "clearCategory": "clear category",
+      "setCategory": "set category →",
+      "clearCounterparty": "clear counterparty",
+      "setCounterparty": "set counterparty →",
+      "renameMerchant": "rename merchant →",
+      "setNote": "set note →",
+      "setKind": "set kind →",
+      "addTag": "add tag",
+      "removeTag": "remove tag",
+      "markReviewed": "mark reviewed",
+      "split": "split:",
+      "uncategorized": "uncategorized",
+      "noActions": "(no action)",
+      "separator": " · "
+    }
+  },
   "ruleBuilder": {
     "newTitle": "New rule",
     "editTitle": "Edit rule",
