@@ -1,4 +1,52 @@
 {
+  "accounts": {
+    "title": "Accounts",
+    "allAccounts": "All accounts",
+    "recentActivity": "Recent activity",
+    "addAria": "Add",
+    "newButton": "New",
+    "menu": {
+      "newAccount": "New account",
+      "newGroup": "New group"
+    },
+    "groupActionsAria": "Group actions: {name}",
+    "groupActions": {
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "ungroupedLabel": "Ungrouped",
+    "emptyGroup": "No accounts",
+    "empty": {
+      "title": "No accounts linked in {ledger} yet.",
+      "description": "Add your first account to start tracking balances and transactions."
+    },
+    "createDialog": {
+      "title": "New account",
+      "description": "Added to {ledger}",
+      "name": "Name",
+      "type": "Type",
+      "group": "Group",
+      "currency": "Currency",
+      "openingBalance": "Opening balance ({currency})",
+      "openingBalancePlaceholder": "0.00",
+      "cardColor": "Card color",
+      "createdToast": "Account created"
+    },
+    "groupDialog": {
+      "newTitle": "New group",
+      "editTitle": "Edit group",
+      "newDescription": "Added to {ledger}.",
+      "editDescription": "Rename this group.",
+      "name": "Name",
+      "createdToast": "Group created",
+      "updatedToast": "Group updated"
+    },
+    "deleteGroupDialog": {
+      "title": "Delete group?",
+      "moveHint": "{count, plural, one {# account will move to Ungrouped.} other {# accounts will move to Ungrouped.}}",
+      "deletedToast": "Group deleted"
+    }
+  },
   "merchants": {
     "title": "Merchants",
     "searchAria": "Search merchants",

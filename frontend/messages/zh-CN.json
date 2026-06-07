@@ -1,4 +1,52 @@
 {
+  "accounts": {
+    "title": "账户",
+    "allAccounts": "全部账户",
+    "recentActivity": "最近动态",
+    "addAria": "添加",
+    "newButton": "新建",
+    "menu": {
+      "newAccount": "新建账户",
+      "newGroup": "新建分组"
+    },
+    "groupActionsAria": "分组操作:{name}",
+    "groupActions": {
+      "rename": "重命名",
+      "delete": "删除"
+    },
+    "ungroupedLabel": "未分组",
+    "emptyGroup": "无账户",
+    "empty": {
+      "title": "{ledger} 还未关联任何账户。",
+      "description": "添加第一个账户开始跟踪余额与交易。"
+    },
+    "createDialog": {
+      "title": "新建账户",
+      "description": "添加到 {ledger}",
+      "name": "名称",
+      "type": "类型",
+      "group": "分组",
+      "currency": "货币",
+      "openingBalance": "初始余额({currency})",
+      "openingBalancePlaceholder": "0.00",
+      "cardColor": "卡片颜色",
+      "createdToast": "账户已创建"
+    },
+    "groupDialog": {
+      "newTitle": "新建分组",
+      "editTitle": "编辑分组",
+      "newDescription": "添加到 {ledger}。",
+      "editDescription": "重命名此分组。",
+      "name": "名称",
+      "createdToast": "分组已创建",
+      "updatedToast": "分组已更新"
+    },
+    "deleteGroupDialog": {
+      "title": "删除分组?",
+      "moveHint": "{count} 个账户将移至未分组。",
+      "deletedToast": "分组已删除"
+    }
+  },
   "merchants": {
     "title": "商户",
     "searchAria": "搜索商户",
