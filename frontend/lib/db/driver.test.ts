@@ -105,3 +105,22 @@ test('execFor: applyPragmaBootstrap + applySchema together produce a usable DB',
     driver.close();
   }
 });
+
+test('execFor: a single-statement PRAGMA setter actually executes (every engine build)', async () => {
+  // Regression pin for the CI-only cutover failures: the bun:sqlite fallback
+  // used to route PRAGMA setters through `.all()`, which executes them on the
+  // macOS build but NOT on the Linux build — the migration dances' FK toggles
+  // silently no-opped there. Setters must go through `.run()`.
+  const driver = await openDb(':memory:');
+  const exec = execFor(driver);
+  try {
+    applyPragmaBootstrap(driver); // foreign_keys = ON
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 1 }]);
+    await exec('PRAGMA foreign_keys = OFF'); // single statement → prepare path
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 0 }]);
+    await exec('PRAGMA foreign_keys = ON');
+    expect(await exec('PRAGMA foreign_keys')).toEqual([{ foreign_keys: 1 }]);
+  } finally {
+    driver.close();
+  }
+});

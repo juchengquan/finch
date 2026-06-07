@@ -91,11 +91,19 @@ export function execFor(db: SqliteDriver): Exec {
       stmt.run(...args);
       return [];
     }
-    // Fallback heuristic for engines without `reader` (bun:sqlite). Anything
-    // starting with SELECT / PRAGMA / EXPLAIN / WITH returns rows; the
-    // remaining statements are writes. Note that bun:sqlite's `.all()` on a
-    // PRAGMA-setter returns [] rather than throwing, so this branch is safe
-    // on that engine even though the prefix matches PRAGMAs indiscriminately.
+    // Fallback heuristic for engines without `reader` (bun:sqlite).
+    // PRAGMA *setters* (`PRAGMA foreign_keys = OFF`) MUST go through `.run()`:
+    // whether `.all()` also executes a setter is engine-BUILD-specific —
+    // macOS bun:sqlite does, the Linux build does not, which silently
+    // no-opped the cutover dances' FK toggles in CI (FK-constrained DROPs and
+    // RENAMEs then failed mid-dance). `.run()` executes on every build.
+    if (/^\s*PRAGMA\b/i.test(sql) && sql.includes('=')) {
+      stmt.run(...args);
+      return [];
+    }
+    // Anything starting with SELECT / EXPLAIN / WITH returns rows, as does a
+    // PRAGMA *getter* (`PRAGMA foreign_keys`, `PRAGMA table_info(…)`); the
+    // remaining statements are writes.
     if (/^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(sql)) {
       return stmt.all(...args) as Row[];
     }
