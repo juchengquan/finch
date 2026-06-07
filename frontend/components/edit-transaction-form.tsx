@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/primitives';
 import { CURRENCIES } from '@/lib/data';
+import { categoryPath } from '@/lib/db/queries/categories';
 import { useFinanceStore, type Tx } from '@/lib/store';
 import { useMerchantPicker } from '@/components/merchant-picker-sheet';
 import {
@@ -60,9 +61,13 @@ export function EditTransactionForm({
   // means the row was deleted between the click and the form render.
   const ledgerId = tx?.ledgerId ?? 'personal';
   const initialNative = tx ? (tx.nativeAmount ?? tx.amount) : 0;
-  const cats: Option[] = storeCats
-    .filter((c) => c.ledgerId === ledgerId)
-    .map((x) => ({ id: x.id, name: x.name }));
+  // Labels render as `Parent › Child › Leaf` so depth-3 picks read
+  // unambiguously (CATEGORIES_LEVEL3_PLAN §5.1).
+  const ledgerCats = storeCats.filter((c) => c.ledgerId === ledgerId);
+  const ledgerCatById = new Map(ledgerCats.map((c) => [c.id, c]));
+  const cats: Option[] = ledgerCats
+    .map((c) => ({ id: c.id, name: categoryPath(c, ledgerCatById) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const accts: Option[] = storeAccts
     .filter((a) => a.ledgerId === ledgerId)
     .map((x) => ({ id: x.id, name: x.name }));

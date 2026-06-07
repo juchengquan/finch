@@ -23,6 +23,7 @@ import { useMoney } from '@/components/use-money';
 import type { BudgetRow, BudgetType } from '@/lib/db/queries/budgets';
 import { periodLabel, nextPeriod, periodOf, type Frequency } from '@/lib/budgets/period';
 import { MOCK } from '@/lib/data';
+import { categoryPath } from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'] as const;
@@ -109,8 +110,16 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
     .filter((a) => a.ledgerId === activeId)
     .map((a) => ({ id: a.id, name: a.name }));
   const ledgerGroups = budgetGroups.filter((g) => g.ledgerId === activeId);
+  // Labels render as `Parent › Child › Leaf` so descendants are
+  // unambiguous in the filter chip multiselect (CATEGORIES_LEVEL3_PLAN
+  // §5.1). Recursive budget matching (§4.2) means picking a parent here
+  // also catches every descendant at match time.
+  const projectedLedgerCats = storeCats.filter((c) => c.ledgerId === activeId);
+  const projectedLedgerCatById = new Map(projectedLedgerCats.map((c) => [c.id, c]));
   const ledgerCats = (storeCats.length
-    ? storeCats.filter((c) => c.ledgerId === activeId).map((c) => ({ id: c.id, name: c.name }))
+    ? projectedLedgerCats
+        .map((c) => ({ id: c.id, name: categoryPath(c, projectedLedgerCatById) }))
+        .sort((a, b) => a.name.localeCompare(b.name))
     : MOCK.categories
         .filter((c) => ((c as { ledger?: string }).ledger ?? 'personal') === activeId)
         .map((c) => ({ id: c.id, name: c.name })));
