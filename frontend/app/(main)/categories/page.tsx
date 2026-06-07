@@ -28,7 +28,11 @@ import { useLedger } from '@/components/ledger-provider';
 import { RowActions } from '@/components/RowActions';
 import { useFinanceStore } from '@/lib/store';
 import { categoryHex, DEFAULT_CATEGORY_HEX } from '@/lib/colors';
-import { buildCategoryTree, type CategoryRow } from '@/lib/db/queries/categories';
+import {
+  categoryPath,
+  resolveCategoryColor,
+  type CategoryRow,
+} from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 
 const TYPES = ['expense', 'income', 'transfer'] as const;
@@ -104,22 +108,87 @@ export default function CategoriesPage() {
   const deleteCategory = useFinanceStore((s) => s.deleteCategory);
 
   const list = categories.filter((c) => c.ledgerId === activeId);
-  const tree = useMemo(() => buildCategoryTree(list), [list]);
-  const topLevel = useMemo(() => list.filter((c) => c.parentId == null), [list]);
-  const colorOf = (c: CategoryRow) => c.color ?? DEFAULT_CATEGORY_HEX;
+  const byId = useMemo(() => new Map(list.map((c) => [c.id, c])), [list]);
+  // 3-level forest (CATEGORIES_LEVEL3_PLAN §5.2). Each top-level node has
+  // its subcategories; each subcategory has its sub-subcategories.
+  // Orphan rows (parent missing) are promoted to top-level so the forest
+  // is always exhaustive — same fallback the prior buildCategoryTree had.
+  const forest = useMemo(() => {
+    const childrenOf = new Map<string, CategoryRow[]>();
+    for (const c of list) {
+      if (c.parentId && byId.has(c.parentId)) {
+        const arr = childrenOf.get(c.parentId);
+        if (arr) arr.push(c);
+        else childrenOf.set(c.parentId, [c]);
+      }
+    }
+    type Node = { node: CategoryRow; children: { node: CategoryRow; grand: CategoryRow[] }[] };
+    const tops = list.filter((c) => c.parentId == null || !byId.has(c.parentId));
+    const out: Node[] = tops.map((p) => ({
+      node: p,
+      children: (childrenOf.get(p.id) ?? []).map((c) => ({
+        node: c,
+        grand: childrenOf.get(c.id) ?? [],
+      })),
+    }));
+    return out;
+  }, [list, byId]);
+  // Depth of a category id in the current ledger (top-level = 1).
+  const depthOfId = (id: string): number => {
+    let cur: string | null = id;
+    let d = 0;
+    for (let hop = 0; cur != null && hop < 10; hop++) {
+      const n = byId.get(cur);
+      if (!n) break;
+      d++;
+      cur = n.parentId;
+    }
+    return d;
+  };
+  // Subtree depth of a node (leaf = 1, with children = 2, grandchildren = 3).
+  const subtreeDepthOfId = (id: string): number => {
+    let frontier = [id];
+    let d = 1;
+    for (let hop = 0; hop < 10; hop++) {
+      const next = list.filter((c) => c.parentId != null && frontier.includes(c.parentId)).map((c) => c.id);
+      if (!next.length) break;
+      d++;
+      frontier = next;
+    }
+    return d;
+  };
+  // True when candidate sits anywhere in root's subtree (including root itself).
+  const isInSubtreeOf = (candidateId: string, rootId: string): boolean => {
+    let cur: string | null = candidateId;
+    for (let hop = 0; cur != null && hop < 10; hop++) {
+      if (cur === rootId) return true;
+      cur = byId.get(cur)?.parentId ?? null;
+    }
+    return false;
+  };
+  // Effective color: walk up the chain looking for a non-null color.
+  // Falls back to the palette default when the whole chain has no colour.
+  const colorOf = (c: CategoryRow) => resolveCategoryColor(c, byId) ?? DEFAULT_CATEGORY_HEX;
 
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
-  // A query keeps a parent whose own name matches (with all its children), or
-  // narrows it down to just the matching subcategories otherwise.
-  const filteredTree = useMemo(() => {
-    if (!q) return tree;
-    return tree.flatMap(({ parent, children }) => {
-      if (parent.name.toLowerCase().includes(q)) return [{ parent, children }];
-      const matching = children.filter((c) => c.name.toLowerCase().includes(q));
-      return matching.length ? [{ parent, children: matching }] : [];
+  // Filter the 3-level forest. A query keeps a node whose own name matches
+  // (with its subtree), or narrows it down to just the matching descendants
+  // otherwise. Search walks all three levels.
+  const filteredForest = useMemo(() => {
+    if (!q) return forest;
+    return forest.flatMap(({ node: parent, children }) => {
+      const parentMatch = parent.name.toLowerCase().includes(q);
+      if (parentMatch) return [{ node: parent, children }];
+      const filteredChildren = children.flatMap(({ node: child, grand }) => {
+        const childMatch = child.name.toLowerCase().includes(q);
+        if (childMatch) return [{ node: child, grand }];
+        const matchingGrand = grand.filter((g) => g.name.toLowerCase().includes(q));
+        return matchingGrand.length ? [{ node: child, grand: matchingGrand }] : [];
+      });
+      return filteredChildren.length ? [{ node: parent, children: filteredChildren }] : [];
     });
-  }, [tree, q]);
+  }, [forest, q]);
 
   // Main categories are collapsed by default; their ids are added when the
   // chevron is clicked, revealing the subcategory rows beneath.
@@ -137,6 +206,18 @@ export default function CategoriesPage() {
 
   const openCreateTop = () => {
     setDraft(EMPTY_DRAFT);
+    setDialogOpen(true);
+  };
+  // New child or grandchild — pre-fills the parent + inherits its type so the
+  // user only has to type a name.
+  const openCreateUnder = (parent: CategoryRow) => {
+    setDraft({
+      ...EMPTY_DRAFT,
+      parentId: parent.id,
+      type: parent.type,
+      icon: parent.icon ?? EMPTY_DRAFT.icon,
+      color: parent.color ?? colorOf(parent),
+    });
     setDialogOpen(true);
   };
 
@@ -178,13 +259,19 @@ export default function CategoriesPage() {
     setDialogOpen(false);
   };
 
-  // A child can be re-parented to any other top-level row in the same ledger.
-  // A parent (one that has children of its own) cannot be re-parented — that
-  // would make a 3-level tree; the mutation layer rejects it too.
-  const editingHasChildren = !!(
-    draft.id && list.some((c) => c.parentId === draft.id)
-  );
-  const reparentChoices = topLevel.filter((p) => p.id !== draft.id);
+  // CATEGORIES_LEVEL3_PLAN §5.2: at depth ≤ 3, the picker accepts any
+  // category whose depth + the editing subtree's depth ≤ 3, AND that
+  // doesn't sit inside the editing subtree (cycle defence). For a new
+  // category (no id) the subtree depth is 1 (just itself).
+  const editingSubtreeDepth = draft.id ? subtreeDepthOfId(draft.id) : 1;
+  const reparentChoices = list
+    .filter((p) => {
+      if (draft.id && (p.id === draft.id || isInSubtreeOf(p.id, draft.id))) return false;
+      const pd = depthOfId(p.id);
+      return pd + editingSubtreeDepth <= 3;
+    })
+    .map((c) => ({ id: c.id, label: categoryPath(c, byId) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const isCreate = draft.id == null;
 
@@ -212,23 +299,25 @@ export default function CategoriesPage() {
               onKeyDown={(e) => e.key === 'Enter' && submit()}
             />
           </div>
-          {!editingHasChildren && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Parent</Label>
-              <Select
-                value={draft.parentId ?? '__top__'}
-                onValueChange={(v) => setDraft({ ...draft, parentId: v === '__top__' ? null : v })}
-              >
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__top__">— Top-level —</SelectItem>
-                  {reparentChoices.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Parent picker. The reparentChoices list excludes any candidate
+              that would push the editing subtree past depth 3, plus the
+              editing subtree itself (cycle defence). Labels render as
+              `Parent › Child › Leaf` so a level-2 candidate is unambiguous. */}
+          <div className="flex flex-col gap-1.5">
+            <Label>Parent</Label>
+            <Select
+              value={draft.parentId ?? '__top__'}
+              onValueChange={(v) => setDraft({ ...draft, parentId: v === '__top__' ? null : v })}
+            >
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__top__">— Top-level —</SelectItem>
+                {reparentChoices.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label>Type</Label>
             <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
@@ -285,23 +374,26 @@ export default function CategoriesPage() {
           </Button>
         </div>
 
-        {tree.length === 0 ? (
+        {forest.length === 0 ? (
           <EmptyState
             icon="tag"
             title="No categories yet"
             description="Tap + to add one — they slot into the budget rings and reports."
           />
-        ) : filteredTree.length === 0 ? (
+        ) : filteredForest.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
         ) : (
         // Desktop: cap to the viewport (below the 77px top bar + 24px shell
         // padding + 52px search row) so the list scrolls internally instead
         // of the page. Mobile keeps natural page scrolling.
         <div className="border-border bg-card divide-border divide-y overflow-hidden rounded-[14px] border md:max-h-[calc(100dvh-180px)] md:overflow-y-auto">
-          {filteredTree.flatMap(({ parent, children }) => {
-            // While searching, a parent kept only for its matching children is
-            // forced open so those matches are actually visible.
-            const isOpen = expanded.has(parent.id) || (!!q && !parent.name.toLowerCase().includes(q));
+          {filteredForest.flatMap(({ node: parent, children }) => {
+            // While searching, a parent kept only for matching descendants is
+            // forced open so the matches are visible.
+            const parentForcedOpen = !!q && !parent.name.toLowerCase().includes(q);
+            const parentOpen = expanded.has(parent.id) || parentForcedOpen;
+            const totalDescendantCount =
+              children.length + children.reduce((s, c) => s + c.grand.length, 0);
             const parentRow = (
               <div
                 key={parent.id}
@@ -316,7 +408,7 @@ export default function CategoriesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{parent.name}</div>
                   <div className="text-muted-foreground mt-0.5 font-mono text-[10px] tracking-[0.5px] uppercase">
-                    {parent.type}{children.length > 0 && ` · ${children.length} sub`}
+                    {parent.type}{totalDescendantCount > 0 && ` · ${totalDescendantCount} sub`}
                   </div>
                 </div>
                 {children.length > 0 && (
@@ -324,12 +416,21 @@ export default function CategoriesPage() {
                     type="button"
                     onClick={() => toggleExpanded(parent.id)}
                     className="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1"
-                    aria-label={isOpen ? `Collapse ${parent.name}` : `Expand ${parent.name}`}
-                    aria-expanded={isOpen}
+                    aria-label={parentOpen ? `Collapse ${parent.name}` : `Expand ${parent.name}`}
+                    aria-expanded={parentOpen}
                   >
-                    <Icon name={isOpen ? 'chev-d' : 'chev'} size={14} />
+                    <Icon name={parentOpen ? 'chev-d' : 'chev'} size={14} />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => openCreateUnder(parent)}
+                  className="text-muted-foreground hover:text-foreground rounded-md p-1"
+                  aria-label={`New subcategory under ${parent.name}`}
+                  title="New subcategory"
+                >
+                  <Icon name="plus" size={14} />
+                </button>
                 <RowActions
                   onEdit={() => openEdit(parent)}
                   onDelete={() => {
@@ -343,32 +444,96 @@ export default function CategoriesPage() {
                   confirmTitle={`Delete ${parent.name}?`}
                   confirmDescription={
                     children.length
-                      ? `Its ${children.length} subcategor${children.length === 1 ? 'y' : 'ies'} will be promoted to top-level. Transactions filed against this parent become uncategorised.`
+                      ? `Its subcategor${children.length === 1 ? 'y' : 'ies'} will be promoted to top-level (any sub-sub categories ride along under their new parent). Transactions filed against this parent become uncategorised.`
                       : 'Transactions filed against this category become uncategorised.'
                   }
                 />
               </div>
             );
-            const childRows = isOpen ? children.map((child) => (
-              <div
-                key={child.id}
-                className="flex items-center gap-2 py-2 pr-3 pl-12 transition-colors hover:bg-secondary/50"
-              >
+            if (!parentOpen) return [parentRow];
+
+            const childRows = children.flatMap(({ node: child, grand }) => {
+              // Forced-open if the query matched a grandchild but not the child.
+              const childForcedOpen = !!q && !child.name.toLowerCase().includes(q);
+              const childOpen = expanded.has(child.id) || childForcedOpen;
+              const childCanHaveMore = depthOfId(child.id) < 3; // depth 2 → grandchild OK
+              const childRow = (
                 <div
-                  className="flex size-6 flex-shrink-0 items-center justify-center rounded-md text-white"
-                  style={{ background: child.color ?? colorOf(parent) }}
+                  key={child.id}
+                  className="flex items-center gap-2 py-2 pr-3 pl-12 transition-colors hover:bg-secondary/50"
                 >
-                  <Icon name={child.icon ?? parent.icon ?? 'tag'} size={12} />
+                  <div
+                    className="flex size-6 flex-shrink-0 items-center justify-center rounded-md text-white"
+                    style={{ background: colorOf(child) }}
+                  >
+                    <Icon name={child.icon ?? parent.icon ?? 'tag'} size={12} />
+                  </div>
+                  <div className="min-w-0 flex-1 truncate text-[13px]">{child.name}</div>
+                  {grand.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(child.id)}
+                      className="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1"
+                      aria-label={childOpen ? `Collapse ${child.name}` : `Expand ${child.name}`}
+                      aria-expanded={childOpen}
+                    >
+                      <Icon name={childOpen ? 'chev-d' : 'chev'} size={12} />
+                    </button>
+                  )}
+                  {childCanHaveMore && (
+                    <button
+                      type="button"
+                      onClick={() => openCreateUnder(child)}
+                      className="text-muted-foreground hover:text-foreground rounded-md p-1"
+                      aria-label={`New sub-subcategory under ${child.name}`}
+                      title="New sub-subcategory"
+                    >
+                      <Icon name="plus" size={12} />
+                    </button>
+                  )}
+                  <RowActions
+                    onEdit={() => openEdit(child)}
+                    onDelete={() => {
+                      deleteCategory(child.id);
+                      toast.success('Subcategory deleted', {
+                        description: grand.length
+                          ? `${child.name} — ${grand.length} sub-subcategor${grand.length === 1 ? 'y' : 'ies'} promoted.`
+                          : child.name,
+                      });
+                    }}
+                    confirmTitle={`Delete ${child.name}?`}
+                    confirmDescription={
+                      grand.length
+                        ? `Its sub-subcategor${grand.length === 1 ? 'y' : 'ies'} will be promoted one level up. Transactions in this subcategory become uncategorised.`
+                        : 'Transactions in this subcategory become uncategorised.'
+                    }
+                  />
                 </div>
-                <div className="min-w-0 flex-1 truncate text-[13px]">{child.name}</div>
-                <RowActions
-                  onEdit={() => openEdit(child)}
-                  onDelete={() => { deleteCategory(child.id); toast.success('Subcategory deleted', { description: child.name }); }}
-                  confirmTitle={`Delete ${child.name}?`}
-                  confirmDescription="Transactions in this subcategory become uncategorised."
-                />
-              </div>
-            )) : [];
+              );
+              if (!childOpen) return [childRow];
+
+              const grandRows = grand.map((g) => (
+                <div
+                  key={g.id}
+                  className="flex items-center gap-2 py-1.5 pr-3 pl-20 transition-colors hover:bg-secondary/50"
+                >
+                  <div
+                    className="flex size-5 flex-shrink-0 items-center justify-center rounded-md text-white"
+                    style={{ background: colorOf(g) }}
+                  >
+                    <Icon name={g.icon ?? child.icon ?? parent.icon ?? 'tag'} size={10} />
+                  </div>
+                  <div className="min-w-0 flex-1 truncate text-[12px]">{g.name}</div>
+                  <RowActions
+                    onEdit={() => openEdit(g)}
+                    onDelete={() => { deleteCategory(g.id); toast.success('Sub-subcategory deleted', { description: g.name }); }}
+                    confirmTitle={`Delete ${g.name}?`}
+                    confirmDescription="Transactions in this sub-subcategory become uncategorised."
+                  />
+                </div>
+              ));
+              return [childRow, ...grandRows];
+            });
             return [parentRow, ...childRows];
           })}
         </div>
