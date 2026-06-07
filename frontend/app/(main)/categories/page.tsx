@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
@@ -64,13 +65,14 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
 }
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useTranslations('categories.dialog');
   return (
     <div className="flex flex-wrap gap-1.5">
       {COLOR_CHOICES.map((c) => (
         <button
           key={c}
           type="button"
-          aria-label={`color ${c}`}
+          aria-label={t('colorAria', { color: c })}
           aria-pressed={value === c}
           onClick={() => onChange(c)}
           className={cn('size-7 rounded-full border-2 transition-transform', value === c ? 'border-foreground scale-110' : 'border-transparent')}
@@ -102,6 +104,8 @@ const EMPTY_DRAFT: CatDraft = {
 
 export default function CategoriesPage() {
   const { active, activeId } = useLedger();
+  const t = useTranslations('categories');
+  const tCommon = useTranslations('common');
   const categories = useFinanceStore((s) => s.categories);
   const createCategory = useFinanceStore((s) => s.createCategory);
   const updateCategory = useFinanceStore((s) => s.updateCategory);
@@ -235,7 +239,7 @@ export default function CategoriesPage() {
 
   const submit = () => {
     const n = draft.name.trim();
-    if (!n) return void toast.error('Enter a category name');
+    if (!n) return void toast.error(t('dialog.nameRequired'));
     if (draft.id) {
       updateCategory(draft.id, {
         name: n,
@@ -244,7 +248,7 @@ export default function CategoriesPage() {
         color: draft.color,
         parentId: draft.parentId,
       });
-      toast.success('Category updated', { description: n });
+      toast.success(t('dialog.updatedToast'), { description: n });
     } else {
       createCategory({
         name: n,
@@ -254,7 +258,7 @@ export default function CategoriesPage() {
         parentId: draft.parentId,
         ledgerId: activeId,
       });
-      toast.success('Category created', { description: n });
+      toast.success(t('dialog.createdToast'), { description: n });
     }
     setDialogOpen(false);
   };
@@ -279,22 +283,22 @@ export default function CategoriesPage() {
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isCreate ? 'New category' : 'Edit category'}</DialogTitle>
+          <DialogTitle>{isCreate ? t('dialog.newTitle') : t('dialog.editTitle')}</DialogTitle>
           <DialogDescription>
             {isCreate
               ? draft.parentId
-                ? `Added under "${list.find((c) => c.id === draft.parentId)?.name ?? '—'}" in ${active.name}.`
-                : `Added as a top-level category in ${active.name}.`
-              : 'Update the name, parent, type, icon and colour.'}
+                ? t('dialog.newUnderDescription', { parent: list.find((c) => c.id === draft.parentId)?.name ?? '—', ledger: active.name })
+                : t('dialog.newTopDescription', { ledger: active.name })
+              : t('dialog.editDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label>Name</Label>
+            <Label>{t('dialog.name')}</Label>
             <Input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="e.g. Travel"
+              placeholder={t('dialog.namePlaceholder')}
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && submit()}
             />
@@ -304,14 +308,14 @@ export default function CategoriesPage() {
               editing subtree itself (cycle defence). Labels render as
               `Parent › Child › Leaf` so a level-2 candidate is unambiguous. */}
           <div className="flex flex-col gap-1.5">
-            <Label>Parent</Label>
+            <Label>{t('dialog.parent')}</Label>
             <Select
               value={draft.parentId ?? '__top__'}
               onValueChange={(v) => setDraft({ ...draft, parentId: v === '__top__' ? null : v })}
             >
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__top__">— Top-level —</SelectItem>
+                <SelectItem value="__top__">{t('dialog.topLevel')}</SelectItem>
                 {reparentChoices.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
                 ))}
@@ -319,37 +323,37 @@ export default function CategoriesPage() {
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Type</Label>
+            <Label>{t('dialog.type')}</Label>
             <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                {TYPES.map((ty) => (
+                  <SelectItem key={ty} value={ty}>{t(`types.${ty}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Icon</Label>
+            <Label>{t('dialog.icon')}</Label>
             <IconPicker value={draft.icon} onChange={(v) => setDraft({ ...draft, icon: v })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Color</Label>
+            <Label>{t('dialog.color')}</Label>
             <ColorPicker value={draft.color} onChange={(v) => setDraft({ ...draft, color: v })} />
           </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">{tCommon('cancel')}</Button>
           </DialogClose>
-          <Button onClick={submit}>{isCreate ? 'Create' : 'Save'}</Button>
+          <Button onClick={submit}>{isCreate ? tCommon('create') : tCommon('save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 
   return (
-    <MobilePage header={<ScreenHeader title="Categories" />}>
+    <MobilePage header={<ScreenHeader title={t('title')} />}>
       <div className="px-5 pb-[120px] md:pb-5">
         {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
         <div className="mb-3.5 flex items-center gap-2">
@@ -358,8 +362,8 @@ export default function CategoriesPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search categories"
-              placeholder="Search categories…"
+              aria-label={t('searchAria')}
+              placeholder={t('searchPlaceholder')}
               className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
             />
           </div>
@@ -367,8 +371,8 @@ export default function CategoriesPage() {
             onClick={openCreateTop}
             size="icon"
             className="rounded-full"
-            aria-label="New category"
-            title="New category"
+            aria-label={t('newAria')}
+            title={t('newAria')}
           >
             <Icon name="plus" size={16} stroke={2} />
           </Button>
@@ -377,11 +381,11 @@ export default function CategoriesPage() {
         {forest.length === 0 ? (
           <EmptyState
             icon="tag"
-            title="No categories yet"
-            description="Tap + to add one — they slot into the budget rings and reports."
+            title={t('empty.title')}
+            description={t('empty.description')}
           />
         ) : filteredForest.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
+          <div className="text-muted-foreground py-8 text-center text-sm">{t('noMatches')}</div>
         ) : (
         // Desktop: cap to the viewport (below the 77px top bar + 24px shell
         // padding + 52px search row) so the list scrolls internally instead
@@ -408,7 +412,7 @@ export default function CategoriesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{parent.name}</div>
                   <div className="text-muted-foreground mt-0.5 font-mono text-[10px] tracking-[0.5px] uppercase">
-                    {parent.type}{totalDescendantCount > 0 && ` · ${totalDescendantCount} sub`}
+                    {t(`types.${parent.type as 'expense' | 'income' | 'transfer'}`)}{totalDescendantCount > 0 && t('subSummary', { count: totalDescendantCount })}
                   </div>
                 </div>
                 {children.length > 0 && (
@@ -416,7 +420,7 @@ export default function CategoriesPage() {
                     type="button"
                     onClick={() => toggleExpanded(parent.id)}
                     className="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1"
-                    aria-label={parentOpen ? `Collapse ${parent.name}` : `Expand ${parent.name}`}
+                    aria-label={parentOpen ? t('collapse', { name: parent.name }) : t('expand', { name: parent.name })}
                     aria-expanded={parentOpen}
                   >
                     <Icon name={parentOpen ? 'chev-d' : 'chev'} size={14} />
@@ -426,8 +430,8 @@ export default function CategoriesPage() {
                   type="button"
                   onClick={() => openCreateUnder(parent)}
                   className="text-muted-foreground hover:text-foreground rounded-md p-1"
-                  aria-label={`New subcategory under ${parent.name}`}
-                  title="New subcategory"
+                  aria-label={t('newSubAria', { name: parent.name })}
+                  title={t('newSubTitle')}
                 >
                   <Icon name="plus" size={14} />
                 </button>
@@ -435,17 +439,17 @@ export default function CategoriesPage() {
                   onEdit={() => openEdit(parent)}
                   onDelete={() => {
                     deleteCategory(parent.id);
-                    toast.success('Category deleted', {
+                    toast.success(t('delete.categoryToast'), {
                       description: children.length
-                        ? `${parent.name} — ${children.length} subcategor${children.length === 1 ? 'y' : 'ies'} promoted to top-level.`
+                        ? t('delete.promotedSub', { name: parent.name, count: children.length })
                         : parent.name,
                     });
                   }}
-                  confirmTitle={`Delete ${parent.name}?`}
+                  confirmTitle={t('delete.confirmTitle', { name: parent.name })}
                   confirmDescription={
                     children.length
-                      ? `Its subcategor${children.length === 1 ? 'y' : 'ies'} will be promoted to top-level (any sub-sub categories ride along under their new parent). Transactions filed against this parent become uncategorised.`
-                      : 'Transactions filed against this category become uncategorised.'
+                      ? t('delete.parentWithChildrenDescription', { count: children.length })
+                      : t('delete.parentEmptyDescription')
                   }
                 />
               </div>
@@ -474,7 +478,7 @@ export default function CategoriesPage() {
                       type="button"
                       onClick={() => toggleExpanded(child.id)}
                       className="text-muted-foreground hover:text-foreground -mr-1 rounded-md p-1"
-                      aria-label={childOpen ? `Collapse ${child.name}` : `Expand ${child.name}`}
+                      aria-label={childOpen ? t('collapse', { name: child.name }) : t('expand', { name: child.name })}
                       aria-expanded={childOpen}
                     >
                       <Icon name={childOpen ? 'chev-d' : 'chev'} size={12} />
@@ -485,8 +489,8 @@ export default function CategoriesPage() {
                       type="button"
                       onClick={() => openCreateUnder(child)}
                       className="text-muted-foreground hover:text-foreground rounded-md p-1"
-                      aria-label={`New sub-subcategory under ${child.name}`}
-                      title="New sub-subcategory"
+                      aria-label={t('newSubSubAria', { name: child.name })}
+                      title={t('newSubSubTitle')}
                     >
                       <Icon name="plus" size={12} />
                     </button>
@@ -495,17 +499,17 @@ export default function CategoriesPage() {
                     onEdit={() => openEdit(child)}
                     onDelete={() => {
                       deleteCategory(child.id);
-                      toast.success('Subcategory deleted', {
+                      toast.success(t('delete.subcategoryToast'), {
                         description: grand.length
-                          ? `${child.name} — ${grand.length} sub-subcategor${grand.length === 1 ? 'y' : 'ies'} promoted.`
+                          ? t('delete.promotedSubSub', { name: child.name, count: grand.length })
                           : child.name,
                       });
                     }}
-                    confirmTitle={`Delete ${child.name}?`}
+                    confirmTitle={t('delete.confirmTitle', { name: child.name })}
                     confirmDescription={
                       grand.length
-                        ? `Its sub-subcategor${grand.length === 1 ? 'y' : 'ies'} will be promoted one level up. Transactions in this subcategory become uncategorised.`
-                        : 'Transactions in this subcategory become uncategorised.'
+                        ? t('delete.childWithGrandDescription', { count: grand.length })
+                        : t('delete.childEmptyDescription')
                     }
                   />
                 </div>
@@ -526,9 +530,9 @@ export default function CategoriesPage() {
                   <div className="min-w-0 flex-1 truncate text-[12px]">{g.name}</div>
                   <RowActions
                     onEdit={() => openEdit(g)}
-                    onDelete={() => { deleteCategory(g.id); toast.success('Sub-subcategory deleted', { description: g.name }); }}
-                    confirmTitle={`Delete ${g.name}?`}
-                    confirmDescription="Transactions in this sub-subcategory become uncategorised."
+                    onDelete={() => { deleteCategory(g.id); toast.success(t('delete.subSubcategoryToast'), { description: g.name }); }}
+                    confirmTitle={t('delete.confirmTitle', { name: g.name })}
+                    confirmDescription={t('delete.grandDescription')}
                   />
                 </div>
               ));

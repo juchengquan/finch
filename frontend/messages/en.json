@@ -1,4 +1,171 @@
 {
+  "categories": {
+    "title": "Categories",
+    "searchAria": "Search categories",
+    "searchPlaceholder": "Search categories…",
+    "newAria": "New category",
+    "noMatches": "No matches",
+    "empty": {
+      "title": "No categories yet",
+      "description": "Tap + to add one — they slot into the budget rings and reports."
+    },
+    "subSummary": " · {count} sub",
+    "expand": "Expand {name}",
+    "collapse": "Collapse {name}",
+    "newSubAria": "New subcategory under {name}",
+    "newSubSubAria": "New sub-subcategory under {name}",
+    "newSubTitle": "New subcategory",
+    "newSubSubTitle": "New sub-subcategory",
+    "types": {
+      "expense": "expense",
+      "income": "income",
+      "transfer": "transfer"
+    },
+    "delete": {
+      "categoryToast": "Category deleted",
+      "subcategoryToast": "Subcategory deleted",
+      "subSubcategoryToast": "Sub-subcategory deleted",
+      "promotedSub": "{name} — {count, plural, one {# subcategory} other {# subcategories}} promoted to top-level.",
+      "promotedSubSub": "{name} — {count, plural, one {# sub-subcategory} other {# sub-subcategories}} promoted.",
+      "confirmTitle": "Delete {name}?",
+      "parentWithChildrenDescription": "Its {count, plural, one {subcategory} other {subcategories}} will be promoted to top-level (any sub-sub categories ride along under their new parent). Transactions filed against this parent become uncategorised.",
+      "parentEmptyDescription": "Transactions filed against this category become uncategorised.",
+      "childWithGrandDescription": "Its {count, plural, one {sub-subcategory} other {sub-subcategories}} will be promoted one level up. Transactions in this subcategory become uncategorised.",
+      "childEmptyDescription": "Transactions in this subcategory become uncategorised.",
+      "grandDescription": "Transactions in this sub-subcategory become uncategorised."
+    },
+    "dialog": {
+      "newTitle": "New category",
+      "editTitle": "Edit category",
+      "newUnderDescription": "Added under \"{parent}\" in {ledger}.",
+      "newTopDescription": "Added as a top-level category in {ledger}.",
+      "editDescription": "Update the name, parent, type, icon and colour.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Travel",
+      "nameRequired": "Enter a category name",
+      "parent": "Parent",
+      "topLevel": "— Top-level —",
+      "type": "Type",
+      "icon": "Icon",
+      "color": "Color",
+      "colorAria": "color {color}",
+      "createdToast": "Category created",
+      "updatedToast": "Category updated"
+    }
+  },
+  "rules": {
+    "title": "Rules",
+    "newAria": "New rule",
+    "newRule": "New rule",
+    "intro": "Rules run automatically on every new transaction in {ledger}. A matching rule can set the category, add a tag, rename the merchant, or split the row.",
+    "empty": {
+      "title": "No rules yet",
+      "description": "Rules categorise repeat merchants automatically. Tap \"New rule\" to set one up — start with the merchant you re-categorise most often."
+    },
+    "row": {
+      "unnamed": "unnamed",
+      "disabled": "disabled",
+      "matched": "{count} matched",
+      "openAria": "Open rule {name}"
+    },
+    "relative": {
+      "today": "today",
+      "yesterday": "yesterday",
+      "daysAgo": "{count} days ago",
+      "lastMonth": "last month",
+      "monthsAgo": "{count} months ago"
+    },
+    "toasts": {
+      "enabled": "Rule {name} enabled",
+      "disabled": "Rule {name} disabled",
+      "deleted": "Rule {name} deleted",
+      "backfilling": "Backfilling rule \"{name}\"",
+      "backfillingUnnamed": "Backfilling rule",
+      "backfillingDescription": "Server is applying the rule across history."
+    },
+    "backfillDialog": {
+      "title": "Apply rule to existing transactions?",
+      "description": "This walks every confirmed transaction in this ledger and applies the rule's actions to those that match. Splits aren't backfilled in this pass; everything else does land.",
+      "matchSummary": "{matched} of {total} confirmed transactions match.",
+      "moreCount": "+{count} more",
+      "noMatches": "Nothing to apply — no matches in history.",
+      "confirm": "Apply to existing"
+    },
+    "deleteDialog": {
+      "title": "Delete this rule?",
+      "description": "The rule won't fire on new transactions. Existing rows it already touched keep their values; the rule id stays in their applied_rule_ids for traceability.",
+      "confirm": "Delete rule"
+    },
+    "detail": {
+      "ruleFallback": "Rule",
+      "description": "Rule detail",
+      "edit": "Edit",
+      "enable": "Enable",
+      "disable": "Disable",
+      "applyExisting": "Apply to existing",
+      "delete": "Delete",
+      "status": "Status",
+      "active": "Active",
+      "disabledStatus": "Disabled",
+      "priority": "Priority",
+      "rerunsOnEdit": "Re-runs on edit",
+      "yes": "Yes",
+      "no": "No",
+      "appliedTo": "Applied to",
+      "appliedCount": "{count, plural, one {# transaction} other {# transactions}}",
+      "condition": "Condition",
+      "actions": "Actions",
+      "noActions": "(no actions)",
+      "lastBackfilled": "Last backfilled"
+    }
+  },
+  "transfers": {
+    "title": "Transfers",
+    "newAria": "New transfer",
+    "transfers": "transfers",
+    "intro": "Cross-account moves. Each creates a linked pair of transactions.",
+    "empty": {
+      "title": "No transfers yet",
+      "description": "Tap + to move money between accounts — pairs a debit and a credit on the same date."
+    },
+    "row": {
+      "deletedToast": "Transfer deleted",
+      "deleteTitle": "Delete this transfer?",
+      "deleteDescription": "Removes both legs ({from} → {to}) and restores the account balances."
+    },
+    "newDialog": {
+      "title": "New transfer",
+      "description": "Move money between two accounts in {ledger}.",
+      "from": "From",
+      "to": "To",
+      "sentFallback": "SENT",
+      "receivedPlaceholder": "received (optional — leave blank for mid-rate)",
+      "dateAria": "Date",
+      "timeAria": "Time",
+      "submit": "Transfer",
+      "errors": {
+        "amount": "Enter an amount",
+        "sameAccount": "Pick two different accounts",
+        "received": "Enter a valid received amount"
+      },
+      "createdToast": "Transfer created"
+    },
+    "editDialog": {
+      "title": "Edit transfer",
+      "description": "Adjust the amount, date or note. Balances are recomputed.",
+      "sent": "Sent · {currency}",
+      "received": "Received · {currency}",
+      "effectiveRate": "Effective rate: {rate} {to} per {from}",
+      "date": "Date",
+      "time": "Time",
+      "noteOptional": "Note (optional)",
+      "errors": {
+        "sent": "Enter a sent amount",
+        "received": "Enter a received amount"
+      },
+      "updatedToast": "Transfer updated"
+    }
+  },
   "scheduled": {
     "title": "Scheduled",
     "newAria": "New scheduled item",

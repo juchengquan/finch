@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
@@ -35,6 +36,8 @@ type Option = { id: string; name: string };
 
 export default function TransfersPage() {
   const { active, activeId } = useLedger();
+  const t = useTranslations('transfers');
+  const tCommon = useTranslations('common');
   const createTransfer = useFinanceStore((s) => s.createTransfer);
   const updateTransfer = useFinanceStore((s) => s.updateTransfer);
   const deleteTransfer = useFinanceStore((s) => s.deleteTransfer);
@@ -70,10 +73,10 @@ export default function TransfersPage() {
   const submitEdit = () => {
     if (!editing) return;
     const fromValue = parseFloat(editing.fromAmount);
-    if (!fromValue || fromValue <= 0) return void toast.error('Enter a sent amount');
+    if (!fromValue || fromValue <= 0) return void toast.error(t('editDialog.errors.sent'));
     const isCross = editing.fromCurrency !== editing.toCurrency;
     const toValue = isCross ? parseFloat(editing.toAmount) : fromValue;
-    if (isCross && (!toValue || toValue <= 0)) return void toast.error('Enter a received amount');
+    if (isCross && (!toValue || toValue <= 0)) return void toast.error(t('editDialog.errors.received'));
     updateTransfer(editing.id, {
       fromAmount: fromValue,
       toAmount: isCross ? toValue : undefined,
@@ -81,7 +84,7 @@ export default function TransfersPage() {
       time: editing.time || null,
       note: editing.note.trim() || null,
     });
-    toast.success('Transfer updated');
+    toast.success(t('editDialog.updatedToast'));
     setEditing(null);
   };
 
@@ -91,12 +94,12 @@ export default function TransfersPage() {
 
   const save = () => {
     const value = parseFloat(amount);
-    if (!value || value <= 0) return toast.error('Enter an amount');
-    if (from === to) return toast.error('Pick two different accounts');
+    if (!value || value <= 0) return toast.error(t('newDialog.errors.amount'));
+    if (from === to) return toast.error(t('newDialog.errors.sameAccount'));
     const recv = newIsCrossCurrency && received ? parseFloat(received) : undefined;
-    if (newIsCrossCurrency && received && (!recv || recv <= 0)) return toast.error('Enter a valid received amount');
+    if (newIsCrossCurrency && received && (!recv || recv <= 0)) return toast.error(t('newDialog.errors.received'));
     createTransfer({ fromAccountId: from, toAccountId: to, fromAmount: value, toAmount: recv, date, time: time || undefined });
-    toast.success('Transfer created');
+    toast.success(t('newDialog.createdToast'));
     setAmount('');
     setReceived('');
   };
@@ -104,16 +107,16 @@ export default function TransfersPage() {
   const newTransferDialog = (
     <Dialog>
       <DialogTrigger asChild>
-        <IconButton icon="plus" aria-label="New transfer" />
+        <IconButton icon="plus" aria-label={t('newAria')} />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New transfer</DialogTitle>
-          <DialogDescription>Move money between two accounts in {active.name}.</DialogDescription>
+          <DialogTitle>{t('newDialog.title')}</DialogTitle>
+          <DialogDescription>{t('newDialog.description', { ledger: active.name })}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label>From</Label>
+            <Label>{t('newDialog.from')}</Label>
             <Select value={from} onValueChange={setFrom}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -124,7 +127,7 @@ export default function TransfersPage() {
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>To</Label>
+            <Label>{t('newDialog.to')}</Label>
             <Select value={to} onValueChange={setTo}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -135,10 +138,10 @@ export default function TransfersPage() {
             </Select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground font-mono text-xs w-10">{fromCurrency || 'SENT'}</span>
+            <span className="text-muted-foreground font-mono text-xs w-10">{fromCurrency || t('newDialog.sentFallback')}</span>
             <Input type="number" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
-            <Input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
-            <Input type="time" aria-label="Time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
+            <Input type="date" aria-label={t('newDialog.dateAria')} value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+            <Input type="time" aria-label={t('newDialog.timeAria')} value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
           </div>
           {newIsCrossCurrency && (
             <div className="flex items-center gap-2">
@@ -146,7 +149,7 @@ export default function TransfersPage() {
               <Input
                 type="number"
                 inputMode="decimal"
-                placeholder="received (optional — leave blank for mid-rate)"
+                placeholder={t('newDialog.receivedPlaceholder')}
                 value={received}
                 onChange={(e) => setReceived(e.target.value)}
               />
@@ -155,10 +158,10 @@ export default function TransfersPage() {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">{tCommon('cancel')}</Button>
           </DialogClose>
           <DialogClose asChild>
-            <Button onClick={save}>Transfer</Button>
+            <Button onClick={save}>{t('newDialog.submit')}</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -166,23 +169,23 @@ export default function TransfersPage() {
   );
 
   return (
-    <MobilePage header={<ScreenHeader title="Transfers" trailing={newTransferDialog} />}>
+    <MobilePage header={<ScreenHeader title={t('title')} trailing={newTransferDialog} />}>
       <div className="px-5 pb-[120px]">
         <div className="px-1 pb-5">
           <SchemaChip label="transfer_groups" />
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
-            {transfers.length} <span className="text-muted-foreground italic">transfers</span>
+            {transfers.length} <span className="text-muted-foreground italic">{t('transfers')}</span>
           </div>
           <div className="text-secondary-foreground mt-1.5 text-[13px]">
-            Cross-account moves. Each creates a linked pair of transactions.
+            {t('intro')}
           </div>
         </div>
 
         {transfers.length === 0 && (
           <EmptyState
             icon="swap"
-            title="No transfers yet"
-            description="Tap + to move money between accounts — pairs a debit and a credit on the same date."
+            title={t('empty.title')}
+            description={t('empty.description')}
           />
         )}
 
@@ -222,9 +225,9 @@ export default function TransfersPage() {
                 time: tg.time ?? '',
                 note: tg.note ?? '',
               })}
-              onDelete={() => { deleteTransfer(tg.id); toast.success('Transfer deleted'); }}
-              confirmTitle="Delete this transfer?"
-              confirmDescription={`Removes both legs (${tg.fromName ?? '—'} → ${tg.toName ?? '—'}) and restores the account balances.`}
+              onDelete={() => { deleteTransfer(tg.id); toast.success(t('row.deletedToast')); }}
+              confirmTitle={t('row.deleteTitle')}
+              confirmDescription={t('row.deleteDescription', { from: tg.fromName ?? '—', to: tg.toName ?? '—' })}
             />
           </div>
         ))}
@@ -233,26 +236,26 @@ export default function TransfersPage() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit transfer</DialogTitle>
-            <DialogDescription>Adjust the amount, date or note. Balances are recomputed.</DialogDescription>
+            <DialogTitle>{t('editDialog.title')}</DialogTitle>
+            <DialogDescription>{t('editDialog.description')}</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Sent · {editing.fromCurrency}</Label>
+                <Label>{t('editDialog.sent', { currency: editing.fromCurrency })}</Label>
                 <Input type="number" inputMode="decimal" value={editing.fromAmount} onChange={(e) => setEditing((p) => (p ? { ...p, fromAmount: e.target.value } : p))} autoFocus />
               </div>
               {editing.fromCurrency !== editing.toCurrency && (
                 <div className="flex flex-col gap-1.5">
-                  <Label>Received · {editing.toCurrency}</Label>
+                  <Label>{t('editDialog.received', { currency: editing.toCurrency })}</Label>
                   <Input type="number" inputMode="decimal" value={editing.toAmount} onChange={(e) => setEditing((p) => (p ? { ...p, toAmount: e.target.value } : p))} />
                   {(() => {
                     const f = parseFloat(editing.fromAmount);
-                    const t = parseFloat(editing.toAmount);
-                    if (!f || !t) return null;
+                    const ta = parseFloat(editing.toAmount);
+                    if (!f || !ta) return null;
                     return (
                       <div className="text-muted-foreground text-[11px]">
-                        Effective rate: {(t / f).toFixed(6)} {editing.toCurrency} per {editing.fromCurrency}
+                        {t('editDialog.effectiveRate', { rate: (ta / f).toFixed(6), to: editing.toCurrency, from: editing.fromCurrency })}
                       </div>
                     );
                   })()}
@@ -260,25 +263,25 @@ export default function TransfersPage() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Date</Label>
+                  <Label>{t('editDialog.date')}</Label>
                   <Input type="date" value={editing.date} onChange={(e) => setEditing((p) => (p ? { ...p, date: e.target.value } : p))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Time</Label>
+                  <Label>{t('editDialog.time')}</Label>
                   <Input type="time" value={editing.time} onChange={(e) => setEditing((p) => (p ? { ...p, time: e.target.value } : p))} />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Note (optional)</Label>
+                <Label>{t('editDialog.noteOptional')}</Label>
                 <Input value={editing.note} onChange={(e) => setEditing((p) => (p ? { ...p, note: e.target.value } : p))} />
               </div>
             </div>
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitEdit}>Save</Button>
+            <Button onClick={submitEdit}>{tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
