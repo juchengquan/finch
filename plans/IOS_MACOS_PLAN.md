@@ -17,7 +17,15 @@
 
 _Audience: the engineers and designers who will build finch's native Apple
 apps. Assumes familiarity with the web app in `frontend/` and the design
-record in `plans/`. Last updated: 2026-06-06._
+record in `plans/`. Last updated: 2026-06-07._
+
+> **What changed since 2026-06-06 (the prior revision):**
+>
+> - **3-level categories shipped** (PR #112, `plans/done/CATEGORIES_LEVEL3_PLAN.md`) — the taxonomy is now ≤ 3 levels deep, enforced in the mutation layer (no schema change). §2.1 (entity row) and §3 row 29 updated.
+> - **i18n shipped** (PRs #113 + #115, `plans/I18N_PLAN.md`) — `next-intl` foundation + structured server-error shape `{ code, params }` + mass extraction of every surface + initial `zh-CN` coverage. The data layer is locale-neutral; `.finch` packs are unaffected. §11 updated.
+> - **Double-entry storage migration in progress** (PR #114 + the `feat/double-entry-cutover` branch, `plans/DOUBLE_ENTRY_PLAN.md`) — `transactions` / `transfer_groups` / `transaction_splits` are being replaced by **`entries` + `postings`** with a balanced-leg invariant + schema triggers + a `auditLedger` semantic-integrity sweep. The client `Tx` projection contract is deliberately preserved as a single-entry skin. **This is the structural change for native:** §2 is rewritten storage-first under DE, §2.6 records the projection contract, §4.6 carries the migration discipline, §4.9 carries the audit-parity requirement.
+>
+> Cross-app interop is unchanged by any of the above — the `.finch` pack format and the shared `SCHEMA_VERSION` lineage are the contract; what's inside is now DE-shaped, that's all (§8).
 
 ---
 
@@ -78,6 +86,17 @@ The same native posture unlocks the sync model the product wants —
 periodic zip "packs" of the database + receipt attachments dropped into
 **iCloud Drive** (§4.3 + §2.5.3) — which a web view can only approximate.
 
+> **DE note (added 2026-06-07):** the double-entry storage migration in
+> progress on the web (`plans/DOUBLE_ENTRY_PLAN.md`) doesn't change the
+> cross-app interop contract — the `.finch` pack still carries a SQLite
+> DB on the shared `SCHEMA_VERSION` lineage; the canonical tables inside
+> are now `entries` / `postings` / `entry_tags` / `entry_attachments`
+> instead of the legacy `transactions` / `transfer_groups` /
+> `transaction_splits` / `transaction_tags` / `transaction_attachments`
+> trio. Migrations run when a swapped-in file is opened (§4.6), so packs
+> written before the cutover still import. The native plan inherits the
+> DE-era schema as canonical; §2 is rewritten storage-first to reflect it.
+
 ---
 
 ## 2. The domain model you are inheriting (the real spec)
@@ -87,10 +106,11 @@ from screenshots — read the source.
 
 | Concern | Canonical source in `frontend/` | What it is |
 |---|---|---|
-| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` | The full `CREATE …` SQL string + the version/migration runner |
-| Schema rationale & business rules | `plans/database_design_en.md` | The design doc behind the schema (decisions #18–#25 etc.) |
-| Server projection contract | `lib/db/repo.ts` (`ProjectedState`) | The exact shape the client consumes |
-| Mutations (the write API) | `lib/db/mutations.ts` | Every server-side action and its effects |
+| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` (canonical) + `lib/db/entries-schema.ts` (DE additions) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
+| Schema rationale & business rules | `plans/database_design_en.md` + `plans/DOUBLE_ENTRY_PLAN.md` | The design doc behind the schema (decisions #18–#25 etc.) + the double-entry rewrite (§2-§3 invariants, §8 migration) |
+| Server projection contract (the `Tx` shape) | `lib/db/state.ts` (`projectState`) | The exact `Tx` / `AccountRow` shape the client consumes — see §2.6 |
+| **Write chokepoint** | `lib/db/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
+| Mutations (the user-facing write API) | `lib/db/mutations.ts` | Every server-side action and its effects; under DE these delegate to the chokepoint |
 | Pure derivations (the read brains) | `lib/select.ts`, `lib/derive.ts` | All computed figures — see §2.4 |
 | Rules engine | `lib/rules/{engine,types,describe}.ts` | Condition/Action model + evaluator |
 | Reconcile math | `lib/reconcile.ts` | Cleared-balance / difference selector |
@@ -99,83 +119,155 @@ from screenshots — read the source.
 | FX conversion | `lib/fx.ts`, `components/use-money.ts` | Rate lookup + base↔display conversion |
 | Installments | `lib/installment.ts` | Finite-plan progress derivation |
 | Counterparty matching | `lib/matcher/counterparty.ts` | Name-resolution on write |
+| **Migration discipline** | `lib/db/schema.ts` (`SCHEMA_VERSION` + `MIGRATIONS`) | ISO-datetime version lineage + additive-migration runner; the DE cutover stamps `2026-06-12T00:00:00Z` — see §4.6 |
 
 ### 2.1 Entities (and the relationships that matter)
 
-All data is scoped to a **ledger**; ledgers never share rows. The entity set:
+All data is scoped to a **ledger**; ledgers never share rows. The entity set
+below reflects the **double-entry storage model** (`plans/DOUBLE_ENTRY_PLAN.md`);
+the user-facing `Tx` shape that surfaces in selectors and the UI is described
+separately in §2.6.
 
 - **ledger** — an isolated set of books with its own `base_currency`. Seeded
-  ledgers: personal, family, business, travel. **Decision (§14):** users MUST
-  be able to **create, rename, and delete** ledgers — this requires a matching
-  change to the **web app** too (it currently has 4 seeded ledgers with no
-  creation path; see §8 cross-app implications).
+  ledgers: personal, family, business, travel. Users can **create, rename,
+  and delete** ledgers; ledger creation calls
+  `ensureSystemCategories(exec, ledgerId)` to seed the three system equity
+  categories (see **category** below). Web-side CRUD ✅ shipped via
+  `plans/done/LEDGER_CRUD_PLAN.md` (PR #109); §8 cross-app implication closed.
 - **account** — typed (`savings | credit_card | investment | cash | fx |
-  virtual`), one fixed `currency`, an `opening_balance` (+ a locked
-  `opening_balance_base`), a cached `current_balance` (derived — see §2.3), an
-  `include_in_net_worth` flag, archive state, and a reconcile checkpoint
-  (`last_reconciled_at/_balance`).
+  virtual`), one fixed `currency`, a cached `current_balance` (derived — see
+  §2.3), an `include_in_net_worth` flag, archive state, and a reconcile
+  checkpoint (`last_reconciled_at/_balance`). **DE change:** the legacy
+  `opening_balance` + `opening_balance_base` columns are gone; an account's
+  opening figure is now an **opening entry** (kind=`opening`, equity-balanced
+  by the per-ledger `sys:opening-balance` category). `current_balance` is
+  recomputed from `Σ confirmed account-leg postings` (the opening leg is in
+  the sum — no separate seed term).
 - **account_group** / **budget_group** — purely organisational buckets;
   deleting a group SET NULLs its members (they fall into "Ungrouped").
-- **category** — a **2-level** tree (`parent_id`, no grandchildren), with
-  `kind` (`expense | income | transfer`), icon, colour. Delete promotes
-  children to top level.
-- **tag** — free labels; many-to-many with transactions via `transaction_tags`.
-- **counterparty** (merchant) — canonical payee, `is_verified`. A transaction's
+- **category** — a **3-level** tree (`parent_id`, max depth enforced in the
+  mutation layer via `assertCanBeParent` / `assertSubtreeFitsUnder` — no
+  schema change; web-side ✅ shipped via `plans/done/CATEGORIES_LEVEL3_PLAN.md`
+  PR #112). `kind ∈ ('expense','income','equity')` — gains `'equity'` for the
+  system rows and **drops `'transfer'`** under DE (a transfer is two account
+  legs with no category leg, so a transfer-kind category is unreferenceable
+  by construction). Icon + colour as before; colour inheritance walks up the
+  chain to the nearest non-null ancestor. Delete promotes children one level
+  up (recursively safe). **DE addition:** a nullable
+  `system ∈ ('opening','adjustment','fx')` column flags the three per-ledger
+  system rows (**Opening balance** · **Balance adjustment** · **FX
+  gain/loss**), seeded by `ensureSystemCategories` (called from seed, the
+  DE migration, and `createLedger`); a UNIQUE `(ledger_id, system)` index
+  prevents duplicates. System rows are resolved by `system`, never by id or
+  name (rename-safe); category pickers and the categories admin hide them.
+- **tag** — free labels; many-to-many with **entries** via `entry_tags`
+  (renamed from `transaction_tags` under DE; a transfer's two account legs
+  share tags by construction — no per-leg divergence).
+- **counterparty** (merchant) — canonical payee, `is_verified`. An entry's
   `counterparty_id` FK lets a rename follow history; SET NULL on delete keeps
   the raw description.
-- **transaction** — the core row. Dual amounts (`amount` native +
-  `amount_base` ledger-base, with a locked `exchange_rate`), `kind` (`income |
-  expense | transfer | adjustment | refund`), `status` (`pending |
-  confirmed`), and three independent triage timestamps: `confirmed_at`,
-  `cleared_at` (reconcile), `reviewed_at` (review queue). Plus
-  `transfer_group_id`, `refunded_transaction_id`, `source_template_id`,
-  `applied_rule_ids` (JSON), and FTS-indexed `description`/`notes`.
-- **transaction_split** — ad-hoc category splits that override the parent's
-  category in aggregations; split amounts MUST sum to the parent's.
-- **transaction_attachment** (added by this plan — §2.5) — pointer rows
-  (`rel_path`, `sha256`, mime, size) for receipt photos/PDFs attached to a
-  transaction. **Actual files are NEVER stored in the SQLite database** —
-  they live in an `attachments/<transaction_id>/` folder on disk and travel
-  inside the `.finch` pack (§2.5.3) alongside the DB.
-- **transfer_group** — the pairing row for a transfer's two legs; carries the
-  from/to currencies + locked rate, never duplicating leg amounts.
+- **entry** (the journal header — replaces `transactions`) — one row per user
+  action. Columns: `date`, `time`, `description` (FTS-indexed via
+  `entries_fts`), `kind ∈ ('opening','income','expense','transfer','adjustment','refund')`,
+  `status ∈ ('pending','confirmed')`, `confirmed_at`, `counterparty_id`,
+  `refunded_entry_id`, `source_template_id`, `notes` (FTS-indexed),
+  `applied_rule_ids` (JSON), `reviewed_at`, plus two DE-only columns:
+  **`dedup_hash`** (sha256 over `date|time|description|sorted(account:amount)`,
+  computed at the chokepoint; UNIQUE per `(ledger_id, dedup_hash)` when not
+  NULL — replaces the legacy column-tuple dedup index) and **`sealed`** (the
+  two-phase-write flag — see §2.2 + §3 of `DOUBLE_ENTRY_PLAN.md`). `kind` is
+  a cached classification label; **the postings shape is the truth** (audit
+  I7 in §2.3.1 enforces they agree).
+- **posting** (the money leg — replaces `transaction_splits` + the
+  amount/currency/`amount_base` columns of legacy `transactions`) — per
+  entry: ≥ 2 postings, ≥ 1 account leg, `Σ amount_base = 0` (exact, with
+  the FX residue leg, §2.3.1 I1). Each posting is **XOR** an account leg
+  (`account_id` set, `category_id` NULL) **or** a category leg (other way
+  around; `category_id` may itself be NULL = "uncategorized", preserving
+  the legacy SET-NULL-on-category-delete semantics). Account-leg `currency`
+  MUST equal the account's currency (schema trigger guard, §2.3.1 I3);
+  category-leg `currency` is the ledger base. Both legs carry `amount`
+  (signed, in `currency`), `amount_base` (signed, locked at the entry's
+  date), and `exchange_rate` (locked). Optional `orig_amount` /
+  `orig_currency` carry the user-typed original figure when the entry was
+  entered in a currency other than the account's (the "JPY hotel on the
+  SGD card" display case; §5.2 of DE plan). Per-leg `cleared_at`
+  (reconcile clearing is per account leg; account legs only).
+- **entry_attachment** (renamed from `transaction_attachment`) — pointer rows
+  (`rel_path`, `sha256`, mime, size) for receipt photos/PDFs attached to an
+  entry. **Actual files are NEVER stored in the SQLite database** — they live
+  in an `attachments/<entry_id>/` folder on disk and travel inside the
+  `.finch` pack (§2.5.3) alongside the DB. The DE migration **reuses the
+  legacy transaction id as the entry id** (§4.6), so the on-disk path
+  `attachments/<entry_id>/...` is identical to the pre-DE
+  `attachments/<transaction_id>/...` for any row that existed before the
+  cutover — packs round-trip across the cutover unchanged.
 - **budget** — named expense limit or income target with a cycle
   (`frequency`/`start_date`), optional rollover (+ cap), staged
   `pending_amount` (next-cycle change), `last_rolled_period`, and
   account/category filter sets (JSON).
 - **scheduled_template** (+ **scheduled_splits**) — recurring income/expense/
   transfer with cadence, `auto_post`, `next_run`/`last_run`, optional
-  `installment_total` (finite plans), `max_executions`.
+  `installment_total` (finite plans), `max_executions`. Posts via the entries
+  chokepoint; a transfer template posts as one entry (two account legs), not
+  two rows.
 - **holding** — a position inside an investment account (`shares`,
   `cost_basis`, `last_price`); guarded by a trigger to investment accounts only.
+  **DE non-change:** decision #23 stands — no commodity/lot accounting; cash
+  flows through ordinary account-leg postings as before.
 - **exchange_rate** — `(date, currency) → rate`; the locked-rate source.
 - **rule** — one if-then rule (JSON `condition` tree + ordered `actions`),
-  `priority`, `is_active`, `run_on_edit`.
+  `priority`, `is_active`, `run_on_edit`. Engine runs inside the chokepoint
+  for income/expense/refund kinds (`postEntry` parity with the legacy
+  `insertTxRow` hook); a rule's `split` action becomes N category legs.
 - **app_state** — small KV slices (mobile tab order, per-ledger display
   currency, transitional queues).
 - **db_metadata** — single row: app name, **schema version**, app version,
-  export checksum + row counts (the import-integrity guard).
+  export checksum + row counts (the import-integrity guard). **DE row_counts
+  keys change:** `transactions` / `transfer_groups` / `transaction_splits` /
+  `transaction_tags` / `transaction_attachments` → `entries` / `postings` /
+  `entry_tags` / `entry_attachments` (the manifest in §2.5.3 follows the
+  same renaming).
+
+> **What dies under DE:** `transfer_groups` (a transfer is just an entry with
+> two account legs; its locked from→to rate is derivable as `|toAmount /
+> fromAmount|`), `transaction_splits` (splits are just N category legs),
+> `accounts.opening_balance` + `accounts.opening_balance_base` (become
+> opening entries). What survives unchanged: every other entity above, every
+> selector in §2.4, the rules engine, budgets, holdings, scheduled templates,
+> FX rate model, pending/confirmed semantics, `current_balance` cache pattern,
+> the attachment pipeline, autobackup/pack/import machinery (table lists
+> updated). See `DOUBLE_ENTRY_PLAN.md §2.5` for the full survives/dies list.
 
 > **Requirement:** the native model MUST represent every entity and every
-> column above. Even columns that look "internal" (e.g. `opening_balance_base`,
-> `applied_rule_ids`, `last_rolled_period`) carry behaviour or audit value and
-> are required for `.db` interop (§8).
+> column above. Even columns that look "internal" (`dedup_hash`, `sealed`,
+> `applied_rule_ids`, `last_rolled_period`) carry behaviour or audit value
+> and are required for `.db` / `.finch` interop (§8).
 
 ### 2.2 The status / triage state machine (don't collapse these)
 
-Four orthogonal axes live on a transaction. They answer different questions and
-MUST stay independent:
+Four orthogonal user-facing axes live on an entry, plus a fifth internal
+write-state flag added by DE. They answer different questions and MUST stay
+independent:
 
-| Axis | Column | Question | Affects balances? |
-|---|---|---|---|
-| Lifecycle | `status` (pending→confirmed) | "Is this real yet?" | Confirmed only |
-| Statement | `cleared_at` | "Has it appeared on a real statement?" (reconcile) | No |
-| Review | `reviewed_at` | "Have I eyeballed it and it's correct?" | No |
-| Provenance | `applied_rule_ids` | "Why is it categorised this way?" | No |
+| Axis | Column | Where | Question | Affects balances? |
+|---|---|---|---|---|
+| Lifecycle | `status` (pending→confirmed) | entry | "Is this real yet?" | Confirmed only |
+| Statement | `cleared_at` | **posting** (account legs only) | "Has it appeared on a real statement?" (reconcile) | No |
+| Review | `reviewed_at` | entry | "Have I eyeballed it and it's correct?" | No |
+| Provenance | `applied_rule_ids` | entry | "Why is it categorised this way?" | No |
+| **Write-state (DE)** | `sealed` | entry | "Is this entry currently being rewritten?" (internal — two-phase write: postings inserted while sealed=0, then `UPDATE … SET sealed=1` fires the balance-check trigger; postings of a sealed entry are immutable, edits unseal → rewrite → reseal) | No |
 
-A confirmed row can be uncleared and unreviewed; a rule can pre-clear review at
-insert. The web app shipped these as separate features (PRs for reconcile, rules,
-review queue); the native app MUST not flatten them into one "done" flag.
+A confirmed entry can be uncleared and unreviewed; a rule can pre-clear
+review at insert. The web app shipped the first four axes as separate
+features (PRs for reconcile, rules, review queue), and the DE cutover added
+`sealed` as a load-bearing internal flag. The native app MUST not flatten
+them into one "done" flag.
+
+**Per-leg clearing under DE:** `cleared_at` lives on the posting (account
+legs only), not the entry — clearing account A's leg of a transfer must
+not clear account B's leg. This preserves the legacy semantics exactly;
+reconcile UI continues to operate per account.
 
 ### 2.3 Money & currency invariants (load-bearing)
 
@@ -187,10 +279,13 @@ wrong one. They are non-negotiable.
    currency**, computed with a **rate locked at write time** (`exchange_rate`).
    A later edit to the rate table MUST NOT reshape history.
 2. **Balances are in the account's currency.** A confirmed insert moves
-   `accounts.current_balance` by the native amount when the row currency matches
-   the account, else by `amount_base`. `current_balance` is **derived/cached**,
-   never the source of truth — it is recomputed from `opening_balance` + Σ
-   confirmed rows (`recomputeAccount`).
+   `accounts.current_balance` by the native amount (under DE, this is
+   `posting.amount` for any account leg — currency mismatch is impossible
+   by §2.3.1 invariant I3). `current_balance` is **derived/cached**, never
+   the source of truth — under DE it is recomputed from `Σ confirmed
+   account-leg amounts of postings` (`recomputeAccount`; the opening entry's
+   account leg is in the sum, so there is no separate opening-balance seed
+   term).
 3. **Display ≠ storage.** Amounts are stored in ledger base; the UI converts to
    the user's **per-ledger display currency** for presentation. Two formatters
    exist and MUST be kept distinct: convert-then-format (store/MOCK amounts) vs
@@ -201,8 +296,10 @@ wrong one. They are non-negotiable.
 5. **Net worth** sums each account's native balance re-expressed in ledger base
    via the live rate, honouring `include_in_net_worth`. Pending rows never count.
 6. **Unrealized FX** = live value (`current_balance × today's rate`) − cost
-   basis (`opening_balance_base` + Σ `amount_base`). Same-currency-as-base
-   accounts are always 0.
+   basis (`Σ confirmed account-leg amount_base` — the opening entry's leg is
+   in the sum; under the legacy schema this was
+   `opening_balance_base + Σ amount_base` of confirmed transactions). Same-
+   currency-as-base accounts are always 0.
 7. **Refunds** are `kind='refund'`, positive, and **net against their category**
    (they reduce expense, not add income). Adjustments (`kind='adjustment'`) and
    transfers are excluded from spend/cash-flow/budget math.
@@ -212,7 +309,39 @@ wrong one. They are non-negotiable.
 > **Direction (money type):** the on-disk format is SQLite `REAL` (a float),
 > rounded to 2dp in the app layer — see §4.5 for why the native app should
 > still compute in `Decimal`/minor-units and only narrow to `REAL` at the
-> storage boundary.
+> storage boundary. **Backstopped by DE:** the balanced-entry invariants
+> (§2.3.1 below) make float drift *detectable* at the storage layer — if the
+> Swift-side Decimal-to-REAL discipline ever slips, `auditLedger` (§4.9)
+> catches it instead of silently corrupting balances.
+
+### 2.3.1 The balanced-entry invariants (added by DE)
+
+Under double-entry the eight invariants above stay true; nine more land at the
+storage layer, lifted from `plans/DOUBLE_ENTRY_PLAN.md §2.4`. These are
+**enforced by schema triggers** (the seal trigger fires when the chokepoint
+UPDATEs `sealed = 1`; the posting triggers guard currency + sealed-
+immutability), so a native port that reuses the verbatim schema (§4.2)
+inherits the enforcement for free. The remaining identities (global trial
+balance, cached-balance drift) are checked by `auditLedger` (§4.9).
+
+| # | Invariant | Enforced by |
+|---|---|---|
+| I1 | Per entry: `ROUND(Σ amount_base, 2) = 0`, **exact** (residue is an explicit `sys:fx-gain` leg, §5.1 of DE plan) | chokepoint + seal trigger |
+| I2 | Per entry: ≥ 2 postings, ≥ 1 account leg | chokepoint + seal trigger |
+| I3 | Account-leg `currency` = the account's `currency`; category-leg `currency` = ledger base (this is the trigger guard that **kills the long-standing currency-mixing class of bug** by construction) | chokepoint + posting trigger |
+| I4 | Postings of a sealed entry are immutable; postings never exist without their entry (FK CASCADE); legs are never written/edited/deleted individually | seal + posting triggers |
+| I5 | Every posting's account/category belongs to the entry's ledger | chokepoint + `auditLedger` |
+| I6 | Only `status='confirmed'` entries move cached balances; `current_balance = Σ confirmed account-leg amounts` (the opening leg is in the sum — no separate seed term) | trigger + `recomputeAccount` |
+| I7 | `entries.kind` matches the postings shape: `transfer` ⟺ 2 account legs; `opening`/`adjustment` ⟺ equity leg with matching `system`; `refund` ⟹ positive account leg (+ optional `refunded_entry_id`) | chokepoint + `auditLedger` |
+| I8 | Global trial balance: `Σ all postings.amount_base = 0` per ledger | `auditLedger` (§4.9) |
+| I9 | Display-currency identity: `amount = amount_base` exactly when `currency` = ledger base | chokepoint + `auditLedger` |
+
+> **Requirement:** native MUST honour I1-I9 at the storage layer. The
+> recommended path (§4.2) is to reuse the verbatim schema + triggers via
+> GRDB — that gets I1-I4 + I6 for free; the remaining identities require the
+> `auditLedger` port (§4.9). Native MUST NOT bypass the chokepoint to write
+> postings directly — there is no other place where the residue leg is
+> derived or the dedup hash is computed.
 
 ### 2.4 The derivations you must reproduce (the brains)
 
@@ -241,16 +370,36 @@ independently-testable pure function:
 > (the "finch-core" of §4.4), not inlined into views — so the parity test
 > suite (§12) can verify them against the TS originals.
 
+> **DE note:** under double-entry the **selector list is unchanged in shape**
+> (same names, same return types, same semantics), but the underlying SQL is
+> now over `postings ⋈ entries` rather than `transactions ⋈
+> transaction_splits`. Two simplifications fall out: refund netting collapses
+> into the entry-kind buckets (no per-selector `kind IN ('expense','refund')`
+> widening across SQL + TS — entries already classify), and the split-vs-
+> parent COALESCE gymnastics in `categorySpend` disappear (a category leg is
+> a category leg). See `DOUBLE_ENTRY_PLAN.md §7` for the per-selector read-
+> path rewires the native port must mirror.
+
 ### 2.5 Receipt attachments + the `.finch` pack format (designed here; ✅ shipped on the web)
 
 > **Status update (post-PR #106, #107):** the design below was implemented
-> end-to-end on the **web app** — the `transaction_attachments` table, the
-> on-disk layout, and the `.finch` pack format with manifest validation
-> and atomic swap all match this section verbatim. Native apps inherit
-> the schema as-designed; the web-side implementation is the *canonical
-> reference* for shape (see `frontend/lib/db/schema.ts`,
-> `frontend/lib/db/pack.ts`, `frontend/lib/db/paths.ts`). Companion design
-> records: `plans/done/RECEIPT_PHOTOS_PLAN.md`, `plans/done/PACK_FORMAT_PLAN.md`.
+> end-to-end on the **web app** — the attachments table, the on-disk
+> layout, and the `.finch` pack format with manifest validation and atomic
+> swap all match this section verbatim. Native apps inherit the schema
+> as-designed; the web-side implementation is the *canonical reference* for
+> shape (see `frontend/lib/db/schema.ts`, `frontend/lib/db/pack.ts`,
+> `frontend/lib/db/paths.ts`). Companion design records:
+> `plans/done/RECEIPT_PHOTOS_PLAN.md`, `plans/done/PACK_FORMAT_PLAN.md`.
+>
+> **DE rename (2026-06-07):** under double-entry the table renames from
+> `transaction_attachments` to `entry_attachments` and the FK column from
+> `transaction_id` to `entry_id`. **Crucially, the DE migration reuses the
+> legacy transaction id as the entry id** (§4.6, `DOUBLE_ENTRY_PLAN.md §8.3`
+> "id stability summary"), so the on-disk path
+> `attachments/<entry_id>/<attachment_id>.<ext>` is byte-identical to the
+> pre-DE `attachments/<transaction_id>/...` for any row that existed before
+> the cutover — pack files round-trip across the cutover unchanged, pointer
+> integrity (`sha256`) survives.
 
 This section originally **decided the shape** so both apps + the file-pack
 sync model (§4.3) would inherit a consistent structure from day one. The
@@ -261,16 +410,16 @@ blobs inside the SQLite file.** The DB stores **pointers** (relative path +
 integrity hash); the bytes live in a sibling `attachments/` folder on disk
 and travel inside the `.finch` pack zip alongside the DB.
 
-#### 2.5.1 New table (added to the shared schema, both apps)
+#### 2.5.1 The attachments table (added to the shared schema, both apps)
 
 ```sql
-CREATE TABLE transaction_attachments (
+CREATE TABLE entry_attachments (
   id                TEXT PRIMARY KEY,         -- UUID
   ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  transaction_id    TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  entry_id          TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
   kind              TEXT NOT NULL CHECK(kind IN ('image','pdf')),
   -- Path inside the pack AND inside the live attachments folder:
-  -- 'attachments/<transaction_id>/<id>.<ext>'. Bytes are NEVER in the DB.
+  -- 'attachments/<entry_id>/<id>.<ext>'. Bytes are NEVER in the DB.
   rel_path          TEXT NOT NULL,
   mime_type         TEXT NOT NULL,
   byte_size         INTEGER NOT NULL,
@@ -279,9 +428,15 @@ CREATE TABLE transaction_attachments (
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );
-CREATE INDEX idx_attach_txn    ON transaction_attachments(transaction_id);
-CREATE INDEX idx_attach_ledger ON transaction_attachments(ledger_id);
+CREATE INDEX idx_attach_entry  ON entry_attachments(entry_id);
+CREATE INDEX idx_attach_ledger ON entry_attachments(ledger_id);
 ```
+
+> The legacy `transaction_attachments` table + `idx_attach_txn` index were
+> the pre-DE shape; the DE migration renames the table + the FK column +
+> the index in place, preserving every row id (see §4.6 + `DOUBLE_ENTRY_PLAN.md
+> §8.2`). Both apps land at the renamed shape on the same `SCHEMA_VERSION`
+> stamp.
 
 - **Cascade behaviour:** deleting a transaction removes the DB row by
   cascade; the orphaned file on disk is swept by the pack-builder (which
@@ -301,7 +456,7 @@ CREATE INDEX idx_attach_ledger ON transaction_attachments(ledger_id);
 ├── finch.sqlite3-wal
 ├── finch.sqlite3-shm
 └── attachments/
-    └── <transaction_id>/
+    └── <entry_id>/
         ├── <attachment_id>.jpg
         └── <attachment_id>.pdf
 ```
@@ -322,7 +477,7 @@ my-ledger.finch       (ZIP container)
 ├── manifest.json     -- pack metadata + checksum + file inventory
 ├── finch.sqlite3     -- VACUUM INTO'd before packing
 └── attachments/
-    └── <transaction_id>/
+    └── <entry_id>/
         └── <attachment_id>.<ext>
 ```
 
@@ -330,7 +485,11 @@ my-ledger.finch       (ZIP container)
 `schema_version`, `exported_at`, `exported_from` (device id + name),
 `db_sha256`, `row_counts` (mirroring the existing `db_metadata`
 integrity guard — `lib/db/checksum.ts` generalises straight into this),
-and `attachment_count` + total bytes.
+and `attachment_count` + total bytes. **DE `row_counts` keys:** the
+manifest enumerates the post-DE canonical tables (`entries`, `postings`,
+`entry_tags`, `entry_attachments`, ...) — packs exported before the
+cutover still import because migrations run when the swapped file is
+opened (§4.6).
 
 - **Atomic swap on receive:** the receiving device unpacks to a tmp
   directory, validates the manifest + every attachment's sha256, then
@@ -343,6 +502,55 @@ and `attachment_count` + total bytes.
   debounced to avoid thrashing.
 - **Backups doubles as the pack history.** Successive packs in a dated
   folder are also the user's restore points (§9).
+
+### 2.6 The `Tx` projection contract (single-entry skin)
+
+Storage is double-entry (§2.1); consumption is single-entry. This subsection
+records the **projection contract** native MUST emit so every consumer in §2.4
+keeps the same arithmetic and a `.finch` pack written by either app projects
+identically on the other.
+
+The web projection lives in `frontend/lib/db/state.ts` (`projectState`) and
+emits **one `Tx` per account posting**, so a transfer is two `Tx` rows
+(exactly as today, exactly as `selectTransfers` expects). The shape native
+MUST reproduce:
+
+| `Tx` field | Source under DE |
+|---|---|
+| `id` | the **account posting id** (DE migration reuses the legacy `transactions.id` here, so client ids are bit-identical across the cutover — §4.6) |
+| `amount` | the account leg's `amount_base` (signed) |
+| `nativeAmount` / `currency` | leg `orig_amount ?? amount` / `orig_currency ?? currency` |
+| `account` | leg `account_id` |
+| `category` | the entry's single category leg's `category_id`; with ≥ 2 category legs, the largest-`abs(amount)` leg's (display default; aggregations use `splits`). Equity legs are never projected as `Tx.category` |
+| `splits` | ≥ 2 category legs → `[{ id, categoryId, amount: −leg.amount, amountBase: −leg.amount_base, description: memo }]` — **negated** back to the parent-signed convention the consumer expects. Equity legs are never projected as splits |
+| `kind` | `entries.kind`; **`kind='opening'` entries are filtered out** of the `Tx` list entirely and projected into `AccountRow.openingBalance` / `openingBalanceBase` instead |
+| `transferGroupId` | the entry id, when the entry has ≥ 2 account legs (`selectTransfers`' grouping works verbatim) |
+| `refundedTransactionId` | the refunded entry's account-posting id, via join |
+| `clearedAt` | the leg's `cleared_at` (per-account clearing preserved) |
+| `tags` | `entry_tags` (transfer legs share tags by construction) |
+| `merchant`, `date`, `time`, `note`, `pending`, `ledgerId`, `sourceTemplateId`, `counterpartyId`, `appliedRuleIds`, `reviewedAt` | `entries` columns (merchant = description with the counterparty-canonical override) |
+
+> **Requirement:** native MUST emit this projection shape. `FinchCore` (§4.4)
+> exposes the projection as a pure function over an open SQLite handle,
+> returning the same `Tx` / `AccountRow` shapes the web's `Tx` type defines.
+> The parity suite (§12) verifies a Swift projection of a golden DB matches
+> the TS projection row-for-row. This is what lets every selector in §2.4
+> keep its current arithmetic — and what lets a `.finch` pack written by
+> either app project identically on the other.
+
+> **Equity legs are invisible to the consumer.** The three system equity
+> categories (`opening` / `adjustment` / `fx`) appear in postings but never
+> as `Tx.category` or as a `Tx.splits` entry — they are filtered out by the
+> projection. The categories admin and category pickers MUST hide them too
+> (resolve by the `system` column, never by id or name; rename-safe).
+
+> **PR-B adapter preconditions (carried from `DOUBLE_ENTRY_PLAN.md`
+> PR-A review).** When a mutation rewrites legs via the chokepoint's
+> `rebuildEntry`, it MUST: (a) forward each account leg's `cleared_at`
+> — omission silently un-clears a reconciled row — and (b) pass explicit
+> `amountBase` values when the entry carries user-pinned rates that a date
+> edit must preserve (the default re-locks from the rates table). Native
+> ports of `updateTransfer` and `updateTransaction` MUST honour both.
 
 ---
 
@@ -477,10 +685,11 @@ UUID primary keys (§4.6) are still required — they keep a future
 row-level sync model possible without a schema break and reduce id
 collisions if two devices briefly diverge.
 
-> Note: `ProjectedState` returns the **whole** projection on every mutation —
-> fine at personal-finance data sizes, and a clean model for "recompute, then
-> re-render." The native app SHOULD adopt the same "mutate → re-derive →
-> publish" loop (a single `@Observable` store fed by `FinchCore`).
+> Note: the projection (`projectState` in `lib/db/state.ts`) returns the
+> **whole** projection on every mutation — fine at personal-finance data
+> sizes, and a clean model for "recompute, then re-render." The native app
+> SHOULD adopt the same "mutate → re-derive → publish" loop (a single
+> `@Observable` store fed by `FinchCore`).
 
 ### 4.4 Shared logic: port to Swift, don't bridge JS
 
@@ -522,6 +731,32 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   **UUIDv4** precisely for a multi-device sync model. **Direction:** native
   app generates **UUIDs** for new rows (PKs are `TEXT`, so they coexist with
   legacy ids), paying forward the §4.3-C sync option at no cost today.
+- **The double-entry migration (added 2026-06-07).** `SCHEMA_VERSION` is
+  bumped to `2026-06-12T00:00:00Z` by the DE cutover
+  (`plans/DOUBLE_ENTRY_PLAN.md §8`). A native install that imports a pre-DE
+  `.finch` pack from the web (or vice versa) will, on opening the swapped-in
+  file, run the same MIGRATIONS entry — which:
+  1. Takes a defensive `VACUUM INTO '<file>.pre-de.bak'` snapshot before the
+     data move (this is the largest migration the project has shipped; the
+     snapshot is the rollback path).
+  2. Creates `entries` / `postings` / `entry_tags` / `entry_attachments` /
+     `entries_fts` tables + indexes + the seal/posting/balance triggers.
+  3. Rebuilds `categories` with the new CHECK (`equity` added, `transfer`
+     dropped) and the `system` column; re-kinds any user-created
+     `'transfer'` categories to `'expense'`; calls `ensureSystemCategories`
+     per ledger.
+  4. Migrates singles / transfers / splits / strays / foreign-currency rows
+     / opening balances per `DOUBLE_ENTRY_PLAN.md §8.2`, **reusing legacy
+     row ids as new entry / posting ids** (the id-stability table in §8.3 of
+     that plan).
+  5. Backfills `entries_fts`; drops the legacy tables + FTS + triggers.
+  6. Recomputes every account; runs `auditLedger` (§4.9) and **aborts the
+     migration on any problem** — the `.pre-de.bak` snapshot is the rollback.
+
+  Native and web MUST run a byte-identical migration step here so the same
+  DB migrates once, consistently, regardless of which app opens it first.
+  The migration is idempotent on a DB already at the new version (the
+  "already applied" swallow handles repeats).
 
 ### 4.7 Platform baselines (decided)
 
@@ -539,6 +774,48 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   file-portable app and lets users who prefer non-store binaries install
   without an Apple ID. (Direct distribution is also the friendlier story for
   users wary of any app-store data policies on a finance app.)
+
+### 4.9 The audit invariant (`auditLedger`)
+
+**Direction (required):** native MUST implement `auditLedger` in `FinchCore`,
+ported from `lib/db/entries.ts::auditLedger`
+(`plans/DOUBLE_ENTRY_PLAN.md §3.3`). It is a read-only sweep returning typed
+problems:
+
+- Unbalanced entries (I1 violations beyond rounding) and unsealed entries
+  (torn writes).
+- Under-2-leg or 0-account-leg entries (I2).
+- Kind ⇔ shape mismatches (I7 — e.g. `kind='transfer'` with one account leg,
+  `kind='adjustment'` with no equity leg).
+- Account-leg currency mismatches (I3 — the long-standing currency-mixing
+  bug class, now schema-enforced; the audit catches any historical row that
+  slipped through pre-DE).
+- Cross-ledger postings (I5) and `amount ≠ amount_base` on base-currency
+  legs (I9).
+- Non-zero global trial balance per ledger (I8).
+- Cached `current_balance` drift vs the `recomputeAccount` sum.
+
+**When it runs (parity with the web — `DOUBLE_ENTRY_PLAN.md §3.3`):**
+
+1. On every **import** of a `.finch` pack — after the manifest's byte
+   checksum, before the atomic swap. A failing audit refuses the import
+   with the typed problem set; the device's current data is untouched.
+2. On the native equivalent of `/api/db-info` — surface the count + a
+   "View report" affordance in the Settings ▸ Data section.
+3. As a **test-suite hook** at the end of every parity-suite scenario
+   (cheap; catches regressions broadly).
+4. As the **migration's abort condition** (§4.6).
+
+**Why this is load-bearing.** The seal + posting + balance triggers (§2.3.1)
+enforce *most* invariants at the schema level — a native port that reuses
+the verbatim schema (§4.2) inherits I1-I4 + I6 for free. But the trial-
+balance identity (I8) and the cached-balance-vs-recompute drift check are
+global sweeps that have to be ported. A native install that ever drifts
+from the web on these is, by definition, a `.db` interop break (§8).
+
+**Parity expectation.** Native and web MUST return the same typed problem
+set on the same DB. Golden DB fixtures with seeded corruptions (one per
+problem class) assert this in both test suites (§12 audit parity).
 
 ---
 
@@ -641,7 +918,10 @@ finch already computes, so the data work is mostly done.
 - **App Intents / Siri / Shortcuts:** "Add a $6 coffee to Personal" → an
   `AddTransaction` intent over `FinchCore`; "What did I spend this week?" →
   surfaces `weeklyDigest`. Donate intents so Siri Suggestions learn the user's
-  habitual entries (pairs with `recentExpenses`).
+  habitual entries (pairs with `recentExpenses`). **The intent dispatches
+  through the Swift port of `postEntry` (the chokepoint, §2.6), so the
+  balanced-entry invariants and the rules engine apply to Siri-created
+  entries automatically — there is no other write path.**
 - **Widgets (WidgetKit) — deferred to a later phase (decision §14).** The
   widget candidates (net-worth sparkline, this-month budget ring,
   month-forecast tile, weekly digest) all sit on top of existing selectors,
@@ -650,8 +930,11 @@ finch already computes, so the data work is mostly done.
 - **Live Activities / Lock Screen — deferred with widgets.** Same reasoning.
 - **Share Extension → receipts:** the long-deferred receipt-photo feature
   (`FEATURE_IDEAS §4.1`) is *natural* here — share a photo/PDF into finch to
-  create/attach to a transaction. (Needs the `transaction_attachments` table
-  the web plan sketched; design it once, shared.)
+  create/attach to an entry. The web-side `entry_attachments` table + on-
+  disk pipeline is ✅ shipped (PR #106; renamed from `transaction_attachments`
+  by the DE migration — §2.5.1); native reuses the same schema + on-disk
+  layout (§2.5.2) and just adds the iOS intake (Share Extension +
+  `PhotosPicker`).
 - **Spotlight indexing:** index transactions/merchants/accounts via
   `CoreSpotlight` so system search jumps into finch — the iOS analogue of ⌘K.
 - **Notifications:** local notifications for scheduled items due, budget
@@ -674,17 +957,29 @@ finch already computes, so the data work is mostly done.
 
 ## 8. Interop with the web app & data portability
 
+> **DE note (added 2026-06-07):** the double-entry storage migration in
+> progress on the web (`plans/DOUBLE_ENTRY_PLAN.md`) does NOT change the
+> cross-app interop contract. The `.finch` pack is still a SQLite DB on the
+> shared `SCHEMA_VERSION` lineage; the canonical tables inside are now
+> `entries` / `postings` / `entry_tags` / `entry_attachments` instead of
+> `transactions` / `transfer_groups` / `transaction_splits` / `transaction_tags`
+> / `transaction_attachments`. The pack manifest's `row_counts` keys
+> follow that rename. Pre-DE packs still import on either app — migrations
+> run when the swapped-in file is opened (§4.6).
+
 - **The `.finch` pack is the primary interop unit (§2.5.3).** A device
   exports a pack to the share sheet or iCloud Drive; another device — or
   the web app — opens that pack to import. The pack format is portable
   in both directions and is the same artifact iCloud Drive replicates for
   sync (§4.3). On import, the receiver MUST validate `manifest.json` (incl.
   the existing checksum + row-counts guard, generalised from
-  `lib/db/checksum.ts`) and every attachment's sha256, then atomically
-  swap into place; refuse a tampered or partial pack with a clear error.
+  `lib/db/checksum.ts`) and every attachment's sha256, **then run
+  `auditLedger` for semantic integrity (§4.9)**, then atomically swap into
+  place; refuse a tampered, partial, or audit-failing pack with a clear
+  error.
 - **Raw `.db` interop still works.** Users who only want the database (no
   attachments) can export a bare `.sqlite3` via `VACUUM INTO` and import it
-  on either side; the `transaction_attachments` table is simply empty.
+  on either side; the `entry_attachments` table is simply empty.
 - **CSV export:** reproduce `GET /api/export/transactions` (names + tags
   resolved via joins); offer via the share sheet (`lib/csv.ts`).
 - **Backups:** the web app keeps timestamped **`.finch.bak` packs** under
@@ -705,7 +1000,8 @@ finch already computes, so the data work is mostly done.
      attachments directory (§2.5) — **shipped via PR #106**
      (`plans/done/RECEIPT_PHOTOS_PLAN.md`). Schema in
      `frontend/lib/db/schema.ts`; resolved on-disk under `FINCH_DB_DIR`
-     via `frontend/lib/db/paths.ts`.
+     via `frontend/lib/db/paths.ts`. _(Subsequently renamed to
+     `entry_attachments` by the DE migration — §2.5.1.)_
   2. ✅ **Add ledger CRUD** to the web app — **shipped via
      `plans/done/LEDGER_CRUD_PLAN.md`** (2026-06-06). Four new
      mutations + matching store actions + DB-backed cosmetics + live
@@ -780,13 +1076,17 @@ finch already computes, so the data work is mostly done.
   formatters; dates via `Date.FormatStyle`. Multi-currency is core, so never
   hard-code symbols. **RTL** layout support. The seed data is multi-currency
   (USD/SGD/CNY/JPY) — use it to test formatting breadth.
-  > **Cross-app note (2026-06-06):** the web app's i18n approach lives in
-  > `plans/I18N_PLAN.md` — `next-intl` + `messages/<locale>.json` catalogs,
-  > English base + Simplified Chinese (`zh-CN`) for v1. The web's *data*
-  > layer is locale-neutral: translations live in app chrome only, never in
-  > the database or in `.finch` packs. A pack built on Apple in Japanese
-  > opens on the web in Chinese with no translation churn (only user-typed
-  > category names etc. cross over, which is correct).
+  > **Cross-app note (updated 2026-06-07):** the web app's i18n approach
+  > is ✅ **shipped via PR #113 (foundation) + PR #115 (mass extraction +
+  > `zh-CN` coverage)**; design record `plans/I18N_PLAN.md`. Stack:
+  > `next-intl` + `messages/<locale>.json` catalogs, English base + Simplified
+  > Chinese (`zh-CN`) for v1, ICU MessageFormat plurals, structured server-
+  > error shape `{ code, params }` so mutation errors translate client-
+  > side. The web's *data* layer is locale-neutral: translations live in
+  > app chrome only, **never in the database or in `.finch` packs**. A pack
+  > built on Apple in Japanese opens on the web in Chinese with no
+  > translation churn (only user-typed category names etc. cross over,
+  > which is correct).
   >
   > **The Apple side is independent** — use the platform's native i18n
   > (`Localizable.strings` / `Localizable.stringsdict` for chrome; CLDR
@@ -808,9 +1108,23 @@ finch already computes, so the data work is mostly done.
   progress, reconcile math, anomaly z-scores, forecast figures, rules
   evaluation) as JSON golden files and assert the Swift implementation matches
   to the cent. This is what keeps two implementations honest (§4.4).
+- **Projection parity (DE):** for every golden DB fixture, native's
+  `projectState` MUST emit the same `Tx` / `AccountRow` rows as the TS
+  projection — same ids (the migration's id-reuse policy makes this
+  byte-identical for pre-DE fixtures), same `splits` sign convention, same
+  filtering of opening / equity legs (§2.6). One ported case per row of the
+  projection-contract table covers it.
+- **Audit parity (DE):** for every fixture DB (golden + property-generated),
+  native's `auditLedger` (§4.9) MUST return the same typed problem set as the
+  TS implementation — empty for clean DBs, matching outcomes for seeded-
+  corruption fixtures (one per problem class: unbalanced, unsealed,
+  currency-mismatch, kind-shape mismatch, cross-ledger leg, global TB ≠ 0,
+  cached-balance drift, `amount ≠ amount_base` on a base-currency leg).
 - **Golden `.db` fixtures:** check in a sample finch `.db` (or generate from the
   shared seed) and assert open/migrate/project round-trips, plus cross-app
-  interop (write on web, read on native).
+  interop (write on web, read on native). The migration must be a no-op on a
+  DB already at `2026-06-12T00:00:00Z`; `auditLedger` must report clean after
+  every round-trip.
 - **Snapshot tests** for key screens in light/dark, a few Dynamic Type sizes,
   and iPhone/iPad/Mac size classes.
 - **Per-increment gate** (mirror CI discipline): build + unit/parity tests +
@@ -823,13 +1137,23 @@ finch already computes, so the data work is mostly done.
 
 Milestones as coherent slices, each independently shippable:
 
-1. **`FinchCore` + read-only mirror.** GRDB on the shared schema (incl. the
-   new `transaction_attachments` table, §2.5); port the projection + the §2.4
-   selectors; parity suite green; a read-only iPhone app
-   (Accounts/Activity/Budgets/Insights) over an imported `.db` or pack.
+1. **`FinchCore` + read-only mirror over the DE schema.** GRDB on the verbatim
+   shared schema (entries + postings + entry_tags + entry_attachments +
+   entries_fts + the seal/posting/balance triggers, §2.1) at
+   `SCHEMA_VERSION = 2026-06-12T00:00:00Z`. Seed the three system equity
+   categories per ledger via `ensureSystemCategories`. Port the `Tx`
+   projection (§2.6), the §2.4 selectors, and `auditLedger` (§4.9). Parity
+   suite green incl. projection-parity + audit-parity (§12). A read-only
+   iPhone app (Accounts/Activity/Budgets/Insights) over an imported `.finch`
+   pack.
 2. **Entry + core CRUD.** Add transaction (all kinds), transaction detail
    edits, pending confirm, budgets, scheduled post-now, **ledger CRUD**
-   (§2.1; coordinated web change in §8). Now "usable for real."
+   (§2.1; web-side ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md` PR #109).
+   Entry CRUD goes through a Swift port of the `lib/db/entries.ts`
+   chokepoint (`postEntry` / `rebuildEntry` / `deleteEntry`) — the same
+   single write path the web uses. The two PR-B adapter preconditions
+   called out in §2.6 (forward `cleared_at`; pass explicit `amountBase` for
+   pinned rates) apply verbatim. Now "usable for real."
 3. **Adaptive iPad/macOS.** `NavigationSplitView`, macOS menus/keyboard, ⌘K;
    both distribution paths set up (§4.8).
 4. **Power features.** Reconcile, rules engine + builder/backfill, transfers,
@@ -838,16 +1162,18 @@ Milestones as coherent slices, each independently shippable:
 5. **Pack engine + iCloud Drive sync (§4.3, §2.5.3).** Implement the
    `.finch` pack format end-to-end on the native side: build, validate,
    atomic swap, debounced auto-pack, manual "Sync now," conflict-copy UX.
-   **Web-side progress (2026-06-06):** the pack format itself + receipt
-   attachments shipped (PRs #106, #107); the on-disk shape and the
-   manifest contract are now the canonical reference for native to
-   match. Cross-app implications §8: 2 of 3 done (attachments + pack
-   format); **ledger CRUD on the web is the last remaining piece** and
-   should be picked up before or alongside this phase so native-created
-   ledgers round-trip cleanly.
-6. **Native upside — part 1 (§7).** App Intents/Siri, Share-Extension
-   receipts (depends on §2.5 + phase 5), Spotlight, notifications, biometric
-   lock.
+   **Web-side status (2026-06-07):** all three §8 cross-app implications
+   are ✅ shipped — receipt attachments (PR #106), `.finch` pack format
+   (PR #107), ledger CRUD (PR #109). The web is the canonical reference
+   for both the on-disk shape and the manifest contract. Pack manifest
+   `row_counts` keys are the DE-era keys (`entries` / `postings` /
+   `entry_tags` / `entry_attachments`); old packs still import because
+   migrations run on the swapped-in file (§4.6).
+6. **Native upside — part 1 (§7).** App Intents/Siri (dispatching through
+   `postEntry`, §7), Share-Extension receipts (writes to
+   `attachments/<entry_id>/...` — the rename from §2.5; ids are reused by
+   the DE migration, so the path structure is stable across the cutover),
+   Spotlight, notifications, biometric lock.
 7. **Native upside — part 2: Widgets / Live Activities / Watch.** Deferred
    from phase 6 by decision (§14); same data layer, mostly UI on top.
 8. **Row-level sync (the full §4.3-C), if ever pursued.** CloudKit or
@@ -896,6 +1222,9 @@ language. Each points at the sections of the doc that now reflect it.
    transcode pipeline, transaction-detail UI + lightbox all live. Native
    adopts the schema verbatim; the file pipeline (Share Extension intake +
    PhotosPicker on iOS) is the part native still needs to build.
+   _(Subsequently renamed to `entry_attachments` + path
+   `attachments/<entry_id>/...` by the DE migration — ids are reused, so
+   on-disk paths are stable across the cutover; §2.5.1, §4.6.)_
 
 5. **OS floor: iOS 26 / iPadOS 26 / macOS 26.** A modern floor lets the app
    use Swift Charts, App Intents, `@Observable`, `NavigationSplitView`, and
@@ -952,6 +1281,9 @@ during the relevant phase.
 | Pack format drifts between web and native | Medium | Single shared `manifest.json` schema; checksum + per-file sha256; cross-app round-trip test (§8, §12) |
 | Orphaned attachment files accumulate on disk | Low | Pack-builder sweep + periodic vacuum keep on-disk files ↔ DB rows in sync (§2.5.1) |
 | macOS feels like a blown-up iPad | Low | NavigationSplitView + real menus/keyboard; Catalyst only as fallback (§4.1) |
+| DE migration outcome divergence between web and native | Medium | Single shared `MIGRATIONS` lineage stamped `2026-06-12T00:00:00Z`; cross-app round-trip test (§8 + §12) opens a web-migrated DB on native (and vice versa) and asserts the second-side migration is a no-op + `auditLedger` clean. Defensive `VACUUM INTO '<file>.pre-de.bak'` snapshot is the rollback (§4.6). |
+| `auditLedger` divergence between web and native | Low | Single Swift port of the audit SQL; golden DB fixtures with seeded corruptions (one per problem class) assert the same typed problem set on both sides (§4.9 + §12 audit parity). |
+| Native write path bypasses the entries chokepoint | Medium | All write surfaces (CRUD, App Intents, Share Extension, scheduled posting) MUST go through the Swift port of `postEntry` / `rebuildEntry` / `deleteEntry` (§2.6, §7); the schema triggers + audit are the second line of defence, but architecting around the chokepoint is the first. |
 
 ## 16. Out of scope / non-goals
 
@@ -970,18 +1302,30 @@ during the relevant phase.
   rate / pending vs confirmed / cleared vs reviewed / transfer group / split /
   counterparty / holding / rule** — defined in §2 and, authoritatively, in
   `plans/database_design_en.md`.
-- **Canonical code references:** schema `frontend/lib/db/schema.ts`; projection
-  `frontend/lib/db/repo.ts`; mutations `frontend/lib/db/mutations.ts`;
+- **Entry / posting / sealed / dedup_hash / residue leg / system equity
+  category / `auditLedger` / chokepoint** — the double-entry vocabulary.
+  Defined in §2.1, §2.2, §2.3.1, §2.6, and §4.9 of this brief; canonically
+  in `plans/DOUBLE_ENTRY_PLAN.md §2-§3`.
+- **Canonical code references:** canonical schema `frontend/lib/db/schema.ts`
+  (+ DE additions `frontend/lib/db/entries-schema.ts`); write chokepoint
+  `frontend/lib/db/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
+  / `auditLedger` / `ensureSystemCategories`); projection
+  `frontend/lib/db/state.ts` (`projectState`); mutations
+  `frontend/lib/db/mutations.ts` (delegate to the chokepoint under DE);
   derivations `frontend/lib/select.ts`; rules `frontend/lib/rules/*`; money
   `frontend/components/use-money.ts` + `frontend/lib/fx.ts`; reconcile
-  `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`; budgets
-  `frontend/lib/budgets/*`; tokens `frontend/app/globals.css`; design intent
-  `plans/frontend_design/`.
-- **Related plans:** `MASTER_PLAN.md` (what shipped); `PWA_PLAN.md`
+  `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`;
+  budgets `frontend/lib/budgets/*`; tokens `frontend/app/globals.css`;
+  design intent `plans/frontend_design/`.
+- **Related plans:** `MASTER_PLAN.md` (what shipped); `DOUBLE_ENTRY_PLAN.md`
+  (the storage rewrite this brief now inherits); `I18N_PLAN.md` (the web
+  i18n approach; Apple side is orthogonal — §11); `PWA_PLAN.md`
   (superseded by §1.1 of this brief, kept as a fork-in-the-road record);
   `FEATURE_IDEAS.md` / `INSPIRATION_IDEAS.md` (idea catalogs); and the
   shipped design records in `plans/done/` —
   `done/RECEIPT_PHOTOS_PLAN.md` (web-side attachments built on §2.5 of
   this brief), `done/PACK_FORMAT_PLAN.md` (web-side `.finch` export/import),
-  `done/RECONCILE_PLAN.md`, `done/RULES_ENGINE_PLAN.md`,
+  `done/LEDGER_CRUD_PLAN.md` (web-side ledger CRUD — closes the last §8
+  cross-app implication), `done/CATEGORIES_LEVEL3_PLAN.md` (web-side
+  3-level taxonomy), `done/RECONCILE_PLAN.md`, `done/RULES_ENGINE_PLAN.md`,
   `done/FILE_BACKED_DB_PLAN.md`.
