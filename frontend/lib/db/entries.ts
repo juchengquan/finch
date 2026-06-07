@@ -480,3 +480,141 @@ export async function postOpening(exec: Exec, o: {
     autoBalanceCategoryId: sys.opening,
   });
 }
+
+/** current_balance from the postings ledger (opening entry included — there
+ *  is no opening_balance seed term). PR B swaps queries/accounts.ts's
+ *  recomputeAccount over to this. */
+export async function recomputeAccountFromPostings(exec: Exec, accountId: string): Promise<void> {
+  const rows = await exec(
+    `SELECT COALESCE(SUM(p.amount), 0) AS total
+       FROM postings p JOIN entries e ON e.id = p.entry_id
+      WHERE p.account_id = ? AND e.status = 'confirmed'`,
+    [accountId],
+  );
+  await exec(
+    "UPDATE accounts SET current_balance = ROUND(?, 2), updated_at = datetime('now') WHERE id = ?",
+    [Number(rows[0]?.total ?? 0), accountId],
+  );
+}
+
+export interface EntryPatch {
+  date?: string;
+  time?: string | null;
+  description?: string;
+  kind?: EntryKind;
+  status?: EntryStatus;
+  notes?: string | null;
+  counterpartyId?: string | null;
+  refundedEntryId?: string | null;
+  /** Full replacement of ALL legs. Omit to keep them (a date edit still
+   *  re-locks account-leg bases at the new date — the locked-rate invariant). */
+  legs?: LegInput[];
+}
+
+/** The single edit path: unseal → patch header → (maybe) rewrite legs →
+ *  reseal → recompute every touched account. Supersedes updateTransaction +
+ *  updateTransfer + setTransactionSplits in PR B. */
+export async function rebuildEntry(exec: Exec, entryId: string, patch: EntryPatch): Promise<{ touchedAccountIds: string[] }> {
+  const [cur] = await exec('SELECT * FROM entries WHERE id = ?', [entryId]);
+  if (!cur) return { touchedAccountIds: [] };
+  const oldLegs = await exec('SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order', [entryId]);
+  const touched = new Set<string>(
+    oldLegs.filter((l) => l.account_id != null).map((l) => String(l.account_id)),
+  );
+
+  const ledgerId = String(cur.ledger_id);
+  const base = await ledgerBase(exec, ledgerId);
+  const date = patch.date ?? String(cur.date);
+  const kind = (patch.kind ?? String(cur.kind)) as EntryKind;
+  const ts = new Date().toISOString();
+  const mustRebuildLegs = patch.legs !== undefined || (patch.date !== undefined && patch.date !== String(cur.date));
+
+  const sp = `re_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
+  await exec(`SAVEPOINT ${sp}`);
+  try {
+    await exec('UPDATE entries SET sealed = 0 WHERE id = ?', [entryId]);
+
+    const sets: string[] = [];
+    const bind: (string | number | null)[] = [];
+    if (patch.date !== undefined) { sets.push('date = ?'); bind.push(patch.date); }
+    if (patch.time !== undefined) { sets.push('time = ?'); bind.push(patch.time ?? null); }
+    if (patch.description !== undefined) { sets.push('description = ?'); bind.push(patch.description); }
+    if (patch.kind !== undefined) { sets.push('kind = ?'); bind.push(patch.kind); }
+    if (patch.notes !== undefined) { sets.push('notes = ?'); bind.push(patch.notes ?? null); }
+    if (patch.counterpartyId !== undefined) { sets.push('counterparty_id = ?'); bind.push(patch.counterpartyId ?? null); }
+    if (patch.refundedEntryId !== undefined) { sets.push('refunded_entry_id = ?'); bind.push(patch.refundedEntryId ?? null); }
+    if (patch.status !== undefined && patch.status !== String(cur.status)) {
+      sets.push('status = ?');
+      bind.push(patch.status);
+      if (patch.status === 'confirmed') { sets.push('confirmed_at = ?'); bind.push(ts); }
+      else sets.push('confirmed_at = NULL');
+    }
+    sets.push('updated_at = ?');
+    bind.push(ts, entryId);
+    await exec(`UPDATE entries SET ${sets.join(', ')} WHERE id = ?`, bind);
+
+    if (mustRebuildLegs) {
+      let inputs: LegInput[];
+      if (patch.legs !== undefined) {
+        inputs = patch.legs;
+      } else {
+        // Keep the existing legs, dropping any prior fx residue (it embodies
+        // the OLD date's rates; appendResidue re-derives it below). Account
+        // legs intentionally omit amountBase so resolveLegs re-locks them.
+        const fxRows = await exec("SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", [ledgerId]);
+        const fxId = fxRows[0] ? String(fxRows[0].id) : null;
+        inputs = oldLegs
+          .filter((r) => r.category_id == null || String(r.category_id) !== fxId)
+          .map((r): LegInput =>
+            r.account_id != null
+              ? {
+                  id: String(r.id), accountId: String(r.account_id), amount: Number(r.amount),
+                  origAmount: r.orig_amount == null ? null : Number(r.orig_amount),
+                  origCurrency: r.orig_currency == null ? null : String(r.orig_currency),
+                  clearedAt: r.cleared_at == null ? null : String(r.cleared_at),
+                  memo: r.memo == null ? null : String(r.memo),
+                }
+              : {
+                  id: String(r.id), categoryId: r.category_id == null ? null : String(r.category_id),
+                  amountBase: Number(r.amount_base), memo: r.memo == null ? null : String(r.memo),
+                });
+      }
+      await exec('DELETE FROM postings WHERE entry_id = ?', [entryId]);
+      const resolved = await resolveLegs(exec, ledgerId, date, base, inputs);
+      if (patch.legs === undefined) {
+        // Date-only re-lock: account legs were re-locked at the new date;
+        // kept category legs (incl. opening/adjustment equity legs — only fx
+        // was dropped) scale proportionally so the category side follows the
+        // re-locked figure with split proportions preserved. Rounding dust
+        // lands on the fx leg via appendResidue below.
+        const oldSum = oldLegs
+          .filter((r) => r.account_id != null)
+          .reduce((s, r) => s + Number(r.amount_base), 0);
+        const newSum = resolved
+          .filter((l) => l.accountId != null)
+          .reduce((s, l) => s + l.amountBase, 0);
+        const scale = oldSum !== 0 ? newSum / oldSum : 1;
+        for (const l of resolved) {
+          if (l.accountId == null) {
+            l.amountBase = r2(l.amountBase * scale);
+            l.amount = l.amountBase; // category legs keep amount == amount_base (I9)
+          }
+        }
+      }
+      await appendResidue(exec, ledgerId, base, resolved);
+      validateShape(kind, resolved, await categoryMeta(exec, resolved));
+      await insertPostings(exec, entryId, resolved);
+      for (const l of resolved) if (l.accountId != null) touched.add(l.accountId);
+    }
+
+    await exec('UPDATE entries SET sealed = 1 WHERE id = ?', [entryId]);
+    await exec(`RELEASE ${sp}`);
+  } catch (err) {
+    await exec(`ROLLBACK TO ${sp}`);
+    await exec(`RELEASE ${sp}`);
+    throw err;
+  }
+
+  for (const id of touched) await recomputeAccountFromPostings(exec, id);
+  return { touchedAccountIds: [...touched] };
+}

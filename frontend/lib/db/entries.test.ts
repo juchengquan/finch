@@ -5,6 +5,7 @@ import type { Exec } from '@/lib/db/repo';
 import {
   ensureSystemCategories, postEntry,
   postSimple, postTransfer, postAdjustment, postOpening,
+  rebuildEntry, recomputeAccountFromPostings,
 } from '@/lib/db/entries';
 
 // Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
@@ -495,4 +496,67 @@ test('postTransfer: same-currency equality, cross-currency residue, pinned toAmo
   const memos = await exec('SELECT memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order', [x.entryId]);
   expect(String(memos[0].memo)).toContain('Transfer to');
   expect(String(memos[1].memo)).toContain('Transfer from');
+});
+
+test('rebuildEntry: header-only patch keeps legs; status flip recomputes', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-rb1', 'SGD', 'lt');
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-rb1', amount: -40, date: '2026-06-05',
+    description: 'Dinner', categoryId: 'cat-t', skipRules: true,
+  });
+  await rebuildEntry(exec, entryId, { description: 'Dinner out', status: 'pending' });
+  const [e] = await exec('SELECT description, status, confirmed_at, sealed FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.description)).toBe('Dinner out');
+  expect(String(e.status)).toBe('pending');
+  expect(e.confirmed_at).toBeNull();
+  expect(Number(e.sealed)).toBe(1);
+  expect(await balanceOf(exec, 'a-rb1')).toBe(0); // pending rows don't count
+
+  await rebuildEntry(exec, entryId, { status: 'confirmed' });
+  expect(await balanceOf(exec, 'a-rb1')).toBe(-40);
+});
+
+test('rebuildEntry: a date edit re-locks account-leg bases at the new date', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec); // ledger 'lt', base SGD
+  await addAccount(exec, 'a-rb2', 'USD', 'lt');
+  // Pin two distinct SGD-hub rate days so the re-lock is observable:
+  // rate(USD→SGD) = rateToHub(USD)/rateToHub(SGD) = 1/r(SGD).
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-01','SGD',0.5,'manual')");
+  await exec("INSERT OR REPLACE INTO exchange_rates (date,currency,rate,source) VALUES ('2026-06-10','SGD',0.8,'manual')");
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-rb2', amount: -100, date: '2026-06-01',
+    description: 'USD spend', categoryId: 'cat-t', skipRules: true,
+  });
+  const base1 = Number((await exec('SELECT amount_base AS b FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId]))[0].b);
+  expect(base1).toBe(-200); // 100 USD at SGD-hub 0.5 → 200 SGD
+
+  await rebuildEntry(exec, entryId, { date: '2026-06-10' });
+  const base2 = Number((await exec('SELECT amount_base AS b FROM postings WHERE entry_id = ? AND account_id IS NOT NULL', [entryId]))[0].b);
+  expect(base2).toBe(-125); // 100 USD at SGD-hub 0.8 → 125 SGD
+  // Plain category legs scale with the re-lock (the category side follows the
+  // new figure — no phantom FX residue on a simple expense).
+  const cats = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL', [entryId]);
+  expect(cats.length).toBe(1);
+  expect(Number(cats[0].amount_base)).toBe(125);
+  const sum = await exec('SELECT ROUND(SUM(amount_base),2) AS s FROM postings WHERE entry_id = ?', [entryId]);
+  expect(Math.abs(Number(sum[0].s))).toBe(0); // still balanced after re-lock
+});
+
+test('rebuildEntry: legs replacement rebalances and recomputes both accounts', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-rb3', 'SGD', 'lt');
+  await addAccount(exec, 'a-rb4', 'SGD', 'lt');
+  const { entryId } = await postSimple(exec, {
+    ledgerId: 'lt', accountId: 'a-rb3', amount: -10, date: '2026-06-05',
+    description: 'Move me', categoryId: 'cat-t', skipRules: true,
+  });
+  await rebuildEntry(exec, entryId, {
+    legs: [{ accountId: 'a-rb4', amount: -10 }, { categoryId: 'cat-t', amountBase: 10 }],
+  });
+  expect(await balanceOf(exec, 'a-rb3')).toBe(0);   // old account released
+  expect(await balanceOf(exec, 'a-rb4')).toBe(-10); // new account charged
 });
