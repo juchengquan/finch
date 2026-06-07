@@ -359,3 +359,57 @@ test('an identical timed manual add collides; NULL time never collides', async (
   const n = await exec("SELECT COUNT(*) AS n FROM entries WHERE description = 'Coffee'");
   expect(Number(n[0].n)).toBe(3);
 });
+
+test('postEntry resolves the counterparty from the description', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-cp', 'SGD', 'lt');
+  await exec(
+    "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES ('cp-t1','lt','Blue Bottle',1,datetime('now'),datetime('now'))",
+  );
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-03', description: 'blue bottle', kind: 'expense',
+    legs: [{ accountId: 'a-cp', amount: -8 }], autoBalanceCategoryId: 'cat-t',
+  });
+  const [e] = await exec('SELECT counterparty_id FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.counterparty_id)).toBe('cp-t1');
+});
+
+test('a rule can recategorize, split, and tag an incoming entry', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-rl', 'SGD', 'lt');
+  await exec(
+    "INSERT INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES ('tag-t','lt','market',NULL,datetime('now'),datetime('now'))",
+  );
+  await exec(
+    `INSERT INTO rules (id,ledger_id,name,priority,condition,actions,is_active,run_on_edit,created_at,updated_at)
+     VALUES ('rule-t1','lt','split groceries',100,?,?,1,0,datetime('now'),datetime('now'))`,
+    [
+      JSON.stringify({ field: 'merchant', op: 'contains', value: 'Market' }),
+      JSON.stringify([
+        { type: 'split', splits: [
+          { categoryId: 'cat-t', fraction: 0.6 },
+          { categoryId: null, fraction: 0.4 },
+        ] },
+        { type: 'add_tag', tagId: 'tag-t' },
+      ]),
+    ],
+  );
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-03', description: 'Sunday Market', kind: 'expense',
+    legs: [{ accountId: 'a-rl', amount: -50 }], autoBalanceCategoryId: null,
+  });
+  const cats = await exec(
+    'SELECT category_id, amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
+    [entryId],
+  );
+  expect(cats.length).toBe(2);
+  expect(Number(cats[0].amount_base)).toBe(30);  // 60% of 50, negated to the category side
+  expect(Number(cats[1].amount_base)).toBe(20);  // remainder-absorbing last split
+  const [e] = await exec('SELECT applied_rule_ids FROM entries WHERE id = ?', [entryId]);
+  expect(String(e.applied_rule_ids)).toContain('rule-t1');
+  // Rule-added tag landed in entry_tags (insertTxRow parity).
+  const tags = await exec('SELECT tag_id FROM entry_tags WHERE entry_id = ?', [entryId]);
+  expect(tags.map((t) => String(t.tag_id))).toEqual(['tag-t']);
+});
