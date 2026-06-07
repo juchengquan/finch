@@ -1252,6 +1252,7 @@
     "deleteDialog": {
       "title": "删除该交易?",
       "description": "{merchant} · {amount} 将被永久删除。此操作不可撤销。",
+      "transferHint": "转账的两条记录将一并删除。",
       "deletedToast": "交易已删除"
     }
   },

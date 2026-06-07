@@ -1251,6 +1251,7 @@
     "deleteDialog": {
       "title": "Delete transaction?",
       "description": "{merchant} · {amount} will be permanently removed. This can't be undone.",
+      "transferHint": "This deletes both sides of the transfer.",
       "deletedToast": "Transaction deleted"
     }
   },
