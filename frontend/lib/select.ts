@@ -196,16 +196,16 @@ export function netWorthByMonth(
  *  bucket is in the ledger's base currency (via `toBase`).
  *
  *  - income:     sum of confirmed kind='income' account-leg amounts (positive)
- *  - expense:    sum of |amount| for confirmed kind in ('expense','refund')
- *                (refunds NET against the period — they're a positive `amount`
- *                with kind='refund' on the account leg, so |amount| would
- *                double-count. Subtract refunds back out below.)
+ *  - expense:    Σ|amount| for kind='expense' minus Σamount for kind='refund'.
+ *                Refunds NET against the period (refund amounts are already
+ *                positive on the account leg, so taking |amount| would
+ *                double-count).
  *  - adjustment: sum of confirmed kind='adjustment' account-leg amounts (signed)
  *  - fx:         the residual — `net - (income - expense + adjustment)`. By
  *                construction (every entry's postings sum to zero), anything
  *                that moves the headline net-worth and isn't one of the three
  *                kinds above is an FX residue leg (sys:fx-gain equity category,
- *                only emitted on cross-currency transfers).
+ *                in practice only emitted on cross-currency transfers).
  *  - net:        the month's end-to-start netWorthSeries delta (i.e. what the
  *                headline trend chart shows).
  *
