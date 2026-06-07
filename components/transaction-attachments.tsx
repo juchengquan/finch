@@ -14,6 +14,7 @@
 //     through the transaction's attachments; Delete prompts via toast confirm.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Icon } from '@/components/primitives';
 import { useFinanceStore } from '@/lib/store';
@@ -41,6 +42,7 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const t = useTranslations('attachments');
 
   const items = useMemo(
     () =>
@@ -59,20 +61,20 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
       setUploading(true);
       try {
         await uploadAttachment(transactionId, file);
-        toast.success('Receipt attached');
+        toast.success(t('attachedToast'));
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Upload failed';
+        const message = err instanceof Error ? err.message : t('uploadError');
         toast.error(message);
       } finally {
         setUploading(false);
       }
     },
-    [transactionId, uploadAttachment],
+    [transactionId, uploadAttachment, t],
   );
 
   return (
     <div className="border-border flex items-center justify-between border-t-[0.5px] py-3 text-[13px]">
-      <span className="text-muted-foreground">Receipts</span>
+      <span className="text-muted-foreground">{t('receipts')}</span>
       <div className="flex items-center gap-2">
         {items.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -81,7 +83,7 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
                 key={a.id}
                 type="button"
                 onClick={() => setOpenId(a.id)}
-                aria-label={`Open ${a.originalFilename || 'attachment'}`}
+                aria-label={t('openAria', { name: a.originalFilename || t('openFallback') })}
                 className={cn(
                   'border-border focus-ring relative size-12 shrink-0 overflow-hidden rounded-[10px] border outline-none',
                   a.kind === 'pdf' && 'bg-muted text-muted-foreground flex items-center justify-center',
@@ -91,7 +93,7 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={attachmentUrl(a.id)}
-                    alt={a.originalFilename || 'receipt'}
+                    alt={a.originalFilename || t('fileFallback')}
                     className="size-full object-cover"
                   />
                 ) : (
@@ -105,14 +107,14 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          aria-label="Attach receipt"
+          aria-label={t('attachReceiptAria')}
           className={cn(
             'focus-ring inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium outline-none',
             uploading ? 'bg-secondary text-muted-foreground' : 'bg-secondary text-foreground hover:bg-muted',
           )}
         >
           <Icon name={uploading ? 'sync' : 'paperclip'} size={12} className={uploading ? 'animate-spin' : undefined} />
-          {items.length === 0 ? (uploading ? 'Uploading…' : 'Attach') : '+'}
+          {items.length === 0 ? (uploading ? t('uploading') : t('attach')) : '+'}
         </button>
         <input
           ref={inputRef}
@@ -145,6 +147,8 @@ interface AttachmentViewerProps {
 function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: AttachmentViewerProps) {
   const attachments = useFinanceStore((s) => s.attachments);
   const removeAttachment = useFinanceStore((s) => s.removeAttachment);
+  const t = useTranslations('attachments');
+  const tv = useTranslations('attachments.viewer');
 
   const items = useMemo(
     () =>
@@ -175,12 +179,12 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
   if (!cur) return null;
 
   const onDelete = () => {
-    toast('Delete this receipt?', {
+    toast(tv('deletePrompt'), {
       action: {
-        label: 'Delete',
+        label: tv('deleteAction'),
         onClick: () => {
           removeAttachment(cur.id);
-          toast.success('Receipt deleted');
+          toast.success(tv('deletedToast'));
           onClose();
         },
       },
@@ -191,22 +195,22 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[95vh] max-w-[95vw] overflow-hidden p-0 sm:max-w-3xl">
         <DialogTitle className="sr-only">
-          {cur.originalFilename || `Receipt ${cur.id}`}
+          {cur.originalFilename || tv('titleFallback', { id: cur.id })}
         </DialogTitle>
         <div className="flex flex-col">
           <div className="border-border bg-card flex items-center justify-between gap-2 border-b px-4 py-2.5 text-[12px]">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{cur.originalFilename || `Attachment ${cur.id.slice(0, 8)}`}</div>
+              <div className="truncate font-medium">{cur.originalFilename || tv('attachmentFallback', { id: cur.id.slice(0, 8) })}</div>
               <div className="text-muted-foreground">
-                {cur.kind === 'pdf' ? 'PDF' : 'Image'} · {fmtBytes(cur.byteSize)}
-                {items.length > 1 && ` · ${idx + 1} of ${items.length}`}
+                {cur.kind === 'pdf' ? tv('pdf') : tv('image')} · {fmtBytes(cur.byteSize)}
+                {items.length > 1 && tv('nOfTotal', { n: idx + 1, total: items.length })}
               </div>
             </div>
             <a
               href={attachmentUrl(cur.id)}
               download={cur.originalFilename || undefined}
               className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-muted"
-              aria-label="Download"
+              aria-label={tv('downloadAria')}
             >
               <Icon name="download" size={14} />
             </a>
@@ -214,7 +218,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
               type="button"
               onClick={onDelete}
               className="focus-ring text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-full px-2 py-1"
-              aria-label="Delete"
+              aria-label={tv('deleteAria')}
             >
               <Icon name="trash" size={14} />
             </button>
@@ -224,7 +228,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={attachmentUrl(cur.id)}
-                alt={cur.originalFilename || 'receipt'}
+                alt={cur.originalFilename || t('fileFallback')}
                 className="max-h-[80vh] max-w-full object-contain"
               />
             ) : (
@@ -242,19 +246,19 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
                 onClick={() => idx > 0 && onSwitch(items[idx - 1].id)}
                 disabled={idx === 0}
                 className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-muted disabled:opacity-30"
-                aria-label="Previous"
+                aria-label={tv('prevAria')}
               >
                 <Icon name="chev-l" size={14} />
-                Prev
+                {tv('prev')}
               </button>
               <button
                 type="button"
                 onClick={() => idx < items.length - 1 && onSwitch(items[idx + 1].id)}
                 disabled={idx === items.length - 1}
                 className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-muted disabled:opacity-30"
-                aria-label="Next"
+                aria-label={tv('nextAria')}
               >
-                Next
+                {tv('next')}
                 <Icon name="chev" size={14} />
               </button>
             </div>

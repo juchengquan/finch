@@ -1,11 +1,1393 @@
 {
+  "categories": {
+    "title": "Categories",
+    "searchAria": "Search categories",
+    "searchPlaceholder": "Search categories…",
+    "newAria": "New category",
+    "noMatches": "No matches",
+    "empty": {
+      "title": "No categories yet",
+      "description": "Tap + to add one — they slot into the budget rings and reports."
+    },
+    "subSummary": " · {count} sub",
+    "expand": "Expand {name}",
+    "collapse": "Collapse {name}",
+    "newSubAria": "New subcategory under {name}",
+    "newSubSubAria": "New sub-subcategory under {name}",
+    "newSubTitle": "New subcategory",
+    "newSubSubTitle": "New sub-subcategory",
+    "types": {
+      "expense": "expense",
+      "income": "income",
+      "transfer": "transfer"
+    },
+    "delete": {
+      "categoryToast": "Category deleted",
+      "subcategoryToast": "Subcategory deleted",
+      "subSubcategoryToast": "Sub-subcategory deleted",
+      "promotedSub": "{name} — {count, plural, one {# subcategory} other {# subcategories}} promoted to top-level.",
+      "promotedSubSub": "{name} — {count, plural, one {# sub-subcategory} other {# sub-subcategories}} promoted.",
+      "confirmTitle": "Delete {name}?",
+      "parentWithChildrenDescription": "Its {count, plural, one {subcategory} other {subcategories}} will be promoted to top-level (any sub-sub categories ride along under their new parent). Transactions filed against this parent become uncategorised.",
+      "parentEmptyDescription": "Transactions filed against this category become uncategorised.",
+      "childWithGrandDescription": "Its {count, plural, one {sub-subcategory} other {sub-subcategories}} will be promoted one level up. Transactions in this subcategory become uncategorised.",
+      "childEmptyDescription": "Transactions in this subcategory become uncategorised.",
+      "grandDescription": "Transactions in this sub-subcategory become uncategorised."
+    },
+    "dialog": {
+      "newTitle": "New category",
+      "editTitle": "Edit category",
+      "newUnderDescription": "Added under \"{parent}\" in {ledger}.",
+      "newTopDescription": "Added as a top-level category in {ledger}.",
+      "editDescription": "Update the name, parent, type, icon and colour.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Travel",
+      "nameRequired": "Enter a category name",
+      "parent": "Parent",
+      "topLevel": "— Top-level —",
+      "type": "Type",
+      "icon": "Icon",
+      "color": "Color",
+      "colorAria": "color {color}",
+      "createdToast": "Category created",
+      "updatedToast": "Category updated"
+    }
+  },
+  "ruleDescribe": {
+    "weekdays": { "0": "Sun", "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat" },
+    "fields": {
+      "merchant": "merchant",
+      "amount": "amount",
+      "account_id": "account",
+      "category_id": "category",
+      "counterparty_id": "counterparty",
+      "currency": "currency",
+      "date_dow": "day-of-week",
+      "date_dom": "day-of-month",
+      "kind": "kind",
+      "tag_id": "tag",
+      "note": "note"
+    },
+    "ops": {
+      "is": "is",
+      "isEmpty": "is empty",
+      "contains": "contains",
+      "startsWith": "starts with",
+      "between": "between",
+      "weekday": "weekday",
+      "hasTag": "has tag",
+      "hasAnyTag": "has any tag in",
+      "hasAllTags": "has all tags",
+      "noteContains": "note contains"
+    },
+    "conditions": {
+      "always": "(always)",
+      "never": "(never)",
+      "and": " AND ",
+      "or": " OR ",
+      "not": "NOT "
+    },
+    "actions": {
+      "clearCategory": "clear category",
+      "setCategory": "set category →",
+      "clearCounterparty": "clear counterparty",
+      "setCounterparty": "set counterparty →",
+      "renameMerchant": "rename merchant →",
+      "setNote": "set note →",
+      "setKind": "set kind →",
+      "addTag": "add tag",
+      "removeTag": "remove tag",
+      "markReviewed": "mark reviewed",
+      "split": "split:",
+      "uncategorized": "uncategorized",
+      "noActions": "(no action)",
+      "separator": " · "
+    }
+  },
+  "ruleBuilder": {
+    "newTitle": "New rule",
+    "editTitle": "Edit rule",
+    "description": "Build the if-then logic for this rule.",
+    "kinds": {
+      "expense": "Expense",
+      "income": "Income",
+      "transfer": "Transfer",
+      "refund": "Refund",
+      "adjustment": "Adjustment"
+    },
+    "fields": {
+      "merchant": "Merchant",
+      "amount": "Amount",
+      "account_id": "Account",
+      "category_id": "Category",
+      "counterparty_id": "Counterparty",
+      "currency": "Currency",
+      "date_dow": "Day of week",
+      "date_dom": "Day of month",
+      "kind": "Kind",
+      "tag_id": "Tag",
+      "note": "Note"
+    },
+    "actions": {
+      "set_category": "Set category",
+      "add_tag": "Add tag",
+      "remove_tag": "Remove tag",
+      "set_counterparty": "Set counterparty",
+      "set_merchant": "Rename merchant",
+      "set_note": "Set note",
+      "set_kind": "Set kind",
+      "mark_reviewed": "Mark reviewed"
+    },
+    "weekdays": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "operators": {
+      "is": "is",
+      "isNull": "is empty",
+      "contains": "contains",
+      "startsWith": "starts with",
+      "between": "between"
+    },
+    "fieldLabels": {
+      "namePlaceholder": "e.g. Shell under $5 → Snacks",
+      "nameOptional": "Name (optional)",
+      "priority": "Priority",
+      "active": "Active",
+      "rerunOnEdit": "Re-run on edit",
+      "rerunOnEditTitle": "Re-fire when an existing transaction is edited (default off — safer)",
+      "when": "When",
+      "then": "Then",
+      "allOfThese": "ALL of these",
+      "anyOfThese": "ANY of these",
+      "addCondition": "+ Add condition",
+      "addAction": "+ Add action",
+      "removeConditionAria": "Remove condition",
+      "removeActionAria": "Remove action"
+    },
+    "placeholders": {
+      "text": "text",
+      "currency": "USD",
+      "noteText": "text in note",
+      "canonicalName": "canonical name",
+      "noteContent": "note text",
+      "pickA": "pick a {label}"
+    },
+    "refLabel": {
+      "account": "account",
+      "category": "category",
+      "counterparty": "counterparty",
+      "tag": "tag"
+    },
+    "test": {
+      "header": "Test against last {total} transactions",
+      "matches": "{count, plural, one {# match} other {# matches}}",
+      "moreCount": "+{count} more",
+      "noMatchesYet": "No matches yet — refine the conditions.",
+      "summary": "Summary"
+    },
+    "actionHints": {
+      "markReviewed": "No parameters — the row is marked reviewed.",
+      "split": "Splits are not yet editable in the builder; hand-craft via the API."
+    },
+    "footer": {
+      "saveChanges": "Save changes",
+      "createRule": "Create rule"
+    },
+    "errors": {
+      "noConditions": "Add at least one condition",
+      "noActions": "Add at least one action"
+    },
+    "toasts": {
+      "updated": "Rule {name} updated",
+      "created": "Rule {name} created"
+    }
+  },
+  "rules": {
+    "title": "Rules",
+    "newAria": "New rule",
+    "newRule": "New rule",
+    "intro": "Rules run automatically on every new transaction in {ledger}. A matching rule can set the category, add a tag, rename the merchant, or split the row.",
+    "empty": {
+      "title": "No rules yet",
+      "description": "Rules categorise repeat merchants automatically. Tap \"New rule\" to set one up — start with the merchant you re-categorise most often."
+    },
+    "row": {
+      "unnamed": "unnamed",
+      "disabled": "disabled",
+      "matched": "{count} matched",
+      "openAria": "Open rule {name}"
+    },
+    "relative": {
+      "today": "today",
+      "yesterday": "yesterday",
+      "daysAgo": "{count} days ago",
+      "lastMonth": "last month",
+      "monthsAgo": "{count} months ago"
+    },
+    "toasts": {
+      "enabled": "Rule {name} enabled",
+      "disabled": "Rule {name} disabled",
+      "deleted": "Rule {name} deleted",
+      "backfilling": "Backfilling rule \"{name}\"",
+      "backfillingUnnamed": "Backfilling rule",
+      "backfillingDescription": "Server is applying the rule across history."
+    },
+    "backfillDialog": {
+      "title": "Apply rule to existing transactions?",
+      "description": "This walks every confirmed transaction in this ledger and applies the rule's actions to those that match. Splits aren't backfilled in this pass; everything else does land.",
+      "matchSummary": "{matched} of {total} confirmed transactions match.",
+      "moreCount": "+{count} more",
+      "noMatches": "Nothing to apply — no matches in history.",
+      "confirm": "Apply to existing"
+    },
+    "deleteDialog": {
+      "title": "Delete this rule?",
+      "description": "The rule won't fire on new transactions. Existing rows it already touched keep their values; the rule id stays in their applied_rule_ids for traceability.",
+      "confirm": "Delete rule"
+    },
+    "detail": {
+      "ruleFallback": "Rule",
+      "description": "Rule detail",
+      "edit": "Edit",
+      "enable": "Enable",
+      "disable": "Disable",
+      "applyExisting": "Apply to existing",
+      "delete": "Delete",
+      "status": "Status",
+      "active": "Active",
+      "disabledStatus": "Disabled",
+      "priority": "Priority",
+      "rerunsOnEdit": "Re-runs on edit",
+      "yes": "Yes",
+      "no": "No",
+      "appliedTo": "Applied to",
+      "appliedCount": "{count, plural, one {# transaction} other {# transactions}}",
+      "condition": "Condition",
+      "actions": "Actions",
+      "noActions": "(no actions)",
+      "lastBackfilled": "Last backfilled"
+    }
+  },
+  "transfers": {
+    "title": "Transfers",
+    "newAria": "New transfer",
+    "transfers": "transfers",
+    "intro": "Cross-account moves. Each creates a linked pair of transactions.",
+    "empty": {
+      "title": "No transfers yet",
+      "description": "Tap + to move money between accounts — pairs a debit and a credit on the same date."
+    },
+    "row": {
+      "deletedToast": "Transfer deleted",
+      "deleteTitle": "Delete this transfer?",
+      "deleteDescription": "Removes both legs ({from} → {to}) and restores the account balances."
+    },
+    "newDialog": {
+      "title": "New transfer",
+      "description": "Move money between two accounts in {ledger}.",
+      "from": "From",
+      "to": "To",
+      "sentFallback": "SENT",
+      "receivedPlaceholder": "received (optional — leave blank for mid-rate)",
+      "dateAria": "Date",
+      "timeAria": "Time",
+      "submit": "Transfer",
+      "errors": {
+        "amount": "Enter an amount",
+        "sameAccount": "Pick two different accounts",
+        "received": "Enter a valid received amount"
+      },
+      "createdToast": "Transfer created"
+    },
+    "detail": {
+      "title": "Transfer",
+      "notFound": "Transfer not found",
+      "received": "→ {amount} received",
+      "rateLocked": "RATE LOCKED @ {rate} · {when}",
+      "posted": "POSTED · {when}",
+      "fromLine": "FROM · {ledger} LEDGER",
+      "toLine": "TO · {ledger} LEDGER",
+      "rateField": "{rate} {from}→{to}",
+      "sameCurrency": "1 (same currency)",
+      "amountBaseLocked": "{amount} (locked)",
+      "explainer": "The exchange rate is locked at import time. Both transactions share amount_base so reports across ledgers stay consistent."
+    },
+    "editDialog": {
+      "title": "Edit transfer",
+      "description": "Adjust the amount, date or note. Balances are recomputed.",
+      "sent": "Sent · {currency}",
+      "received": "Received · {currency}",
+      "effectiveRate": "Effective rate: {rate} {to} per {from}",
+      "date": "Date",
+      "time": "Time",
+      "noteOptional": "Note (optional)",
+      "errors": {
+        "sent": "Enter a sent amount",
+        "received": "Enter a received amount"
+      },
+      "updatedToast": "Transfer updated"
+    }
+  },
+  "scheduled": {
+    "title": "Scheduled",
+    "newAria": "New scheduled item",
+    "upcoming": "Upcoming",
+    "incoming": "+ {amount} incoming",
+    "month": "Month",
+    "year": "Year",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "calendarDayAria": "{month} {day}",
+    "newButton": "New",
+    "nothingOnDay": "Nothing on this day",
+    "form": {
+      "newTitle": "New scheduled item",
+      "editTitle": "Edit scheduled item",
+      "types": {
+        "expense": "expense",
+        "income": "income",
+        "transfer": "transfer"
+      },
+      "name": "Name",
+      "namePlaceholder": "e.g. Rent",
+      "description": "Description",
+      "descriptionOptional": "(optional)",
+      "descriptionPlaceholder": "Shown on each posted transaction — defaults to the name",
+      "amount": "Amount",
+      "amountSuffix": " · {currency}",
+      "toAccount": "To account",
+      "fromAccount": "From account",
+      "account": "Account",
+      "selectAccount": "Select account",
+      "category": "Category",
+      "categoryNone": "None",
+      "date": "Date",
+      "recurring": "Recurring",
+      "frequency": "Frequency",
+      "frequencies": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "biweekly": "biweekly",
+        "monthly": "monthly",
+        "quarterly": "quarterly",
+        "yearly": "yearly"
+      },
+      "dayOfWeek": "Day of week",
+      "selectPlaceholder": "Select",
+      "dayOfMonth": "Day of month",
+      "repeat": "Repeat",
+      "repeatPlaceholder": "Infinite",
+      "untilDate": "Until date",
+      "installmentPlan": "Installment plan",
+      "installmentPlaceholder": "e.g. 24 for a 24-month plan",
+      "installmentHint": "Stops auto-posting after this many payments and shows progress. Leave blank for an ordinary recurring expense.",
+      "color": "Color",
+      "autoPost": "Auto-post",
+      "addButton": "Add"
+    },
+    "errors": {
+      "nameRequired": "Enter a name",
+      "accountRequired": "Pick an account",
+      "fromAccountRequired": "Pick a source account",
+      "invalidInstallment": "Invalid installment total"
+    },
+    "card": {
+      "once": "once",
+      "autoChip": "AUTO",
+      "deleteTitle": "Delete {name}?",
+      "deleteDescription": "This removes the scheduled item from your calendar."
+    },
+    "toasts": {
+      "added": "Scheduled item added",
+      "updated": "Scheduled item updated",
+      "deleted": "Scheduled item deleted"
+    }
+  },
+  "insightCards": {
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "spendingDown": "Spending down {pct}% vs last month",
+    "spendingUp": "Spending up {pct}% vs last month",
+    "spendingBody": "{cur} this month vs {prev} last month.",
+    "overBudget": "{name} over budget",
+    "overBudgetBody": "At {spent} of {budget} — {over} over.",
+    "pending": "{count} pending to review",
+    "pendingBody": "{total} awaiting confirmation on the Pending screen.",
+    "topCategory": "{name} leads your spending",
+    "topCategoryBody": "{amount} — {pct}% of expenses this period.",
+    "weekendVsWeekday": "Weekends cost more than weekdays",
+    "weekendVsWeekdayBody": "Weekend days run {ratio}× weekday spend ({weekend} vs {weekday} per day).",
+    "topCategoryByWeekday": "{day}s are mostly {name}",
+    "topCategoryByWeekdayBody": "{pct}% of your {day} spending goes to {name}.",
+    "endOfMonthBump": "End-of-month runs hotter",
+    "endOfMonthBumpBody": "Days 23-31 average {ratio}× your earlier-month spend per day.",
+    "weekdaySkew": "{day}s are your spendy days",
+    "weekdaySkewBody": "You spend {ratio}× the daily average on {day}s.",
+    "quietestDay": "{day}s are your quietest",
+    "quietestDayBody": "You spend {pct}% less on {day}s than the daily average.",
+    "goalProgress": "{name} is {pct}% funded",
+    "goalProgressBody": "{saved} of {target} saved.",
+    "netWorthUp": "Net worth is trending up",
+    "netWorthDown": "Net worth dipped",
+    "netWorthBody": "{sign}{delta} across this period's activity."
+  },
+  "insights": {
+    "title": "Insights",
+    "viewToggleAria": "Insights view",
+    "views": {
+      "trends": "Trends",
+      "breakdown": "Breakdown"
+    },
+    "metrics": {
+      "spending": "Spending",
+      "income": "Income",
+      "cashflow": "Cashflow",
+      "networth": "Net worth"
+    },
+    "headers": {
+      "yourSpending": "Your spending",
+      "lessThanLast": "You're spending less",
+      "moreThanLast": "You're spending more",
+      "thisMonth": "this month",
+      "thanLastMonth": "than last month"
+    },
+    "breakdown": {
+      "monthLabel": "Month",
+      "spent": "Spent",
+      "categoriesCount": "{count} categories",
+      "exportMonth": "Export {month} CSV",
+      "exportGeneric": "Export month CSV",
+      "noSpending": "No spending in {scope}.",
+      "scopeFallback": "this ledger",
+      "exportToast": "Transactions exported",
+      "exportDescription": "{month} · CSV",
+      "exportDownloaded": "CSV downloaded",
+      "exportFailure": "Export failed"
+    },
+    "chartLegend": {
+      "income": "Income",
+      "expense": "Expense"
+    },
+    "forecast": {
+      "title": "Spending forecast",
+      "dayOf": "day {elapsed} of {total}",
+      "projected": "projected",
+      "vsPrev": "{dir} {pct}% vs {month}",
+      "spentSoFar": "Spent so far · {amount}",
+      "runRateRest": "Run-rate rest · {amount}",
+      "scheduled": "Scheduled · {amount}"
+    },
+    "incomeFlow": {
+      "title": "Where {month} income went",
+      "incomeIn": "{amount} in",
+      "incomeLabel": "Income",
+      "savedLabel": "Saved",
+      "savedTotal": "Saved · {amount}"
+    },
+    "heatmap": {
+      "title": "Daily spending",
+      "last12Weeks": "last 12 weeks"
+    },
+    "insightsEmpty": "Add a few transactions to see insights.",
+    "deltas": {
+      "title": "{prev} vs {cur}",
+      "topChanges": "Top changes"
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "searchAria": "Search transactions",
+    "searchPlaceholder": "Search transactions",
+    "filters": {
+      "all": "All",
+      "out": "Out",
+      "in": "In"
+    },
+    "toggleFilters": "Toggle filters",
+    "filtersLabel": "Filters",
+    "saveSearch": "Save",
+    "saveSearchAria": "Save current filters as a search",
+    "selectMode": {
+      "enter": "Select",
+      "exit": "Cancel",
+      "enterAria": "Select transactions to recategorize",
+      "exitAria": "Exit select mode",
+      "selectedCount": "{count} selected",
+      "selectAll": "Select all {total}",
+      "recategorizePlaceholder": "Recategorize…",
+      "regionAria": "Bulk recategorize",
+      "appliedToast": "Set category to {category} on {count, plural, one {# transaction} other {# transactions}}"
+    },
+    "reviewToggle": "Needs review",
+    "reviewToggleAria": "Show only transactions that need review",
+    "reviewCount": "{count, plural, one {# transaction to review} other {# transactions to review}}",
+    "markAllReviewed": "Mark all reviewed",
+    "markedReviewedToast": "Marked {count} reviewed",
+    "reviewEmpty": "All caught up — nothing to review.",
+    "deleteSavedSearchAria": "Delete saved search {name}",
+    "filterPanel": {
+      "from": "From",
+      "to": "To",
+      "minAmount": "Min amount",
+      "maxAmount": "Max amount",
+      "clear": "Clear"
+    },
+    "empty": {
+      "title": "No transactions",
+      "filteredDescription": "Nothing matches the current filters. Clear them to see all rows.",
+      "freshDescription": "Add an expense to get started — it'll show up here."
+    },
+    "row": {
+      "needsReview": "Needs review",
+      "pending": "pending",
+      "uncategorized": "Uncategorized"
+    },
+    "table": {
+      "date": "Date",
+      "merchant": "Merchant",
+      "category": "Category",
+      "account": "Account",
+      "status": "Status",
+      "amount": "Amount",
+      "pending": "Pending",
+      "posted": "Posted"
+    },
+    "saveDialog": {
+      "title": "Save search",
+      "name": "Name",
+      "namePlaceholder": "e.g. Subscriptions > $20",
+      "hint": "Pinned on this device only — saved searches aren't stored in your ledger or included in exports.",
+      "savedToast": "Saved \"{name}\""
+    }
+  },
+  "budgets": {
+    "title": "Budgets",
+    "addAria": "Add",
+    "newButton": "New",
+    "tabs": {
+      "expense": "expense",
+      "income": "income"
+    },
+    "menu": {
+      "newBudget": "New budget",
+      "newGroup": "New group"
+    },
+    "ungroupedLabel": "Ungrouped",
+    "emptyGroup": "No {type} budgets",
+    "empty": {
+      "title": "No {type} budgets in {ledger} yet",
+      "description": "Tap + to set a monthly cap or savings target."
+    },
+    "card": {
+      "pendingAria": "Amount change pending",
+      "pctOfTarget": "{pct}% of target",
+      "over": "{amount} over",
+      "left": "{amount} left"
+    },
+    "groupActionsAria": "Group actions: {name}",
+    "groupActions": {
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "form": {
+      "newTitle": "New budget",
+      "editTitle": "Edit budget",
+      "expenseDescription": "Track spending against a limit in {ledger}.",
+      "incomeDescription": "Track income/savings progress in {ledger}.",
+      "types": {
+        "expense": "expense",
+        "income": "income"
+      },
+      "name": "Name",
+      "expensePlaceholder": "e.g. Groceries",
+      "incomePlaceholder": "e.g. Salary, New car",
+      "target": "Target",
+      "limit": "Limit",
+      "pendingChip": "{amount} pending",
+      "pendingChipWithPeriod": "{amount} pending · {period}",
+      "clearPending": "Clear",
+      "group": "Group",
+      "noGroup": "No group",
+      "cycle": "Cycle",
+      "startDate": "Start date",
+      "frequencies": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "biweekly": "biweekly",
+        "monthly": "monthly",
+        "quarterly": "quarterly",
+        "yearly": "yearly"
+      },
+      "recurring": "Recurring",
+      "recurringSuffix": " · {hint}",
+      "recurringRepeats": "repeats each cycle",
+      "recurringOneShotGoal": "one-shot goal (manual contributions)",
+      "recurringOneTime": "one-time",
+      "rollover": "Roll over unused budget",
+      "rolloverDailyHint": " (not available for daily)",
+      "categories": "Categories",
+      "accounts": "Accounts",
+      "chip": {
+        "summary": "· {count}",
+        "all": "· all",
+        "noneAvailable": "None available"
+      },
+      "hint": {
+        "cycleImmediate": "Cycle change applies immediately.",
+        "amountStaged": "Amount change takes effect {period}.",
+        "saveImmediate": "Save changes immediately.",
+        "saveChanges": "Save changes."
+      },
+      "errors": {
+        "name": "Enter a budget name",
+        "targetGt0": "Enter a target greater than 0",
+        "limitGt0": "Enter a limit greater than 0"
+      },
+      "toasts": {
+        "created": "Budget created",
+        "updated": "Budget updated",
+        "cycleUpdated": "Cycle updated",
+        "amountStaged": "Amount staged",
+        "stagedTakesEffect": "Takes effect {period}"
+      }
+    },
+    "detail": {
+      "fallbackTitle": "Budget",
+      "notFound": "Budget not found.",
+      "saved": "SAVED",
+      "used": "USED",
+      "of": "of",
+      "carried": "(+{amount} carried)",
+      "pendingFromNext": "{amount} from {period}",
+      "toGo": "{amount} to go",
+      "over": "{amount} over",
+      "left": "{amount} left",
+      "editButton": "Edit",
+      "contributeButton": "Contribute",
+      "deleteButton": "Delete",
+      "incomeTitle": "Income",
+      "transactionsTitle": "Transactions",
+      "manualOnly": "Progress is tracked via manual contributions.",
+      "noneInCycle": "No transactions in this cycle yet",
+      "contributeDialog": {
+        "title": "Add to {name}",
+        "description": "Record a contribution toward this goal.",
+        "submit": "Add",
+        "addedToast": "Contribution added",
+        "addedDescription": "{name} · +{amount}",
+        "amountError": "Enter an amount greater than 0"
+      },
+      "deleteDialog": {
+        "title": "Delete budget?",
+        "description": "{name} will be permanently removed. Your transactions are unaffected.",
+        "deletedToast": "Budget deleted"
+      }
+    },
+    "groupDialog": {
+      "renameTitle": "Rename group",
+      "newTitle": "New budget group",
+      "description": "Buckets budgets on this screen, like account groups.",
+      "name": "Name",
+      "nameRequired": "Enter a group name",
+      "createdToast": "Group created",
+      "updatedToast": "Group updated"
+    },
+    "deleteGroupDialog": {
+      "title": "Delete group?",
+      "description": "Budgets in this group are kept and become ungrouped. This can't be undone.",
+      "deletedToast": "Group deleted"
+    }
+  },
+  "accounts": {
+    "title": "Accounts",
+    "allAccounts": "All accounts",
+    "recentActivity": "Recent activity",
+    "addAria": "Add",
+    "newButton": "New",
+    "menu": {
+      "newAccount": "New account",
+      "newGroup": "New group"
+    },
+    "detail": {
+      "notFoundTitle": "Account not found",
+      "notFoundHeader": "No account here",
+      "notFoundBody": "We couldn't find an account with id {id}. It may have been deleted, or the link is wrong.",
+      "backToAccounts": "Back to accounts",
+      "detailsAria": "Account details",
+      "editAria": "Edit account",
+      "fxGain": "FX gain {amount}",
+      "fxLoss": "FX loss {amount}",
+      "holdingsLine": "+ {holdings} in holdings · total {total}",
+      "adjustBalance": "Adjust balance",
+      "reconcile": "Reconcile",
+      "details": {
+        "type": "Type",
+        "currency": "Currency",
+        "lastSync": "Last sync",
+        "lastSyncValue": "2 min ago",
+        "linkedSince": "Linked since",
+        "linkedSinceValue": "Jan 2024"
+      },
+      "autoCategorize": "Auto-categorize: on",
+      "detailsHeaderShort": "ACCOUNT DETAILS",
+      "detailsDialog": {
+        "title": "Account details",
+        "description": "Metadata for this account.",
+        "editButton": "Edit details"
+      },
+      "editDialog": {
+        "title": "Edit account",
+        "name": "Name",
+        "type": "Type",
+        "currency": "Currency",
+        "currencyHint": "Set at creation and cannot be changed. Make a new account to use another currency.",
+        "archive": "Archive",
+        "updatedToast": "Account updated"
+      },
+      "archiveDialog": {
+        "title": "Archive {name}?",
+        "description": "The account is hidden from your lists but its transaction history is kept. You can't undo this from the app.",
+        "confirm": "Archive",
+        "archivedToast": "Account archived"
+      },
+      "adjustDialog": {
+        "title": "Adjust {name}",
+        "description": "Force the balance to a target value with a single adjustment entry — the blunt path. For a guided session that ticks off real statement rows, use Reconcile. Adjustments don't count toward spending or income.",
+        "currentBalance": "Current balance",
+        "targetBalance": "Target balance",
+        "noteOptional": "Note (optional)",
+        "notePlaceholder": "e.g. Bank fee I missed",
+        "submit": "Adjust",
+        "targetError": "Enter a target balance",
+        "alreadyAtToast": "Already at this balance — nothing to adjust",
+        "adjustedToast": "Balance adjusted"
+      },
+      "reconcileCard": {
+        "title": "Reconcile to statement",
+        "cancelAria": "Cancel reconcile",
+        "cancel": "Cancel",
+        "statementBalance": "Statement balance ({currency})",
+        "asOf": "As of",
+        "cleared": "Cleared",
+        "target": "Target",
+        "difference": "Difference",
+        "summary": "{cleared} cleared · {toReview} to review",
+        "shortBy": "You're {amount} short — likely a missing transaction. Add it below, or post an adjustment.",
+        "overBy": "You're {amount} over — likely a missing transaction. Add it below, or post an adjustment.",
+        "directionAria": "Direction",
+        "expense": "expense",
+        "income": "income",
+        "merchant": "Merchant",
+        "amountAria": "Amount ({currency})",
+        "amountPlaceholder": "Amount ({currency})",
+        "addButton": "Add",
+        "addCancel": "Cancel",
+        "addMissing": "Add missing transaction",
+        "postAdjustment": "Post adjustment for {amount}",
+        "doneButton": "Done",
+        "amountError": "Enter an amount",
+        "merchantError": "Enter a merchant",
+        "addedClearedToast": "Added & cleared",
+        "statementBalanceError": "Enter a statement balance",
+        "statementDateError": "Pick the statement date",
+        "reconciledToast": "Reconciled",
+        "reconciledWithAdjustmentToast": "Reconciled with adjustment"
+      },
+      "pending": {
+        "headerReconcile": "Pending · {count}",
+        "subReconcile": "On your statement? Confirm & clear",
+        "headerNormal": "To confirm · {count}",
+        "subNormal": "Not in your balance yet",
+        "incomeFallback": "Income",
+        "confirmAndClearLabel": "Confirm & clear",
+        "confirmAndClearAria": "Confirm and clear {merchant}",
+        "confirmAria": "Confirm {merchant}",
+        "voidAria": "Void {merchant}",
+        "confirmAndClearedToast": "Confirmed & cleared",
+        "confirmedToast": "Confirmed {merchant}",
+        "voidedToast": "Voided {merchant}"
+      },
+      "allTransactions": "All transactions · {count}",
+      "filterLabel": "Filter"
+    },
+    "groupActionsAria": "Group actions: {name}",
+    "groupActions": {
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "ungroupedLabel": "Ungrouped",
+    "emptyGroup": "No accounts",
+    "empty": {
+      "title": "No accounts linked in {ledger} yet.",
+      "description": "Add your first account to start tracking balances and transactions."
+    },
+    "createDialog": {
+      "title": "New account",
+      "description": "Added to {ledger}",
+      "name": "Name",
+      "type": "Type",
+      "group": "Group",
+      "currency": "Currency",
+      "openingBalance": "Opening balance ({currency})",
+      "openingBalancePlaceholder": "0.00",
+      "cardColor": "Card color",
+      "createdToast": "Account created"
+    },
+    "groupDialog": {
+      "newTitle": "New group",
+      "editTitle": "Edit group",
+      "newDescription": "Added to {ledger}.",
+      "editDescription": "Rename this group.",
+      "name": "Name",
+      "createdToast": "Group created",
+      "updatedToast": "Group updated"
+    },
+    "deleteGroupDialog": {
+      "title": "Delete group?",
+      "moveHint": "{count, plural, one {# account will move to Ungrouped.} other {# accounts will move to Ungrouped.}}",
+      "deletedToast": "Group deleted"
+    }
+  },
+  "merchants": {
+    "title": "Merchants",
+    "searchAria": "Search merchants",
+    "searchPlaceholder": "Search merchants…",
+    "newAria": "New merchant",
+    "noMatches": "No matches",
+    "unverifiedChip": "UNVERIFIED",
+    "verifyButton": "Verify",
+    "verifiedToast": "{name} verified",
+    "createDialog": {
+      "title": "New merchant",
+      "description": "A standardised counterparty for matching transactions.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Starbucks",
+      "create": "Add",
+      "createErrorEmpty": "Enter a merchant name",
+      "createdToast": "Merchant added"
+    },
+    "editDialog": {
+      "title": "Edit merchant",
+      "description": "Rename this merchant.",
+      "updatedToast": "Merchant updated"
+    },
+    "deleteConfirm": {
+      "title": "Delete {name}?",
+      "description": "The merchant is removed; transactions that referenced it are left untouched.",
+      "deletedToast": "Merchant deleted"
+    }
+  },
+  "tags": {
+    "title": "Tags",
+    "searchAria": "Search tags",
+    "searchPlaceholder": "Search tags…",
+    "newAria": "New tag",
+    "emptyHint": "No tags yet — tap + to add one.",
+    "noMatches": "No matches",
+    "colorAria": "color {color}",
+    "createDialog": {
+      "title": "New tag",
+      "description": "Add a tag to {ledger}.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Reimbursable",
+      "color": "Color",
+      "createErrorEmpty": "Enter a tag name",
+      "createdToast": "Tag created"
+    },
+    "editDialog": {
+      "title": "Edit tag",
+      "description": "Update the name or colour.",
+      "updatedToast": "Tag updated"
+    },
+    "deleteConfirm": {
+      "title": "Delete {name}?",
+      "description": "The tag is removed from every transaction it's on. This can't be undone.",
+      "deletedToast": "Tag deleted"
+    }
+  },
+  "pendingRow": {
+    "fxChip": "· FX",
+    "merchantLabel": "Merchant:",
+    "pickMerchant": "Pick a merchant:",
+    "saveAs": "Save as:",
+    "saveAsPlaceholder": "Merchant name",
+    "saveAsAria": "New merchant name",
+    "unverified": "UNVERIFIED",
+    "ambiguousUnknown": "?",
+    "other": "Other…",
+    "clearOverride": "Clear override",
+    "cancelAria": "Cancel",
+    "errors": {
+      "pickOrName": "Pick or name a merchant first"
+    },
+    "toasts": {
+      "confirmed": "Confirmed {account} · {label}",
+      "voided": "Voided {merchant}"
+    },
+    "confirm": {
+      "default": "Confirm",
+      "verify": "Confirm & verify",
+      "create": "Confirm & create"
+    },
+    "resolutionLabel": {
+      "savedAs": "saved as {name}",
+      "confirmed": "confirmed",
+      "linkedTo": "linked to {name}"
+    }
+  },
+  "pending": {
+    "title": "Pending",
+    "filterAria": "Filter",
+    "items": "items",
+    "intro": "Confirm them to flow into your reports and balances. Or cancel to void.",
+    "empty": "All caught up — nothing pending.",
+    "confirmAll": "Confirm all",
+    "confirmedAllToast": "All items confirmed"
+  },
+  "ledgerSwitcher": {
+    "switchAria": "Switch ledger",
+    "settingsAria": "Ledger settings",
+    "header": "Ledgers",
+    "accountsCount": "{count, plural, one {# account} other {# accounts}}",
+    "txnsCount": "{count, plural, one {# txn} other {# txns}}",
+    "newLedger": "New ledger",
+    "newDialog": {
+      "title": "New ledger",
+      "description": "A separate set of books. Choose a base currency now — every transaction you log here is stored in this currency. You can rename and recolor later.",
+      "name": "Name",
+      "namePlaceholder": "Studio · Side hustle · Trip to Japan…",
+      "base": "Base currency",
+      "color": "Color",
+      "tagline": "Tagline (optional)",
+      "taglinePlaceholder": "One-line description shown in the switcher",
+      "create": "Create ledger",
+      "creating": "Creating…",
+      "nameRequired": "Name is required",
+      "createdToast": "Created \"{name}\"",
+      "createdDescription": "Switched to the new ledger.",
+      "createFailure": "Could not create ledger"
+    }
+  },
+  "reconcileStatus": {
+    "never": "Never reconciled",
+    "today": "today",
+    "yesterday": "yesterday",
+    "daysAgo": "{count} days ago",
+    "reconciledTo": "Reconciled to {balance} · {when}",
+    "title": "Reconciled on {date}"
+  },
+  "accountForecast": {
+    "title": "Forecast",
+    "horizonAria": "Forecast horizon",
+    "horizonLabel": "{days}d",
+    "today": "Today",
+    "inDays": "In {days}d",
+    "lowPoint": "Low point",
+    "noEvents": "No scheduled events in the next {days} days.",
+    "addTemplate": "Add a <link>scheduled template</link> to forecast future debits and credits.",
+    "upcoming": "UPCOMING · {count}",
+    "moreInHorizon": "+{count} more in the next {days}d"
+  },
+  "weeklyDigest": {
+    "title": "Last week",
+    "spent": "spent",
+    "vsLastWeek": "vs last wk",
+    "txnsCount": "{count, plural, one {# transaction} other {# transactions}}",
+    "incomeChip": "+{amount} income",
+    "netPositive": "+{amount} net",
+    "netNegative": "−{amount} net",
+    "vsTypical": "vs typical {amount}",
+    "topCategories": "Top categories",
+    "biggestHit": "Biggest hit"
+  },
+  "badges": {
+    "refund": "Refund",
+    "unusual": "Unusual",
+    "unusualTitle": "{multiplier}× standard deviation from this merchant's average (≈ {mean})",
+    "pending": "Pending",
+    "upcoming": "Upcoming",
+    "done": "Done"
+  },
+  "txnSheet": {
+    "title": "Transaction details",
+    "description": "View and edit the selected transaction."
+  },
+  "editTxnSheet": {
+    "title": "Edit",
+    "description": "Edit the selected transaction."
+  },
+  "editTxnForm": {
+    "notFound": "Transaction not found",
+    "amount": "Amount",
+    "amountAria": "Amount",
+    "currency": "Currency",
+    "currencyHint": "Follows the selected account",
+    "merchant": "Merchant",
+    "merchantAria": "Select merchant",
+    "merchantPlaceholder": "Pick a merchant",
+    "category": "Category",
+    "account": "Account",
+    "date": "Date",
+    "dateAria": "Date",
+    "time": "Time",
+    "timeAria": "Time",
+    "status": "Status",
+    "statusAria": "Status",
+    "statusPosted": "Posted",
+    "statusPending": "Pending",
+    "note": "Note",
+    "noteAria": "Note",
+    "notePlaceholder": "Optional",
+    "save": "Save changes",
+    "errors": {
+      "amount": "Enter an amount",
+      "account": "Pick an account",
+      "date": "Pick a date"
+    },
+    "updatedToast": "Transaction updated"
+  },
+  "holdings": {
+    "headerCount": "Holdings · {count}",
+    "addButton": "Add",
+    "emptyTitle": "No positions yet",
+    "emptySub": "Log a stock, ETF, or fund you hold to see its live valuation.",
+    "sharesLine": "{shares} shares · cost {cost}",
+    "atPrice": " · @ {price} on {date}",
+    "noQuote": "no quote",
+    "updatePriceAria": "Update {symbol} price",
+    "editAria": "Edit {symbol}",
+    "deleteAria": "Delete {symbol}",
+    "holdingsValue": "Holdings value",
+    "unrealized": "{amount} unrealized",
+    "approxPrefix": "≈ {amount}",
+    "deleteDialog": {
+      "title": "Delete {symbol}?",
+      "description": "The position is removed permanently. Transactions you logged for buys / sells / dividends are not touched.",
+      "removedToast": "Removed {symbol}"
+    },
+    "addDialog": {
+      "title": "Add a holding",
+      "description": "Log a stock, ETF, or fund position you hold in this account.",
+      "symbol": "Symbol",
+      "symbolPlaceholder": "VTI",
+      "currency": "Currency",
+      "nameOptional": "Name (optional)",
+      "namePlaceholder": "Vanguard Total Stock Market ETF",
+      "shares": "Shares",
+      "sharesPlaceholder": "50",
+      "costBasis": "Cost basis (total paid)",
+      "costBasisPlaceholder": "11250",
+      "priceOptional": "Current price (optional)",
+      "pricePlaceholder": "248.50",
+      "priceDate": "Price date",
+      "addButton": "Add",
+      "addedToast": "Added {symbol}",
+      "errors": {
+        "symbol": "Enter a symbol",
+        "sharesGt0": "Shares must be greater than 0",
+        "costGte0": "Cost basis must be 0 or greater",
+        "priceGte0": "Price must be 0 or greater"
+      }
+    },
+    "editDialog": {
+      "title": "Edit {symbol}",
+      "description": "Shares + cost basis. Update the price separately to refresh the live value.",
+      "updatedToast": "Updated {symbol}",
+      "updatedFallback": "holding"
+    },
+    "priceDialog": {
+      "title": "Update {symbol} price",
+      "description": "Per-share price in {currency}. Leave blank to clear the quote.",
+      "price": "Price",
+      "asOf": "As of",
+      "errors": {
+        "priceGte0": "Price must be 0 or greater",
+        "validDate": "Pick a valid date"
+      },
+      "updatedToast": "Price updated"
+    }
+  },
+  "attachments": {
+    "receipts": "Receipts",
+    "openAria": "Open {name}",
+    "openFallback": "attachment",
+    "attachReceiptAria": "Attach receipt",
+    "uploading": "Uploading…",
+    "attach": "Attach",
+    "attachedToast": "Receipt attached",
+    "uploadError": "Upload failed",
+    "fileFallback": "receipt",
+    "viewer": {
+      "titleFallback": "Receipt {id}",
+      "attachmentFallback": "Attachment {id}",
+      "pdf": "PDF",
+      "image": "Image",
+      "nOfTotal": " · {n} of {total}",
+      "downloadAria": "Download",
+      "deleteAria": "Delete",
+      "deletePrompt": "Delete this receipt?",
+      "deleteAction": "Delete",
+      "deletedToast": "Receipt deleted",
+      "prevAria": "Previous",
+      "prev": "Prev",
+      "nextAria": "Next",
+      "next": "Next"
+    }
+  },
+  "txnDetail": {
+    "notFound": "Transaction not found",
+    "heroLabels": {
+      "refundFrom": "Refund from",
+      "received": "You received from",
+      "spent": "You spent at"
+    },
+    "actions": {
+      "split": "Split",
+      "splitCount": "Split ({count})",
+      "refund": "Refund",
+      "toRefund": "To refund",
+      "edit": "Edit",
+      "editAria": "Edit transaction",
+      "delete": "Delete"
+    },
+    "fx": {
+      "originalLabel": "ORIGINAL · {currency}",
+      "baseLabel": "BASE · {currency} (LOCKED)",
+      "rateLocked": "RATE LOCKED @ {rate} · {from}→{to} · {date}"
+    },
+    "ruleSuggestion": {
+      "prompt": "Always categorize {merchant} as {category}?",
+      "createRule": "Create rule",
+      "dismissAria": "Dismiss"
+    },
+    "rows": {
+      "category": "Category",
+      "splitSummary": "Split across {count} categories",
+      "uncategorized": "Uncategorized",
+      "account": "Account",
+      "refundOf": "Refund of",
+      "originalRemoved": "original removed",
+      "status": "Status",
+      "pending": "Pending",
+      "posted": "Posted",
+      "note": "Note",
+      "review": "Review",
+      "reviewed": "Reviewed",
+      "needsReview": "Needs review",
+      "reviewedToast": "Marked reviewed",
+      "needsReviewToast": "Marked needs-review",
+      "categoryUpdatedToast": "Category updated"
+    },
+    "splits": {
+      "title": "Splits",
+      "uncategorized": "Uncategorized",
+      "editorTitle": "Edit splits",
+      "editorDescription": "Allocate {amount} across categories. Splits must sum to the transaction amount.",
+      "categoryAria": "Category",
+      "amountAria": "Amount",
+      "removeAria": "Remove split",
+      "addSplit": "Add split",
+      "balanceToTotal": "Balance to total",
+      "target": "Target {amount}",
+      "short": "Short {amount}",
+      "over": "Over {amount}",
+      "balanced": "Balanced",
+      "clearSplits": "Clear splits",
+      "savedToast": "Splits saved",
+      "saveError": "Could not save splits",
+      "clearedToast": "Splits cleared"
+    },
+    "refundSection": {
+      "title": "Refunds",
+      "fullyRefunded": "Fully refunded",
+      "refundedLabel": "Refunded",
+      "refundedSummary": "{refunded} of {total}"
+    },
+    "refundDialog": {
+      "title": "Refund this purchase",
+      "description": "Records money coming back from {merchant}. It nets against the original's category, not income.",
+      "amountLabel": "Amount",
+      "amountWithCurrency": "Amount · {currency}",
+      "overWarning": "More than the original {amount} — allowed, but unusual.",
+      "category": "Category",
+      "toAccount": "To account",
+      "submit": "Record refund",
+      "amountError": "Enter a refund amount",
+      "recordedToast": "Refund recorded",
+      "refundMerchant": "Refund · {merchant}"
+    },
+    "convertDialog": {
+      "title": "Convert to refund",
+      "description": "Reclassifies this {amount} from income to a refund. Pick the purchase it offsets — it will net against that purchase's category instead of counting as income.",
+      "searchAria": "Search purchases",
+      "searchPlaceholder": "Search a purchase by merchant…",
+      "noMatches": "No matching purchases",
+      "overWarning": "More than the original {amount} — allowed, but unusual.",
+      "submit": "Convert to refund",
+      "pickError": "Pick the purchase this refunds",
+      "convertedToast": "Converted to refund",
+      "convertedDescription": "Linked to {merchant}"
+    },
+    "tags": {
+      "title": "Tags",
+      "addPlaceholder": "+ tag",
+      "allApplied": "All tags applied",
+      "newPlaceholder": "New tag…",
+      "create": "Create"
+    },
+    "deleteDialog": {
+      "title": "Delete transaction?",
+      "description": "{merchant} · {amount} will be permanently removed. This can't be undone.",
+      "deletedToast": "Transaction deleted"
+    }
+  },
+  "add": {
+    "sheetTitle": "Add",
+    "sheetDescription": "Record an expense, income, or transfer.",
+    "typeAria": "Transaction type",
+    "types": {
+      "expense": "expense",
+      "income": "income",
+      "transfer": "transfer"
+    },
+    "recent": "RECENT",
+    "repeatAria": "Repeat {merchant} {amount}",
+    "fields": {
+      "amount": "Amount",
+      "amountAria": "Amount",
+      "sent": "Sent",
+      "currency": "Currency",
+      "currencyHint": "Follows the selected account",
+      "merchant": "Merchant",
+      "merchantPlaceholder": "Pick a merchant",
+      "merchantAria": "Select merchant",
+      "category": "Category",
+      "account": "Account",
+      "from": "From",
+      "to": "To",
+      "recv": "Recv {currency}",
+      "recvAria": "Received amount",
+      "recvPlaceholder": "amount in {currency}",
+      "effectiveRate": "Effective rate: {rate} {to} per {from}",
+      "date": "Date",
+      "dateAria": "Date",
+      "note": "Note",
+      "noteAria": "Note",
+      "notePlaceholder": "Optional"
+    },
+    "suggestion": {
+      "prefix": "Suggested:",
+      "aria": "Use suggested category {name}"
+    },
+    "duplicateWarning": "Possible duplicate — {merchant} for the same amount on this account around {date}. Save again only if it's a separate purchase.",
+    "saveButton": {
+      "expense": "Save expense",
+      "income": "Save income",
+      "transfer": "Save transfer"
+    },
+    "errors": {
+      "amount": "Enter an amount",
+      "accounts": "Pick both accounts",
+      "sameAccount": "Pick two different accounts",
+      "recvAmount": "Enter the amount received in {currency}"
+    },
+    "fallback": {
+      "income": "Income",
+      "untitled": "Untitled",
+      "account": "account"
+    },
+    "toasts": {
+      "transferCreated": "Transfer created",
+      "transferDescription": "{from} → {to} · {amount}",
+      "incomeAdded": "Income added",
+      "expenseAdded": "Expense added",
+      "txnDescription": "{merchant} · {amount}"
+    }
+  },
   "settings": {
+    "ledger": {
+      "activeSection": "Active ledger",
+      "switchHint": "Switch ledgers from the sidebar.",
+      "thisLedgerSection": "This ledger",
+      "baseCurrency": "Base currency",
+      "baseCurrencyHint": "Reporting currency for this ledger. Changing it rewrites every locked conversion in {count, plural, one {# transaction} other {# transactions}} using the rate on each transaction's own date.",
+      "baseCurrencyToast": "Base currency changed to {currency}",
+      "baseCurrencyToastDescription": "{count, plural, one {# transaction} other {# transactions}} reconverted.",
+      "displayCurrency": "Display currency",
+      "categoriesRow": "Categories",
+      "categoriesCount": "{count, plural, one {# category} other {# categories}}",
+      "nameAppearance": "Name & appearance",
+      "editButton": "Edit",
+      "defaultLedgerRow": "Default ledger",
+      "makeDefaultButton": "Make default",
+      "defaultedToast": "{name} is now the default ledger.",
+      "exchangeRatesSection": "Exchange rates",
+      "dangerZoneSection": "Danger zone",
+      "deleteRow": "Delete this ledger",
+      "deleteButton": "Delete…",
+      "lastLedgerHint": "You can't delete the only ledger. Create another first.",
+      "baseChangeDialog": {
+        "title": "Change base currency to {currency}?",
+        "description": "Every locked amount_base in this ledger ({count, plural, one {# transaction} other {# transactions}}) will be re-converted under the new base, using the rate on each transaction's own date. Account balances are then re-derived. Reversible by switching back.",
+        "confirm": "Change base"
+      },
+      "editDialog": {
+        "title": "Edit ledger",
+        "description": "Rename, recolor, or rewrite the tagline. Base currency is changed separately (it rewrites every locked conversion).",
+        "name": "Name",
+        "color": "Color",
+        "tagline": "Tagline",
+        "taglinePlaceholder": "One-line description shown in the switcher",
+        "updatedToast": "Updated"
+      },
+      "deleteDialog": {
+        "title": "Delete \"{name}\"?",
+        "description": "This permanently deletes the ledger and everything in it: {accounts, plural, one {# account} other {# accounts}}, {txns, plural, one {# transaction} other {# transactions}}, and every budget, scheduled item, rule, holding, receipt, and category scoped to it. Not recoverable unless you restore from a backup.",
+        "typeToConfirm": "Type {name} to confirm",
+        "confirmButton": "Delete ledger",
+        "deletedToast": "Deleted \"{name}\""
+      }
+    },
     "account": {
       "title": "Settings",
+      "appearance": "Appearance",
+      "theme": "Theme",
       "language": {
         "row": "Language",
         "english": "English",
         "chinese": "中文(简体)"
+      },
+      "bottomBar": {
+        "section": "Bottom bar",
+        "hint": "Choose and reorder the four sections in your bottom navigation. The center Add button is always shown."
+      },
+      "data": {
+        "section": "Data",
+        "sampleRow": "Sample data",
+        "resetButton": "Reset",
+        "resetSuccess": "Sample data restored",
+        "hint": "Your changes are saved on this device. Reset restores the original sample data."
+      },
+      "metadata": {
+        "title": "Database",
+        "app": "App:",
+        "schema": "Schema:",
+        "updated": "Updated:",
+        "rows": "Rows:",
+        "rowsSummary": "{txns} txns · {accounts} accounts · {categories} categories"
       },
       "backup": {
         "section": "Backup & restore",
@@ -50,19 +1432,135 @@
           "noop": "No backup created (auto-backup is off)"
         },
         "restore": {
+          "row": "Restore from backup",
+          "noBackups": "No backups yet",
+          "pickPlaceholder": "Pick backup",
           "dialogTitle": "Restore this backup?",
           "dialogDescription": "Replaces the current database with the contents of this backup. A snapshot of the live DB is created first so you can undo this.",
-          "confirm": "Restore"
-        }
+          "dialogDescriptionDetail": "Restoring {name} ({date} · {size}) will replace your current database. A snapshot of the current state will be saved automatically before the swap.",
+          "confirm": "Restore",
+          "busy": "Restoring…",
+          "success": "Backup restored",
+          "successDescription": "Previous data backed up to {file}",
+          "failure": "Restore failed"
+        },
+        "importDialog": {
+          "description": "This will replace your current database with the contents of {name}. A backup of your current data will be saved automatically before the swap.",
+          "fileSize": "File size: {size}. The file is validated (SQLite header, schema version, foreign keys, checksum) before it replaces your live database.",
+          "importSuccess": "Database imported",
+          "importSuccessDescription": "Previous data backed up to {file}",
+          "importFailure": "Import failed"
+        },
+        "backupNowToast": {
+          "failure": "Backup failed"
+        },
+        "hint": "Your data lives in a SQLite file on the server and syncs on every change. Importing replaces the live file — a snapshot of the current state is saved automatically before the swap."
       }
     }
+  },
+  "ui": {
+    "dialogClose": "Close"
   },
   "common": {
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
-    "create": "Create"
+    "create": "Create",
+    "add": "Add",
+    "back": "Back",
+    "done": "Done",
+    "loading": "Loading…",
+    "moreActions": "More actions"
+  },
+  "nav": {
+    "accounts": "Accounts",
+    "budgets": "Budgets",
+    "scheduled": "Scheduled",
+    "insights": "Insights",
+    "activity": "Activity",
+    "reports": "Reports",
+    "goals": "Goals",
+    "add": "Add",
+    "settings": "Settings",
+    "pending": "Pending",
+    "merchants": "Merchants",
+    "categories": "Categories",
+    "tags": "Tags",
+    "rules": "Rules",
+    "transfers": "Transfers",
+    "exchangeRates": "Exchange rates",
+    "ledgerGroup": "Ledger"
+  },
+  "merchantPicker": {
+    "title": "Merchant",
+    "description": "Pick an existing merchant or create a new one.",
+    "searchPlaceholder": "Search merchants…",
+    "emptyHint": "No merchants yet. Type to create one.",
+    "noMatches": "No matches for \"{query}\"",
+    "unverifiedChip": "UNVERIFIED",
+    "createNew": "Create new merchant \"{name}\"",
+    "verifiedToast": "Verified {name}",
+    "nameError": "Enter a merchant name"
+  },
+  "exchangeRates": {
+    "summary": "{count, plural, one {# currency} other {# currencies}}",
+    "updatedSuffix": " · updated {date}",
+    "deleteLatestAria": "Delete latest {currency} rate",
+    "removedToast": "{currency} rate removed",
+    "addRate": "Add rate",
+    "manualFallback": "manual",
+    "rateError": "Enter a rate greater than 0",
+    "setToast": "{currency} → USD set",
+    "setDescription": "{rate} on {date}",
+    "dialog": {
+      "title": "Add exchange rate",
+      "description": "How many USD equals one unit of the foreign currency (USD-pivoted). Used by display conversion and locked into new transactions at insert time.",
+      "currency": "Currency",
+      "date": "Date",
+      "rateLabel": "Rate (1 {currency} = ? USD)",
+      "source": "Source"
+    }
+  },
+  "mobileTabsEditor": {
+    "moveUpAria": "Move {section} up",
+    "moveDownAria": "Move {section} down",
+    "sectionFallback": "section"
+  },
+  "settingsTabs": {
+    "account": "Account",
+    "ledger": "Ledger"
+  },
+  "themeToggle": {
+    "aria": "Toggle theme"
+  },
+  "shell": {
+    "brand": "Finch",
+    "search": "Search",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "primaryNav": "Primary navigation",
+    "addExpense": "Add expense",
+    "accountMenu": "Account menu",
+    "breadcrumb": "Breadcrumb",
+    "userLabel": "Personal",
+    "goBack": "Go back"
+  },
+  "palette": {
+    "title": "Search and commands",
+    "description": "Search transactions, accounts, and categories, or jump to a page.",
+    "placeholder": "Search transactions, accounts, screens…",
+    "ariaLabel": "Command palette search",
+    "noResults": "No results",
+    "shortcutsHint": "↑↓ navigate · ↵ select · esc close",
+    "groups": {
+      "pages": "Pages",
+      "transactions": "Transactions",
+      "merchants": "Merchants",
+      "categories": "Categories",
+      "accounts": "Accounts",
+      "tags": "Tags"
+    }
   },
   "error": {
     "required": {

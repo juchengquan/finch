@@ -1,16 +1,23 @@
 // Computed insights (INSIGHTS_PLAN.md Phase A): pure, ranked rules over the
 // projected store. Each rule returns an Insight or null; the page falls back to
 // curated copy when the engine produces nothing (cold/empty ledger).
+//
+// Insight titles and bodies are returned as ICU message keys + interpolation
+// params so the InsightCard can translate via `useTranslations('insightCards')`.
+// Pre-formatted monetary strings come from `ctx.fmt`; weekday names come from
+// `ctx.weekdayName` so the caller can supply locale-aware labels.
 
 import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
 import { categorySpend, netWorthSeries, prevMonth, kindOf } from '@/lib/select';
 
+type Params = Record<string, string | number>;
+
 export interface Insight {
   tone: 'pos' | 'warn' | 'neut';
   icon: string;
-  title: string;
-  body: string;
+  title: { key: string; params?: Params };
+  body: { key: string; params?: Params };
 }
 
 export interface InsightCtx {
@@ -21,11 +28,12 @@ export interface InsightCtx {
   ledgerId: string;
   month: string; // current month (YYYY-MM); budget/spend rules scope to it
   fmt: (n: number) => string;
+  /** Locale-aware weekday name for index 0-6 (Sun-Sat). */
+  weekdayName: (dow: number) => string;
 }
 
 const sumValues = (m: Record<string, number>) => Object.values(m).reduce((s, v) => s + v, 0);
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 
 /** Day-of-week for a `YYYY-MM-DD` transaction date. Returns NaN for an
@@ -52,8 +60,8 @@ const spendingTrend: Rule = (ctx) => {
   return {
     tone: down ? 'pos' : 'warn',
     icon: down ? 'arrow-d' : 'arrow-u',
-    title: `Spending ${down ? 'down' : 'up'} ${Math.abs(pct)}% vs last month`,
-    body: `${ctx.fmt(cur)} this month vs ${ctx.fmt(prev)} last month.`,
+    title: { key: down ? 'spendingDown' : 'spendingUp', params: { pct: Math.abs(pct) } },
+    body: { key: 'spendingBody', params: { cur: ctx.fmt(cur), prev: ctx.fmt(prev) } },
   };
 };
 
@@ -71,8 +79,8 @@ const overBudget: Rule = (ctx) => {
   return {
     tone: 'warn',
     icon: 'arrow-u',
-    title: `${worst.name} over budget`,
-    body: `At ${ctx.fmt(worst.spent)} of ${ctx.fmt(worst.budget)} — ${ctx.fmt(worst.over)} over.`,
+    title: { key: 'overBudget', params: { name: worst.name } },
+    body: { key: 'overBudgetBody', params: { spent: ctx.fmt(worst.spent), budget: ctx.fmt(worst.budget), over: ctx.fmt(worst.over) } },
   };
 };
 
@@ -84,8 +92,8 @@ const pending: Rule = (ctx) => {
   return {
     tone: 'neut',
     icon: 'doc',
-    title: `${items.length} pending to review`,
-    body: `${ctx.fmt(total)} awaiting confirmation on the Pending screen.`,
+    title: { key: 'pending', params: { count: items.length } },
+    body: { key: 'pendingBody', params: { total: ctx.fmt(total) } },
   };
 };
 
@@ -102,8 +110,8 @@ const topCategory: Rule = (ctx) => {
   return {
     tone: 'neut',
     icon: 'fork',
-    title: `${name} leads your spending`,
-    body: `${ctx.fmt(topSpent)} — ${pct}% of expenses this period.`,
+    title: { key: 'topCategory', params: { name } },
+    body: { key: 'topCategoryBody', params: { amount: ctx.fmt(topSpent), pct } },
   };
 };
 
@@ -125,11 +133,12 @@ const weekdaySkew: Rule = (ctx) => {
   for (let i = 1; i < 7; i++) if (totals[i] > totals[maxDay]) maxDay = i;
   const ratio = totals[maxDay] / mean;
   if (ratio < 1.5) return null;
+  const day = ctx.weekdayName(maxDay);
   return {
     tone: 'neut',
     icon: 'sparkle',
-    title: `${WEEKDAYS[maxDay]}s are your spendy days`,
-    body: `You spend ${ratio.toFixed(1)}× the daily average on ${WEEKDAYS[maxDay]}s.`,
+    title: { key: 'weekdaySkew', params: { day } },
+    body: { key: 'weekdaySkewBody', params: { ratio: ratio.toFixed(1), day } },
   };
 };
 
@@ -181,8 +190,8 @@ const weekendVsWeekday: Rule = (ctx) => {
   return {
     tone: 'neut',
     icon: 'calendar',
-    title: 'Weekends cost more than weekdays',
-    body: `Weekend days run ${ratio.toFixed(1)}× weekday spend (${ctx.fmt(weekendPerDay)} vs ${ctx.fmt(weekdayPerDay)} per day).`,
+    title: { key: 'weekendVsWeekday' },
+    body: { key: 'weekendVsWeekdayBody', params: { ratio: ratio.toFixed(1), weekend: ctx.fmt(weekendPerDay), weekday: ctx.fmt(weekdayPerDay) } },
   };
 };
 
@@ -213,11 +222,12 @@ const topCategoryByWeekday: Rule = (ctx) => {
   }
   if (!best) return null;
   const name = ctx.categories.find((c) => c.id === best.categoryId)?.name ?? best.categoryId;
+  const day = ctx.weekdayName(best.dow);
   return {
     tone: 'neut',
     icon: 'tag',
-    title: `${WEEKDAYS[best.dow]}s are mostly ${name}`,
-    body: `${Math.round(best.share * 100)}% of your ${WEEKDAYS[best.dow]} spending goes to ${name}.`,
+    title: { key: 'topCategoryByWeekday', params: { day, name } },
+    body: { key: 'topCategoryByWeekdayBody', params: { pct: Math.round(best.share * 100), day, name } },
   };
 };
 
@@ -246,8 +256,8 @@ const endOfMonthBump: Rule = (ctx) => {
   return {
     tone: 'neut',
     icon: 'calendar',
-    title: 'End-of-month runs hotter',
-    body: `Days 23-31 average ${ratio.toFixed(1)}× your earlier-month spend per day.`,
+    title: { key: 'endOfMonthBump' },
+    body: { key: 'endOfMonthBumpBody', params: { ratio: ratio.toFixed(1) } },
   };
 };
 
@@ -272,11 +282,12 @@ const quietestDay: Rule = (ctx) => {
   for (let i = 1; i < 7; i++) if (totals[i] < totals[minDay]) minDay = i;
   const ratio = totals[minDay] / mean;
   if (ratio > 0.5) return null;
+  const day = ctx.weekdayName(minDay);
   return {
     tone: 'pos',
     icon: 'check',
-    title: `${WEEKDAYS[minDay]}s are your quietest`,
-    body: `You spend ${Math.round((1 - ratio) * 100)}% less on ${WEEKDAYS[minDay]}s than the daily average.`,
+    title: { key: 'quietestDay', params: { day } },
+    body: { key: 'quietestDayBody', params: { pct: Math.round((1 - ratio) * 100), day } },
   };
 };
 
@@ -289,8 +300,8 @@ const goalProgress: Rule = (ctx) => {
   return {
     tone: 'pos',
     icon: 'check',
-    title: `${top.name} is ${pct}% funded`,
-    body: `${ctx.fmt(top.saved)} of ${ctx.fmt(top.target)} saved.`,
+    title: { key: 'goalProgress', params: { name: top.name, pct } },
+    body: { key: 'goalProgressBody', params: { saved: ctx.fmt(top.saved), target: ctx.fmt(top.target) } },
   };
 };
 
@@ -304,8 +315,8 @@ const netWorthTrend: Rule = (ctx) => {
   return {
     tone: up ? 'pos' : 'warn',
     icon: up ? 'arrow-u' : 'arrow-d',
-    title: up ? 'Net worth is trending up' : 'Net worth dipped',
-    body: `${up ? '+' : '−'}${ctx.fmt(Math.abs(delta))} across this period's activity.`,
+    title: { key: up ? 'netWorthUp' : 'netWorthDown' },
+    body: { key: 'netWorthBody', params: { sign: up ? '+' : '−', delta: ctx.fmt(Math.abs(delta)) } },
   };
 };
 

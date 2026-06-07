@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
   >(null);
   const counterparties = useFinanceStore((s) => s.counterparties);
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
+  const t = useTranslations('merchantPicker');
 
   const close = useCallback(() => {
     setOpen(false);
@@ -71,21 +73,21 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
       const cp = counterparties.find((c) => c.id === id);
       if (cp && !cp.verified) {
         verifyCounterparty(id);
-        toast.success(`Verified ${name}`);
+        toast.success(t('verifiedToast', { name }));
       }
       onResolveCb?.({ kind: 'existing', id, name });
       setOpen(false);
       setQuery('');
       setOnResolveCb(null);
     },
-    [counterparties, verifyCounterparty, onResolveCb],
+    [counterparties, verifyCounterparty, onResolveCb, t],
   );
 
   const createAndPick = useCallback(
     (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        toast.error('Enter a merchant name');
+        toast.error(t('nameError'));
         return;
       }
       onResolveCb?.({ kind: 'new', name: trimmed });
@@ -93,7 +95,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
       setQuery('');
       setOnResolveCb(null);
     },
-    [onResolveCb],
+    [onResolveCb, t],
   );
 
   const value = useMemo(() => ({ openMerchantPicker, close }), [openMerchantPicker, close]);
@@ -120,10 +122,8 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
             (not max-h) so the card doesn't grow/shrink as the search narrows. */}
         <DialogContent className="flex h-[70vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="border-border border-b px-5 py-4">
-            <DialogTitle className="font-serif text-xl italic">Merchant</DialogTitle>
-            <DialogDescription className="sr-only">
-              Pick an existing merchant or create a new one.
-            </DialogDescription>
+            <DialogTitle className="font-serif text-xl italic">{t('title')}</DialogTitle>
+            <DialogDescription className="sr-only">{t('description')}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="px-5 pt-4 pb-3">
@@ -132,7 +132,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search merchants…"
+                  placeholder={t('searchPlaceholder')}
                   className="h-auto border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                   autoFocus
                 />
@@ -141,12 +141,12 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
             <div className="flex flex-col px-2">
               {sorted.length === 0 && !q && (
                 <div className="text-muted-foreground py-8 text-center text-sm">
-                  No merchants yet. Type to create one.
+                  {t('emptyHint')}
                 </div>
               )}
               {sorted.length === 0 && q && (
                 <div className="text-muted-foreground py-8 text-center text-sm">
-                  No matches for &ldquo;{query}&rdquo;
+                  {t('noMatches', { query })}
                 </div>
               )}
               {sorted.map((c) => (
@@ -167,7 +167,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
                       <div className="truncate text-sm font-medium">{c.name}</div>
                       {!c.verified && (
                         <span className="border-warning/40 text-warning rounded border px-1.5 py-0.2 font-mono text-[9px] tracking-[0.6px]">
-                          UNVERIFIED
+                          {t('unverifiedChip')}
                         </span>
                       )}
                     </div>
@@ -184,7 +184,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
                   onClick={() => createAndPick(query)}
                 >
                   <Icon name="plus" size={14} />
-                  Create new merchant &ldquo;{titleCase(query.trim())}&rdquo;
+                  {t('createNew', { name: titleCase(query.trim()) })}
                 </Button>
               </div>
             )}

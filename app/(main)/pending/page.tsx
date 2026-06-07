@@ -1,6 +1,7 @@
 'use client';
 
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { PendingRow } from '@/components/pending-row';
@@ -11,15 +12,16 @@ export default function PendingPage() {
   const { activeId } = useLedger();
   const allTxns = useFinanceStore((s) => s.transactions);
   const confirmAllPending = useFinanceStore((s) => s.confirmAllPending);
+  const t = useTranslations('pending');
 
-  const pending = allTxns.filter((t) => t.pending && (t.ledgerId ?? 'personal') === activeId);
+  const pending = allTxns.filter((tx) => tx.pending && (tx.ledgerId ?? 'personal') === activeId);
 
   return (
     <MobilePage
       header={
         <ScreenHeader
-          title="Pending"
-          trailing={<IconButton icon="filter" aria-label="Filter" />}
+          title={t('title')}
+          trailing={<IconButton icon="filter" aria-label={t('filterAria')} />}
         />
       }
     >
@@ -27,16 +29,16 @@ export default function PendingPage() {
         <div className="px-1 pb-5">
           <SchemaChip label="status = pending" />
           <div className="mt-1.5 font-serif text-[44px] leading-none tracking-[-1.6px]">
-            {pending.length} <span className="text-muted-foreground italic">items</span>
+            {pending.length} <span className="text-muted-foreground italic">{t('items')}</span>
           </div>
           <div className="text-secondary-foreground mt-1.5 text-[13px]">
-            Confirm them to flow into your reports and balances. Or cancel to void.
+            {t('intro')}
           </div>
         </div>
 
         {pending.length === 0 ? (
           <div className="text-muted-foreground py-16 text-center text-sm">
-            All caught up — nothing pending.
+            {t('empty')}
           </div>
         ) : (
           <>
@@ -45,12 +47,12 @@ export default function PendingPage() {
                 type="button"
                 onClick={() => {
                   confirmAllPending();
-                  toast.success('All items confirmed');
+                  toast.success(t('confirmedAllToast'));
                 }}
                 className="bg-foreground text-background flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[19px] text-xs font-medium"
               >
                 <Icon name="check" size={14} />
-                Confirm all
+                {t('confirmAll')}
               </button>
             </div>
 

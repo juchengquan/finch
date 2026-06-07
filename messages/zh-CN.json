@@ -1,11 +1,1394 @@
 {
+  "categories": {
+    "title": "类别",
+    "searchAria": "搜索类别",
+    "searchPlaceholder": "搜索类别…",
+    "newAria": "新建类别",
+    "noMatches": "无匹配",
+    "empty": {
+      "title": "暂无类别",
+      "description": "点击 + 添加一个 —— 它们会接入预算与报表。"
+    },
+    "subSummary": " · {count} 个子项",
+    "expand": "展开 {name}",
+    "collapse": "折叠 {name}",
+    "newSubAria": "在 {name} 下新建子类",
+    "newSubSubAria": "在 {name} 下新建三级类别",
+    "newSubTitle": "新建子类",
+    "newSubSubTitle": "新建三级类别",
+    "types": {
+      "expense": "支出",
+      "income": "收入",
+      "transfer": "转账"
+    },
+    "delete": {
+      "categoryToast": "类别已删除",
+      "subcategoryToast": "子类已删除",
+      "subSubcategoryToast": "三级类别已删除",
+      "promotedSub": "{name} —— {count} 个子类已提升为一级。",
+      "promotedSubSub": "{name} —— {count} 个三级类别已提升。",
+      "confirmTitle": "删除 {name}?",
+      "parentWithChildrenDescription": "其 {count} 个子类将提升为一级(原三级类别会随之移到新父级下)。归在此父级的交易将变为未分类。",
+      "parentEmptyDescription": "归在此类别下的交易将变为未分类。",
+      "childWithGrandDescription": "其 {count} 个三级类别将提升一级。该子类下的交易将变为未分类。",
+      "childEmptyDescription": "该子类下的交易将变为未分类。",
+      "grandDescription": "该三级类别下的交易将变为未分类。"
+    },
+    "dialog": {
+      "newTitle": "新建类别",
+      "editTitle": "编辑类别",
+      "newUnderDescription": "添加到「{parent}」(位于 {ledger})。",
+      "newTopDescription": "添加为 {ledger} 的一级类别。",
+      "editDescription": "更新名称、父级、类型、图标和颜色。",
+      "name": "名称",
+      "namePlaceholder": "例如:旅行",
+      "nameRequired": "请输入类别名称",
+      "parent": "父级",
+      "topLevel": "— 一级 —",
+      "type": "类型",
+      "icon": "图标",
+      "color": "颜色",
+      "colorAria": "颜色 {color}",
+      "createdToast": "类别已创建",
+      "updatedToast": "类别已更新"
+    }
+  },
+  "ruleDescribe": {
+    "weekdays": { "0": "日", "1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六" },
+    "fields": {
+      "merchant": "商户",
+      "amount": "金额",
+      "account_id": "账户",
+      "category_id": "类别",
+      "counterparty_id": "对手方",
+      "currency": "货币",
+      "date_dow": "周几",
+      "date_dom": "每月几日",
+      "kind": "类型",
+      "tag_id": "标签",
+      "note": "备注"
+    },
+    "ops": {
+      "is": "等于",
+      "isEmpty": "为空",
+      "contains": "包含",
+      "startsWith": "以…开头",
+      "between": "介于",
+      "weekday": "周几",
+      "hasTag": "含标签",
+      "hasAnyTag": "含任一标签",
+      "hasAllTags": "含全部标签"
+    ,
+      "noteContains": "备注含"
+    },
+    "conditions": {
+      "always": "(始终)",
+      "never": "(从不)",
+      "and": " 且 ",
+      "or": " 或 ",
+      "not": "非 "
+    },
+    "actions": {
+      "clearCategory": "清除类别",
+      "setCategory": "设置类别 →",
+      "clearCounterparty": "清除对手方",
+      "setCounterparty": "设置对手方 →",
+      "renameMerchant": "重命名商户 →",
+      "setNote": "设置备注 →",
+      "setKind": "设置类型 →",
+      "addTag": "添加标签",
+      "removeTag": "移除标签",
+      "markReviewed": "标为已复核",
+      "split": "拆分:",
+      "uncategorized": "未分类",
+      "noActions": "(无动作)",
+      "separator": " · "
+    }
+  },
+  "ruleBuilder": {
+    "newTitle": "新建规则",
+    "editTitle": "编辑规则",
+    "description": "构建该规则的「如果-那么」逻辑。",
+    "kinds": {
+      "expense": "支出",
+      "income": "收入",
+      "transfer": "转账",
+      "refund": "退款",
+      "adjustment": "调整"
+    },
+    "fields": {
+      "merchant": "商户",
+      "amount": "金额",
+      "account_id": "账户",
+      "category_id": "类别",
+      "counterparty_id": "对手方",
+      "currency": "货币",
+      "date_dow": "周几",
+      "date_dom": "每月几日",
+      "kind": "类型",
+      "tag_id": "标签",
+      "note": "备注"
+    },
+    "actions": {
+      "set_category": "设置类别",
+      "add_tag": "添加标签",
+      "remove_tag": "移除标签",
+      "set_counterparty": "设置对手方",
+      "set_merchant": "重命名商户",
+      "set_note": "设置备注",
+      "set_kind": "设置类型",
+      "mark_reviewed": "标为已复核"
+    },
+    "weekdays": {
+      "sun": "日",
+      "mon": "一",
+      "tue": "二",
+      "wed": "三",
+      "thu": "四",
+      "fri": "五",
+      "sat": "六"
+    },
+    "operators": {
+      "is": "等于",
+      "isNull": "为空",
+      "contains": "包含",
+      "startsWith": "以...开头",
+      "between": "介于"
+    },
+    "fieldLabels": {
+      "namePlaceholder": "例如:壳牌 < ¥30 → 零食",
+      "nameOptional": "名称(可选)",
+      "priority": "优先级",
+      "active": "启用",
+      "rerunOnEdit": "编辑时重新运行",
+      "rerunOnEditTitle": "已有交易被编辑时重新触发(默认关闭 —— 更安全)",
+      "when": "当",
+      "then": "则",
+      "allOfThese": "全部满足",
+      "anyOfThese": "任一满足",
+      "addCondition": "+ 添加条件",
+      "addAction": "+ 添加动作",
+      "removeConditionAria": "移除条件",
+      "removeActionAria": "移除动作"
+    },
+    "placeholders": {
+      "text": "文本",
+      "currency": "USD",
+      "noteText": "备注内文本",
+      "canonicalName": "规范名称",
+      "noteContent": "备注内容",
+      "pickA": "选择{label}"
+    },
+    "refLabel": {
+      "account": "账户",
+      "category": "类别",
+      "counterparty": "对手方",
+      "tag": "标签"
+    },
+    "test": {
+      "header": "对最近 {total} 笔交易进行测试",
+      "matches": "匹配 {count} 笔",
+      "moreCount": "+{count} 笔",
+      "noMatchesYet": "暂无匹配 —— 请细化条件。",
+      "summary": "摘要"
+    },
+    "actionHints": {
+      "markReviewed": "无参数 —— 该行会被标为已复核。",
+      "split": "构建器暂不支持拆分;请通过 API 手动构造。"
+    },
+    "footer": {
+      "saveChanges": "保存修改",
+      "createRule": "创建规则"
+    },
+    "errors": {
+      "noConditions": "请至少添加一个条件",
+      "noActions": "请至少添加一个动作"
+    },
+    "toasts": {
+      "updated": "规则 {name} 已更新",
+      "created": "规则 {name} 已创建"
+    }
+  },
+  "rules": {
+    "title": "规则",
+    "newAria": "新建规则",
+    "newRule": "新建规则",
+    "intro": "规则会在 {ledger} 的每笔新交易上自动运行。匹配的规则可以设置类别、添加标签、重命名商户或拆分该笔。",
+    "empty": {
+      "title": "暂无规则",
+      "description": "规则会自动归类重复商户。点击「新建规则」开始创建 —— 可以从你最常改类别的商户入手。"
+    },
+    "row": {
+      "unnamed": "未命名",
+      "disabled": "已禁用",
+      "matched": "已匹配 {count} 笔",
+      "openAria": "打开规则 {name}"
+    },
+    "relative": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "daysAgo": "{count} 天前",
+      "lastMonth": "上个月",
+      "monthsAgo": "{count} 个月前"
+    },
+    "toasts": {
+      "enabled": "规则 {name} 已启用",
+      "disabled": "规则 {name} 已禁用",
+      "deleted": "规则 {name} 已删除",
+      "backfilling": "正在回填规则「{name}」",
+      "backfillingUnnamed": "正在回填规则",
+      "backfillingDescription": "服务器正在将该规则应用到历史记录。"
+    },
+    "backfillDialog": {
+      "title": "对历史交易应用该规则?",
+      "description": "将遍历本账本下每笔已确认交易,对匹配的交易执行规则动作。本次回填不处理拆分;其余动作会落地。",
+      "matchSummary": "已确认交易中 {matched} / {total} 笔匹配。",
+      "moreCount": "+{count} 笔",
+      "noMatches": "无可应用 —— 历史无匹配。",
+      "confirm": "应用到历史"
+    },
+    "deleteDialog": {
+      "title": "删除此规则?",
+      "description": "规则不会再对新交易生效。其已影响的旧交易保持现值;它们的 applied_rule_ids 仍保留该规则 id 以便追溯。",
+      "confirm": "删除规则"
+    },
+    "detail": {
+      "ruleFallback": "规则",
+      "description": "规则详情",
+      "edit": "编辑",
+      "enable": "启用",
+      "disable": "禁用",
+      "applyExisting": "应用到历史",
+      "delete": "删除",
+      "status": "状态",
+      "active": "启用中",
+      "disabledStatus": "已禁用",
+      "priority": "优先级",
+      "rerunsOnEdit": "编辑时重新运行",
+      "yes": "是",
+      "no": "否",
+      "appliedTo": "已应用于",
+      "appliedCount": "{count} 笔交易",
+      "condition": "条件",
+      "actions": "动作",
+      "noActions": "(无动作)",
+      "lastBackfilled": "最近回填"
+    }
+  },
+  "transfers": {
+    "title": "转账",
+    "newAria": "新建转账",
+    "transfers": "笔转账",
+    "intro": "跨账户调拨。每笔转账会生成一对关联的交易。",
+    "empty": {
+      "title": "暂无转账",
+      "description": "点击 + 在账户之间调拨 —— 同日生成一借一贷。"
+    },
+    "row": {
+      "deletedToast": "转账已删除",
+      "deleteTitle": "删除此转账?",
+      "deleteDescription": "将删除两侧({from} → {to})并恢复账户余额。"
+    },
+    "newDialog": {
+      "title": "新建转账",
+      "description": "在 {ledger} 的两个账户之间调拨。",
+      "from": "从",
+      "to": "到",
+      "sentFallback": "发出",
+      "receivedPlaceholder": "收到(可选 —— 留空使用中间汇率)",
+      "dateAria": "日期",
+      "timeAria": "时间",
+      "submit": "转账",
+      "errors": {
+        "amount": "请输入金额",
+        "sameAccount": "请选择两个不同的账户",
+        "received": "请输入有效的收到金额"
+      },
+      "createdToast": "转账已创建"
+    },
+    "detail": {
+      "title": "转账",
+      "notFound": "未找到该转账",
+      "received": "→ 收到 {amount}",
+      "rateLocked": "汇率锁定 @ {rate} · {when}",
+      "posted": "已入账 · {when}",
+      "fromLine": "从 · {ledger} 账本",
+      "toLine": "到 · {ledger} 账本",
+      "rateField": "{rate} {from}→{to}",
+      "sameCurrency": "1(同币种)",
+      "amountBaseLocked": "{amount}(已锁定)",
+      "explainer": "汇率在导入时即锁定。两笔交易共用 amount_base,使跨账本报表保持一致。"
+    },
+    "editDialog": {
+      "title": "编辑转账",
+      "description": "调整金额、日期或备注。余额会重新计算。",
+      "sent": "发出 · {currency}",
+      "received": "收到 · {currency}",
+      "effectiveRate": "实际汇率:每 1 {from} = {rate} {to}",
+      "date": "日期",
+      "time": "时间",
+      "noteOptional": "备注(可选)",
+      "errors": {
+        "sent": "请输入发出金额",
+        "received": "请输入收到金额"
+      },
+      "updatedToast": "转账已更新"
+    }
+  },
+  "scheduled": {
+    "title": "计划",
+    "newAria": "新建计划项",
+    "upcoming": "即将到期",
+    "incoming": "+ {amount} 入账",
+    "month": "月份",
+    "year": "年份",
+    "prevMonth": "上一月",
+    "nextMonth": "下一月",
+    "calendarDayAria": "{month} {day} 日",
+    "newButton": "新建",
+    "nothingOnDay": "当日无计划",
+    "form": {
+      "newTitle": "新建计划项",
+      "editTitle": "编辑计划项",
+      "types": {
+        "expense": "支出",
+        "income": "收入",
+        "transfer": "转账"
+      },
+      "name": "名称",
+      "namePlaceholder": "例如:房租",
+      "description": "描述",
+      "descriptionOptional": "(可选)",
+      "descriptionPlaceholder": "每次入账时显示 —— 默认与名称相同",
+      "amount": "金额",
+      "amountSuffix": " · {currency}",
+      "toAccount": "目标账户",
+      "fromAccount": "来源账户",
+      "account": "账户",
+      "selectAccount": "选择账户",
+      "category": "类别",
+      "categoryNone": "无",
+      "date": "日期",
+      "recurring": "重复",
+      "frequency": "频率",
+      "frequencies": {
+        "daily": "每日",
+        "weekly": "每周",
+        "biweekly": "每两周",
+        "monthly": "每月",
+        "quarterly": "每季",
+        "yearly": "每年"
+      },
+      "dayOfWeek": "周几",
+      "selectPlaceholder": "选择",
+      "dayOfMonth": "每月几日",
+      "repeat": "次数",
+      "repeatPlaceholder": "无限",
+      "untilDate": "截止日期",
+      "installmentPlan": "分期计划",
+      "installmentPlaceholder": "例如 24 表示 24 期",
+      "installmentHint": "在该期数后停止自动入账并显示进度。一般循环开支可留空。",
+      "color": "颜色",
+      "autoPost": "自动入账",
+      "addButton": "添加"
+    },
+    "errors": {
+      "nameRequired": "请输入名称",
+      "accountRequired": "请选择账户",
+      "fromAccountRequired": "请选择来源账户",
+      "invalidInstallment": "分期总数无效"
+    },
+    "card": {
+      "once": "单次",
+      "autoChip": "自动",
+      "deleteTitle": "删除 {name}?",
+      "deleteDescription": "将从日历中移除该计划项。"
+    },
+    "toasts": {
+      "added": "计划项已添加",
+      "updated": "计划项已更新",
+      "deleted": "计划项已删除"
+    }
+  },
+  "insightCards": {
+    "weekdays": {
+      "0": "周日",
+      "1": "周一",
+      "2": "周二",
+      "3": "周三",
+      "4": "周四",
+      "5": "周五",
+      "6": "周六"
+    },
+    "spendingDown": "本月支出比上月少 {pct}%",
+    "spendingUp": "本月支出比上月多 {pct}%",
+    "spendingBody": "本月 {cur} 对比上月 {prev}。",
+    "overBudget": "{name} 超出预算",
+    "overBudgetBody": "已用 {spent} / {budget} —— 超出 {over}。",
+    "pending": "{count} 笔待复核",
+    "pendingBody": "{total} 待在「待处理」页面确认。",
+    "topCategory": "{name} 是你的最大支出类别",
+    "topCategoryBody": "{amount} —— 占本期支出 {pct}%。",
+    "weekendVsWeekday": "周末花得比工作日多",
+    "weekendVsWeekdayBody": "周末日均花费是工作日的 {ratio} 倍({weekend} vs {weekday})。",
+    "topCategoryByWeekday": "{day}主要花在{name}",
+    "topCategoryByWeekdayBody": "{day}支出中有 {pct}% 用于{name}。",
+    "endOfMonthBump": "月末更猛",
+    "endOfMonthBumpBody": "23-31 日的日均支出是月初的 {ratio} 倍。",
+    "weekdaySkew": "{day}是你最爱花的日子",
+    "weekdaySkewBody": "你在{day}的支出是日均的 {ratio} 倍。",
+    "quietestDay": "{day}是你最安静的日子",
+    "quietestDayBody": "你在{day}的支出比日均少 {pct}%。",
+    "goalProgress": "{name} 已完成 {pct}%",
+    "goalProgressBody": "已存 {saved} / 目标 {target}。",
+    "netWorthUp": "净资产呈上升趋势",
+    "netWorthDown": "净资产下滑",
+    "netWorthBody": "本期变化 {sign}{delta}。"
+  },
+  "insights": {
+    "title": "洞察",
+    "viewToggleAria": "洞察视图",
+    "views": {
+      "trends": "趋势",
+      "breakdown": "明细"
+    },
+    "metrics": {
+      "spending": "支出",
+      "income": "收入",
+      "cashflow": "现金流",
+      "networth": "净资产"
+    },
+    "headers": {
+      "yourSpending": "本月支出",
+      "lessThanLast": "本月支出少了",
+      "moreThanLast": "本月支出多了",
+      "thisMonth": "本月",
+      "thanLastMonth": "比上月"
+    },
+    "breakdown": {
+      "monthLabel": "月份",
+      "spent": "已花",
+      "categoriesCount": "{count} 个类别",
+      "exportMonth": "导出 {month} CSV",
+      "exportGeneric": "导出该月 CSV",
+      "noSpending": "{scope}没有支出。",
+      "scopeFallback": "该账本",
+      "exportToast": "交易已导出",
+      "exportDescription": "{month} · CSV",
+      "exportDownloaded": "CSV 已下载",
+      "exportFailure": "导出失败"
+    },
+    "chartLegend": {
+      "income": "收入",
+      "expense": "支出"
+    },
+    "forecast": {
+      "title": "支出预测",
+      "dayOf": "第 {elapsed} 天 / 共 {total} 天",
+      "projected": "预计",
+      "vsPrev": "比 {month} {dir} {pct}%",
+      "spentSoFar": "已花费 · {amount}",
+      "runRateRest": "按当前节奏剩余 · {amount}",
+      "scheduled": "已计划 · {amount}"
+    },
+    "incomeFlow": {
+      "title": "{month}收入去向",
+      "incomeIn": "收入 {amount}",
+      "incomeLabel": "收入",
+      "savedLabel": "结余",
+      "savedTotal": "结余 · {amount}"
+    },
+    "heatmap": {
+      "title": "每日支出",
+      "last12Weeks": "近 12 周"
+    },
+    "insightsEmpty": "添加几笔交易后即可查看洞察。",
+    "deltas": {
+      "title": "{prev} vs {cur}",
+      "topChanges": "主要变化"
+    }
+  },
+  "activity": {
+    "title": "动态",
+    "searchAria": "搜索交易",
+    "searchPlaceholder": "搜索交易",
+    "filters": {
+      "all": "全部",
+      "out": "支出",
+      "in": "收入"
+    },
+    "toggleFilters": "切换筛选",
+    "filtersLabel": "筛选",
+    "saveSearch": "保存",
+    "saveSearchAria": "保存当前筛选为搜索",
+    "selectMode": {
+      "enter": "选择",
+      "exit": "取消",
+      "enterAria": "选择交易以批量改类",
+      "exitAria": "退出选择模式",
+      "selectedCount": "已选 {count}",
+      "selectAll": "全选 {total}",
+      "recategorizePlaceholder": "改类别…",
+      "regionAria": "批量改类别",
+      "appliedToast": "已将 {count} 笔交易的类别改为 {category}"
+    },
+    "reviewToggle": "待复核",
+    "reviewToggleAria": "仅显示需要复核的交易",
+    "reviewCount": "{count} 笔待复核",
+    "markAllReviewed": "全部标为已复核",
+    "markedReviewedToast": "已将 {count} 笔标为已复核",
+    "reviewEmpty": "都处理完了 —— 没有待复核的项目。",
+    "deleteSavedSearchAria": "删除已保存搜索 {name}",
+    "filterPanel": {
+      "from": "起",
+      "to": "止",
+      "minAmount": "最小金额",
+      "maxAmount": "最大金额",
+      "clear": "清除"
+    },
+    "empty": {
+      "title": "暂无交易",
+      "filteredDescription": "没有匹配当前筛选的项目。清除筛选可查看全部。",
+      "freshDescription": "添加一笔支出开始记账 —— 它会出现在这里。"
+    },
+    "row": {
+      "needsReview": "待复核",
+      "pending": "待处理",
+      "uncategorized": "未分类"
+    },
+    "table": {
+      "date": "日期",
+      "merchant": "商户",
+      "category": "类别",
+      "account": "账户",
+      "status": "状态",
+      "amount": "金额",
+      "pending": "待处理",
+      "posted": "已入账"
+    },
+    "saveDialog": {
+      "title": "保存搜索",
+      "name": "名称",
+      "namePlaceholder": "例如:订阅 > ¥150",
+      "hint": "仅保存在此设备上 —— 保存的搜索不计入账本,也不会出现在导出中。",
+      "savedToast": "已保存「{name}」"
+    }
+  },
+  "budgets": {
+    "title": "预算",
+    "addAria": "添加",
+    "newButton": "新建",
+    "tabs": {
+      "expense": "支出",
+      "income": "收入"
+    },
+    "menu": {
+      "newBudget": "新建预算",
+      "newGroup": "新建分组"
+    },
+    "ungroupedLabel": "未分组",
+    "emptyGroup": "暂无{type}预算",
+    "empty": {
+      "title": "{ledger} 还没有{type}预算",
+      "description": "点击 + 设置每月上限或储蓄目标。"
+    },
+    "card": {
+      "pendingAria": "金额变更待生效",
+      "pctOfTarget": "已达目标 {pct}%",
+      "over": "超出 {amount}",
+      "left": "剩余 {amount}"
+    },
+    "groupActionsAria": "分组操作:{name}",
+    "groupActions": {
+      "rename": "重命名",
+      "delete": "删除"
+    },
+    "form": {
+      "newTitle": "新建预算",
+      "editTitle": "编辑预算",
+      "expenseDescription": "在 {ledger} 中按上限跟踪支出。",
+      "incomeDescription": "在 {ledger} 中跟踪收入/储蓄进度。",
+      "types": {
+        "expense": "支出",
+        "income": "收入"
+      },
+      "name": "名称",
+      "expensePlaceholder": "例如:杂货",
+      "incomePlaceholder": "例如:工资、买车",
+      "target": "目标",
+      "limit": "上限",
+      "pendingChip": "{amount} 待生效",
+      "pendingChipWithPeriod": "{amount} 待生效 · {period}",
+      "clearPending": "清除",
+      "group": "分组",
+      "noGroup": "无分组",
+      "cycle": "周期",
+      "startDate": "起始日期",
+      "frequencies": {
+        "daily": "每日",
+        "weekly": "每周",
+        "biweekly": "每两周",
+        "monthly": "每月",
+        "quarterly": "每季",
+        "yearly": "每年"
+      },
+      "recurring": "循环",
+      "recurringSuffix": " · {hint}",
+      "recurringRepeats": "每个周期重复",
+      "recurringOneShotGoal": "一次性目标(手动贡献)",
+      "recurringOneTime": "一次性",
+      "rollover": "未用预算结转",
+      "rolloverDailyHint": "(每日周期不可用)",
+      "categories": "类别",
+      "accounts": "账户",
+      "chip": {
+        "summary": "· {count}",
+        "all": "· 全部",
+        "noneAvailable": "无可用项"
+      },
+      "hint": {
+        "cycleImmediate": "周期更改立即生效。",
+        "amountStaged": "金额更改将在 {period} 生效。",
+        "saveImmediate": "更改立即生效。",
+        "saveChanges": "保存更改。"
+      },
+      "errors": {
+        "name": "请输入预算名称",
+        "targetGt0": "请输入大于 0 的目标",
+        "limitGt0": "请输入大于 0 的上限"
+      },
+      "toasts": {
+        "created": "预算已创建",
+        "updated": "预算已更新",
+        "cycleUpdated": "周期已更新",
+        "amountStaged": "金额已暂存",
+        "stagedTakesEffect": "{period} 生效"
+      }
+    },
+    "detail": {
+      "fallbackTitle": "预算",
+      "notFound": "未找到该预算。",
+      "saved": "已存",
+      "used": "已用",
+      "of": "/",
+      "carried": "(结转 +{amount})",
+      "pendingFromNext": "下一周期 {period} 的 {amount}",
+      "toGo": "还需 {amount}",
+      "over": "超出 {amount}",
+      "left": "剩余 {amount}",
+      "editButton": "编辑",
+      "contributeButton": "贡献",
+      "deleteButton": "删除",
+      "incomeTitle": "收入",
+      "transactionsTitle": "交易",
+      "manualOnly": "进度仅通过手动贡献跟踪。",
+      "noneInCycle": "本周期暂无交易",
+      "contributeDialog": {
+        "title": "添加到 {name}",
+        "description": "为该目标记录一笔贡献。",
+        "submit": "添加",
+        "addedToast": "贡献已添加",
+        "addedDescription": "{name} · +{amount}",
+        "amountError": "请输入大于 0 的金额"
+      },
+      "deleteDialog": {
+        "title": "删除该预算?",
+        "description": "{name} 将被永久删除。你的交易不受影响。",
+        "deletedToast": "预算已删除"
+      }
+    },
+    "groupDialog": {
+      "renameTitle": "重命名分组",
+      "newTitle": "新建预算分组",
+      "description": "在此屏中将预算分组,类似账户分组。",
+      "name": "名称",
+      "nameRequired": "请输入分组名称",
+      "createdToast": "分组已创建",
+      "updatedToast": "分组已更新"
+    },
+    "deleteGroupDialog": {
+      "title": "删除分组?",
+      "description": "此分组下的预算会保留并变为未分组。此操作不可撤销。",
+      "deletedToast": "分组已删除"
+    }
+  },
+  "accounts": {
+    "title": "账户",
+    "allAccounts": "全部账户",
+    "recentActivity": "最近动态",
+    "addAria": "添加",
+    "newButton": "新建",
+    "menu": {
+      "newAccount": "新建账户",
+      "newGroup": "新建分组"
+    },
+    "detail": {
+      "notFoundTitle": "未找到账户",
+      "notFoundHeader": "此处无账户",
+      "notFoundBody": "未找到 id 为 {id} 的账户。可能已被删除,或链接有误。",
+      "backToAccounts": "返回账户",
+      "detailsAria": "账户详情",
+      "editAria": "编辑账户",
+      "fxGain": "汇兑收益 {amount}",
+      "fxLoss": "汇兑损失 {amount}",
+      "holdingsLine": "+ 持仓 {holdings} · 合计 {total}",
+      "adjustBalance": "调整余额",
+      "reconcile": "对账",
+      "details": {
+        "type": "类型",
+        "currency": "货币",
+        "lastSync": "最近同步",
+        "lastSyncValue": "2 分钟前",
+        "linkedSince": "关联时间",
+        "linkedSinceValue": "2024 年 1 月"
+      },
+      "autoCategorize": "自动分类:开启",
+      "detailsHeaderShort": "账户详情",
+      "detailsDialog": {
+        "title": "账户详情",
+        "description": "该账户的元信息。",
+        "editButton": "编辑详情"
+      },
+      "editDialog": {
+        "title": "编辑账户",
+        "name": "名称",
+        "type": "类型",
+        "currency": "货币",
+        "currencyHint": "在账户创建时确定,无法更改。如需使用其他货币,请新建账户。",
+        "archive": "归档",
+        "updatedToast": "账户已更新"
+      },
+      "archiveDialog": {
+        "title": "归档 {name}?",
+        "description": "账户会从列表中隐藏,但其交易历史保留。无法从应用内撤销。",
+        "confirm": "归档",
+        "archivedToast": "账户已归档"
+      },
+      "adjustDialog": {
+        "title": "调整 {name}",
+        "description": "用一条调整分录直接把余额改到目标值 —— 较粗的做法。若要逐条对账单核对,请使用对账。调整不计入支出或收入。",
+        "currentBalance": "当前余额",
+        "targetBalance": "目标余额",
+        "noteOptional": "备注(可选)",
+        "notePlaceholder": "例如:漏掉的银行手续费",
+        "submit": "调整",
+        "targetError": "请输入目标余额",
+        "alreadyAtToast": "已经等于该值 —— 无需调整",
+        "adjustedToast": "余额已调整"
+      },
+      "reconcileCard": {
+        "title": "对账单核对",
+        "cancelAria": "取消对账",
+        "cancel": "取消",
+        "statementBalance": "对账单余额({currency})",
+        "asOf": "截至",
+        "cleared": "已清算",
+        "target": "目标",
+        "difference": "差额",
+        "summary": "已清算 {cleared} 笔 · 待复核 {toReview} 笔",
+        "shortBy": "差 {amount} —— 可能是漏记交易。请在下方补录,或登记一笔调整。",
+        "overBy": "多 {amount} —— 可能是漏记交易。请在下方补录,或登记一笔调整。",
+        "directionAria": "方向",
+        "expense": "支出",
+        "income": "收入",
+        "merchant": "商户",
+        "amountAria": "金额({currency})",
+        "amountPlaceholder": "金额({currency})",
+        "addButton": "添加",
+        "addCancel": "取消",
+        "addMissing": "补录漏掉的交易",
+        "postAdjustment": "登记 {amount} 的调整",
+        "doneButton": "完成",
+        "amountError": "请输入金额",
+        "merchantError": "请输入商户",
+        "addedClearedToast": "已添加并清算",
+        "statementBalanceError": "请输入对账单余额",
+        "statementDateError": "请选择对账单日期",
+        "reconciledToast": "已对账",
+        "reconciledWithAdjustmentToast": "已对账并补登调整"
+      },
+      "pending": {
+        "headerReconcile": "待处理 · {count}",
+        "subReconcile": "在对账单上吗?确认并清算",
+        "headerNormal": "待确认 · {count}",
+        "subNormal": "尚未计入余额",
+        "incomeFallback": "收入",
+        "confirmAndClearLabel": "确认并清算",
+        "confirmAndClearAria": "确认并清算 {merchant}",
+        "confirmAria": "确认 {merchant}",
+        "voidAria": "作废 {merchant}",
+        "confirmAndClearedToast": "已确认并清算",
+        "confirmedToast": "已确认 {merchant}",
+        "voidedToast": "已作废 {merchant}"
+      },
+      "allTransactions": "全部交易 · {count}",
+      "filterLabel": "筛选"
+    },
+    "groupActionsAria": "分组操作:{name}",
+    "groupActions": {
+      "rename": "重命名",
+      "delete": "删除"
+    },
+    "ungroupedLabel": "未分组",
+    "emptyGroup": "无账户",
+    "empty": {
+      "title": "{ledger} 还未关联任何账户。",
+      "description": "添加第一个账户开始跟踪余额与交易。"
+    },
+    "createDialog": {
+      "title": "新建账户",
+      "description": "添加到 {ledger}",
+      "name": "名称",
+      "type": "类型",
+      "group": "分组",
+      "currency": "货币",
+      "openingBalance": "初始余额({currency})",
+      "openingBalancePlaceholder": "0.00",
+      "cardColor": "卡片颜色",
+      "createdToast": "账户已创建"
+    },
+    "groupDialog": {
+      "newTitle": "新建分组",
+      "editTitle": "编辑分组",
+      "newDescription": "添加到 {ledger}。",
+      "editDescription": "重命名此分组。",
+      "name": "名称",
+      "createdToast": "分组已创建",
+      "updatedToast": "分组已更新"
+    },
+    "deleteGroupDialog": {
+      "title": "删除分组?",
+      "moveHint": "{count} 个账户将移至未分组。",
+      "deletedToast": "分组已删除"
+    }
+  },
+  "merchants": {
+    "title": "商户",
+    "searchAria": "搜索商户",
+    "searchPlaceholder": "搜索商户…",
+    "newAria": "新建商户",
+    "noMatches": "无匹配",
+    "unverifiedChip": "未核验",
+    "verifyButton": "核验",
+    "verifiedToast": "{name} 已核验",
+    "createDialog": {
+      "title": "新建商户",
+      "description": "用于匹配交易的标准化对手方。",
+      "name": "名称",
+      "namePlaceholder": "例如:星巴克",
+      "create": "添加",
+      "createErrorEmpty": "请输入商户名称",
+      "createdToast": "商户已添加"
+    },
+    "editDialog": {
+      "title": "编辑商户",
+      "description": "重命名此商户。",
+      "updatedToast": "商户已更新"
+    },
+    "deleteConfirm": {
+      "title": "删除 {name}?",
+      "description": "此商户将被移除;引用它的交易不会被改动。",
+      "deletedToast": "商户已删除"
+    }
+  },
+  "tags": {
+    "title": "标签",
+    "searchAria": "搜索标签",
+    "searchPlaceholder": "搜索标签…",
+    "newAria": "新建标签",
+    "emptyHint": "暂无标签 —— 点击 + 添加。",
+    "noMatches": "无匹配",
+    "colorAria": "颜色 {color}",
+    "createDialog": {
+      "title": "新建标签",
+      "description": "为 {ledger} 添加一个标签。",
+      "name": "名称",
+      "namePlaceholder": "例如:可报销",
+      "color": "颜色",
+      "createErrorEmpty": "请输入标签名称",
+      "createdToast": "标签已创建"
+    },
+    "editDialog": {
+      "title": "编辑标签",
+      "description": "更新名称或颜色。",
+      "updatedToast": "标签已更新"
+    },
+    "deleteConfirm": {
+      "title": "删除 {name}?",
+      "description": "此标签会从所有附带它的交易中移除。此操作不可撤销。",
+      "deletedToast": "标签已删除"
+    }
+  },
+  "pendingRow": {
+    "fxChip": "· 外汇",
+    "merchantLabel": "商户:",
+    "pickMerchant": "选择商户:",
+    "saveAs": "保存为:",
+    "saveAsPlaceholder": "商户名称",
+    "saveAsAria": "新商户名称",
+    "unverified": "未核验",
+    "ambiguousUnknown": "?",
+    "other": "其他…",
+    "clearOverride": "清除覆盖",
+    "cancelAria": "取消",
+    "errors": {
+      "pickOrName": "请先选择或输入商户"
+    },
+    "toasts": {
+      "confirmed": "已确认 {account} · {label}",
+      "voided": "已作废 {merchant}"
+    },
+    "confirm": {
+      "default": "确认",
+      "verify": "确认并核验",
+      "create": "确认并创建"
+    },
+    "resolutionLabel": {
+      "savedAs": "已保存为 {name}",
+      "confirmed": "已确认",
+      "linkedTo": "已关联到 {name}"
+    }
+  },
+  "pending": {
+    "title": "待处理",
+    "filterAria": "筛选",
+    "items": "项",
+    "intro": "确认后会计入报表与余额。也可取消以作废。",
+    "empty": "都处理完了 —— 没有待处理的项目。",
+    "confirmAll": "全部确认",
+    "confirmedAllToast": "已全部确认"
+  },
+  "ledgerSwitcher": {
+    "switchAria": "切换账本",
+    "settingsAria": "账本设置",
+    "header": "账本",
+    "accountsCount": "{count} 个账户",
+    "txnsCount": "{count} 笔交易",
+    "newLedger": "新建账本",
+    "newDialog": {
+      "title": "新建账本",
+      "description": "另一套独立账本。请先选择基础货币 —— 此账本下记录的每笔交易都以该货币存储。名称与颜色稍后可修改。",
+      "name": "名称",
+      "namePlaceholder": "工作室 · 副业 · 日本之旅…",
+      "base": "基础货币",
+      "color": "颜色",
+      "tagline": "标语(可选)",
+      "taglinePlaceholder": "在切换器中显示的一句话描述",
+      "create": "创建账本",
+      "creating": "创建中…",
+      "nameRequired": "名称必填",
+      "createdToast": "已创建「{name}」",
+      "createdDescription": "已切换到新账本。",
+      "createFailure": "无法创建账本"
+    }
+  },
+  "reconcileStatus": {
+    "never": "从未对账",
+    "today": "今天",
+    "yesterday": "昨天",
+    "daysAgo": "{count} 天前",
+    "reconciledTo": "已对账至 {balance} · {when}",
+    "title": "对账日期:{date}"
+  },
+  "accountForecast": {
+    "title": "预测",
+    "horizonAria": "预测时段",
+    "horizonLabel": "{days} 天",
+    "today": "今日",
+    "inDays": "{days} 天后",
+    "lowPoint": "最低点",
+    "noEvents": "未来 {days} 天无计划事件。",
+    "addTemplate": "添加<link>计划项</link>以预测未来的收支。",
+    "upcoming": "即将 · {count}",
+    "moreInHorizon": "未来 {days} 天还有 +{count}"
+  },
+  "weeklyDigest": {
+    "title": "上周",
+    "spent": "已花",
+    "vsLastWeek": "对比上周",
+    "txnsCount": "{count} 笔交易",
+    "incomeChip": "+{amount} 收入",
+    "netPositive": "+{amount} 净额",
+    "netNegative": "−{amount} 净额",
+    "vsTypical": "对比平均 {amount}",
+    "topCategories": "主要类别",
+    "biggestHit": "最大支出"
+  },
+  "badges": {
+    "refund": "退款",
+    "unusual": "异常",
+    "unusualTitle": "偏离该商户均值 {multiplier} 个标准差(约 {mean})",
+    "pending": "待处理",
+    "upcoming": "即将到期",
+    "done": "已完成"
+  },
+  "txnSheet": {
+    "title": "交易详情",
+    "description": "查看并编辑所选交易。"
+  },
+  "editTxnSheet": {
+    "title": "编辑",
+    "description": "编辑所选交易。"
+  },
+  "editTxnForm": {
+    "notFound": "未找到该交易",
+    "amount": "金额",
+    "amountAria": "金额",
+    "currency": "货币",
+    "currencyHint": "跟随所选账户",
+    "merchant": "商户",
+    "merchantAria": "选择商户",
+    "merchantPlaceholder": "选择商户",
+    "category": "类别",
+    "account": "账户",
+    "date": "日期",
+    "dateAria": "日期",
+    "time": "时间",
+    "timeAria": "时间",
+    "status": "状态",
+    "statusAria": "状态",
+    "statusPosted": "已入账",
+    "statusPending": "待处理",
+    "note": "备注",
+    "noteAria": "备注",
+    "notePlaceholder": "可选",
+    "save": "保存修改",
+    "errors": {
+      "amount": "请输入金额",
+      "account": "请选择账户",
+      "date": "请选择日期"
+    },
+    "updatedToast": "交易已更新"
+  },
+  "holdings": {
+    "headerCount": "持仓 · {count}",
+    "addButton": "添加",
+    "emptyTitle": "暂无持仓",
+    "emptySub": "登记你持有的股票、ETF 或基金,即可查看实时估值。",
+    "sharesLine": "{shares} 股 · 成本 {cost}",
+    "atPrice": " · 价 {price}({date})",
+    "noQuote": "无报价",
+    "updatePriceAria": "更新 {symbol} 价格",
+    "editAria": "编辑 {symbol}",
+    "deleteAria": "删除 {symbol}",
+    "holdingsValue": "持仓价值",
+    "unrealized": "未实现 {amount}",
+    "approxPrefix": "≈ {amount}",
+    "deleteDialog": {
+      "title": "删除 {symbol}?",
+      "description": "持仓将被永久删除。已记录的买入/卖出/分红交易不受影响。",
+      "removedToast": "已删除 {symbol}"
+    },
+    "addDialog": {
+      "title": "添加持仓",
+      "description": "在此账户下记录你持有的股票、ETF 或基金。",
+      "symbol": "代号",
+      "symbolPlaceholder": "VTI",
+      "currency": "货币",
+      "nameOptional": "名称(可选)",
+      "namePlaceholder": "Vanguard 全市场 ETF",
+      "shares": "股数",
+      "sharesPlaceholder": "50",
+      "costBasis": "成本(累计支付)",
+      "costBasisPlaceholder": "11250",
+      "priceOptional": "当前价格(可选)",
+      "pricePlaceholder": "248.50",
+      "priceDate": "价格日期",
+      "addButton": "添加",
+      "addedToast": "已添加 {symbol}",
+      "errors": {
+        "symbol": "请输入代号",
+        "sharesGt0": "股数必须大于 0",
+        "costGte0": "成本必须大于等于 0",
+        "priceGte0": "价格必须大于等于 0"
+      }
+    },
+    "editDialog": {
+      "title": "编辑 {symbol}",
+      "description": "调整股数与成本。请单独更新价格以刷新实时价值。",
+      "updatedToast": "已更新 {symbol}",
+      "updatedFallback": "持仓"
+    },
+    "priceDialog": {
+      "title": "更新 {symbol} 价格",
+      "description": "以 {currency} 计的每股价格。留空则清除报价。",
+      "price": "价格",
+      "asOf": "截至",
+      "errors": {
+        "priceGte0": "价格必须大于等于 0",
+        "validDate": "请选择有效日期"
+      },
+      "updatedToast": "价格已更新"
+    }
+  },
+  "attachments": {
+    "receipts": "票据",
+    "openAria": "打开 {name}",
+    "openFallback": "附件",
+    "attachReceiptAria": "附加票据",
+    "uploading": "上传中…",
+    "attach": "附加",
+    "attachedToast": "票据已附加",
+    "uploadError": "上传失败",
+    "fileFallback": "票据",
+    "viewer": {
+      "titleFallback": "票据 {id}",
+      "attachmentFallback": "附件 {id}",
+      "pdf": "PDF",
+      "image": "图片",
+      "nOfTotal": " · 第 {n} / {total} 张",
+      "downloadAria": "下载",
+      "deleteAria": "删除",
+      "deletePrompt": "删除该票据?",
+      "deleteAction": "删除",
+      "deletedToast": "票据已删除",
+      "prevAria": "上一张",
+      "prev": "上一张",
+      "nextAria": "下一张",
+      "next": "下一张"
+    }
+  },
+  "txnDetail": {
+    "notFound": "未找到该交易",
+    "heroLabels": {
+      "refundFrom": "退款来自",
+      "received": "你收到来自",
+      "spent": "你支出于"
+    },
+    "actions": {
+      "split": "拆分",
+      "splitCount": "拆分({count})",
+      "refund": "退款",
+      "toRefund": "转为退款",
+      "edit": "编辑",
+      "editAria": "编辑交易",
+      "delete": "删除"
+    },
+    "fx": {
+      "originalLabel": "原币 · {currency}",
+      "baseLabel": "基础 · {currency}(已锁定)",
+      "rateLocked": "汇率锁定 @ {rate} · {from}→{to} · {date}"
+    },
+    "ruleSuggestion": {
+      "prompt": "始终将 {merchant} 归类为 {category}?",
+      "createRule": "创建规则",
+      "dismissAria": "关闭"
+    },
+    "rows": {
+      "category": "类别",
+      "splitSummary": "拆分到 {count} 个类别",
+      "uncategorized": "未分类",
+      "account": "账户",
+      "refundOf": "退款对应",
+      "originalRemoved": "原交易已删除",
+      "status": "状态",
+      "pending": "待处理",
+      "posted": "已入账",
+      "note": "备注",
+      "review": "复核",
+      "reviewed": "已复核",
+      "needsReview": "待复核",
+      "reviewedToast": "已标为已复核",
+      "needsReviewToast": "已标为待复核",
+      "categoryUpdatedToast": "类别已更新"
+    },
+    "splits": {
+      "title": "拆分",
+      "uncategorized": "未分类",
+      "editorTitle": "编辑拆分",
+      "editorDescription": "将 {amount} 在各类别间分配。拆分总和必须等于交易金额。",
+      "categoryAria": "类别",
+      "amountAria": "金额",
+      "removeAria": "移除该拆分",
+      "addSplit": "添加拆分",
+      "balanceToTotal": "对齐总额",
+      "target": "目标 {amount}",
+      "short": "差 {amount}",
+      "over": "多 {amount}",
+      "balanced": "已平衡",
+      "clearSplits": "清除拆分",
+      "savedToast": "拆分已保存",
+      "saveError": "无法保存拆分",
+      "clearedToast": "拆分已清除"
+    },
+    "refundSection": {
+      "title": "退款",
+      "fullyRefunded": "已全额退款",
+      "refundedLabel": "已退款",
+      "refundedSummary": "{refunded} / {total}"
+    },
+    "refundDialog": {
+      "title": "为该购买登记退款",
+      "description": "记录从 {merchant} 返还的金额。会对冲原交易的类别,而不是计入收入。",
+      "amountLabel": "金额",
+      "amountWithCurrency": "金额 · {currency}",
+      "overWarning": "超过了原金额 {amount} —— 允许,但属异常。",
+      "category": "类别",
+      "toAccount": "目标账户",
+      "submit": "登记退款",
+      "amountError": "请输入退款金额",
+      "recordedToast": "退款已登记",
+      "refundMerchant": "退款 · {merchant}"
+    },
+    "convertDialog": {
+      "title": "转为退款",
+      "description": "将该笔 {amount} 由收入改为退款。请选择它所对冲的购买 —— 它将记入该购买的类别,而非收入。",
+      "searchAria": "搜索购买",
+      "searchPlaceholder": "按商户搜索购买…",
+      "noMatches": "无匹配购买",
+      "overWarning": "超过了原金额 {amount} —— 允许,但属异常。",
+      "submit": "转为退款",
+      "pickError": "请选择该笔对应的购买",
+      "convertedToast": "已转为退款",
+      "convertedDescription": "已关联到 {merchant}"
+    },
+    "tags": {
+      "title": "标签",
+      "addPlaceholder": "+ 标签",
+      "allApplied": "全部标签已应用",
+      "newPlaceholder": "新建标签…",
+      "create": "创建"
+    },
+    "deleteDialog": {
+      "title": "删除该交易?",
+      "description": "{merchant} · {amount} 将被永久删除。此操作不可撤销。",
+      "deletedToast": "交易已删除"
+    }
+  },
+  "add": {
+    "sheetTitle": "添加",
+    "sheetDescription": "记录一笔支出、收入或转账。",
+    "typeAria": "交易类型",
+    "types": {
+      "expense": "支出",
+      "income": "收入",
+      "transfer": "转账"
+    },
+    "recent": "最近",
+    "repeatAria": "重复 {merchant} {amount}",
+    "fields": {
+      "amount": "金额",
+      "amountAria": "金额",
+      "sent": "发出",
+      "currency": "货币",
+      "currencyHint": "跟随所选账户",
+      "merchant": "商户",
+      "merchantPlaceholder": "选择商户",
+      "merchantAria": "选择商户",
+      "category": "类别",
+      "account": "账户",
+      "from": "从",
+      "to": "到",
+      "recv": "收到 {currency}",
+      "recvAria": "收到金额",
+      "recvPlaceholder": "{currency} 金额",
+      "effectiveRate": "实际汇率:每 1 {from} = {rate} {to}",
+      "date": "日期",
+      "dateAria": "日期",
+      "note": "备注",
+      "noteAria": "备注",
+      "notePlaceholder": "可选"
+    },
+    "suggestion": {
+      "prefix": "建议:",
+      "aria": "使用建议类别 {name}"
+    },
+    "duplicateWarning": "可能重复 —— 该账户在 {date} 附近有同金额的 {merchant}。如果确为另一笔购买,请再次保存。",
+    "saveButton": {
+      "expense": "保存支出",
+      "income": "保存收入",
+      "transfer": "保存转账"
+    },
+    "errors": {
+      "amount": "请输入金额",
+      "accounts": "请选择两个账户",
+      "sameAccount": "请选择两个不同的账户",
+      "recvAmount": "请输入 {currency} 的收到金额"
+    },
+    "fallback": {
+      "income": "收入",
+      "untitled": "未命名",
+      "account": "账户"
+    },
+    "toasts": {
+      "transferCreated": "转账已创建",
+      "transferDescription": "{from} → {to} · {amount}",
+      "incomeAdded": "收入已添加",
+      "expenseAdded": "支出已添加",
+      "txnDescription": "{merchant} · {amount}"
+    }
+  },
   "settings": {
+    "ledger": {
+      "activeSection": "当前账本",
+      "switchHint": "在侧栏切换账本。",
+      "thisLedgerSection": "此账本",
+      "baseCurrency": "基础货币",
+      "baseCurrencyHint": "此账本的报告货币。更改后会按每笔交易自身日期的汇率,重新计算该账本下全部 {count} 笔交易的锁定折算金额。",
+      "baseCurrencyToast": "基础货币已改为 {currency}",
+      "baseCurrencyToastDescription": "已重新折算 {count} 笔交易。",
+      "displayCurrency": "显示货币",
+      "categoriesRow": "类别",
+      "categoriesCount": "{count} 个类别",
+      "nameAppearance": "名称与外观",
+      "editButton": "编辑",
+      "defaultLedgerRow": "默认账本",
+      "makeDefaultButton": "设为默认",
+      "defaultedToast": "{name} 已设为默认账本。",
+      "exchangeRatesSection": "汇率",
+      "dangerZoneSection": "危险操作",
+      "deleteRow": "删除此账本",
+      "deleteButton": "删除…",
+      "lastLedgerHint": "无法删除唯一的账本。请先创建另一个。",
+      "baseChangeDialog": {
+        "title": "将基础货币改为 {currency}?",
+        "description": "此账本的全部锁定 amount_base({count} 笔交易)将按每笔交易自身日期的汇率,在新的基础下重新折算。账户余额会同步重新计算。可通过切回原货币恢复。",
+        "confirm": "更改基础"
+      },
+      "editDialog": {
+        "title": "编辑账本",
+        "description": "重命名、改色或修改标语。基础货币需单独更改(它会重写所有锁定的折算金额)。",
+        "name": "名称",
+        "color": "颜色",
+        "tagline": "标语",
+        "taglinePlaceholder": "在切换器中显示的一句话描述",
+        "updatedToast": "已更新"
+      },
+      "deleteDialog": {
+        "title": "删除「{name}」?",
+        "description": "这将永久删除该账本及其全部内容:{accounts} 个账户、{txns} 笔交易,以及其所属的全部预算、计划项、规则、持仓、票据和类别。除非从备份恢复,否则无法挽回。",
+        "typeToConfirm": "输入 {name} 以确认",
+        "confirmButton": "删除账本",
+        "deletedToast": "已删除「{name}」"
+      }
+    },
     "account": {
       "title": "设置",
+      "appearance": "外观",
+      "theme": "主题",
       "language": {
         "row": "语言",
         "english": "English",
         "chinese": "中文(简体)"
+      },
+      "bottomBar": {
+        "section": "底部导航",
+        "hint": "选择并排列底部导航的四个分区。中间的添加按钮始终显示。"
+      },
+      "data": {
+        "section": "数据",
+        "sampleRow": "示例数据",
+        "resetButton": "重置",
+        "resetSuccess": "示例数据已恢复",
+        "hint": "更改保存在此设备上。重置将恢复原始示例数据。"
+      },
+      "metadata": {
+        "title": "数据库",
+        "app": "应用:",
+        "schema": "结构:",
+        "updated": "更新时间:",
+        "rows": "行数:",
+        "rowsSummary": "{txns} 条交易 · {accounts} 个账户 · {categories} 个类别"
       },
       "backup": {
         "section": "备份与恢复",
@@ -50,19 +1433,135 @@
           "noop": "未创建备份(自动备份已关闭)"
         },
         "restore": {
+          "row": "从备份恢复",
+          "noBackups": "暂无备份",
+          "pickPlaceholder": "选择备份",
           "dialogTitle": "恢复此备份?",
           "dialogDescription": "用此备份的内容替换当前数据库。当前数据库将先备份一次,以便撤销。",
-          "confirm": "恢复"
-        }
+          "dialogDescriptionDetail": "恢复 {name}({date} · {size})将替换当前数据库。当前数据库将先自动备份一次,以便撤销。",
+          "confirm": "恢复",
+          "busy": "正在恢复…",
+          "success": "备份已恢复",
+          "successDescription": "原数据已备份至 {file}",
+          "failure": "恢复失败"
+        },
+        "importDialog": {
+          "description": "将用 {name} 的内容替换当前数据库。当前数据库将先自动备份一次,以便撤销。",
+          "fileSize": "文件大小:{size}。导入前会校验文件(SQLite 头、结构版本、外键、校验和),然后才替换当前数据库。",
+          "importSuccess": "数据库已导入",
+          "importSuccessDescription": "原数据已备份至 {file}",
+          "importFailure": "导入失败"
+        },
+        "backupNowToast": {
+          "failure": "备份失败"
+        },
+        "hint": "你的数据保存在服务器上的 SQLite 文件中,每次更改都会同步。导入会替换它 — 替换前会自动保存一次当前状态的快照。"
       }
     }
+  },
+  "ui": {
+    "dialogClose": "关闭"
   },
   "common": {
     "cancel": "取消",
     "save": "保存",
     "delete": "删除",
     "edit": "编辑",
-    "create": "创建"
+    "create": "创建",
+    "add": "添加",
+    "back": "返回",
+    "done": "完成",
+    "loading": "加载中…",
+    "moreActions": "更多操作"
+  },
+  "nav": {
+    "accounts": "账户",
+    "budgets": "预算",
+    "scheduled": "计划",
+    "insights": "洞察",
+    "activity": "动态",
+    "reports": "报表",
+    "goals": "目标",
+    "add": "添加",
+    "settings": "设置",
+    "pending": "待处理",
+    "merchants": "商户",
+    "categories": "类别",
+    "tags": "标签",
+    "rules": "规则",
+    "transfers": "转账",
+    "exchangeRates": "汇率",
+    "ledgerGroup": "账本"
+  },
+  "merchantPicker": {
+    "title": "商户",
+    "description": "选择已有商户或创建新商户。",
+    "searchPlaceholder": "搜索商户…",
+    "emptyHint": "暂无商户。输入即可创建。",
+    "noMatches": "无匹配「{query}」",
+    "unverifiedChip": "未核验",
+    "createNew": "新建商户「{name}」",
+    "verifiedToast": "已核验 {name}",
+    "nameError": "请输入商户名称"
+  },
+  "exchangeRates": {
+    "summary": "{count} 种货币",
+    "updatedSuffix": " · 更新于 {date}",
+    "deleteLatestAria": "删除最新 {currency} 汇率",
+    "removedToast": "{currency} 汇率已删除",
+    "addRate": "添加汇率",
+    "manualFallback": "手动",
+    "rateError": "请输入大于 0 的汇率",
+    "setToast": "{currency} → USD 已设置",
+    "setDescription": "{date} 的 {rate}",
+    "dialog": {
+      "title": "添加汇率",
+      "description": "1 单位外币等于多少美元(以 USD 为枢纽)。用于显示折算并在新交易插入时锁定。",
+      "currency": "货币",
+      "date": "日期",
+      "rateLabel": "汇率(1 {currency} = ? USD)",
+      "source": "来源"
+    }
+  },
+  "mobileTabsEditor": {
+    "moveUpAria": "上移 {section}",
+    "moveDownAria": "下移 {section}",
+    "sectionFallback": "分区"
+  },
+  "settingsTabs": {
+    "account": "账户",
+    "ledger": "账本"
+  },
+  "themeToggle": {
+    "aria": "切换主题"
+  },
+  "shell": {
+    "brand": "Finch",
+    "search": "搜索",
+    "expandSidebar": "展开侧栏",
+    "collapseSidebar": "折叠侧栏",
+    "primaryNav": "主导航",
+    "addExpense": "添加支出",
+    "accountMenu": "账户菜单",
+    "breadcrumb": "面包屑",
+    "userLabel": "个人",
+    "goBack": "返回"
+  },
+  "palette": {
+    "title": "搜索与命令",
+    "description": "搜索交易、账户和类别,或跳转到页面。",
+    "placeholder": "搜索交易、账户、页面…",
+    "ariaLabel": "命令面板搜索",
+    "noResults": "无结果",
+    "shortcutsHint": "↑↓ 导航 · ↵ 选择 · esc 关闭",
+    "groups": {
+      "pages": "页面",
+      "transactions": "交易",
+      "merchants": "商户",
+      "categories": "类别",
+      "accounts": "账户",
+      "tags": "标签"
+    }
   },
   "error": {
     "required": {

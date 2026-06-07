@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
@@ -62,6 +63,7 @@ export function AddExpenseForm({
   onSaved?: (id: string) => void;
   className?: string;
 }) {
+  const t = useTranslations('add');
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const createTransfer = useFinanceStore((s) => s.createTransfer);
   const createCounterparty = useFinanceStore((s) => s.createCounterparty);
@@ -171,15 +173,15 @@ export function AddExpenseForm({
 
   const saveTransfer = () => {
     const value = parseFloat(amount);
-    if (!value || value <= 0) return void toast.error('Enter an amount');
-    if (!fromAccount || !toAccount) return void toast.error('Pick both accounts');
-    if (fromAccount === toAccount) return void toast.error('Pick two different accounts');
+    if (!value || value <= 0) return void toast.error(t('errors.amount'));
+    if (!fromAccount || !toAccount) return void toast.error(t('errors.accounts'));
+    if (fromAccount === toAccount) return void toast.error(t('errors.sameAccount'));
     // Cross-currency: the received amount is required so the actual bank
     // conversion is recorded rather than guessed from the mid-rate.
     let recv: number | undefined;
     if (transferIsCrossCurrency) {
       recv = parseFloat(received);
-      if (!recv || recv <= 0) return void toast.error(`Enter the amount received in ${toCurrency}`);
+      if (!recv || recv <= 0) return void toast.error(t('errors.recvAmount', { currency: toCurrency }));
     }
     // A cleared date field falls back to "now" (local).
     const when = date || localDateTimeNow();
@@ -192,9 +194,15 @@ export function AddExpenseForm({
       time: when.slice(11, 16) || undefined,
       note: note.trim() || undefined,
     });
-    const fromName = accountOptions.find((a) => a.id === fromAccount)?.name ?? 'account';
-    const toName = accountOptions.find((a) => a.id === toAccount)?.name ?? 'account';
-    toast.success('Transfer created', { description: `${fromName} → ${toName} · ${fmtNative(value, accountCurrency)}` });
+    const fromName = accountOptions.find((a) => a.id === fromAccount)?.name ?? t('fallback.account');
+    const toName = accountOptions.find((a) => a.id === toAccount)?.name ?? t('fallback.account');
+    toast.success(t('toasts.transferCreated'), {
+      description: t('toasts.transferDescription', {
+        from: fromName,
+        to: toName,
+        amount: fmtNative(value, accountCurrency),
+      }),
+    });
     onSaved?.('');
   };
 
@@ -202,7 +210,7 @@ export function AddExpenseForm({
     if (type === 'transfer') return saveTransfer();
     const value = parseFloat(amount);
     if (!value || Number.isNaN(value)) {
-      toast.error('Enter an amount');
+      toast.error(t('errors.amount'));
       return;
     }
     const signed = type === 'income' ? Math.abs(value) : -Math.abs(value);
@@ -213,8 +221,9 @@ export function AddExpenseForm({
     // Split the datetime-local value into the stored date + time columns,
     // honouring what the user picked; a cleared field falls back to "now".
     const when = date || localDateTimeNow();
+    const fallbackName = type === 'income' ? t('fallback.income') : t('fallback.untitled');
     const id = addTransaction({
-      merchant: merchant.trim() || (type === 'income' ? 'Income' : 'Untitled'),
+      merchant: merchant.trim() || fallbackName,
       category,
       amount: baseAmount,
       currency: accountCurrency,
@@ -226,8 +235,11 @@ export function AddExpenseForm({
       pending: false,
       ledgerId: activeId,
     });
-    toast.success(type === 'income' ? 'Income added' : 'Expense added', {
-      description: `${merchant.trim() || (type === 'income' ? 'Income' : 'Untitled')} · ${fmtNative(Math.abs(value), accountCurrency)}`,
+    toast.success(type === 'income' ? t('toasts.incomeAdded') : t('toasts.expenseAdded'), {
+      description: t('toasts.txnDescription', {
+        merchant: merchant.trim() || fallbackName,
+        amount: fmtNative(Math.abs(value), accountCurrency),
+      }),
     });
     onSaved?.(id);
   };
@@ -235,17 +247,17 @@ export function AddExpenseForm({
   return (
     <div className={cn('flex flex-col gap-3.5 px-5 pt-4 pb-8', className)}>
       <div className="flex justify-center pt-5">
-        <div role="tablist" aria-label="Transaction type" className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
-          {(['expense', 'income', 'transfer'] as const).map((t) => (
+        <div role="tablist" aria-label={t('typeAria')} className="bg-secondary inline-flex rounded-full p-0.5 text-xs">
+          {(['expense', 'income', 'transfer'] as const).map((tv) => (
             <button
-              key={t}
+              key={tv}
               type="button"
               role="tab"
-              aria-selected={type === t}
-              onClick={() => setType(t)}
-              className={cn('rounded-full px-4 py-1.5 capitalize transition-colors', type === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
+              aria-selected={type === tv}
+              onClick={() => setType(tv)}
+              className={cn('rounded-full px-4 py-1.5 transition-colors', type === tv ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
             >
-              {t}
+              {t(`types.${tv}`)}
             </button>
           ))}
         </div>
@@ -253,14 +265,14 @@ export function AddExpenseForm({
 
       {recents.length > 0 && (
         <div className="-mx-5 px-5">
-          <div className="text-muted-foreground mb-1.5 font-mono text-[10px] tracking-[1.5px]">RECENT</div>
+          <div className="text-muted-foreground mb-1.5 font-mono text-[10px] tracking-[1.5px]">{t('recent')}</div>
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {recents.map((r, i) => (
               <button
                 key={`${r.merchant}-${r.amount}-${i}`}
                 type="button"
                 onClick={() => applyRecent(r)}
-                aria-label={`Repeat ${r.merchant} ${fmtNative(r.amount, r.currency)}`}
+                aria-label={t('repeatAria', { merchant: r.merchant, amount: fmtNative(r.amount, r.currency) })}
                 className="bg-secondary text-secondary-foreground hover:bg-secondary/80 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] transition-colors"
               >
                 <span className="truncate max-w-[14ch]">{r.merchant}</span>
@@ -271,14 +283,14 @@ export function AddExpenseForm({
         </div>
       )}
       <div>
-        <Field icon="banknote" label={type === 'transfer' ? 'Sent' : 'Amount'}>
+        <Field icon="banknote" label={type === 'transfer' ? t('fields.sent') : t('fields.amount')}>
           <div className="flex items-baseline gap-1">
             <span className="text-muted-foreground text-[15px]">{currencySym}</span>
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
               inputMode="decimal"
-              aria-label="Amount" placeholder="0"
+              aria-label={t('fields.amountAria')} placeholder="0"
               autoFocus
               className="placeholder:text-muted-foreground w-24 bg-transparent text-right text-[15px] outline-none"
             />
@@ -286,7 +298,7 @@ export function AddExpenseForm({
         </Field>
         {type === 'transfer' ? (
           <>
-            <Field icon="wallet" label="From">
+            <Field icon="wallet" label={t('fields.from')}>
               <Select value={fromAccount} onValueChange={setFromAccount}>
                 <SelectTrigger size="sm" className="border-0 shadow-none">
                   <SelectValue />
@@ -300,7 +312,7 @@ export function AddExpenseForm({
                 </SelectContent>
               </Select>
             </Field>
-            <Field icon="arrow-r" label="To">
+            <Field icon="arrow-r" label={t('fields.to')}>
               <Select value={toAccount} onValueChange={setToAccount}>
                 <SelectTrigger size="sm" className="border-0 shadow-none">
                   <SelectValue />
@@ -316,13 +328,13 @@ export function AddExpenseForm({
             </Field>
             {transferIsCrossCurrency && (
               <>
-                <Field icon="coins" label={`Recv ${toCurrency}`}>
+                <Field icon="coins" label={t('fields.recv', { currency: toCurrency })}>
                   <input
                     value={received}
                     onChange={(e) => setReceived(e.target.value.replace(/[^0-9.]/g, ''))}
                     inputMode="decimal"
-                    aria-label="Received amount"
-                    placeholder={`amount in ${toCurrency}`}
+                    aria-label={t('fields.recvAria')}
+                    placeholder={t('fields.recvPlaceholder', { currency: toCurrency })}
                     className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
                   />
                 </Field>
@@ -332,7 +344,7 @@ export function AddExpenseForm({
                   if (!sent || !got) return null;
                   return (
                     <div className="text-muted-foreground px-5 py-2 text-right text-[11px]">
-                      Effective rate: {(got / sent).toFixed(6)} {toCurrency} per {accountCurrency}
+                      {t('fields.effectiveRate', { rate: (got / sent).toFixed(6), to: toCurrency, from: accountCurrency })}
                     </div>
                   );
                 })()}
@@ -341,10 +353,10 @@ export function AddExpenseForm({
           </>
         ) : (
           <>
-            <Field icon="coins" label="Currency">
-              <span className="text-muted-foreground text-[15px]" title="Follows the selected account">{accountCurrency}</span>
+            <Field icon="coins" label={t('fields.currency')}>
+              <span className="text-muted-foreground text-[15px]" title={t('fields.currencyHint')}>{accountCurrency}</span>
             </Field>
-            <Field icon="tag" label="Merchant">
+            <Field icon="tag" label={t('fields.merchant')}>
               <button
                 type="button"
                 onClick={() =>
@@ -358,15 +370,15 @@ export function AddExpenseForm({
                   })
                 }
                 className="flex w-full items-center justify-end gap-1.5 text-right text-[15px] outline-none"
-                aria-label="Select merchant"
+                aria-label={t('fields.merchantAria')}
               >
                 <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
-                  {merchant || 'Pick a merchant'}
+                  {merchant || t('fields.merchantPlaceholder')}
                 </span>
                 <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
               </button>
             </Field>
-            <Field icon="fork" label="Category">
+            <Field icon="fork" label={t('fields.category')}>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger size="sm" className="border-0 shadow-none">
                   <SelectValue />
@@ -386,15 +398,15 @@ export function AddExpenseForm({
                   type="button"
                   onClick={() => setCategory(suggestion.categoryId)}
                   className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors"
-                  aria-label={`Use suggested category ${suggestedName}`}
+                  aria-label={t('suggestion.aria', { name: suggestedName })}
                 >
                   <Icon name="sync" size={10} />
-                  <span>Suggested: <span className="font-medium">{suggestedName}</span></span>
+                  <span>{t('suggestion.prefix')} <span className="font-medium">{suggestedName}</span></span>
                   <span className="text-muted-foreground">· {suggestion.count}×</span>
                 </button>
               </div>
             )}
-            <Field icon="wallet" label="Account">
+            <Field icon="wallet" label={t('fields.account')}>
               <Select value={account} onValueChange={setAccount}>
                 <SelectTrigger size="sm" className="border-0 shadow-none">
                   <SelectValue />
@@ -410,19 +422,19 @@ export function AddExpenseForm({
             </Field>
           </>
         )}
-        <Field icon="calendar" label="Date">
+        <Field icon="calendar" label={t('fields.date')}>
           <input
-            type="datetime-local" aria-label="Date"
+            type="datetime-local" aria-label={t('fields.dateAria')}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
-        <Field icon="edit" label="Note">
+        <Field icon="edit" label={t('fields.note')}>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            aria-label="Note" placeholder="Optional"
+            aria-label={t('fields.noteAria')} placeholder={t('fields.notePlaceholder')}
             className="placeholder:text-muted-foreground w-full bg-transparent text-right text-[15px] outline-none"
           />
         </Field>
@@ -435,8 +447,7 @@ export function AddExpenseForm({
         >
           <Icon name="bell" size={14} className="text-warning mt-0.5 shrink-0" />
           <span>
-            Possible duplicate — <span className="font-medium">{duplicate.merchant}</span> for the same
-            amount on this account around {duplicate.date.slice(0, 10)}. Save again only if it’s a separate purchase.
+            {t('duplicateWarning', { merchant: duplicate.merchant, date: duplicate.date.slice(0, 10) })}
           </span>
         </div>
       )}
@@ -446,7 +457,7 @@ export function AddExpenseForm({
         onClick={save}
         className="bg-foreground text-background mt-2 flex h-[54px] cursor-pointer items-center justify-center rounded-[27px] text-base font-medium -tracking-[0.2px]"
       >
-        {type === 'transfer' ? 'Save transfer' : type === 'income' ? 'Save income' : 'Save expense'}
+        {type === 'transfer' ? t('saveButton.transfer') : type === 'income' ? t('saveButton.income') : t('saveButton.expense')}
       </button>
     </div>
   );

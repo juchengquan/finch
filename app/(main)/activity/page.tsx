@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Money, Icon, CatBar } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -21,13 +22,9 @@ import { EmptyState } from '@/components/empty-state';
 import { merchantStats, anomalyScore } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
-const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'out', label: 'Out' },
-  { id: 'in', label: 'In' },
-] as const;
+const FILTER_IDS = ['all', 'out', 'in'] as const;
 
-type Filter = (typeof FILTERS)[number]['id'];
+type Filter = (typeof FILTER_IDS)[number];
 
 function dayLabel(date: string) {
   return new Date(`${date}T00:00`).toLocaleDateString('en-US', {
@@ -51,6 +48,8 @@ export default function ActivityPage() {
   // Review-triage filter: when on, the list narrows to unreviewed confirmed
   // rows so Activity becomes a "what still needs a look" queue.
   const [reviewOnly, setReviewOnly] = useState(false);
+  const t = useTranslations('activity');
+  const tCommon = useTranslations('common');
   const allTxns = useFinanceStore((s) => s.transactions);
   const allTags = useFinanceStore((s) => s.tags);
   const allCategories = useFinanceStore((s) => s.categories);
@@ -84,7 +83,7 @@ export default function ActivityPage() {
     if (!ids.length) return;
     bulkRecategorize(ids, categoryId);
     const cat = ledgerCategories.find((c) => c.id === categoryId);
-    toast.success(`Set category to ${cat?.name ?? 'Uncategorized'} on ${ids.length} ${ids.length === 1 ? 'transaction' : 'transactions'}`);
+    toast.success(t('selectMode.appliedToast', { category: cat?.name ?? t('row.uncategorized'), count: ids.length }));
     exitSelectMode();
   };
   // Per-merchant stats for the anomaly badge. One pass over the transaction
@@ -156,7 +155,7 @@ export default function ActivityPage() {
       minAmount: minA != null && Number.isFinite(minA) ? minA : null,
       maxAmount: maxA != null && Number.isFinite(maxA) ? maxA : null,
     });
-    toast.success(`Saved “${name}”`);
+    toast.success(t('saveDialog.savedToast', { name }));
     setSaveName('');
     setSaveOpen(false);
   };
@@ -181,7 +180,7 @@ export default function ActivityPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Activity" trailing={<SearchButton />} />}
+      header={<ScreenHeader title={t('title')} trailing={<SearchButton />} />}
     >
       <div className="px-5 pb-[120px]">
         <div className="bg-secondary mb-3 flex h-9 items-center gap-2 rounded-full px-3.5">
@@ -189,31 +188,31 @@ export default function ActivityPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search transactions" placeholder="Search transactions"
+            aria-label={t('searchAria')} placeholder={t('searchPlaceholder')}
             className="placeholder:text-muted-foreground focus-ring w-full bg-transparent text-[13px] outline-none"
           />
         </div>
 
         <div className="mb-4 flex items-center gap-2">
           <div className="bg-secondary flex flex-1 gap-1 rounded-full p-1">
-            {FILTERS.map((f) => (
+            {FILTER_IDS.map((f) => (
               <button
-                key={f.id}
+                key={f}
                 type="button"
-                onClick={() => setFilter(f.id)}
+                onClick={() => setFilter(f)}
                 className={cn(
                   'h-7 flex-1 rounded-full text-xs font-medium transition-colors',
-                  filter === f.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+                  filter === f ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
                 )}
               >
-                {f.label}
+                {t(`filters.${f}`)}
               </button>
             ))}
           </div>
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
-            aria-label="Toggle filters"
+            aria-label={t('toggleFilters')}
             aria-expanded={filtersOpen}
             className={cn(
               'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
@@ -221,23 +220,23 @@ export default function ActivityPage() {
             )}
           >
             <Icon name="filter" size={13} />
-            Filters{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
+            {t('filtersLabel')}{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
           </button>
           {hasActiveFilters && !selectMode && (
             <button
               type="button"
               onClick={() => setSaveOpen(true)}
-              aria-label="Save current filters as a search"
+              aria-label={t('saveSearchAria')}
               className="border-border text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium"
             >
               <Icon name="bookmark" size={13} />
-              Save
+              {t('saveSearch')}
             </button>
           )}
           <button
             type="button"
             onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-            aria-label={selectMode ? 'Exit select mode' : 'Select transactions to recategorize'}
+            aria-label={selectMode ? t('selectMode.exitAria') : t('selectMode.enterAria')}
             aria-pressed={selectMode}
             className={cn(
               'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
@@ -245,12 +244,12 @@ export default function ActivityPage() {
             )}
           >
             <Icon name={selectMode ? 'x' : 'check'} size={13} />
-            {selectMode ? 'Cancel' : 'Select'}
+            {selectMode ? t('selectMode.exit') : t('selectMode.enter')}
           </button>
           <button
             type="button"
             onClick={() => setReviewOnly((v) => !v)}
-            aria-label="Show only transactions that need review"
+            aria-label={t('reviewToggleAria')}
             aria-pressed={reviewOnly}
             className={cn(
               'border-border flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium',
@@ -258,31 +257,31 @@ export default function ActivityPage() {
             )}
           >
             <Icon name="doc" size={13} />
-            Needs review{unreviewedCount > 0 ? ` · ${unreviewedCount}` : ''}
+            {t('reviewToggle')}{unreviewedCount > 0 ? ` · ${unreviewedCount}` : ''}
           </button>
         </div>
 
         {reviewOnly && unreviewedCount > 0 && (
           <div className="mb-4 flex items-center justify-between gap-2">
             <span className="text-muted-foreground text-[11px]">
-              {unreviewedCount} transaction{unreviewedCount === 1 ? '' : 's'} to review
+              {t('reviewCount', { count: unreviewedCount })}
             </span>
             <button
               type="button"
               onClick={() => {
                 markAllReviewed(activeId);
-                toast.success(`Marked ${unreviewedCount} reviewed`);
+                toast.success(t('markedReviewedToast', { count: unreviewedCount }));
               }}
               className="text-primary text-[11px] font-medium underline-offset-2 hover:underline"
             >
-              Mark all reviewed
+              {t('markAllReviewed')}
             </button>
           </div>
         )}
         {reviewOnly && unreviewedCount === 0 && (
           <div className="text-muted-foreground mb-4 flex items-center gap-1.5 text-[12px]">
             <Icon name="check" size={13} className="text-success" />
-            All caught up — nothing to review.
+            {t('reviewEmpty')}
           </div>
         )}
 
@@ -304,7 +303,7 @@ export default function ActivityPage() {
                 <button
                   type="button"
                   onClick={() => deleteSavedSearch(s.id)}
-                  aria-label={`Delete saved search ${s.name}`}
+                  aria-label={t('deleteSavedSearchAria', { name: s.name })}
                   className="hover:text-foreground text-muted-foreground flex size-4 items-center justify-center rounded-full"
                 >
                   <Icon name="x" size={11} />
@@ -318,17 +317,17 @@ export default function ActivityPage() {
           <div className="bg-card border-border mb-4 flex flex-col gap-3 rounded-xl border p-3.5">
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-from" className="text-muted-foreground text-[11px]">From</Label>
+                <Label htmlFor="filter-from" className="text-muted-foreground text-[11px]">{t('filterPanel.from')}</Label>
                 <Input id="filter-from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-8 text-[12px]" />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-to" className="text-muted-foreground text-[11px]">To</Label>
+                <Label htmlFor="filter-to" className="text-muted-foreground text-[11px]">{t('filterPanel.to')}</Label>
                 <Input id="filter-to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-8 text-[12px]" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-min" className="text-muted-foreground text-[11px]">Min amount</Label>
+                <Label htmlFor="filter-min" className="text-muted-foreground text-[11px]">{t('filterPanel.minAmount')}</Label>
                 <Input
                   id="filter-min"
                   type="number"
@@ -341,7 +340,7 @@ export default function ActivityPage() {
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="filter-max" className="text-muted-foreground text-[11px]">Max amount</Label>
+                <Label htmlFor="filter-max" className="text-muted-foreground text-[11px]">{t('filterPanel.maxAmount')}</Label>
                 <Input
                   id="filter-max"
                   type="number"
@@ -357,7 +356,7 @@ export default function ActivityPage() {
             {activeRangeCount > 0 && (
               <div className="flex justify-end">
                 <Button size="sm" variant="ghost" onClick={clearRangeFilters}>
-                  Clear
+                  {t('filterPanel.clear')}
                 </Button>
               </div>
             )}
@@ -366,19 +365,19 @@ export default function ActivityPage() {
 
         {ledgerTags.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-1.5">
-            {ledgerTags.map((t) => (
+            {ledgerTags.map((tg) => (
               <button
-                key={t.id}
+                key={tg.id}
                 type="button"
-                onClick={() => setTagFilter((prev) => (prev === t.id ? null : t.id))}
+                onClick={() => setTagFilter((prev) => (prev === tg.id ? null : tg.id))}
                 className={cn(
                   'rounded-lg px-2.5 py-1 text-[11px] transition-colors',
-                  tagFilter === t.id
+                  tagFilter === tg.id
                     ? 'bg-foreground text-background'
                     : 'bg-secondary text-secondary-foreground',
                 )}
               >
-                {t.name}
+                {tg.name}
               </button>
             ))}
           </div>
@@ -387,11 +386,11 @@ export default function ActivityPage() {
         {txns.length === 0 && (
           <EmptyState
             icon="search"
-            title="No transactions"
+            title={t('empty.title')}
             description={
               query || tagFilter || activeRangeCount > 0
-                ? 'Nothing matches the current filters. Clear them to see all rows.'
-                : 'Add an expense to get started — it’ll show up here.'
+                ? t('empty.filteredDescription')
+                : t('empty.freshDescription')
             }
           />
         )}
@@ -404,15 +403,15 @@ export default function ActivityPage() {
                 {dayLabel(group.date)}
               </div>
               <div className="bg-card border-border overflow-hidden rounded-xl border">
-                {group.items.map((t, i) => {
-                  const cat = catById(t.category);
-                  const inc = t.amount > 0;
-                  const selected = selectedIds.has(t.id);
+                {group.items.map((tx, i) => {
+                  const cat = catById(tx.category);
+                  const inc = tx.amount > 0;
+                  const selected = selectedIds.has(tx.id);
                   return (
                     <button
-                      key={t.id}
+                      key={tx.id}
                       type="button"
-                      onClick={() => (selectMode ? toggleSelected(t.id) : openTransaction(t.id))}
+                      onClick={() => (selectMode ? toggleSelected(tx.id) : openTransaction(tx.id))}
                       aria-pressed={selectMode ? selected : undefined}
                       className={cn(
                         'flex w-full items-center gap-3 p-3.5 text-left',
@@ -435,27 +434,27 @@ export default function ActivityPage() {
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          {!selectMode && !t.pending && !t.reviewedAt && (
+                          {!selectMode && !tx.pending && !tx.reviewedAt && (
                             <span
                               className="bg-primary/70 size-1.5 shrink-0 rounded-full"
-                              aria-label="Needs review"
-                              title="Needs review"
+                              aria-label={t('row.needsReview')}
+                              title={t('row.needsReview')}
                             />
                           )}
-                          <span className="truncate text-sm font-medium">{t.merchant}</span>
-                          {t.kind === 'refund' && <RefundBadge />}
+                          <span className="truncate text-sm font-medium">{tx.merchant}</span>
+                          {tx.kind === 'refund' && <RefundBadge />}
                           {(() => {
-                            const a = anomalyScore(t, stats);
+                            const a = anomalyScore(tx, stats);
                             return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
                           })()}
                         </div>
                         <div className="text-muted-foreground mt-0.5 truncate text-[11px]">
-                          {cat.name} · {acctById(t.account).name}
-                          {t.pending && <span className="text-warning"> · pending</span>}
+                          {cat.name} · {acctById(tx.account).name}
+                          {tx.pending && <span className="text-warning"> · {t('row.pending')}</span>}
                         </div>
                       </div>
                       <Money
-                        value={t.amount}
+                        value={tx.amount}
                         signed={inc}
                         className={cn('text-sm font-medium', inc ? 'text-success' : 'text-foreground')}
                       />
@@ -473,23 +472,23 @@ export default function ActivityPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-muted-foreground border-border border-b text-left text-[11px] tracking-wide uppercase">
-                  <th className="px-4 py-2.5 font-medium">Date</th>
-                  <th className="px-4 py-2.5 font-medium">Merchant</th>
-                  <th className="px-4 py-2.5 font-medium">Category</th>
-                  <th className="px-4 py-2.5 font-medium">Account</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Amount</th>
+                  <th className="px-4 py-2.5 font-medium">{t('table.date')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('table.merchant')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('table.category')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('table.account')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('table.status')}</th>
+                  <th className="px-4 py-2.5 text-right font-medium">{t('table.amount')}</th>
                 </tr>
               </thead>
               <tbody>
-                {txns.map((t) => {
-                  const cat = catById(t.category);
-                  const inc = t.amount > 0;
-                  const selected = selectedIds.has(t.id);
+                {txns.map((tx) => {
+                  const cat = catById(tx.category);
+                  const inc = tx.amount > 0;
+                  const selected = selectedIds.has(tx.id);
                   return (
                     <tr
-                      key={t.id}
-                      onClick={() => (selectMode ? toggleSelected(t.id) : openTransaction(t.id))}
+                      key={tx.id}
+                      onClick={() => (selectMode ? toggleSelected(tx.id) : openTransaction(tx.id))}
                       aria-pressed={selectMode ? selected : undefined}
                       className={cn(
                         'border-border hover:bg-secondary/40 cursor-pointer border-t first:border-t-0',
@@ -497,7 +496,7 @@ export default function ActivityPage() {
                       )}
                     >
                       <td className="text-muted-foreground px-4 py-2.5 font-mono text-xs whitespace-nowrap">
-                        {t.date.replace(/-/g, '/')}{t.time ? ' ' + t.time.slice(0, 5) : ''}
+                        {tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2.5">
@@ -514,25 +513,25 @@ export default function ActivityPage() {
                           ) : (
                             <CatBar color={cat.color} className="h-4" />
                           )}
-                          {t.merchant}
-                          {t.kind === 'refund' && <RefundBadge />}
+                          {tx.merchant}
+                          {tx.kind === 'refund' && <RefundBadge />}
                           {(() => {
-                            const a = anomalyScore(t, stats);
+                            const a = anomalyScore(tx, stats);
                             return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
                           })()}
                         </div>
                       </td>
                       <td className="text-muted-foreground px-4 py-2.5">{cat.name}</td>
-                      <td className="text-muted-foreground px-4 py-2.5">{acctById(t.account).name}</td>
+                      <td className="text-muted-foreground px-4 py-2.5">{acctById(tx.account).name}</td>
                       <td className="px-4 py-2.5 text-xs">
-                        {t.pending ? (
-                          <span className="text-warning">Pending</span>
+                        {tx.pending ? (
+                          <span className="text-warning">{t('table.pending')}</span>
                         ) : (
-                          <span className="text-muted-foreground">Posted</span>
+                          <span className="text-muted-foreground">{t('table.posted')}</span>
                         )}
                       </td>
                       <td className={cn('px-4 py-2.5 text-right font-mono', inc ? 'text-success' : 'text-foreground')}>
-                        <Money value={t.amount} signed={inc} />
+                        <Money value={tx.amount} signed={inc} />
                       </td>
                     </tr>
                   );
@@ -546,19 +545,19 @@ export default function ActivityPage() {
       {selectMode && (
         <div
           role="region"
-          aria-label="Bulk recategorize"
+          aria-label={t('selectMode.regionAria')}
           className="bg-card border-border fixed inset-x-3 bottom-[88px] z-30 flex items-center gap-2 rounded-2xl border p-2.5 shadow-lg md:right-6 md:bottom-6 md:left-auto md:max-w-md"
         >
           <span className="font-mono text-[11px] font-medium">
-            {selectedIds.size} selected
+            {t('selectMode.selectedCount', { count: selectedIds.size })}
           </span>
           {selectedIds.size < txns.length && (
             <button
               type="button"
-              onClick={() => setSelectedIds(new Set(txns.map((t) => t.id)))}
+              onClick={() => setSelectedIds(new Set(txns.map((tx) => tx.id)))}
               className="text-primary text-[11px] underline-offset-2 hover:underline"
             >
-              Select all {txns.length}
+              {t('selectMode.selectAll', { total: txns.length })}
             </button>
           )}
           <div className="flex-1" />
@@ -568,7 +567,7 @@ export default function ActivityPage() {
             disabled={selectedIds.size === 0}
           >
             <SelectTrigger size="sm" className="w-[150px]">
-              <SelectValue placeholder="Recategorize…" />
+              <SelectValue placeholder={t('selectMode.recategorizePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
               {ledgerCategories.map((c) => (
@@ -584,10 +583,10 @@ export default function ActivityPage() {
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Save search</DialogTitle>
+            <DialogTitle>{t('saveDialog.title')}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="saved-search-name" className="text-muted-foreground text-[11px]">Name</Label>
+            <Label htmlFor="saved-search-name" className="text-muted-foreground text-[11px]">{t('saveDialog.name')}</Label>
             <Input
               id="saved-search-name"
               autoFocus
@@ -596,15 +595,15 @@ export default function ActivityPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') confirmSaveSearch();
               }}
-              placeholder="e.g. Subscriptions > $20"
+              placeholder={t('saveDialog.namePlaceholder')}
             />
             <p className="text-muted-foreground text-[11px]">
-              Pinned on this device only — saved searches aren’t stored in your ledger or included in exports.
+              {t('saveDialog.hint')}
             </p>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setSaveOpen(false)}>Cancel</Button>
-            <Button onClick={confirmSaveSearch} disabled={!saveName.trim()}>Save</Button>
+            <Button variant="ghost" onClick={() => setSaveOpen(false)}>{tCommon('cancel')}</Button>
+            <Button onClick={confirmSaveSearch} disabled={!saveName.trim()}>{tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

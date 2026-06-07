@@ -8,6 +8,7 @@
 // back through the existing optimistic-update + re-projection pattern.
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ export function EditTransactionSheetProvider({ children }: { children: React.Rea
   // different id remounts the form with fresh state).
   const [open, setOpen] = useState(false);
   const [txId, setTxId] = useState<string | null>(null);
+  const t = useTranslations('editTxnSheet');
 
   const openEditTransaction = useCallback((id: string) => {
     setTxId(id);
@@ -52,10 +54,8 @@ export function EditTransactionSheetProvider({ children }: { children: React.Rea
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="border-border border-b px-5 py-4">
-            <DialogTitle className="font-serif text-xl italic">Edit</DialogTitle>
-            <DialogDescription className="sr-only">
-              Edit the selected transaction.
-            </DialogDescription>
+            <DialogTitle className="font-serif text-xl italic">{t('title')}</DialogTitle>
+            <DialogDescription className="sr-only">{t('description')}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* Only mount while open so each open starts from the row's current

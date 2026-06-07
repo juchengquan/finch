@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ const colorFor = (id: string, name: string): string => {
 
 function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border: boolean; onEdit: () => void; onDelete: () => void }) {
   const verifyCounterparty = useFinanceStore((s) => s.verifyCounterparty);
+  const t = useTranslations('merchants');
 
   return (
     <div className={cn('flex items-start gap-3 py-3.5', border && 'border-border border-t')}>
@@ -50,7 +52,7 @@ function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border:
             <div className="text-sm font-medium">{c.name}</div>
             {!c.verified && (
               <span className="border-warning/40 text-warning rounded border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px]">
-                UNVERIFIED
+                {t('unverifiedChip')}
               </span>
             )}
           </div>
@@ -59,8 +61,8 @@ function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border:
             <RowActions
               onEdit={onEdit}
               onDelete={onDelete}
-              confirmTitle={`Delete ${c.name}?`}
-              confirmDescription="The merchant is removed; transactions that referenced it are left untouched."
+              confirmTitle={t('deleteConfirm.title', { name: c.name })}
+              confirmDescription={t('deleteConfirm.description')}
             />
           </div>
         </div>
@@ -71,11 +73,11 @@ function MerchantRow({ c, border, onEdit, onDelete }: { c: MerchantData; border:
             className="mt-2 h-7"
             onClick={() => {
               verifyCounterparty(c.id);
-              toast.success(`${c.name} verified`);
+              toast.success(t('verifiedToast', { name: c.name }));
             }}
           >
             <Icon name="check" size={12} />
-            Verify
+            {t('verifyButton')}
           </Button>
         )}
       </div>
@@ -89,6 +91,8 @@ export default function MerchantsPage() {
   const updateCounterparty = useFinanceStore((s) => s.updateCounterparty);
   const deleteCounterparty = useFinanceStore((s) => s.deleteCounterparty);
   const [query, setQuery] = useState('');
+  const t = useTranslations('merchants');
+  const tCommon = useTranslations('common');
 
   // Drive the list off the projected counterparties; fall back to the static
   // seed only until the store hydrates so the first paint isn't empty.
@@ -104,9 +108,9 @@ export default function MerchantsPage() {
   const [newName, setNewName] = useState('');
   const submitCreate = () => {
     const name = newName.trim();
-    if (!name) return void toast.error('Enter a merchant name');
+    if (!name) return void toast.error(t('createDialog.createErrorEmpty'));
     createCounterparty({ name, ledgerId: CP_LEDGER });
-    toast.success('Merchant added', { description: name });
+    toast.success(t('createDialog.createdToast'), { description: name });
     setNewName('');
     setCreateOpen(false);
   };
@@ -115,15 +119,15 @@ export default function MerchantsPage() {
   const submitEdit = () => {
     if (!editing) return;
     const name = editing.name.trim();
-    if (!name) return void toast.error('Enter a merchant name');
+    if (!name) return void toast.error(t('createDialog.createErrorEmpty'));
     updateCounterparty(editing.id, { name });
-    toast.success('Merchant updated', { description: name });
+    toast.success(t('editDialog.updatedToast'), { description: name });
     setEditing(null);
   };
 
   return (
     <MobilePage
-      header={<ScreenHeader title="Merchants" />}
+      header={<ScreenHeader title={t('title')} />}
     >
       <div className="px-5 pb-[120px] md:pb-5">
         {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
@@ -133,7 +137,7 @@ export default function MerchantsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search merchants" placeholder="Search merchants…"
+              aria-label={t('searchAria')} placeholder={t('searchPlaceholder')}
               className="placeholder:text-muted-foreground focus-ring w-full bg-transparent outline-none"
             />
           </div>
@@ -141,8 +145,8 @@ export default function MerchantsPage() {
             onClick={() => setCreateOpen(true)}
             size="icon"
             className="rounded-full"
-            aria-label="New merchant"
-            title="New merchant"
+            aria-label={t('newAria')}
+            title={t('newAria')}
           >
             <Icon name="plus" size={16} stroke={2} />
           </Button>
@@ -158,11 +162,11 @@ export default function MerchantsPage() {
               c={c}
               border={i > 0}
               onEdit={() => setEditing({ id: c.id, name: c.name })}
-              onDelete={() => { deleteCounterparty(c.id); toast.success('Merchant deleted', { description: c.name }); }}
+              onDelete={() => { deleteCounterparty(c.id); toast.success(t('deleteConfirm.deletedToast'), { description: c.name }); }}
             />
           ))}
           {list.length === 0 && (
-            <div className="text-muted-foreground py-8 text-center text-sm">No matches</div>
+            <div className="text-muted-foreground py-8 text-center text-sm">{t('noMatches')}</div>
           )}
         </div>
       </div>
@@ -170,20 +174,20 @@ export default function MerchantsPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New merchant</DialogTitle>
-            <DialogDescription>A standardised counterparty for matching transactions.</DialogDescription>
+            <DialogTitle>{t('createDialog.title')}</DialogTitle>
+            <DialogDescription>{t('createDialog.description')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
-              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Starbucks" autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
+              <Label>{t('createDialog.name')}</Label>
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('createDialog.namePlaceholder')} autoFocus onKeyDown={(e) => e.key === 'Enter' && submitCreate()} />
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitCreate}>Add</Button>
+            <Button onClick={submitCreate}>{t('createDialog.create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -191,22 +195,22 @@ export default function MerchantsPage() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit merchant</DialogTitle>
-            <DialogDescription>Rename this merchant.</DialogDescription>
+            <DialogTitle>{t('editDialog.title')}</DialogTitle>
+            <DialogDescription>{t('editDialog.description')}</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Name</Label>
+                <Label>{t('createDialog.name')}</Label>
                 <Input value={editing.name} onChange={(e) => setEditing((p) => (p ? { ...p, name: e.target.value } : p))} autoFocus />
               </div>
             </div>
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitEdit}>Save</Button>
+            <Button onClick={submitEdit}>{tCommon('save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

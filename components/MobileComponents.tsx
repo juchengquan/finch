@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Icon } from './primitives';
 import { SearchButton } from './command-palette';
 import { Badge } from '@/components/ui/badge';
@@ -9,10 +10,11 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export function ProfileChip({ className }: { className?: string }) {
+  const tNav = useTranslations('nav');
   return (
     <Link
       href="/settings"
-      aria-label="Settings"
+      aria-label={tNav('settings')}
       className={cn(
         'bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-full font-serif text-base italic',
         className,
@@ -34,6 +36,7 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({ title, back = false, backHref, leading, trailing }: ScreenHeaderProps) {
   const router = useRouter();
+  const tShell = useTranslations('shell');
   return (
     <>
       {/* Locked to the top of the viewport (mobile only), like the bottom tab
@@ -49,7 +52,7 @@ export function ScreenHeader({ title, back = false, backHref, leading, trailing 
                   variant="outline"
                   size="icon"
                   className="size-11"
-                  aria-label="Go back"
+                  aria-label={tShell('goBack')}
                   onClick={() => (backHref ? router.push(backHref) : router.back())}
                 >
                   <Icon name="chev-l" size={18} />

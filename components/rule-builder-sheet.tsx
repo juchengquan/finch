@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { applyRules, evaluateCondition } from '@/lib/rules/engine';
 import { describeCondition, describeActions } from '@/lib/rules/describe';
+import { useDescribeDict } from '@/lib/rules/use-describe-dict';
 import { cn } from '@/lib/utils';
 import { categoryPath } from '@/lib/db/queries/categories';
 import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
@@ -34,40 +36,34 @@ interface Draft {
   actions: Action[];
 }
 
-const KIND_OPTIONS: { value: TxKind; label: string }[] = [
-  { value: 'expense', label: 'Expense' },
-  { value: 'income', label: 'Income' },
-  { value: 'transfer', label: 'Transfer' },
-  { value: 'refund', label: 'Refund' },
-  { value: 'adjustment', label: 'Adjustment' },
+const KIND_VALUES: TxKind[] = ['expense', 'income', 'transfer', 'refund', 'adjustment'];
+
+const FIELD_VALUES: Leaf['field'][] = [
+  'merchant',
+  'amount',
+  'account_id',
+  'category_id',
+  'counterparty_id',
+  'currency',
+  'date_dow',
+  'date_dom',
+  'kind',
+  'tag_id',
+  'note',
 ];
 
-const FIELD_OPTIONS: { value: Leaf['field']; label: string }[] = [
-  { value: 'merchant', label: 'Merchant' },
-  { value: 'amount', label: 'Amount' },
-  { value: 'account_id', label: 'Account' },
-  { value: 'category_id', label: 'Category' },
-  { value: 'counterparty_id', label: 'Counterparty' },
-  { value: 'currency', label: 'Currency' },
-  { value: 'date_dow', label: 'Day of week' },
-  { value: 'date_dom', label: 'Day of month' },
-  { value: 'kind', label: 'Kind' },
-  { value: 'tag_id', label: 'Tag' },
-  { value: 'note', label: 'Note' },
+const ACTION_VALUES: Action['type'][] = [
+  'set_category',
+  'add_tag',
+  'remove_tag',
+  'set_counterparty',
+  'set_merchant',
+  'set_note',
+  'set_kind',
+  'mark_reviewed',
 ];
 
-const ACTION_OPTIONS: { value: Action['type']; label: string }[] = [
-  { value: 'set_category', label: 'Set category' },
-  { value: 'add_tag', label: 'Add tag' },
-  { value: 'remove_tag', label: 'Remove tag' },
-  { value: 'set_counterparty', label: 'Set counterparty' },
-  { value: 'set_merchant', label: 'Rename merchant' },
-  { value: 'set_note', label: 'Set note' },
-  { value: 'set_kind', label: 'Set kind' },
-  { value: 'mark_reviewed', label: 'Mark reviewed' },
-];
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 function defaultLeaf(field: Leaf['field']): Leaf {
   switch (field) {
@@ -167,6 +163,9 @@ export function RuleBuilderSheet({
   prefill?: RulePrefill;
 }) {
   const { activeId } = useLedger();
+  const t = useTranslations('ruleBuilder');
+  const tCommon = useTranslations('common');
+  const describeDict = useDescribeDict();
   const categories = useFinanceStore((s) => s.categories);
   const accounts = useFinanceStore((s) => s.accounts);
   const counterparties = useFinanceStore((s) => s.counterparties);
@@ -230,11 +229,11 @@ export function RuleBuilderSheet({
 
   const save = () => {
     if (!draft.leaves.length) {
-      toast.error('Add at least one condition');
+      toast.error(t('errors.noConditions'));
       return;
     }
     if (!draft.actions.length) {
-      toast.error('Add at least one action');
+      toast.error(t('errors.noActions'));
       return;
     }
     if (rule) {
@@ -246,7 +245,7 @@ export function RuleBuilderSheet({
         isActive: draft.isActive,
         runOnEdit: draft.runOnEdit,
       });
-      toast.success(`Rule ${draft.name.trim() || rule.id} updated`);
+      toast.success(t('toasts.updated', { name: draft.name.trim() || rule.id }));
     } else {
       const id = createRule({
         name: draft.name.trim() || null,
@@ -257,7 +256,7 @@ export function RuleBuilderSheet({
         runOnEdit: draft.runOnEdit,
         ledgerId: activeId,
       });
-      toast.success(`Rule ${draft.name.trim() || id} created`);
+      toast.success(t('toasts.created', { name: draft.name.trim() || id }));
     }
     onClose();
   };
@@ -267,10 +266,10 @@ export function RuleBuilderSheet({
       <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="border-border shrink-0 border-b px-5 py-4">
           <DialogTitle className="font-serif text-xl italic">
-            {rule ? 'Edit rule' : 'New rule'}
+            {rule ? t('editTitle') : t('newTitle')}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Build the if-then logic for this rule.
+            {t('description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -278,17 +277,17 @@ export function RuleBuilderSheet({
           {/* Name + priority + flags */}
           <section className="space-y-2.5">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="rule-name" className="text-muted-foreground text-[11px]">Name (optional)</Label>
+              <Label htmlFor="rule-name" className="text-muted-foreground text-[11px]">{t('fieldLabels.nameOptional')}</Label>
               <Input
                 id="rule-name"
                 value={draft.name}
                 onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="e.g. Shell under $5 → Snacks"
+                placeholder={t('fieldLabels.namePlaceholder')}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <Label htmlFor="rule-priority" className="text-muted-foreground text-[11px]">Priority</Label>
+                <Label htmlFor="rule-priority" className="text-muted-foreground text-[11px]">{t('fieldLabels.priority')}</Label>
                 <Input
                   id="rule-priority"
                   type="number"
@@ -303,15 +302,15 @@ export function RuleBuilderSheet({
                     checked={draft.isActive}
                     onChange={(e) => setDraft((d) => ({ ...d, isActive: e.target.checked }))}
                   />
-                  Active
+                  {t('fieldLabels.active')}
                 </label>
-                <label className="flex items-center gap-2 text-[12px]" title="Re-fire when an existing transaction is edited (default off — safer)">
+                <label className="flex items-center gap-2 text-[12px]" title={t('fieldLabels.rerunOnEditTitle')}>
                   <input
                     type="checkbox"
                     checked={draft.runOnEdit}
                     onChange={(e) => setDraft((d) => ({ ...d, runOnEdit: e.target.checked }))}
                   />
-                  Re-run on edit
+                  {t('fieldLabels.rerunOnEdit')}
                 </label>
               </div>
             </div>
@@ -320,14 +319,14 @@ export function RuleBuilderSheet({
           {/* Condition builder */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-muted-foreground text-[11px]">When</Label>
+              <Label className="text-muted-foreground text-[11px]">{t('fieldLabels.when')}</Label>
               <Select value={draft.combinator} onValueChange={(v) => setDraft((d) => ({ ...d, combinator: v as 'all' | 'any' }))}>
                 <SelectTrigger size="sm" className="h-7 w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">ALL of these</SelectItem>
-                  <SelectItem value="any">ANY of these</SelectItem>
+                  <SelectItem value="all">{t('fieldLabels.allOfThese')}</SelectItem>
+                  <SelectItem value="any">{t('fieldLabels.anyOfThese')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -360,13 +359,13 @@ export function RuleBuilderSheet({
               }
               className="text-primary text-[12px] underline-offset-2 hover:underline"
             >
-              + Add condition
+              {t('fieldLabels.addCondition')}
             </button>
           </section>
 
           {/* Action picker */}
           <section className="space-y-2">
-            <Label className="text-muted-foreground text-[11px]">Then</Label>
+            <Label className="text-muted-foreground text-[11px]">{t('fieldLabels.then')}</Label>
             <ol className="space-y-2">
               {draft.actions.map((action, i) => (
                 <li key={i}>
@@ -395,40 +394,40 @@ export function RuleBuilderSheet({
               }
               className="text-primary text-[12px] underline-offset-2 hover:underline"
             >
-              + Add action
+              {t('fieldLabels.addAction')}
             </button>
           </section>
 
           {/* Test panel */}
           <section className="bg-secondary space-y-2 rounded-xl p-3">
             <div className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide">
-              Test against last {preview.total} transactions
+              {t('test.header', { total: preview.total })}
             </div>
             <div className="text-foreground text-[13px]">
-              <span className="font-medium">{preview.matchCount}</span> match{preview.matchCount === 1 ? '' : 'es'}
+              {t('test.matches', { count: preview.matchCount })}
             </div>
             {preview.samples.length > 0 ? (
               <ul className="text-muted-foreground space-y-0.5 font-mono text-[10px]">
-                {preview.samples.map((t) => (
-                  <li key={t.id} className="truncate">
-                    {t.date} · {t.merchant} · ${Math.abs(t.nativeAmount ?? t.amount).toFixed(2)}
+                {preview.samples.map((sample) => (
+                  <li key={sample.id} className="truncate">
+                    {sample.date} · {sample.merchant} · ${Math.abs(sample.nativeAmount ?? sample.amount).toFixed(2)}
                   </li>
                 ))}
                 {preview.matchCount > preview.samples.length && (
                   <li className="text-muted-foreground italic">
-                    +{preview.matchCount - preview.samples.length} more
+                    {t('test.moreCount', { count: preview.matchCount - preview.samples.length })}
                   </li>
                 )}
               </ul>
             ) : (
-              <div className="text-muted-foreground text-[11px] italic">No matches yet — refine the conditions.</div>
+              <div className="text-muted-foreground text-[11px] italic">{t('test.noMatchesYet')}</div>
             )}
             <div className="border-border mt-2 border-t pt-2">
               <div className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide">
-                Summary
+                {t('test.summary')}
               </div>
               <div className="text-foreground mt-1 font-mono text-[11px]">
-                {describeCondition(condition)} → {describeActions(draft.actions)}
+                {describeCondition(condition, describeDict)} → {describeActions(draft.actions, describeDict)}
               </div>
             </div>
           </section>
@@ -437,11 +436,11 @@ export function RuleBuilderSheet({
         <div className="border-border bg-card shrink-0 border-t px-5 py-3">
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button onClick={save}>
               <Icon name="check" size={14} />
-              {rule ? 'Save changes' : 'Create rule'}
+              {rule ? t('footer.saveChanges') : t('footer.createRule')}
             </Button>
           </div>
         </div>
@@ -465,6 +464,7 @@ interface LeafEditorProps {
 }
 
 function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange, onRemove }: LeafEditorProps) {
+  const t = useTranslations('ruleBuilder');
   return (
     <div className="bg-card border-border space-y-2 rounded-lg border p-2.5">
       <div className="flex items-center gap-2">
@@ -473,8 +473,8 @@ function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {FIELD_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            {FIELD_VALUES.map((v) => (
+              <SelectItem key={v} value={v}>{t(`fields.${v}`)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -482,7 +482,7 @@ function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange
           <button
             type="button"
             onClick={onRemove}
-            aria-label="Remove condition"
+            aria-label={t('fieldLabels.removeConditionAria')}
             className="text-muted-foreground hover:text-foreground rounded p-1"
           >
             <Icon name="x" size={14} />
@@ -496,6 +496,7 @@ function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange
 }
 
 function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }: LeafEditorProps) {
+  const t = useTranslations('ruleBuilder');
   const inputClass = 'h-8 text-[12px]';
 
   if (leaf.field === 'merchant') {
@@ -506,16 +507,16 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="is">is</SelectItem>
-            <SelectItem value="contains">contains</SelectItem>
-            <SelectItem value="startsWith">starts with</SelectItem>
+            <SelectItem value="is">{t('operators.is')}</SelectItem>
+            <SelectItem value="contains">{t('operators.contains')}</SelectItem>
+            <SelectItem value="startsWith">{t('operators.startsWith')}</SelectItem>
           </SelectContent>
         </Select>
         <Input
           value={leaf.value}
           onChange={(e) => onChange({ ...leaf, value: e.target.value } as Leaf)}
           className={inputClass}
-          placeholder="text"
+          placeholder={t('placeholders.text')}
         />
       </div>
     );
@@ -533,7 +534,7 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
               <SelectItem value="lt">&lt;</SelectItem>
               <SelectItem value="lte">≤</SelectItem>
               <SelectItem value="eq">=</SelectItem>
-              <SelectItem value="between">between</SelectItem>
+              <SelectItem value="between">{t('operators.between')}</SelectItem>
             </SelectContent>
           </Select>
           <Input type="number" value={lo} className={inputClass}
@@ -560,7 +561,7 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
             <SelectItem value="lt">&lt;</SelectItem>
             <SelectItem value="lte">≤</SelectItem>
             <SelectItem value="eq">=</SelectItem>
-            <SelectItem value="between">between</SelectItem>
+            <SelectItem value="between">{t('operators.between')}</SelectItem>
           </SelectContent>
         </Select>
         <Input type="number" value={Number(leaf.value)} className={inputClass}
@@ -570,7 +571,7 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
   }
   if (leaf.field === 'account_id') {
     return (
-      <RefPicker label="account" value={String(leaf.value)} options={accounts}
+      <RefPicker labelKey="account" value={String(leaf.value)} options={accounts}
         onChange={(v) => onChange({ field: 'account_id', op: 'is', value: v })} />
     );
   }
@@ -583,12 +584,12 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
         }}>
           <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="is">is</SelectItem>
-            <SelectItem value="is_null">is empty</SelectItem>
+            <SelectItem value="is">{t('operators.is')}</SelectItem>
+            <SelectItem value="is_null">{t('operators.isNull')}</SelectItem>
           </SelectContent>
         </Select>
         {leaf.op !== 'is_null' && (
-          <RefPicker label="category" value={String(leaf.value ?? '')} options={categories}
+          <RefPicker labelKey="category" value={String(leaf.value ?? '')} options={categories}
             onChange={(v) => onChange({ field: 'category_id', op: 'is', value: v })} />
         )}
       </div>
@@ -603,12 +604,12 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
         }}>
           <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="is">is</SelectItem>
-            <SelectItem value="is_null">is empty</SelectItem>
+            <SelectItem value="is">{t('operators.is')}</SelectItem>
+            <SelectItem value="is_null">{t('operators.isNull')}</SelectItem>
           </SelectContent>
         </Select>
         {leaf.op !== 'is_null' && (
-          <RefPicker label="counterparty" value={String(leaf.value ?? '')} options={counterparties}
+          <RefPicker labelKey="counterparty" value={String(leaf.value ?? '')} options={counterparties}
             onChange={(v) => onChange({ field: 'counterparty_id', op: 'is', value: v })} />
         )}
       </div>
@@ -617,14 +618,14 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
   if (leaf.field === 'currency') {
     return (
       <Input value={String(leaf.value)} className={inputClass}
-        onChange={(e) => onChange({ ...leaf, value: e.target.value.toUpperCase() } as Leaf)} placeholder="USD" />
+        onChange={(e) => onChange({ ...leaf, value: e.target.value.toUpperCase() } as Leaf)} placeholder={t('placeholders.currency')} />
     );
   }
   if (leaf.field === 'date_dow') {
     const selected = Array.isArray(leaf.value) ? leaf.value : [];
     return (
       <div className="flex flex-wrap gap-1">
-        {WEEKDAYS.map((d, i) => {
+        {WEEKDAY_KEYS.map((key, i) => {
           const on = selected.includes(i);
           return (
             <button
@@ -639,7 +640,7 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
                 on ? 'bg-primary text-primary-foreground' : 'bg-card border-border border',
               )}
             >
-              {d}
+              {t(`weekdays.${key}`)}
             </button>
           );
         })}
@@ -667,38 +668,40 @@ function LeafBody({ leaf, onChange, accounts, categories, counterparties, tags }
       <Select value={String(leaf.value)} onValueChange={(v) => onChange({ field: 'kind', op: 'is', value: v as TxKind })}>
         <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
         <SelectContent>
-          {KIND_OPTIONS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+          {KIND_VALUES.map((k) => <SelectItem key={k} value={k}>{t(`kinds.${k}`)}</SelectItem>)}
         </SelectContent>
       </Select>
     );
   }
   if (leaf.field === 'tag_id') {
     return (
-      <RefPicker label="tag" value={String(leaf.value)} options={tags}
+      <RefPicker labelKey="tag" value={String(leaf.value)} options={tags}
         onChange={(v) => onChange({ field: 'tag_id', op: 'has', value: v })} />
     );
   }
   if (leaf.field === 'note') {
     return (
       <Input value={String(leaf.value)} className={inputClass}
-        onChange={(e) => onChange({ field: 'note', op: 'contains', value: e.target.value })} placeholder="text in note" />
+        onChange={(e) => onChange({ field: 'note', op: 'contains', value: e.target.value })} placeholder={t('placeholders.noteText')} />
     );
   }
   return null;
 }
 
 function RefPicker({
-  label, value, options, onChange,
+  labelKey, value, options, onChange,
 }: {
-  label: string;
+  labelKey: 'account' | 'category' | 'counterparty' | 'tag';
   value: string;
   options: { id: string; name: string }[];
   onChange: (v: string) => void;
 }) {
+  const t = useTranslations('ruleBuilder');
+  const labelText = t(`refLabel.${labelKey}`);
   return (
     <Select value={value || undefined} onValueChange={onChange}>
       <SelectTrigger size="sm" className="h-8 text-[12px]">
-        <SelectValue placeholder={`pick a ${label}`} />
+        <SelectValue placeholder={t('placeholders.pickA', { label: labelText })} />
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (
@@ -723,6 +726,7 @@ interface ActionEditorProps {
 }
 
 function ActionEditor({ action, categories, counterparties, tags, onChange, onRemove }: ActionEditorProps) {
+  const t = useTranslations('ruleBuilder');
   return (
     <div className="bg-card border-border space-y-2 rounded-lg border p-2.5">
       <div className="flex items-center gap-2">
@@ -731,8 +735,8 @@ function ActionEditor({ action, categories, counterparties, tags, onChange, onRe
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ACTION_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            {ACTION_VALUES.map((v) => (
+              <SelectItem key={v} value={v}>{t(`actions.${v}`)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -740,7 +744,7 @@ function ActionEditor({ action, categories, counterparties, tags, onChange, onRe
           <button
             type="button"
             onClick={onRemove}
-            aria-label="Remove action"
+            aria-label={t('fieldLabels.removeActionAria')}
             className="text-muted-foreground hover:text-foreground rounded p-1"
           >
             <Icon name="x" size={14} />
@@ -753,50 +757,51 @@ function ActionEditor({ action, categories, counterparties, tags, onChange, onRe
 }
 
 function ActionBody({ action, onChange, categories, counterparties, tags }: ActionEditorProps) {
+  const t = useTranslations('ruleBuilder');
   const inputClass = 'h-8 text-[12px]';
   switch (action.type) {
     case 'set_category':
       return (
-        <RefPicker label="category" value={action.categoryId ?? ''} options={categories}
+        <RefPicker labelKey="category" value={action.categoryId ?? ''} options={categories}
           onChange={(v) => onChange({ type: 'set_category', categoryId: v })} />
       );
     case 'set_counterparty':
       return (
-        <RefPicker label="counterparty" value={action.counterpartyId ?? ''} options={counterparties}
+        <RefPicker labelKey="counterparty" value={action.counterpartyId ?? ''} options={counterparties}
           onChange={(v) => onChange({ type: 'set_counterparty', counterpartyId: v })} />
       );
     case 'set_merchant':
       return (
         <Input value={action.merchant} className={inputClass}
-          onChange={(e) => onChange({ type: 'set_merchant', merchant: e.target.value })} placeholder="canonical name" />
+          onChange={(e) => onChange({ type: 'set_merchant', merchant: e.target.value })} placeholder={t('placeholders.canonicalName')} />
       );
     case 'set_note':
       return (
         <Input value={action.note} className={inputClass}
-          onChange={(e) => onChange({ type: 'set_note', note: e.target.value })} placeholder="note text" />
+          onChange={(e) => onChange({ type: 'set_note', note: e.target.value })} placeholder={t('placeholders.noteContent')} />
       );
     case 'set_kind':
       return (
         <Select value={action.kind} onValueChange={(v) => onChange({ type: 'set_kind', kind: v as TxKind })}>
           <SelectTrigger size="sm" className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {KIND_OPTIONS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+            {KIND_VALUES.map((k) => <SelectItem key={k} value={k}>{t(`kinds.${k}`)}</SelectItem>)}
           </SelectContent>
         </Select>
       );
     case 'add_tag':
       return (
-        <RefPicker label="tag" value={action.tagId} options={tags}
+        <RefPicker labelKey="tag" value={action.tagId} options={tags}
           onChange={(v) => onChange({ type: 'add_tag', tagId: v })} />
       );
     case 'remove_tag':
       return (
-        <RefPicker label="tag" value={action.tagId} options={tags}
+        <RefPicker labelKey="tag" value={action.tagId} options={tags}
           onChange={(v) => onChange({ type: 'remove_tag', tagId: v })} />
       );
     case 'mark_reviewed':
-      return <div className="text-muted-foreground text-[11px]">No parameters — the row is marked reviewed.</div>;
+      return <div className="text-muted-foreground text-[11px]">{t('actionHints.markReviewed')}</div>;
     case 'split':
-      return <div className="text-muted-foreground text-[11px] italic">Splits are not yet editable in the builder; hand-craft via the API.</div>;
+      return <div className="text-muted-foreground text-[11px] italic">{t('actionHints.split')}</div>;
   }
 }

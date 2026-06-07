@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Icon } from './primitives';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +18,7 @@ import { useMobileTabs } from '@/components/mobile-tabs';
 // center "Add" button is fixed and not configurable here.
 export function MobileTabsEditor() {
   const { tabIds, setTabIds, catalog } = useMobileTabs();
+  const t = useTranslations('mobileTabsEditor');
 
   const move = (index: number, dir: -1 | 1) => {
     const target = index + dir;
@@ -60,7 +62,7 @@ export function MobileTabsEditor() {
                 variant="outline"
                 size="icon"
                 className="size-8"
-                aria-label={`Move ${section?.label ?? 'section'} up`}
+                aria-label={t('moveUpAria', { section: section?.label ?? t('sectionFallback') })}
                 disabled={i === 0}
                 onClick={() => move(i, -1)}
               >
@@ -70,7 +72,7 @@ export function MobileTabsEditor() {
                 variant="outline"
                 size="icon"
                 className="size-8"
-                aria-label={`Move ${section?.label ?? 'section'} down`}
+                aria-label={t('moveDownAria', { section: section?.label ?? t('sectionFallback') })}
                 disabled={i === tabIds.length - 1}
                 onClick={() => move(i, 1)}
               >

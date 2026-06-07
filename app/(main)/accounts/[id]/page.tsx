@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
 import { RefundBadge } from '@/components/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
@@ -47,6 +48,9 @@ export default function AccountDetailPage() {
   const { display, fmtFrom, toBase, fmt, base } = useMoney();
   const params = useParams();
   const router = useRouter();
+  const t = useTranslations('accounts.detail');
+  const tNav = useTranslations('nav');
+  const tCommon = useTranslations('common');
   const accountId = params.id as string;
   // Try real (DB-backed) accounts first; the mock list is a pre-hydration
   // fallback for structural fields (color, ledger). When neither matches the
@@ -137,7 +141,7 @@ export default function AccountDetailPage() {
       name: draft.name.trim(),
       type: draft.type,
     });
-    toast.success('Account updated', { description: draft.name.trim() || name });
+    toast.success(t('editDialog.updatedToast'), { description: draft.name.trim() || name });
   };
 
   const openAdjust = () => {
@@ -162,9 +166,9 @@ export default function AccountDetailPage() {
     : null;
   const finishReconcile = (postAdjustment: boolean) => {
     if (!row || !Number.isFinite(targetNumber)) {
-      return void toast.error('Enter a statement balance');
+      return void toast.error(t('reconcileCard.statementBalanceError'));
     }
-    if (!statementDate) return void toast.error('Pick the statement date');
+    if (!statementDate) return void toast.error(t('reconcileCard.statementDateError'));
     reconcileAccount({
       accountId,
       statementBalance: targetNumber,
@@ -172,7 +176,7 @@ export default function AccountDetailPage() {
       postAdjustment,
     });
     toast.success(
-      postAdjustment ? 'Reconciled with adjustment' : 'Reconciled',
+      postAdjustment ? t('reconcileCard.reconciledWithAdjustmentToast') : t('reconcileCard.reconciledToast'),
       { description: `${name} → ${targetNumber.toLocaleString()}` },
     );
     exitReconcile();
@@ -185,8 +189,8 @@ export default function AccountDetailPage() {
   // expense/income category in the ledger; the user recategorises later.
   const addMissing = () => {
     const value = parseFloat(addAmount);
-    if (!value || Number.isNaN(value)) return void toast.error('Enter an amount');
-    if (!addMerchant.trim()) return void toast.error('Enter a merchant');
+    if (!value || Number.isNaN(value)) return void toast.error(t('reconcileCard.amountError'));
+    if (!addMerchant.trim()) return void toast.error(t('reconcileCard.merchantError'));
     const signed = addExpense ? -Math.abs(value) : Math.abs(value);
     const baseAmount = currency === base ? signed : Math.round(convertAmount(signed, currency, base) * 100) / 100;
     const fallbackCat = storeCategories.find((c) => c.ledgerId === ledgerId)?.id ?? null;
@@ -204,7 +208,7 @@ export default function AccountDetailPage() {
       ledgerId,
     });
     setCleared(id, true); // auto-clear: it's on the statement, that's why we're adding it
-    toast.success('Added & cleared', { description: `${addMerchant.trim()} · ${fmtNative(Math.abs(value), currency)}` });
+    toast.success(t('reconcileCard.addedClearedToast'), { description: `${addMerchant.trim()} · ${fmtNative(Math.abs(value), currency)}` });
     setAddMerchant('');
     setAddAmount('');
     setAddOpen(false);
@@ -214,53 +218,52 @@ export default function AccountDetailPage() {
   const confirmAndClear = (txId: string) => {
     confirmPending(txId);
     setCleared(txId, true);
-    toast.success('Confirmed & cleared');
+    toast.success(t('pending.confirmAndClearedToast'));
   };
   const submitAdjust = () => {
     const target = parseFloat(adjustTarget);
-    if (!Number.isFinite(target)) return void toast.error('Enter a target balance');
+    if (!Number.isFinite(target)) return void toast.error(t('adjustDialog.targetError'));
     if (Math.abs(target - balance) < 0.005) {
-      toast.info('Already at this balance — nothing to adjust');
+      toast.info(t('adjustDialog.alreadyAtToast'));
       setAdjustOpen(false);
       return;
     }
     adjustAccountBalance(accountId, target, adjustNote.trim() || undefined);
-    toast.success('Balance adjusted', { description: `${name} → ${target.toLocaleString()}` });
+    toast.success(t('adjustDialog.adjustedToast'), { description: `${name} → ${target.toLocaleString()}` });
     setAdjustOpen(false);
   };
 
   const doArchive = () => {
     archiveAccount(accountId);
-    toast.success('Account archived', { description: name });
+    toast.success(t('archiveDialog.archivedToast'), { description: name });
     setConfirmArchive(false);
     setEditOpen(false);
     router.push('/accounts');
   };
 
   const details: [string, string][] = [
-    ['Type', accountTypeLabel(type)],
-    ['Currency', currency],
-    ['Last sync', '2 min ago'],
-    ['Linked since', 'Jan 2024'],
+    [t('details.type'), accountTypeLabel(type)],
+    [t('details.currency'), currency],
+    [t('details.lastSync'), t('details.lastSyncValue')],
+    [t('details.linkedSince'), t('details.linkedSinceValue')],
   ];
 
   if (notFound) {
     return (
       <MobilePage
         header={
-          <ScreenHeader title="Account not found" back={true} backHref="/accounts" trailing={<></>} />
+          <ScreenHeader title={t('notFoundTitle')} back={true} backHref="/accounts" trailing={<></>} />
         }
       >
         <div className="px-5 pb-[22px]">
           <div className="bg-card border-border mt-4 flex flex-col items-center gap-3 rounded-2xl border px-6 py-12 text-center">
             <Icon name="wallet" size={28} />
-            <div className="font-serif text-xl">No account here</div>
+            <div className="font-serif text-xl">{t('notFoundHeader')}</div>
             <p className="text-muted-foreground max-w-xs text-sm">
-              We couldn&rsquo;t find an account with id <code className="font-mono text-xs">{accountId}</code>.
-              It may have been deleted, or the link is wrong.
+              {t('notFoundBody', { id: accountId })}
             </p>
             <Button variant="outline" onClick={() => router.push('/accounts')}>
-              Back to accounts
+              {t('backToAccounts')}
             </Button>
           </div>
         </div>
@@ -276,7 +279,7 @@ export default function AccountDetailPage() {
     >
       <div className="px-5 pb-[22px]">
         <div className="text-muted-foreground mb-[18px] flex items-center gap-2 text-xs md:hidden">
-          <Link href="/accounts" className="text-muted-foreground no-underline">Accounts</Link>
+          <Link href="/accounts" className="text-muted-foreground no-underline">{tNav('accounts')}</Link>
           <Icon name="chev" size={11}/>
           <span className="text-foreground">{name}</span>
         </div>
@@ -295,13 +298,12 @@ export default function AccountDetailPage() {
               )}
               {row && row.currency !== active.base && Math.abs(fxDelta) >= 0.01 && (
                 <div className="mt-1 text-xs text-white/60 tabular-nums">
-                  FX {fxDelta >= 0 ? 'gain' : 'loss'} {fmt(Math.abs(fxDelta))}
+                  {fxDelta >= 0 ? t('fxGain', { amount: fmt(Math.abs(fxDelta)) }) : t('fxLoss', { amount: fmt(Math.abs(fxDelta)) })}
                 </div>
               )}
               {isInvestment && holdingsTotal > 0 && (
                 <div className="mt-1.5 text-xs text-white/70 tabular-nums">
-                  + {fmtNative(holdingsTotal, currency)} in holdings ·
-                  total {fmtNative(balance + holdingsTotal, currency)}
+                  {t('holdingsLine', { holdings: fmtNative(holdingsTotal, currency), total: fmtNative(balance + holdingsTotal, currency) })}
                 </div>
               )}
             </div>
@@ -309,7 +311,7 @@ export default function AccountDetailPage() {
             <button
               type="button"
               onClick={() => setDetailsOpen(true)}
-              aria-label="Account details"
+              aria-label={t('detailsAria')}
               className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:hidden"
             >
               <Icon name="doc" size={16} />
@@ -318,7 +320,7 @@ export default function AccountDetailPage() {
             <button
               type="button"
               onClick={openEdit}
-              aria-label="Edit account"
+              aria-label={t('editAria')}
               className="hidden size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:flex"
             >
               <Icon name="edit" size={16} />
@@ -341,10 +343,10 @@ export default function AccountDetailPage() {
           {row && <ReconcileStatus account={row} />}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={openAdjust}>
-              <Icon name="edit" size={13} />Adjust balance
+              <Icon name="edit" size={13} />{t('adjustBalance')}
             </Button>
             <Button variant="outline" size="sm" onClick={openReconcile} disabled={reconcileMode}>
-              <Icon name="check" size={13} />Reconcile
+              <Icon name="check" size={13} />{t('reconcile')}
             </Button>
           </div>
         </div>
@@ -352,20 +354,20 @@ export default function AccountDetailPage() {
         {reconcileMode && row && (
           <div className="bg-card border-border mb-4 overflow-hidden rounded-[14px] border">
             <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
-              <div className="text-sm font-semibold">Reconcile to statement</div>
+              <div className="text-sm font-semibold">{t('reconcileCard.title')}</div>
               <button
                 type="button"
                 onClick={exitReconcile}
-                aria-label="Cancel reconcile"
+                aria-label={t('reconcileCard.cancelAria')}
                 className="text-muted-foreground hover:text-foreground cursor-pointer text-[11px]"
               >
-                Cancel
+                {t('reconcileCard.cancel')}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3 px-[18px] py-3.5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="recon-balance" className="text-muted-foreground text-[11px]">
-                  Statement balance ({currency})
+                  {t('reconcileCard.statementBalance', { currency })}
                 </Label>
                 <Input
                   id="recon-balance"
@@ -377,7 +379,7 @@ export default function AccountDetailPage() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="recon-date" className="text-muted-foreground text-[11px]">As of</Label>
+                <Label htmlFor="recon-date" className="text-muted-foreground text-[11px]">{t('reconcileCard.asOf')}</Label>
                 <Input
                   id="recon-date"
                   type="date"
@@ -390,15 +392,15 @@ export default function AccountDetailPage() {
             {recState && (
               <div className="border-border space-y-2 border-t px-[18px] py-3.5">
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
-                  <span className="text-muted-foreground">Cleared</span>
+                  <span className="text-muted-foreground">{t('reconcileCard.cleared')}</span>
                   <span>{fmtNative(recState.clearedBalance, currency)}</span>
                 </div>
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
-                  <span className="text-muted-foreground">Target</span>
+                  <span className="text-muted-foreground">{t('reconcileCard.target')}</span>
                   <span>{fmtNative(recState.statementBalance, currency)}</span>
                 </div>
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
-                  <span className="text-muted-foreground">Difference</span>
+                  <span className="text-muted-foreground">{t('reconcileCard.difference')}</span>
                   <span className={cn(recState.balanced ? 'text-success' : 'text-warning')}>
                     {recState.difference >= 0 ? '+' : '−'}
                     {fmtNative(Math.abs(recState.difference), currency)}
@@ -422,14 +424,14 @@ export default function AccountDetailPage() {
                 </div>
                 <div className="text-muted-foreground flex items-center justify-between text-[11px]">
                   <span>
-                    {recState.clearedCount} cleared · {recState.unclearedCount} to review
+                    {t('reconcileCard.summary', { cleared: recState.clearedCount, toReview: recState.unclearedCount })}
                   </span>
                 </div>
                 {!recState.balanced && (
                   <p className="text-muted-foreground text-[11px]">
-                    You&apos;re {fmtNative(Math.abs(recState.difference), currency)}{' '}
-                    {recState.difference > 0 ? 'short' : 'over'} — likely a missing transaction. Add it
-                    below, or post an adjustment.
+                    {recState.difference > 0
+                      ? t('reconcileCard.shortBy', { amount: fmtNative(Math.abs(recState.difference), currency) })
+                      : t('reconcileCard.overBy', { amount: fmtNative(Math.abs(recState.difference), currency) })}
                   </p>
                 )}
 
@@ -437,57 +439,57 @@ export default function AccountDetailPage() {
                 {addOpen ? (
                   <div className="border-border bg-secondary/40 space-y-2 rounded-lg border p-2.5">
                     <div className="flex gap-2">
-                      <div role="tablist" aria-label="Direction" className="bg-secondary inline-flex rounded-full p-0.5 text-[11px]">
-                        {([['expense', true], ['income', false]] as const).map(([label, isExp]) => (
+                      <div role="tablist" aria-label={t('reconcileCard.directionAria')} className="bg-secondary inline-flex rounded-full p-0.5 text-[11px]">
+                        {([['expense', true], ['income', false]] as const).map(([key, isExp]) => (
                           <button
-                            key={label}
+                            key={key}
                             type="button"
                             role="tab"
                             aria-selected={addExpense === isExp}
                             onClick={() => setAddExpense(isExp)}
-                            className={cn('rounded-full px-2.5 py-1 capitalize', addExpense === isExp ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
+                            className={cn('rounded-full px-2.5 py-1', addExpense === isExp ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground')}
                           >
-                            {label}
+                            {t(`reconcileCard.${key}`)}
                           </button>
                         ))}
                       </div>
                     </div>
                     <Input
-                      aria-label="Merchant"
-                      placeholder="Merchant"
+                      aria-label={t('reconcileCard.merchant')}
+                      placeholder={t('reconcileCard.merchant')}
                       value={addMerchant}
                       onChange={(e) => setAddMerchant(e.target.value)}
                       className="h-8 text-[12px]"
                     />
                     <div className="flex gap-2">
                       <Input
-                        aria-label={`Amount (${currency})`}
+                        aria-label={t('reconcileCard.amountAria', { currency })}
                         type="number"
                         inputMode="decimal"
-                        placeholder={`Amount (${currency})`}
+                        placeholder={t('reconcileCard.amountPlaceholder', { currency })}
                         value={addAmount}
                         onChange={(e) => setAddAmount(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') addMissing(); }}
                         className="h-8 text-right font-mono text-[12px]"
                       />
-                      <Button size="sm" onClick={addMissing}>Add</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
+                      <Button size="sm" onClick={addMissing}>{t('reconcileCard.addButton')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setAddOpen(false)}>{t('reconcileCard.addCancel')}</Button>
                     </div>
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" className="w-full" onClick={() => setAddOpen(true)}>
-                    <Icon name="plus" size={13} /> Add missing transaction
+                    <Icon name="plus" size={13} /> {t('reconcileCard.addMissing')}
                   </Button>
                 )}
 
                 <div className="flex justify-end gap-2 pt-1">
                   {!recState.balanced && (
                     <Button size="sm" variant="ghost" onClick={() => finishReconcile(true)}>
-                      Post adjustment for {fmtNative(Math.abs(recState.difference), currency)}
+                      {t('reconcileCard.postAdjustment', { amount: fmtNative(Math.abs(recState.difference), currency) })}
                     </Button>
                   )}
                   <Button size="sm" onClick={() => finishReconcile(false)} disabled={!recState.balanced}>
-                    Done
+                    {t('reconcileCard.doneButton')}
                   </Button>
                 </div>
               </div>
@@ -501,8 +503,8 @@ export default function AccountDetailPage() {
         {reconcileMode && toConfirm.length > 0 && (
           <div className="border-border mb-4 overflow-hidden rounded-[14px] border">
             <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
-              <div className="text-sm font-semibold">Pending · {toConfirm.length}</div>
-              <span className="text-muted-foreground text-[11px]">On your statement? Confirm &amp; clear</span>
+              <div className="text-sm font-semibold">{t('pending.headerReconcile', { count: toConfirm.length })}</div>
+              <span className="text-muted-foreground text-[11px]">{t('pending.subReconcile')}</span>
             </div>
             {toConfirm.map((tx, i) => {
               const cat = catById(tx.category);
@@ -518,15 +520,15 @@ export default function AccountDetailPage() {
                       <span className="truncate text-[13px] font-medium">{tx.merchant}</span>
                       <StatusBadge status="pending" />
                     </div>
-                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || t('pending.incomeFallback')}</div>
                   </div>
                   <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')} />
                   <Button
                     size="sm" variant="outline" className="shrink-0"
-                    aria-label={`Confirm and clear ${tx.merchant}`}
+                    aria-label={t('pending.confirmAndClearAria', { merchant: tx.merchant })}
                     onClick={() => confirmAndClear(tx.id)}
                   >
-                    Confirm &amp; clear
+                    {t('pending.confirmAndClearLabel')}
                   </Button>
                 </div>
               );
@@ -537,8 +539,8 @@ export default function AccountDetailPage() {
         {toConfirm.length > 0 && !reconcileMode && (
           <div className="border-warning/30 bg-warning/5 mb-4 overflow-hidden rounded-[14px] border">
             <div className="border-warning/20 flex items-center justify-between border-b px-[18px] py-3.5">
-              <div className="text-sm font-semibold">To confirm · {toConfirm.length}</div>
-              <span className="text-muted-foreground text-[11px]">Not in your balance yet</span>
+              <div className="text-sm font-semibold">{t('pending.headerNormal', { count: toConfirm.length })}</div>
+              <span className="text-muted-foreground text-[11px]">{t('pending.subNormal')}</span>
             </div>
             {toConfirm.map((tx, i) => {
               const cat = catById(tx.category);
@@ -554,19 +556,19 @@ export default function AccountDetailPage() {
                       <span className="truncate text-[13px] font-medium">{tx.merchant}</span>
                       <StatusBadge status="pending" />
                     </div>
-                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || t('pending.incomeFallback')}</div>
                   </button>
                   <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')} />
                   <div className="flex shrink-0 items-center gap-1">
                     <Button
-                      size="icon" variant="ghost" className="size-8" aria-label={`Confirm ${tx.merchant}`}
-                      onClick={() => { confirmPending(tx.id); toast.success(`Confirmed ${tx.merchant}`); }}
+                      size="icon" variant="ghost" className="size-8" aria-label={t('pending.confirmAria', { merchant: tx.merchant })}
+                      onClick={() => { confirmPending(tx.id); toast.success(t('pending.confirmedToast', { merchant: tx.merchant })); }}
                     >
                       <Icon name="check" size={14} stroke={2} />
                     </Button>
                     <Button
-                      size="icon" variant="ghost" className="size-8" aria-label={`Void ${tx.merchant}`}
-                      onClick={() => { cancelPending(tx.id); toast(`Voided ${tx.merchant}`); }}
+                      size="icon" variant="ghost" className="size-8" aria-label={t('pending.voidAria', { merchant: tx.merchant })}
+                      onClick={() => { cancelPending(tx.id); toast(t('pending.voidedToast', { merchant: tx.merchant })); }}
                     >
                       <Icon name="x" size={14} />
                     </Button>
@@ -592,8 +594,8 @@ export default function AccountDetailPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">
           <div className="bg-card border-border overflow-hidden rounded-[14px] border">
             <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
-              <div className="text-sm font-semibold">All transactions · {txs.length}</div>
-              <div className="text-muted-foreground flex cursor-pointer items-center gap-1 text-xs"><Icon name="filter" size={12}/>Filter</div>
+              <div className="text-sm font-semibold">{t('allTransactions', { count: txs.length })}</div>
+              <div className="text-muted-foreground flex cursor-pointer items-center gap-1 text-xs"><Icon name="filter" size={12}/>{t('filterLabel')}</div>
             </div>
             {(reconcileMode ? txs : txs.slice(0, 6)).map((tx, i) => {
               const cat = catById(tx.category);
@@ -636,7 +638,7 @@ export default function AccountDetailPage() {
                         return a?.isAnomaly ? <AnomalyBadge zScore={a.zScore} mean={a.mean} /> : null;
                       })()}
                     </div>
-                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || 'Income'}</div>
+                    <div className="text-muted-foreground mt-0.5 text-[11px]">{tx.date.replace(/-/g, '/')}{tx.time ? ' ' + tx.time.slice(0, 5) : ''} · {cat.name || t('pending.incomeFallback')}</div>
                   </div>
                   <Money value={tx.amount} signed={inc} className={cn('font-mono text-[13px] font-semibold', inc ? 'text-success' : 'text-foreground')}/>
                 </button>
@@ -646,7 +648,7 @@ export default function AccountDetailPage() {
 
           <div className="bg-card border-border hidden rounded-[14px] border p-[18px] md:block">
             <div className="text-muted-foreground mb-2.5 font-mono text-[10px] tracking-[1.2px]">
-              ACCOUNT DETAILS
+              {t('detailsHeaderShort')}
             </div>
             {details.map(([l, v], i) => (
               <div key={l} className={cn('flex justify-between py-2 text-xs', i && 'border-border border-t-[0.5px] border-dotted')}>
@@ -655,7 +657,7 @@ export default function AccountDetailPage() {
               </div>
             ))}
             <div className="bg-secondary text-secondary-foreground mt-3.5 flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs">
-              <Icon name="sync" size={12}/>Auto-categorize: on
+              <Icon name="sync" size={12}/>{t('autoCategorize')}
             </div>
           </div>
         </div>
@@ -665,9 +667,9 @@ export default function AccountDetailPage() {
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="md:hidden">
           <DialogHeader>
-            <DialogTitle className="font-serif text-xl italic">Account details</DialogTitle>
+            <DialogTitle className="font-serif text-xl italic">{t('detailsDialog.title')}</DialogTitle>
             <DialogDescription className="sr-only">
-              Metadata for this account.
+              {t('detailsDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div>
@@ -678,10 +680,10 @@ export default function AccountDetailPage() {
               </div>
             ))}
             <div className="bg-secondary text-secondary-foreground mt-4 flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm">
-              <Icon name="sync" size={14}/>Auto-categorize: on
+              <Icon name="sync" size={14}/>{t('autoCategorize')}
             </div>
             <Button variant="outline" className="mt-4 w-full" onClick={openEdit}>
-              <Icon name="edit" size={14} />Edit details
+              <Icon name="edit" size={14} />{t('detailsDialog.editButton')}
             </Button>
           </div>
         </DialogContent>
@@ -690,17 +692,17 @@ export default function AccountDetailPage() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit account</DialogTitle>
+            <DialogTitle>{t('editDialog.title')}</DialogTitle>
             <DialogDescription>{name}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="acct-name">Name</Label>
+              <Label htmlFor="acct-name">{t('editDialog.name')}</Label>
               <Input id="acct-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="acct-type">Type</Label>
+                <Label htmlFor="acct-type">{t('editDialog.type')}</Label>
                 <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v })}>
                   <SelectTrigger id="acct-type" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -709,27 +711,27 @@ export default function AccountDetailPage() {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="acct-currency">Currency</Label>
+                <Label htmlFor="acct-currency">{t('editDialog.currency')}</Label>
                 <div
                   id="acct-currency"
                   className="border-input bg-muted text-muted-foreground flex h-9 w-full items-center rounded-md border px-3 text-sm"
                 >
                   {currency}
                 </div>
-                <p className="text-muted-foreground text-[11px]">Set at creation and cannot be changed. Make a new account to use another currency.</p>
+                <p className="text-muted-foreground text-[11px]">{t('editDialog.currencyHint')}</p>
               </div>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { setEditOpen(false); setConfirmArchive(true); }}>
-              <Icon name="trash" size={14} />Archive
+              <Icon name="trash" size={14} />{t('editDialog.archive')}
             </Button>
             <div className="flex gap-2">
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline">{tCommon('cancel')}</Button>
               </DialogClose>
               <DialogClose asChild>
-                <Button onClick={saveDetails}>Save</Button>
+                <Button onClick={saveDetails}>{tCommon('save')}</Button>
               </DialogClose>
             </div>
           </DialogFooter>
@@ -739,16 +741,16 @@ export default function AccountDetailPage() {
       <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archive {name}?</DialogTitle>
+            <DialogTitle>{t('archiveDialog.title', { name })}</DialogTitle>
             <DialogDescription>
-              The account is hidden from your lists but its transaction history is kept. You can&rsquo;t undo this from the app.
+              {t('archiveDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={doArchive}>Archive</Button>
+            <Button variant="destructive" onClick={doArchive}>{t('archiveDialog.confirm')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -756,20 +758,18 @@ export default function AccountDetailPage() {
       <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adjust {name}</DialogTitle>
+            <DialogTitle>{t('adjustDialog.title', { name })}</DialogTitle>
             <DialogDescription>
-              Force the balance to a target value with a single adjustment entry — the blunt
-              path. For a guided session that ticks off real statement rows, use Reconcile.
-              Adjustments don&rsquo;t count toward spending or income.
+              {t('adjustDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Current balance</Label>
+              <Label>{t('adjustDialog.currentBalance')}</Label>
               <div className="text-muted-foreground text-sm">{balance.toLocaleString()}</div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="adjust-target">Target balance</Label>
+              <Label htmlFor="adjust-target">{t('adjustDialog.targetBalance')}</Label>
               <Input
                 id="adjust-target"
                 type="number"
@@ -780,20 +780,20 @@ export default function AccountDetailPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="adjust-note">Note (optional)</Label>
+              <Label htmlFor="adjust-note">{t('adjustDialog.noteOptional')}</Label>
               <Input
                 id="adjust-note"
                 value={adjustNote}
                 onChange={(e) => setAdjustNote(e.target.value)}
-                placeholder="e.g. Bank fee I missed"
+                placeholder={t('adjustDialog.notePlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
-            <Button onClick={submitAdjust}>Adjust</Button>
+            <Button onClick={submitAdjust}>{t('adjustDialog.submit')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
