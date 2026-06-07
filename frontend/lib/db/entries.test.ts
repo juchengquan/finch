@@ -2,10 +2,12 @@ import { test, expect } from 'bun:test';
 import { seededDb, freshDb } from '@/lib/db/test-utils';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
-import { ensureSystemCategories } from '@/lib/db/entries';
+import { ensureSystemCategories, postEntry } from '@/lib/db/entries';
 
-// Seeded in-memory DB (ledger 'personal', base SGD, category 'food', FX rows)
-// with the PR-A additive schema applied on top.
+// Seeded in-memory DB (ledger 'personal', category 'food', FX rows — see
+// data/*.json) with the PR-A additive schema applied on top. Base-sensitive
+// tests don't rely on any seeded ledger's base: they build their own ledger
+// via withTestLedger (ledger base is user-chosen at create time).
 export const newDb = async (): Promise<Exec> => {
   const db = await seededDb();
   await applyEntriesSchema(db.exec);
@@ -14,12 +16,32 @@ export const newDb = async (): Promise<Exec> => {
 
 // Fresh, transaction-less account so balance assertions start from a clean 0
 // (seeded accounts already carry legacy-table balances).
-export const addAccount = async (exec: Exec, id: string, currency = 'SGD') => {
+export const addAccount = async (exec: Exec, id: string, currency = 'SGD', ledgerId = 'personal') => {
   await exec(
     `INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,sort_order,include_in_net_worth,is_active,created_at,updated_at)
      VALUES (?,?,NULL,?,'savings',?,0,0,0,0,1,1,datetime('now'),datetime('now'))`,
-    [id, 'personal', id, currency],
+    [id, ledgerId, id, currency],
   );
+};
+
+// Ledger base is user-chosen at create time, so base-sensitive tests create
+// their OWN ledger + category instead of assuming anything about the seed.
+export const addLedger = async (exec: Exec, id: string, base: string) => {
+  await exec(
+    "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
+    [id, id, base],
+  );
+};
+export const addCategory = async (exec: Exec, id: string, ledgerId: string, kind = 'expense') => {
+  await exec(
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,system,created_at,updated_at) VALUES (?,?,NULL,?,?,NULL,NULL,0,NULL,datetime('now'),datetime('now'))",
+    [id, ledgerId, id, kind],
+  );
+};
+// The standard base-sensitive fixture: ledger 'lt' (base SGD), category 'cat-t'.
+export const withTestLedger = async (exec: Exec) => {
+  await addLedger(exec, 'lt', 'SGD');
+  await addCategory(exec, 'cat-t', 'lt');
 };
 
 export const balanceOf = async (exec: Exec, id: string) =>
@@ -214,4 +236,76 @@ test('ensureSystemCategories is idempotent and per-ledger', async () => {
   // Per-ledger isolation: another seeded ledger gets its own rows.
   const c = await ensureSystemCategories(exec, 'family');
   expect(c.opening).not.toBe(a.opening);
+});
+
+test('postEntry books a balanced expense with an auto-balance category leg', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-pe1', 'SGD', 'lt');
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'Lunch', kind: 'expense',
+    legs: [{ accountId: 'a-pe1', amount: -12.5 }],
+    autoBalanceCategoryId: 'cat-t', skipRules: true,
+  });
+  const legs = await exec('SELECT account_id, category_id, amount, amount_base, currency FROM postings WHERE entry_id = ? ORDER BY sort_order', [entryId]);
+  expect(legs.length).toBe(2);
+  expect(Number(legs[0].amount)).toBe(-12.5);          // account leg, SGD == ledger base
+  expect(String(legs[1].category_id)).toBe('cat-t');    // category leg, +12.5 base
+  expect(Number(legs[1].amount_base)).toBe(12.5);
+  const [e] = await exec('SELECT sealed, status FROM entries WHERE id = ?', [entryId]);
+  expect(Number(e.sealed)).toBe(1);
+  expect(String(e.status)).toBe('confirmed');
+  expect(await balanceOf(exec, 'a-pe1')).toBe(-12.5);
+});
+
+test('postEntry appends an FX-residue equity leg when locked bases disagree', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-sgd1', 'SGD', 'lt');
+  await addAccount(exec, 'a-usd1', 'USD', 'lt');
+  const sys = await ensureSystemCategories(exec, 'lt');
+  // Pre-locked bases that deliberately don't cancel: −100 SGD vs +74 USD
+  // worth 100.50 SGD (a pinned bank rate).
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'FX move', kind: 'transfer', skipRules: true,
+    legs: [
+      { accountId: 'a-sgd1', amount: -100, amountBase: -100, exchangeRate: 1 },
+      { accountId: 'a-usd1', amount: 74, amountBase: 100.5, exchangeRate: 1.358 },
+    ],
+  });
+  const fx = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND category_id = ?', [entryId, sys.fx]);
+  expect(fx.length).toBe(1);
+  expect(Number(fx[0].amount_base)).toBe(-0.5); // exact balance (I1)
+});
+
+test('postEntry validates shape per kind and is atomic on failure', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-pe2', 'SGD', 'lt');
+  // refund must be positive
+  await expect(postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'Bad refund', kind: 'refund', skipRules: true,
+    legs: [{ accountId: 'a-pe2', amount: -5 }], autoBalanceCategoryId: 'cat-t',
+  })).rejects.toThrow('refund must be positive');
+  // transfer needs exactly two account legs
+  await expect(postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'Bad transfer', kind: 'transfer', skipRules: true,
+    legs: [{ accountId: 'a-pe2', amount: -5 }], autoBalanceCategoryId: 'cat-t',
+  })).rejects.toThrow('exactly two account legs');
+  // nothing leaked from the failed attempts
+  const n = await exec("SELECT COUNT(*) AS n FROM entries WHERE description LIKE 'Bad %'");
+  expect(Number(n[0].n)).toBe(0);
+  expect(await balanceOf(exec, 'a-pe2')).toBe(0);
+});
+
+test('postEntry keeps amount = amount_base on base-currency legs (I9)', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-pe3', 'SGD', 'lt'); // account currency == ledger base
+  const { entryId } = await postEntry(exec, {
+    ledgerId: 'lt', date: '2026-06-02', description: 'Salary', kind: 'income', skipRules: true,
+    legs: [{ accountId: 'a-pe3', amount: 3000 }], autoBalanceCategoryId: null,
+  });
+  const legs = await exec('SELECT amount, amount_base FROM postings WHERE entry_id = ?', [entryId]);
+  for (const l of legs) expect(Number(l.amount)).toBe(Number(l.amount_base));
 });
