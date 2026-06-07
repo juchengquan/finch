@@ -129,3 +129,22 @@ test('sealed postings are immutable except cleared_at/memo; cascade delete passe
   const left = await exec("SELECT COUNT(*) AS n FROM postings WHERE entry_id = 'e-ok'");
   expect(Number(left[0].n)).toBe(0);
 });
+
+test('seal rejects a zero-posting entry (COALESCE guard)', async () => {
+  const exec = await newDb();
+  await rawEntry(exec, 'e-zero');
+  await expect(seal(exec, 'e-zero')).rejects.toThrow('Entry postings must balance');
+});
+
+test('a posting cannot be moved out of a sealed entry', async () => {
+  const exec = await newDb();
+  await addAccount(exec, 'a4');
+  await rawEntry(exec, 'e-sealed2');
+  await rawLeg(exec, 'p-s1', 'e-sealed2', 'a4', null, -10);
+  await rawLeg(exec, 'p-s2', 'e-sealed2', null, 'food', 10);
+  await seal(exec, 'e-sealed2');
+  await rawEntry(exec, 'e-open'); // unsealed target
+  await expect(
+    exec("UPDATE postings SET entry_id = 'e-open' WHERE id = 'p-s1'"),
+  ).rejects.toThrow('Unseal');
+});

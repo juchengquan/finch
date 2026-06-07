@@ -89,6 +89,8 @@ END;
 -- column list — per-leg clearing edits sealed entries. The WHEN subquery
 -- returns NULL once the parent entry row is gone, so the FK CASCADE from an
 -- entry delete passes the DELETE guard untouched.
+-- The UPDATE guard checks OLD and NEW entry_id, so a posting can be neither
+-- moved into nor smuggled out of a sealed entry.
 CREATE TRIGGER IF NOT EXISTS tr_post_sealed_insert BEFORE INSERT ON postings
 FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = NEW.entry_id) = 1
 BEGIN
@@ -98,6 +100,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS tr_post_sealed_update
 BEFORE UPDATE OF entry_id, account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, sort_order ON postings
 FOR EACH ROW WHEN (SELECT sealed FROM entries WHERE id = NEW.entry_id) = 1
+  OR (SELECT sealed FROM entries WHERE id = OLD.entry_id) = 1
 BEGIN
   SELECT RAISE(ABORT, 'Unseal the entry before editing postings');
 END;
