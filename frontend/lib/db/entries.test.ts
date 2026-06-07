@@ -20,8 +20,8 @@ export const newDb = async (): Promise<Exec> => (await seededDb()).exec;
 // (seeded accounts already carry legacy-table balances).
 export const addAccount = async (exec: Exec, id: string, currency = 'SGD', ledgerId = 'personal') => {
   await exec(
-    `INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,opening_balance,opening_balance_base,sort_order,include_in_net_worth,is_active,created_at,updated_at)
-     VALUES (?,?,NULL,?,'savings',?,0,0,0,0,1,1,datetime('now'),datetime('now'))`,
+    `INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at)
+     VALUES (?,?,NULL,?,'savings',?,0,0,1,1,datetime('now'),datetime('now'))`,
     [id, ledgerId, id, currency],
   );
 };

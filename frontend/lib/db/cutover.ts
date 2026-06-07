@@ -58,7 +58,9 @@ async function entryDone(exec: Exec, id: string): Promise<boolean> {
   return false;
 }
 
-interface RawLeg {
+// MoveLeg and MoveHeader are exported so seed.ts can be a second consumer
+// of insertSealedEntry without postEntry overhead (rules/counterparty/residue).
+export interface MoveLeg {
   id: string;
   accountId: string | null;
   categoryId: string | null;
@@ -73,7 +75,10 @@ interface RawLeg {
   clearedAt: string | null;
 }
 
-interface EntryHeader {
+// Keep RawLeg as a local alias so existing code in this module doesn't change.
+type RawLeg = MoveLeg;
+
+export interface MoveHeader {
   id: string;
   ledgerId: string;
   date: string;
@@ -92,10 +97,14 @@ interface EntryHeader {
   updatedAt: string;
 }
 
+// Keep EntryHeader as a local alias so existing code in this module is unchanged.
+type EntryHeader = MoveHeader;
+
 /** Insert an entry (sealed=0), its postings, then seal it (fires the
  *  balance-check trigger). NO savepoint — idempotence + the end audit are
- *  the safety net; a torn entry is repaired by entryDone on replay. */
-async function insertSealedEntry(exec: Exec, hdr: EntryHeader, legs: RawLeg[]): Promise<void> {
+ *  the safety net; a torn entry is repaired by entryDone on replay.
+ *  Exported so seed.ts can use the same two-phase write path. */
+export async function insertSealedEntry(exec: Exec, hdr: MoveHeader, legs: MoveLeg[]): Promise<void> {
   const hash = dedupHash(hdr.date, hdr.time, hdr.description ?? '', legs);
   await exec(
     `INSERT INTO entries
@@ -130,8 +139,9 @@ async function insertSealedEntry(exec: Exec, hdr: EntryHeader, legs: RawLeg[]): 
 
 /** Append an FX residue leg when Σ amountBase is not zero (§5.1 / I1).
  *  Threshold 0.005 — same as postEntry's appendResidue.
- *  The residue leg id is `${entryId}-fx` (canonical per §8.3). */
-function appendResidueIfNeeded(legs: RawLeg[], fxCategoryId: string, base: string, entryId: string): void {
+ *  The residue leg id is `${entryId}-fx` (canonical per §8.3).
+ *  Exported so seed.ts can reuse the same residue logic. */
+export function appendResidueIfNeeded(legs: MoveLeg[], fxCategoryId: string, base: string, entryId: string): void {
   const residue = r2(legs.reduce((s, l) => s + l.amountBase, 0));
   if (Math.abs(residue) >= 0.005) {
     legs.push({

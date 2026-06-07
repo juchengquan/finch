@@ -184,7 +184,7 @@ export async function validateImportBytes(bytes: Uint8Array): Promise<ImportVali
       return { ok: false, reason: `This backup is from a newer Finch (schema ${meta.schemaVersion}).` };
     }
 
-    const requiredTables = ['ledgers', 'accounts', 'categories', 'transactions'];
+    const requiredTables = ['ledgers', 'accounts', 'categories', 'entries', 'postings'];
     for (const t of requiredTables) {
       const info = await exec(`PRAGMA table_info(${t})`);
       if (info.length === 0) return { ok: false, reason: `Required table missing: ${t}` };

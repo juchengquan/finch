@@ -1,9 +1,9 @@
 // Read + admin operations on the ledgers table.
 //
 // The ledger base currency is mutable via `recomputeAmountBases`: changing
-// the base forces a full rewrite of every locked `amount_base` (transactions,
-// transaction_splits) under the new base + locked rate per transaction date.
-// Account current balances are then re-derived from opening + Σ deltas.
+// the base forces a full rewrite of every locked `amount_base` (entries/
+// postings) under the new base + locked rate per entry date. Account current
+// balances are then re-derived from postings via recomputeAccount.
 //
 // Full CRUD (create / rename / restyle / set-default / delete) lives in
 // LEDGER_CRUD_PLAN — see §3 + §5 for the design.
@@ -11,6 +11,8 @@
 import type { Exec } from '@/lib/db/repo';
 import { convertToBase } from './rates';
 import { recomputeAccount } from './accounts';
+import { rebuildEntry, auditLedger, ensureSystemCategories } from '@/lib/db/entries';
+import { I18nError } from '@/lib/i18n-error';
 
 export interface LedgerRow {
   id: string;
@@ -37,8 +39,8 @@ export async function listLedgers(exec: Exec): Promise<LedgerRow[]> {
             l.color, l.tagline,
             (SELECT COUNT(*) FROM accounts a
               WHERE a.ledger_id = l.id AND a.is_active = 1) AS accounts,
-            (SELECT COUNT(*) FROM transactions t
-              WHERE t.ledger_id = l.id) AS txns
+            (SELECT COUNT(*) FROM entries e
+              WHERE e.ledger_id = l.id AND e.kind != 'opening') AS txns
        FROM ledgers l
       ORDER BY l.is_default DESC, l.name`,
   );
@@ -140,22 +142,20 @@ export async function deleteLedger(exec: Exec, id: string): Promise<{ relPaths: 
     // Collect attachment rel_paths BEFORE the rows go away — caller unlinks
     // them after the savepoint releases.
     const attachRows = await exec(
-      'SELECT rel_path FROM transaction_attachments WHERE ledger_id = ?',
+      'SELECT rel_path FROM entry_attachments WHERE ledger_id = ?',
       [id],
     );
     const relPaths = attachRows.map((r) => String(r.rel_path));
 
-    // Ordered deletes from leaves up to the root. Rows in tables not
-    // listed here (transaction_tags, transaction_splits, scheduled_splits)
-    // follow via their own FK CASCADE off the rows we delete here.
-    await exec('DELETE FROM transaction_attachments WHERE ledger_id = ?', [id]);
-    await exec('DELETE FROM transactions WHERE ledger_id = ?', [id]);
+    // Ordered deletes from leaves up to the root. postings, entry_tags, and
+    // entry_attachments follow via FK CASCADE when entries are deleted.
+    await exec('DELETE FROM entry_attachments WHERE ledger_id = ?', [id]);
+    await exec('DELETE FROM entries WHERE ledger_id = ?', [id]); // postings/entry_tags cascade
     await exec('DELETE FROM scheduled_templates WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM rules WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM holdings WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM budgets WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM budget_groups WHERE ledger_id = ?', [id]);
-    await exec('DELETE FROM transfer_groups WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM accounts WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM account_groups WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM categories WHERE ledger_id = ?', [id]);
@@ -190,102 +190,111 @@ export async function deleteLedger(exec: Exec, id: string): Promise<{ relPaths: 
 
 /**
  * Rewrite every locked `amount_base` in `ledgerId` against `newBase` using each
- * transaction's date + native currency to look up rates. Updates:
- *   - ledgers.base_currency to newBase
- *   - transactions.amount_base + exchange_rate
- *   - transaction_splits.amount_base (per-split, same conversion logic)
- *   - accounts.current_balance via recomputeAccount (because cross-currency
- *     rows now produce different account-currency deltas after the rebuild)
+ * entry's date + native currency to look up rates (DOUBLE_ENTRY_PLAN §5.3).
+ * Per entry, inside a single SAVEPOINT:
+ *   1. UPDATE ledgers.base_currency to newBase.
+ *   2. For every entry in the ledger: read its postings; build a LegInput[]:
+ *      - account legs: no amountBase (forces re-lock at the entry's own date
+ *        under the new base); forward clearedAt/memo/orig/id.
+ *      - category legs (excluding fx-system legs — dropped; rebuildEntry
+ *        re-derives them): reconvert amount_base via convertToBase from the
+ *        OLD base value to the NEW base at the entry's date; forward id/memo.
+ *   3. rebuildEntry re-residues + reseals + recomputes touched accounts.
+ *   4. auditLedger after the loop; throw I18nError on any problem.
  *
- * Idempotent: running with the current base is a no-op (each row reconverts
- * to the same figure). Wrapped in BEGIN/COMMIT so a mid-run failure leaves
- * the ledger in its pre-call state.
+ * Idempotent: running with the current base reconverts to the same figures.
+ * Wrapped in SAVEPOINT so a mid-run failure leaves the ledger unchanged.
  */
 export async function recomputeAmountBases(
   exec: Exec,
   ledgerId: string,
   newBase: string,
-): Promise<{ transactions: number; splits: number; accounts: number }> {
-  // SAVEPOINT (not BEGIN) so this composes with an outer transaction. SQLite
-  // rejects nested BEGINs — and while no caller wraps us today, the API
-  // route's mutation queue is the kind of place a future "batch these"
-  // wrapper would slot in. RELEASE on success, ROLLBACK TO on failure.
+): Promise<{ entries: number; accounts: number }> {
   const sp = 'recompute_bases';
   await exec(`SAVEPOINT ${sp}`);
   try {
+    // Ensure system categories exist under the new base (fx-gain/loss etc.).
+    await ensureSystemCategories(exec, ledgerId);
+
+    // 1. Get old base before updating.
+    const [ledgerRow] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [ledgerId]);
+    const oldBase = ledgerRow ? String(ledgerRow.base_currency) : newBase;
+
     await exec(
       "UPDATE ledgers SET base_currency = ?, updated_at = datetime('now') WHERE id = ?",
       [newBase, ledgerId],
     );
 
-    const txns = await exec(
-      'SELECT id, date, currency, amount FROM transactions WHERE ledger_id = ?',
+    // 2. Fetch all entries for this ledger.
+    const entryRows = await exec(
+      'SELECT id, date FROM entries WHERE ledger_id = ? ORDER BY date, id',
       [ledgerId],
     );
-    for (const t of txns) {
-      const conv = await convertToBase(
-        exec,
-        Number(t.amount),
-        String(t.currency),
-        newBase,
-        String(t.date),
+
+    const touchedAccountIds = new Set<string>();
+
+    for (const entry of entryRows) {
+      const entryId = String(entry.id);
+      const entryDate = String(entry.date);
+
+      // Read all postings for this entry.
+      const postingRows = await exec(
+        'SELECT id, account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, cleared_at, memo FROM postings WHERE entry_id = ? ORDER BY sort_order',
+        [entryId],
       );
-      await exec(
-        "UPDATE transactions SET amount_base = ?, exchange_rate = ?, updated_at = datetime('now') WHERE id = ?",
-        [conv.amountBase, conv.rate, String(t.id)],
+
+      // Identify the fx-system category for this ledger (to drop residue legs).
+      const fxRows = await exec(
+        "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'",
+        [ledgerId],
       );
+      const fxCatId = fxRows[0] ? String(fxRows[0].id) : null;
+
+      // Build LegInput[] — see design §5.3.
+      const legs: import('@/lib/db/entries').LegInput[] = [];
+      for (const p of postingRows) {
+        if (p.account_id != null) {
+          // Account leg: omit amountBase so rebuildEntry re-locks at the new base.
+          legs.push({
+            id: String(p.id),
+            accountId: String(p.account_id),
+            amount: Number(p.amount),
+            origAmount: p.orig_amount == null ? null : Number(p.orig_amount),
+            origCurrency: p.orig_currency == null ? null : String(p.orig_currency),
+            clearedAt: p.cleared_at == null ? null : String(p.cleared_at),
+            memo: p.memo == null ? null : String(p.memo),
+          });
+          touchedAccountIds.add(String(p.account_id));
+        } else {
+          // Category leg: drop fx-system residue legs (rebuildEntry re-derives them).
+          if (fxCatId != null && String(p.category_id) === fxCatId) continue;
+          // Reconvert the OLD base-denominated amount to the NEW base at the entry date.
+          const oldBaseValue = Number(p.amount_base);
+          const conv = await convertToBase(exec, oldBaseValue, oldBase, newBase, entryDate);
+          legs.push({
+            id: String(p.id),
+            categoryId: p.category_id == null ? null : String(p.category_id),
+            amountBase: Math.round(conv.amountBase * 100) / 100,
+            memo: p.memo == null ? null : String(p.memo),
+          });
+        }
+      }
+
+      await rebuildEntry(exec, entryId, { legs });
     }
 
-    // Splits carry their own amount_base in the ledger base. Native amount and
-    // currency follow the parent's, so the same convertToBase applies.
-    const splits = await exec(
-      `SELECT ts.id, ts.amount, t.currency, t.date
-         FROM transaction_splits ts JOIN transactions t ON t.id = ts.transaction_id
-        WHERE t.ledger_id = ?`,
-      [ledgerId],
-    );
-    for (const s of splits) {
-      const conv = await convertToBase(
-        exec,
-        Number(s.amount),
-        String(s.currency),
-        newBase,
-        String(s.date),
+    // 4. Audit after the loop.
+    const problems = await auditLedger(exec, ledgerId, { checkBalances: true });
+    if (problems.length) {
+      throw new I18nError(
+        'error.ledger.recomputeFailed',
+        { count: problems.length },
+        `recomputeAmountBases audit failed: ${problems[0].code} ${problems[0].detail}`,
       );
-      await exec(
-        'UPDATE transaction_splits SET amount_base = ? WHERE id = ?',
-        [conv.amountBase, String(s.id)],
-      );
-    }
-
-    // Account balances are stored in each account's own currency, but the
-    // trigger's choice of delta (native vs amount_base) depends on whether
-    // the txn currency matches the account currency. Foreign rows on
-    // account-currency-matches-old-base accounts changed meaning, so rebuild.
-    // The locked opening_balance_base must also move to the new base — same
-    // creation-date rate, just expressed against newBase via the USD pivot.
-    const accts = await exec(
-      'SELECT id, currency, opening_balance, created_at FROM accounts WHERE ledger_id = ?',
-      [ledgerId],
-    );
-    for (const a of accts) {
-      const createdDate = String(a.created_at ?? '').slice(0, 10);
-      const conv = await convertToBase(
-        exec,
-        Number(a.opening_balance ?? 0),
-        String(a.currency),
-        newBase,
-        createdDate,
-      );
-      await exec(
-        "UPDATE accounts SET opening_balance_base = ?, updated_at = datetime('now') WHERE id = ?",
-        [conv.amountBase, String(a.id)],
-      );
-      await recomputeAccount(exec, String(a.id));
     }
 
     await exec(`RELEASE ${sp}`);
-    return { transactions: txns.length, splits: splits.length, accounts: accts.length };
+    return { entries: entryRows.length, accounts: touchedAccountIds.size };
   } catch (err) {
     await exec(`ROLLBACK TO ${sp}`);
     await exec(`RELEASE ${sp}`);
