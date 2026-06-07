@@ -690,10 +690,21 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
 }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
   const categories = useFinanceStore((s) => s.categories);
+  const tCard = useTranslations('scheduled.card');
+  const tForm = useTranslations('scheduled.form');
+  const freqLabel = item.frequency === 'once'
+    ? tCard('once')
+    : (() => {
+        try {
+          return tForm(`frequencies.${item.frequency as 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly'}`);
+        } catch {
+          return item.frequency;
+        }
+      })();
   return (
     <div className="bg-card border-border flex items-center gap-3.5 rounded-xl border p-3.5">
       <div className="w-11 shrink-0 text-center">
-        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{item.frequency === 'once' ? 'once' : item.frequency}</div>
+        <div className="text-muted-foreground font-mono text-[9px] tracking-wide uppercase">{freqLabel}</div>
         <div className="mt-0.5 font-serif text-[22px] leading-none -tracking-[0.4px]">{item.day}</div>
       </div>
       <div className="min-w-0 flex-1">
@@ -703,10 +714,10 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
         </div>
         <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
           <span className="size-1.5 rounded-full" style={{ background: item.color }} />
-          {item.type}
+          {tForm(`types.${item.type as 'expense' | 'income' | 'transfer'}`)}
           {item.category ? <> · {categories.find(c => c.id === item.category)?.name ?? item.category}</> : null}
           {item.account ? <> · {item.account}</> : null}
-          {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">AUTO</span> : null}
+          {item.autoPost ? <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[9px] tracking-[0.6px] text-secondary-foreground">{tCard('autoChip')}</span> : null}
           {item.installmentTotal != null && (
             <span
               className={cn(
@@ -728,12 +739,12 @@ function ScheduledCard({ item, status = 'upcoming', onEdit, onDelete }: {
       <div className="flex items-center gap-0.5">
         <RowActions
           onEdit={() => {
-            const t = scheduled.find((r) => r.id === item.id);
-            if (t) onEdit(t);
+            const tpl = scheduled.find((r) => r.id === item.id);
+            if (tpl) onEdit(tpl);
           }}
           onDelete={onDelete}
-          confirmTitle={`Delete ${item.name}?`}
-          confirmDescription="This removes the scheduled item from your calendar."
+          confirmTitle={tCard('deleteTitle', { name: item.name })}
+          confirmDescription={tCard('deleteDescription')}
         />
       </div>
     </div>

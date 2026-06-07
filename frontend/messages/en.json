@@ -242,6 +242,12 @@
       "fromAccountRequired": "Pick a source account",
       "invalidInstallment": "Invalid installment total"
     },
+    "card": {
+      "once": "once",
+      "autoChip": "AUTO",
+      "deleteTitle": "Delete {name}?",
+      "deleteDescription": "This removes the scheduled item from your calendar."
+    },
     "toasts": {
       "added": "Scheduled item added",
       "updated": "Scheduled item updated",
@@ -931,6 +937,45 @@
     "transfers": "Transfers",
     "exchangeRates": "Exchange rates",
     "ledgerGroup": "Ledger"
+  },
+  "merchantPicker": {
+    "title": "Merchant",
+    "description": "Pick an existing merchant or create a new one.",
+    "searchPlaceholder": "Search merchants…",
+    "emptyHint": "No merchants yet. Type to create one.",
+    "noMatches": "No matches for \"{query}\"",
+    "unverifiedChip": "UNVERIFIED",
+    "createNew": "Create new merchant \"{name}\"",
+    "verifiedToast": "Verified {name}",
+    "nameError": "Enter a merchant name"
+  },
+  "exchangeRates": {
+    "summary": "{count, plural, one {# currency} other {# currencies}}",
+    "updatedSuffix": " · updated {date}",
+    "deleteLatestAria": "Delete latest {currency} rate",
+    "removedToast": "{currency} rate removed",
+    "addRate": "Add rate",
+    "manualFallback": "manual",
+    "rateError": "Enter a rate greater than 0",
+    "setToast": "{currency} → USD set",
+    "setDescription": "{rate} on {date}",
+    "dialog": {
+      "title": "Add exchange rate",
+      "description": "How many USD equals one unit of the foreign currency (USD-pivoted). Used by display conversion and locked into new transactions at insert time.",
+      "currency": "Currency",
+      "date": "Date",
+      "rateLabel": "Rate (1 {currency} = ? USD)",
+      "source": "Source"
+    }
+  },
+  "mobileTabsEditor": {
+    "moveUpAria": "Move {section} up",
+    "moveDownAria": "Move {section} down",
+    "sectionFallback": "section"
+  },
+  "settingsTabs": {
+    "account": "Account",
+    "ledger": "Ledger"
   },
   "shell": {
     "brand": "Finch",

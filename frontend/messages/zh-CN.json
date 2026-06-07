@@ -242,6 +242,12 @@
       "fromAccountRequired": "请选择来源账户",
       "invalidInstallment": "分期总数无效"
     },
+    "card": {
+      "once": "单次",
+      "autoChip": "自动",
+      "deleteTitle": "删除 {name}?",
+      "deleteDescription": "将从日历中移除该计划项。"
+    },
     "toasts": {
       "added": "计划项已添加",
       "updated": "计划项已更新",
@@ -931,6 +937,45 @@
     "transfers": "转账",
     "exchangeRates": "汇率",
     "ledgerGroup": "账本"
+  },
+  "merchantPicker": {
+    "title": "商户",
+    "description": "选择已有商户或创建新商户。",
+    "searchPlaceholder": "搜索商户…",
+    "emptyHint": "暂无商户。输入即可创建。",
+    "noMatches": "无匹配「{query}」",
+    "unverifiedChip": "未核验",
+    "createNew": "新建商户「{name}」",
+    "verifiedToast": "已核验 {name}",
+    "nameError": "请输入商户名称"
+  },
+  "exchangeRates": {
+    "summary": "{count} 种货币",
+    "updatedSuffix": " · 更新于 {date}",
+    "deleteLatestAria": "删除最新 {currency} 汇率",
+    "removedToast": "{currency} 汇率已删除",
+    "addRate": "添加汇率",
+    "manualFallback": "手动",
+    "rateError": "请输入大于 0 的汇率",
+    "setToast": "{currency} → USD 已设置",
+    "setDescription": "{date} 的 {rate}",
+    "dialog": {
+      "title": "添加汇率",
+      "description": "1 单位外币等于多少美元(以 USD 为枢纽)。用于显示折算并在新交易插入时锁定。",
+      "currency": "货币",
+      "date": "日期",
+      "rateLabel": "汇率(1 {currency} = ? USD)",
+      "source": "来源"
+    }
+  },
+  "mobileTabsEditor": {
+    "moveUpAria": "上移 {section}",
+    "moveDownAria": "下移 {section}",
+    "sectionFallback": "分区"
+  },
+  "settingsTabs": {
+    "account": "账户",
+    "ledger": "账本"
   },
   "shell": {
     "brand": "Finch",
