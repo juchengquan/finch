@@ -713,10 +713,12 @@ export interface AuditProblem {
 }
 
 /** Read-only semantic sweep over the entries ledger (design doc §3.3 / I8).
- *  Post-cutover (PR B) postings drive accounts.current_balance via the seal
- *  trigger + recomputeAccountFromPostings, so the cache-vs-derived check is
- *  on by default. Pass `checkBalances: false` only when intentionally exercising
- *  the cache (e.g. a fixture that deliberately seeds drift to verify detection). */
+ *  Post-cutover, postings drive accounts.current_balance via the post-insert
+ *  `tr_post_balance` trigger (entries-schema.ts) plus explicit
+ *  `recomputeAccountFromPostings` calls on edits/deletes, so the cache-vs-
+ *  derived check is on by default. Pass `checkBalances: false` only when
+ *  intentionally exercising the cache (e.g. a fixture that deliberately
+ *  seeds drift to verify detection). */
 export async function auditLedger(exec: Exec, ledgerId?: string, opts: { checkBalances?: boolean } = {}): Promise<AuditProblem[]> {
   const checkBalances = opts.checkBalances ?? true;
   const problems: AuditProblem[] = [];
