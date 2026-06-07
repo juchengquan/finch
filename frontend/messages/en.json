@@ -761,6 +761,46 @@
       "createFailure": "Could not create ledger"
     }
   },
+  "reconcileStatus": {
+    "never": "Never reconciled",
+    "today": "today",
+    "yesterday": "yesterday",
+    "daysAgo": "{count} days ago",
+    "reconciledTo": "Reconciled to {balance} · {when}",
+    "title": "Reconciled on {date}"
+  },
+  "accountForecast": {
+    "title": "Forecast",
+    "horizonAria": "Forecast horizon",
+    "horizonLabel": "{days}d",
+    "today": "Today",
+    "inDays": "In {days}d",
+    "lowPoint": "Low point",
+    "noEvents": "No scheduled events in the next {days} days.",
+    "addTemplate": "Add a <link>scheduled template</link> to forecast future debits and credits.",
+    "upcoming": "UPCOMING · {count}",
+    "moreInHorizon": "+{count} more in the next {days}d"
+  },
+  "weeklyDigest": {
+    "title": "Last week",
+    "spent": "spent",
+    "vsLastWeek": "vs last wk",
+    "txnsCount": "{count, plural, one {# transaction} other {# transactions}}",
+    "incomeChip": "+{amount} income",
+    "netPositive": "+{amount} net",
+    "netNegative": "−{amount} net",
+    "vsTypical": "vs typical {amount}",
+    "topCategories": "Top categories",
+    "biggestHit": "Biggest hit"
+  },
+  "badges": {
+    "refund": "Refund",
+    "unusual": "Unusual",
+    "unusualTitle": "{multiplier}× standard deviation from this merchant's average (≈ {mean})",
+    "pending": "Pending",
+    "upcoming": "Upcoming",
+    "done": "Done"
+  },
   "txnSheet": {
     "title": "Transaction details",
     "description": "View and edit the selected transaction."

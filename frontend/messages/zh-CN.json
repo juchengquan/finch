@@ -761,6 +761,46 @@
       "createFailure": "无法创建账本"
     }
   },
+  "reconcileStatus": {
+    "never": "从未对账",
+    "today": "今天",
+    "yesterday": "昨天",
+    "daysAgo": "{count} 天前",
+    "reconciledTo": "已对账至 {balance} · {when}",
+    "title": "对账日期:{date}"
+  },
+  "accountForecast": {
+    "title": "预测",
+    "horizonAria": "预测时段",
+    "horizonLabel": "{days} 天",
+    "today": "今日",
+    "inDays": "{days} 天后",
+    "lowPoint": "最低点",
+    "noEvents": "未来 {days} 天无计划事件。",
+    "addTemplate": "添加<link>计划项</link>以预测未来的收支。",
+    "upcoming": "即将 · {count}",
+    "moreInHorizon": "未来 {days} 天还有 +{count}"
+  },
+  "weeklyDigest": {
+    "title": "上周",
+    "spent": "已花",
+    "vsLastWeek": "对比上周",
+    "txnsCount": "{count} 笔交易",
+    "incomeChip": "+{amount} 收入",
+    "netPositive": "+{amount} 净额",
+    "netNegative": "−{amount} 净额",
+    "vsTypical": "对比平均 {amount}",
+    "topCategories": "主要类别",
+    "biggestHit": "最大支出"
+  },
+  "badges": {
+    "refund": "退款",
+    "unusual": "异常",
+    "unusualTitle": "偏离该商户均值 {multiplier} 个标准差(约 {mean})",
+    "pending": "待处理",
+    "upcoming": "即将到期",
+    "done": "已完成"
+  },
   "txnSheet": {
     "title": "交易详情",
     "description": "查看并编辑所选交易。"
