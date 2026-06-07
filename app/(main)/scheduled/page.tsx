@@ -16,6 +16,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import type { ScheduledTemplate } from '@/lib/store';
 import { parseInstallmentTotal } from '@/lib/installment';
+import { categoryPath } from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -460,7 +461,16 @@ export default function ScheduledPage() {
               <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v })}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
-                  {categories.filter(c => c.type === 'expense' || c.type === 'income').map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {(() => {
+                    // Labels render as Parent › Child › Leaf so depth-3
+                    // picks are unambiguous (CATEGORIES_LEVEL3_PLAN §5.1).
+                    const filtered = categories.filter(c => c.type === 'expense' || c.type === 'income');
+                    const byId = new Map(filtered.map((c) => [c.id, c]));
+                    return filtered
+                      .map((c) => ({ id: c.id, label: categoryPath(c, byId) }))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>);
+                  })()}
                 </SelectContent>
               </Select>
             </div>

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { suggestCategory, recentExpenses, findDuplicate } from '@/lib/select';
+import { categoryPath } from '@/lib/db/queries/categories';
 import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };
@@ -86,8 +87,14 @@ export function AddExpenseForm({
   const [note, setNote] = useState('');
 
   // Category/account options come from the projected store, scoped to the active
-  // ledger; fall back to MOCK until the store is hydrated.
-  const cats: Option[] = storeCats.filter((c) => c.ledgerId === activeId).map((x) => ({ id: x.id, name: x.name }));
+  // ledger; fall back to MOCK until the store is hydrated. Category labels
+  // render as `Parent › Child › Leaf` so depth-3 picks are unambiguous
+  // (CATEGORIES_LEVEL3_PLAN §5.1); siblings cluster via the path sort.
+  const ledgerCats = storeCats.filter((c) => c.ledgerId === activeId);
+  const ledgerCatById = new Map(ledgerCats.map((c) => [c.id, c]));
+  const cats: Option[] = ledgerCats
+    .map((c) => ({ id: c.id, name: categoryPath(c, ledgerCatById) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const accts: Option[] = storeAccts.filter((a) => a.ledgerId === activeId).map((x) => ({ id: x.id, name: x.name }));
 
   type Mock = { id: string; name: string; ledger?: string };

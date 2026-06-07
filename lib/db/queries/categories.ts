@@ -128,22 +128,102 @@ export async function categorySpend(exec: Exec, ledgerId: string): Promise<Recor
 }
 
 /**
- * Fold child spend into the parent's bucket so a parent's value = its own
- * transactions + Σ(its children's transactions). Children keep their own
- * entries too; callers pick whichever level they want for display.
+ * Fold descendant spend into ancestor buckets so each category's value =
+ * its own transactions + Σ(descendants' transactions, recursively). Works
+ * at any depth (CATEGORIES_LEVEL3_PLAN §4.1) — at 2 levels behaves the same
+ * as before; at 3 levels, grandchildren bubble up to grandparents.
+ * Children keep their own entries too; callers pick whichever level they
+ * want for display.
  */
 export function rollupCategorySpend(
   leafTotals: Record<string, number>,
   categories: { id: string; parentId: string | null }[],
 ): Record<string, number> {
-  const rolled: Record<string, number> = { ...leafTotals };
+  const childrenOf = new Map<string, string[]>();
   for (const c of categories) {
     if (c.parentId == null) continue;
-    const childTotal = leafTotals[c.id];
-    if (childTotal == null) continue;
-    rolled[c.parentId] = (rolled[c.parentId] ?? 0) + childTotal;
+    const list = childrenOf.get(c.parentId);
+    if (list) list.push(c.id);
+    else childrenOf.set(c.parentId, [c.id]);
   }
-  return rolled;
+  const memo = new Map<string, number>();
+  const totalOf = (id: string): number => {
+    const hit = memo.get(id);
+    if (hit !== undefined) return hit;
+    let t = leafTotals[id] ?? 0;
+    for (const child of childrenOf.get(id) ?? []) t += totalOf(child);
+    memo.set(id, t);
+    return t;
+  };
+  const out: Record<string, number> = {};
+  for (const c of categories) out[c.id] = totalOf(c.id);
+  return out;
+}
+
+/** Expand a set of category ids to include every descendant (recursive).
+ *  Used by `budgetProgress` so a budget on `food` also catches transactions
+ *  in `food › restaurants › japanese`. Idempotent: passing already-expanded
+ *  ids is a no-op. */
+export function expandDescendants(
+  ids: Iterable<string>,
+  categories: { id: string; parentId: string | null }[],
+): Set<string> {
+  const out = new Set<string>(ids);
+  const childrenOf = new Map<string, string[]>();
+  for (const c of categories) {
+    if (c.parentId == null) continue;
+    const list = childrenOf.get(c.parentId);
+    if (list) list.push(c.id);
+    else childrenOf.set(c.parentId, [c.id]);
+  }
+  const stack = [...out];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const child of childrenOf.get(cur) ?? []) {
+      if (!out.has(child)) {
+        out.add(child);
+        stack.push(child);
+      }
+    }
+  }
+  return out;
+}
+
+/** Display path for a category: `Food › Restaurants › Japanese`. Walks the
+ *  parent chain to the root, joining names with the standard ` › `
+ *  separator. Returns just the name when the category is top-level. */
+export function categoryPath(
+  c: { id: string; name: string; parentId: string | null },
+  byId: Map<string, { id: string; name: string; parentId: string | null }>,
+): string {
+  const parts = [c.name];
+  let cur = c.parentId;
+  for (let hop = 0; cur != null && hop < 10; hop++) {
+    const p = byId.get(cur);
+    if (!p) break;
+    parts.unshift(p.name);
+    cur = p.parentId;
+  }
+  return parts.join(' › ');
+}
+
+/** Resolve a category's effective color, falling back to the nearest
+ *  ancestor with a non-null `color` (CATEGORIES_LEVEL3_PLAN §6 color
+ *  inheritance). Returns null when the entire chain to the root has no
+ *  color — the caller picks a DEFAULT in that case. */
+export function resolveCategoryColor(
+  c: { id: string; parentId: string | null; color: string | null },
+  byId: Map<string, { id: string; parentId: string | null; color: string | null }>,
+): string | null {
+  if (c.color) return c.color;
+  let cur = c.parentId;
+  for (let hop = 0; cur != null && hop < 10; hop++) {
+    const p = byId.get(cur);
+    if (!p) break;
+    if (p.color) return p.color;
+    cur = p.parentId;
+  }
+  return null;
 }
 
 /** Confirmed expense totals per category for a month (e.g. '2026-05'). */

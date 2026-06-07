@@ -95,11 +95,14 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  -- Optional parent within a 2-level taxonomy. NULL = top-level. A non-NULL
-  -- value must itself reference a top-level row (no grandchildren — enforced
-  -- in the mutation layer, not SQL, since a self-referential CHECK is hard
-  -- to express cleanly). Promote-on-delete: SET NULL pushes children up to
-  -- top-level when their parent is removed, so no rows are destroyed.
+  -- Optional parent within a ≤3-level taxonomy (CATEGORIES_LEVEL3_PLAN).
+  -- NULL = top-level. Depth cap is enforced in the mutation layer
+  -- (assertCanBeParent / assertSubtreeFitsUnder in mutations.ts) — a
+  -- self-referential CHECK is hard to express cleanly in SQLite, so the
+  -- rule lives where the writes happen. Promote-on-delete: SET NULL pushes
+  -- children up to top-level when their parent is removed (recursively
+  -- safe at any depth — a level-3 grandchild becomes level-2 when its
+  -- level-2 parent is deleted, no rows are destroyed).
   parent_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   name       TEXT NOT NULL,
   kind       TEXT NOT NULL CHECK(kind IN ('expense','income','transfer')),
