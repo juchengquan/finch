@@ -2,6 +2,7 @@ import { test, expect } from 'bun:test';
 import { seededDb, freshDb } from '@/lib/db/test-utils';
 import { applyEntriesSchema } from '@/lib/db/entries-schema';
 import type { Exec } from '@/lib/db/repo';
+import { ensureSystemCategories } from '@/lib/db/entries';
 
 // Seeded in-memory DB (ledger 'personal', base SGD, category 'food', FX rows)
 // with the PR-A additive schema applied on top.
@@ -195,4 +196,18 @@ test('the balance trigger rounds accumulated cents', async () => {
   await rawLeg(exec, 'p-rd3', 'e-rd', null, 'food', 0.3);
   await seal(exec, 'e-rd');
   expect(await balanceOf(exec, 'a-rd')).toBe(-0.3);
+});
+
+test('ensureSystemCategories is idempotent and per-ledger', async () => {
+  const exec = await newDb();
+  const a = await ensureSystemCategories(exec, 'personal');
+  const b = await ensureSystemCategories(exec, 'personal');
+  expect(a).toEqual(b); // second call returns the same ids, inserts nothing
+
+  const rows = await exec(
+    "SELECT system, kind FROM categories WHERE ledger_id = 'personal' AND system IS NOT NULL ORDER BY system",
+  );
+  expect(rows.map((r) => `${r.system}:${r.kind}`)).toEqual([
+    'adjustment:equity', 'fx:equity', 'opening:equity',
+  ]);
 });
