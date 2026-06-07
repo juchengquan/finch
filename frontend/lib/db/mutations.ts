@@ -100,6 +100,7 @@ import { resolveAttachmentPath } from './paths';
 import { unlink } from 'node:fs/promises';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
+import { I18nError } from '@/lib/i18n-error';
 
 /** Merge a partial backup-config update into the app_state slice. Reads the
  *  existing JSON, overrides the named keys, writes back. Concurrent
@@ -183,9 +184,9 @@ function newId(prefix: string): string {
 // failed: budgets.ledger_id, budgets.name, ..."), so we match on a distinctive
 // column from each backstop index (idx_txn_dedup / idx_budget_unique in
 // schema.ts, #5). Any other error propagates unchanged.
-const DEDUP_MESSAGES: { signature: string; message: string }[] = [
-  { signature: 'transactions.account_id, transactions.date', message: 'This looks like a duplicate — an identical transaction already exists.' },
-  { signature: 'budgets.ledger_id, budgets.name', message: 'A budget with this name and cycle already exists.' },
+const DEDUP_MESSAGES: { signature: string; code: string; message: string }[] = [
+  { signature: 'transactions.account_id, transactions.date', code: 'error.duplicate.txn', message: 'This looks like a duplicate — an identical transaction already exists.' },
+  { signature: 'budgets.ledger_id, budgets.name', code: 'error.duplicate.budget', message: 'A budget with this name and cycle already exists.' },
 ];
 async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
   try {
@@ -193,8 +194,8 @@ async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
   } catch (err) {
     const msg = String((err as Error)?.message ?? err);
     if (msg.includes('UNIQUE constraint failed')) {
-      for (const { signature, message } of DEDUP_MESSAGES) {
-        if (msg.includes(signature)) throw new Error(message);
+      for (const { signature, code, message } of DEDUP_MESSAGES) {
+        if (msg.includes(signature)) throw new I18nError(code, {}, message);
       }
     }
     throw err;
@@ -212,7 +213,7 @@ async function categoryDepth(exec: Exec, id: string): Promise<number> {
   let depth = 0;
   for (let hop = 0; cur != null && hop < 10; hop++) {
     const rows = await exec('SELECT parent_id FROM categories WHERE id = ?', [cur]);
-    if (!rows.length) throw new Error('Category does not exist');
+    if (!rows.length) throw new I18nError('error.notFound.category', {}, 'Category does not exist');
     depth++;
     cur = rows[0].parent_id == null ? null : String(rows[0].parent_id);
   }
@@ -260,7 +261,7 @@ async function isInSubtreeOf(
  *  3 levels. Used by `createCategory` (new node = +1 level). */
 async function assertCanBeParent(exec: Exec, parentId: string): Promise<void> {
   const d = await categoryDepth(exec, parentId);
-  if (d >= 3) throw new Error('Categories nest at most three levels deep');
+  if (d >= 3) throw new I18nError('error.category.depthCap', {}, 'Categories nest at most three levels deep');
 }
 
 /** Reject moving the subtree rooted at `movingId` under `newParentId` when
@@ -276,7 +277,7 @@ async function assertSubtreeFitsUnder(
   const pd = await categoryDepth(exec, newParentId);
   const sd = await subtreeDepth(exec, movingId);
   if (pd + sd > 3) {
-    throw new Error('Categories nest at most three levels deep');
+    throw new I18nError('error.category.depthCap', {}, 'Categories nest at most three levels deep');
   }
 }
 
@@ -302,14 +303,14 @@ async function postSingle(
  *  in lieu of the previous 'personal' hardcode (LEDGER_CRUD_PLAN §1 fix). */
 async function resolveTemplateLedger(exec: Exec, templateId: string): Promise<string> {
   const rows = await exec('SELECT ledger_id FROM scheduled_templates WHERE id = ?', [templateId]);
-  if (!rows.length) throw new Error('Template not found');
+  if (!rows.length) throw new I18nError('error.notFound.template', {}, 'Template not found');
   return String(rows[0].ledger_id);
 }
 
 async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const templateId = str(args.templateId);
   const t = await getScheduled(exec, templateId);
-  if (!t) throw new Error('Template not found');
+  if (!t) throw new I18nError('error.notFound.template', {}, 'Template not found');
   // Use the template's own ledger, not a hardcoded 'personal'. Templates can
   // live in any ledger; posting one to the wrong ledger would orphan the
   // resulting transaction's ledger_id from its source. (LEDGER_CRUD_PLAN §1
@@ -319,7 +320,11 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   // we touch the account, so a fully-paid plan can't sneak an extra payment
   // through. installmentPaid is the derived count of confirmed posts.
   if (t.installmentTotal != null && (t.installmentPaid ?? 0) >= t.installmentTotal) {
-    throw new Error(`"${t.name}" has finished its ${t.installmentTotal}-payment plan`);
+    throw new I18nError(
+      'error.scheduled.installmentDone',
+      { name: t.name, total: t.installmentTotal },
+      `"${t.name}" has finished its ${t.installmentTotal}-payment plan`,
+    );
   }
   const date = new Date().toISOString().slice(0, 10);
   // The posted transaction's description: the template's own description, or
@@ -327,12 +332,12 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
   const desc = t.description || t.name;
 
   if (t.type === 'transfer') {
-    if (!t.fromAccountId || !t.accountId) throw new Error(`"${t.name}" is missing an account`);
+    if (!t.fromAccountId || !t.accountId) throw new I18nError('error.scheduled.missingAccount', { name: t.name }, `"${t.name}" is missing an account`);
     await createTransfer(exec, { fromAccountId: t.fromAccountId, toAccountId: t.accountId, fromAmount: t.amount ?? 0, date, note: desc });
     return;
   }
 
-  if (t.amount == null) throw new Error(`"${t.name}" has a variable amount — add it manually`);
+  if (t.amount == null) throw new I18nError('error.scheduled.variableAmount', { name: t.name }, `"${t.name}" has a variable amount — add it manually`);
   const sign = t.type === 'income' ? 1 : -1;
 
   if (t.type === 'income' && t.splits?.length) {
@@ -343,7 +348,7 @@ async function postScheduled(exec: Exec, args: Args): Promise<void> {
       await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null);
       posted++;
     }
-    if (!posted) throw new Error(`No split amounts to post for "${t.name}"`);
+    if (!posted) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
     return;
   }
 
@@ -364,12 +369,12 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   // auto-generated (or manually posted) from a recurring entry. Stamped on
   // both legs so the dedupe / cap math in generateDueScheduled works.
   const sourceTemplateId = args.sourceTemplateId ? str(args.sourceTemplateId) : null;
-  if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
-  if (fromId === toId) throw new Error('Pick two different accounts');
+  if (!fromAmount) throw new I18nError('error.transfer.amountGt0', {}, 'Transfer amount must be greater than 0');
+  if (fromId === toId) throw new I18nError('error.transfer.sameAccount', {}, 'Pick two different accounts');
 
   const [from] = await exec('SELECT ledger_id, currency, name FROM accounts WHERE id = ?', [fromId]);
   const [to] = await exec('SELECT currency, name FROM accounts WHERE id = ?', [toId]);
-  if (!from || !to) throw new Error('Account not found');
+  if (!from || !to) throw new I18nError('error.notFound.account', {}, 'Account not found');
 
   const ledgerId = String(from.ledger_id);
   const fromCurrency = String(from.currency);
@@ -379,9 +384,9 @@ async function createTransfer(exec: Exec, args: Args): Promise<void> {
   let toAmount: number;
   let rate: number;
   if (explicitToAmount != null) {
-    if (!(explicitToAmount > 0)) throw new Error('Received amount must be greater than 0');
+    if (!(explicitToAmount > 0)) throw new I18nError('error.transfer.receivedGt0', {}, 'Received amount must be greater than 0');
     if (fromCurrency === toCurrency && Math.abs(explicitToAmount - fromAmount) > 0.005) {
-      throw new Error('Same-currency transfer amounts must match');
+      throw new I18nError('error.transfer.sameCurrencyMismatch', {}, 'Same-currency transfer amounts must match');
     }
     toAmount = explicitToAmount;
     rate = fromCurrency === toCurrency ? 1 : Math.round((toAmount / fromAmount) * 1e6) / 1e6;
@@ -539,9 +544,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'adjustAccountBalance': {
       const accountId = str(args.accountId);
       const target = Number(args.targetBalance);
-      if (!Number.isFinite(target)) throw new Error('Enter a target balance');
+      if (!Number.isFinite(target)) throw new I18nError('error.adjust.targetRequired', {}, 'Enter a target balance');
       const [acct] = await exec('SELECT ledger_id, current_balance, currency FROM accounts WHERE id = ?', [accountId]);
-      if (!acct) throw new Error('Account not found');
+      if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
       const delta = r2(target - Number(acct.current_balance));
       if (delta === 0) return; // already at target — no-op
       // `source` distinguishes a manual adjust from one posted by the
@@ -629,7 +634,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // on the statement target.
       const accountId = str(args.accountId);
       const statementBalance = Number(args.statementBalance);
-      if (!Number.isFinite(statementBalance)) throw new Error('Statement balance is required');
+      if (!Number.isFinite(statementBalance)) throw new I18nError('error.reconcile.statementBalance', {}, 'Statement balance is required');
       const statementDate = args.statementDate ? str(args.statementDate) : new Date().toISOString().slice(0, 10);
       const postAdjustment = args.postAdjustment === true;
 
@@ -640,7 +645,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
           'SELECT ledger_id, currency, opening_balance FROM accounts WHERE id = ?',
           [accountId],
         );
-        if (!acct) throw new Error('Account not found');
+        if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
         const opening = Number(acct.opening_balance ?? 0);
         const [sum] = await exec(
           `SELECT COALESCE(SUM(
@@ -782,10 +787,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createBudget': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();
-      if (!name) throw new Error('Budget name is required');
+      if (!name) throw new I18nError('error.required.budgetName', {}, 'Budget name is required');
       const type: BudgetType = str(args.type) === 'income' ? 'income' : 'expense';
       const amount = Number(args.amount);
-      if (!(amount > 0)) throw new Error('Budget amount must be greater than 0');
+      if (!(amount > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
       const strList = (v: unknown): string[] => (Array.isArray(v) ? (v as unknown[]).map(str) : []);
       await withDedupMessage(() => qCreateBudget(exec, {
         id: str(args.id || newId('bgt')),
@@ -809,8 +814,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateBudget': {
       const patch = (args.patch ?? {}) as BudgetPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Budget name is required');
-      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Budget amount must be greater than 0');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.budgetName', {}, 'Budget name is required');
+      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
       // Amount-only edits on existing recurring budgets stage to
       // pending_amount instead of writing the active amount — the next
       // period boundary commits the change (BUDGET_CYCLES_PLAN §2).
@@ -830,9 +835,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateBudgetCycle': {
       const patch = (args.patch ?? {}) as BudgetCyclePatch;
       const validFreqs = ['daily','weekly','biweekly','monthly','quarterly','yearly'];
-      if (!validFreqs.includes(patch.frequency)) throw new Error(`Unknown frequency "${patch.frequency}"`);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.startDate)) throw new Error('startDate must be YYYY-MM-DD');
-      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new Error('Budget amount must be greater than 0');
+      if (!validFreqs.includes(patch.frequency)) throw new I18nError('error.budget.unknownFreq', { freq: String(patch.frequency) }, `Unknown frequency "${patch.frequency}"`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.startDate)) throw new I18nError('error.budget.dateFormat', {}, 'startDate must be YYYY-MM-DD');
+      if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
       await qUpdateBudgetCycle(exec, str(args.id), patch);
       return;
     }
@@ -846,13 +851,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'contributeBudget': {
       const amount = Number(args.amount);
-      if (!Number.isFinite(amount)) throw new Error('Invalid contribution amount');
+      if (!Number.isFinite(amount)) throw new I18nError('error.budget.invalidContribution', {}, 'Invalid contribution amount');
       await qContributeBudget(exec, str(args.id), amount);
       return;
     }
     case 'createBudgetGroup': {
       const name = str(args.name).trim();
-      if (!name) throw new Error('Group name is required');
+      if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');
       await qCreateBudgetGroup(exec, {
         id: str(args.id || newId('bgg')),
         ledgerId: str(args.ledgerId || 'personal'),
@@ -862,7 +867,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateBudgetGroup': {
       const patch = (args.patch ?? {}) as BudgetGroupPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Group name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.groupName', {}, 'Group name is required');
       await qUpdateBudgetGroup(exec, str(args.id), patch);
       return;
     }
@@ -872,9 +877,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createAccount': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();
-      if (!name) throw new Error('Account name is required');
+      if (!name) throw new I18nError('error.required.accountName', {}, 'Account name is required');
       const type = str(args.type || 'savings');
-      if (!isAccountType(type)) throw new Error(`Unknown account type "${type}"`);
+      if (!isAccountType(type)) throw new I18nError('error.account.unknownType', { type }, `Unknown account type "${type}"`);
       await qCreateAccount(exec, {
         id: str(args.id || newId('acct')),
         ledgerId,
@@ -889,9 +894,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateAccount': {
       const patch = (args.patch ?? {}) as AccountPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Account name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.accountName', {}, 'Account name is required');
       if (patch.type !== undefined && !isAccountType(str(patch.type))) {
-        throw new Error(`Unknown account type "${patch.type}"`);
+        throw new I18nError('error.account.unknownType', { type: String(patch.type) }, `Unknown account type "${patch.type}"`);
       }
       await qUpdateAccount(exec, str(args.id), patch);
       return;
@@ -904,7 +909,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'createAccountGroup': {
       const name = str(args.name).trim();
-      if (!name) throw new Error('Group name is required');
+      if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');
       await qCreateAccountGroup(exec, {
         id: str(args.id || newId('ag')),
         ledgerId: str(args.ledgerId || 'personal'),
@@ -914,7 +919,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateAccountGroup': {
       const patch = (args.patch ?? {}) as AccountGroupPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Group name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.groupName', {}, 'Group name is required');
       await qUpdateAccountGroup(exec, str(args.id), patch);
       return;
     }
@@ -931,7 +936,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'addScheduledSplit': {
       const accountId = str(args.accountId).trim();
-      if (!accountId) throw new Error('A split needs an account');
+      if (!accountId) throw new I18nError('error.required.splitAccount', {}, 'A split needs an account');
       await qAddScheduledSplit(exec, str(args.templateId), accountId, Number(args.pct) || 0);
       return;
     }
@@ -954,7 +959,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'createCategory': {
       const ledgerId = str(args.ledgerId || 'personal');
       const name = str(args.name).trim();
-      if (!name) throw new Error('Category name is required');
+      if (!name) throw new I18nError('error.required.categoryName', {}, 'Category name is required');
       const type = args.type ? str(args.type) : 'expense';
       const icon = args.icon ? str(args.icon) : null;
       const color = args.color ? str(args.color) : null;
@@ -969,13 +974,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateCategory': {
       const id = str(args.id);
       const patch = (args.patch ?? {}) as CategoryPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Category name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.categoryName', {}, 'Category name is required');
       if (patch.parentId !== undefined && patch.parentId !== null) {
-        if (patch.parentId === id) throw new Error('A category cannot be its own parent');
+        if (patch.parentId === id) throw new I18nError('error.category.selfParent', {}, 'A category cannot be its own parent');
         // Cycle defence: the target parent must not live inside the moving
         // subtree (else the move would orphan the chain into a loop).
         if (await isInSubtreeOf(exec, patch.parentId, id)) {
-          throw new Error('A category cannot be moved under its own descendant');
+          throw new I18nError('error.category.underDescendant', {}, 'A category cannot be moved under its own descendant');
         }
         // Depth defence: account for the moving subtree, not just the
         // parent's depth. Replaces the old 2-level era guard that
@@ -990,13 +995,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateTag': {
       const patch = (args.patch ?? {}) as TagPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Tag name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.tagName', {}, 'Tag name is required');
       await qUpdateTag(exec, str(args.id), patch);
       return;
     }
     case 'updateScheduled': {
       const patch = { ...(args.patch ?? {}) } as ScheduledPatch & { installmentTotal?: unknown };
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Template name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.templateName', {}, 'Template name is required');
       if ('installmentTotal' in patch) {
         patch.installmentTotal = parseInstallmentTotal(patch.installmentTotal);
       }
@@ -1005,7 +1010,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateCounterparty': {
       const patch = (args.patch ?? {}) as CounterpartyPatch;
-      if (patch.name !== undefined && !str(patch.name).trim()) throw new Error('Merchant name is required');
+      if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.merchantName', {}, 'Merchant name is required');
       await qUpdateCounterparty(exec, str(args.id), patch);
       return;
     }
@@ -1013,7 +1018,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const ledgerId = str(args.ledgerId || 'personal');
       const condition = args.condition as Condition;
       const actions = (Array.isArray(args.actions) ? args.actions : []) as Action[];
-      if (!condition) throw new Error('Rule condition is required');
+      if (!condition) throw new I18nError('error.required.ruleCondition', {}, 'Rule condition is required');
       const input: NewRule = {
         ledgerId,
         name: args.name == null ? null : str(args.name),
@@ -1051,7 +1056,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // Load just this rule from the DB (active OR inactive — explicit backfill
       // shouldn't silently skip a disabled rule the user just enabled).
       const ruleRows = await exec('SELECT * FROM rules WHERE id = ?', [ruleId]);
-      if (!ruleRows.length) throw new Error('Rule not found');
+      if (!ruleRows.length) throw new I18nError('error.notFound.rule', {}, 'Rule not found');
       const { rowToRule } = await import('./queries/rules');
       const rule = rowToRule(ruleRows[0]);
 
@@ -1148,7 +1153,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'createTag': {
       const name = str(args.name).trim();
-      if (!name) throw new Error('Tag name is required');
+      if (!name) throw new I18nError('error.required.tagName', {}, 'Tag name is required');
       await exec("INSERT INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))", [
         args.id ? str(args.id) : newId('tag'), str(args.ledgerId || 'personal'), name, args.color ? str(args.color) : null,
       ]);
@@ -1195,15 +1200,15 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'createScheduled': {
       const name = str(args.name).trim();
-      if (!name) throw new Error('Template name is required');
+      if (!name) throw new I18nError('error.required.templateName', {}, 'Template name is required');
       const type = str(args.type || 'expense');
-      if (!['income', 'expense', 'transfer'].includes(type)) throw new Error(`Unknown type "${type}"`);
+      if (!['income', 'expense', 'transfer'].includes(type)) throw new I18nError('error.account.splitTypeUnknown', { type }, `Unknown type "${type}"`);
       const frequency = str(args.frequency || 'monthly');
       if (!['once', 'daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].includes(frequency)) {
-        throw new Error(`Unknown frequency "${frequency}"`);
+        throw new I18nError('error.account.splitFreqUnknown', { freq: frequency }, `Unknown frequency "${frequency}"`);
       }
       const accountId = str(args.accountId ?? '').trim();
-      if (!accountId) throw new Error('An account is required');
+      if (!accountId) throw new I18nError('error.required.account', {}, 'An account is required');
       await qCreateScheduled(exec, {
         id: str(args.id || newId('sch')),
         ledgerId: str(args.ledgerId || 'personal'),
@@ -1234,7 +1239,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'createCounterparty': {
       const name = str(args.name).trim();
-      if (!name) throw new Error('Merchant name is required');
+      if (!name) throw new I18nError('error.required.merchantName', {}, 'Merchant name is required');
       await qCreateCounterparty(exec, {
         id: str(args.id || newId('cp')),
         ledgerId: str(args.ledgerId || 'personal'),
@@ -1249,10 +1254,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const date = str(args.date);
       const currency = str(args.currency).trim().toUpperCase();
       const rate = Number(args.rate);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
-      if (!currency) throw new Error('Currency is required');
-      if (!(rate > 0)) throw new Error('Rate must be greater than 0');
-      if (currency === 'USD') throw new Error('USD is the hub currency and is not stored');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new I18nError('error.fx.dateFormat', {}, 'Date must be YYYY-MM-DD');
+      if (!currency) throw new I18nError('error.required.currency', {}, 'Currency is required');
+      if (!(rate > 0)) throw new I18nError('error.fx.rateGt0', {}, 'Rate must be greater than 0');
+      if (currency === 'USD') throw new I18nError('error.fx.usdHub', {}, 'USD is the hub currency and is not stored');
       await qSetExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
       return;
     }
@@ -1314,13 +1319,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const symbol = str(args.symbol).trim().toUpperCase();
       const shares = Number(args.shares);
       const costBasis = Number(args.costBasis);
-      if (!accountId) throw new Error('An investment account is required');
-      if (!symbol) throw new Error('Symbol is required');
-      if (!(shares > 0)) throw new Error('Shares must be greater than 0');
-      if (!(costBasis >= 0)) throw new Error('Cost basis must be 0 or greater');
+      if (!accountId) throw new I18nError('error.required.investmentAccount', {}, 'An investment account is required');
+      if (!symbol) throw new I18nError('error.required.symbol', {}, 'Symbol is required');
+      if (!(shares > 0)) throw new I18nError('error.holding.sharesGt0', {}, 'Shares must be greater than 0');
+      if (!(costBasis >= 0)) throw new I18nError('error.holding.costBasisGte0', {}, 'Cost basis must be 0 or greater');
       const [acct] = await exec('SELECT type, currency, ledger_id FROM accounts WHERE id = ?', [accountId]);
-      if (!acct) throw new Error('Account not found');
-      if (String(acct.type) !== 'investment') throw new Error('Holdings can only be added to an investment account');
+      if (!acct) throw new I18nError('error.notFound.account', {}, 'Account not found');
+      if (String(acct.type) !== 'investment') throw new I18nError('error.holding.notInvestment', {}, 'Holdings can only be added to an investment account');
       const ledgerId = str(args.ledgerId || acct.ledger_id || 'personal');
       // Lock currency to the account's so cross-position sums in the
       // account's currency stay correct without per-row conversion. A
@@ -1329,7 +1334,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const accountCurrency = String(acct.currency ?? 'USD');
       const requested = args.currency ? str(args.currency).trim().toUpperCase() : accountCurrency;
       if (requested !== accountCurrency) {
-        throw new Error(`Holding currency must match the account currency (${accountCurrency})`);
+        throw new I18nError('error.holding.currencyMismatch', { currency: accountCurrency }, `Holding currency must match the account currency (${accountCurrency})`);
       }
       const currency = accountCurrency;
       await qCreateHolding(exec, {
@@ -1353,18 +1358,18 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const normalized: HoldingPatch = {};
       if (patch.symbol !== undefined) {
         const sym = str(patch.symbol).trim().toUpperCase();
-        if (!sym) throw new Error('Symbol cannot be empty');
+        if (!sym) throw new I18nError('error.holding.symbolEmpty', {}, 'Symbol cannot be empty');
         normalized.symbol = sym;
       }
       if (patch.name !== undefined) normalized.name = patch.name == null ? null : str(patch.name);
       if (patch.shares !== undefined) {
         const s = Number(patch.shares);
-        if (!(s > 0)) throw new Error('Shares must be greater than 0');
+        if (!(s > 0)) throw new I18nError('error.holding.sharesGt0', {}, 'Shares must be greater than 0');
         normalized.shares = s;
       }
       if (patch.costBasis !== undefined) {
         const c = Number(patch.costBasis);
-        if (!(c >= 0)) throw new Error('Cost basis must be 0 or greater');
+        if (!(c >= 0)) throw new I18nError('error.holding.costBasisGte0', {}, 'Cost basis must be 0 or greater');
         normalized.costBasis = c;
       }
       if (patch.notes !== undefined) normalized.notes = patch.notes == null ? null : str(patch.notes);
@@ -1378,8 +1383,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // partial-null pair, so this just enforces the "both halves move
       // together" invariant rather than rejecting at the boundary.
       const date = price == null ? null : args.date == null ? null : str(args.date);
-      if (price !== null && !(price >= 0)) throw new Error('Price must be 0 or greater');
-      if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Date must be YYYY-MM-DD');
+      if (price !== null && !(price >= 0)) throw new I18nError('error.holding.priceGte0', {}, 'Price must be 0 or greater');
+      if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new I18nError('error.fx.dateFormat', {}, 'Date must be YYYY-MM-DD');
       await qSetHoldingPrice(exec, id, price, date);
       return;
     }
@@ -1389,10 +1394,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'changeLedgerBase': {
       const ledgerId = str(args.ledgerId);
       const newBase = str(args.newBase).trim().toUpperCase();
-      if (!ledgerId) throw new Error('ledgerId is required');
-      if (!/^[A-Z]{3}$/.test(newBase)) throw new Error('newBase must be a 3-letter ISO code');
+      if (!ledgerId) throw new I18nError('error.required.ledgerId', {}, 'ledgerId is required');
+      if (!/^[A-Z]{3}$/.test(newBase)) throw new I18nError('error.ledger.newBaseISO', {}, 'newBase must be a 3-letter ISO code');
       const [row] = await exec('SELECT base_currency FROM ledgers WHERE id = ?', [ledgerId]);
-      if (!row) throw new Error('Ledger not found');
+      if (!row) throw new I18nError('error.notFound.ledger', {}, 'Ledger not found');
       if (String(row.base_currency) === newBase) return; // no-op
       const { recomputeAmountBases } = await import('./queries/ledgers');
       await recomputeAmountBases(exec, ledgerId, newBase);
@@ -1405,11 +1410,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const id = str(args.id);
       const name = str(args.name).trim();
       const base = str(args.base).trim().toUpperCase();
-      if (!id) throw new Error('id is required');
-      if (!name) throw new Error('Name is required');
-      if (!/^[A-Z]{3}$/.test(base)) throw new Error('base must be a 3-letter ISO code');
+      if (!id) throw new I18nError('error.required.id', {}, 'id is required');
+      if (!name) throw new I18nError('error.required.name', {}, 'Name is required');
+      if (!/^[A-Z]{3}$/.test(base)) throw new I18nError('error.ledger.baseISO', {}, 'base must be a 3-letter ISO code');
       const collide = await exec('SELECT id FROM ledgers WHERE id = ?', [id]);
-      if (collide.length) throw new Error('Ledger id already exists');
+      if (collide.length) throw new I18nError('error.ledger.duplicateId', {}, 'Ledger id already exists');
       const color = args.color == null ? null : String(args.color);
       const tagline = args.tagline == null ? null : String(args.tagline);
       const { createLedger: qCreateLedger } = await import('./queries/ledgers');
@@ -1418,10 +1423,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'updateLedger': {
       const id = str(args.id);
-      if (!id) throw new Error('id is required');
+      if (!id) throw new I18nError('error.required.id', {}, 'id is required');
       const patch = (args.patch ?? {}) as { name?: string; color?: string | null; tagline?: string | null };
       if (patch.name !== undefined && !String(patch.name).trim()) {
-        throw new Error('Name cannot be empty');
+        throw new I18nError('error.ledger.nameEmpty', {}, 'Name cannot be empty');
       }
       const { updateLedger: qUpdateLedger } = await import('./queries/ledgers');
       await qUpdateLedger(exec, id, {
@@ -1433,9 +1438,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'setDefaultLedger': {
       const id = str(args.id);
-      if (!id) throw new Error('id is required');
+      if (!id) throw new I18nError('error.required.id', {}, 'id is required');
       const exists = await exec('SELECT id FROM ledgers WHERE id = ?', [id]);
-      if (!exists.length) throw new Error('Ledger not found');
+      if (!exists.length) throw new I18nError('error.notFound.ledger', {}, 'Ledger not found');
       const { setDefaultLedger: qSetDefaultLedger } = await import('./queries/ledgers');
       await qSetDefaultLedger(exec, id);
       return;
@@ -1443,7 +1448,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'deleteLedger': {
       // Ordered cascade + attachment-file sweep (LEDGER_CRUD_PLAN §5).
       const id = str(args.id);
-      if (!id) throw new Error('id is required');
+      if (!id) throw new I18nError('error.required.id', {}, 'id is required');
       const { deleteLedger: qDeleteLedger } = await import('./queries/ledgers');
       const { relPaths } = await qDeleteLedger(exec, id);
       // Clean the ledger's key out of the displayCurrencyByLedger map so it
@@ -1466,6 +1471,6 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     default:
-      throw new Error(`Unknown action: ${action}`);
+      throw new I18nError('error.unknownAction', { action }, `Unknown action: ${action}`);
   }
 }
