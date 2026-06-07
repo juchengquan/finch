@@ -854,8 +854,6 @@ An **append-only record**, never pruned (a decade of daily rates for every suppo
 > window; that's why the old rolling-90-day `pruneOldRates` was
 > removed.
 
-Historical values for foreign-currency transactions are **not** read from this table on display — the rate is locked onto each transaction at insert time (`transactions.exchange_rate` + `transactions.amount_base`). But the table **is** the input whenever those locks are *re-derived*: `recomputeAmountBases` on a base-currency change, and `updateTransaction` on an amount/currency/**date** edit (a date-only edit re-locks too — the invariant is that `exchange_rate` is always the rate on the row's own date). Pruning would make those recomputes lossy for transactions older than the window; that's why the old rolling-90-day `pruneOldRates` was removed.
-
 Lookup for a date with no stored row (`rateToHub`):
 1. nearest stored rate on-or-before the txn date
 2. nearest stored rate on-or-after the txn date (covers backdates before the first stored row)
