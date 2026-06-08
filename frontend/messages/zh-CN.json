@@ -516,6 +516,18 @@
       "fx": "汇兑损益",
       "chartAria": "按月堆叠的净资产变化(六个月,围绕零轴)",
       "netLatest": "上月净变化: {value}"
+    },
+    "netWorthByType": {
+      "title": "按类型分净资产",
+      "subtitle": "查看净资产在不同账户类型中的分布。",
+      "cash": "现金",
+      "savings": "储蓄",
+      "investment": "投资",
+      "creditCard": "信用卡",
+      "fx": "外币",
+      "virtual": "虚拟账户",
+      "chartAria": "按六种账户类型分解净资产,正值在零轴上方,负值在下方",
+      "totalNote": "净资产: {value}"
     }
   },
   "activity": {

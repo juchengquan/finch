@@ -61,19 +61,12 @@ async function open(): Promise<ServerDb> {
     await seedDatabase(exec);
     await migrate(exec, { fresh: true });
   } else {
-    // One-time safety net for the double-entry cutover: if the file is on an
-    // older schema and the cutover migration hasn't run yet, snapshot it now
-    // so the user can restore by replacing the DB file with the .bak.
-    // VACUUM INTO writes an fsynced, WAL-clean copy; we skip if the bak
-    // already exists so a repeated open (e.g. after a crash mid-migration)
-    // doesn't overwrite a previously-good snapshot.
-    const bakPath = `${full}.pre-de.bak`;
-    const recordedVersionRows = await exec('SELECT schema_version FROM db_metadata WHERE id = 1').catch(() => []);
-    const recordedVersion = String(recordedVersionRows[0]?.schema_version ?? '');
-    if (needsCutoverSnapshot(recordedVersion) && !existsSync(bakPath)) {
-      // VACUUM INTO writes an fsynced, WAL-clean copy to bakPath.
-      driver.prepare('VACUUM INTO ?').run(bakPath);
-    }
+    // PR-C-FOLLOWUPS NOTE: the pre-DE safety-net snapshot
+    // (`VACUUM INTO ${full}.pre-de.bak` when needsCutoverSnapshot) was removed
+    // alongside the 2026-06-14 MIGRATIONS cutover entry. The project is
+    // pre-release with no legacy databases to preserve, so the snapshot path
+    // is dead code. If a pre-DE database ever needs to be carried forward,
+    // reinstate the snapshot from git history at the DE PR C merge commit.
     await migrate(exec, { fresh: false });
   }
 
@@ -93,6 +86,43 @@ export function _resetServerDbForTests(): void {
     _db.then((d) => d.driver.close()).catch(() => {});
   }
   _db = null;
+}
+
+// ---------------------------------------------------------------------------
+// Audit result cache
+// ---------------------------------------------------------------------------
+// `/api/db-info` runs `auditLedger` on every call. The DB doesn't change
+// between two `/api/db-info` calls unless a mutation happens, and the
+// response carries a `checkedAt` so the client can see staleness. Caching
+// the result per-process reduces it to one audit per server life.
+//
+// No manual invalidation: if the user mutates the DB, the cached audit is
+// stale until the next process restart. The `checkedAt` field makes the
+// staleness visible; a future PR can wire mutation-driven invalidation.
+
+let _auditCache: import('./entries').DbAudit | null = null;
+
+const AUDIT_MAX_PROBLEMS = 50;
+
+/** Return the audit result for the live DB, computing + caching on the first
+ *  call and returning the cached value on subsequent calls. */
+export async function getCachedAudit(): Promise<import('./entries').DbAudit> {
+  if (_auditCache) return _auditCache;
+  const { exec } = await getServerDb();
+  const { auditLedger } = await import('./entries');
+  const problems = await auditLedger(exec);
+  _auditCache = {
+    problems: problems.slice(0, AUDIT_MAX_PROBLEMS),
+    problemCount: problems.length,
+    checkedAt: new Date().toISOString(),
+  };
+  return _auditCache;
+}
+
+/** Test-only: drop the cached audit so the next getCachedAudit() re-runs
+ *  the audit. Never call from app code. */
+export function _resetAuditCacheForTests(): void {
+  _auditCache = null;
 }
 
 // Best-effort graceful-shutdown checkpoint. SQLite auto-checkpoints when the
@@ -735,19 +765,4 @@ async function readAppVersion(): Promise<string> {
   } catch {
     return '0.0.0';
   }
-}
-
-/**
- * Pure predicate: returns true when a DB carrying `recordedVersion` needs a
- * pre-double-entry cutover snapshot. Exported so it can be unit-tested without
- * the filesystem / driver involved.
- *
- * The snapshot is taken whenever the recorded version is non-empty AND strictly
- * older than the cutover migration key ('2026-06-14T00:00:00Z'). An empty
- * string means the db_metadata row doesn't exist yet (very old or synthetic
- * test DB) — we skip the snapshot in that case because there is nothing
- * meaningful to preserve before any migration has run.
- */
-export function needsCutoverSnapshot(recordedVersion: string): boolean {
-  return recordedVersion !== '' && recordedVersion < '2026-06-14T00:00:00Z';
 }

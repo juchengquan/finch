@@ -27,6 +27,7 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
+  isActive: true,
   color: null,
   sortOrder: 0,
   lastReconciledAt: null,

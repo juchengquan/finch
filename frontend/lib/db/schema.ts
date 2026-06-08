@@ -435,60 +435,6 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 export const SCHEMA_VERSION = '2026-06-14T00:00:00Z';
 export const APP_NAME = 'finch';
 
-// Replay-safe recreation dance for accounts: removes the opening_balance and
-// opening_balance_base columns (they became opening entries in the cutover).
-// Pattern mirrors CATEGORIES_UPGRADE in entries-schema.ts:
-//   NO staging drop — on a replay after a mid-dance crash the surviving
-//   accounts_new still holds the data; the CREATE fails "already exists"
-//   (swallowed by the migration runner), INSERT OR IGNORE tops up any missing
-//   rows (or is a no-op when the source table is already gone), and the RENAME
-//   promotes the populated staging table. FK OFF/ON wrap is required because
-//   account_groups / ledgers are referenced by the staging table's FKs and
-//   SQLite won't parse a self-referential FK during the rename in FK=ON mode.
-export const ACCOUNTS_DROP_OPENING_COLUMNS: string[] = [
-  'PRAGMA foreign_keys = OFF',
-  // Modern ALTER semantics (pinned by applyPragmaBootstrap) re-parse every
-  // trigger on RENAME — and tr_post_balance references accounts, which is
-  // transiently dropped mid-dance. Legacy mode skips the re-parse; the
-  // staging rename needs no reference rewriting. See CATEGORIES_UPGRADE.
-  'PRAGMA legacy_alter_table = ON',
-  `CREATE TABLE IF NOT EXISTS accounts_new (
-     id                   TEXT PRIMARY KEY,
-     ledger_id            TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-     group_id             TEXT REFERENCES account_groups(id) ON DELETE SET NULL,
-     name                 TEXT NOT NULL,
-     type                 TEXT NOT NULL CHECK(type IN ('savings','credit_card','investment','cash','fx','virtual')),
-     currency             TEXT NOT NULL DEFAULT 'SGD',
-     current_balance      REAL NOT NULL DEFAULT 0,
-     color                TEXT,
-     sort_order           INTEGER NOT NULL DEFAULT 0,
-     include_in_net_worth INTEGER NOT NULL DEFAULT 1,
-     is_active            INTEGER NOT NULL DEFAULT 1,
-     archived_at          TEXT,
-     last_reconciled_at      TEXT,
-     last_reconciled_balance REAL,
-     created_at           TEXT NOT NULL,
-     updated_at           TEXT NOT NULL
-   )`,
-  // INSERT OR IGNORE: replay-safe — if accounts_new already has the rows (a
-  // previous partial run), OR IGNORE skips them; if the source accounts table
-  // is already gone (post-RENAME), the SELECT returns 0 rows harmlessly.
-  `INSERT OR IGNORE INTO accounts_new
-     (id, ledger_id, group_id, name, type, currency, current_balance,
-      color, sort_order, include_in_net_worth, is_active, archived_at,
-      last_reconciled_at, last_reconciled_balance, created_at, updated_at)
-   SELECT id, ledger_id, group_id, name, type, currency, current_balance,
-          color, sort_order, include_in_net_worth, is_active, archived_at,
-          last_reconciled_at, last_reconciled_balance, created_at, updated_at
-   FROM accounts`,
-  'DROP TABLE accounts',
-  'ALTER TABLE accounts_new RENAME TO accounts',
-  'CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id)',
-  'CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id)',
-  'PRAGMA legacy_alter_table = OFF',
-  'PRAGMA foreign_keys = ON',
-];
-
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
 // Applied in lex (== chronological) order for versions strictly greater than a
 // database's recorded schema_version.
@@ -649,33 +595,25 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
   ],
   // Double-entry cutover, phase 1 (PR B / DOUBLE_ENTRY_PLAN §12): the DE core
   // tables/triggers + the categories equity upgrade + entry_attachments +
-  // entries_fts land on existing files. Structures only — the data move and
-  // the legacy-table drops are the '2026-06-14' entry. Every statement is
-  // idempotent under the isAlreadyAppliedError rule.
+  // entries_fts land on existing files. Every statement is idempotent under
+  // the isAlreadyAppliedError rule.
   // NOTE: ENTRIES_SCHEMA is listed first — it creates the entries/postings/
   // entry_tags tables that CATEGORIES_UPGRADE and subsequent steps reference.
   // The CATEGORIES_UPGRADE dance is replay-safe by construction (see its comment in entries-schema.ts).
+  //
+  // PR-C-FOLLOWUPS NOTE: the '2026-06-14' cutover (data-move + accounts-dance
+  // + legacy-table drops) is intentionally absent. The project is pre-release
+  // with no legacy databases to preserve, so the upgrade path is dead code;
+  // the canonical SCHEMA above already carries the post-cutover shape. If a
+  // pre-DE database ever needs to be carried forward, the cutover code lives
+  // in git history at the DE PR C merge commit and can be reinstated behind a
+  // versioned MIGRATIONS entry.
   '2026-06-13T00:00:00Z': [
     ENTRIES_SCHEMA,
     ...CATEGORIES_UPGRADE,
     ENTRY_ATTACHMENTS_DDL,
     ENTRIES_FTS_DDL,
   ],
-  // Double-entry cutover, phase 2 (PR B): move every legacy row into
-  // entries/postings (id-faithful — see cutover.ts), rebuild accounts without
-  // the opening-balance columns (the figures became opening ENTRIES), then
-  // drop the legacy tables. moveLegacyData recomputes balances and runs the
-  // full auditLedger, THROWING on any problem — a failed audit aborts the
-  // version (it is never stamped) and the pre-migration .pre-de.bak snapshot
-  // (server.ts) is the rollback. Replay-safe: the move skips/repairs
-  // per-entry, the accounts dance follows the no-staging-drop pattern, and
-  // the drops are IF EXISTS.
-  '2026-06-14T00:00:00Z': async (exec) => {
-    const { moveLegacyData, dropLegacyTables } = await import('./cutover');
-    await moveLegacyData(exec);
-    for (const sql of ACCOUNTS_DROP_OPENING_COLUMNS) await runMigrationStmt(exec, sql);
-    await dropLegacyTables(exec);
-  },
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be

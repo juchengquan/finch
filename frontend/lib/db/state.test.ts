@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { buildState, projectState } from '@/lib/db/state';
 import { applyMutation } from '@/lib/db/mutations';
 import { listCounterparties } from '@/lib/db/queries/counterparties';
-import { freshDb, seededDb } from '@/lib/db/test-utils';
+import { freshDb, seededAndAudited } from '@/lib/db/test-utils';
 import type { PersistState } from '@/lib/db/repo';
 
 const sample: PersistState = {
@@ -100,7 +100,7 @@ test('account balance reflects the live transaction set (not just the seed)', as
 });
 
 test('counterparty verify + alias edits write the table (no app_state shim)', async () => {
-  const { exec } = await seededDb();
+  const exec = await seededAndAudited();
   // cp-04 (Don Don Donki) is seeded unverified; flip it.
   await applyMutation(exec, 'verifyCounterparty', { id: 'cp-04' });
   let donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
@@ -111,7 +111,7 @@ test('counterparty verify + alias edits write the table (no app_state shim)', as
 });
 
 test('mobile bottom-bar tab ids round-trip through app_state', async () => {
-  const { exec } = await seededDb();
+  const exec = await seededAndAudited();
 
   // Unset → projects as empty (the client applies its own default).
   expect((await projectState(exec)).mobileTabIds).toEqual([]);
@@ -126,7 +126,7 @@ test('mobile bottom-bar tab ids round-trip through app_state', async () => {
 });
 
 test('per-ledger display currency round-trips through app_state', async () => {
-  const { exec } = await seededDb();
+  const exec = await seededAndAudited();
 
   // Unset → projects as an empty map (the client falls back to each ledger's base).
   expect((await projectState(exec)).displayCurrencyByLedger).toEqual({});
