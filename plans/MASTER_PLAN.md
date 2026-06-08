@@ -272,7 +272,11 @@ retired the last `app_state` override shims. Delivered in phases on one branch:
 - [x] **Balance recompute** — `recomputeAccount` keeps `current_balance` /
       `balance_after` correct after any edit/cancel/delete (the trigger is INSERT-only).
 - [x] **Accounts** — display columns + create / table-backed update / archive /
-      delete; **`accountOverrides` retired**.
+      unarchive (Filter ▾ on the list page surfaces archived accounts with an
+      inline Unarchive affordance); **no delete UI** — `deleteAccount` lives in
+      the DB layer for future cleanup scripts but is unreachable from the
+      store/UI. **`accountOverrides` retired**. See
+      `docs/superpowers/specs/2026-06-08-account-archive-unarchive-design.md`.
 - [x] **Delete/edit everywhere** — shared `<RowActions>` (⋯ menu + confirm) +
       edit dialogs for categories, goals (as income budgets), tags, recurring,
       transfers, merchants.
