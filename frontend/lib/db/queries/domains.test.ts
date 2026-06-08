@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
+import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount, listArchivedAccounts } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
 import { seededAndAudited } from '@/lib/db/test-utils';
@@ -757,4 +757,37 @@ test('export: transactionExportRows scopes by ledger and month', async () => {
   // A month with no data yields an empty export, not an error.
   const none = await transactionExportRows(exec, { ledgerId: 'personal', month: '1999-01' });
   expect(none).toEqual([]);
+});
+
+test('accounts: listArchivedAccounts returns only is_active=0 rows for the given ledger, archived_at DESC', async () => {
+  const exec = await seeded();
+  // Create two accounts; archive one. The archived one should appear in
+  // listArchivedAccounts, the other should not.
+  await createAccount(exec, {
+    id: 'acct-active', ledgerId: 'personal', name: 'Active Acct', type: 'cash',
+    currency: 'USD', groupId: 'cash', openingBalance: 100, color: '#111111',
+  });
+  await createAccount(exec, {
+    id: 'acct-archived', ledgerId: 'personal', name: 'Archived Acct', type: 'cash',
+    currency: 'USD', groupId: 'cash', openingBalance: 200, color: '#222222',
+  });
+  await archiveAccount(exec, 'acct-archived');
+
+  const archived = await listArchivedAccounts(exec, 'personal');
+  expect(archived).toHaveLength(1);
+  expect(archived[0].id).toBe('acct-archived');
+  expect(archived[0].isActive).toBe(false);
+  expect(archived[0].archivedAt).not.toBeNull();
+
+  // Cross-ledger isolation: create + archive in 'family' ledger, assert
+  // the personal-scoped query still returns only its own.
+  await exec(`INSERT OR IGNORE INTO ledgers (id) VALUES ('family')`);
+  await createAccount(exec, {
+    id: 'acct-family', ledgerId: 'family', name: 'Family Acct', type: 'cash',
+    currency: 'USD', groupId: null, openingBalance: 0, color: '#333333',
+  });
+  await archiveAccount(exec, 'acct-family');
+  const personalArchived = await listArchivedAccounts(exec, 'personal');
+  expect(personalArchived).toHaveLength(1);
+  expect(personalArchived[0].id).toBe('acct-archived');
 });

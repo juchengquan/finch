@@ -57,6 +57,10 @@ export interface AccountRow {
    *  `null` while the account is active. Powers the "Archived <date>" subtitle
    *  on the ghost-row variant in the Accounts list. */
   archivedAt: string | null;
+  /** Mirrors `accounts.is_active` (1 → true, 0 → false) so consumers can branch
+   *  on the active/archived state without re-querying. Always true for rows
+   *  from `listAccounts`, always false for rows from `listArchivedAccounts`. */
+  isActive: boolean;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
@@ -99,6 +103,50 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     lastReconciledAt: r.lastReconciledAt == null ? null : String(r.lastReconciledAt),
     lastReconciledBalance: r.lastReconciledBalance == null ? null : Number(r.lastReconciledBalance),
     archivedAt: r.archivedAt == null ? null : String(r.archivedAt),
+  }));
+}
+
+/** List archived (is_active=0) accounts; pass a ledgerId to scope, or omit for
+ *  all ledgers. Same row shape as listAccounts (the mapper is duplicated
+ *  below; both queries return the canonical AccountRow so consumers can
+ *  treat them uniformly). Ordered by archived_at DESC (most recent first). */
+export async function listArchivedAccounts(exec: Exec, ledgerId?: string): Promise<AccountRow[]> {
+  const where = ledgerId ? 'WHERE a.ledger_id = ? AND a.is_active = 0' : 'WHERE a.is_active = 0';
+  const rows = await exec(
+    `SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency, a.current_balance AS balance,
+            COALESCE(op.amount, 0) AS openingBalance,
+            COALESCE(op.amount_base, 0) AS openingBalanceBase,
+            a.group_id AS groupId, g.name AS groupName, a.color,
+            a.sort_order AS sortOrder, a.include_in_net_worth AS inw,
+            a.is_active AS isActive,
+            a.archived_at AS archivedAt,
+            a.last_reconciled_at AS lastReconciledAt,
+            a.last_reconciled_balance AS lastReconciledBalance
+       FROM accounts a
+       LEFT JOIN account_groups g ON a.group_id = g.id
+       LEFT JOIN postings op ON op.entry_id = 'open-' || a.id AND op.account_id = a.id
+      ${where}
+      ORDER BY a.archived_at DESC`,
+    ledgerId ? [ledgerId] : [],
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    ledgerId: String(r.ledgerId),
+    name: String(r.name),
+    type: String(r.type),
+    currency: String(r.currency),
+    balance: Number(r.balance),
+    openingBalance: Number(r.openingBalance ?? 0),
+    openingBalanceBase: Number(r.openingBalanceBase ?? 0),
+    groupId: r.groupId == null ? null : String(r.groupId),
+    groupName: r.groupName == null ? null : String(r.groupName),
+    includeInNetWorth: Number(r.inw),
+    isActive: Number(r.isActive ?? 0) !== 0,
+    archivedAt: r.archivedAt == null ? null : String(r.archivedAt),
+    color: r.color == null ? null : String(r.color),
+    sortOrder: Number(r.sortOrder ?? 0),
+    lastReconciledAt: r.lastReconciledAt == null ? null : String(r.lastReconciledAt),
+    lastReconciledBalance: r.lastReconciledBalance == null ? null : Number(r.lastReconciledBalance),
   }));
 }
 
