@@ -33,7 +33,6 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   lastReconciledAt: null,
   lastReconciledBalance: null,
   archivedAt: null,
-  isActive: true,
   ...over,
 });
 

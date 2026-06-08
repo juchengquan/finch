@@ -1639,7 +1639,7 @@ test('deleteLedger refuses the last ledger', async () => {
 });
 
 test('unarchiveAccount: round-trip with archiveAccount restores the row to the active list with archivedAt cleared', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Create an account, archive it, unarchive it — assert the row is identical
   // to the pre-archive snapshot field-for-field, except archivedAt flips to null.
   // §2: accounts no longer has opening_balance (opening entries replace that column).
@@ -1666,7 +1666,7 @@ test('unarchiveAccount: round-trip with archiveAccount restores the row to the a
 });
 
 test('unarchiveAccount: nonexistent id is a silent no-op (no throw, no rows changed)', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Direct call (not via applyMutation) — the mutation runner's catch wraps
   // any throw; for this assertion we just want to verify qUnarchiveAccount
   // doesn't blow up on a missing row.

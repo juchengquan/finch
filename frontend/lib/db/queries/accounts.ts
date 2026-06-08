@@ -57,10 +57,6 @@ export interface AccountRow {
    *  `null` while the account is active. Powers the "Archived <date>" subtitle
    *  on the ghost-row variant in the Accounts list. */
   archivedAt: string | null;
-  /** Mirrors `accounts.is_active` (1 → true, 0 → false) so consumers can branch
-   *  on the active/archived state without re-querying. Always true for rows
-   *  from `listAccounts`, always false for rows from `listArchivedAccounts`. */
-  isActive: boolean;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
