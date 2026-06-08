@@ -129,5 +129,5 @@ export function applyPragmaBootstrap(db: SqliteDriver): void {
   // macOS ships ON, Linux ships OFF — which made the cutover's rebuild dances
   // pass locally and fail in CI. Pinning it here makes every environment run
   // the strict semantics; the dances explicitly toggle it ON around their
-  // RENAMEs (see CATEGORIES_UPGRADE / ACCOUNTS_DROP_OPENING_COLUMNS).
+  // RENAMEs (see CATEGORIES_UPGRADE).
 }
