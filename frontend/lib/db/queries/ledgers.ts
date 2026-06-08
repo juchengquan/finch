@@ -8,9 +8,9 @@
 // Full CRUD (create / rename / restyle / set-default / delete) lives in
 // LEDGER_CRUD_PLAN — see §3 + §5 for the design.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import { convertToBase } from './rates';
-import { rebuildEntry, auditLedger, ensureSystemCategories } from '@/lib/db/entries';
+import { rebuildEntry, auditLedger, ensureSystemCategories } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 
 export interface LedgerRow {
@@ -250,7 +250,7 @@ export async function recomputeAmountBases(
       const fxCatId = fxRows[0] ? String(fxRows[0].id) : null;
 
       // Build LegInput[] — see design §5.3.
-      const legs: import('@/lib/db/entries').LegInput[] = [];
+      const legs: import('../core/entries').LegInput[] = [];
       for (const p of postingRows) {
         if (p.account_id != null) {
           // Account leg: omit amountBase so rebuildEntry re-locks at the new base.

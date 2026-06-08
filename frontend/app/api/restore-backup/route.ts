@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { restoreBackup } from '@/lib/db/server';
+import { restoreBackup } from '@/lib/db/core/server';
 
 // Swap the live DB with the contents of one of the on-disk backups listed by
 // GET /api/backups. Runs through the same validation + autoBackup + swap as

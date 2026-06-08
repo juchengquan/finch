@@ -1,4 +1,4 @@
-import { getServerDb } from '@/lib/db/server';
+import { getServerDb } from '@/lib/db/core/server';
 import { transactionsCsv } from '@/lib/db/queries/export';
 
 // Human-readable transactions export (CSV), built from the live server DB.

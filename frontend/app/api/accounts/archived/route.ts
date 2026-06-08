@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerDb } from '@/lib/db/server';
+import { getServerDb } from '@/lib/db/core/server';
 import { listArchivedAccounts } from '@/lib/db/queries/accounts';
 
 export const runtime = 'nodejs';

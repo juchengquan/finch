@@ -5,8 +5,8 @@ import path from 'node:path';
 import { openDb, execFor, applyPragmaBootstrap, type SqliteDriver } from './driver';
 import { applySchema, migrate } from './schema';
 import { seedDatabase } from './seed';
-import { projectState, readBackupConfig } from './state';
-import { bumpUpdated, rowCounts, stampExport } from './queries/metadata';
+import { projectState, readBackupConfig } from '../state';
+import { bumpUpdated, rowCounts, stampExport } from '../queries/metadata';
 import { computeChecksum } from './checksum';
 import { rollBudgetsIfDue } from '@/lib/budgets/rollover';
 import type { Exec, ProjectedState } from './repo';
@@ -176,7 +176,7 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
 export interface ImportValidation {
   ok: boolean;
   reason?: string;
-  metadata?: import('./queries/metadata').DbMetadata;
+  metadata?: import('../queries/metadata').DbMetadata;
 }
 
 /**
@@ -250,7 +250,7 @@ export async function validateImportBytes(bytes: Uint8Array): Promise<ImportVali
     // produce a useful error.
     await applySchema(exec);
 
-    const { readMetadata } = await import('./queries/metadata');
+    const { readMetadata } = await import('../queries/metadata');
     let meta = await readMetadata(exec);
     if (!meta) {
       // Pre-bootstrap file: run migrate to populate metadata, then re-read.
@@ -297,7 +297,7 @@ function importMaxMb(): number {
 
 export interface ImportResult {
   ok: true;
-  metadata: import('./queries/metadata').DbMetadata;
+  metadata: import('../queries/metadata').DbMetadata;
   backupPath: string;
 }
 
@@ -676,7 +676,7 @@ export async function exportDbBytes(): Promise<{ bytes: Uint8Array; filename: st
  * include, no included file lacks a row).
  */
 export async function exportPackBytes(): Promise<{ bytes: Uint8Array; filename: string }> {
-  const { listAttachmentFiles } = await import('./queries/attachments');
+  const { listAttachmentFiles } = await import('../queries/attachments');
   const { resolveAttachmentPath } = await import('./paths');
   const { buildPack } = await import('./pack');
   const { SCHEMA_VERSION } = await import('./schema');

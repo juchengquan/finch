@@ -7,8 +7,8 @@ import {
   confirmTransaction,
   getTransaction,
 } from '@/lib/db/queries/transactions';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from '../core/test-utils';
+import type { Exec } from '../core/repo';
 
 const seeded = async (): Promise<Exec> => {
   const { exec } = await seededDb();

@@ -11,7 +11,7 @@
 // MoveLeg / MoveHeader are exported so seed.ts can be a second consumer
 // without re-implementing the shape.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from './repo';
 import { dedupHash } from './entries';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerDb, getCachedAudit } from '@/lib/db/server';
-import type { DbAudit } from '@/lib/db/entries';
+import { getServerDb, getCachedAudit } from '@/lib/db/core/server';
+import type { DbAudit } from '@/lib/db/core/entries';
 import { readMetadata } from '@/lib/db/queries/metadata';
 
 export const runtime = 'nodejs';

@@ -2,8 +2,8 @@ import { test, expect, beforeEach, afterEach } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { autoBackup, listBackups, _resetServerDbForTests } from '@/lib/db/server';
-import { detectFileKind } from '@/lib/db/pack';
+import { autoBackup, listBackups, _resetServerDbForTests } from './core/server';
+import { detectFileKind } from './core/pack';
 
 // Each test gets a fresh tmp dir + resets the cached server connection so it
 // reopens against that dir. Without the reset, the singleton would keep
@@ -97,7 +97,7 @@ test('autoBackup when frequencyMs = -1 (off): returns created=false, no new file
   expect(before).toBeGreaterThanOrEqual(1);
 
   // Now write the off setting via the mutation path (round-trip through the server).
-  const { getServerDb } = await import('@/lib/db/server');
+  const { getServerDb } = await import('./core/server');
   const { setAppState } = await import('@/lib/db/queries/appState');
   const db = await getServerDb();
   await setAppState(db.exec, 'backupConfig', JSON.stringify({ frequencyMs: -1, retention: 14 }));
@@ -115,7 +115,7 @@ test('autoBackup with force=true overrides both throttle AND off', async () => {
   expect(a.created).toBe(true);
 
   // Now flip to "off" via app_state.
-  const { getServerDb } = await import('@/lib/db/server');
+  const { getServerDb } = await import('./core/server');
   const { setAppState } = await import('@/lib/db/queries/appState');
   const db = await getServerDb();
   await setAppState(db.exec, 'backupConfig', JSON.stringify({ frequencyMs: -1, retention: 14 }));

@@ -2,8 +2,8 @@ import { test, expect } from 'bun:test';
 import { buildState, projectState } from '@/lib/db/state';
 import { applyMutation } from '@/lib/db/mutations';
 import { listCounterparties } from '@/lib/db/queries/counterparties';
-import { freshDb, seededAndAudited } from '@/lib/db/test-utils';
-import type { PersistState } from '@/lib/db/repo';
+import { freshDb, seededAndAudited } from './core/test-utils';
+import type { PersistState } from './core/repo';
 
 const sample: PersistState = {
   transactions: [

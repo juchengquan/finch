@@ -1,8 +1,8 @@
 import { test, expect } from 'bun:test';
 import { createRule } from '@/lib/db/queries/rules';
 import { insertTxRow } from '@/lib/db/queries/transactions';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from '../db/core/test-utils';
+import type { Exec } from '../db/core/repo';
 import type { Action, Condition } from '@/lib/rules/types';
 
 async function seeded(): Promise<Exec> {

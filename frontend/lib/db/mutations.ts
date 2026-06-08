@@ -3,8 +3,8 @@
 // table; pending/scheduled/override slices live in app_state. Each handler is a
 // pure SQL mutation; the API route persists the file and returns the new state.
 
-import type { Exec } from './repo';
-import { ensureSystemCategories } from './entries';
+import type { Exec } from './core/repo';
+import { ensureSystemCategories } from './core/entries';
 import {
   getScheduled,
   deleteScheduled as qDeleteScheduled,
@@ -93,14 +93,14 @@ import {
   postTransfer, postAdjustment, postSimple,
   rebuildEntry, resolveEntryRef,
   recomputeAccountFromPostings,
-} from './entries';
-import { seedReference, insertTransactions, seedTransactionTags } from './seed';
+} from './core/entries';
+import { seedReference, insertTransactions, seedTransactionTags } from './core/seed';
 import {
   deleteAttachment as qDeleteAttachment,
   getAttachmentFile as qGetAttachmentFile,
   getAttachmentRelPathsForTransaction as qAttachmentPathsForTx,
 } from './queries/attachments';
-import { resolveAttachmentPath } from './paths';
+import { resolveAttachmentPath } from './core/paths';
 import { unlink } from 'node:fs/promises';
 import transactionsData from '@/data/transactions.json';
 import type { Tx } from '@/lib/store';
@@ -715,7 +715,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         // For split entries (≥2 category legs) the spec says: no-op on legs.
         if (catLegs.length >= 2) continue;
 
-        const legs: import('./entries').LegInput[] = [
+        const legs: import('./core/entries').LegInput[] = [
           {
             id: String(acctLeg.id),
             accountId: String(acctLeg.account_id),
@@ -1164,7 +1164,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
             );
             // No-op on splits (≥2 category legs) — mirrors bulkRecategorize parity.
             if (catLegs.length < 2) {
-              const legs: import('./entries').LegInput[] = [
+              const legs: import('./core/entries').LegInput[] = [
                 {
                   id: String(acctLeg.id),
                   accountId: String(acctLeg.account_id),
@@ -1250,7 +1250,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         );
         if (acctLeg) {
           const totalBase = Math.abs(Number(acctLeg.amount_base));
-          const legs: import('./entries').LegInput[] = [
+          const legs: import('./core/entries').LegInput[] = [
             {
               id: String(acctLeg.id),
               accountId: String(acctLeg.account_id),

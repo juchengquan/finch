@@ -5,7 +5,7 @@
 //
 // See plans/done/BUDGET_CYCLES_PLAN.md for the design.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../db/core/repo';
 import { periodOf, prevPeriod, nextPeriod, periodRange, type Frequency } from './period';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;

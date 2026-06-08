@@ -1,7 +1,7 @@
 // Human-readable exports built from the DB (names resolved via joins), distinct
 // from the raw SQLite-file backup. Currently: transactions as CSV.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import { toCsv, type CsvColumn } from '@/lib/csv';
 
 export interface TxExportRow {

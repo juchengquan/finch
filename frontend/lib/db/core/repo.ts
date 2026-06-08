@@ -1,15 +1,21 @@
 import type { Tx, ScheduledTemplate } from '@/lib/store';
-import type { AccountRow } from './queries/accounts';
-import type { AccountGroupRow } from './queries/accountGroups';
-import type { BudgetRow } from './queries/budgets';
-import type { BudgetGroupRow } from './queries/budgetGroups';
-import type { CategoryRow } from './queries/categories';
-import type { Counterparty } from './queries/counterparties';
-import type { LedgerRow } from './queries/ledgers';
-import type { ExchangeRate } from './queries/system';
-import type { Tag } from './queries/tags';
-import type { Holding } from './queries/holdings';
-import type { Attachment } from './queries/attachments';
+
+// Row types live in their per-domain types.ts (PR 2). For now, repo.ts
+// references them from the (still-to-be-moved) queries/ folder; PR 1 leaves
+// these imports as '../queries/<x>' and they resolve because we keep
+// queries/ in this PR. PR 2 (types extraction) updates them to
+// '../domain/<x>/types'.
+import type { AccountRow } from '../queries/accounts';
+import type { AccountGroupRow } from '../queries/accountGroups';
+import type { BudgetRow } from '../queries/budgets';
+import type { BudgetGroupRow } from '../queries/budgetGroups';
+import type { CategoryRow } from '../queries/categories';
+import type { Counterparty } from '../queries/counterparties';
+import type { LedgerRow } from '../queries/ledgers';
+import type { ExchangeRate } from '../queries/system';
+import type { Tag } from '../queries/tags';
+import type { Holding } from '../queries/holdings';
+import type { Attachment } from '../queries/attachments';
 import type { Rule } from '@/lib/rules/types';
 
 // A minimal async query interface so the same logic works against the in-memory
@@ -55,5 +61,5 @@ export interface ProjectedState extends PersistState {
   displayCurrencyByLedger: Record<string, string>;
   /** Backup frequency + retention. Persisted in app_state so the choice
    *  travels with the database (every .finch pack carries it). */
-  backupConfig: import('./state').BackupConfigSlice;
+  backupConfig: import('../state').BackupConfigSlice;
 }

@@ -18,11 +18,11 @@
 
 import { test, expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { applySchema, migrate, SCHEMA_VERSION } from '@/lib/db/schema';
-import { seedDatabase } from '@/lib/db/seed';
+import { applySchema, migrate, SCHEMA_VERSION } from './core/schema';
+import { seedDatabase } from './core/seed';
 import { insertTxRow } from '@/lib/db/queries/transactions';
 import { listAccounts } from '@/lib/db/queries/accounts';
-import type { Exec, Row, SqlBind } from '@/lib/db/repo';
+import type { Exec, Row, SqlBind } from './core/repo';
 
 // ---------------------------------------------------------------------------
 // The async Exec shim — same shape we'd write for better-sqlite3. Both

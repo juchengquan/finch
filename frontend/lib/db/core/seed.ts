@@ -10,8 +10,8 @@
 
 import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
-import { convertToBase } from './queries/rates';
-import { resolveCounterpartyIdByName } from './queries/counterparties';
+import { convertToBase } from '../queries/rates';
+import { resolveCounterpartyIdByName } from '../queries/counterparties';
 import { ensureSystemCategories, postOpening, recomputeAccountFromPostings } from './entries';
 import { insertSealedEntry, appendResidueIfNeeded, type MoveLeg, type MoveHeader } from './sealed-entry';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';

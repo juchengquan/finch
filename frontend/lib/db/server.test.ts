@@ -17,14 +17,14 @@ beforeEach(() => {
 afterEach(async () => {
   // Drop the cached connection + audit cache so the next test (or the next
   // process boot) sees a clean slate.
-  const { _resetServerDbForTests, _resetAuditCacheForTests } = await import('./server');
+  const { _resetServerDbForTests, _resetAuditCacheForTests } = await import('./core/server');
   _resetAuditCacheForTests();
   _resetServerDbForTests();
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
 test('getCachedAudit populates the cache on first call', async () => {
-  const { getCachedAudit } = await import('./server');
+  const { getCachedAudit } = await import('./core/server');
   const first = await getCachedAudit();
   expect(first.problemCount).toBe(0);
   expect(first.problems).toEqual([]);
@@ -36,7 +36,7 @@ test('getCachedAudit populates the cache on first call', async () => {
 });
 
 test('getCachedAudit returns the cached value on subsequent calls', async () => {
-  const { getCachedAudit } = await import('./server');
+  const { getCachedAudit } = await import('./core/server');
   const first = await getCachedAudit();
   // Second call should return the SAME checkedAt — proves the cache fired
   // (a fresh audit would generate a slightly later timestamp).
@@ -47,7 +47,7 @@ test('getCachedAudit returns the cached value on subsequent calls', async () => 
 });
 
 test('getCachedAudit resets on cache clear', async () => {
-  const { getCachedAudit, _resetAuditCacheForTests } = await import('./server');
+  const { getCachedAudit, _resetAuditCacheForTests } = await import('./core/server');
   const first = await getCachedAudit();
   expect(typeof first.checkedAt).toBe('string');
   _resetAuditCacheForTests();

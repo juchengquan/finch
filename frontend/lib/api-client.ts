@@ -1,7 +1,7 @@
 // Thin client for the server database API. The server owns the authoritative
 // SQLite file; the store is a mirror hydrated from these calls.
 
-import type { ProjectedState } from '@/lib/db/repo';
+import type { ProjectedState } from './db/core/repo';
 import { fromWireError } from '@/lib/i18n-error';
 import type { DbInfoResponse } from '@/app/api/db-info/route';
 

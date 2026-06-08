@@ -1,8 +1,8 @@
 import { test, expect } from 'bun:test';
 import { rateToHub, convertToBase, HUB_CURRENCY } from '@/lib/db/queries/rates';
 import { addTransaction } from '@/lib/db/queries/transactions';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from '../core/test-utils';
+import type { Exec } from '../core/repo';
 
 async function seeded(): Promise<Exec> {
   const { exec } = await seededDb();

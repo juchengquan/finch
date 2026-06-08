@@ -1,4 +1,4 @@
-import { exportDbBytes, exportPackBytes } from '@/lib/db/server';
+import { exportDbBytes, exportPackBytes } from '@/lib/db/core/server';
 
 // Streams a stamped copy of the authoritative server DB. Two formats:
 //   - default                        -> bare .sqlite3 file (back-compat)

@@ -2,7 +2,7 @@
 // exactly like account_groups bucket accounts. Deleting a group sets its
 // budgets' group_id to NULL via the schema FK (ON DELETE SET NULL).
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface BudgetGroupRow {
   id: string;

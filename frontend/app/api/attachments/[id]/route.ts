@@ -1,9 +1,9 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { getServerDb } from '@/lib/db/server';
+import { getServerDb } from '@/lib/db/core/server';
 import { getAttachmentFile } from '@/lib/db/queries/attachments';
-import { resolveAttachmentPath } from '@/lib/db/paths';
+import { resolveAttachmentPath } from '@/lib/db/core/paths';
 
 // Serve route for receipt attachments. RECEIPT_PHOTOS_PLAN §5.2.
 //

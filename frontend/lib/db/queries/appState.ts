@@ -1,4 +1,4 @@
-import type { Exec } from '../repo';
+import type { Exec } from '../core/repo';
 
 // Generic accessors for the transitional `app_state` key/value table: a home for
 // single app-level preferences that don't yet warrant their own table. Values are

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { seededDb } from '@/lib/db/test-utils';
+import { seededDb } from './core/test-utils';
 
 const seeded = async () => (await seededDb()).exec;
 

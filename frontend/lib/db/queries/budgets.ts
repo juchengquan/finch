@@ -3,7 +3,7 @@
 // limit or an income target (Goals are income budgets). Legacy per-category
 // budgets and the goals table were removed in the budgets redesign.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export type BudgetType = 'expense' | 'income';
 

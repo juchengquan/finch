@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerDb } from '@/lib/db/server';
+import { getServerDb } from '@/lib/db/core/server';
 import { readMetadata, rowCounts } from '@/lib/db/queries/metadata';
 
 // Returns the db_metadata row (provenance + version + row counts) so the UI can
