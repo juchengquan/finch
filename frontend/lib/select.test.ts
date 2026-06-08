@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -277,6 +277,49 @@ test('netWorthByMonth excludes accounts with isActive=0', () => {
   const series = netWorthByMonth([], accounts, 'personal', '2026-06', 3);
   // Without the isActive filter, total would be 500. With it, only chk counts → 1000.
   expect(series[series.length - 1].v).toBe(1000);
+});
+
+test('netWorthByAccountType splits a single-currency ledger into all 6 types', () => {
+  // One account per type, all active and counted. All in ledger base (USD),
+  // so the toBase default is identity — balances pass through unchanged.
+  const accounts: AccountRow[] = [
+    { id: 'cash',  name: 'Wallet', balance: 100, currency: 'USD', type: 'cash',        ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'sav',   name: 'Sav',    balance: 500, currency: 'USD', type: 'savings',     ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'inv',   name: 'Inv',    balance: 800, currency: 'USD', type: 'investment',  ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'cc',    name: 'CC',     balance: -200,currency: 'USD', type: 'credit_card', ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'fx',    name: 'FX',     balance: 50,  currency: 'USD', type: 'fx',          ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'virt',  name: 'Virt',   balance: 0,   currency: 'USD', type: 'virtual',     ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+  ];
+  const out = netWorthByAccountType(accounts, 'personal');
+  // Always 6 buckets in canonical order, even when zero.
+  expect(out.map((b) => b.type)).toEqual(['cash', 'savings', 'investment', 'credit_card', 'fx', 'virtual']);
+  expect(out.find((b) => b.type === 'cash')!.balance).toBe(100);
+  expect(out.find((b) => b.type === 'savings')!.balance).toBe(500);
+  expect(out.find((b) => b.type === 'investment')!.balance).toBe(800);
+  expect(out.find((b) => b.type === 'credit_card')!.balance).toBe(-200);
+  expect(out.find((b) => b.type === 'fx')!.balance).toBe(50);
+  expect(out.find((b) => b.type === 'virtual')!.balance).toBe(0);
+});
+
+test('netWorthByAccountType honours includeInNetWorth=0 and isActive=0', () => {
+  // One counted account (cash) and four excluded accounts (one per exclusion
+  // vector per relevant type) — verifies the bucket for each excluded type
+  // is zero, not the account's balance.
+  const accounts: AccountRow[] = [
+    { id: 'cash',  name: 'Wallet', balance: 100, currency: 'USD', type: 'cash',        ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'sav',   name: 'Sav',    balance: 999, currency: 'USD', type: 'savings',     ledgerId: 'personal', includeInNetWorth: 0, isActive: true } as AccountRow,
+    { id: 'inv',   name: 'Inv',    balance: 999, currency: 'USD', type: 'investment',  ledgerId: 'personal', includeInNetWorth: 1, isActive: false } as AccountRow,
+    { id: 'cc',    name: 'CC',     balance: 999, currency: 'USD', type: 'credit_card', ledgerId: 'personal', includeInNetWorth: 0, isActive: false } as AccountRow,
+    { id: 'fx',    name: 'FX',     balance: 999, currency: 'USD', type: 'fx',          ledgerId: 'other',    includeInNetWorth: 1, isActive: true } as AccountRow,
+  ];
+  const out = netWorthByAccountType(accounts, 'personal');
+  expect(out.find((b) => b.type === 'cash')!.balance).toBe(100);
+  // Excluded types collapse to 0.
+  expect(out.find((b) => b.type === 'savings')!.balance).toBe(0);
+  expect(out.find((b) => b.type === 'investment')!.balance).toBe(0);
+  expect(out.find((b) => b.type === 'credit_card')!.balance).toBe(0);
+  // fx account is in a different ledger → excluded.
+  expect(out.find((b) => b.type === 'fx')!.balance).toBe(0);
 });
 
 test('netWorthExplained buckets a month into income / expense / adjustment / fx', () => {

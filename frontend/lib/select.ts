@@ -8,6 +8,7 @@ import type { ListOptions } from '@/lib/db/queries/transactions';
 import type { Transfer } from '@/lib/db/queries/transfers';
 import type { BudgetRow } from '@/lib/db/queries/budgets';
 import type { Holding } from '@/lib/db/queries/holdings';
+import type { AccountType } from '@/lib/account-types';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { expandDescendants } from '@/lib/db/queries/categories';
 
@@ -1153,6 +1154,27 @@ export function netWorthSeries(
     .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0 && (a.isActive ?? true))
     .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
   return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId && !t.pending), total);
+}
+
+/** Net-worth breakdown by `account.type` (cash / savings / investment /
+ *  credit_card / fx / virtual). Honours the same `includeInNetWorth` and
+ *  `isActive` predicates as `netWorthByMonth` so the headline Insights
+ *  chart and this breakdown agree. Returns the 6 canonical types in a
+ *  stable order, even when zero. */
+export function netWorthByAccountType(
+  accounts: AccountRow[],
+  ledgerId: string,
+  toBase: ToBase = identityBase,
+): { type: AccountType; balance: number }[] {
+  const byType = new Map<AccountType, number>();
+  for (const a of accounts) {
+    if (a.ledgerId !== ledgerId) continue;
+    if ((a.includeInNetWorth ?? 1) === 0) continue;
+    if (!(a.isActive ?? true)) continue;
+    byType.set(a.type as AccountType, (byType.get(a.type as AccountType) ?? 0) + toBase(a.balance, a.currency));
+  }
+  const order: AccountType[] = ['cash', 'savings', 'investment', 'credit_card', 'fx', 'virtual'];
+  return order.map((type) => ({ type, balance: round2(byType.get(type) ?? 0) }));
 }
 
 /** Mirrors listTransfers(): reconstruct transfers by grouping on transferGroupId. */
