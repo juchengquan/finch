@@ -5,11 +5,14 @@ import path from 'node:path';
 import {
   exportDbBytes,
   importDbBytes,
+  importPackBytes,
   validateImportBytes,
   listBackups,
   _resetServerDbForTests,
   getServerDb,
 } from '@/lib/db/server';
+import { seededDb } from '@/lib/db/test-utils';
+import { buildPack } from '@/lib/db/pack';
 
 // Each test gets its own tmp data dir so files don't bleed across tests.
 
@@ -104,4 +107,121 @@ test('importDbBytes rejects upload above FINCH_IMPORT_MAX_MB', async () => {
   const tooBig = new Uint8Array(2 * 1024 * 1024);
   await expect(importDbBytes(tooBig)).rejects.toThrow(/too large/i);
   delete process.env.FINCH_IMPORT_MAX_MB;
+});
+
+test('importDbBytes refuses an audit-failing DB and leaves the live DB untouched', async () => {
+  // Boot the live server DB so we have a known-good file on disk to compare against.
+  const liveDb = await getServerDb();
+  const livePath = liveDb.file;
+
+  // Build a separate in-memory DB with one unsealed entry — the cheapest
+  // corruption the audit reliably detects. VACUUM INTO a tempfile to get
+  // bytes that look like a real export.
+  const tmp = path.join(
+    os.tmpdir(),
+    `finch-bad-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`,
+  );
+  const { exec, driver, close } = await seededDb();
+  try {
+    await exec(
+      `INSERT INTO entries (id, ledger_id, date, kind, status, sealed, created_at, updated_at)
+       VALUES ('e-bad', 'personal', '2026-06-07', 'expense', 'confirmed', 0, datetime('now'), datetime('now'))`,
+    );
+    await exec(
+      `INSERT INTO postings (id, entry_id, account_id, amount, currency, amount_base, exchange_rate)
+       VALUES ('p-bad-a', 'e-bad', 'chk', -10, 'USD', -10, 1)`,
+    );
+    driver.prepare('VACUUM INTO ?').run(tmp);
+    const bytes = new Uint8Array(await fs.readFile(tmp));
+
+    // Snapshot the live DB before the import.
+    const liveBefore = await fs.readFile(livePath);
+
+    await expect(importDbBytes(bytes)).rejects.toThrow(/audit|unsealed|unbalanced/i);
+
+    // Live DB unchanged.
+    const liveAfter = await fs.readFile(livePath);
+    expect(Buffer.compare(liveBefore, liveAfter)).toBe(0);
+  } finally {
+    close();
+    await fs.unlink(tmp).catch(() => {});
+    await fs.unlink(`${tmp}-wal`).catch(() => {});
+    await fs.unlink(`${tmp}-shm`).catch(() => {});
+  }
+});
+
+test('importPackBytes refuses an audit-failing pack, leaves the live DB untouched, and tears down the staging dir', async () => {
+  // Boot the live server DB so we have a known-good file on disk to compare against.
+  const liveDb = await getServerDb();
+  const livePath = liveDb.file;
+
+  // Build a separate in-memory DB with one unsealed entry, VACUUM INTO a
+  // tempfile, and wrap those bytes in a real `.finch` pack via buildPack.
+  // This exercises the full pack import path (parse + extract + audit),
+  // not just the bare-DB one covered above.
+  const dbTmp = path.join(
+    os.tmpdir(),
+    `finch-bad-pack-db-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`,
+  );
+  const { exec, driver, close } = await seededDb();
+  let packBytes: Uint8Array;
+  try {
+    await exec(
+      `INSERT INTO entries (id, ledger_id, date, kind, status, sealed, created_at, updated_at)
+       VALUES ('e-bad', 'personal', '2026-06-07', 'expense', 'confirmed', 0, datetime('now'), datetime('now'))`,
+    );
+    await exec(
+      `INSERT INTO postings (id, entry_id, account_id, amount, currency, amount_base, exchange_rate)
+       VALUES ('p-bad-a', 'e-bad', 'chk', -10, 'USD', -10, 1)`,
+    );
+    driver.prepare('VACUUM INTO ?').run(dbTmp);
+    const dbBytes = new Uint8Array(await fs.readFile(dbTmp));
+
+    const built = await buildPack({
+      dbBytes,
+      // Empty attachments list keeps the test small — the pack still
+      // round-trips through parsePack + extractPack + the audit gate.
+      attachmentFiles: [],
+      meta: {
+        appVersion: 'test',
+        schemaVersion: '2026-06-14T00:00:00Z',
+        exportedAt: '2026-06-08T00:00:00.000Z',
+        rowCounts: {},
+      },
+    });
+    packBytes = built.bytes;
+  } finally {
+    close();
+    await fs.unlink(dbTmp).catch(() => {});
+    await fs.unlink(`${dbTmp}-wal`).catch(() => {});
+    await fs.unlink(`${dbTmp}-shm`).catch(() => {});
+  }
+
+  // Snapshot the live DB before the import.
+  const liveBefore = await fs.readFile(livePath);
+
+  // Snapshot any pre-existing `finch-pack-import-*` dirs so we can
+  // distinguish leftover artefacts from this test's staging dir. (Other
+  // tests use different prefixes — pack.test.ts uses `finch-pack-test-` etc.)
+  const beforeDirs = new Set(
+    (await fs.readdir(os.tmpdir(), { withFileTypes: true }))
+      .filter((d) => d.isDirectory() && d.name.startsWith('finch-pack-import-'))
+      .map((d) => d.name),
+  );
+
+  await expect(importPackBytes(packBytes!)).rejects.toThrow(/audit|unsealed|unbalanced/i);
+
+  // Live DB byte-identical — audit gate must abort before any swap.
+  const liveAfter = await fs.readFile(livePath);
+  expect(Buffer.compare(liveBefore, liveAfter)).toBe(0);
+
+  // Staging dir torn down. The function populates `<os.tmpdir()>/finch-pack-import-…`
+  // via extractPack and should rm it on EVERY rejection path, including
+  // the audit gate. Any new entry in `finch-pack-import-*` after the import
+  // is a leak.
+  const afterDirs = (await fs.readdir(os.tmpdir(), { withFileTypes: true }))
+    .filter((d) => d.isDirectory() && d.name.startsWith('finch-pack-import-'))
+    .map((d) => d.name);
+  const leaked = afterDirs.filter((n) => !beforeDirs.has(n));
+  expect(leaked).toEqual([]);
 });

@@ -3,6 +3,7 @@
 
 import type { ProjectedState } from '@/lib/db/repo';
 import { fromWireError } from '@/lib/i18n-error';
+import type { DbInfoResponse } from '@/app/api/db-info/route';
 
 const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
@@ -40,10 +41,10 @@ export async function mutate(action: string, args?: Record<string, unknown>): Pr
   return (await res.json()) as ProjectedState;
 }
 
-export async function fetchDbInfo(): Promise<{ path: string }> {
+export async function fetchDbInfo(): Promise<DbInfoResponse> {
   const res = await fetch(api('db-info'), { cache: 'no-store' });
   if (!res.ok) throw new Error(`GET /api/db-info ${res.status}`);
-  return (await res.json()) as { path: string };
+  return (await res.json()) as DbInfoResponse;
 }
 
 /** Upload a receipt attachment (image / PDF) for a transaction. POSTs

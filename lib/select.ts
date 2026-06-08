@@ -172,8 +172,10 @@ export function netWorthByMonth(
 ): { m: string; v: number }[] {
   if (!endMonth) return [];
   const months = monthsBack(endMonth, n);
+  // F4 fix: honour include_in_net_worth (matches `accounts/queries/accounts.ts::netWorth`
+  // and the headline Net-worth card on /accounts). Falsy = include (default), 0 = exclude.
   const total = accounts
-    .filter((a) => a.ledgerId === ledgerId)
+    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0)
     .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
   // Pending (unconfirmed) txns aren't in the balance total, so exclude them here too.
   const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId && !t.pending);
@@ -187,6 +189,64 @@ export function netWorthByMonth(
       i++;
     }
     return { m: MONTH_LABELS[Number(mo.slice(5)) - 1], v: r2(bal) };
+  });
+}
+
+/** Net-worth-movement decomposition over a trailing window of months. Each
+ *  bucket is in the ledger's base currency (via `toBase`).
+ *
+ *  - income:     sum of confirmed kind='income' account-leg amounts (positive)
+ *  - expense:    Σ|amount| for kind='expense' minus Σamount for kind='refund'.
+ *                Refunds NET against the period (refund amounts are already
+ *                positive on the account leg, so taking |amount| would
+ *                double-count).
+ *  - adjustment: sum of confirmed kind='adjustment' account-leg amounts (signed)
+ *  - fx:         the residual — `net - (income - expense + adjustment)`. By
+ *                construction (every entry's postings sum to zero), anything
+ *                that moves the headline net-worth and isn't one of the three
+ *                kinds above is an FX residue leg (sys:fx-gain equity category,
+ *                in practice only emitted on cross-currency transfers).
+ *  - net:        the month's end-to-start netWorthSeries delta (i.e. what the
+ *                headline trend chart shows).
+ *
+ *  Transfer Tx pairs sum to zero and contribute to none of the buckets above. */
+export function netWorthExplained(
+  txns: Tx[],
+  accounts: AccountRow[],
+  ledgerId: string,
+  endMonth: string,
+  n: number,
+  toBase: ToBase = identityBase,
+): { m: string; income: number; expense: number; adjustment: number; fx: number; net: number }[] {
+  if (!endMonth) return [];
+  const months = monthsBack(endMonth, n);
+  const series = netWorthByMonth(txns, accounts, ledgerId, endMonth, n + 1, toBase);
+  // netWorthByMonth returns one point per month INCLUDING the end month; we
+  // asked for n+1 so we can compute n monthly deltas. The `m` field of each
+  // row is a month label (e.g. "Jun") not a YYYY-MM key, so we re-derive the
+  // extended window here and index by position.
+  const extendedMonths = monthsBack(endMonth, n + 1);
+  const deltas = new Map<string, number>();
+  for (let i = 1; i < series.length && i < extendedMonths.length; i++) {
+    deltas.set(extendedMonths[i], series[i].v - series[i - 1].v);
+  }
+  const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId && !t.pending);
+  return months.map((m) => {
+    const inMonth = ledgerTxns.filter((t) => t.date.startsWith(m));
+    let income = 0;
+    let expensePositive = 0;
+    let refundPositive = 0;
+    let adjustment = 0;
+    for (const t of inMonth) {
+      if (t.kind === 'income') income += t.amount;
+      else if (t.kind === 'expense') expensePositive += Math.abs(t.amount);
+      else if (t.kind === 'refund') refundPositive += t.amount; // refund.amount is positive on the account leg
+      else if (t.kind === 'adjustment') adjustment += t.amount;
+    }
+    const expense = expensePositive - refundPositive; // refunds net against expense
+    const net = deltas.get(m) ?? 0;
+    const fx = round2(net - income + expense - adjustment);
+    return { m, income: round2(income), expense: round2(expense), adjustment: round2(adjustment), fx, net: round2(net) };
   });
 }
 
@@ -1085,8 +1145,10 @@ export function netWorthSeries(
   ledgerId: string,
   toBase: ToBase = identityBase,
 ): number[] {
+  // F4 fix: honour include_in_net_worth (matches `accounts/queries/accounts.ts::netWorth`
+  // and the headline Net-worth card on /accounts). Falsy = include (default), 0 = exclude.
   const total = accounts
-    .filter((a) => a.ledgerId === ledgerId)
+    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0)
     .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
   return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId && !t.pending), total);
 }
