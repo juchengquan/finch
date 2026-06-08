@@ -288,6 +288,7 @@ interface FinanceState {
   createAccount: (input: NewAccountInput) => string;
   updateAccount: (id: string, patch: AccountPatch) => void;
   archiveAccount: (id: string) => void;
+  unarchiveAccount: (id: string) => void;
   createAccountGroup: (input: { name: string; ledgerId?: string }) => string;
   updateAccountGroup: (id: string, patch: { name?: string }) => void;
   deleteAccountGroup: (id: string) => void;
@@ -716,6 +717,10 @@ export const useFinanceStore = create<FinanceState>()(
       archiveAccount: (id) => {
         set((s) => ({ accounts: s.accounts.filter((a) => a.id !== id) }));
         syncMutation('archiveAccount', { id });
+      },
+
+      unarchiveAccount: (id) => {
+        syncMutation('unarchiveAccount', { id });
       },
 
       createAccountGroup: (input) => {
