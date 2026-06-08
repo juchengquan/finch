@@ -18,6 +18,7 @@ import {
   createAccount as qCreateAccount,
   updateAccount as qUpdateAccount,
   archiveAccount as qArchiveAccount,
+  unarchiveAccount as qUnarchiveAccount,
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries/accounts';
@@ -914,6 +915,9 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     }
     case 'archiveAccount':
       await qArchiveAccount(exec, str(args.id));
+      return;
+    case 'unarchiveAccount':
+      await qUnarchiveAccount(exec, str(args.id));
       return;
     case 'deleteAccount':
       await qDeleteAccount(exec, str(args.id));
