@@ -47,7 +47,7 @@ test('accounts: list, net worth, balance series, edit', async () => {
   expect(ccu.name).toBe('Amex Platinum');
 });
 
-test('accounts: create, then archive removes from the active list', async () => {
+test('accounts: create, then archive removes from the active list, archivedAt is null on the active row but stamped on the archived row', async () => {
   const exec = await seeded();
   await createAccount(exec, {
     id: 'acct-new', ledgerId: 'personal', name: 'Wise USD', type: 'cash',
@@ -57,12 +57,14 @@ test('accounts: create, then archive removes from the active list', async () => 
   const created = accts.find((a) => a.id === 'acct-new')!;
   expect(created.name).toBe('Wise USD');
   expect(created.balance).toBeCloseTo(500, 2);
+  // Pre-archive: archivedAt is null.
+  expect(created.archivedAt).toBeNull();
 
   await archiveAccount(exec, 'acct-new');
   accts = await listAccounts(exec, 'personal');
   expect(accts.find((a) => a.id === 'acct-new')).toBeUndefined();
 
-  // archived_at is stamped so the audit trail survives the soft-delete.
+  // Direct SQL: the row is archived with a stamped archived_at.
   const [archived] = await exec("SELECT is_active, archived_at FROM accounts WHERE id = 'acct-new'");
   expect(Number(archived.is_active)).toBe(0);
   expect(archived.archived_at).not.toBeNull();

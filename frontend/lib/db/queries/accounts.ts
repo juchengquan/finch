@@ -53,6 +53,10 @@ export interface AccountRow {
   /** Statement balance the user matched at that date, in the account's native
    *  currency. Paired with `lastReconciledAt`. */
   lastReconciledBalance: number | null;
+  /** ISO 8601 UTC stamp set by `archiveAccount` when the row was soft-deleted,
+   *  `null` while the account is active. Powers the "Archived <date>" subtitle
+   *  on the ghost-row variant in the Accounts list. */
+  archivedAt: string | null;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
@@ -68,7 +72,8 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
             a.sort_order AS sortOrder, a.include_in_net_worth AS inw,
             a.is_active AS isActive,
             a.last_reconciled_at AS lastReconciledAt,
-            a.last_reconciled_balance AS lastReconciledBalance
+            a.last_reconciled_balance AS lastReconciledBalance,
+            a.archived_at AS archivedAt
        FROM accounts a
        LEFT JOIN account_groups g ON a.group_id = g.id
        LEFT JOIN postings op ON op.entry_id = 'open-' || a.id AND op.account_id = a.id
@@ -93,6 +98,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     sortOrder: Number(r.sortOrder ?? 0),
     lastReconciledAt: r.lastReconciledAt == null ? null : String(r.lastReconciledAt),
     lastReconciledBalance: r.lastReconciledBalance == null ? null : Number(r.lastReconciledBalance),
+    archivedAt: r.archivedAt == null ? null : String(r.archivedAt),
   }));
 }
 
