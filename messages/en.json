@@ -515,6 +515,18 @@
       "fx": "FX gain/loss",
       "chartAria": "Net-worth movement, six months, stacked by month around the zero axis",
       "netLatest": "Last month net: {value}"
+    },
+    "netWorthByType": {
+      "title": "Net worth by type",
+      "subtitle": "Where your net worth sits, by account type.",
+      "cash": "Cash",
+      "savings": "Savings",
+      "investment": "Investment",
+      "creditCard": "Credit card",
+      "fx": "FX",
+      "virtual": "Virtual",
+      "chartAria": "Net worth decomposed across the six account types, positive above zero and negative below",
+      "totalNote": "Net: {value}"
     }
   },
   "activity": {

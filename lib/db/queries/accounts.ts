@@ -44,6 +44,7 @@ export interface AccountRow {
   groupId: string | null;
   groupName: string | null;
   includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
+  isActive: boolean; // mirrors accounts.is_active (1 = active, 0 = archived)
   color: string | null;
   sortOrder: number;
   /** Date of the last successful reconcile-to-statement (`YYYY-MM-DD`), or null
@@ -65,6 +66,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
             COALESCE(op.amount_base, 0) AS openingBalanceBase,
             a.group_id AS groupId, g.name AS groupName, a.color,
             a.sort_order AS sortOrder, a.include_in_net_worth AS inw,
+            a.is_active AS isActive,
             a.last_reconciled_at AS lastReconciledAt,
             a.last_reconciled_balance AS lastReconciledBalance
        FROM accounts a
@@ -86,6 +88,7 @@ export async function listAccounts(exec: Exec, ledgerId?: string): Promise<Accou
     groupId: r.groupId == null ? null : String(r.groupId),
     groupName: r.groupName == null ? null : String(r.groupName),
     includeInNetWorth: Number(r.inw),
+    isActive: Number(r.isActive ?? 0) !== 0,
     color: r.color == null ? null : String(r.color),
     sortOrder: Number(r.sortOrder ?? 0),
     lastReconciledAt: r.lastReconciledAt == null ? null : String(r.lastReconciledAt),

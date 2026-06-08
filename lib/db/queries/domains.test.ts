@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
-import { seededDb } from '@/lib/db/test-utils';
+import { seededAndAudited } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
 // Confirmed, non-transfer/-adjustment cash flow for a month. §2: uses entries + postings.
@@ -22,8 +22,7 @@ async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) 
 }
 
 async function seeded(): Promise<Exec> {
-  const { exec } = await seededDb();
-  return exec;
+  return await seededAndAudited();
 }
 
 test('accounts: list, net worth, balance series, edit', async () => {

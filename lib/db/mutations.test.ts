@@ -1,39 +1,15 @@
-import { test, expect, afterEach } from 'bun:test';
+import { test, expect } from 'bun:test';
 import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
 import { convertToBase } from '@/lib/db/queries/rates';
-import { seededDb } from '@/lib/db/test-utils';
-import { auditLedger } from '@/lib/db/entries';
+import { seededAndAudited } from '@/lib/db/test-utils';
 import type { Exec } from '@/lib/db/repo';
 
-const seeded = async (): Promise<Exec> => (await seededDb()).exec;
-// `seeded` is kept untracked on purpose (escape hatch for tests that intentionally
-// leave the ledger in a half-valid state). New tests should prefer
-// `seededTracked` below so the audit hook catches unintended drift.
-
-let lastExec: Exec | null = null;
-const seededTracked = async (): Promise<Exec> => {
-  const exec = await seeded();
-  lastExec = exec;
-  return exec;
-};
-
-afterEach(async () => {
-  if (!lastExec) return;
-  const problems = await auditLedger(lastExec);
-  if (problems.length > 0) {
-    const summary = problems
-      .slice(0, 5)
-      .map((p) => `${p.code}${p.entryId ? ` (entry ${p.entryId})` : ''}: ${p.detail}`)
-      .join('\n  ');
-    throw new Error(
-      `auditLedger reported ${problems.length} problem${problems.length === 1 ? '' : 's'} at end of test:\n  ${summary}${problems.length > 5 ? '\n  …' : ''}`,
-    );
-  }
-  lastExec = null;
-});
+// `seededAndAudited` is the default — its afterEach hook runs auditLedger
+// and throws on drift. Use `seededDb` directly only when a test intentionally
+// leaves the ledger in a half-valid state.
 
 const balanceOf = async (exec: Exec, id: string) =>
   Number((await exec('SELECT current_balance AS b FROM accounts WHERE id = ?', [id]))[0].b);
@@ -59,7 +35,7 @@ const monthlyCashFlow = async (exec: Exec, ledgerId: string, yearMonth: string) 
 };
 
 test('createTransfer makes paired rows that move both balances', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
 
@@ -82,7 +58,7 @@ test('createTransfer makes paired rows that move both balances', async () => {
 });
 
 test('createTransfer rejects same-account and zero amount', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(
     applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'chk', fromAmount: 50, date: '2026-05-27' }),
   ).rejects.toThrow();
@@ -92,7 +68,7 @@ test('createTransfer rejects same-account and zero amount', async () => {
 });
 
 test('postScheduled posts a resolvable expense template as a transaction', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // rt-spotify: $11.99 expense on "Amex Gold" → account cc.
   const ccBefore = await balanceOf(exec, 'cc');
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-spotify' });
@@ -107,7 +83,7 @@ test('postScheduled posts a resolvable expense template as a transaction', async
 });
 
 test('postScheduled stamps the template category onto the posted transaction', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Build a template that has a category set, then post it manually. The
   // posted row should carry that category — earlier the manual-post path
   // hard-coded category_id to NULL while autopost preserved it.
@@ -124,7 +100,7 @@ test('postScheduled stamps the template category onto the posted transaction', a
 });
 
 test('createHolding rejects a currency that differs from the account currency', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // `inv` is denominated in USD (personal-ledger base). Trying to add a EUR
   // position should fail outright — mixed-currency sums on the account total
   // would silently corrupt without per-row conversion.
@@ -136,7 +112,7 @@ test('createHolding rejects a currency that differs from the account currency', 
 });
 
 test('postScheduled posts to the template\'s linked account', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // rt-rent: $1850 expense on Chase Checking (chk).
   const chkBefore = await balanceOf(exec, 'chk');
   await applyMutation(exec, 'postScheduled', { templateId: 'rt-rent' });
@@ -144,7 +120,7 @@ test('postScheduled posts to the template\'s linked account', async () => {
 });
 
 test('postScheduled splits income across its linked accounts', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // rt-salary: $5800 income split 60/25/15 across Chase Checking / Marcus Savings / Fidelity Brokerage.
   const chkBefore = await balanceOf(exec, 'chk');
   const savBefore = await balanceOf(exec, 'sav');
@@ -156,7 +132,7 @@ test('postScheduled splits income across its linked accounts', async () => {
 });
 
 test('transfers are excluded from category spend and cash flow', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
   const before = await categorySpend(exec, 'personal');
   await applyMutation(exec, 'createTransfer', {
@@ -171,7 +147,7 @@ test('transfers are excluded from category spend and cash flow', async () => {
 });
 
 test('a refund nets its category spend, lifts the balance, and stays out of income', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
   const food0 = (await categorySpend(exec, 'personal'))['food'] ?? 0;
   const chk0 = await balanceOf(exec, 'chk');
@@ -201,7 +177,7 @@ test('a refund nets its category spend, lifts the balance, and stays out of inco
 });
 
 test('deleting the refunded expense orphans the refund (SET NULL); the refund survives', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { getRefundsFor } = await import('@/lib/db/queries/transactions');
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'chk', amount: -200, merchant: 'TV',
@@ -223,7 +199,7 @@ test('deleting the refunded expense orphans the refund (SET NULL); the refund su
 });
 
 test('converting an income to a refund reclassifies it: nets category spend, drops from income, balance unchanged', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
 
   // A $200 grocery expense to offset against.
@@ -269,7 +245,7 @@ test('converting an income to a refund reclassifies it: nets category spend, dro
 });
 
 test('createCategory inserts a ledger-scoped category', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = Number((await exec("SELECT count(*) AS n FROM categories WHERE ledger_id = 'personal'"))[0].n);
   await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'plane' });
   const rows = await exec("SELECT * FROM categories WHERE name = 'Travel' AND ledger_id = 'personal'");
@@ -281,12 +257,12 @@ test('createCategory inserts a ledger-scoped category', async () => {
 });
 
 test('createCategory rejects an empty name', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: '  ' })).rejects.toThrow();
 });
 
 test('updateScheduledSplit updates the nth split by sort order', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'updateScheduledSplit', { templateId: 'rt-salary', index: 1, pct: 30 });
   const rows = await exec("SELECT amount_pct FROM scheduled_splits WHERE template_id = 'rt-salary' ORDER BY sort_order");
   expect(Number(rows[0].amount_pct)).toBe(60); // unchanged
@@ -294,7 +270,7 @@ test('updateScheduledSplit updates the nth split by sort order', async () => {
 });
 
 test('createTag + setTransactionTags replace the tag set', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'createTag', { id: 'tag-new', ledgerId: 'personal', name: 'Trip' });
   await applyMutation(exec, 'setTransactionTags', { id: 't02', tagIds: ['tag-new', 'tag-business'] });
   // §2: entry_tags replaces transaction_tags; entry_id = old tx id (seed preserves ids).
@@ -307,14 +283,14 @@ test('createTag + setTransactionTags replace the tag set', async () => {
 });
 
 test('seeded tag assignments are projected onto transactions', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: entry_tags replaces transaction_tags; entry_id = old tx id (seed preserves ids).
   const map = await exec("SELECT tag_id FROM entry_tags WHERE entry_id = 't03' ORDER BY tag_id");
   expect(map.length).toBe(2);
 });
 
 test('createTransfer converts the incoming leg across currencies', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Add a EUR account in the personal (USD) ledger.
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw','personal','EUR Wallet','cash','EUR',0,1,'2026-05-26','2026-05-26')",
@@ -335,7 +311,7 @@ test('createTransfer converts the incoming leg across currencies', async () => {
 });
 
 test('addTransaction on a foreign-currency account: native balance, ledger-base amount_base', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // A JPY account inside the personal (USD) ledger — account currency ≠ ledger base.
   // §2: accounts no longer has opening_balance (opening entries replace that column).
   await exec(
@@ -359,7 +335,7 @@ test('addTransaction on a foreign-currency account: native balance, ledger-base 
 });
 
 test('recompute keeps a foreign-currency account balance in its own currency', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: accounts no longer has opening_balance column.
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
@@ -379,7 +355,7 @@ test('recompute keeps a foreign-currency account balance in its own currency', a
 });
 
 test('editing a foreign-currency transaction amount reconverts amount_base to ledger base', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: accounts no longer has opening_balance column.
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
@@ -402,7 +378,7 @@ test('editing a foreign-currency transaction amount reconverts amount_base to le
 });
 
 test('editing only the date re-locks exchange_rate + amount_base to the new date', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: accounts no longer has opening_balance column.
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('jpyw','personal','JPY Wallet','cash','JPY',0,1,'2026-05-26','2026-05-26')",
@@ -431,7 +407,7 @@ test('editing only the date re-locks exchange_rate + amount_base to the new date
 });
 
 test('seed records each account opening balance and balances reconcile', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: opening_balance column is gone. current_balance = SUM of all confirmed account postings
   // (including the opening entry). The current balance should still match the seed.
   const [a] = await exec("SELECT current_balance FROM accounts WHERE id = 'cc'");
@@ -446,7 +422,7 @@ test('seed records each account opening balance and balances reconcile', async (
 });
 
 test('editing a transaction amount recomputes the account balance', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = await balanceOf(exec, 'cc'); // -842.18
   await applyMutation(exec, 'updateTransaction', { id: 't01', patch: { amount: -100 } });
   // t01 was -6.75 → -100, so cc drops by the 93.25 difference.
@@ -454,14 +430,14 @@ test('editing a transaction amount recomputes the account balance', async () => 
 });
 
 test('cancelling a transaction reverses its effect on the balance', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = await balanceOf(exec, 'cc');
   await applyMutation(exec, 'deleteTransaction', { id: 't01' }); // -6.75 expense removed
   expect(await balanceOf(exec, 'cc')).toBeCloseTo(before + 6.75, 2);
 });
 
 test('migrate stamps the schema version in db_metadata', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await migrate(exec, { fresh: true });
   const meta = await readMetadata(exec);
   expect(meta).not.toBeNull();
@@ -470,7 +446,7 @@ test('migrate stamps the schema version in db_metadata', async () => {
 });
 
 test('schema shape: budgets no longer carries tag_ids; new indexes present', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const budgetCols = (await exec('PRAGMA table_info(budgets)')).map((r) => String(r.name));
   expect(budgetCols).not.toContain('tag_ids');
 
@@ -486,7 +462,7 @@ test('schema shape: budgets no longer carries tag_ids; new indexes present', asy
 
 
 test('deleteCategory uncategorizes its transactions', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = Number((await exec("SELECT COUNT(*) AS n FROM categories WHERE id = 'food'"))[0].n);
   expect(before).toBe(1);
   // §2: category is referenced by postings (category_id FK with SET NULL).
@@ -499,7 +475,7 @@ test('deleteCategory uncategorizes its transactions', async () => {
 });
 
 test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RESTRICT)', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: scheduled_templates.kind uses the entry kind values (expense/income/etc).
   await exec(
     `INSERT INTO scheduled_templates
@@ -515,7 +491,7 @@ test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RE
 });
 
 test('deleteTag drops the tag and its assignments', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: entry_tags replaces transaction_tags.
   expect(Number((await exec("SELECT COUNT(*) AS n FROM entry_tags WHERE tag_id = 'tag-business'"))[0].n)).toBeGreaterThan(0);
   await applyMutation(exec, 'deleteTag', { id: 'tag-business' });
@@ -524,7 +500,7 @@ test('deleteTag drops the tag and its assignments', async () => {
 });
 
 test('deleteScheduled removes the template and cascades its splits', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_splits WHERE template_id = 'rt-salary'"))[0].n)).toBeGreaterThan(0);
   await applyMutation(exec, 'deleteScheduled', { id: 'rt-salary' });
   expect(Number((await exec("SELECT COUNT(*) AS n FROM scheduled_templates WHERE id = 'rt-salary'"))[0].n)).toBe(0);
@@ -532,14 +508,14 @@ test('deleteScheduled removes the template and cascades its splits', async () =>
 });
 
 test('deleteCounterparty removes the merchant', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
   await applyMutation(exec, 'deleteCounterparty', { id: cpId });
   expect(Number((await exec('SELECT COUNT(*) AS n FROM counterparties WHERE id = ?', [cpId]))[0].n)).toBe(0);
 });
 
 test('deleteTransfer removes both legs and restores balances', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27' });
@@ -555,7 +531,7 @@ test('deleteTransfer removes both legs and restores balances', async () => {
 });
 
 test('updateCategory edits name/type/icon/color', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'updateCategory', { id: 'food', patch: { name: 'Food & Drink', type: 'income', icon: 'coins', color: '#8085dc' } });
   const [c] = await exec("SELECT name, kind, icon, color FROM categories WHERE id = 'food'");
   expect(String(c.name)).toBe('Food & Drink');
@@ -565,7 +541,7 @@ test('updateCategory edits name/type/icon/color', async () => {
 });
 
 test('createCategory persists icon + color, and listCategories returns color', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { listCategories } = await import('@/lib/db/queries/categories');
   await applyMutation(exec, 'createCategory', { ledgerId: 'personal', name: 'Travel', type: 'expense', icon: 'car', color: '#00a6ae' });
   const cat = (await listCategories(exec, 'personal')).find((c) => c.name === 'Travel')!;
@@ -576,7 +552,7 @@ test('createCategory persists icon + color, and listCategories returns color', a
 });
 
 test('updateTag edits fields', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'updateTag', { id: 'tag-business', patch: { name: 'Work', color: '300' } });
   const [tag] = await exec("SELECT name, color FROM tags WHERE id = 'tag-business'");
   expect(String(tag.name)).toBe('Work');
@@ -584,7 +560,7 @@ test('updateTag edits fields', async () => {
 });
 
 test('updateScheduled and updateCounterparty edit fields', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'updateScheduled', { id: 'rt-spotify', patch: { name: 'Spotify Duo', amount: 14.99, frequency: 'yearly', dayOfMonth: 5, autoPost: 0 } });
   const [r] = await exec("SELECT name, amount, frequency, day_of_month, auto_post FROM scheduled_templates WHERE id = 'rt-spotify'");
   expect(String(r.name)).toBe('Spotify Duo');
@@ -600,7 +576,7 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
 });
 
 test('updateScheduled silently skips unknown keys without throwing a SQL error', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // A stray patch key (typo, stale field name) used to become `undefined = ?`
   // in SQL and throw "near '=': syntax error". The query should ignore it and
   // apply the known fields cleanly.
@@ -613,7 +589,7 @@ test('updateScheduled silently skips unknown keys without throwing a SQL error',
 });
 
 test('updateTransfer rewrites both legs and recomputes balances', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
   await applyMutation(exec, 'createTransfer', { fromAccountId: 'chk', toAccountId: 'sav', fromAmount: 200, date: '2026-05-27', note: 'a' });
@@ -629,7 +605,7 @@ test('updateTransfer rewrites both legs and recomputes balances', async () => {
 });
 
 test('createTransfer with explicit toAmount pins both sides + sets the rate', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw2','personal','EUR Wallet 2','cash','EUR',0,1,'2026-05-26','2026-05-26')",
   );
@@ -643,7 +619,7 @@ test('createTransfer with explicit toAmount pins both sides + sets the rate', as
 });
 
 test('updateTransfer with only fromAmount preserves the FX ratio on cross-currency', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw3','personal','EUR Wallet 3','cash','EUR',0,1,'2026-05-26','2026-05-26')",
   );
@@ -657,7 +633,7 @@ test('updateTransfer with only fromAmount preserves the FX ratio on cross-curren
 });
 
 test('updateTransfer with both amounts rewrites the rate on cross-currency', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await exec(
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,is_active,created_at,updated_at) VALUES ('eurw4','personal','EUR Wallet 4','cash','EUR',0,1,'2026-05-26','2026-05-26')",
   );
@@ -674,7 +650,7 @@ test('updateTransfer with both amounts rewrites the rate on cross-currency', asy
 });
 
 test('createCounterparty inserts an unverified merchant', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'createCounterparty', { id: 'cp-new', ledgerId: 'personal', name: 'Starbucks' });
   const { listCounterparties } = await import('@/lib/db/queries/counterparties');
   const cp = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-new')!;
@@ -684,7 +660,7 @@ test('createCounterparty inserts an unverified merchant', async () => {
 });
 
 test('createScheduled inserts a template that lists and posts', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'createScheduled', {
     id: 'rt-new', ledgerId: 'personal', name: 'Netflix', type: 'expense',
     amount: 19.99, frequency: 'monthly', dayOfMonth: 9, accountId: 'cc', autoPost: true, weekDay: null, color: null,
@@ -704,7 +680,7 @@ test('createScheduled inserts a template that lists and posts', async () => {
 });
 
 test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // rt-spotify has no splits seeded.
   const { listScheduled } = await import('@/lib/db/queries/scheduled');
   const flag = async () => Number((await exec("SELECT splits_enabled FROM scheduled_templates WHERE id = 'rt-spotify'"))[0].splits_enabled);
@@ -733,7 +709,7 @@ test('addScheduledSplit / removeScheduledSplit manage splits + splits_enabled', 
 });
 
 test('adjustAccountBalance posts a marked delta and moves balance to the target', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = await balanceOf(exec, 'chk'); // 4218.50 seed
   await applyMutation(exec, 'adjustAccountBalance', { accountId: 'chk', targetBalance: 5000, note: 'reconcile' });
   expect(await balanceOf(exec, 'chk')).toBeCloseTo(5000, 2);
@@ -748,7 +724,7 @@ test('adjustAccountBalance posts a marked delta and moves balance to the target'
 });
 
 test('adjustments are excluded from category spend and cash flow', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
   const month = new Date().toISOString().slice(0, 7);
   const spendBefore = await categorySpend(exec, 'personal');
@@ -767,7 +743,7 @@ test('adjustments are excluded from category spend and cash flow', async () => {
 });
 
 test('income via addTransaction (positive amount) increases the account balance', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const before = await balanceOf(exec, 'chk');
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'chk', amount: 250, merchant: 'Side gig',
@@ -777,7 +753,7 @@ test('income via addTransaction (positive amount) increases the account balance'
 });
 
 test('setExchangeRate upserts on (date, currency); deleteExchangeRate removes it', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { listExchangeRates } = await import('@/lib/db/queries/system');
   // Insert.
   await applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: 'JPY', rate: 0.0091, source: 'manual' });
@@ -800,14 +776,14 @@ test('setExchangeRate upserts on (date, currency); deleteExchangeRate removes it
 });
 
 test('setExchangeRate validation (currency required, rate > 0, ISO date)', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: '', rate: 0.01 })).rejects.toThrow(/currency/i);
   await expect(applyMutation(exec, 'setExchangeRate', { date: '2026-06-01', currency: 'JPY', rate: 0 })).rejects.toThrow(/rate/i);
   await expect(applyMutation(exec, 'setExchangeRate', { date: '2026/06/01', currency: 'JPY', rate: 0.01 })).rejects.toThrow(/date/i);
 });
 
 test('newly set rate is picked up by convertToBase for the same date', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { convertToBase } = await import('@/lib/db/queries/rates');
   await applyMutation(exec, 'setExchangeRate', { date: '2026-06-15', currency: 'JPY', rate: 0.01, source: 'manual' });
   // JPY → USD on that date: rate = rate(JPY) / rate(USD) = 0.01 / 1 = 0.01 (USD is the hub).
@@ -817,7 +793,7 @@ test('newly set rate is picked up by convertToBase for the same date', async () 
 });
 
 test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: Pick a confirmed expense from entries. amount/amount_base on the account posting,
   // category on the category posting.
   const [parent] = await exec(
@@ -893,7 +869,7 @@ test('setTransactionSplits validates sum + min-2-rows; categorySpend uses splits
 });
 
 test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-end', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { listAccountGroups } = await import('@/lib/db/queries/accountGroups');
 
   const before = await listAccountGroups(exec, 'personal');
@@ -922,12 +898,12 @@ test('createAccountGroup / updateAccountGroup / deleteAccountGroup wire end-to-e
 });
 
 test('createAccountGroup rejects an empty name', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(applyMutation(exec, 'createAccountGroup', { name: '   ' })).rejects.toThrow(/name/i);
 });
 
 test('pending transactions are excluded from the balance until confirmed', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const b0 = await balanceOf(exec, 'chk');
   await applyMutation(exec, 'addTransaction', {
     ledgerId: 'personal', accountId: 'chk', amount: -50, merchant: 'Hold', date: '2026-05-28', status: 'pending',
@@ -940,7 +916,7 @@ test('pending transactions are excluded from the balance until confirmed', async
 });
 
 test('generateDueScheduled materializes due occurrences, idempotently', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const cc0 = await balanceOf(exec, 'cc');
   const chk0 = await balanceOf(exec, 'chk');
   const sav0 = await balanceOf(exec, 'sav');
@@ -978,7 +954,7 @@ test('generateDueScheduled materializes due occurrences, idempotently', async ()
 });
 
 test('generateDueScheduled: recurring transfer caps at installment_total like other templates', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // 3-payment recurring transfer; after a year only 3 occurrences should fire
   // (Jan, Feb, Mar 2026). §2: each occurrence = 1 transfer entry (not 2 rows).
   await applyMutation(exec, 'createScheduled', {
@@ -1012,7 +988,7 @@ const installmentPaidOf = async (exec: Exec, id: string) => {
 };
 
 test('createScheduled rejects an installment total that isn\'t a positive integer', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(
     applyMutation(exec, 'createScheduled', {
       id: 'sch-bad', name: 'Bad plan', type: 'expense', frequency: 'monthly',
@@ -1028,7 +1004,7 @@ test('createScheduled rejects an installment total that isn\'t a positive intege
 });
 
 test('postScheduled blocks once installmentPaid reaches installmentTotal', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'createScheduled', {
     id: 'sch-phone', name: 'Phone contract', type: 'expense', frequency: 'monthly',
     dayOfMonth: 1, accountId: 'chk', amount: 50, installmentTotal: 2,
@@ -1044,7 +1020,7 @@ test('postScheduled blocks once installmentPaid reaches installmentTotal', async
 });
 
 test('installmentPaid counts only CONFIRMED transactions; cancelling a pending leaves it untouched', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'createScheduled', {
     id: 'sch-plan', name: 'Furniture 0%', type: 'expense', frequency: 'monthly',
     dayOfMonth: 1, accountId: 'chk', amount: 200, installmentTotal: 12,
@@ -1068,7 +1044,7 @@ test('installmentPaid counts only CONFIRMED transactions; cancelling a pending l
 });
 
 test('generateDueScheduled stops generating once the plan has filled installmentTotal', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // 3-month plan starting Jan 2026, daily would over-shoot, monthly is right.
   await applyMutation(exec, 'createScheduled', {
     id: 'sch-cap', name: 'Three-month plan', type: 'expense', frequency: 'monthly',
@@ -1091,7 +1067,7 @@ test('generateDueScheduled stops generating once the plan has filled installment
 // ---------------------------------------------------------------------------
 
 test('changeLedgerBase re-stamps opening_balance_base for a foreign-currency account', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: opening_balance/opening_balance_base columns are dropped from accounts.
   // Opening balances are stored as 'opening' entries + postings.
   // Use createAccount mutation to properly create the JPY account with an opening entry.
@@ -1119,7 +1095,7 @@ test('changeLedgerBase re-stamps opening_balance_base for a foreign-currency acc
 });
 
 test('changeLedgerBase rewrites transaction_splits.amount_base under the new base', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: splits are category postings (account_id IS NULL) on entries.
   // Pick any seed entry with a known account posting amount.
   const [tx] = await exec(
@@ -1153,7 +1129,7 @@ test('changeLedgerBase rewrites transaction_splits.amount_base under the new bas
 });
 
 test('changeLedgerBase same-base call is a no-op (no row changes)', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: check postings (which carry amount_base) instead of transactions.
   const before = await exec(
     "SELECT p.id, p.amount_base FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
@@ -1169,7 +1145,7 @@ test('changeLedgerBase same-base call is a no-op (no row changes)', async () => 
 });
 
 test('bulkRecategorize moves N rows in one statement; categorySpend shifts accordingly', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { categorySpend } = await import('@/lib/db/queries/categories');
   // §2: Pick three confirmed expenses by their entry id; category is on the category posting.
   const ids = (
@@ -1202,7 +1178,7 @@ test('bulkRecategorize moves N rows in one statement; categorySpend shifts accor
 });
 
 test('bulkRecategorize: empty ids is a no-op; null categoryId clears the link', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: category is on category postings (account_id IS NULL).
   const beforeCount = Number(
     (await exec("SELECT COUNT(*) AS c FROM postings WHERE category_id = 'food'"))[0].c,
@@ -1223,7 +1199,7 @@ test('bulkRecategorize: empty ids is a no-op; null categoryId clears the link', 
 });
 
 test('setCleared toggles cleared_at and is independent of status', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: cleared_at is per-leg on postings (not on entries). status is on entries.
   // Resolve entry id; then check the account posting's cleared_at.
   const [row] = await exec(
@@ -1248,7 +1224,7 @@ test('setCleared toggles cleared_at and is independent of status', async () => {
 });
 
 test('setReviewed toggles reviewed_at; markAllReviewed clears the ledger queue', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: reviewed_at on entries; look up entry id via account posting.
   const [row] = await exec(
     "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.status = 'confirmed' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
@@ -1291,7 +1267,7 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
   const prevDbDir = process.env.FINCH_DB_DIR;
   process.env.FINCH_DB_DIR = tmpRoot;
   try {
-    const exec = await seededTracked();
+    const exec = await seededAndAudited();
     // §2: entry_attachments replaces transaction_attachments; use entry_id FK.
     const [tx] = await exec(
       "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
@@ -1335,7 +1311,7 @@ test('deleteTransaction collects rel_paths via cascade and unlinks the files', a
   const prevDbDir = process.env.FINCH_DB_DIR;
   process.env.FINCH_DB_DIR = tmpRoot;
   try {
-    const exec = await seededTracked();
+    const exec = await seededAndAudited();
     // §2: entry_attachments replaces transaction_attachments; use entry_id FK.
     const [tx] = await exec(
       "SELECT e.id FROM entries e JOIN postings p ON p.entry_id = e.id WHERE p.account_id = 'chk' AND e.kind NOT IN ('opening','transfer') LIMIT 1",
@@ -1376,7 +1352,7 @@ test('deleteTransaction collects rel_paths via cascade and unlinks the files', a
 });
 
 test('reconcileAccount stamps the checkpoint without an adjustment when none is asked', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'reconcileAccount', {
     accountId: 'chk',
     statementBalance: 9999.99,
@@ -1398,7 +1374,7 @@ test('reconcileAccount stamps the checkpoint without an adjustment when none is 
 });
 
 test('reconcileAccount with postAdjustment posts the exact remainder + lands cleared sum on target', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Clear a handful of rows so the cleared sum is non-trivial.
   // §2: use entry ids (not transaction ids).
   const ids = (
@@ -1455,7 +1431,7 @@ test('reconcileAccount with postAdjustment posts the exact remainder + lands cle
 });
 
 test('reconcileAccount with postAdjustment is a no-op on the adjustment when the gap is within the penny tolerance', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: opening_balance column is gone. The cleared sum = SUM of pre-cleared opening
   // entry's account posting. Reconcile to that exact value → gap = 0 → no adjustment.
   const [sum] = await exec(
@@ -1478,7 +1454,7 @@ test('reconcileAccount with postAdjustment is a no-op on the adjustment when the
 });
 
 test('duplicate guard: identical addTransaction is rejected with a friendly message', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const draft = {
     ledgerId: 'personal', accountId: 'chk', amount: -12.5, currency: 'USD',
     merchant: 'Double Latte', categoryId: 'food', date: '2026-05-20', time: '09:00',
@@ -1497,7 +1473,7 @@ test('duplicate guard: identical addTransaction is rejected with a friendly mess
 });
 
 test('duplicate guard: a second budget with the same name+cycle is rejected', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const b = { ledgerId: 'personal', name: 'Groceries', type: 'expense', amount: 600, frequency: 'monthly', startDate: '2026-05-01' };
   await applyMutation(exec, 'createBudget', { id: 'bgt-a', ...b });
   await expect(applyMutation(exec, 'createBudget', { id: 'bgt-b', ...b })).rejects.toThrow(/already exists/i);
@@ -1513,7 +1489,7 @@ test('duplicate guard: a second budget with the same name+cycle is rejected', as
 // -----------------------------------------------------------------------------
 
 test('createLedger appears in listLedgers with zero counts; new rows update counts', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   const { listLedgers, createLedger: qCreate } = await import('@/lib/db/queries/ledgers');
 
   await applyMutation(exec, 'createLedger', {
@@ -1547,7 +1523,7 @@ test('createLedger appears in listLedgers with zero counts; new rows update coun
 });
 
 test('createLedger rejects duplicate id, empty name, bad base', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(
     applyMutation(exec, 'createLedger', { id: 'personal', name: 'Dup', base: 'USD' }),
   ).rejects.toThrow(/already exists/i);
@@ -1560,7 +1536,7 @@ test('createLedger rejects duplicate id, empty name, bad base', async () => {
 });
 
 test('updateLedger renames + recolors; changeLedgerBase still works after', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'updateLedger', {
     id: 'family', patch: { name: 'Household', color: '#3d6b46', tagline: 'shared' },
   });
@@ -1576,14 +1552,14 @@ test('updateLedger renames + recolors; changeLedgerBase still works after', asyn
 });
 
 test('updateLedger rejects empty name', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await expect(
     applyMutation(exec, 'updateLedger', { id: 'family', patch: { name: '   ' } }),
   ).rejects.toThrow(/empty/i);
 });
 
 test('setDefaultLedger flips exactly one is_default', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'setDefaultLedger', { id: 'business' });
   const rows = await exec('SELECT id, is_default FROM ledgers');
   const defaults = rows.filter((r) => Number(r.is_default) === 1);
@@ -1592,7 +1568,7 @@ test('setDefaultLedger flips exactly one is_default', async () => {
 });
 
 test('deleteLedger removes every ledger-scoped row and leaves siblings untouched', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // §2: entries replaces transactions as the ledger-scoped journal table.
   const beforePersonal = Number((await exec(
     "SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal'",
@@ -1629,7 +1605,7 @@ test('deleteLedger removes every ledger-scoped row and leaves siblings untouched
 });
 
 test('deleteLedger of the default ledger promotes the first remaining by name', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Seed has personal as default. The remaining ledger NAMES (not ids) sort:
   // "Family" (id=family), "Japan '26" (id=travel), "Side studio" (id=business).
   // First by name is "Family" -> id=family.
@@ -1640,7 +1616,7 @@ test('deleteLedger of the default ledger promotes the first remaining by name', 
 });
 
 test('deleteLedger cleans the displayCurrencyByLedger key', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'business', currency: 'USD' });
   await applyMutation(exec, 'setDisplayCurrency', { ledgerId: 'family', currency: 'SGD' });
   await applyMutation(exec, 'deleteLedger', { id: 'business' });
@@ -1654,7 +1630,7 @@ test('deleteLedger cleans the displayCurrencyByLedger key', async () => {
 });
 
 test('deleteLedger refuses the last ledger', async () => {
-  const exec = await seededTracked();
+  const exec = await seededAndAudited();
   // Reduce to a single ledger.
   for (const id of ['family', 'business', 'travel']) {
     await applyMutation(exec, 'deleteLedger', { id });
