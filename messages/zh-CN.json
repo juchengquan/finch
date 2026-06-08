@@ -851,6 +851,17 @@
       "rename": "重命名",
       "delete": "删除"
     },
+    "filter": {
+      "aria": "筛选账户",
+      "includeArchived": "显示已归档账户"
+    },
+    "unarchive": {
+      "button": "取消归档",
+      "toast": "已恢复 {name}"
+    },
+    "archived": {
+      "subtitle": "归档于 {date}"
+    },
     "ungroupedLabel": "未分组",
     "emptyGroup": "无账户",
     "empty": {

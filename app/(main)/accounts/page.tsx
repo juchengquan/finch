@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Icon, Money, CatBar } from '@/components/primitives';
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionSheet } from '@/components/transaction-sheet';
@@ -23,6 +23,7 @@ import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById, CURRENCIES } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
 import { cn } from '@/lib/utils';
+import type { AccountRow } from '@/lib/db/queries/accounts';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
 
@@ -38,7 +39,9 @@ const UNGROUPED_ID = '__ungrouped__';
 
 // Collapsible account groups, shared by the mobile column and the desktop
 // left column. Accounts are created via the header "New" menu; empty groups
-// just show a muted placeholder.
+// just show a muted placeholder. When `showArchived` is true, archived rows
+// in each group are interleaved below the active rows as muted "ghost" rows
+// with an Unarchive button.
 function AccountGroupAccordion({
   groups,
   balanceOf,
@@ -46,6 +49,9 @@ function AccountGroupAccordion({
   defaultOpen,
   onEditGroup,
   onDeleteGroup,
+  archivedAccounts,
+  showArchived,
+  onUnarchive,
 }: {
   groups: GroupWithAccounts[];
   balanceOf: (id: string) => number;
@@ -53,6 +59,9 @@ function AccountGroupAccordion({
   defaultOpen: string[];
   onEditGroup?: (groupId: string) => void;
   onDeleteGroup?: (groupId: string) => void;
+  archivedAccounts: AccountRow[];
+  showArchived: boolean;
+  onUnarchive: (id: string, name: string) => void;
 }) {
   const t = useTranslations('accounts');
   return (
@@ -61,6 +70,12 @@ function AccountGroupAccordion({
         const groupTotal = g.accounts.reduce((s, a) => s + balanceOf(a.id), 0);
         const empty = g.accounts.length === 0;
         const editable = g.id !== UNGROUPED_ID && onEditGroup && onDeleteGroup;
+        // Bucket archived rows by group — accounts with no group land in the
+        // synthetic UNGROUPED bucket (groupId = ''), matching the active rows.
+        const archivedInGroup = showArchived
+          ? archivedAccounts.filter((a) => (a.groupId ?? '') === (g.id === UNGROUPED_ID ? '' : g.id))
+          : [];
+        const showGhost = archivedInGroup.length > 0;
         return (
           <AccordionItem key={g.id} value={g.id}>
             <AccordionTrigger
@@ -99,7 +114,7 @@ function AccountGroupAccordion({
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              {empty ? (
+              {empty && !showGhost ? (
                 <EmptyState variant="card" size="sm" title={t('emptyGroup')} />
               ) : (
                 <div className="bg-card border-border rounded-xl border">
@@ -122,6 +137,29 @@ function AccountGroupAccordion({
                       </Link>
                     );
                   })}
+                  {showGhost && archivedInGroup.map((a, i) => (
+                    <div
+                      key={`archived-${a.id}`}
+                      className={cn(
+                        'text-muted-foreground flex items-center justify-between gap-3 p-3.5 text-sm italic opacity-60',
+                        (i > 0 || g.accounts.length > 0) && 'border-border border-t-[0.5px]',
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{a.name}</div>
+                        <div className="text-[11px] not-italic">
+                          {t('archived.subtitle', { date: (a.archivedAt ?? '').slice(0, 10) })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-foreground hover:bg-muted shrink-0 rounded-md px-2 py-1 text-xs not-italic"
+                        onClick={() => onUnarchive(a.id, a.name)}
+                      >
+                        {t('unarchive.button')}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </AccordionContent>
@@ -164,6 +202,31 @@ export default function AccountsPage() {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [groupDraft, setGroupDraft] = useState<GroupDraft>(EMPTY_GROUP_DRAFT);
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedAccounts, setArchivedAccounts] = useState<AccountRow[]>([]);
+
+  useEffect(() => {
+    if (!showArchived) return;
+    // Re-fetch whenever the filter is on AND either the toggle has just been
+    // turned on (showArchived flipped) or the active ledger changed. We don't
+    // try to be clever about caching — listArchivedAccounts is cheap and the
+    // staleness surface (a fresh archive not showing in the ghost list) is
+    // more annoying than a re-fetch on toggle. Switching ledgers with the
+    // filter on also re-fetches, so the ghost list stays scoped to the active
+    // ledger.
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/accounts/archived?ledgerId=${encodeURIComponent(activeId)}`);
+      if (!res.ok) throw new Error(`listArchivedAccounts HTTP ${res.status}`);
+      const rows = (await res.json()) as AccountRow[];
+      if (!cancelled) {
+        setArchivedAccounts(rows);
+      }
+    })().catch((err) => console.error('listArchivedAccounts failed', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [showArchived, activeId]);
 
   const openCreate = (groupId?: string) => {
     setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash', currency: active.base });
@@ -242,8 +305,36 @@ export default function AccountsPage() {
     setConfirmDeleteGroupId(null);
   };
 
+  // Optimistic local-state remove — the ghost row vanishes immediately. The
+  // store action fires syncMutation('unarchiveAccount', …); the server's
+  // projected state comes back and the row reappears in the active list.
+  const handleUnarchive = (id: string, name: string) => {
+    setArchivedAccounts((prev) => prev.filter((a) => a.id !== id));
+    useFinanceStore.getState().unarchiveAccount(id);
+    toast.success(t('unarchive.toast'), { description: name });
+  };
+
   const trailing = (
     <div className="flex items-center gap-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={t('filter.aria')}
+            className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
+          >
+            <Icon name="filter" size={16} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuCheckboxItem
+            checked={showArchived}
+            onCheckedChange={(v) => setShowArchived(!!v)}
+          >
+            {t('filter.includeArchived')}
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <SearchButton />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -392,7 +483,17 @@ export default function AccountsPage() {
       <ScreenHeader title={t('title')} trailing={trailing} />
 
       <div className="px-5 pb-[120px] md:hidden">
-        <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
+        <AccountGroupAccordion
+          groups={groupedAccounts}
+          balanceOf={balanceOf}
+          fmt={fmt}
+          defaultOpen={DEFAULT_OPEN_GROUPS}
+          onEditGroup={openEditGroup}
+          onDeleteGroup={setConfirmDeleteGroupId}
+          archivedAccounts={archivedAccounts}
+          showArchived={showArchived}
+          onUnarchive={handleUnarchive}
+        />
       </div>
 
       <div className="hidden px-8 pb-12 md:block">
@@ -419,7 +520,17 @@ export default function AccountsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <AccountGroupAccordion groups={groupedAccounts} balanceOf={balanceOf} fmt={fmt} defaultOpen={DEFAULT_OPEN_GROUPS} onEditGroup={openEditGroup} onDeleteGroup={setConfirmDeleteGroupId} />
+            <AccountGroupAccordion
+              groups={groupedAccounts}
+              balanceOf={balanceOf}
+              fmt={fmt}
+              defaultOpen={DEFAULT_OPEN_GROUPS}
+              onEditGroup={openEditGroup}
+              onDeleteGroup={setConfirmDeleteGroupId}
+              archivedAccounts={archivedAccounts}
+              showArchived={showArchived}
+              onUnarchive={handleUnarchive}
+            />
           </div>
 
           <aside className="min-w-0">

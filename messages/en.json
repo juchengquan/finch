@@ -850,6 +850,17 @@
       "rename": "Rename",
       "delete": "Delete"
     },
+    "filter": {
+      "aria": "Filter accounts",
+      "includeArchived": "Include archived accounts"
+    },
+    "unarchive": {
+      "button": "Unarchive",
+      "toast": "Unarchived {name}"
+    },
+    "archived": {
+      "subtitle": "Archived {date}"
+    },
     "ungroupedLabel": "Ungrouped",
     "emptyGroup": "No accounts",
     "empty": {
