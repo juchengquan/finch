@@ -172,10 +172,11 @@ export function netWorthByMonth(
 ): { m: string; v: number }[] {
   if (!endMonth) return [];
   const months = monthsBack(endMonth, n);
-  // F4 fix: honour include_in_net_worth (matches `accounts/queries/accounts.ts::netWorth`
-  // and the headline Net-worth card on /accounts). Falsy = include (default), 0 = exclude.
+  // F4 + isActive fix: honour both filters to match `accounts/queries/accounts.ts::netWorth`
+  // (which filters is_active=1 AND include_in_net_worth=1) and the headline Net-worth
+  // card on /accounts. Falsy = include (default), 0 = exclude.
   const total = accounts
-    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0)
+    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0 && (a.isActive ?? true))
     .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
   // Pending (unconfirmed) txns aren't in the balance total, so exclude them here too.
   const ledgerTxns = txns.filter((t) => ledgerOf(t) === ledgerId && !t.pending);
@@ -1145,10 +1146,11 @@ export function netWorthSeries(
   ledgerId: string,
   toBase: ToBase = identityBase,
 ): number[] {
-  // F4 fix: honour include_in_net_worth (matches `accounts/queries/accounts.ts::netWorth`
-  // and the headline Net-worth card on /accounts). Falsy = include (default), 0 = exclude.
+  // F4 + isActive fix: honour both filters to match `accounts/queries/accounts.ts::netWorth`
+  // (which filters is_active=1 AND include_in_net_worth=1) and the headline Net-worth
+  // card on /accounts. Falsy = include (default), 0 = exclude.
   const total = accounts
-    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0)
+    .filter((a) => a.ledgerId === ledgerId && (a.includeInNetWorth ?? 1) !== 0 && (a.isActive ?? true))
     .reduce((s, a) => s + toBase(a.balance, a.currency), 0);
   return runningSeries(txns.filter((t) => (t.ledgerId ?? 'personal') === ledgerId && !t.pending), total);
 }

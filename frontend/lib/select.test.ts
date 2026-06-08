@@ -28,6 +28,7 @@ const acct = (over: Partial<AccountRow>): AccountRow => ({
   groupId: null,
   groupName: null,
   includeInNetWorth: 1,
+  isActive: true,
   color: null,
   sortOrder: 0,
   lastReconciledAt: null,
@@ -64,6 +65,16 @@ test('netWorthSeries excludes accounts with includeInNetWorth=0', () => {
   ];
   const series = netWorthSeries([], accounts, 'personal');
   // Last point IS the current total. Without filter: 500; with: 1000.
+  expect(series[series.length - 1]).toBe(1000);
+});
+
+test('netWorthSeries excludes accounts with isActive=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'old', name: 'Old', balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1, isActive: false } as AccountRow,
+  ];
+  const series = netWorthSeries([], accounts, 'personal');
+  // Last point IS the current total. Without filter: 500; with isActive: 1000.
   expect(series[series.length - 1]).toBe(1000);
 });
 
@@ -255,6 +266,16 @@ test('netWorthByMonth excludes accounts with includeInNetWorth=0', () => {
   ];
   const series = netWorthByMonth([], accounts, 'personal', '2026-06', 3);
   // Without the filter, total would be 500. With it, only chk counts → 1000.
+  expect(series[series.length - 1].v).toBe(1000);
+});
+
+test('netWorthByMonth excludes accounts with isActive=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1, isActive: true } as AccountRow,
+    { id: 'old', name: 'Old', balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1, isActive: false } as AccountRow,
+  ];
+  const series = netWorthByMonth([], accounts, 'personal', '2026-06', 3);
+  // Without the isActive filter, total would be 500. With it, only chk counts → 1000.
   expect(series[series.length - 1].v).toBe(1000);
 });
 
