@@ -88,6 +88,43 @@ export function _resetServerDbForTests(): void {
   _db = null;
 }
 
+// ---------------------------------------------------------------------------
+// Audit result cache
+// ---------------------------------------------------------------------------
+// `/api/db-info` runs `auditLedger` on every call. The DB doesn't change
+// between two `/api/db-info` calls unless a mutation happens, and the
+// response carries a `checkedAt` so the client can see staleness. Caching
+// the result per-process reduces it to one audit per server life.
+//
+// No manual invalidation: if the user mutates the DB, the cached audit is
+// stale until the next process restart. The `checkedAt` field makes the
+// staleness visible; a future PR can wire mutation-driven invalidation.
+
+let _auditCache: import('./entries').DbAudit | null = null;
+
+const AUDIT_MAX_PROBLEMS = 50;
+
+/** Return the audit result for the live DB, computing + caching on the first
+ *  call and returning the cached value on subsequent calls. */
+export async function getCachedAudit(): Promise<import('./entries').DbAudit> {
+  if (_auditCache) return _auditCache;
+  const { exec } = await getServerDb();
+  const { auditLedger } = await import('./entries');
+  const problems = await auditLedger(exec);
+  _auditCache = {
+    problems: problems.slice(0, AUDIT_MAX_PROBLEMS),
+    problemCount: problems.length,
+    checkedAt: new Date().toISOString(),
+  };
+  return _auditCache;
+}
+
+/** Test-only: drop the cached audit so the next getCachedAudit() re-runs
+ *  the audit. Never call from app code. */
+export function _resetAuditCacheForTests(): void {
+  _auditCache = null;
+}
+
 // Best-effort graceful-shutdown checkpoint. SQLite auto-checkpoints when the
 // WAL grows past ~1000 pages (~4 MB), so the only thing this catches is the
 // "process killed before the next auto-checkpoint" case — small but worth a
