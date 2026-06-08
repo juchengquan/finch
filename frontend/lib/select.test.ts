@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
 import type { Holding } from '@/lib/db/queries/holdings';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/queries/accounts';
@@ -55,6 +55,16 @@ test('netWorthSeries ends at the ledger total and ignores other ledgers', () => 
   const txns = [tx({ amount: -10 }), tx({ amount: 50, ledgerId: 'family' })];
   const s = netWorthSeries(txns, accounts, 'personal');
   expect(s[s.length - 1]).toBe(100);
+});
+
+test('netWorthSeries excludes accounts with includeInNetWorth=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+    { id: 'cc',  name: 'CC',  balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 0 } as AccountRow,
+  ];
+  const series = netWorthSeries([], accounts, 'personal');
+  // Last point IS the current total. Without filter: 500; with: 1000.
+  expect(series[series.length - 1]).toBe(1000);
 });
 
 test('balanceSeries walks the native (account-currency) amount when present', () => {
@@ -236,6 +246,54 @@ test('netWorthByMonth ignores other ledgers and returns [] for empty endMonth', 
   const out = netWorthByMonth(txns, accounts, 'personal', '2026-05', 1);
   expect(out[0].v).toBeCloseTo(100, 2); // family txn ignored
   expect(netWorthByMonth([], accounts, 'personal', '', 3)).toEqual([]);
+});
+
+test('netWorthByMonth excludes accounts with includeInNetWorth=0', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+    { id: 'cc',  name: 'CC',  balance: -500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 0 } as AccountRow,
+  ];
+  const series = netWorthByMonth([], accounts, 'personal', '2026-06', 3);
+  // Without the filter, total would be 500. With it, only chk counts → 1000.
+  expect(series[series.length - 1].v).toBe(1000);
+});
+
+test('netWorthExplained buckets a month into income / expense / adjustment / fx', () => {
+  // Single-currency ledger so fx is exactly 0 — keeps the assertions tight.
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1500, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+  ];
+  const txns: Tx[] = [
+    { id: 't1', amount: 3000, date: '2026-06-05', kind: 'income',     ledgerId: 'personal', account: 'chk', merchant: 'Salary' } as Tx,
+    { id: 't2', amount: -100, date: '2026-06-10', kind: 'expense',    ledgerId: 'personal', account: 'chk', merchant: 'Coffee' } as Tx,
+    { id: 't3', amount: -50,  date: '2026-06-12', kind: 'adjustment', ledgerId: 'personal', account: 'chk', merchant: 'Reconcile' } as Tx,
+  ];
+  const series = netWorthExplained(txns, accounts, 'personal', '2026-06', 1);
+  expect(series).toHaveLength(1);
+  expect(series[0]).toMatchObject({
+    m: '2026-06',
+    income: 3000,
+    expense: 100,    // stored as positive magnitude
+    adjustment: -50,
+    fx: 0,
+    net: 2850,       // income(3000) - expense(100) + adjustment(-50) + fx(0)
+  });
+});
+
+test('netWorthExplained returns one bucket per month over a window', () => {
+  const accounts: AccountRow[] = [
+    { id: 'chk', name: 'Chk', balance: 1000, currency: 'USD', ledgerId: 'personal', includeInNetWorth: 1 } as AccountRow,
+  ];
+  const txns: Tx[] = [
+    { id: 't1', amount: 500,  date: '2026-04-01', kind: 'income',  ledgerId: 'personal', account: 'chk', merchant: 'Salary' } as Tx,
+    { id: 't2', amount: -200, date: '2026-05-15', kind: 'expense', ledgerId: 'personal', account: 'chk', merchant: 'Bills' } as Tx,
+    { id: 't3', amount: 700,  date: '2026-06-01', kind: 'income',  ledgerId: 'personal', account: 'chk', merchant: 'Salary' } as Tx,
+  ];
+  const series = netWorthExplained(txns, accounts, 'personal', '2026-06', 3);
+  expect(series.map((s) => s.m)).toEqual(['2026-04', '2026-05', '2026-06']);
+  expect(series[0].income).toBe(500);
+  expect(series[1].expense).toBe(200);
+  expect(series[2].income).toBe(700);
 });
 
 test('selectTransactions filters by date range (from / to inclusive)', () => {

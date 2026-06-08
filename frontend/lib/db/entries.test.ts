@@ -854,3 +854,11 @@ test('always-on audit: seeded DB is double-entry clean (DOUBLE_ENTRY_PLAN §I7)'
   }
   expect(problems).toHaveLength(0);
 });
+
+test('auditLedger checks balance drift by default (post-cutover)', async () => {
+  const { exec } = await seededDb();
+  // Manually corrupt the cached balance on one account.
+  await exec("UPDATE accounts SET current_balance = current_balance + 999 WHERE id = 'chk'");
+  const problems = await auditLedger(exec); // NO opts — should now detect drift
+  expect(problems.find((p) => p.code === 'balance-drift')?.detail).toMatch(/chk/);
+});

@@ -506,6 +506,16 @@
     "deltas": {
       "title": "{prev} vs {cur}",
       "topChanges": "主要变化"
+    },
+    "netWorthExplained": {
+      "title": "净资产构成",
+      "subtitle": "按月份分解推动净资产变化的因素 — 收入、支出、调整与汇兑。",
+      "income": "收入",
+      "expense": "支出",
+      "adjustment": "调整",
+      "fx": "汇兑损益",
+      "chartAria": "按月堆叠的净资产变化(六个月,围绕零轴)",
+      "netLatest": "上月净变化: {value}"
     }
   },
   "activity": {
@@ -1396,6 +1406,13 @@
         "dbInfo": {
           "label": "数据库文件(服务器)",
           "loading": "…"
+        },
+        "audit": {
+          "label": "审计",
+          "loading": "检查中…",
+          "clean": "未发现问题",
+          "problems": "{count} 个问题",
+          "more": "另有 {count} 个"
         },
         "exportDb": {
           "label": "导出副本",

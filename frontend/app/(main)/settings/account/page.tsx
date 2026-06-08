@@ -262,6 +262,31 @@ export default function AccountSettingsPage() {
             {backup.serverPath ?? tBackup('dbInfo.loading')}
           </span>
         </Row>
+        <Row icon="shield-check" label={tBackup('audit.label')}>
+          {!backup.audit ? (
+            <span className="text-muted-foreground text-xs">{tBackup('audit.loading')}</span>
+          ) : backup.audit.problemCount === 0 ? (
+            <span className="text-success text-xs">{tBackup('audit.clean')}</span>
+          ) : (
+            <details className="text-xs">
+              <summary className="text-warning cursor-pointer">
+                {tBackup('audit.problems', { count: backup.audit.problemCount })}
+              </summary>
+              <ul className="mt-2 ml-4 list-disc text-muted-foreground">
+                {backup.audit.problems.slice(0, 5).map((p, i) => (
+                  <li key={i}>
+                    <span className="font-mono">{p.code}</span>
+                    {p.entryId ? <span> · entry {p.entryId}</span> : null}
+                    {p.detail ? <span> · {p.detail}</span> : null}
+                  </li>
+                ))}
+                {backup.audit.problemCount > 5 ? (
+                  <li>{tBackup('audit.more', { count: backup.audit.problemCount - 5 })}</li>
+                ) : null}
+              </ul>
+            </details>
+          )}
+        </Row>
         <Row icon="download" label={tBackup('exportDb.label')}>
           <Button variant="outline" size="sm" onClick={() => void backup.download()}>
             {tBackup('exportDb.button')}

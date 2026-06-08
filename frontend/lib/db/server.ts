@@ -150,6 +150,45 @@ export interface ImportValidation {
 }
 
 /**
+ * Open the candidate DB bytes in a throwaway connection and run the semantic
+ * audit. Throws on any problem so the caller aborts the import BEFORE the
+ * live DB is touched. The byte-level checksum (`validateImportBytes`) only
+ * proves the file matches what was stamped; this hook proves the postings
+ * are double-entry sound.
+ *
+ * Implementation: write to a tempfile (better-sqlite3 / bun:sqlite both open
+ * by path, not buffer), open via the cross-runtime driver, audit, close,
+ * delete. We can't audit via the live `exec` because the swap hasn't happened
+ * yet — the live DB still points at the *current* file.
+ */
+async function assertImportAuditClean(bytes: Uint8Array): Promise<void> {
+  const tmp = path.join(
+    os.tmpdir(),
+    `finch-import-audit-${Date.now()}-${Math.random().toString(36).slice(2)}.sqlite3`,
+  );
+  await fs.writeFile(tmp, Buffer.from(bytes));
+  const driver = await openDb(tmp);
+  try {
+    const exec = execFor(driver);
+    const { auditLedger } = await import('./entries');
+    const problems = await auditLedger(exec);
+    if (problems.length > 0) {
+      const top = problems
+        .slice(0, 5)
+        .map((p) => `${p.code}${p.entryId ? `:${p.entryId}` : ''}`)
+        .join(', ');
+      throw new Error(
+        `Audit failed on imported DB (${problems.length} problem${problems.length === 1 ? '' : 's'}: ${top}${problems.length > 5 ? ', …' : ''})`,
+      );
+    }
+  } finally {
+    driver.close();
+    await fs.unlink(tmp).catch(() => {});
+    await removeSidecars(tmp).catch(() => {});
+  }
+}
+
+/**
  * Validate a candidate DB file in isolation (no swap). Returns ok + metadata
  * when the file passes every check, otherwise ok=false with a human-readable
  * reason. Checks, in order:
@@ -241,6 +280,11 @@ async function importDbBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
   const v = await validateImportBytes(bytes);
   if (!v.ok) throw new Error(v.reason ?? 'Invalid file');
 
+  // DE §3.3: semantic-integrity check on the swap candidate before any
+  // destructive operation. Open a throwaway driver over the incoming bytes,
+  // run auditLedger, abort on any problem so the live DB stays untouched.
+  await assertImportAuditClean(bytes);
+
   const backup = await autoBackup({ force: true }); // always snapshot — even if auto-backup is off
   const { full } = dbFile();
 
@@ -305,6 +349,19 @@ async function importPackBytesLocked(bytes: Uint8Array): Promise<ImportResult> {
   if (!v.ok) {
     await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
     throw new Error(v.reason ?? 'Invalid DB inside pack');
+  }
+
+  // DE §3.3: semantic-integrity check on the extracted DB before any
+  // destructive operation. (The pack's own checksum + per-file sha256 verify
+  // bytes; auditLedger verifies semantics.) Tear the staging tree down if the
+  // audit rejects — the function propagates the error after this block, so
+  // the cleanup must be here (the success path teardown further down is
+  // unreachable on throw).
+  try {
+    await assertImportAuditClean(dbBytes);
+  } catch (err) {
+    await fs.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
   }
 
   // Snapshot the live DB so the swap is recoverable. (Attachments aren't

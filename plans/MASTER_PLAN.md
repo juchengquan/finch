@@ -8,7 +8,7 @@ and the current implementation in `frontend/`.
 > app's live data layer, served by a **server-side** SQLite database. See
 > `plans/done/SQLITE_INTEGRATION_PLAN.md` for the architecture and what remains.
 
-_Last updated: 2026-06-07._
+_Last updated: 2026-06-08._
 
 ### Plans index
 
@@ -34,7 +34,7 @@ What lives in `plans/` (active) vs `plans/done/` (shipped design records):
 - `LEDGER_CRUD_PLAN.md` — moved here 2026-06-06; shipped via PR #109 — web-app ledger CRUD (create / rename / restyle / set-default / delete), DB-backed cosmetics + live counts, persisted active ledger, ordered cascade delete with on-disk attachment sweep. Closes the last cross-app implication from `IOS_MACOS_PLAN.md §8`.
 - `CATEGORIES_LEVEL3_PLAN.md` — moved here 2026-06-06; shipped via PR #112 — relax the 2-level category taxonomy to a 3-level hard cap (e.g. `Food › Restaurants › Japanese`). **No schema change** — the cap is mutation-layer only. Backend gains a depth check + recursive `rollupCategorySpend` + recursive budget category-id matching. UI: every category `<Select>` renders labels as `Parent › Child › Leaf`; `/categories` admin page renders a 3-level forest with inline "+ subcategory" / "+ sub-subcategory" affordances; color inheritance walks up the chain to the nearest non-null ancestor.
 - `I18N_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #113 (foundation: `next-intl` + structured server-error shape `{ code, params }` + format helpers) + #115 (mass extraction of every surface + `zh-CN` coverage). Translations live in app chrome only; **never in the database or `.finch` packs** (the data layer stays locale-neutral, so packs round-trip across locales). Per-device persisted via `localStorage`. The Apple-native i18n path stays orthogonal (`Localizable.strings`).
-- `DOUBLE_ENTRY_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #114 (PR A, additive core: chokepoint `lib/db/entries.ts` + entries/postings DDL constants in `lib/db/entries-schema.ts` + contract test suite, no production reads/writes yet) + #116 (PR B, the cutover: migration via `lib/db/cutover.ts`, projection rewrite in `lib/db/state.ts`, mutation rewires in `lib/db/mutations.ts`, read-path rewires across `lib/db/queries/*`, seed rewrite, FK re-points, `transactionSplits.ts` deletion). `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`. **Double-entry core, single-entry skin**: `transactions` / `transfer_groups` / `transaction_splits` replaced by `entries` + `postings` with a balanced-leg invariant + schema triggers + `auditLedger`; the client `Tx` projection is preserved so pages and selectors are untouched. PR C (audit-on-import wiring + the §10.7 net-worth-explained Insights panel + the §12 docs follow-up) is the remaining open work.
+- `DOUBLE_ENTRY_PLAN.md` — **moved here 2026-06-07**; shipped via PRs #114 (PR A, additive core: chokepoint `lib/db/entries.ts` + entries/postings DDL constants in `lib/db/entries-schema.ts` + contract test suite, no production reads/writes yet) + #116 (PR B, the cutover: migration via `lib/db/cutover.ts`, projection rewrite in `lib/db/state.ts`, mutation rewires in `lib/db/mutations.ts`, read-path rewires across `lib/db/queries/*`, seed rewrite, FK re-points, `transactionSplits.ts` deletion) + PR C (audit-on-import wiring + the §10.7 net-worth-explained Insights panel + the §12 docs follow-up — design-doc v3, MASTER_PLAN sweep). `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`. **Double-entry core, single-entry skin**: `transactions` / `transfer_groups` / `transaction_splits` replaced by `entries` + `postings` with a balanced-leg invariant + schema triggers + `auditLedger`; the client `Tx` projection is preserved so pages and selectors are untouched.
 
 ---
 
@@ -362,17 +362,9 @@ below; what's still open is summarized here.
    change. **M.**
 3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
-4. **Double-entry follow-up — PR C** (`plans/done/DOUBLE_ENTRY_PLAN.md
-   §12 PR-C list`) — wire `auditLedger` into `/api/import` (semantic
-   integrity check after the byte checksum, before the atomic swap) and
-   `/api/db-info` (surface drift in Settings ▸ Data); the §10.7
-   "net-worth-explained" Insights panel (income − expenses + adjustments
-   + FX, now a SELECT over postings); align `netWorthSeries` /
-   `netWorthByMonth` with the `include_in_net_worth` filter (the F4
-   inconsistency, trivially fixable post-cutover); design-doc v3 +
-   MASTER_PLAN sweep. **S-M.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **Double-entry PR C — audit wiring + net-worth-explained + F4 fix** (this PR; closes `plans/done/DOUBLE_ENTRY_PLAN.md §12 PR-C`) — `auditLedger` is now wired into `GET /api/db-info` (problem count + first 50 problems surfaced in Settings ▸ Account ▸ Database; clean-DB shows "no problems found") and into `POST /api/import` for both bare-`.sqlite3` and `.finch` paths (audit runs on the swap candidate before any destructive operation; live DB stays untouched on failure). `mutations.test.ts` gained an `afterEach` hook that asserts `auditLedger` clean at the end of every scenario — cheap regression net across ~30 tests. F4 fix: `netWorthByMonth` and `netWorthSeries` now honour `include_in_net_worth`, aligning the Insights trend chart with the Accounts header. New `netWorthExplained` selector + `NetWorthExplainedCard` decompose monthly net-worth movement into income / expense / adjustment / FX via the postings-sum-to-zero residual, surfacing previously-invisible adjustments and FX drift on the Insights page. Settings page renders audit status next to the database path (PR #117 in MASTER_PLAN's PR-# space).
 - ✅ **Double-entry storage core** (PRs #114 + #116, 2026-06-07; design
   record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` /
   `transfer_groups` / `transaction_splits` replaced by `entries` +
@@ -389,7 +381,7 @@ below; what's still open is summarized here.
   FK re-points (`entry_tags`, `entry_attachments`, `entries_fts`).
   `SCHEMA_VERSION` bumped to `2026-06-14T00:00:00Z`; legacy tables
   dropped. PR C (audit wiring + net-worth-explained panel + docs
-  follow-up) is item #4 in the open list above.
+  follow-up) shipped as the entry above.
 - ✅ **Multi-language / i18n** (PR #113 foundation + PR #115 mass
   extraction; design record `plans/done/I18N_PLAN.md`) — `next-intl` +
   per-device `localStorage['finch.locale']` + auto-detect from
@@ -455,13 +447,13 @@ unchanged — the Set collapses the two legs that share a date. Templates
 without a `from_account_id` are left to manual entry. See
 `plans/database_design_en.md` decision #25.
 
-**Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.13 / decision #24.
+**Installment tracking** ✅ shipped — new `scheduled_templates.installment_total` column (e.g. 24 for a 24-month phone contract) caps both auto-generation (`generateDueScheduled` mirrors the `max_executions` slice) and manual posting (`postScheduled` rejects once the plan is full). The matching "paid so far" figure is **derived**, not stored — `installmentPaid = COUNT(transactions WHERE source_template_id = id AND status = 'confirmed')` — so pending rows don't inflate progress and cancelling a pending occurrence leaves the counter untouched. The scheduled list shows a "paid/total" badge that turns green when the plan completes. Cash math only — for the interest/principal split of a real loan payment, the user adds transaction splits to the posted row. See `plans/database_design_en.md` §6.12 / decision #24.
 
-**Investment tracking** ✅ shipped — new `holdings` table (one row per position inside an investment-type account) carries `symbol + shares + cost_basis + currency + (last_price, last_price_date)`. Cash stays in `accounts.current_balance` (driven by ordinary buy/sell/dividend transactions); positions are managed separately, valued live as `shares × last_price`, with unrealized gain/loss = value − cost_basis. The investment-account detail page surfaces a "Holdings" panel with add / edit / price-update / delete dialogs and a "Holdings value + ≈ display + unrealized" summary row; the balance card prints "+ X in holdings · total Y" alongside the cash figure. No external feeds — prices are typed manually, and we keep no price-history table (`last_price` overwrites). See `plans/database_design_en.md` §6.19 / decision #23.
+**Investment tracking** ✅ shipped — new `holdings` table (one row per position inside an investment-type account) carries `symbol + shares + cost_basis + currency + (last_price, last_price_date)`. Cash stays in `accounts.current_balance` (driven by ordinary buy/sell/dividend transactions); positions are managed separately, valued live as `shares × last_price`, with unrealized gain/loss = value − cost_basis. The investment-account detail page surfaces a "Holdings" panel with add / edit / price-update / delete dialogs and a "Holdings value + ≈ display + unrealized" summary row; the balance card prints "+ X in holdings · total Y" alongside the cash figure. No external feeds — prices are typed manually, and we keep no price-history table (`last_price` overwrites). See `plans/database_design_en.md` §6.18 / decision #23.
 
 **Unrealized FX gain/loss** ✅ shipped — `accounts.opening_balance_base` locks the ledger-base cost of each account's opening balance at creation. With it the account's cost basis is `opening_balance_base + Σ amount_base of confirmed transactions`, and the live valuation `current_balance × today's rate` reveals the drift as unrealized FX. The account-detail balance card shows an "FX gain/loss" line for accounts denominated in a non-base currency; same-currency-as-base accounts read 0 and hide it. `recomputeAmountBases` re-stamps the column when the ledger's base itself changes. See `plans/database_design_en.md` §6.4 / decision #22.
 
-**Counterparty FK link** ✅ shipped — `transactions.counterparty_id` is set at insert/update via `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger); `projectState` overrides `merchant` with the canonical catalog name when the FK is set, so renames on the Merchants page follow transaction history. `ON DELETE SET NULL` preserves the original description text. See `plans/database_design_en.md` §6.10 / decision #18 for the schema and rationale.
+**Counterparty FK link** ✅ shipped — `transactions.counterparty_id` is set at insert/update via `resolveCounterpartyIdByName` (case-insensitive exact match within the ledger); `projectState` overrides `merchant` with the canonical catalog name when the FK is set, so renames on the Merchants page follow transaction history. `ON DELETE SET NULL` preserves the original description text. See `plans/database_design_en.md` §6.9 / decision #18 for the schema and rationale.
 
 **Base-currency-change recompute tool** ✅ shipped — Settings › Ledger has a "Base currency" select; flipping it confirms then atomically rewrites every locked `amount_base` (transactions + splits) under the new base using each row's own date, and re-runs `recomputeAccount` for every account in the ledger. `transfer_groups.amount_base` isn't touched (it's the from-leg native magnitude, not a ledger-base figure). See `plans/database_design_en.md` §6.1 / decision #19 + `lib/db/queries/ledgers.ts::recomputeAmountBases`.
 
@@ -519,11 +511,11 @@ Everything else in the curated list below — Transaction splits, Spending forec
    summed for a live total = cash + Σ shares × last_price. Investment-account
    detail page has a Holdings panel with add / edit / price-update / delete
    dialogs; the balance card surfaces "+ X in holdings · total Y" alongside
-   cash. See `plans/database_design_en.md` §6.19 / decision #23.
+   cash. See `plans/database_design_en.md` §6.18 / decision #23.
 9. **Refund support** ✅ *(done)* — `kind='refund'` on `transactions` linked back
    to the original expense via `refunded_transaction_id` (SET NULL on delete).
    Schema, decision, and cascade policy live in
-   `plans/database_design_en.md` §6.10 / §8 / §13. Shipped: schema + `idx_txn_refunded`,
+   `plans/database_design_en.md` §6.9 / §8 / §13. Shipped: schema + `idx_txn_refunded`,
    query layer (`addTransaction` accepts `kind`/`refundedTransactionId`, `getRefundsFor`),
    `categorySpend`/`monthlyByCategory` + `lib/select.ts` + budget rollover widened to
    `kind IN ('expense','refund')` so the positive refund nets against its category,
