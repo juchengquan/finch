@@ -204,15 +204,16 @@ export default function AccountsPage() {
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedAccounts, setArchivedAccounts] = useState<AccountRow[]>([]);
-  const [archivedLoaded, setArchivedLoaded] = useState(false);
 
-  // Load the archived set on demand the first time the user toggles the filter
-  // on. Subsequent toggles reuse the cached slice (re-fetches only happen when
-  // the user re-enables the filter after a page reload). When the user
-  // archives from a per-account edit dialog we don't auto-insert the new row
-  // here — toggling the filter off and on re-fetches and picks it up.
   useEffect(() => {
-    if (!showArchived || archivedLoaded) return;
+    if (!showArchived) return;
+    // Re-fetch whenever the filter is on AND either the toggle has just been
+    // turned on (showArchived flipped) or the active ledger changed. We don't
+    // try to be clever about caching — listArchivedAccounts is cheap and the
+    // staleness surface (a fresh archive not showing in the ghost list) is
+    // more annoying than a re-fetch on toggle. Switching ledgers with the
+    // filter on also re-fetches, so the ghost list stays scoped to the active
+    // ledger.
     let cancelled = false;
     (async () => {
       const res = await fetch(`/api/accounts/archived?ledgerId=${encodeURIComponent(activeId)}`);
@@ -220,13 +221,12 @@ export default function AccountsPage() {
       const rows = (await res.json()) as AccountRow[];
       if (!cancelled) {
         setArchivedAccounts(rows);
-        setArchivedLoaded(true);
       }
     })().catch((err) => console.error('listArchivedAccounts failed', err));
     return () => {
       cancelled = true;
     };
-  }, [showArchived, archivedLoaded, activeId]);
+  }, [showArchived, activeId]);
 
   const openCreate = (groupId?: string) => {
     setDraft({ ...EMPTY_DRAFT, group: groupId ?? 'cash', currency: active.base });
