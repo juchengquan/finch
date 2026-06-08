@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerDb, getCachedAudit } from '@/lib/db/core/server';
 import type { DbAudit } from '@/lib/db/core/entries';
-import { readMetadata } from '@/lib/db/queries/metadata';
+import { readMetadata } from '@/lib/db/domain/_app/metadata';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

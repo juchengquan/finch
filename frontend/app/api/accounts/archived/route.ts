@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerDb } from '@/lib/db/core/server';
-import { listArchivedAccounts } from '@/lib/db/queries/accounts';
+import { listArchivedAccounts } from '@/lib/db/domain/accounts/queries';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

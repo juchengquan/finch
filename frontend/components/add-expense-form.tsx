@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { suggestCategory, recentExpenses, findDuplicate } from '@/lib/select';
-import { categoryPath } from '@/lib/db/queries/categories';
+import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };

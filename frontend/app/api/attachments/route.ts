@@ -7,7 +7,7 @@ import {
   insertAttachment,
   countAttachmentsForTransaction,
   resolveAttachmentTarget,
-} from '@/lib/db/queries/attachments';
+} from '@/lib/db/domain/attachments/queries';
 import { resolveAttachmentPath } from '@/lib/db/core/paths';
 import { detectFile, processBytes } from '@/lib/attachments/process';
 

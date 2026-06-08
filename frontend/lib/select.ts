@@ -3,14 +3,14 @@
 // store (which mirrors the server DB) instead of a second in-browser query DB.
 
 import type { Tx, ScheduledTemplate } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/queries/accounts';
-import type { ListOptions } from '@/lib/db/queries/transactions';
-import type { Transfer } from '@/lib/db/queries/transfers';
-import type { BudgetRow } from '@/lib/db/queries/budgets';
-import type { Holding } from '@/lib/db/queries/holdings';
+import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { ListOptions } from '@/lib/db/domain/transactions/queries';
+import type { Transfer } from '@/lib/db/domain/transfers/queries';
+import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
+import type { Holding } from '@/lib/db/domain/holdings/queries';
 import type { AccountType } from '@/lib/account-types';
 import { occurrencesUpTo } from '@/lib/recurrence';
-import { expandDescendants } from '@/lib/db/queries/categories';
+import { expandDescendants } from '@/lib/db/domain/categories/queries';
 
 const ledgerOf = (t: Tx) => t.ledgerId ?? 'personal';
 

@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { migrate } from '../db/core/schema';
 import { rollBudgetsIfDue, invalidateRollover } from '@/lib/budgets/rollover';
 import { seededDb } from '../db/core/test-utils';
-import { insertTxRow } from '@/lib/db/queries/transactions';
+import { insertTxRow } from '@/lib/db/domain/transactions/queries';
 import type { Exec } from '../db/core/repo';
 
 /** Delete all entries (and their postings via CASCADE) that have a category

@@ -17,7 +17,7 @@ import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import type { ScheduledTemplate } from '@/lib/store';
 import { parseInstallmentTotal } from '@/lib/installment';
-import { categoryPath } from '@/lib/db/queries/categories';
+import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];

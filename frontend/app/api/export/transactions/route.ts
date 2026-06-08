@@ -1,5 +1,5 @@
 import { getServerDb } from '@/lib/db/core/server';
-import { transactionsCsv } from '@/lib/db/queries/export';
+import { transactionsCsv } from '@/lib/db/domain/_app/export';
 
 // Human-readable transactions export (CSV), built from the live server DB.
 export const runtime = 'nodejs';

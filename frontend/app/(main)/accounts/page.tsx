@@ -23,7 +23,7 @@ import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById, CURRENCIES } from '@/lib/data';
 import { ACCOUNT_TYPE_OPTIONS } from '@/lib/account-types';
 import { cn } from '@/lib/utils';
-import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { AccountRow } from '@/lib/db/domain/accounts/queries';
 
 const DEFAULT_OPEN_GROUPS = ['cash', 'credit', 'invest'];
 

@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
-import { createRule } from '@/lib/db/queries/rules';
-import { insertTxRow } from '@/lib/db/queries/transactions';
+import { createRule } from '@/lib/db/domain/rules/queries';
+import { insertTxRow } from '@/lib/db/domain/transactions/queries';
 import { seededDb } from '../db/core/test-utils';
 import type { Exec } from '../db/core/repo';
 import type { Action, Condition } from '@/lib/rules/types';
