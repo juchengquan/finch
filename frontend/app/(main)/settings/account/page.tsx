@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Icon } from '@/components/primitives';
+import { Clock, Doc, Download, ShieldCheck, Sparkle, Sync, Upload } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { MobileTabsEditor } from '@/components/MobileTabsEditor';
@@ -37,11 +37,25 @@ const fmtBytes = (n: number) => {
 };
 const fmtDate = (iso: string) => new Date(iso).toLocaleString();
 
+// Row.icon is a string short-name; resolve to the typed lucide component so
+// the row template can stay declarative. Only the icons used in the account
+// settings rows appear here; extend as new rows are added.
+const ROW_ICON: Record<string, typeof Sparkle> = {
+  sparkle: Sparkle,
+  doc: Doc,
+  sync: Sync,
+  'shield-check': ShieldCheck,
+  download: Download,
+  upload: Upload,
+  clock: Clock,
+};
+
 function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  const Glyph = ROW_ICON[icon] ?? Sparkle;
   return (
     <div className="border-border flex items-center gap-3.5 border-b py-3.5">
       <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
-        <Icon name={icon} size={14} />
+        <Glyph size={14} />
       </div>
       <div className="flex-1 text-sm">{label}</div>
       {children}

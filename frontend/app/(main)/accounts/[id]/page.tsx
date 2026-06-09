@@ -5,7 +5,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon, Money, CatBar, Sparkline } from '@/components/primitives';
+import { CatBar, Money, Sparkline } from '@/components/primitives';
+import { Check, Chev, Doc, Edit, Filter, Plus, Sync, Trash, Wallet, X } from '@/components/icons';
 import { RefundBadge } from '@/components/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
 import { merchantStats, anomalyScore } from '@/lib/select';
@@ -257,7 +258,7 @@ export default function AccountDetailPage() {
       >
         <div className="px-5 pb-[22px]">
           <div className="bg-card border-border mt-4 flex flex-col items-center gap-3 rounded-2xl border px-6 py-12 text-center">
-            <Icon name="wallet" size={28} />
+            <Wallet size={28} />
             <div className="font-serif text-xl">{t('notFoundHeader')}</div>
             <p className="text-muted-foreground max-w-xs text-sm">
               {t('notFoundBody', { id: accountId })}
@@ -280,7 +281,7 @@ export default function AccountDetailPage() {
       <div className="px-5 pb-[22px]">
         <div className="text-muted-foreground mb-[18px] flex items-center gap-2 text-xs md:hidden">
           <Link href="/accounts" className="text-muted-foreground no-underline">{tNav('accounts')}</Link>
-          <Icon name="chev" size={11}/>
+          <Chev size={11} />
           <span className="text-foreground">{name}</span>
         </div>
 
@@ -314,7 +315,7 @@ export default function AccountDetailPage() {
               aria-label={t('detailsAria')}
               className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:hidden"
             >
-              <Icon name="doc" size={16} />
+              <Doc size={16} />
             </button>
             {/* Desktop: details are shown inline, so the card button edits directly. */}
             <button
@@ -323,7 +324,7 @@ export default function AccountDetailPage() {
               aria-label={t('editAria')}
               className="hidden size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/15 md:flex"
             >
-              <Icon name="edit" size={16} />
+              <Edit size={16} />
             </button>
           </div>
           {series.length > 2 && (
@@ -343,10 +344,10 @@ export default function AccountDetailPage() {
           {row && <ReconcileStatus account={row} />}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={openAdjust}>
-              <Icon name="edit" size={13} />{t('adjustBalance')}
+              <Edit size={13} />{t('adjustBalance')}
             </Button>
             <Button variant="outline" size="sm" onClick={openReconcile} disabled={reconcileMode}>
-              <Icon name="check" size={13} />{t('reconcile')}
+              <Check size={13} />{t('reconcile')}
             </Button>
           </div>
         </div>
@@ -478,7 +479,7 @@ export default function AccountDetailPage() {
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" className="w-full" onClick={() => setAddOpen(true)}>
-                    <Icon name="plus" size={13} /> {t('reconcileCard.addMissing')}
+                    <Plus size={13} /> {t('reconcileCard.addMissing')}
                   </Button>
                 )}
 
@@ -564,13 +565,13 @@ export default function AccountDetailPage() {
                       size="icon" variant="ghost" className="size-8" aria-label={t('pending.confirmAria', { merchant: tx.merchant })}
                       onClick={() => { confirmPending(tx.id); toast.success(t('pending.confirmedToast', { merchant: tx.merchant })); }}
                     >
-                      <Icon name="check" size={14} stroke={2} />
+                      <Check size={14} strokeWidth={2} />
                     </Button>
                     <Button
                       size="icon" variant="ghost" className="size-8" aria-label={t('pending.voidAria', { merchant: tx.merchant })}
                       onClick={() => { cancelPending(tx.id); toast(t('pending.voidedToast', { merchant: tx.merchant })); }}
                     >
-                      <Icon name="x" size={14} />
+                      <X size={14} />
                     </Button>
                   </div>
                 </div>
@@ -595,7 +596,7 @@ export default function AccountDetailPage() {
           <div className="bg-card border-border overflow-hidden rounded-[14px] border">
             <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
               <div className="text-sm font-semibold">{t('allTransactions', { count: txs.length })}</div>
-              <div className="text-muted-foreground flex cursor-pointer items-center gap-1 text-xs"><Icon name="filter" size={12}/>{t('filterLabel')}</div>
+              <div className="text-muted-foreground flex cursor-pointer items-center gap-1 text-xs"><Filter size={12}/>{t('filterLabel')}</div>
             </div>
             {(reconcileMode ? txs : txs.slice(0, 6)).map((tx, i) => {
               const cat = catById(tx.category);
@@ -624,7 +625,7 @@ export default function AccountDetailPage() {
                       )}
                       aria-hidden
                     >
-                      {cleared && <Icon name="check" size={10} />}
+                      {cleared && <Check size={10} />}
                     </span>
                   ) : (
                     <CatBar color={cat.color} />
@@ -657,7 +658,7 @@ export default function AccountDetailPage() {
               </div>
             ))}
             <div className="bg-secondary text-secondary-foreground mt-3.5 flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-xs">
-              <Icon name="sync" size={12}/>{t('autoCategorize')}
+              <Sync size={12}/>{t('autoCategorize')}
             </div>
           </div>
         </div>
@@ -680,10 +681,10 @@ export default function AccountDetailPage() {
               </div>
             ))}
             <div className="bg-secondary text-secondary-foreground mt-4 flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm">
-              <Icon name="sync" size={14}/>{t('autoCategorize')}
+              <Sync size={14}/>{t('autoCategorize')}
             </div>
             <Button variant="outline" className="mt-4 w-full" onClick={openEdit}>
-              <Icon name="edit" size={14} />{t('detailsDialog.editButton')}
+              <Edit size={14} />{t('detailsDialog.editButton')}
             </Button>
           </div>
         </DialogContent>
@@ -724,7 +725,7 @@ export default function AccountDetailPage() {
           </div>
           <DialogFooter className="sm:justify-between">
             <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { setEditOpen(false); setConfirmArchive(true); }}>
-              <Icon name="trash" size={14} />{t('editDialog.archive')}
+              <Trash size={14} />{t('editDialog.archive')}
             </Button>
             <div className="flex gap-2">
               <DialogClose asChild>

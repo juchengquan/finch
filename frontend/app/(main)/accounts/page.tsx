@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon, Money, CatBar } from '@/components/primitives';
+import { CatBar, Money } from '@/components/primitives';
+import { Chev, Dots, Edit, Filter, Plus, Tags, Wallet, X } from '@/components/icons';
 import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
@@ -89,16 +90,16 @@ function AccountGroupAccordion({
                         aria-label={t('groupActionsAria', { name: g.name })}
                         className="text-muted-foreground hover:text-foreground ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md"
                       >
-                        <Icon name="dots" size={14} />
+                        <Dots size={14} />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => onEditGroup!(g.id)}>
-                        <Icon name="edit" size={14} />
+                        <Edit size={14} />
                         {t('groupActions.rename')}
                       </DropdownMenuItem>
                       <DropdownMenuItem variant="destructive" onSelect={() => onDeleteGroup!(g.id)}>
-                        <Icon name="x" size={14} />
+                        <X size={14} />
                         {t('groupActions.delete')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -132,7 +133,7 @@ function AccountGroupAccordion({
                               {bal < 0 ? '−' : ''}{fmt(Math.abs(bal))}
                             </div>
                           </div>
-                          <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
+                          <Chev size={12} className="text-muted-foreground shrink-0" />
                         </div>
                       </Link>
                     );
@@ -323,7 +324,7 @@ export default function AccountsPage() {
             aria-label={t('filter.aria')}
             className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
           >
-            <Icon name="filter" size={16} />
+            <Filter size={16} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -343,16 +344,16 @@ export default function AccountsPage() {
             aria-label={t('addAria')}
             className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
           >
-            <Icon name="plus" size={16} />
+            <Plus size={16} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => openCreate()}>
-            <Icon name="wallet" size={14} />
+                    <Wallet size={14} />
             {t('menu.newAccount')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openCreateGroup()}>
-            <Icon name="tags" size={14} />
+                    <Tags size={14} />
             {t('menu.newGroup')}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -504,17 +505,17 @@ export default function AccountsPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline">
-                    <Icon name="plus" size={14} />
+                    <Plus size={14} />
                     {t('newButton')}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => openCreate()}>
-                    <Icon name="wallet" size={14} />
+            <Wallet size={14} />
                     {t('menu.newAccount')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => openCreateGroup()}>
-                    <Icon name="tags" size={14} />
+            <Tags size={14} />
                     {t('menu.newGroup')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

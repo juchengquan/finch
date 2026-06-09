@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Bell } from '@/components/icons';
 
 /** Marks a transaction whose magnitude is unusually far from the merchant's
  *  historical mean. Surfaced inline next to the merchant name so users notice
@@ -16,7 +16,7 @@ export function AnomalyBadge({ zScore, mean }: { zScore: number; mean: number })
       className="bg-warning/10 text-warning inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
       title={t('unusualTitle', { multiplier: x.toFixed(1), mean: mean.toFixed(2) })}
     >
-      <Icon name="bell" size={9} />
+      <Bell size={9} />
       {t('unusual')}
     </span>
   );

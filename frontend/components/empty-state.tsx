@@ -1,14 +1,24 @@
 'use client';
 
-import { Icon } from '@/components/primitives';
+import { Search, Sparkle, Swap, Tag, Target } from '@/components/icons';
 import { cn } from '@/lib/utils';
+
+const ICON_FOR: Record<string, typeof Sparkle> = {
+  target: Target,
+  tag: Tag,
+  sparkle: Sparkle,
+  swap: Swap,
+  search: Search,
+};
 
 interface EmptyStateProps {
   /** One-line label; the only required prop. e.g. "No transactions". */
   title: React.ReactNode;
   /** Secondary explainer beneath the title. */
   description?: React.ReactNode;
-  /** Lucide icon name (`primitives.ts` shim); rendered in a tinted chip when set. */
+  /** Lucide icon short-name (see `ICON_FOR` above); rendered in a tinted chip
+   *  when set. Only the names listed in `ICON_FOR` render — extend the map
+   *  to support more. */
   icon?: string;
   /** Optional CTA at the bottom — pass a Button or a plain Link. */
   action?: React.ReactNode;
@@ -36,11 +46,12 @@ export function EmptyState({
   size = 'md',
   className,
 }: EmptyStateProps) {
+  const Glyph = icon ? ICON_FOR[icon] : undefined;
   const inner = (
     <>
-      {icon && (
+      {Glyph && (
         <div className="bg-secondary text-muted-foreground mx-auto mb-3 flex size-9 items-center justify-center rounded-full">
-          <Icon name={icon} size={16} />
+          <Glyph size={16} />
         </div>
       )}
       <div className={cn('text-foreground text-sm font-medium', !description && !action && 'text-muted-foreground font-normal')}>

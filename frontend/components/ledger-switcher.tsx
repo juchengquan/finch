@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Cog, Plus, Swap } from '@/components/icons';
 import { useLedger } from '@/components/ledger-provider';
 import { useCurrency } from '@/components/currency-provider';
 import { useFinanceStore } from '@/lib/store';
@@ -86,8 +86,7 @@ export function LedgerSwitcher({
                   {currency}
                 </span>
               </span>
-              <Icon
-                name="swap"
+              <Swap
                 size={14}
                 className="text-muted-foreground mr-0.5 shrink-0"
               />
@@ -99,7 +98,7 @@ export function LedgerSwitcher({
             title={t('settingsAria')}
             className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-colors"
           >
-            <Icon name="cog" size={15} />
+            <Cog size={15} />
           </Link>
         </div>
       ) : (
@@ -172,7 +171,7 @@ export function LedgerSwitcher({
           }}
           className="text-muted-foreground gap-2.5 py-2"
         >
-          <Icon name="plus" size={16} className="shrink-0" />
+          <Plus size={16} className="shrink-0" />
           <span className="text-[13px] font-medium">{t('newLedger')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

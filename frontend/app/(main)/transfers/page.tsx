@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Split } from '@/components/icons';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
 import { fmtNative } from '@/lib/data';
@@ -195,7 +195,7 @@ export default function TransfersPage() {
             className="border-border bg-card mb-2.5 flex items-center gap-3 rounded-[14px] border p-4"
           >
             <div className="bg-secondary text-secondary-foreground flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[16px]">
-              <Icon name="split" size={16} stroke={2} />
+              <Split size={16} strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">

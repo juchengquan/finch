@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Icon } from './primitives';
+import { Calendar, Chart, ChevD, ChevU, Clock, Target, Wallet } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -16,6 +16,15 @@ import { useMobileTabs } from '@/components/mobile-tabs';
 // (sections already used elsewhere are disabled) and can be reordered with the
 // up/down controls. Changes apply live — the bar updates immediately. The
 // center "Add" button is fixed and not configurable here.
+
+const SECTION_ICONS: Record<string, typeof Wallet> = {
+  wallet: Wallet,
+  target: Target,
+  calendar: Calendar,
+  chart: Chart,
+  clock: Clock,
+};
+
 export function MobileTabsEditor() {
   const { tabIds, setTabIds, catalog } = useMobileTabs();
   const t = useTranslations('mobileTabsEditor');
@@ -40,10 +49,14 @@ export function MobileTabsEditor() {
     <div>
       {tabIds.map((id, i) => {
         const section = catalog.find((t) => t.id === id);
+        // The catalog exposes a string icon name (see MAIN_TAB_SEEDS in
+        // mobile-tabs.ts). Resolve to the typed lucide component so the
+        // editor can keep rendering whatever section is being edited.
+        const SectionIcon = SECTION_ICONS[section?.icon ?? ''] ?? Wallet;
         return (
           <div key={`${id}-${i}`} className="border-border flex items-center gap-3 border-b py-3">
             <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
-              <Icon name={section?.icon ?? 'wallet'} size={14} />
+              <SectionIcon size={14} />
             </div>
             <Select value={id} onValueChange={(v) => replace(i, v)}>
               <SelectTrigger size="sm" className="flex-1">
@@ -66,7 +79,7 @@ export function MobileTabsEditor() {
                 disabled={i === 0}
                 onClick={() => move(i, -1)}
               >
-                <Icon name="chev-u" size={14} />
+                <ChevU size={14} />
               </Button>
               <Button
                 variant="outline"
@@ -76,7 +89,7 @@ export function MobileTabsEditor() {
                 disabled={i === tabIds.length - 1}
                 onClick={() => move(i, 1)}
               >
-                <Icon name="chev-d" size={14} />
+                <ChevD size={14} />
               </Button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Icon } from './primitives';
+import { ArrowD, ArrowU, Calendar, Check, Doc, Fork, Sparkle, Tag } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import type { Insight } from '@/lib/insights';
 
@@ -15,12 +15,24 @@ const TONE: Record<string, string> = {
   neut: 'bg-primary/10 text-primary',
 };
 
+const ICON: Record<string, typeof ArrowD> = {
+  'arrow-d': ArrowD,
+  'arrow-u': ArrowU,
+  doc: Doc,
+  fork: Fork,
+  sparkle: Sparkle,
+  calendar: Calendar,
+  tag: Tag,
+  check: Check,
+};
+
 export function InsightCard({ insight }: InsightCardProps) {
   const t = useTranslations('insightCards');
+  const Icon = ICON[insight.icon] ?? Doc;
   return (
     <div className="bg-card border-border mb-2.5 flex gap-3 rounded-xl border p-4">
       <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', TONE[insight.tone])}>
-        <Icon name={insight.icon} size={16} />
+        <Icon size={16} />
       </div>
       <div className="flex-1">
         <div className="mb-1 font-serif text-lg -tracking-[0.2px]">{t(insight.title.key, insight.title.params)}</div>

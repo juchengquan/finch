@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Money, Icon } from '@/components/primitives';
+import { Money } from '@/components/primitives';
+import { Chev, ChevL, Plus } from '@/components/icons';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -281,13 +282,13 @@ export default function ScheduledPage() {
                 type="button" aria-label={t('prevMonth')} onClick={() => shift(-1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
-                <Icon name="chev-l" size={14} />
+                <ChevL size={14} />
               </button>
               <button
                 type="button" aria-label={t('nextMonth')} onClick={() => shift(1)}
                 className="border-border text-muted-foreground hover:text-foreground flex size-7 cursor-pointer items-center justify-center rounded-md border"
               >
-                <Icon name="chev" size={14} />
+                <Chev size={14} />
               </button>
             </div>
           </div>
@@ -329,7 +330,7 @@ export default function ScheduledPage() {
             {selectedDay != null ? `${MONTH_NAMES[view.m]} ${selectedDay}` : t('upcoming')}
           </div>
           <Button variant="outline" size="sm" className="h-7" onClick={openCreate}>
-            <Icon name="plus" size={13} />{t('newButton')}
+            <Plus size={13} />{t('newButton')}
           </Button>
         </div>
         {selectedDay != null ? (

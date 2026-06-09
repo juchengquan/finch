@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { ArrowD, ArrowU, Chev, Check } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
@@ -53,7 +53,7 @@ export default function TransferDetailPage() {
           <Link href="/transfers" className="text-muted-foreground">
             {tNav('transfers')}
           </Link>
-          <Icon name="chev" size={11} />
+          <Chev size={11} />
           <span className="font-mono text-foreground">{tf.id}</span>
         </div>
 
@@ -65,7 +65,7 @@ export default function TransferDetailPage() {
             {t('received', { amount: fmtNative(toAmount, tf.toCurrency) })}
           </div>
           <div className="mt-3.5 inline-flex items-center gap-2 rounded-[14px] bg-secondary px-3 py-1.5 font-mono text-[10px] tracking-[0.6px] text-secondary-foreground">
-            <Icon name="check" size={12} className="text-success" stroke={2}/>
+            <Check size={12} className="text-success" strokeWidth={2} />
             {crossCurrency ? t('rateLocked', { rate, when: whenStr }) : t('posted', { when: whenStr })}
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function TransferDetailPage() {
         <div className="mb-3 rounded-[14px] border border-border bg-card">
           <div className="flex items-center gap-3 border-b border-dashed border-border p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-[16px] bg-destructive/10 text-destructive">
-              <Icon name="arrow-u" size={16} stroke={2}/>
+              <ArrowU size={16} strokeWidth={2} />
             </div>
             <div className="flex-1">
               <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('fromLine', { ledger: ledgerLabel })}</div>
@@ -83,7 +83,7 @@ export default function TransferDetailPage() {
           </div>
           <div className="flex items-center gap-3 p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-[16px] bg-success/10 text-success">
-              <Icon name="arrow-d" size={16} stroke={2}/>
+              <ArrowD size={16} strokeWidth={2} />
             </div>
             <div className="flex-1">
               <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('toLine', { ledger: ledgerLabel })}</div>

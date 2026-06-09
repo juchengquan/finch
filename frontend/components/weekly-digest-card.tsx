@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { catById } from '@/lib/data';
-import { Icon } from './primitives';
+import { Calendar } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { useMoney } from '@/components/use-money';
 import type { WeeklyDigest } from '@/lib/select';
@@ -44,7 +44,7 @@ export function WeeklyDigestCard({ digest }: { digest: WeeklyDigest | null }) {
     <div className="bg-card border-border mb-4 rounded-xl border p-3.5">
       <div className="mb-2 flex items-baseline justify-between">
         <div className="flex items-center gap-1.5 text-sm font-semibold">
-          <Icon name="calendar" size={14} />
+          <Calendar size={14} />
           {t('title')}
         </div>
         <span className="text-muted-foreground font-mono text-[11px]">{weekLabel(digest.weekStart, digest.weekEnd)}</span>

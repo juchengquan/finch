@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useAppLocale } from '@/components/i18n-provider';
-import { Ring, Money, Icon, CatBar } from '@/components/primitives';
+import { CatBar, Money, Ring } from '@/components/primitives';
+import { Chev, Clock, Edit, Plus, X } from '@/components/icons';
 import { RefundBadge } from '@/components/refund-badge';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { acctById, catById } from '@/lib/data';
@@ -85,7 +86,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
       <div className="px-5 pb-[120px]">
         <div className="text-muted-foreground mb-5 flex items-center gap-2 text-xs md:hidden">
           <Link href="/budgets" className="text-muted-foreground">{tNav('budgets')}</Link>
-          <Icon name="chev" size={11} />
+          <Chev size={11} />
           <span className="text-foreground">{budget.name}</span>
         </div>
 
@@ -120,7 +121,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
             </div>
             {budget.pendingAmount != null && (
               <div className="text-warning bg-warning/10 mt-1.5 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px]">
-                <Icon name="clock" size={11} />
+                <Clock size={11} />
                 {t('pendingFromNext', {
                   amount: fmt(budget.pendingAmount),
                   period: periodLabel(
@@ -146,15 +147,15 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                <Icon name="edit" size={14} />{t('editButton')}
+                <Edit size={14} />{t('editButton')}
               </Button>
               {oneShot && (
                 <Button variant="outline" size="sm" onClick={() => { setContrib(''); setContribOpen(true); }}>
-                  <Icon name="plus" size={14} />{t('contributeButton')}
+                  <Plus size={14} />{t('contributeButton')}
                 </Button>
               )}
               <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
-                <Icon name="x" size={14} />{t('deleteButton')}
+                <X size={14} />{t('deleteButton')}
               </Button>
             </div>
           </div>
