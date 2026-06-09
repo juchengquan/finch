@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { migrate } from './core/schema';
-import { applyMutation } from '@/lib/db/mutations';
+import { applyMutation } from '@/lib/db/mutate';
 import { projectState } from '@/lib/db/state';
 import { listBudgetGroups as listGroups } from '@/lib/db/queries/budgetGroups';
 import { seededDb } from './core/test-utils';

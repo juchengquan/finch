@@ -71,6 +71,13 @@ export const handlers = {
     if (!accountId) throw new I18nError('error.required.splitAccount', {}, 'A split needs an account');
     await qAddScheduledSplit(exec, str(args.templateId), accountId, Number(args.pct) || 0);
   },
+  updateScheduledSplit: async (exec, args: Args['updateScheduledSplit']) => {
+    await exec(
+      `UPDATE scheduled_splits SET amount_pct = ?
+        WHERE id = (SELECT id FROM scheduled_splits WHERE template_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?)`,
+      [Number(args.pct), str(args.templateId), Number(args.index)],
+    );
+  },
   removeScheduledSplit: (exec, args: Args['removeScheduledSplit']) =>
     qRemoveScheduledSplit(exec, str(args.templateId), Number(args.index)),
   postScheduled: async (exec, args: Args['postScheduled']) => {

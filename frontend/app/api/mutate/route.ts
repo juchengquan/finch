@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withWrite } from '@/lib/db/core/server';
-import { applyMutation } from '@/lib/db/mutations';
+import { applyMutation } from '@/lib/db/mutate';
 import { toWireError } from '@/lib/i18n-error';
 
 export const runtime = 'nodejs';

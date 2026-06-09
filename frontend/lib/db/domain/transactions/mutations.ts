@@ -272,4 +272,99 @@ export const handlers = {
     for (const r of pendingAccts) await recomputeAccountFromPostings(exec, String(r.account_id));
     return;
   },
+  setTransactionTags: async (exec, args: Args['setTransactionTags']) => {
+    const txId = str(args.id);
+    const tagIds = Array.isArray(args.tagIds) ? (args.tagIds as unknown[]).map(str) : [];
+    // Resolve account-posting id → entry id; fall back to the id itself if
+    // it already is an entry id (forward-compat with B4 callers).
+    const ref = await resolveEntryRef(exec, txId);
+    const entryId = ref?.entryId ?? txId;
+    await exec('DELETE FROM entry_tags WHERE entry_id = ?', [entryId]);
+    for (const tagId of tagIds) {
+      await exec('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [entryId, tagId]);
+    }
+    return;
+  },
+  setTransactionSplits: async (exec, args: Args['setTransactionSplits']) => {
+    const txId = str(args.id);
+    const rawSplits = Array.isArray(args.splits) ? (args.splits as unknown[]) : [];
+    type SplitInput = { categoryId: string | null; amount: number; description: string | null };
+    const splits: SplitInput[] = rawSplits.map((s) => {
+      const o = s as Record<string, unknown>;
+      return {
+        categoryId: o.categoryId == null ? null : str(o.categoryId),
+        amount: Number(o.amount),
+        description: o.description == null ? null : str(o.description),
+      };
+    });
+
+    const before = await txTouches(exec, txId);
+    const ref = await resolveEntryRef(exec, txId);
+    if (ref) {
+      const { entryId } = ref;
+      // Load the account leg — forward verbatim (amounts/account don't change).
+      const [acctLeg] = await exec(
+        `SELECT id, account_id, amount, amount_base, exchange_rate, cleared_at, memo
+           FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1`,
+        [entryId],
+      );
+      if (acctLeg) {
+        const totalBase = Math.abs(Number(acctLeg.amount_base));
+        const legs: LegInput[] = [
+          {
+            id: String(acctLeg.id),
+            accountId: String(acctLeg.account_id),
+            amount: Number(acctLeg.amount),
+            amountBase: Number(acctLeg.amount_base),
+            exchangeRate: Number(acctLeg.exchange_rate ?? 1),
+            clearedAt: acctLeg.cleared_at == null ? null : String(acctLeg.cleared_at),
+            memo: acctLeg.memo == null ? null : String(acctLeg.memo),
+          },
+        ];
+
+        if (splits.length === 0) {
+          // Clear splits: rebuild with a single uncategorised category leg.
+          legs.push({ categoryId: null, amountBase: -Number(acctLeg.amount_base) });
+        } else {
+          // Must have at least two split rows to be meaningful.
+          if (splits.length === 1) {
+            throw new I18nError('error.split.minTwo', {}, 'Splits require at least two rows');
+          }
+          // Validate that splits sum matches the account leg magnitude.
+          const splitTotal = splits.reduce((acc, sp) => acc + Math.abs(sp.amount), 0);
+          if (splitTotal > 0 && Math.abs(splitTotal - totalBase) > 0.005 * splits.length) {
+            throw new I18nError('error.split.sumMismatch', {}, 'Split amounts must sum to the transaction total');
+          }
+          // Compute base ratio: if amounts in native currency, scale to base.
+          const baseRatio = splitTotal > 0 ? totalBase / splitTotal : 1;
+          // Last leg absorbs rounding remainders.
+          let usedBase = 0;
+          for (let i = 0; i < splits.length; i++) {
+            const sp = splits[i];
+            const isLast = i === splits.length - 1;
+            const spBase = isLast
+              ? r2(Number(acctLeg.amount_base) + usedBase) // absorb remainder (signed)
+              : r2(-Math.abs(sp.amount) * baseRatio * Math.sign(Number(acctLeg.amount_base)));
+            if (!isLast) usedBase += spBase;
+            legs.push({
+              categoryId: sp.categoryId,
+              amountBase: spBase,
+              memo: sp.description,
+            });
+          }
+        }
+        await rebuildEntry(exec, entryId, { legs });
+      }
+    }
+    const after = await txTouches(exec, txId);
+    const merged = mergeTouches(before, after);
+    if (merged) {
+      await invalidateRollover(
+        exec,
+        { categoryIds: merged.categoryIds, accountIds: merged.accountIds },
+        merged.earliestDate,
+      );
+    }
+    return;
+  },
 } satisfies Partial<{ [K in ActionName]: Handler<K> }>;
