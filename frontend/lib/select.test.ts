@@ -1,8 +1,8 @@
 import { test, expect } from 'bun:test';
 import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
-import type { Holding } from '@/lib/db/domain/holdings/queries';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: Math.random().toString(36).slice(2),

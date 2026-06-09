@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { fmtNative } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
 
 const STALE_AFTER_DAYS = 35;
 
