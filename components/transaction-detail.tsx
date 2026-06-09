@@ -39,7 +39,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useEditTransaction } from '@/components/edit-transaction-sheet';
-import { categoryPath } from '@/lib/db/queries/categories';
+import { categoryPath } from '@/lib/db/domain/categories/queries';
 
 interface SplitRow {
   key: string;

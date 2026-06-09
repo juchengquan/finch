@@ -5,11 +5,11 @@
 // writes compose via SAVEPOINT, the recomputeAmountBases idiom.
 
 import { createHash } from 'node:crypto';
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from './repo';
 import type { Tx } from '@/lib/store';
-import { convertToBase } from './queries/rates';
-import { resolveCounterpartyIdByName } from './queries/counterparties';
-import { listActiveRules } from './queries/rules';
+import { convertToBase } from '../queries/rates';
+import { resolveCounterpartyIdByName } from '../queries/counterparties';
+import { listActiveRules } from '../queries/rules';
 import { applyRules } from '@/lib/rules/engine';
 
 const newId = (prefix: string) =>

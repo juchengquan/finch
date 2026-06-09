@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { importDbBytes, importPackBytes } from '@/lib/db/server';
-import { detectFileKind } from '@/lib/db/pack';
+import { importDbBytes, importPackBytes } from '@/lib/db/core/server';
+import { detectFileKind } from '@/lib/db/core/pack';
 
 // Accepts a multipart upload with field name "file" — either:
 //   - a bare .sqlite3 backup file, or

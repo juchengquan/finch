@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { fetchDbInfo } from '@/lib/api-client';
-import type { DbAudit } from '@/lib/db/entries';
+import type { DbAudit } from '../lib/db/core/entries';
 
 const base = process.env.NODE_ENV === 'development' ? '' : (process.env.NEXT_PUBLIC_BASE_PATH || '/finch');
 
@@ -132,7 +132,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     const res = await fetch(`${base}/api/export?withAttachments=1`);
     if (!res.ok) throw new Error(`Export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    const { downloadBytes } = await import('@/lib/db/storage');
+    const { downloadBytes } = await import('../lib/db/core/storage');
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace(/-(\d{3})Z$/, 'Z');
     downloadBytes(bytes, `finch-${ts}.finch`, 'application/zip');
   }, []);
@@ -147,7 +147,7 @@ export function SqliteBackupProvider({ children }: { children: React.ReactNode }
     const res = await fetch(`${base}/api/export/transactions${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error(`CSV export failed (${res.status})`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    const { downloadBytes } = await import('@/lib/db/storage');
+    const { downloadBytes } = await import('../lib/db/core/storage');
     const suffix = [scope?.ledgerId, scope?.month].filter(Boolean).join('-');
     downloadBytes(bytes, suffix ? `finch-transactions-${suffix}.csv` : 'finch-transactions.csv', 'text/csv;charset=utf-8');
   }, []);

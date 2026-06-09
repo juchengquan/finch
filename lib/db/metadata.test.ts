@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test';
-import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
+import { migrate, SCHEMA_VERSION } from './core/schema';
 import { readMetadata, rowCounts, stampExport } from '@/lib/db/queries/metadata';
-import { computeChecksum } from '@/lib/db/checksum';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { computeChecksum } from './core/checksum';
+import { seededDb } from './core/test-utils';
+import type { Exec } from './core/repo';
 
 async function fresh(): Promise<Exec> {
   const { exec } = await seededDb();

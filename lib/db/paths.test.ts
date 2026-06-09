@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import path from 'node:path';
-import { dbDir, attachmentsDir, resolveAttachmentPath } from '@/lib/db/paths';
+import { dbDir, attachmentsDir, resolveAttachmentPath } from './core/paths';
 
 let originalDbDir: string | undefined;
 

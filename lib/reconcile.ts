@@ -5,7 +5,7 @@
 // See plans/RECONCILE_PLAN.md §3.
 
 import type { Tx } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/queries/accounts';
+import type { AccountRow } from '@/lib/db/domain/accounts/queries';
 
 export interface ReconcileState {
   /** Cleared (opening + ticked-confirmed) balance in account currency. */

@@ -1,7 +1,7 @@
 // Reads and writes for the single-row db_metadata table. The row is the source
 // of truth for "what is this file?" — see schema.ts for the column shape.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface DbMetadata {
   appName: string;

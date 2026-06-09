@@ -12,8 +12,8 @@
 // client) resolves it via `resolveEntryRef` first so the API routes keep
 // their existing contract unchanged.
 
-import type { Exec } from '@/lib/db/repo';
-import { resolveEntryRef } from '@/lib/db/entries';
+import type { Exec } from '../core/repo';
+import { resolveEntryRef } from '../core/entries';
 
 /** Client-projected attachment shape. `rel_path` is **deliberately omitted**
  *  so the client cannot construct a file URL; clients reach the bytes via

@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
-import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
-import { bareDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { migrate, SCHEMA_VERSION } from './core/schema';
+import { bareDb } from './core/test-utils';
+import type { Exec } from './core/repo';
 
 const db = async (): Promise<Exec> => (await bareDb()).exec;
 

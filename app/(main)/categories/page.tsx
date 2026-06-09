@@ -33,7 +33,7 @@ import {
   categoryPath,
   resolveCategoryColor,
   type CategoryRow,
-} from '@/lib/db/queries/categories';
+} from '@/lib/db/domain/categories/queries';
 import { cn } from '@/lib/utils';
 
 const TYPES = ['expense', 'income'] as const;

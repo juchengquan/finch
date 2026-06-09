@@ -1,6 +1,6 @@
 // Tags: list, edit, delete. Create / assign in mutations.ts.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface Tag {
   id: string;

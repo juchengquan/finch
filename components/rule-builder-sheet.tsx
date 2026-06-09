@@ -15,7 +15,7 @@ import { applyRules, evaluateCondition } from '@/lib/rules/engine';
 import { describeCondition, describeActions } from '@/lib/rules/describe';
 import { useDescribeDict } from '@/lib/rules/use-describe-dict';
 import { cn } from '@/lib/utils';
-import { categoryPath } from '@/lib/db/queries/categories';
+import { categoryPath } from '@/lib/db/domain/categories/queries';
 import type { Action, Condition, Leaf, Rule, TxKind } from '@/lib/rules/types';
 import type { Tx } from '@/lib/store';
 

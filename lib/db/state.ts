@@ -7,7 +7,7 @@
 // (pending/recurring/overrides) live in the transitional `app_state` table
 // until their own phase migrates them to real tables.
 
-import { seedReference, insertTransactions, seedTransactionTags } from './seed';
+import { seedReference, insertTransactions, seedTransactionTags } from './core/seed';
 import { enrichLegTxs } from './queries/transactions';
 import { listAccounts } from './queries/accounts';
 import { listAccountGroups } from './queries/accountGroups';
@@ -23,7 +23,7 @@ import { listScheduled } from './queries/scheduled';
 import { listHoldings } from './queries/holdings';
 import { listAttachments } from './queries/attachments';
 import { getAppState } from './queries/appState';
-import type { Exec, PersistState, ProjectedState } from './repo';
+import type { Exec, PersistState, ProjectedState } from './core/repo';
 import type { Tx } from '@/lib/store';
 
 /** Build a complete relational DB (in the given connection) from store state. */

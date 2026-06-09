@@ -1,10 +1,10 @@
 import { test, expect } from 'bun:test';
-import { migrate } from '@/lib/db/schema';
+import { migrate } from './core/schema';
 import { applyMutation } from '@/lib/db/mutations';
 import { projectState } from '@/lib/db/state';
 import { listBudgetGroups as listGroups } from '@/lib/db/queries/budgetGroups';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from './core/test-utils';
+import type { Exec } from './core/repo';
 
 async function seeded(): Promise<Exec> {
   const { exec } = await seededDb();

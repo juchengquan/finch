@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/primitives';
 import { CURRENCIES } from '@/lib/data';
-import { categoryPath } from '@/lib/db/queries/categories';
+import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { useFinanceStore, type Tx } from '@/lib/store';
 import { useMerchantPicker } from '@/components/merchant-picker-sheet';
 import {

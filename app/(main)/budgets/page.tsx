@@ -30,7 +30,7 @@ import { Label } from '@/components/ui/label';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useFinanceStore } from '@/lib/store';
-import type { BudgetRow, BudgetType } from '@/lib/db/queries/budgets';
+import type { BudgetRow, BudgetType } from '@/lib/db/domain/budgets/queries';
 import { budgetProgress } from '@/lib/select';
 import { cn } from '@/lib/utils';
 

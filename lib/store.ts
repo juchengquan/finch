@@ -3,17 +3,17 @@
 import { create } from 'zustand';
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
-import type { AccountRow } from '@/lib/db/queries/accounts';
-import type { AccountGroupRow } from '@/lib/db/queries/accountGroups';
-import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/queries/budgets';
-import type { BudgetGroupRow } from '@/lib/db/queries/budgetGroups';
-import type { CategoryRow } from '@/lib/db/queries/categories';
-import type { Counterparty } from '@/lib/db/queries/counterparties';
-import type { LedgerRow } from '@/lib/db/queries/ledgers';
-import type { ExchangeRate } from '@/lib/db/queries/system';
-import type { Tag } from '@/lib/db/queries/tags';
-import type { Holding } from '@/lib/db/queries/holdings';
-import type { Attachment } from '@/lib/db/queries/attachments';
+import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountGroupRow } from '@/lib/db/domain/accountGroups/queries';
+import type { BudgetRow, BudgetType, BudgetPatch } from '@/lib/db/domain/budgets/queries';
+import type { BudgetGroupRow } from '@/lib/db/domain/budgetGroups/queries';
+import type { CategoryRow } from '@/lib/db/domain/categories/queries';
+import type { Counterparty } from '@/lib/db/domain/counterparties/queries';
+import type { LedgerRow } from '@/lib/db/domain/ledgers/queries';
+import type { ExchangeRate } from '@/lib/db/domain/_app/system';
+import type { Tag } from '@/lib/db/domain/tags/queries';
+import type { Holding } from '@/lib/db/domain/holdings/queries';
+import type { Attachment } from '@/lib/db/domain/attachments/queries';
 import type { Rule } from '@/lib/rules/types';
 
 export interface Tx {

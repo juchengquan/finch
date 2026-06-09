@@ -1,9 +1,9 @@
 // DB-backed account interactions: listing with group + balance, the balance
 // curve from snapshots, net worth, and editing account details.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
-import { recomputeAccountFromPostings, postOpening, deleteEntry, resolveEntryRef } from '@/lib/db/entries';
+import { recomputeAccountFromPostings, postOpening, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 // convertToBase removed — opening_balance derivation now uses postOpening (entries layer)
 

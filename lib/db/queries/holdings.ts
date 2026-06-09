@@ -4,7 +4,7 @@
 // Prices are kept as a single "last seen" pair (no history table); updates
 // overwrite the previous values.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface Holding {
   id: string;

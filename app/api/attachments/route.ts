@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { randomUUID, createHash } from 'node:crypto';
 import { writeFile, mkdir, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { withWrite } from '@/lib/db/server';
+import { withWrite } from '@/lib/db/core/server';
 import {
   insertAttachment,
   countAttachmentsForTransaction,
   resolveAttachmentTarget,
-} from '@/lib/db/queries/attachments';
-import { resolveAttachmentPath } from '@/lib/db/paths';
+} from '@/lib/db/domain/attachments/queries';
+import { resolveAttachmentPath } from '@/lib/db/core/paths';
 import { detectFile, processBytes } from '@/lib/attachments/process';
 
 // Multipart upload route for receipt photos / PDFs. RECEIPT_PHOTOS_PLAN §5.1.

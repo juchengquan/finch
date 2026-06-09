@@ -2,7 +2,7 @@
 // Accounts are real FKs (account_id / from_account_id); display names are
 // derived by joining the accounts table at read time, like transactions.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
 
 // installment_paid is derived: count the CONFIRMED entries linked back

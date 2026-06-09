@@ -9,9 +9,9 @@
 // available.
 
 import { test, expect } from 'bun:test';
-import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/driver';
-import { applySchema } from '@/lib/db/schema';
-import { freshDb } from '@/lib/db/test-utils';
+import { openDb, execFor, applyPragmaBootstrap } from './core/driver';
+import { applySchema } from './core/schema';
+import { freshDb } from './core/test-utils';
 
 test('execFor: PRAGMA setter goes through .run() (no "use run() instead" error)', async () => {
   // The repro for the 500s in /api/state, /api/mutate, /api/db-info. The

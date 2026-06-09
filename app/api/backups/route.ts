@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { autoBackup, listBackups } from '@/lib/db/server';
+import { autoBackup, listBackups } from '@/lib/db/core/server';
 
 // GET  /api/backups  — list existing on-disk backups (path + name + size +
 //                      createdAt), newest first.
