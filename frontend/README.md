@@ -65,6 +65,10 @@ lib/
 
 Amounts are stored in the active ledger's base currency. Use `useMoney()` to display (auto-converts to user's chosen display currency). Use `fmtNative()` / `fmtNativeShort()` from `lib/data.ts` for amounts already denominated in their own currency.
 
+### DB layer
+
+`lib/db/` is layered (`core/` → `domain/` → `mutate.ts`) with one folder per first-class domain. See `frontend/db-architecture.md` for the full layout, the layer rules (enforced by ESLint), and a worked example for adding a new action.
+
 ## Remote access via Tailscale Serve
 
 To expose the app at `https://your-hostname.ts.net/finch`:
