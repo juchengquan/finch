@@ -21,7 +21,7 @@
 // The resolved rate is then pinned under the requested date (source
 // 'derived') so the approximation is at least stable across future lookups.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 /** The universal pivot currency. exchange_rates.rate is always vs this. */
 export const HUB_CURRENCY = 'USD';

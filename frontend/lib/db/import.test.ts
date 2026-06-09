@@ -10,9 +10,9 @@ import {
   listBackups,
   _resetServerDbForTests,
   getServerDb,
-} from '@/lib/db/server';
-import { seededDb } from '@/lib/db/test-utils';
-import { buildPack } from '@/lib/db/pack';
+} from './core/server';
+import { seededDb } from './core/test-utils';
+import { buildPack } from './core/pack';
 
 // Each test gets its own tmp data dir so files don't bleed across tests.
 
@@ -74,7 +74,7 @@ test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {
   // checksum without breaking the SQLite header itself.
   await getServerDb();
   const { bytes } = await exportDbBytes();
-  const { openDb, execFor } = await import('./driver');
+  const { openDb, execFor } = await import('./core/driver');
   const tamperPath = path.join(os.tmpdir(), `finch-tamper-${Date.now()}.sqlite3`);
   await fs.writeFile(tamperPath, Buffer.from(bytes));
   const driver = await openDb(tamperPath);

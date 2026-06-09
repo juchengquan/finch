@@ -1,13 +1,13 @@
 import { test, expect } from 'bun:test';
-import { seededDb, bareDb } from '@/lib/db/test-utils';
-import { applyEntriesSchema, CATEGORIES_UPGRADE } from '@/lib/db/entries-schema';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb, bareDb } from './core/test-utils';
+import { applyEntriesSchema, CATEGORIES_UPGRADE } from './core/entries-schema';
+import type { Exec } from './core/repo';
 import {
   ensureSystemCategories, postEntry,
   postSimple, postTransfer, postAdjustment, postOpening,
   rebuildEntry, recomputeAccountFromPostings,
   deleteEntry, resolveEntryRef, auditLedger,
-} from '@/lib/db/entries';
+} from './core/entries';
 
 // Seeded in-memory DB with the canonical schema (B1 carries the DE core).
 // Base-sensitive tests don't rely on any seeded ledger's base: they build

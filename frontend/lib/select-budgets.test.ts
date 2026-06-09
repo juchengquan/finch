@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { cycleWindow, budgetProgress } from '@/lib/select';
 import type { Tx } from '@/lib/store';
-import type { BudgetRow } from '@/lib/db/queries/budgets';
+import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
 
 const tx = (p: Partial<Tx> & { amount: number; date: string }): Tx => ({
   id: Math.random().toString(36).slice(2),

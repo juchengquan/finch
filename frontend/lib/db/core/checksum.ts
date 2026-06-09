@@ -4,8 +4,8 @@
 // would depend on its own value.
 
 import { createHash } from 'node:crypto';
-import type { Exec } from '@/lib/db/repo';
-import { CANONICAL_TABLES } from './queries/metadata';
+import type { Exec } from './repo';
+import { CANONICAL_TABLES } from '../queries/metadata';
 
 /**
  * Deterministically dump every canonical table to a single string and hash it.

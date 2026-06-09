@@ -7,8 +7,8 @@ import {
   setHoldingPrice,
   deleteHolding,
 } from '@/lib/db/queries/holdings';
-import { seededDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededDb } from '../core/test-utils';
+import type { Exec } from '../core/repo';
 
 async function seeded(): Promise<Exec> {
   const { exec } = await seededDb();

@@ -3,7 +3,7 @@
 // lives on accounts.include_in_net_worth and is defaulted by `type` at create
 // time; there is no group-level default any more.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface AccountGroupRow {
   id: string;

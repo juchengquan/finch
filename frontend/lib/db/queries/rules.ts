@@ -2,7 +2,7 @@
 // action list live as JSON text columns; this layer is the (de)serialization
 // boundary — everything above it works with the typed Rule shape.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import type { Rule, NewRule, Condition, Action } from '@/lib/rules/types';
 
 function parseCondition(raw: unknown): Condition {

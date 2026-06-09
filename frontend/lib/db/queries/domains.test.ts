@@ -2,8 +2,8 @@ import { test, expect } from 'bun:test';
 import { listAccounts, netWorth, updateAccount, createAccount, archiveAccount, listArchivedAccounts } from '@/lib/db/queries/accounts';
 import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
-import { seededAndAudited } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededAndAudited } from '../core/test-utils';
+import type { Exec } from '../core/repo';
 
 // Confirmed, non-transfer/-adjustment cash flow for a month. §2: uses entries + postings.
 async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) {

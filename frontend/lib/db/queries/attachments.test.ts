@@ -9,8 +9,8 @@ import {
   deleteAttachment,
   resolveAttachmentTarget,
 } from '@/lib/db/queries/attachments';
-import { freshDb as freshTestDb } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { freshDb as freshTestDb } from '../core/test-utils';
+import type { Exec } from '../core/repo';
 
 /** Seeded ledger + account + entries the attachments can FK to. */
 async function freshDb(): Promise<Exec> {

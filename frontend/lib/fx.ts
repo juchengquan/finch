@@ -2,8 +2,8 @@
 // server-side queries/rates.ts logic for client-side display). Pure functions
 // — `useMoney` calls these against the projected store rates.
 
-import type { ExchangeRate } from '@/lib/db/queries/system';
-import { HUB_CURRENCY } from '@/lib/db/queries/rates';
+import type { ExchangeRate } from '@/lib/db/domain/_app/system';
+import { HUB_CURRENCY } from '@/lib/db/domain/_app/system';
 
 /** Latest USD-per-1-unit rate per currency. USD always = 1 (the hub). */
 export function latestRateMap(rates: ExchangeRate[]): Map<string, number> {

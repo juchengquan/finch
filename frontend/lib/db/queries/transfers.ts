@@ -3,8 +3,8 @@
 // accounts and amounts from the postings. Write paths delegate to rebuildEntry
 // and deleteEntry (DOUBLE_ENTRY_PLAN §6).
 
-import type { Exec } from '@/lib/db/repo';
-import { rebuildEntry, deleteEntry, resolveEntryRef } from '@/lib/db/entries';
+import type { Exec } from '../core/repo';
+import { rebuildEntry, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 
 export interface Transfer {
@@ -178,7 +178,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     const newToRate = newToNative !== 0 ? Math.round((newToBase / newToNative) * 1e6) / 1e6 : Number(toLeg.exchange_rate);
 
     // Build legs with explicitly resolved bases (no re-lock from rates table).
-    const entryPatch: import('@/lib/db/entries').EntryPatch = {
+    const entryPatch: import('../core/entries').EntryPatch = {
       legs: [
         {
           id: String(fromLeg.id),
@@ -213,7 +213,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
   // §6 PR-B precondition: pinned bank rates survive date edits — whenever
   // patch.date is present we pass explicit legs with the stored amount_base and
   // exchange_rate so rebuildEntry never enters its re-lock branch.
-  const headerPatch: import('@/lib/db/entries').EntryPatch = {};
+  const headerPatch: import('../core/entries').EntryPatch = {};
   if (patch.date !== undefined) headerPatch.date = patch.date;
   if (patch.time !== undefined) headerPatch.time = patch.time ?? null;
   if (patch.note !== undefined) headerPatch.notes = patch.note ?? null;

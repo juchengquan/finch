@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { withWrite } from '@/lib/db/server';
+import { withWrite } from '@/lib/db/core/server';
 import { applyMutation } from '@/lib/db/mutations';
 import { toWireError } from '@/lib/i18n-error';
 

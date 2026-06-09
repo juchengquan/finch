@@ -2,7 +2,7 @@
 // (lib/db/server.ts). Reads return the store's `Tx` shape so the projected
 // state can feed the store directly.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 import type { Tx } from '@/lib/store';
 import { convertToBase } from './rates';
 import { resolveCounterpartyIdByName } from './counterparties';
@@ -10,7 +10,7 @@ import {
   postEntry, postSimple, rebuildEntry, deleteEntry, resolveEntryRef,
   recomputeAccountFromPostings,
   type EntryKind,
-} from '@/lib/db/entries';
+} from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
@@ -550,7 +550,7 @@ export async function updateTransaction(
   const oldAccountId = acctLegs.length > 0 ? String(acctLegs[0].account_id) : null;
 
   // Build EntryPatch header fields.
-  const entryPatch: import('@/lib/db/entries').EntryPatch = {};
+  const entryPatch: import('../core/entries').EntryPatch = {};
   if (patch.date !== undefined) entryPatch.date = patch.date;
   if (patch.time !== undefined) entryPatch.time = patch.time ?? null;
   if (patch.note !== undefined) entryPatch.notes = patch.note ?? null;
@@ -650,7 +650,7 @@ export async function updateTransaction(
     ? patch.category
     : (existingCatLeg ? (existingCatLeg.category_id == null ? null : String(existingCatLeg.category_id)) : null);
 
-  const newLegs: import('@/lib/db/entries').LegInput[] = [
+  const newLegs: import('../core/entries').LegInput[] = [
     {
       id: String(oldAcctLeg.id),
       accountId: newAccountId,

@@ -1,6 +1,6 @@
 // DB-backed category interactions: listing and per-category spend.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface CategoryRow {
   id: string;

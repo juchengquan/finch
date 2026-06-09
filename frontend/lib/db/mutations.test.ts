@@ -1,11 +1,11 @@
 import { test, expect } from 'bun:test';
-import { migrate, SCHEMA_VERSION } from '@/lib/db/schema';
+import { migrate, SCHEMA_VERSION } from './core/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
 import { applyMutation } from '@/lib/db/mutations';
 import { listTransfers } from '@/lib/db/queries/transfers';
 import { convertToBase } from '@/lib/db/queries/rates';
-import { seededAndAudited } from '@/lib/db/test-utils';
-import type { Exec } from '@/lib/db/repo';
+import { seededAndAudited } from './core/test-utils';
+import type { Exec } from './core/repo';
 
 // `seededAndAudited` is the default — its afterEach hook runs auditLedger
 // and throws on drift. Use `seededDb` directly only when a test intentionally

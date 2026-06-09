@@ -2,7 +2,7 @@
 // The table is a catalog of canonical merchant names — there is no FK from
 // transactions; the link is informational only.
 
-import type { Exec } from '@/lib/db/repo';
+import type { Exec } from '../core/repo';
 
 export interface Counterparty {
   id: string;

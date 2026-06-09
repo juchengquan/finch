@@ -14,7 +14,7 @@ import {
   detectFileKind,
   sha256Hex,
   PackError,
-} from '@/lib/db/pack';
+} from './core/pack';
 
 /** A stub byte stream the size of a small SQLite file. The pack module
  *  doesn't care it isn't a real SQLite header — it just hashes bytes. */

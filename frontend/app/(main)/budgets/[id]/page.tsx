@@ -15,7 +15,7 @@ import { useMoney } from '@/components/use-money';
 import { budgetProgress, kindOf } from '@/lib/select';
 import { BudgetFormDialog } from '@/components/budget-form-dialog';
 import { periodLabel, nextPeriod, type Frequency } from '@/lib/budgets/period';
-import type { BudgetRow } from '@/lib/db/queries/budgets';
+import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
 import { useTransactionSheet } from '@/components/transaction-sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
