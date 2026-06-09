@@ -15,7 +15,6 @@ import type { AccountGroupPatch, NewAccountGroup } from './accountGroups/types';
 import type {
   BudgetCyclePatch,
   BudgetPatch,
-  NewBudget,
 } from './budgets/types';
 import type { BudgetGroupPatch } from './budgetGroups/types';
 import type { CategoryPatch } from './categories/types';
@@ -87,12 +86,23 @@ export type Args = {
   deleteAccountGroup: { id: string };
 
   // --- budgets (6) ---
-  createBudget: NewBudget & {
+  createBudget: {
     id?: string;
+    ledgerId?: string;
+    groupId?: string | null;
+    name: string;
+    type?: 'expense' | 'income';
+    amount: number;
     saved?: number;
     frequency?: string;
     startDate?: string;
+    endDate?: string | null;
     isRecurring?: number;
+    rollover?: number | boolean;
+    rolloverLimit?: number | null;
+    accountIds?: string[];
+    categoryIds?: string[];
+    warningPct?: number;
   };
   updateBudget: { id: string; patch: BudgetPatch };
   updateBudgetCycle: { id: string; patch: BudgetCyclePatch };
