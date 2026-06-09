@@ -3,22 +3,7 @@
 
 import type { Exec } from '../core/repo';
 import { toCsv, type CsvColumn } from '@/lib/csv';
-
-export interface TxExportRow {
-  date: string;
-  time: string;
-  ledger: string;
-  account: string;
-  merchant: string;
-  category: string;
-  amount: number;
-  currency: string;
-  amountBase: number;
-  status: string;
-  kind: string;
-  note: string;
-  tags: string;
-}
+import type { TxExportFilter, TxExportRow } from '@/lib/db/domain/_app/export.types';
 
 const COLUMNS: CsvColumn[] = [
   { key: 'date', label: 'Date' },
@@ -35,15 +20,6 @@ const COLUMNS: CsvColumn[] = [
   { key: 'note', label: 'Note' },
   { key: 'tags', label: 'Tags' },
 ];
-
-/** Optional scoping for a transactions export. Both filters are independent;
- *  omit for the full all-ledgers export (the Settings backup behaviour). */
-export interface TxExportFilter {
-  /** Restrict to one ledger. */
-  ledgerId?: string;
-  /** Restrict to a single YYYY-MM month (matched against the txn date). */
-  month?: string;
-}
 
 /** Transactions with account/category names + tag list, newest first.
  *  One row per account leg; opening entries excluded. */

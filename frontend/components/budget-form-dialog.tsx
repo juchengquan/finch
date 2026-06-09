@@ -22,7 +22,7 @@ import { Switch } from '@/components/ui/switch';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore, type NewBudgetInput } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
-import type { BudgetRow, BudgetType } from '@/lib/db/domain/budgets/queries';
+import type { BudgetRow, BudgetType } from '@/lib/db/domain/budgets/types';
 import { periodLabel, nextPeriod, periodOf, type Frequency } from '@/lib/budgets/period';
 import { MOCK } from '@/lib/data';
 import { categoryPath } from '@/lib/db/domain/categories/queries';

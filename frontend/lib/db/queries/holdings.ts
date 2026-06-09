@@ -5,23 +5,7 @@
 // overwrite the previous values.
 
 import type { Exec } from '../core/repo';
-
-export interface Holding {
-  id: string;
-  ledgerId: string;
-  accountId: string;
-  symbol: string;
-  name: string | null;
-  shares: number;
-  /** Total amount paid in `currency`. Per-share average = costBasis / shares. */
-  costBasis: number;
-  currency: string;
-  /** Last price the user logged (per share, in `currency`). Null until set. */
-  lastPrice: number | null;
-  /** YYYY-MM-DD the lastPrice was effective on. Null until set. */
-  lastPriceDate: string | null;
-  notes: string | null;
-}
+import type { Holding, NewHolding, HoldingPatch } from '@/lib/db/domain/holdings/types';
 
 function rowToHolding(r: Record<string, unknown>): Holding {
   return {
@@ -74,22 +58,6 @@ export async function getHolding(exec: Exec, id: string): Promise<Holding | null
   return rows[0] ? rowToHolding(rows[0]) : null;
 }
 
-export interface NewHolding {
-  id: string;
-  ledgerId: string;
-  accountId: string;
-  symbol: string;
-  name?: string | null;
-  shares: number;
-  costBasis: number;
-  /** Defaults to the account's currency when omitted. */
-  currency?: string;
-  /** Optional initial price; pair with lastPriceDate when provided. */
-  lastPrice?: number | null;
-  lastPriceDate?: string | null;
-  notes?: string | null;
-}
-
 /** Insert a new holding row. The account must be an investment-type account —
  *  the caller (mutation handler) checks this; SQL has no CHECK against type. */
 export async function createHolding(exec: Exec, h: NewHolding): Promise<void> {
@@ -98,20 +66,12 @@ export async function createHolding(exec: Exec, h: NewHolding): Promise<void> {
   await exec(
     `INSERT INTO holdings
        (id,ledger_id,account_id,symbol,name,shares,cost_basis,currency,last_price,last_price_date,notes,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       h.id, h.ledgerId, h.accountId, h.symbol.toUpperCase(), h.name ?? null,
       h.shares, h.costBasis, currency, h.lastPrice ?? null, h.lastPriceDate ?? null, h.notes ?? null,
     ],
   );
-}
-
-export interface HoldingPatch {
-  symbol?: string;
-  name?: string | null;
-  shares?: number;
-  costBasis?: number;
-  notes?: string | null;
 }
 
 const PATCH_COLUMNS: Record<keyof HoldingPatch, string> = {

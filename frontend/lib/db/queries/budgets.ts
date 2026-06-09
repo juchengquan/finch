@@ -4,34 +4,12 @@
 // budgets and the goals table were removed in the budgets redesign.
 
 import type { Exec } from '../core/repo';
-
-export type BudgetType = 'expense' | 'income';
-
-export interface BudgetRow {
-  id: string;
-  ledgerId: string;
-  groupId: string | null;
-  name: string;
-  type: BudgetType;
-  amount: number;
-  /** Manual progress accumulator for one-shot income/goal budgets. */
-  saved: number;
-  carryForward: number;
-  frequency: string;
-  startDate: string;
-  endDate: string | null;
-  isRecurring: number;
-  rollover: number;
-  rolloverLimit: number | null;
-  /** Staged amount change; activated at the next period boundary by
-   *  rollBudgetsIfDue. null = no pending change. */
-  pendingAmount: number | null;
-  /** Catch-up marker for the rollover engine. null = never rolled. */
-  lastRolledPeriod: string | null;
-  accountIds: string[];
-  categoryIds: string[];
-  warningPct: number;
-}
+import type {
+  BudgetRow,
+  NewBudget,
+  BudgetPatch,
+  BudgetCyclePatch,
+} from '@/lib/db/domain/budgets/types';
 
 const parseIds = (v: unknown): string[] => {
   if (v == null) return [];
@@ -78,25 +56,6 @@ export async function listBudgets(exec: Exec, ledgerId?: string): Promise<Budget
   return rows.map(rowToBudget);
 }
 
-export interface NewBudget {
-  id: string;
-  ledgerId: string;
-  groupId?: string | null;
-  name: string;
-  type: BudgetType;
-  amount: number;
-  saved?: number;
-  frequency: string;
-  startDate: string;
-  endDate?: string | null;
-  isRecurring?: number;
-  rollover?: number;
-  rolloverLimit?: number | null;
-  accountIds?: string[];
-  categoryIds?: string[];
-  warningPct?: number;
-}
-
 const idsToJson = (ids?: string[]): string | null => (ids && ids.length ? JSON.stringify(ids) : null);
 
 /** Insert a named budget. */
@@ -106,7 +65,7 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
        (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
         frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
         account_ids, category_ids, warning_pct, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       b.id,
       b.ledgerId,
@@ -126,22 +85,6 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
       b.warningPct ?? 80,
     ],
   );
-}
-
-export interface BudgetPatch {
-  groupId?: string | null;
-  name?: string;
-  type?: BudgetType;
-  amount?: number;
-  frequency?: string;
-  startDate?: string;
-  endDate?: string | null;
-  isRecurring?: number;
-  rollover?: number;
-  rolloverLimit?: number | null;
-  accountIds?: string[];
-  categoryIds?: string[];
-  warningPct?: number;
 }
 
 const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
@@ -199,15 +142,6 @@ export async function clearPendingAmount(exec: Exec, id: string): Promise<void> 
     "UPDATE budgets SET pending_amount = NULL, updated_at = datetime('now') WHERE id = ?",
     [id],
   );
-}
-
-export interface BudgetCyclePatch {
-  frequency: string;
-  startDate: string;
-  /** When omitted, the current `amount` carries over unchanged. */
-  amount?: number;
-  /** Optional end-date adjustment alongside the cycle change. */
-  endDate?: string | null;
 }
 
 /**

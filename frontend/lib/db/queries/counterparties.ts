@@ -3,13 +3,7 @@
 // transactions; the link is informational only.
 
 import type { Exec } from '../core/repo';
-
-export interface Counterparty {
-  id: string;
-  ledgerId: string;
-  name: string;
-  verified: boolean;
-}
+import type { Counterparty, NewCounterparty, CounterpartyPatch } from '@/lib/db/domain/counterparties/types';
 
 function rowToCp(r: Record<string, unknown>): Counterparty {
   return {
@@ -50,22 +44,12 @@ export async function unverifyCounterparty(exec: Exec, id: string): Promise<void
   await exec("UPDATE counterparties SET is_verified = 0, updated_at = datetime('now') WHERE id = ?", [id]);
 }
 
-export interface NewCounterparty {
-  id: string;
-  ledgerId: string;
-  name: string;
-}
-
 /** Insert a new (unverified) merchant. */
 export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
   await exec(
     "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
     [c.id, c.ledgerId, c.name],
   );
-}
-
-export interface CounterpartyPatch {
-  name?: string;
 }
 
 /** Update a merchant's editable fields (canonical name only — category lives

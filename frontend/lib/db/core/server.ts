@@ -176,7 +176,7 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
 export interface ImportValidation {
   ok: boolean;
   reason?: string;
-  metadata?: import('../queries/metadata').DbMetadata;
+  metadata?: import('@/lib/db/domain/_app/metadata.types').DbMetadata;
 }
 
 /**
@@ -297,7 +297,7 @@ function importMaxMb(): number {
 
 export interface ImportResult {
   ok: true;
-  metadata: import('../queries/metadata').DbMetadata;
+  metadata: import('@/lib/db/domain/_app/metadata.types').DbMetadata;
   backupPath: string;
 }
 

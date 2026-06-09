@@ -12,6 +12,12 @@ import {
   type EntryKind,
 } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import type {
+  ListOptions,
+  AddInput,
+  NewTxRow,
+  TransactionPatch,
+} from '@/lib/db/domain/transactions/types';
 
 /** Translate a user-typed search string into an FTS5 MATCH expression.
  *  Each run of unicode letters/numbers becomes a case-folded prefix term
@@ -24,51 +30,6 @@ function toFts5Query(raw: string): string {
   const tokens = [...raw.toLowerCase().matchAll(/[\p{L}\p{N}]+/gu)].map((m) => m[0]);
   if (tokens.length === 0) return '';
   return tokens.map((t) => `${t}*`).join(' AND ');
-}
-
-export type Direction = 'all' | 'in' | 'out';
-
-export interface ListOptions {
-  ledgerId: string;
-  direction?: Direction;
-  query?: string;
-  accountId?: string;
-  categoryId?: string;
-  status?: 'pending' | 'confirmed';
-  from?: string; // inclusive YYYY-MM-DD
-  to?: string; // inclusive YYYY-MM-DD
-  /** Filter by absolute amount, magnitude in the ledger base currency. */
-  minAmount?: number;
-  maxAmount?: number;
-  limit?: number;
-  offset?: number;
-}
-
-export interface AddInput {
-  ledgerId: string;
-  accountId: string;
-  amount: number; // signed, native (in `currency`)
-  amountBase?: number; // signed, ledger base; defaults to `amount` (same-currency)
-  currency?: string; // native currency; defaults to the account's currency
-  merchant: string;
-  categoryId?: string | null;
-  date: string;
-  time?: string;
-  note?: string;
-  status?: 'pending' | 'confirmed';
-  /** Explicit classification; defaults to income/expense by amount sign.
-   *  'adjustment' is the manual balance-reconciliation kind; 'refund' is a
-   *  positive row that nets against its category (see refundedTransactionId). */
-  kind?: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
-  /** For kind='refund': the original expense this refund offsets. */
-  refundedTransactionId?: string | null;
-  /** Optional explicit counterparty link. When provided, the wrapper
-   *  forwards it to `insertTxRow`, which uses it as the FK and skips the
-   *  name-based auto-resolve. The projection in `state.ts` still overwrites
-   *  `merchant` with the canonical counterparty name on read. */
-  counterpartyId?: string | null;
-  /** Bypass the rules engine for this insert. */
-  skipRules?: boolean;
 }
 
 /** Map a joined posting+entry row to the partial Tx shape.
@@ -413,45 +374,6 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
   return entryId;
 }
 
-/** @deprecated B3b: this wrapper is DEAD CODE — all callers now go through
- *  addTransaction → postSimple/postEntry. Retained for tests that still use
- *  the insertTxRow shim; optional fields fall back to resolved values
- *  (id, currency, amountBase/rate, counterpartyId, status, timestamp). */
-export interface NewTxRow {
-  ledgerId: string;
-  accountId: string;
-  date: string;
-  time?: string | null;
-  /** Signed native amount in `currency` (the account's currency). */
-  amount: number;
-  description: string;
-  kind: 'income' | 'expense' | 'transfer' | 'adjustment' | 'refund';
-  /** Optional: omit to default to the account's own currency. */
-  currency?: string;
-  categoryId?: string | null;
-  status?: 'pending' | 'confirmed';
-  transferGroupId?: string | null;
-  refundedTransactionId?: string | null;
-  sourceTemplateId?: string | null;
-  notes?: string | null;
-  /** Pre-resolved (amount_base, rate) when the caller already has them
-   *  (seed already converted the whole batch; recompute paths supply
-   *  their own). Default: convert on the fly via `convertToBase`. */
-  amountBase?: number;
-  exchangeRate?: number;
-  /** Pre-resolved counterparty id. Pass `null` to skip the lookup with a
-   *  known-empty result; omit (undefined) to run the resolver. */
-  counterpartyId?: string | null;
-  /** Override the generated id (seed uses fixed ids). */
-  id?: string;
-  /** Override created/updated/confirmed timestamps (seed uses SEED_TS). */
-  timestamp?: string;
-  /** Bypass the rules engine for this insert. Used by seed (rules don't exist
-   *  during seeding) and as an escape hatch for rule-generated rows that must
-   *  not re-trigger rules (the infinite-loop guard). Default false. */
-  skipRules?: boolean;
-}
-
 /** @deprecated insertTxRow is DEAD CODE as of B3b. All insert paths now go
  *  through addTransaction → postSimple/postEntry. Retained as a test shim. */
 export async function insertTxRow(exec: Exec, row: NewTxRow): Promise<string> {
@@ -508,20 +430,6 @@ export async function getRefundsFor(exec: Exec, originalId: string): Promise<Tx[
  *     (now on confirm, NULL on demote). The recompute step picks up the
  *     change in the account balance, since the balance sum is `confirmed`-only.
  */
-export interface TransactionPatch {
-  merchant?: Tx['merchant'];
-  category?: Tx['category'];
-  amount?: Tx['amount'];
-  date?: Tx['date'];
-  time?: Tx['time'];
-  note?: Tx['note'];
-  kind?: Tx['kind'];
-  refundedTransactionId?: Tx['refundedTransactionId'];
-  account?: string;
-  currency?: string;
-  status?: 'pending' | 'confirmed';
-}
-
 /** Full adapter rewrite of updateTransaction over the entries chokepoint.
  *  Preserves the legacy patch contract verbatim. Returns { oldAccountId }
  *  for the dispatcher's source-account recompute step. */
