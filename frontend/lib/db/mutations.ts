@@ -94,119 +94,24 @@ import {
   rebuildEntry, resolveEntryRef,
   recomputeAccountFromPostings,
 } from './core/entries';
-import { seedReference, insertTransactions, seedTransactionTags } from './core/seed';
 import {
   deleteAttachment,
   getAttachmentFile,
   getAttachmentRelPathsForTransaction,
 } from './domain/attachments/queries';
-import { resolveAttachmentPath } from './core/paths';
-import { unlink } from 'node:fs/promises';
-import transactionsData from '@/data/transactions.json';
-import type { Tx } from '@/lib/store';
 import { I18nError } from '@/lib/i18n-error';
-
-/** Merge a partial backup-config update into the app_state slice. Reads the
- *  existing JSON, overrides the named keys, writes back. Concurrent
- *  setBackupFrequency / setBackupRetention can't clobber each other this way.
- *  Defaults mirror `lib/db/state.ts::readBackupConfig`. */
-async function mergeBackupConfig(
-  exec: Exec,
-  patch: Partial<{ frequencyMs: number; retention: number }>,
-): Promise<void> {
-  const raw = await getAppState(exec, 'backupConfig');
-  let cur: { frequencyMs: number; retention: number } = { frequencyMs: 60 * 60 * 1000, retention: 14 };
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const f = Number((parsed as { frequencyMs?: unknown }).frequencyMs);
-        const r = Number((parsed as { retention?: unknown }).retention);
-        if (Number.isFinite(f)) cur.frequencyMs = Math.trunc(f);
-        if (Number.isFinite(r) && r > 0) cur.retention = Math.trunc(r);
-      }
-    } catch {
-      /* keep defaults */
-    }
-  }
-  cur = { ...cur, ...patch };
-  await setAppState(exec, 'backupConfig', JSON.stringify(cur));
-}
-
-/** Best-effort attachment-file cleanup. Called AFTER the DB row(s) are gone:
- *  if the unlink fails (missing file, EBUSY on Windows in dev, etc.) the
- *  orphan is harmless — `lib/db/queries/attachments.ts` will never surface a
- *  row pointing at it again, and a future vacuum can sweep it. The opposite
- *  order (unlink first, then delete) would risk a phantom DB row pointing
- *  at a missing file. RECEIPT_PHOTOS_PLAN §3.3. */
-async function unlinkAttachmentFiles(relPaths: string[]): Promise<void> {
-  if (!relPaths.length) return;
-  for (const rel of relPaths) {
-    const abs = resolveAttachmentPath(rel);
-    if (!abs) continue;
-    await unlink(abs).catch(() => {});
-  }
-}
-
-const RESET_TABLES = [
-  'holdings',
-  'entry_attachments',
-  'entry_tags',
-  'postings',
-  'entries',
-  'scheduled_splits',
-  'scheduled_templates',
-  'tags',
-  'budgets',
-  'budget_groups',
-  'counterparties',
-  'categories',
-  'accounts',
-  'account_groups',
-  'exchange_rates',
-  'rules',
-  'ledgers',
-  'app_state',
-];
-
-async function resetDb(exec: Exec): Promise<void> {
-  for (const t of RESET_TABLES) await exec(`DELETE FROM ${t}`);
-  await seedReference(exec);
-  await insertTransactions(exec, transactionsData as Tx[]);
-  await seedTransactionTags(exec);
-}
+import { withDedupMessage } from './domain/_shared/with-dedup-message';
+import { newId } from './domain/_shared/ids';
+import { txTouches, mergeTouches } from './domain/_shared/tx-touches';
+import { postSingle } from './domain/_shared/post-helpers';
+import { resetDb } from './domain/_shared/reset-tables';
+import { mergeBackupConfig } from './domain/_shared/backup-config';
+import { unlinkAttachmentFiles } from './domain/_shared/attachment-cleanup';
+import { setMobileTabIds, setDisplayCurrency } from './domain/_shared/mobile-tabs';
 
 type Args = Record<string, unknown>;
 const str = (v: unknown) => String(v);
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-function newId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
-// Turn a UNIQUE violation from a known dedup index into a human message, so a
-// double-submit surfaces as a clear toast instead of a raw 500. SQLite reports
-// the violated index by its *columns*, not its name (e.g. "UNIQUE constraint
-// failed: budgets.ledger_id, budgets.name, ..."), so we match on a distinctive
-// column from each backstop index (idx_txn_dedup / idx_budget_unique in
-// schema.ts, #5). Any other error propagates unchanged.
-const DEDUP_MESSAGES: { signature: string; code: string; message: string }[] = [
-  { signature: 'entries.ledger_id, entries.dedup_hash', code: 'error.duplicate.txn', message: 'This looks like a duplicate — an identical transaction already exists.' },
-  { signature: 'budgets.ledger_id, budgets.name', code: 'error.duplicate.budget', message: 'A budget with this name and cycle already exists.' },
-];
-async function withDedupMessage<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (err) {
-    const msg = String((err as Error)?.message ?? err);
-    if (msg.includes('UNIQUE constraint failed')) {
-      for (const { signature, code, message } of DEDUP_MESSAGES) {
-        if (msg.includes(signature)) throw new I18nError(code, {}, message);
-      }
-    }
-    throw err;
-  }
-}
 
 // Categories nest at most 3 levels (CATEGORIES_LEVEL3_PLAN).
 // The cap lives here, not in SQL — a self-referential CHECK is hard to
@@ -285,24 +190,6 @@ async function assertSubtreeFitsUnder(
   if (pd + sd > 3) {
     throw new I18nError('error.category.depthCap', {}, 'Categories nest at most three levels deep');
   }
-}
-
-async function postSingle(
-  exec: Exec,
-  ledgerId: string,
-  accountId: string,
-  amount: number,
-  description: string,
-  date: string,
-  sourceTemplateId: string | null = null,
-  categoryId: string | null = null,
-): Promise<void> {
-  await postSimple(exec, {
-    ledgerId, accountId, date,
-    amount, description, categoryId,
-    kind: amount > 0 ? 'income' : 'expense',
-    sourceTemplateId,
-  });
 }
 
 /** Read a template's owning ledger directly off the row. Used by postScheduled
@@ -477,44 +364,6 @@ async function generateDueScheduled(exec: Exec, today: string): Promise<void> {
       });
     }
   }
-}
-
-// Capture a transaction's date + every category/account it touches.
-// Used by the tx-mutation cases to feed invalidateRollover() with the
-// before/after state of an edit. Now entries-based (B3b).
-async function txTouches(
-  exec: Exec,
-  id: string,
-): Promise<{ date: string; accountId: string; categoryIds: string[] } | null> {
-  const ref = await resolveEntryRef(exec, id);
-  if (!ref) return null;
-  const { entryId } = ref;
-  const [e] = await exec('SELECT date FROM entries WHERE id = ?', [entryId]);
-  if (!e) return null;
-  const postings = await exec(
-    'SELECT account_id, category_id FROM postings WHERE entry_id = ?',
-    [entryId],
-  );
-  const categoryIds = new Set<string>();
-  let accountId: string | null = null;
-  for (const p of postings) {
-    if (p.account_id != null && accountId == null) accountId = String(p.account_id);
-    if (p.category_id != null) categoryIds.add(String(p.category_id));
-  }
-  if (!accountId) return null;
-  return { date: String(e.date), accountId, categoryIds: [...categoryIds] };
-}
-
-function mergeTouches(
-  a: { date: string; accountId: string; categoryIds: string[] } | null,
-  b: { date: string; accountId: string; categoryIds: string[] } | null,
-): { earliestDate: string; categoryIds: string[]; accountIds: string[] } | null {
-  if (!a && !b) return null;
-  const dates = [a?.date, b?.date].filter((d): d is string => Boolean(d));
-  const earliestDate = dates.sort()[0];
-  const cats = new Set<string>([...(a?.categoryIds ?? []), ...(b?.categoryIds ?? [])]);
-  const accts = new Set<string>([...(a ? [a.accountId] : []), ...(b ? [b.accountId] : [])]);
-  return { earliestDate, categoryIds: [...cats], accountIds: [...accts] };
 }
 
 export async function applyMutation(exec: Exec, action: string, args: Args): Promise<void> {
@@ -1384,26 +1233,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     case 'setMobileTabIds': {
       const ids = Array.isArray(args.ids) ? args.ids.filter((v): v is string => typeof v === 'string') : [];
-      await setAppState(exec, 'mobileTabs', JSON.stringify(ids));
+      await setMobileTabIds(exec, ids);
       return;
     }
     case 'setDisplayCurrency': {
-      // Merge the single ledger's choice into the stored map so a concurrent
-      // edit to a different ledger isn't clobbered.
-      const ledgerId = str(args.ledgerId);
-      const currency = str(args.currency);
-      const raw = await getAppState(exec, 'displayCurrencyByLedger');
-      let map: Record<string, string> = {};
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) map = parsed as Record<string, string>;
-        } catch {
-          /* ignore malformed value */
-        }
-      }
-      map[ledgerId] = currency;
-      await setAppState(exec, 'displayCurrencyByLedger', JSON.stringify(map));
+      await setDisplayCurrency(exec, str(args.ledgerId), str(args.currency));
       return;
     }
     case 'setBackupFrequency': {
