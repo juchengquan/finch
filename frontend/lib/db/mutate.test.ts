@@ -403,6 +403,14 @@ test('adjustments are excluded from category spend and cash flow', async () => {
   expect(flowAfter.net).toBeCloseTo(flowBefore.net, 2);
 });
 
+test('reports: monthly cash flow', async () => {
+  const exec = await seededAndAudited();
+  const cf = await monthlyCashFlow(exec, 'personal', '2026-05');
+  expect(cf.income).toBeCloseTo(2900, 2);
+  expect(cf.expense).toBeLessThan(0);
+  expect(cf.net).toBeCloseTo(cf.income + cf.expense, 2);
+});
+
 test('setExchangeRate upserts on (date, currency); deleteExchangeRate removes it', async () => {
   const exec = await seededAndAudited();
   const { listExchangeRates } = await import('@/lib/db/queries/system');
@@ -636,6 +644,20 @@ test('applyMutation dispatches all 74 actions (smoke)', async () => {
     'verifyCounterparty',
   ];
   expect(actions.length).toBe(74);
+
+  // The dispatcher should NOT throw 'Unknown action' for any of the 74 names.
+  // It MAY throw a different I18nError (per-action arg validation), or a
+  // plain Error (invariants), or succeed silently — the test doesn't care
+  // about success/failure of the per-action logic, just that the dispatcher
+  // routes every action to SOME handler.
+  const exec = await seededAndAudited();
+  for (const action of actions) {
+    try {
+      await applyMutation(exec, action, {} as never);
+    } catch (err) {
+      expect((err as Error).message).not.toMatch(/Unknown action/);
+    }
+  }
 });
 
 

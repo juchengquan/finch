@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test';
 import { applyMutation } from '@/lib/db/mutate';
 import { seededAndAudited } from '@/lib/db/core/test-utils';
 import { I18nError } from '@/lib/i18n-error';
-import { listCategories } from '@/lib/db/queries/categories';
+import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queries/categories';
 
 test('createCategory allows depth-3 (parent under a child) but rejects depth-4', async () => {
   const exec = await seededAndAudited();
@@ -145,4 +145,79 @@ test('deleteCategory: scheduled_templates.category_id is SET NULL (used to be RE
   await applyMutation(exec, 'deleteCategory', { id: 'food' });
   const [row] = await exec("SELECT category_id FROM scheduled_templates WHERE id = 'sch-food'");
   expect(row.category_id).toBeNull();
+});
+
+test('categories: list + monthly spend', async () => {
+  const exec = await seededAndAudited();
+  expect((await listCategories(exec, 'personal')).length).toBe(15); // 8 top-level + 7 demo subcategories
+  const spend = await monthlyByCategory(exec, 'personal', '2026-05');
+  const food = spend.find((c) => c.id === 'food')!;
+  expect(food.spent).toBeGreaterThan(0);
+  // Food spend should equal the sum of confirmed food expenses.
+  expect(food.spent).toBeCloseTo(6.75 + 84.32 + 42.18 + 14.2 + 29.84, 2);
+
+  // All-time map spans the full seed history — the prior-year `h*` rows
+  // (groceries + dining) push the total well above the original Mar/Apr/May
+  // sum; assert at least that minimum so it stays a meaningful regression test.
+  const map = await categorySpend(exec, 'personal');
+  expect(map.food).toBeGreaterThanOrEqual(6.75 + 84.32 + 42.18 + 14.2 + 29.84 + 132.8 + 96.5);
+});
+
+test('categories: 2-level tree — parent_id wires children, build+rollup behave', async () => {
+  const exec = await seededAndAudited();
+  const { buildCategoryTree, rollupCategorySpend } = await import('@/lib/db/queries/categories');
+  const cats = await listCategories(exec, 'personal');
+
+  // Seeded demo children carry their parent id.
+  const groceries = cats.find((c) => c.id === 'food-groceries')!;
+  expect(groceries.parentId).toBe('food');
+  const food = cats.find((c) => c.id === 'food')!;
+  expect(food.parentId).toBeNull();
+
+  // Tree groups children under their parent; childless parents come back with [].
+  const tree = buildCategoryTree(cats);
+  const foodNode = tree.find((n) => n.parent.id === 'food')!;
+  expect(foodNode.children.map((c) => c.id).sort()).toEqual(
+    ['food-coffee', 'food-groceries', 'food-restaurants'].sort(),
+  );
+  expect(tree.find((n) => n.parent.id === 'rent')!.children).toEqual([]);
+
+  // rollupCategorySpend folds child totals into the parent bucket.
+  const rolled = rollupCategorySpend({ food: 10, 'food-groceries': 30, 'food-coffee': 5 }, cats);
+  expect(rolled.food).toBe(10 + 30 + 5);
+  expect(rolled['food-groceries']).toBe(30); // children keep their own line too
+});
+
+test('rollupCategorySpend folds grandchild → child → parent (3-level)', async () => {
+  // Synthetic 3-level tree so the test is independent of the seed.
+  const cats = [
+    { id: 'food',  parentId: null },
+    { id: 'rest',  parentId: 'food' },
+    { id: 'japan', parentId: 'rest' },
+  ];
+  const { rollupCategorySpend } = await import('@/lib/db/queries/categories');
+  const rolled = rollupCategorySpend({ food: 10, rest: 20, japan: 30 }, cats);
+  expect(rolled.japan).toBe(30);          // leaf stays alone
+  expect(rolled.rest).toBe(20 + 30);       // child = own + grandchild
+  expect(rolled.food).toBe(10 + 20 + 30);  // root = own + child + grandchild
+});
+
+test('expandDescendants returns the configured ids plus every descendant', async () => {
+  const cats = [
+    { id: 'food',     parentId: null },
+    { id: 'rest',     parentId: 'food' },
+    { id: 'japan',    parentId: 'rest' },
+    { id: 'thai',     parentId: 'rest' },
+    { id: 'grocery',  parentId: 'food' },
+    { id: 'rent',     parentId: null },
+  ];
+  const { expandDescendants } = await import('@/lib/db/queries/categories');
+  const set = expandDescendants(['food'], cats);
+  expect(set).toEqual(new Set(['food', 'rest', 'japan', 'thai', 'grocery']));
+  // Already-deep ids stay (no double-add).
+  expect(expandDescendants(['japan'], cats)).toEqual(new Set(['japan']));
+  // Multiple roots merge.
+  expect(expandDescendants(['food', 'rent'], cats)).toEqual(
+    new Set(['food', 'rest', 'japan', 'thai', 'grocery', 'rent']),
+  );
 });
