@@ -16,7 +16,7 @@ The `frontend/lib/db/` directory is organized in three layers:
 
 Layer rules (enforced by ESLint `no-restricted-imports`):
 - `core/*` cannot import from `domain/*`.
-- `domain/<x>/` can only import from same-domain, `core/*`, `domain/_shared/`, `domain/_app/`, and the items re-exported from `domain/<x>/_deps.ts` (not yet created; 3 known cross-domain deps currently use direct `queries` imports: `transactions → attachments`, `rules → counterparties`, `scheduled → counterparties`).
+- `domain/<x>/` can only import from same-domain, `core/*`, `domain/_shared/`, `domain/_app/`, and the items re-exported from `domain/<x>/_deps.ts` (not yet created; 5 known cross-domain deps currently use direct `queries` imports: `accounts → accountGroups`, `transactions → attachments`, `budgets → budgetGroups`, `rules → counterparties`, `scheduled → counterparties`).
 - The route layer (`app/api/mutate/route.ts`) calls `applyMutation`; it does not import from per-domain files.
 - External consumers (UI, route handlers, app state) import types from `lib/db/domain/<x>/types` and read SQL from `lib/db/domain/<x>/queries`; they do not import from `lib/db/domain/<x>/mutations`.
 

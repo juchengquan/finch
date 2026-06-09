@@ -20,7 +20,7 @@ const eslintConfig = defineConfig([
   // domain/_shared/, domain/_app/, or a _deps.ts re-export; external
   // consumers (app/, lib/, components/) use the wire-level
   // @/lib/db/mutate.applyMutation instead of importing per-domain
-  // mutations. See docs/db-architecture.md for the full rules.
+  // mutations. See frontend/db-architecture.md for the full rules.
   {
     // Files INSIDE lib/db/domain/<x>/ (excluding _shared, _app):
     //   - May import from same-domain (any layer).
@@ -38,7 +38,7 @@ const eslintConfig = defineConfig([
     // domain files. Relative-path cross-domain imports (the common
     // case in the current codebase) are not caught here; that
     // cross-domain rule is enforced by code review. See
-    // docs/db-architecture.md.
+    // frontend/db-architecture.md.
     files: ["lib/db/domain/**/!(_shared|_app)/*.ts"],
     rules: {
       "no-restricted-imports": ["error", {

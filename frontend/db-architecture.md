@@ -109,7 +109,7 @@ Plus the central types file:
 | `domain/<x>/` | `domain/_shared/` | ✓ |
 | `domain/<x>/` | `domain/_app/` | ✓ |
 | `domain/<x>/` | `domain/_args.ts` | ✓ |
-| `domain/<x>/` | sibling domain `domain/<y>/` | ⚠ — 3 known cross-domain deps use direct `queries` imports today (`transactions → attachments`, `rules → counterparties`, `scheduled → counterparties`); a future PR introduces `domain/<x>/_deps.ts` re-exports to formalize this |
+| `domain/<x>/` | sibling domain `domain/<y>/` | ⚠ — 5 known cross-domain deps use direct `queries` imports today (`accounts → accountGroups`, `transactions → attachments`, `budgets → budgetGroups`, `rules → counterparties`, `scheduled → counterparties`); a future PR introduces `domain/<x>/_deps.ts` re-exports to formalize this |
 | `app/*`, `lib/*`, `components/*` | `lib/db/domain/<x>/types` | ✓ (type imports) |
 | `app/*`, `lib/*`, `components/*` | `lib/db/domain/<x>/queries` | ✓ (read queries are public) |
 | `app/*`, `lib/*`, `components/*` | `lib/db/domain/<x>/mutations` | ✗ — use the wire-level `@/lib/db/mutate.applyMutation` instead |
