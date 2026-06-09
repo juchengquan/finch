@@ -7,7 +7,7 @@ import { Icon, Sparkline } from '@/components/primitives';
 import { useFinanceStore } from '@/lib/store';
 import { fmtNative } from '@/lib/data';
 import { accountForecast, type ForecastEvent } from '@/lib/select';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import { cn } from '@/lib/utils';
 
 const today = () => new Date().toISOString().slice(0, 10);

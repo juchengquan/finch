@@ -4,6 +4,7 @@
 
 import type { Exec } from '../core/repo';
 import type { ScheduledTemplate, ScheduledSplit } from '@/lib/store';
+import type { ScheduledPatch, NewScheduled } from '@/lib/db/domain/scheduled/types';
 
 // installment_paid is derived: count the CONFIRMED entries linked back
 // via source_template_id. Pending rows wait for the user's confirm action and
@@ -146,22 +147,6 @@ export async function getScheduled(exec: Exec, id: string): Promise<ScheduledTem
   };
 }
 
-export interface ScheduledPatch {
-  name?: string;
-  description?: string | null;
-  amount?: number | null;
-  frequency?: string;
-  dayOfMonth?: number;
-  weekDay?: number;
-  autoPost?: number;
-  color?: string | null;
-  type?: string;
-  category?: string | null;
-  endDate?: string | null;
-  maxExecutions?: number | null;
-  installmentTotal?: number | null;
-}
-
 export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPatch): Promise<void> {
   const cols: Record<string, string> = {
     name: 'name', description: 'description', amount: 'amount', frequency: 'frequency', dayOfMonth: 'day_of_month',
@@ -184,27 +169,6 @@ export async function updateScheduled(exec: Exec, id: string, patch: ScheduledPa
   sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE scheduled_templates SET ${sets.join(', ')} WHERE id = ?`, bind);
-}
-
-export interface NewScheduled {
-  id: string;
-  ledgerId: string;
-  name: string;
-  description: string | null;
-  type: string;
-  amount: number | null;
-  frequency: string;
-  dayOfMonth: number;
-  weekDay: number | null;
-  accountId: string;
-  fromAccountId: string | null;
-  autoPost: number;
-  color: string | null;
-  category: string | null;
-  startDate: string;
-  endDate: string | null;
-  maxExecutions: number | null;
-  installmentTotal: number | null;
 }
 
 export async function createScheduled(exec: Exec, t: NewScheduled): Promise<void> {

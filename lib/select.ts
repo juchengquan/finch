@@ -3,11 +3,11 @@
 // store (which mirrors the server DB) instead of a second in-browser query DB.
 
 import type { Tx, ScheduledTemplate } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
-import type { ListOptions } from '@/lib/db/domain/transactions/queries';
-import type { Transfer } from '@/lib/db/domain/transfers/queries';
-import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
-import type { Holding } from '@/lib/db/domain/holdings/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
+import type { ListOptions } from '@/lib/db/domain/transactions/types';
+import type { Transfer } from '@/lib/db/domain/transfers/types';
+import type { BudgetRow } from '@/lib/db/domain/budgets/types';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { AccountType } from '@/lib/account-types';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { expandDescendants } from '@/lib/db/domain/categories/queries';

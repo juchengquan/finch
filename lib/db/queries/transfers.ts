@@ -6,22 +6,7 @@
 import type { Exec } from '../core/repo';
 import { rebuildEntry, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
-
-export interface Transfer {
-  id: string; // entry id (was transfer_group_id)
-  date: string;
-  /** Time-of-day "HH:MM" shared by both legs; null when none was recorded. */
-  time: string | null;
-  amount: number; // positive magnitude sent, in `fromCurrency` (native)
-  toAmount: number; // positive magnitude received, in `toCurrency` (native)
-  fromCurrency: string;
-  toCurrency: string;
-  fromAccountId: string | null;
-  toAccountId: string | null;
-  fromName: string | null;
-  toName: string | null;
-  note: string | null;
-}
+import type { Transfer, TransferPatch } from '@/lib/db/domain/transfers/types';
 
 export async function listTransfers(exec: Exec, ledgerId: string): Promise<Transfer[]> {
   // Transfer entries: kind='transfer' with ≥2 account legs in the ledger.
@@ -88,19 +73,6 @@ export async function listTransfers(exec: Exec, ledgerId: string): Promise<Trans
     });
   }
   return result;
-}
-
-export interface TransferPatch {
-  /** Sent magnitude, in the from-account's currency. */
-  fromAmount?: number;
-  /** Received magnitude, in the to-account's currency. Set this when the
-   *  bank's actual conversion differs from the mid-rate; the effective FX
-   *  rate becomes `toAmount / fromAmount`. */
-  toAmount?: number;
-  date?: string;
-  /** Time-of-day "HH:MM" written to both legs; null clears it. */
-  time?: string | null;
-  note?: string | null;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;

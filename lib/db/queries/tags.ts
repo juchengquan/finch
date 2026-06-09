@@ -1,13 +1,7 @@
 // Tags: list, edit, delete. Create / assign in mutations.ts.
 
 import type { Exec } from '../core/repo';
-
-export interface Tag {
-  id: string;
-  ledgerId: string;
-  name: string;
-  color: string | null;
-}
+import type { Tag, TagPatch } from '@/lib/db/domain/tags/types';
 
 /** List tags; pass a ledgerId to scope, or omit for all ledgers. */
 export async function listTags(exec: Exec, ledgerId?: string): Promise<Tag[]> {
@@ -21,11 +15,6 @@ export async function listTags(exec: Exec, ledgerId?: string): Promise<Tag[]> {
     name: String(r.name),
     color: r.color == null ? null : String(r.color),
   }));
-}
-
-export interface TagPatch {
-  name?: string;
-  color?: string | null;
 }
 
 /** Update a tag's editable fields. */

@@ -8,7 +8,7 @@
 // `ctx.weekdayName` so the caller can supply locale-aware labels.
 
 import type { Tx } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import { categorySpend, netWorthSeries, prevMonth, kindOf } from '@/lib/select';
 
 type Params = Record<string, string | number>;

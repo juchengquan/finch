@@ -25,7 +25,7 @@ import {
   holdingGainLoss,
   holdingsValueForAccount,
 } from '@/lib/select';
-import type { Holding } from '@/lib/db/domain/holdings/queries';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 import { cn } from '@/lib/utils';
 
 interface Props {

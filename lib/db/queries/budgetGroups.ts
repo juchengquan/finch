@@ -3,13 +3,7 @@
 // budgets' group_id to NULL via the schema FK (ON DELETE SET NULL).
 
 import type { Exec } from '../core/repo';
-
-export interface BudgetGroupRow {
-  id: string;
-  ledgerId: string;
-  name: string;
-  sortOrder: number;
-}
+import type { BudgetGroupRow, NewBudgetGroup, BudgetGroupPatch } from '@/lib/db/domain/budgetGroups/types';
 
 /** List groups; pass a ledgerId to scope, or omit for all ledgers. */
 export async function listBudgetGroups(exec: Exec, ledgerId?: string): Promise<BudgetGroupRow[]> {
@@ -27,12 +21,6 @@ export async function listBudgetGroups(exec: Exec, ledgerId?: string): Promise<B
   }));
 }
 
-export interface NewBudgetGroup {
-  id: string;
-  ledgerId: string;
-  name: string;
-}
-
 /** Insert a group; sort_order is appended after the existing ones in the ledger. */
 export async function createBudgetGroup(exec: Exec, g: NewBudgetGroup): Promise<void> {
   const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM budget_groups WHERE ledger_id = ?', [g.ledgerId]);
@@ -42,10 +30,6 @@ export async function createBudgetGroup(exec: Exec, g: NewBudgetGroup): Promise<
      VALUES (?,?,?,?,datetime('now'),datetime('now'))`,
     [g.id, g.ledgerId, g.name, sortOrder],
   );
-}
-
-export interface BudgetGroupPatch {
-  name?: string;
 }
 
 export async function updateBudgetGroup(exec: Exec, id: string, patch: BudgetGroupPatch): Promise<void> {

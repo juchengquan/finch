@@ -1,13 +1,7 @@
 // Read queries for the exchange-rates surface (Settings › Ledger › Exchange rates).
 
 import type { Exec } from '../core/repo';
-
-export interface ExchangeRate {
-  date: string;
-  currency: string;
-  rate: number;
-  source: string | null;
-}
+import type { ExchangeRate } from '@/lib/db/domain/_app/system.types';
 
 export async function listExchangeRates(exec: Exec): Promise<ExchangeRate[]> {
   const rows = await exec('SELECT date, currency, rate, source FROM exchange_rates ORDER BY date');

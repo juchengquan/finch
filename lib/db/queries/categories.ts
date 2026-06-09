@@ -1,19 +1,7 @@
 // DB-backed category interactions: listing and per-category spend.
 
 import type { Exec } from '../core/repo';
-
-export interface CategoryRow {
-  id: string;
-  ledgerId: string;
-  /** NULL = top-level category. Non-NULL = child whose parent is a top-level row. */
-  parentId: string | null;
-  name: string;
-  /** `expense` / `income` / `transfer`. (DB column is `kind` for historical reasons.) */
-  type: string;
-  icon: string | null;
-  /** Hex `#rrggbb`. Use lib/colors `categoryHex(hue)` to generate from a palette hue. */
-  color: string | null;
-}
+import type { CategoryRow, CategoryTreeNode, CategoryPatch, CategorySpend } from '@/lib/db/domain/categories/types';
 
 /** List categories; pass a ledgerId to scope, or omit for all ledgers.
  *  Equity system rows (kind='equity') are excluded — they are hidden from
@@ -36,11 +24,6 @@ export async function listCategories(exec: Exec, ledgerId?: string): Promise<Cat
   }));
 }
 
-export interface CategoryTreeNode {
-  parent: CategoryRow;
-  children: CategoryRow[];
-}
-
 /** Group categories into a 2-level tree. Top-level rows become parents (with
  *  an empty `children` array when childless); child rows whose parent is also
  *  in `cats` slot under that parent. Orphan children (their parent isn't in
@@ -59,14 +42,6 @@ export function buildCategoryTree(cats: CategoryRow[]): CategoryTreeNode[] {
     }
   }
   return tops.map((p) => ({ parent: p, children: childrenOf.get(p.id) ?? [] }));
-}
-
-export interface CategoryPatch {
-  name?: string;
-  type?: string;
-  icon?: string | null;
-  color?: string | null;
-  parentId?: string | null;
 }
 
 /** Update a category's editable fields. */
@@ -95,12 +70,6 @@ export async function updateCategory(exec: Exec, id: string, patch: CategoryPatc
  *  ON DELETE SET NULL clause; transactions.category_id becomes NULL too. */
 export async function deleteCategory(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM categories WHERE id = ?', [id]);
-}
-
-export interface CategorySpend {
-  id: string;
-  name: string;
-  spent: number; // positive magnitude of expenses
 }
 
 /**

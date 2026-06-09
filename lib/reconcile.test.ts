@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { reconcileState } from '@/lib/reconcile';
 import type { Tx } from '@/lib/store';
-import type { AccountRow } from '@/lib/db/domain/accounts/queries';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: Math.random().toString(36).slice(2),

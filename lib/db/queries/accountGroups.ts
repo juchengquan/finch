@@ -4,13 +4,7 @@
 // time; there is no group-level default any more.
 
 import type { Exec } from '../core/repo';
-
-export interface AccountGroupRow {
-  id: string;
-  ledgerId: string;
-  name: string;
-  sortOrder: number;
-}
+import type { AccountGroupRow, NewAccountGroup, AccountGroupPatch } from '@/lib/db/domain/accountGroups/types';
 
 /** List groups; pass a ledgerId to scope, or omit for all ledgers. */
 export async function listAccountGroups(exec: Exec, ledgerId?: string): Promise<AccountGroupRow[]> {
@@ -28,12 +22,6 @@ export async function listAccountGroups(exec: Exec, ledgerId?: string): Promise<
   }));
 }
 
-export interface NewAccountGroup {
-  id: string;
-  ledgerId: string;
-  name: string;
-}
-
 /** Insert a group; sort_order is appended after the existing ones in the ledger. */
 export async function createAccountGroup(exec: Exec, g: NewAccountGroup): Promise<void> {
   const rows = await exec('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM account_groups WHERE ledger_id = ?', [g.ledgerId]);
@@ -43,10 +31,6 @@ export async function createAccountGroup(exec: Exec, g: NewAccountGroup): Promis
      VALUES (?,?,?,?,datetime('now'),datetime('now'))`,
     [g.id, g.ledgerId, g.name, sortOrder],
   );
-}
-
-export interface AccountGroupPatch {
-  name?: string;
 }
 
 export async function updateAccountGroup(exec: Exec, id: string, patch: AccountGroupPatch): Promise<void> {
