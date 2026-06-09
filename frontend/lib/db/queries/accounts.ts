@@ -5,6 +5,7 @@ import type { Exec } from '../core/repo';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import { recomputeAccountFromPostings, postOpening, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import type { AccountRow, AccountPatch, NewAccount } from '@/lib/db/domain/accounts/types';
 // convertToBase removed — opening_balance derivation now uses postOpening (entries layer)
 
 /**
@@ -24,39 +25,6 @@ export async function recomputeAccount(exec: Exec, accountId: string): Promise<v
 export async function recomputeForTransaction(exec: Exec, txnId: string): Promise<void> {
   const ref = await resolveEntryRef(exec, txnId);
   if (ref?.accountId) await recomputeAccount(exec, ref.accountId);
-}
-
-export interface AccountRow {
-  id: string;
-  ledgerId: string;
-  name: string;
-  type: string;
-  currency: string;
-  balance: number;
-  /** Opening balance in the account's native currency. The starting point that
-   *  `recomputeAccount` walks forward through confirmed rows to land at
-   *  `current_balance`; same anchor the reconcile selector uses. */
-  openingBalance: number;
-  /** Ledger-base value of the opening balance, locked at account creation. The
-   *  cost-basis half of the unrealized-FX calculation: cost basis =
-   *  openingBalanceBase + Σ amount_base of confirmed transactions. */
-  openingBalanceBase: number;
-  groupId: string | null;
-  groupName: string | null;
-  includeInNetWorth: number; // 0/1; defaulted from `type` at create, flippable per account
-  isActive: boolean; // mirrors accounts.is_active (1 = active, 0 = archived)
-  color: string | null;
-  sortOrder: number;
-  /** Date of the last successful reconcile-to-statement (`YYYY-MM-DD`), or null
-   *  when the account has never been reconciled. */
-  lastReconciledAt: string | null;
-  /** Statement balance the user matched at that date, in the account's native
-   *  currency. Paired with `lastReconciledAt`. */
-  lastReconciledBalance: number | null;
-  /** ISO 8601 UTC stamp set by `archiveAccount` when the row was soft-deleted,
-   *  `null` while the account is active. Powers the "Archived <date>" subtitle
-   *  on the ghost-row variant in the Accounts list. */
-  archivedAt: string | null;
 }
 
 /** List accounts; pass a ledgerId to scope, or omit for all ledgers. */
@@ -157,17 +125,6 @@ export async function netWorth(exec: Exec, ledgerId: string): Promise<number> {
   return Number(rows[0]?.total ?? 0);
 }
 
-// `currency` is intentionally not editable — it's fixed at account creation
-// (changing it would re-interpret stored native amounts / locked amount_base).
-export interface AccountPatch {
-  name?: string;
-  type?: string;
-  color?: string | null;
-  groupId?: string | null;
-  /** Per-account net-worth flag. Defaulted from `type` on create; flippable. */
-  includeInNetWorth?: number;
-}
-
 // `currency` is deliberately not patchable — it's fixed at account creation
 // (see AccountPatch in lib/store.ts). Any stray key without a column mapping is
 // skipped below.
@@ -194,17 +151,6 @@ export async function updateAccount(exec: Exec, id: string, patch: AccountPatch)
   sets.push("updated_at = datetime('now')");
   bind.push(id);
   await exec(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`, bind);
-}
-
-export interface NewAccount {
-  id: string;
-  ledgerId: string;
-  name: string;
-  type: string;
-  currency: string;
-  groupId: string | null;
-  openingBalance: number;
-  color: string | null;
 }
 
 /** Insert a new account; current_balance starts at 0.

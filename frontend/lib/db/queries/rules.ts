@@ -4,6 +4,7 @@
 
 import type { Exec } from '../core/repo';
 import type { Rule, NewRule, Condition, Action } from '@/lib/rules/types';
+import type { RulePatchInput } from '@/lib/db/domain/rules/types';
 
 function parseCondition(raw: unknown): Condition {
   try {
@@ -63,7 +64,7 @@ export async function createRule(exec: Exec, id: string, r: NewRule): Promise<vo
     `INSERT INTO rules
        (id, ledger_id, name, priority, condition, actions, is_active, run_on_edit,
         created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+    VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       id,
       r.ledgerId,
@@ -75,15 +76,6 @@ export async function createRule(exec: Exec, id: string, r: NewRule): Promise<vo
       r.runOnEdit ? 1 : 0,
     ],
   );
-}
-
-export interface RulePatchInput {
-  name?: string | null;
-  priority?: number;
-  condition?: Condition;
-  actions?: Action[];
-  isActive?: boolean;
-  runOnEdit?: boolean;
 }
 
 export async function updateRule(exec: Exec, id: string, patch: RulePatchInput): Promise<void> {

@@ -12,21 +12,7 @@ import type { Exec } from '../core/repo';
 import { convertToBase } from './rates';
 import { rebuildEntry, auditLedger, ensureSystemCategories } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
-
-export interface LedgerRow {
-  id: string;
-  name: string;
-  base: string;
-  isDefault: number;
-  /** Accent dot in the switcher; null = derive a hue from the id. */
-  color: string | null;
-  /** One-line description shown in the switcher dropdown. */
-  tagline: string | null;
-  /** Live count of active accounts in this ledger (subselect). */
-  accounts: number;
-  /** Live count of transactions in this ledger (subselect). */
-  txns: number;
-}
+import type { LedgerRow, NewLedgerInput, LedgerPatch } from '@/lib/db/domain/ledgers/types';
 
 /** List ledgers — projected so the UI can react when one's base flips.
  *  Includes live `accounts` + `txns` counts via subselects so the switcher
@@ -55,14 +41,6 @@ export async function listLedgers(exec: Exec): Promise<LedgerRow[]> {
   }));
 }
 
-export interface NewLedgerInput {
-  id: string;
-  name: string;
-  base: string;
-  color?: string | null;
-  tagline?: string | null;
-}
-
 /** Insert a new ledger row. `is_default = 0` always; promote via
  *  `setDefaultLedger`. The caller validates inputs (LEDGER_CRUD_PLAN §4). */
 export async function createLedger(exec: Exec, input: NewLedgerInput): Promise<void> {
@@ -71,12 +49,6 @@ export async function createLedger(exec: Exec, input: NewLedgerInput): Promise<v
       "VALUES (?, ?, ?, 0, ?, ?, datetime('now'), datetime('now'))",
     [input.id, input.name, input.base, input.color ?? null, input.tagline ?? null],
   );
-}
-
-export interface LedgerPatch {
-  name?: string;
-  color?: string | null;
-  tagline?: string | null;
 }
 
 /** Update a ledger's editable cosmetic fields. Base currency stays on the

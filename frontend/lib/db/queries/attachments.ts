@@ -14,28 +14,7 @@
 
 import type { Exec } from '../core/repo';
 import { resolveEntryRef } from '../core/entries';
-
-/** Client-projected attachment shape. `rel_path` is **deliberately omitted**
- *  so the client cannot construct a file URL; clients reach the bytes via
- *  GET /api/attachments/:id. */
-export interface Attachment {
-  id: string;
-  ledgerId: string;
-  // transactionId carries the account-posting id as projected by state.ts;
-  // the entry→posting remap lives in state.ts's projection.
-  transactionId: string;
-  kind: 'image' | 'pdf';
-  mimeType: string;
-  byteSize: number;
-  sha256: string;
-  originalFilename: string | null;
-  createdAt: string;
-}
-
-/** Server-side row including `rel_path`. Never sent to the client. */
-export interface AttachmentFile extends Attachment {
-  relPath: string;
-}
+import type { Attachment, AttachmentFile, InsertAttachmentParams } from '@/lib/db/domain/attachments/types';
 
 /** List attachments for the projection. Optionally scope to a ledger. */
 export async function listAttachments(exec: Exec, ledgerId?: string): Promise<Attachment[]> {
@@ -122,18 +101,6 @@ export async function countAttachmentsForTransaction(
  *  durably on disk; this row insert is the commit point for the upload.
  *  `transactionId` is forwarded from the client (may be account-posting id);
  *  we resolve to entry_id via resolveEntryRef. */
-export interface InsertAttachmentParams {
-  id: string;
-  ledgerId: string;
-  transactionId: string;
-  kind: 'image' | 'pdf';
-  relPath: string;
-  mimeType: string;
-  byteSize: number;
-  sha256: string;
-  originalFilename: string | null;
-}
-
 export async function insertAttachment(exec: Exec, p: InsertAttachmentParams): Promise<void> {
   const ref = await resolveEntryRef(exec, p.transactionId);
   const entryId = ref?.entryId ?? p.transactionId;
