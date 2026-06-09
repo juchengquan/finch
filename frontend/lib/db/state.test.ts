@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
 import { buildState, projectState } from '@/lib/db/state';
-import { applyMutation } from '@/lib/db/mutations';
+import { applyMutation } from '@/lib/db/mutate';
 import { listCounterparties } from '@/lib/db/queries/counterparties';
 import { freshDb, seededAndAudited } from './core/test-utils';
 import type { PersistState } from './core/repo';
