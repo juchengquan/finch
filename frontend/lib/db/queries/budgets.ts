@@ -4,6 +4,8 @@
 // budgets and the goals table were removed in the budgets redesign.
 
 import type { Exec } from '../core/repo';
+import { I18nError } from '@/lib/i18n-error';
+import { BUDGET_ERROR_CODES } from '@/lib/db/domain/budgets/errors';
 import type {
   BudgetRow,
   NewBudget,
@@ -152,7 +154,7 @@ export async function clearPendingAmount(exec: Exec, id: string): Promise<void> 
  */
 export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyclePatch): Promise<void> {
   const existing = await exec('SELECT amount, end_date FROM budgets WHERE id = ?', [id]);
-  if (!existing.length) throw new Error('Budget not found');
+  if (!existing.length) throw new I18nError(BUDGET_ERROR_CODES.notFound, {}, 'Budget not found');
   const amount = patch.amount ?? Number(existing[0].amount);
   // undefined preserves the existing end_date; explicit null clears it; a
   // string sets it.

@@ -12,6 +12,7 @@ import {
   type EntryKind,
 } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import { TRANSACTION_ERROR_CODES } from '@/lib/db/domain/transactions/errors';
 import type {
   ListOptions,
   AddInput,
@@ -452,7 +453,7 @@ export async function updateTransaction(
   const touchesMoney = patch.amount !== undefined || patch.category !== undefined
     || patch.account !== undefined || patch.currency !== undefined || patch.kind !== undefined;
   if (acctLegs.length > 1 && touchesMoney) {
-    throw new I18nError('error.entry.transferLegEdit', {}, 'Edit transfers from the Transfers screen');
+    throw new I18nError(TRANSACTION_ERROR_CODES.transferLegEdit, {}, 'Edit transfers from the Transfers screen');
   }
 
   const oldAccountId = acctLegs.length > 0 ? String(acctLegs[0].account_id) : null;

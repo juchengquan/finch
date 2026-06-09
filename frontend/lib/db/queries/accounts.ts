@@ -5,6 +5,7 @@ import type { Exec } from '../core/repo';
 import { defaultIncludeInNetWorth } from '@/lib/account-types';
 import { recomputeAccountFromPostings, postOpening, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import { ACCOUNT_ERROR_CODES } from '@/lib/db/domain/accounts/errors';
 import type { AccountRow, AccountPatch, NewAccount } from '@/lib/db/domain/accounts/types';
 // convertToBase removed — opening_balance derivation now uses postOpening (entries layer)
 
@@ -215,7 +216,7 @@ export async function deleteAccount(exec: Exec, id: string): Promise<void> {
     )) as { other: number }[];
     if (Number(other) > 0) {
       throw new I18nError(
-        'error.account.hasTransactions',
+        ACCOUNT_ERROR_CODES.hasTransactions,
         {},
         'Account has transactions — archive it instead',
       );
