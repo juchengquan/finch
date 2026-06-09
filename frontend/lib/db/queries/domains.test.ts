@@ -4,6 +4,7 @@ import { listCategories, monthlyByCategory, categorySpend } from '@/lib/db/queri
 import { listCounterparties, searchCounterparties, verifyCounterparty } from '@/lib/db/queries/counterparties';
 import { seededAndAudited } from '../core/test-utils';
 import type { Exec } from '../core/repo';
+import { I18nError } from '@/lib/i18n-error';
 
 // Confirmed, non-transfer/-adjustment cash flow for a month. §2: uses entries + postings.
 async function monthlyCashFlow(exec: Exec, ledgerId: string, yearMonth: string) {
@@ -146,6 +147,21 @@ test('createCategory allows depth-3 (parent under a child) but rejects depth-4',
       ledgerId: 'personal', name: 'Doppio', parentId: espresso.id,
     }),
   ).rejects.toThrow(/three levels/i);
+});
+
+test('createCategory throws I18nError when parent is already at depth 3', async () => {
+  const exec = await seeded();
+  const { applyMutation } = await import('@/lib/db/mutations');
+  await applyMutation(exec, 'createCategory', {
+    ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
+  });
+  const cats = await listCategories(exec, 'personal');
+  const espresso = cats.find((c) => c.name === 'Espresso')!;
+  await expect(
+    applyMutation(exec, 'createCategory', {
+      ledgerId: 'personal', name: 'Doppio', parentId: espresso.id,
+    }),
+  ).rejects.toThrow(I18nError);
 });
 
 test('updateCategory subtree move: depth-3 subtree fits only under a top-level parent', async () => {
@@ -790,4 +806,37 @@ test('accounts: listArchivedAccounts returns only is_active=0 rows for the given
   const personalArchived = await listArchivedAccounts(exec, 'personal');
   expect(personalArchived).toHaveLength(1);
   expect(personalArchived[0].id).toBe('acct-archived');
+});
+
+test('updateBudgetCycle throws I18nError when budget is not found', async () => {
+  const exec = await seeded();
+  const { updateBudgetCycle } = await import('@/lib/db/domain/budgets/queries');
+  await expect(
+    updateBudgetCycle(exec, 'budget-nonexistent', { frequency: 'monthly', startDate: '2026-01-01', amount: 100 }),
+  ).rejects.toThrow(I18nError);
+});
+
+test('deleteLedger throws I18nError when ledger is not found', async () => {
+  const exec = await seeded();
+  const { deleteLedger } = await import('@/lib/db/domain/ledgers/queries');
+  await expect(deleteLedger(exec, 'ledger-nonexistent')).rejects.toThrow(I18nError);
+});
+
+test('deleteLedger throws I18nError when target is the last ledger', async () => {
+  // Start from a minimal schema+ledger (the seed ships 4 ledgers; we can't
+  // easily delete the others due to cascading FKs).
+  const { bareDb } = await import('../core/test-utils');
+  const { applySchema } = await import('../core/schema');
+  const { deleteLedger } = await import('@/lib/db/domain/ledgers/queries');
+  const { exec, close } = await bareDb();
+  try {
+    await applySchema(exec);
+    await exec(
+      `INSERT INTO ledgers (id, name, base_currency, is_default, created_at, updated_at)
+       VALUES ('solo', 'Solo', 'USD', 1, datetime('now'), datetime('now'))`,
+    );
+    await expect(deleteLedger(exec, 'solo')).rejects.toThrow(I18nError);
+  } finally {
+    close();
+  }
 });
