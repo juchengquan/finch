@@ -12,6 +12,7 @@ import type { Exec } from '../core/repo';
 import { convertToBase } from './rates';
 import { rebuildEntry, auditLedger, ensureSystemCategories } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import { LEDGER_ERROR_CODES } from '@/lib/db/domain/ledgers/errors';
 import type { LedgerRow, NewLedgerInput, LedgerPatch } from '@/lib/db/domain/ledgers/types';
 
 /** List ledgers — projected so the UI can react when one's base flips.
@@ -98,14 +99,14 @@ export async function setDefaultLedger(exec: Exec, id: string): Promise<void> {
 export async function deleteLedger(exec: Exec, id: string): Promise<{ relPaths: string[]; newDefaultId: string | null }> {
   // Guard #1: target exists.
   const target = await exec('SELECT id, is_default FROM ledgers WHERE id = ?', [id]);
-  if (!target.length) throw new Error('Ledger not found');
+  if (!target.length) throw new I18nError(LEDGER_ERROR_CODES.notFound, {}, 'Ledger not found');
   const wasDefault = Number(target[0].is_default) === 1;
 
   // Guard #2: not the last ledger.
   const remainingCount = Number(
     (await exec('SELECT COUNT(*) AS n FROM ledgers WHERE id != ?', [id]))[0]?.n ?? 0,
   );
-  if (remainingCount === 0) throw new Error('Cannot delete the last ledger');
+  if (remainingCount === 0) throw new I18nError(LEDGER_ERROR_CODES.lastLedger, {}, 'Cannot delete the last ledger');
 
   const sp = 'delete_ledger';
   await exec(`SAVEPOINT ${sp}`);
@@ -258,7 +259,7 @@ export async function recomputeAmountBases(
     const problems = await auditLedger(exec, ledgerId, { checkBalances: true });
     if (problems.length) {
       throw new I18nError(
-        'error.ledger.recomputeFailed',
+        LEDGER_ERROR_CODES.recomputeFailed,
         { count: problems.length },
         `recomputeAmountBases audit failed: ${problems[0].code} ${problems[0].detail}`,
       );

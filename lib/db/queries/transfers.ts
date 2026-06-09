@@ -6,6 +6,7 @@
 import type { Exec } from '../core/repo';
 import { rebuildEntry, deleteEntry, resolveEntryRef } from '../core/entries';
 import { I18nError } from '@/lib/i18n-error';
+import { TRANSFER_ERROR_CODES } from '@/lib/db/domain/transfers/errors';
 import type { Transfer, TransferPatch } from '@/lib/db/domain/transfers/types';
 
 export async function listTransfers(exec: Exec, ledgerId: string): Promise<Transfer[]> {
@@ -123,8 +124,8 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
     if (hasFrom) newFromNative = Math.abs(Number(patch.fromAmount));
     if (hasTo) newToNative = Math.abs(Number(patch.toAmount));
 
-    if (!(newFromNative > 0)) throw new I18nError('error.transfer.amountGt0', {}, 'Transfer amount must be greater than 0');
-    if (!(newToNative > 0)) throw new I18nError('error.transfer.amountGt0', {}, 'Transfer amount must be greater than 0');
+    if (!(newFromNative > 0)) throw new I18nError(TRANSFER_ERROR_CODES.amountGt0, {}, 'Transfer amount must be greater than 0');
+    if (!(newToNative > 0)) throw new I18nError(TRANSFER_ERROR_CODES.amountGt0, {}, 'Transfer amount must be greater than 0');
 
     if (hasFrom && !hasTo) {
       // Preserve ratio: scale to-leg by the same factor as from-leg.
@@ -134,7 +135,7 @@ export async function updateTransfer(exec: Exec, groupId: string, patch: Transfe
       const factor = oldTo > 0 ? newToNative / oldTo : 1;
       newFromNative = r2(oldFrom * factor);
     } else if (sameCurrency && Math.abs(newFromNative - newToNative) > 0.005) {
-      throw new I18nError('error.transfer.sameCurrencyMismatch', {}, 'Same-currency transfer amounts must match');
+      throw new I18nError(TRANSFER_ERROR_CODES.sameCurrencyMismatch, {}, 'Same-currency transfer amounts must match');
     }
 
     // Preserve pinned rates: new base = old base × (new native / old native).

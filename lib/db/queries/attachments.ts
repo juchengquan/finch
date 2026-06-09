@@ -14,6 +14,8 @@
 
 import type { Exec } from '../core/repo';
 import { resolveEntryRef } from '../core/entries';
+import { I18nError } from '@/lib/i18n-error';
+import { ATTACHMENT_ERROR_CODES } from '@/lib/db/domain/attachments/errors';
 import type { Attachment, AttachmentFile, InsertAttachmentParams } from '@/lib/db/domain/attachments/types';
 
 /** List attachments for the projection. Optionally scope to a ledger. */
@@ -151,7 +153,11 @@ export async function deleteAttachment(exec: Exec, id: string): Promise<void> {
 function rowToAttachment(r: Record<string, unknown>): Attachment {
   const kind = String(r.kind);
   if (kind !== 'image' && kind !== 'pdf') {
-    throw new Error(`Invalid attachment kind: ${kind}`);
+    throw new I18nError(
+      ATTACHMENT_ERROR_CODES.invalidKind,
+      { kind },
+      `Invalid attachment kind: ${kind}`,
+    );
   }
   return {
     id: String(r.id),
