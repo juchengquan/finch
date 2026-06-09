@@ -7,88 +7,88 @@ import type { Exec } from './core/repo';
 import { ensureSystemCategories } from './core/entries';
 import {
   getScheduled,
-  deleteScheduled as qDeleteScheduled,
-  updateScheduled as qUpdateScheduled,
-  createScheduled as qCreateScheduled,
-  addScheduledSplit as qAddScheduledSplit,
-  removeScheduledSplit as qRemoveScheduledSplit,
+  deleteScheduled,
+  updateScheduled,
+  createScheduled,
+  addScheduledSplit,
+  removeScheduledSplit,
   type ScheduledPatch,
-} from './queries/scheduled';
+} from './domain/scheduled/queries';
 import {
-  createAccount as qCreateAccount,
-  updateAccount as qUpdateAccount,
-  archiveAccount as qArchiveAccount,
-  unarchiveAccount as qUnarchiveAccount,
-  deleteAccount as qDeleteAccount,
+  createAccount,
+  updateAccount,
+  archiveAccount,
+  unarchiveAccount,
+  deleteAccount,
   type AccountPatch,
-} from './queries/accounts';
+} from './domain/accounts/queries';
 import {
-  createAccountGroup as qCreateAccountGroup,
-  updateAccountGroup as qUpdateAccountGroup,
-  deleteAccountGroup as qDeleteAccountGroup,
+  createAccountGroup,
+  updateAccountGroup,
+  deleteAccountGroup,
   type AccountGroupPatch,
-} from './queries/accountGroups';
-import { deleteTag as qDeleteTag, updateTag as qUpdateTag, type TagPatch } from './queries/tags';
+} from './domain/accountGroups/queries';
+import { deleteTag, updateTag, type TagPatch } from './domain/tags/queries';
 import {
-  createRule as qCreateRule,
-  updateRule as qUpdateRule,
-  deleteRule as qDeleteRule,
+  createRule,
+  updateRule,
+  deleteRule,
   type RulePatchInput,
-} from './queries/rules';
+} from './domain/rules/queries';
 import type { Action, Condition, NewRule } from '@/lib/rules/types';
-import { deleteCategory as qDeleteCategory, updateCategory as qUpdateCategory, type CategoryPatch } from './queries/categories';
+import { deleteCategory, updateCategory, type CategoryPatch } from './domain/categories/queries';
 // qSetTransactionSplits removed: setTransactionSplits is now inline via rebuildEntry (B3b)
 import {
-  deleteCounterparty as qDeleteCounterparty,
-  updateCounterparty as qUpdateCounterparty,
-  createCounterparty as qCreateCounterparty,
-  verifyCounterparty as qVerifyCounterparty,
-  unverifyCounterparty as qUnverifyCounterparty,
+  deleteCounterparty,
+  updateCounterparty,
+  createCounterparty,
+  verifyCounterparty,
+  unverifyCounterparty,
   resolveCounterpartyIdByName,
   type CounterpartyPatch,
-} from './queries/counterparties';
-import { deleteTransfer as qDeleteTransfer, updateTransfer as qUpdateTransfer } from './queries/transfers';
-import { setExchangeRate as qSetExchangeRate, deleteExchangeRate as qDeleteExchangeRate } from './queries/system';
-import { getAppState, setAppState } from './queries/appState';
+} from './domain/counterparties/queries';
+import { deleteTransfer, updateTransfer } from './domain/transfers/queries';
+import { setExchangeRate, deleteExchangeRate } from './domain/_app/system';
+import { getAppState, setAppState } from './domain/_app/appState';
 import { occurrencesUpTo } from '@/lib/recurrence';
 import { invalidateRollover } from '@/lib/budgets/rollover';
 import type { ScheduledTemplate } from '@/lib/store';
 import {
-  createBudget as qCreateBudget,
-  updateBudget as qUpdateBudget,
-  updateBudgetCycle as qUpdateBudgetCycle,
-  stageBudgetAmount as qStageBudgetAmount,
-  clearPendingAmount as qClearPendingAmount,
-  deleteBudget as qDeleteBudget,
-  contributeBudget as qContributeBudget,
+  createBudget,
+  updateBudget,
+  updateBudgetCycle,
+  stageBudgetAmount,
+  clearPendingAmount,
+  deleteBudget,
+  contributeBudget,
   type BudgetPatch,
   type BudgetCyclePatch,
   type BudgetType,
-} from './queries/budgets';
+} from './domain/budgets/queries';
 import {
-  createBudgetGroup as qCreateBudgetGroup,
-  updateBudgetGroup as qUpdateBudgetGroup,
-  deleteBudgetGroup as qDeleteBudgetGroup,
+  createBudgetGroup,
+  updateBudgetGroup,
+  deleteBudgetGroup,
   type BudgetGroupPatch,
-} from './queries/budgetGroups';
+} from './domain/budgetGroups/queries';
 import { isAccountType } from '@/lib/account-types';
 import { parseInstallmentTotal } from '@/lib/installment';
 // convertToBase not needed in mutations.ts (used within entries.ts and transactions.ts adapters)
 import {
-  createHolding as qCreateHolding,
-  updateHolding as qUpdateHolding,
-  setHoldingPrice as qSetHoldingPrice,
-  deleteHolding as qDeleteHolding,
+  createHolding,
+  updateHolding,
+  setHoldingPrice,
+  deleteHolding,
   type HoldingPatch,
-} from './queries/holdings';
+} from './domain/holdings/queries';
 import {
-  addTransaction as qAdd,
-  updateTransaction as qUpdate,
-  deleteTransactionRow as qDelete,
-  confirmTransaction as qConfirm,
-  confirmPendingWithMerchant as qConfirmWithMerchant,
+  addTransaction,
+  updateTransaction,
+  deleteTransactionRow,
+  confirmTransaction,
+  confirmPendingWithMerchant,
   type AddInput,
-} from './queries/transactions';
+} from './domain/transactions/queries';
 import {
   postTransfer, postAdjustment, postSimple,
   rebuildEntry, resolveEntryRef,
@@ -96,10 +96,10 @@ import {
 } from './core/entries';
 import { seedReference, insertTransactions, seedTransactionTags } from './core/seed';
 import {
-  deleteAttachment as qDeleteAttachment,
-  getAttachmentFile as qGetAttachmentFile,
-  getAttachmentRelPathsForTransaction as qAttachmentPathsForTx,
-} from './queries/attachments';
+  deleteAttachment,
+  getAttachmentFile,
+  getAttachmentRelPathsForTransaction,
+} from './domain/attachments/queries';
 import { resolveAttachmentPath } from './core/paths';
 import { unlink } from 'node:fs/promises';
 import transactionsData from '@/data/transactions.json';
@@ -520,7 +520,7 @@ function mergeTouches(
 export async function applyMutation(exec: Exec, action: string, args: Args): Promise<void> {
   switch (action) {
     case 'addTransaction': {
-      const id = await withDedupMessage(() => qAdd(exec, args as unknown as AddInput));
+      const id = await withDedupMessage(() => addTransaction(exec, args as unknown as AddInput));
       const touches = await txTouches(exec, id);
       if (touches) {
         await invalidateRollover(
@@ -553,10 +553,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateTransaction': {
       const id = str(args.id);
       const before = await txTouches(exec, id);
-      // qUpdate (entries adapter) handles all account recomputes internally via
+      // updateTransaction (entries adapter) handles all account recomputes internally via
       // rebuildEntry. The returned oldAccountId tells us if recompute is needed
       // for the OLD account — rebuildEntry already does the NEW account.
-      const { oldAccountId } = await qUpdate(exec, id, args.patch as Parameters<typeof qUpdate>[2]);
+      const { oldAccountId } = await updateTransaction(exec, id, args.patch as Parameters<typeof updateTransaction>[2]);
       if (oldAccountId) {
         await recomputeAccountFromPostings(exec, oldAccountId);
       }
@@ -743,10 +743,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // Collect attachment rel_paths BEFORE the FK CASCADE fires — afterwards
       // the rows are gone and we can't recover them. The actual unlinks run
       // at the bottom of this case, after the DB state is settled.
-      const attachmentPaths = await qAttachmentPathsForTx(exec, id);
+      const attachmentPaths = await getAttachmentRelPathsForTransaction(exec, id);
       // Hard delete: deleteEntry (called by deleteTransactionRow) handles
       // recomputeAccountFromPostings for every affected account internally.
-      await qDelete(exec, id);
+      await deleteTransactionRow(exec, id);
       if (before) {
         await invalidateRollover(
           exec,
@@ -762,19 +762,19 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       // file. The user-visible model is "the receipt is gone" regardless of
       // which step technically fails (RECEIPT_PHOTOS_PLAN §3.3).
       const id = str(args.id);
-      const row = await qGetAttachmentFile(exec, id);
+      const row = await getAttachmentFile(exec, id);
       if (!row) return; // already gone — idempotent
-      await qDeleteAttachment(exec, id);
+      await deleteAttachment(exec, id);
       await unlinkAttachmentFiles([row.relPath]);
       return;
     }
     case 'confirmTransaction':
-      // qConfirm (entries adapter) calls recomputeAccountFromPostings internally.
-      await qConfirm(exec, str(args.id));
+      // confirmTransaction (entries adapter) calls recomputeAccountFromPostings internally.
+      await confirmTransaction(exec, str(args.id));
       return;
     case 'confirmPendingWithMerchant': {
-      // qConfirmWithMerchant (entries adapter) calls recomputeAccountFromPostings internally.
-      await qConfirmWithMerchant(exec, str(args.id), {
+      // confirmPendingWithMerchant (entries adapter) calls recomputeAccountFromPostings internally.
+      await confirmPendingWithMerchant(exec, str(args.id), {
         counterpartyId: args.counterpartyId != null ? str(args.counterpartyId) : null,
         newCounterpartyName: args.newCounterpartyName != null ? str(args.newCounterpartyName) : null,
       });
@@ -804,7 +804,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const amount = Number(args.amount);
       if (!(amount > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
       const strList = (v: unknown): string[] => (Array.isArray(v) ? (v as unknown[]).map(str) : []);
-      await withDedupMessage(() => qCreateBudget(exec, {
+      await withDedupMessage(() => createBudget(exec, {
         id: str(args.id || newId('bgt')),
         ledgerId,
         groupId: args.groupId ? str(args.groupId) : null,
@@ -837,11 +837,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         const id = str(args.id);
         const [row] = await exec('SELECT is_recurring FROM budgets WHERE id = ?', [id]);
         if (row && Number(row.is_recurring) === 1) {
-          await qStageBudgetAmount(exec, id, Number(patch.amount));
+          await stageBudgetAmount(exec, id, Number(patch.amount));
           return;
         }
       }
-      await qUpdateBudget(exec, str(args.id), patch);
+      await updateBudget(exec, str(args.id), patch);
       return;
     }
     case 'updateBudgetCycle': {
@@ -850,27 +850,27 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!validFreqs.includes(patch.frequency)) throw new I18nError('error.budget.unknownFreq', { freq: String(patch.frequency) }, `Unknown frequency "${patch.frequency}"`);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.startDate)) throw new I18nError('error.budget.dateFormat', {}, 'startDate must be YYYY-MM-DD');
       if (patch.amount !== undefined && !(Number(patch.amount) > 0)) throw new I18nError('error.budget.amountGt0', {}, 'Budget amount must be greater than 0');
-      await qUpdateBudgetCycle(exec, str(args.id), patch);
+      await updateBudgetCycle(exec, str(args.id), patch);
       return;
     }
     case 'clearPendingAmount':
-      await qClearPendingAmount(exec, str(args.id));
+      await clearPendingAmount(exec, str(args.id));
       return;
     // Entity delete uses `removeBudget` to avoid colliding with the legacy
     // per-category `deleteBudget` action above.
     case 'removeBudget':
-      await qDeleteBudget(exec, str(args.id));
+      await deleteBudget(exec, str(args.id));
       return;
     case 'contributeBudget': {
       const amount = Number(args.amount);
       if (!Number.isFinite(amount)) throw new I18nError('error.budget.invalidContribution', {}, 'Invalid contribution amount');
-      await qContributeBudget(exec, str(args.id), amount);
+      await contributeBudget(exec, str(args.id), amount);
       return;
     }
     case 'createBudgetGroup': {
       const name = str(args.name).trim();
       if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-      await qCreateBudgetGroup(exec, {
+      await createBudgetGroup(exec, {
         id: str(args.id || newId('bgg')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
@@ -880,11 +880,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateBudgetGroup': {
       const patch = (args.patch ?? {}) as BudgetGroupPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-      await qUpdateBudgetGroup(exec, str(args.id), patch);
+      await updateBudgetGroup(exec, str(args.id), patch);
       return;
     }
     case 'deleteBudgetGroup':
-      await qDeleteBudgetGroup(exec, str(args.id));
+      await deleteBudgetGroup(exec, str(args.id));
       return;
     case 'createAccount': {
       const ledgerId = str(args.ledgerId || 'personal');
@@ -892,7 +892,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!name) throw new I18nError('error.required.accountName', {}, 'Account name is required');
       const type = str(args.type || 'savings');
       if (!isAccountType(type)) throw new I18nError('error.account.unknownType', { type }, `Unknown account type "${type}"`);
-      await qCreateAccount(exec, {
+      await createAccount(exec, {
         id: str(args.id || newId('acct')),
         ledgerId,
         name,
@@ -910,22 +910,22 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (patch.type !== undefined && !isAccountType(str(patch.type))) {
         throw new I18nError('error.account.unknownType', { type: String(patch.type) }, `Unknown account type "${patch.type}"`);
       }
-      await qUpdateAccount(exec, str(args.id), patch);
+      await updateAccount(exec, str(args.id), patch);
       return;
     }
     case 'archiveAccount':
-      await qArchiveAccount(exec, str(args.id));
+      await archiveAccount(exec, str(args.id));
       return;
     case 'unarchiveAccount':
-      await qUnarchiveAccount(exec, str(args.id));
+      await unarchiveAccount(exec, str(args.id));
       return;
     case 'deleteAccount':
-      await qDeleteAccount(exec, str(args.id));
+      await deleteAccount(exec, str(args.id));
       return;
     case 'createAccountGroup': {
       const name = str(args.name).trim();
       if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-      await qCreateAccountGroup(exec, {
+      await createAccountGroup(exec, {
         id: str(args.id || newId('ag')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
@@ -935,11 +935,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'updateAccountGroup': {
       const patch = (args.patch ?? {}) as AccountGroupPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-      await qUpdateAccountGroup(exec, str(args.id), patch);
+      await updateAccountGroup(exec, str(args.id), patch);
       return;
     }
     case 'deleteAccountGroup':
-      await qDeleteAccountGroup(exec, str(args.id));
+      await deleteAccountGroup(exec, str(args.id));
       return;
     case 'updateScheduledSplit': {
       await exec(
@@ -952,24 +952,24 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
     case 'addScheduledSplit': {
       const accountId = str(args.accountId).trim();
       if (!accountId) throw new I18nError('error.required.splitAccount', {}, 'A split needs an account');
-      await qAddScheduledSplit(exec, str(args.templateId), accountId, Number(args.pct) || 0);
+      await addScheduledSplit(exec, str(args.templateId), accountId, Number(args.pct) || 0);
       return;
     }
     case 'removeScheduledSplit': {
-      await qRemoveScheduledSplit(exec, str(args.templateId), Number(args.index));
+      await removeScheduledSplit(exec, str(args.templateId), Number(args.index));
       return;
     }
     case 'verifyCounterparty':
-      await qVerifyCounterparty(exec, str(args.id));
+      await verifyCounterparty(exec, str(args.id));
       return;
     case 'unverifyCounterparty':
-      await qUnverifyCounterparty(exec, str(args.id));
+      await unverifyCounterparty(exec, str(args.id));
       return;
     case 'createTransfer':
       await createTransfer(exec, args);
       return;
     case 'updateTransfer':
-      await qUpdateTransfer(exec, str(args.id), (args.patch ?? {}) as Parameters<typeof qUpdateTransfer>[2]);
+      await updateTransfer(exec, str(args.id), (args.patch ?? {}) as Parameters<typeof updateTransfer>[2]);
       return;
     case 'createCategory': {
       const ledgerId = str(args.ledgerId || 'personal');
@@ -1005,13 +1005,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         // parent (the deepest leaf stays at depth 3).
         await assertSubtreeFitsUnder(exec, id, patch.parentId);
       }
-      await qUpdateCategory(exec, id, patch);
+      await updateCategory(exec, id, patch);
       return;
     }
     case 'updateTag': {
       const patch = (args.patch ?? {}) as TagPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.tagName', {}, 'Tag name is required');
-      await qUpdateTag(exec, str(args.id), patch);
+      await updateTag(exec, str(args.id), patch);
       return;
     }
     case 'updateScheduled': {
@@ -1020,13 +1020,13 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if ('installmentTotal' in patch) {
         patch.installmentTotal = parseInstallmentTotal(patch.installmentTotal);
       }
-      await qUpdateScheduled(exec, str(args.id), patch);
+      await updateScheduled(exec, str(args.id), patch);
       return;
     }
     case 'updateCounterparty': {
       const patch = (args.patch ?? {}) as CounterpartyPatch;
       if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.merchantName', {}, 'Merchant name is required');
-      await qUpdateCounterparty(exec, str(args.id), patch);
+      await updateCounterparty(exec, str(args.id), patch);
       return;
     }
     case 'createRule': {
@@ -1044,16 +1044,16 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         runOnEdit: args.runOnEdit === true,
       };
       const id = args.id ? str(args.id) : newId('rule');
-      await qCreateRule(exec, id, input);
+      await createRule(exec, id, input);
       return;
     }
     case 'updateRule': {
       const patch = (args.patch ?? {}) as RulePatchInput;
-      await qUpdateRule(exec, str(args.id), patch);
+      await updateRule(exec, str(args.id), patch);
       return;
     }
     case 'deleteRule': {
-      await qDeleteRule(exec, str(args.id));
+      await deleteRule(exec, str(args.id));
       return;
     }
     case 'backfillRule': {
@@ -1308,10 +1308,10 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'deleteCategory':
-      await qDeleteCategory(exec, str(args.id));
+      await deleteCategory(exec, str(args.id));
       return;
     case 'deleteTag':
-      await qDeleteTag(exec, str(args.id));
+      await deleteTag(exec, str(args.id));
       return;
     case 'createScheduled': {
       const name = str(args.name).trim();
@@ -1324,7 +1324,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       }
       const accountId = str(args.accountId ?? '').trim();
       if (!accountId) throw new I18nError('error.required.account', {}, 'An account is required');
-      await qCreateScheduled(exec, {
+      await createScheduled(exec, {
         id: str(args.id || newId('sch')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
@@ -1347,15 +1347,15 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'deleteScheduled':
-      await qDeleteScheduled(exec, str(args.id));
+      await deleteScheduled(exec, str(args.id));
       return;
     case 'deleteTransfer':
-      await qDeleteTransfer(exec, str(args.id));
+      await deleteTransfer(exec, str(args.id));
       return;
     case 'createCounterparty': {
       const name = str(args.name).trim();
       if (!name) throw new I18nError('error.required.merchantName', {}, 'Merchant name is required');
-      await qCreateCounterparty(exec, {
+      await createCounterparty(exec, {
         id: str(args.id || newId('cp')),
         ledgerId: str(args.ledgerId || 'personal'),
         name,
@@ -1363,7 +1363,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       return;
     }
     case 'deleteCounterparty':
-      await qDeleteCounterparty(exec, str(args.id));
+      await deleteCounterparty(exec, str(args.id));
       return;
     case 'setExchangeRate': {
       const date = str(args.date);
@@ -1373,11 +1373,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!currency) throw new I18nError('error.required.currency', {}, 'Currency is required');
       if (!(rate > 0)) throw new I18nError('error.fx.rateGt0', {}, 'Rate must be greater than 0');
       if (currency === 'USD') throw new I18nError('error.fx.usdHub', {}, 'USD is the hub currency and is not stored');
-      await qSetExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
+      await setExchangeRate(exec, { date, currency, rate, source: args.source ? str(args.source) : null });
       return;
     }
     case 'deleteExchangeRate':
-      await qDeleteExchangeRate(exec, str(args.date), str(args.currency).toUpperCase());
+      await deleteExchangeRate(exec, str(args.date), str(args.currency).toUpperCase());
       return;
     case 'postScheduled':
       await postScheduled(exec, args);
@@ -1452,7 +1452,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         throw new I18nError('error.holding.currencyMismatch', { currency: accountCurrency }, `Holding currency must match the account currency (${accountCurrency})`);
       }
       const currency = accountCurrency;
-      await qCreateHolding(exec, {
+      await createHolding(exec, {
         id: str(args.id || newId('h')),
         ledgerId,
         accountId,
@@ -1488,7 +1488,7 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
         normalized.costBasis = c;
       }
       if (patch.notes !== undefined) normalized.notes = patch.notes == null ? null : str(patch.notes);
-      await qUpdateHolding(exec, id, normalized);
+      await updateHolding(exec, id, normalized);
       return;
     }
     case 'setHoldingPrice': {
@@ -1500,11 +1500,11 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       const date = price == null ? null : args.date == null ? null : str(args.date);
       if (price !== null && !(price >= 0)) throw new I18nError('error.holding.priceGte0', {}, 'Price must be 0 or greater');
       if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new I18nError('error.fx.dateFormat', {}, 'Date must be YYYY-MM-DD');
-      await qSetHoldingPrice(exec, id, price, date);
+      await setHoldingPrice(exec, id, price, date);
       return;
     }
     case 'deleteHolding':
-      await qDeleteHolding(exec, str(args.id));
+      await deleteHolding(exec, str(args.id));
       return;
     case 'changeLedgerBase': {
       const ledgerId = str(args.ledgerId);
@@ -1532,8 +1532,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (collide.length) throw new I18nError('error.ledger.duplicateId', {}, 'Ledger id already exists');
       const color = args.color == null ? null : String(args.color);
       const tagline = args.tagline == null ? null : String(args.tagline);
-      const { createLedger: qCreateLedger } = await import('./queries/ledgers');
-      await qCreateLedger(exec, { id, name, base, color, tagline });
+      const { createLedger } = await import('./domain/ledgers/queries');
+      await createLedger(exec, { id, name, base, color, tagline });
       await ensureSystemCategories(exec, id);
       return;
     }
@@ -1544,8 +1544,8 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (patch.name !== undefined && !String(patch.name).trim()) {
         throw new I18nError('error.ledger.nameEmpty', {}, 'Name cannot be empty');
       }
-      const { updateLedger: qUpdateLedger } = await import('./queries/ledgers');
-      await qUpdateLedger(exec, id, {
+      const { updateLedger } = await import('./domain/ledgers/queries');
+      await updateLedger(exec, id, {
         ...(patch.name !== undefined ? { name: String(patch.name).trim() } : {}),
         ...(patch.color !== undefined ? { color: patch.color == null ? null : String(patch.color) } : {}),
         ...(patch.tagline !== undefined ? { tagline: patch.tagline == null ? null : String(patch.tagline) } : {}),
@@ -1557,16 +1557,16 @@ export async function applyMutation(exec: Exec, action: string, args: Args): Pro
       if (!id) throw new I18nError('error.required.id', {}, 'id is required');
       const exists = await exec('SELECT id FROM ledgers WHERE id = ?', [id]);
       if (!exists.length) throw new I18nError('error.notFound.ledger', {}, 'Ledger not found');
-      const { setDefaultLedger: qSetDefaultLedger } = await import('./queries/ledgers');
-      await qSetDefaultLedger(exec, id);
+      const { setDefaultLedger } = await import('./domain/ledgers/queries');
+      await setDefaultLedger(exec, id);
       return;
     }
     case 'deleteLedger': {
       // Ordered cascade + attachment-file sweep (LEDGER_CRUD_PLAN §5).
       const id = str(args.id);
       if (!id) throw new I18nError('error.required.id', {}, 'id is required');
-      const { deleteLedger: qDeleteLedger } = await import('./queries/ledgers');
-      const { relPaths } = await qDeleteLedger(exec, id);
+      const { deleteLedger } = await import('./domain/ledgers/queries');
+      const { relPaths } = await deleteLedger(exec, id);
       // Clean the ledger's key out of the displayCurrencyByLedger map so it
       // doesn't dangle. Other app_state slices are scalar/per-ledger-irrelevant.
       const raw = await getAppState(exec, 'displayCurrencyByLedger');
