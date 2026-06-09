@@ -2,18 +2,7 @@
 // of truth for "what is this file?" — see schema.ts for the column shape.
 
 import type { Exec } from '../core/repo';
-
-export interface DbMetadata {
-  appName: string;
-  schemaVersion: string;
-  appVersion: string;
-  createdAt: string;
-  updatedAt: string;
-  exportedAt: string | null;
-  exportedFrom: string | null;
-  rowCounts: Record<string, number> | null;
-  checksum: string | null;
-}
+import type { DbMetadata, ExportStamp } from '@/lib/db/domain/_app/metadata.types';
 
 /** Read the single metadata row; returns null when the table is absent or empty. */
 export async function readMetadata(exec: Exec): Promise<DbMetadata | null> {
@@ -41,13 +30,6 @@ export async function readMetadata(exec: Exec): Promise<DbMetadata | null> {
 /** Bump the metadata row's updated_at to "now" (in UTC ISO 8601). */
 export async function bumpUpdated(exec: Exec): Promise<void> {
   await exec("UPDATE db_metadata SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 1");
-}
-
-export interface ExportStamp {
-  exportedAt: string;
-  exportedFrom: string | null;
-  rowCounts: Record<string, number>;
-  checksum: string;
 }
 
 /** Stamp the metadata row with export-time provenance. Used by /api/export
