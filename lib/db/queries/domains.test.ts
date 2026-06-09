@@ -131,7 +131,7 @@ test('categories: 2-level tree — parent_id wires children, build+rollup behave
 // CATEGORIES_LEVEL3_PLAN: depth-3 is now allowed; the cap is at 3.
 test('createCategory allows depth-3 (parent under a child) but rejects depth-4', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
 
   // Depth 3 OK: food (1) -> food-coffee (2) -> Espresso (3)
   await applyMutation(exec, 'createCategory', {
@@ -151,7 +151,7 @@ test('createCategory allows depth-3 (parent under a child) but rejects depth-4',
 
 test('createCategory throws I18nError when parent is already at depth 3', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   await applyMutation(exec, 'createCategory', {
     ledgerId: 'personal', name: 'Espresso', parentId: 'food-coffee',
   });
@@ -166,7 +166,7 @@ test('createCategory throws I18nError when parent is already at depth 3', async 
 
 test('updateCategory subtree move: depth-3 subtree fits only under a top-level parent', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
 
   // Build a depth-3 chain under food: food -> food-coffee -> Espresso.
   await applyMutation(exec, 'createCategory', {
@@ -192,7 +192,7 @@ test('updateCategory subtree move: depth-3 subtree fits only under a top-level p
 
 test('updateCategory rejects moving a node under its own descendant (cycle)', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   await expect(
     applyMutation(exec, 'updateCategory', {
       id: 'food', patch: { parentId: 'food-coffee' },
@@ -236,7 +236,7 @@ test('expandDescendants returns the configured ids plus every descendant', async
 
 test('deleteCategory promotes children to top-level (ON DELETE SET NULL)', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   // 'food' has demo children. Delete it; the children should survive as top-level.
   await applyMutation(exec, 'deleteCategory', { id: 'food' });
   const after = await listCategories(exec, 'personal');
@@ -284,7 +284,7 @@ test('counterparty FK: addTransaction links exact name (case-insensitive), null 
 test('counterparty FK: renaming a counterparty makes projectState surface the canonical name', async () => {
   const exec = await seeded();
   const { addTransaction } = await import('@/lib/db/queries/transactions');
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   const { projectState } = await import('@/lib/db/state');
 
   // Insert a row that links to Grab (cp-02).
@@ -328,7 +328,7 @@ test('counterparty FK: updateTransaction re-resolves when merchant text changes'
 test('counterparty FK: deleting a counterparty leaves linked transactions intact (SET NULL)', async () => {
   const exec = await seeded();
   const { addTransaction } = await import('@/lib/db/queries/transactions');
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
 
   const txId = await addTransaction(exec, {
     ledgerId: 'personal', accountId: 'chk', amount: -8,
@@ -342,7 +342,7 @@ test('counterparty FK: deleting a counterparty leaves linked transactions intact
 
 test('changeLedgerBase: rewrites amount_base under the new base using each txn date', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   const { convertToBase } = await import('@/lib/db/queries/rates');
   const { listLedgers } = await import('@/lib/db/queries/ledgers');
 
@@ -377,7 +377,7 @@ test('changeLedgerBase: rewrites amount_base under the new base using each txn d
 
 test('changeLedgerBase: same-base call is a no-op', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   // §2: check postings (which carry amount_base, exchange_rate) instead of transactions.
   const before = await exec(
     "SELECT p.id, p.amount_base, p.exchange_rate FROM postings p JOIN entries e ON p.entry_id = e.id WHERE e.ledger_id = 'personal' ORDER BY p.id",
@@ -391,7 +391,7 @@ test('changeLedgerBase: same-base call is a no-op', async () => {
 
 test('changeLedgerBase: rejects malformed currency codes', async () => {
   const exec = await seeded();
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   await expect(applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'usd' }))
     .resolves.toBeUndefined(); // case-insensitive: lowercased input is accepted (validator uppercases)
   await expect(applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'US' }))
@@ -614,7 +614,7 @@ test('confirmPendingWithMerchant: with no resolution leaves the row confirmed bu
 test('updateTransaction: account change moves the row and recomputes both source + destination balances', async () => {
   const exec = await seeded();
   const { addTransaction } = await import('@/lib/db/queries/transactions');
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   const { recomputeAccount, listAccounts } = await import('@/lib/db/queries/accounts');
   // Establish a known starting balance.
   await recomputeAccount(exec, 'chk');
@@ -701,7 +701,7 @@ test('updateTransaction: currency change re-derives amount_base + locks a new ra
 test('updateTransaction: status flip sets/clears confirmed_at and moves the balance', async () => {
   const exec = await seeded();
   const { addTransaction } = await import('@/lib/db/queries/transactions');
-  const { applyMutation } = await import('@/lib/db/mutations');
+  const { applyMutation } = await import('@/lib/db/mutate');
   const { recomputeAccount, listAccounts } = await import('@/lib/db/queries/accounts');
   // Insert a $25 pending expense on chk. Pending rows are excluded from the
   // balance sum, so chk's balance is unchanged after add.

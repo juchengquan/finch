@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test';
 import { migrate, SCHEMA_VERSION } from './core/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
-import { applyMutation } from '@/lib/db/mutations';
+import { applyMutation } from '@/lib/db/mutate';
 import { listTransfers } from '@/lib/db/queries/transfers';
 import { convertToBase } from '@/lib/db/queries/rates';
 import { seededAndAudited } from './core/test-utils';
