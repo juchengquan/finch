@@ -6,9 +6,9 @@ import {
   updateRule,
   deleteRule,
   markRuleApplied,
-} from '@/lib/db/queries/rules';
-import { freshDb as freshTestDb } from '../core/test-utils';
-import type { Exec } from '../core/repo';
+} from '@/lib/db/domain/rules/queries';
+import { freshDb as freshTestDb } from '@/lib/db/core/test-utils';
+import type { Exec } from '@/lib/db/core/repo';
 import type { Condition, Action } from '@/lib/rules/types';
 
 async function freshDb(): Promise<Exec> {

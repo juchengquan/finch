@@ -6,9 +6,9 @@ import {
   deleteTransactionRow,
   confirmTransaction,
   getTransaction,
-} from '@/lib/db/queries/transactions';
-import { seededDb } from '../core/test-utils';
-import type { Exec } from '../core/repo';
+} from '@/lib/db/domain/transactions/queries';
+import { seededDb } from '@/lib/db/core/test-utils';
+import type { Exec } from '@/lib/db/core/repo';
 
 const seeded = async (): Promise<Exec> => {
   const { exec } = await seededDb();
