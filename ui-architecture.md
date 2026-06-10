@@ -123,7 +123,7 @@ Scenario: add a `<ColorDot />` primitive (a small colored circle for category co
 ## Test counts (post-PR 4)
 
 - Total: 534 pass / 0 fail (matches the PR 3 baseline; PR 4 is pure refactor + docs).
-- The 44 `useFinanceStore` consumers still work (PR 2 preserved the import path).
+- The 40 `useFinanceStore` consumers (verified post-#135) still work (PR 2 preserved the import path).
 - The 388 `<Icon name="...">` call sites across 52 files are gone (PR 1; each was replaced with a typed lucide import from `@/components/icons`).
 - The 5 `*-sheet.tsx` files are renamed (PR 3).
 - The 12 promoted primitives are in `components/ui/` (PR 4).

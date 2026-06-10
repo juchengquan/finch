@@ -1,5 +1,5 @@
 // frontend/components/ui/icon-button.tsx — extracted from
-// MobileComponents.tsx (was 17 lines; PR 4). Used by the bottom tab
+// Extracted from the original `MobileComponents.tsx` (pre-PR-4; deleted in PR A); `MobilePage` now lives in `mobile-page.tsx`. Used by the bottom tab
 // bar, settings tabs, and sidebar chrome. The component is a thin
 // shadcn Button wrapper that takes a typed LucideIcon component.
 'use client';
