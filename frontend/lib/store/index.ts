@@ -1,5 +1,5 @@
 // frontend/lib/store/index.ts — the canonical entry point. Wires the
-// per-domain state + actions into a single zustand store. The 66
+// per-domain state + actions into a single zustand store. The 40
 // external consumers import `useFinanceStore` (and the data-type
 // definitions Tx, ScheduledTemplate, etc.) from `@/lib/store`, which
 // resolves to this file via the `@/*` alias and TypeScript's

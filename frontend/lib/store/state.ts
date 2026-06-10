@@ -1,6 +1,6 @@
 // frontend/lib/store/state.ts — the FinanceState interface (state only).
-// Moved from lib/store.ts:188-374. The action types stay in lib/store.ts
-// for now; PR 2 Tasks 4-7 will move them to per-domain actions.ts files.
+// Moved from lib/store.ts:188-374 (PR #131). The action types live in
+// per-domain actions.ts files (PR #131, Tasks 4-7).
 //
 // Import path notes:
 // - `Tx` and `ScheduledTemplate` now live in their owning per-domain state
