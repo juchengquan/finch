@@ -372,17 +372,8 @@ interface FinanceState {
   reset: () => void;
 }
 
-// The authoritative database lives on the server. Each action updates the store
-// optimistically for instant UI, then POSTs the same change to the server and
-// replaces the store with the server's projected state (the source of truth).
-// StoreHydration seeds the store from the server on load.
-function syncMutation(action: string, args?: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return;
-  void import('@/lib/api-client')
-    .then(({ mutate }) => mutate(action, args))
-    .then((state) => useFinanceStore.setState(state))
-    .catch((err) => console.error(`Sync failed (${action})`, err));
-}
+import { syncMutation } from './store/hydrate';
+export { syncMutation };
 
 export const useFinanceStore = create<FinanceState>()(
   (set) => ({
