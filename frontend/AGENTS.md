@@ -21,3 +21,23 @@ Layer rules (enforced by ESLint `no-restricted-imports`):
 - External consumers (UI, route handlers, app state) import types from `lib/db/domain/<x>/types` and read SQL from `lib/db/domain/<x>/queries`; they do not import from `lib/db/domain/<x>/mutations`.
 
 See `frontend/db-architecture.md` for the full layout + a worked example (adding a new action to the `tags` domain).
+
+## UI layer (post-refactor, 2026-06)
+
+The `frontend/components/` directory is organized in three layers:
+
+- `ui/` — generic primitives. 10 shadcn wrappers (the original `npx shadcn` output) + 12 promoted primitives (chips, badges, headers). All kebab-case. New primitives are added here.
+- `components/<X>.tsx` — feature components (PageShell, DesktopShell, MobileShell, command-palette, add-expense-form, etc.). Kebab-case by default; PascalCase only via the allow-list in `scripts/check-component-filenames.sh` (currently 7 entries: 4 intentional — PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx; 3 transitional — MobileComponents.tsx, MobileTabsEditor.tsx, RowActions.tsx, candidates for kebab-case rename in a follow-up).
+- `icons.tsx` — the typed lucide barrel. Sole entry point for lucide icons. Consumers import from `@/components/icons`, not `lucide-react` directly.
+
+Layer rules (enforced by the CI script + code review):
+- `components/ui/*` is pure primitives — no business logic, no data fetching. The shadcn wrappers are thin wrappers; the promoted primitives are similarly focused.
+- `components/<X>.tsx` is feature components — they compose primitives, fetch data, render pages.
+- `app/<page>.tsx` is the page itself — imports from `components/*` and `lib/*`.
+
+Renames that landed in the 4-PR refactor:
+- `components/PageShell.tsx` is a 30-line dispatcher (was 338 lines; PR 3 split it into DesktopShell + MobileShell).
+- 5 `*-sheet.tsx` files renamed to `*-dialog.tsx` (they all use shadcn `Dialog`, not a real bottom-sheet).
+- `<Icon name="...">` shim deleted; use typed lucide imports from `@/components/icons`.
+
+See `frontend/ui-architecture.md` for the full layout, the per-file convention, the layer rules table, the icon pattern, and a worked example (adding a new `components/ui/` primitive).
