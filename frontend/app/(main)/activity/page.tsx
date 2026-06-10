@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { CatBar } from '@/components/ui/cat-bar';
 import { Money } from '@/components/primitives';
 import { Bookmark, Check, Doc, Filter, Search, X } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import { Button } from '@/components/ui/button';

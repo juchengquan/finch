@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Split } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { Plus, Split } from '@/components/icons';
+import { MobilePage } from '@/components/mobile-page';
 import { SchemaChip } from '@/components/ui/schema-chip';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { IconButton } from '@/components/ui/icon-button';
@@ -110,7 +110,7 @@ export default function TransfersPage() {
   const newTransferDialog = (
     <Dialog>
       <DialogTrigger asChild>
-        <IconButton icon="plus" aria-label={t('newAria')} />
+        <IconButton icon={Plus} aria-label={t('newAria')} />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

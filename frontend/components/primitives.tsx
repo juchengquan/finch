@@ -1,43 +1,7 @@
 'use client';
 
-import type { LucideIcon } from 'lucide-react';
-import {
-  Utensils, Home, Car, ShoppingBag, Film, Heart, RefreshCw, MoreHorizontal, Plus, Search,
-  SlidersHorizontal, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, ArrowRight, ArrowLeft,
-  ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, Menu, Bell, Wallet, ChartColumn, Settings,
-  FileText, Target, Tag, Tags, Split, Pencil, Check, X, Calendar, Mic, Camera, Sparkles, Clock, Circle,
-  Download, Upload, ArrowRightLeft, Coins, Trash2, Bookmark, Paperclip, Image as ImageIcon,
-  Banknote, ShieldCheck,
-} from 'lucide-react';
-
 import { useMoney } from '@/components/use-money';
 import { cn } from '@/lib/utils';
-
-const ICONS: Record<string, LucideIcon> = {
-  fork: Utensils, home: Home, car: Car, bag: ShoppingBag, film: Film, heart: Heart,
-  sync: RefreshCw, dots: MoreHorizontal, plus: Plus, search: Search, filter: SlidersHorizontal,
-  chev: ChevronRight, 'chev-l': ChevronLeft, 'chev-d': ChevronDown, 'chev-u': ChevronUp,
-  'arrow-r': ArrowRight, 'arrow-l': ArrowLeft, 'arrow-u': ArrowUp, 'arrow-d': ArrowDown,
-  'arrow-dl': ArrowDownLeft, 'arrow-ur': ArrowUpRight, menu: Menu, bell: Bell, wallet: Wallet,
-  chart: ChartColumn, cog: Settings, doc: FileText, target: Target, tag: Tag, tags: Tags, split: Split,
-  edit: Pencil, pencil: Pencil, check: Check, x: X, calendar: Calendar, mic: Mic, cam: Camera, sparkle: Sparkles,
-  clock: Clock, download: Download, upload: Upload, swap: ArrowRightLeft, coins: Coins, trash: Trash2,
-  bookmark: Bookmark, paperclip: Paperclip, image: ImageIcon, banknote: Banknote,
-  'shield-check': ShieldCheck,
-};
-
-interface IconProps {
-  name: string;
-  size?: number;
-  stroke?: number;
-  className?: string;
-  style?: React.CSSProperties;
-}
-
-export function Icon({ name, size = 18, stroke = 1.5, className, style }: IconProps) {
-  const Cmp = ICONS[name] ?? Circle;
-  return <Cmp size={size} strokeWidth={stroke} className={className} style={style} aria-hidden />;
-}
 
 interface MoneyProps {
   value: number;

@@ -11,7 +11,7 @@ import { Check, Chev, Doc, Edit, Filter, Plus, Sync, Trash, Wallet, X } from '@/
 import { RefundBadge } from '@/components/ui/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
 import { merchantStats, anomalyScore } from '@/lib/select';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
