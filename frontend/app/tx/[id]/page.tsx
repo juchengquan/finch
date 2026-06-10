@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { ScreenHeader } from '@/components/MobileComponents';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { TransactionDetail } from '@/components/transaction-detail';
 
 export default function TxDetailPage() {

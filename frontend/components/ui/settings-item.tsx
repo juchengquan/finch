@@ -1,7 +1,11 @@
+// frontend/components/ui/settings-item.tsx — extracted from
+// components/SettingsItem.tsx (38 lines; PR 4). A row in the mobile
+// Settings list: leading icon in a circular badge, label, and either
+// a Switch toggle or a value+chevron (the "navigate" affordance).
 'use client';
 
 import { Chev } from '@/components/icons';
-import { Switch } from '@/components/ui/switch';
+import { Switch } from './switch';
 
 interface SettingsItemProps {
   item: {
