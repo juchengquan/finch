@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Check, Plus, Search } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Chev, Check, Edit, Plus, Sync, Trash, X } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { IconButton } from '@/components/ui/icon-button';
 import { EmptyState } from '@/components/empty-state';
@@ -109,7 +109,7 @@ export default function RulesPage() {
         <ScreenHeader
           title={t('title')}
           trailing={
-            <IconButton icon="plus" aria-label={t('newAria')} variant="primary" onClick={openNewBuilder} />
+            <IconButton icon={Plus} aria-label={t('newAria')} variant="primary" onClick={openNewBuilder} />
           }
         />
       }

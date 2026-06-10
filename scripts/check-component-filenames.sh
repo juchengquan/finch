@@ -3,7 +3,7 @@
 # component file naming convention (PR 4). Enforces:
 #   - components/ui/*.tsx must be kebab-case (no capital letters)
 #   - components/*.tsx may be PascalCase only if in the allow-list
-#     (currently 7 files: 4 intentional, 3 transitional — see below)
+#     (currently 6 files: 4 intentional, 2 transitional — see below)
 #
 # Run via: bun run check:naming
 # Exit 0 = pass; exit 1 = fail (with details on stderr).
@@ -12,7 +12,7 @@
 #   Intentional (kept PascalCase by design):
 #     - PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx
 #   Transitional (rename to kebab-case in a follow-up):
-#     - MobileComponents.tsx, MobileTabsEditor.tsx, RowActions.tsx
+#     - MobileTabsEditor.tsx, RowActions.tsx
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -26,12 +26,12 @@ if [ -n "$non_kebab" ]; then
 fi
 
 # Check 2: components/*.tsx may be PascalCase only if in the allow-list.
-# 7 entries: 4 are the post-PR-4 "intentional" PascalCase files
+# 6 entries: 4 are the post-PR-4 "intentional" PascalCase files
 # (PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx),
-# 3 are transitional feature components that should be renamed to
-# kebab-case in a follow-up (MobileComponents.tsx, MobileTabsEditor.tsx,
-# RowActions.tsx). When those 3 are renamed, remove them from this list.
-allowlist="PageShell.tsx primitives.tsx DesktopShell.tsx MobileShell.tsx MobileComponents.tsx MobileTabsEditor.tsx RowActions.tsx"
+# 2 are transitional feature components that should be renamed to
+# kebab-case in a follow-up (MobileTabsEditor.tsx, RowActions.tsx).
+# When those 2 are renamed, remove them from this list.
+allowlist="PageShell.tsx primitives.tsx DesktopShell.tsx MobileShell.tsx MobileTabsEditor.tsx RowActions.tsx"
 allowlist_re=$(echo "$allowlist" | tr ' ' '|')
 
 is_pascal() {

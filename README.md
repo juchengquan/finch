@@ -7,7 +7,7 @@ Personal finance tracker — multi-currency, multi-ledger, mobile-first with a r
 - **Next.js 16** (App Router, Turbopack) + **React 19**
 - **TypeScript** (strict)
 - **Tailwind CSS v4** + **shadcn/ui** (Radix-based components)
-- **zustand** for the client-side store (mirror of the server projection)
+- **zustand** for the client-side store
 - **SQLite** as the server-side source of truth (`better-sqlite3` under Node, `bun:sqlite` under Bun, WAL mode, file-backed)
 - **lucide-react** icons, **next-themes** (light/dark), **sonner** (toasts)
 - **Bun** for package manager and test runner
@@ -38,16 +38,14 @@ app/
 ├── (main)/          # Consumer app — accounts, budgets, scheduled, insights, goals…
 │   ├── layout.tsx   # Sidebar tabs + mobile bottom bar via PageShell
 │   └── scheduled/   # Unified calendar + list for recurring bills, income, reminders
-└── (ledger)/        # Ledger admin — pending, transfers, merchants, categories…
 components/
 ├── PageShell.tsx     # Single responsive shell (sidebar≥768px / bottom tab on mobile)
-├── MobileComponents.tsx  # Shared page chrome (ScreenHeader, PageHeader, …)
-├── primitives.tsx    # Icon shim, Money formatter, SVG charts
+├── primitives.tsx    # Money formatter, SVG charts
 ├── ui/               # shadcn/ui components
 ├── sqlite-backup-provider.tsx  # Settings → Database wiring (export / import / restore)
 └── store-hydration.tsx  # Hydrates zustand store from server on load
 lib/
-├── store.ts          # zustand store — all mutable state + actions
+├── store/            # per-domain zustand slices
 ├── select.ts         # Pure selectors over transactions (balance, spend, forecast)
 ├── derive.ts         # Derived computations from store
 ├── data.ts           # Static reference data + money formatters
@@ -59,7 +57,7 @@ lib/
 
 1. **Static reference** (`data/*.json` + `lib/data.ts`) — read-only seed: ledgers, accounts, categories, default scheduled templates. Used as the pre-hydration fallback for the client lookups.
 2. **Server-side SQLite** (`lib/db/`) — the **source of truth**. File-backed at `FINCH_DB_DIR/FINCH_DB_FILE` (`./.data/finch.sqlite3` by default), WAL mode, opened by the runtime-detecting `lib/db/driver.ts` (`better-sqlite3` under Node, `bun:sqlite` under Bun). Mutations land via `/api/mutate` inside a `BEGIN`/`COMMIT` wrapper; reads via `/api/state`.
-3. **Client store** (`lib/store.ts`) — the zustand store is a mirror of #2, populated by `components/store-hydration.tsx` on load and patched after every mutation. The store is the in-memory working model for the UI, not the durability boundary.
+3. **Client store** (`lib/store/`) — the zustand store is a mirror of #2, populated by `components/store-hydration.tsx` on load and patched after every mutation. The store is the in-memory working model for the UI, not the durability boundary.
 
 ### Money & currencies
 
@@ -115,8 +113,8 @@ tailscale serve --bg --set-path /finch http://127.0.0.1:3001
 
 ## Theming
 
-CSS variables in `app/globals.css` — light "warm editorial" / dark "noir". Toggle via theme control (next-themes). Finance-semantic tokens `--success` / `--warning` supplement the shadcn set. Display currency switchable in Settings via `CurrencyProvider`.
+CSS variables in `app/globals.css` — light "warm editorial" / dark "noir". Toggle via theme control (next-themes). Finance-semantic tokens `--success` / `--warning` supplement the shadcn set. Display currency is per-ledger, set in Settings › Ledger (derived from `useLedger()` + the store; not a provider).
 
 ## Provider order
 
-`app/layout.tsx`: `ThemeProvider` → `CurrencyProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`
+`app/layout.tsx`: `ThemeProvider` → `LedgerProvider` → `StoreHydration` + `SqliteBackupProvider` → children + `Toaster`

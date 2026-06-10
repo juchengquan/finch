@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Money } from '@/components/primitives';
 import { Chev, ChevL, Plus } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { IconButton } from '@/components/ui/icon-button';
 import { Button } from '@/components/ui/button';
@@ -227,7 +227,7 @@ export default function ScheduledPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title={t('title')} trailing={<IconButton icon="plus" aria-label={t('newAria')} onClick={openCreate} />} />}
+      header={<ScreenHeader title={t('title')} trailing={<IconButton icon={Plus} aria-label={t('newAria')} onClick={openCreate} />} />}
     >
       <div className="px-5 pb-[22px]">
         <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{t('upcoming')}</div>
