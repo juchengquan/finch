@@ -27,7 +27,7 @@ See `frontend/db-architecture.md` for the full layout + a worked example (adding
 The `frontend/components/` directory is organized in three layers:
 
 - `ui/` — generic primitives. 10 shadcn wrappers (the original `npx shadcn` output) + 12 promoted primitives (chips, badges, headers). All kebab-case. New primitives are added here.
-- `components/<X>.tsx` — feature components (PageShell, DesktopShell, MobileShell, command-palette, add-expense-form, etc.). Kebab-case by default; PascalCase only via the allow-list in `scripts/check-component-filenames.sh` (currently 6 entries: 4 intentional — PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx; 2 transitional — MobileTabsEditor.tsx, RowActions.tsx, candidates for kebab-case rename in a follow-up).
+- `components/<X>.tsx` — feature components (PageShell, DesktopShell, MobileShell, command-palette, add-expense-form, etc.). Kebab-case by default; PascalCase only via the allow-list in `scripts/check-component-filenames.sh` (currently 4 entries — PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx).
 - `icons.tsx` — the typed lucide barrel. Sole entry point for lucide icons. Consumers import from `@/components/icons`, not `lucide-react` directly.
 
 Layer rules (enforced by code review; the CI script enforces filenames only):

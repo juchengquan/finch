@@ -44,7 +44,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useLedger } from '@/components/ledger-provider';
-import { RowActions } from '@/components/RowActions';
+import { RowActions } from '@/components/row-actions';
 import { useFinanceStore } from '@/lib/store';
 import { categoryHex, DEFAULT_CATEGORY_HEX } from '@/lib/colors';
 import {

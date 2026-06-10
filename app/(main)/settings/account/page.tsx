@@ -5,7 +5,7 @@ import { Clock, Doc, Download, ShieldCheck, Sparkle, Sync, Upload } from '@/comp
 import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
-import { MobileTabsEditor } from '@/components/MobileTabsEditor';
+import { MobileTabsEditor } from '@/components/mobile-tabs-editor';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useTranslations } from 'next-intl';
