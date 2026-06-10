@@ -9,7 +9,7 @@
 
 import { syncMutation } from '../hydrate';
 import type { SetState, GetState } from '../_shared/types';
-import type { TransferInput } from '@/lib/store';
+import type { TransferInput } from './state';
 
 export const transferActions = (set: SetState, get: GetState) => ({
   // Transfers are created on the server (multi-row / relational); the server

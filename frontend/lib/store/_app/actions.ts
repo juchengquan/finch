@@ -13,7 +13,8 @@ import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import { syncMutation } from '../hydrate';
 import type { SetState, GetState } from '../_shared/types';
-import type { Tx, ScheduledTemplate } from '@/lib/store';
+import type { Tx } from '../transactions/state';
+import type { ScheduledTemplate } from '../scheduled/state';
 
 const SEED_TX = transactionsData as Tx[];
 const SEED_SCHEDULED = scheduledData as ScheduledTemplate[];

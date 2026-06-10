@@ -3,10 +3,10 @@
 // for now; PR 2 Tasks 4-7 will move them to per-domain actions.ts files.
 //
 // Import path notes:
-// - `Tx` and `ScheduledTemplate` are still declared in lib/store.ts (the
-//   legacy file) and re-exported by this module's re-export shim. Importing
-//   them here would be a type-only circular import; TypeScript handles that
-//   fine but we use the path the codebase already uses to keep the diff small.
+// - `Tx` and `ScheduledTemplate` now live in their owning per-domain state
+//   files (transactions/state.ts and scheduled/state.ts respectively) and
+//   are re-exported from lib/store/index.ts so the existing
+//   `import type { Tx } from '@/lib/store'` paths keep working.
 // - The DB row types come from `lib/db/domain/<x>/types` (the post-refactor
 //   per-domain types layer), matching the imports lib/store.ts:7-18 uses today.
 
@@ -22,7 +22,8 @@ import type { Tag } from '@/lib/db/domain/tags/types';
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { Attachment } from '@/lib/db/domain/attachments/types';
 import type { Rule } from '@/lib/rules/types';
-import type { Tx, ScheduledTemplate } from '@/lib/store';
+import type { Tx } from './transactions/state';
+import type { ScheduledTemplate } from './scheduled/state';
 
 export interface FinanceState {
   transactions: Tx[];

@@ -12,7 +12,7 @@
 import { newId } from '../_shared/ids';
 import { syncMutation } from '../hydrate';
 import type { SetState, GetState } from '../_shared/types';
-import type { Tx, TxSplit, TxSplitInput } from '@/lib/store';
+import type { Tx, TxSplit, TxSplitInput } from './state';
 
 export const transactionActions = (set: SetState, get: GetState) => ({
   addTransaction: (tx: Omit<Tx, 'id'> & { counterpartyId?: string | null }): string => {

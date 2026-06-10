@@ -6,10 +6,17 @@
 // - scheduled: SEED_SCHEDULED (from data/scheduled-templates.json)
 // - ledgers/accounts/categories/etc.: empty arrays (the server's
 //   /api/state replaces them on first StoreHydration)
+//
+// Not marked `as const`: the array types stay mutable (e.g. `Tx[]`) so
+// the create() call's return type matches FinanceState's mutable array
+// shapes. The previous `as const` made them readonly, which broke the
+// assignability check (the read-only tuple `readonly []` is not
+// assignable to the mutable `LedgerRow[]`).
 
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
-import type { Tx, ScheduledTemplate } from '@/lib/store';
+import type { Tx } from './transactions/state';
+import type { ScheduledTemplate } from './scheduled/state';
 
 const SEED_TX = transactionsData as Tx[];
 const SEED_SCHEDULED = scheduledData as ScheduledTemplate[];
@@ -32,4 +39,4 @@ export const initialState = {
   mobileTabIds: [],
   displayCurrencyByLedger: {},
   backupConfig: { frequencyMs: 60 * 60 * 1000, retention: 14 },
-} as const;
+};

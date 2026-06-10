@@ -7,12 +7,8 @@
 // This module is the SOLE entry point for the client → server mutation
 // round-trip. It depends on `@/lib/api-client` (dynamic import to
 // avoid SSR window access) and on the store's `useFinanceStore`.
-//
-// Import path note: this currently imports from '../store' (the legacy
-// `lib/store.ts` file). When Task 5 promotes `lib/store.ts` to the
-// `lib/store/index.ts` barrel, this import will be updated to './index'.
 
-import { useFinanceStore } from '../store';
+import { useFinanceStore } from './index';
 
 export function syncMutation(action: string, args?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return;
