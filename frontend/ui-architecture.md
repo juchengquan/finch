@@ -16,11 +16,11 @@ This is the contributor-facing reference for the post-refactor layout. The agent
 #### Promoted primitives (12)
 | File | Symbol | Source (PR 4) |
 |---|---|---|
-| `icon-button.tsx` | `IconButton` | `MobileComponents.tsx:134` |
-| `screen-header.tsx` | `ScreenHeader` | `MobileComponents.tsx:37` |
-| `page-header.tsx` | `PageHeader` | `MobileComponents.tsx:95` |
-| `profile-chip.tsx` | `ProfileChip` | `MobileComponents.tsx:12` |
-| `schema-chip.tsx` | `SchemaChip` | `MobileComponents.tsx:118` |
+| `icon-button.tsx` | `IconButton` | `icon-button.tsx` |
+| `screen-header.tsx` | `ScreenHeader` | `screen-header.tsx` |
+| `page-header.tsx` | `PageHeader` | `page-header.tsx` |
+| `profile-chip.tsx` | `ProfileChip` | `profile-chip.tsx` |
+| `schema-chip.tsx` | `SchemaChip` | `schema-chip.tsx` |
 | `refund-badge.tsx` | `RefundBadge` | `refund-badge.tsx` |
 | `status-badge.tsx` | `StatusBadge` | `StatusBadge.tsx` |
 | `settings-item.tsx` | `SettingsItem` | `SettingsItem.tsx` |
@@ -33,7 +33,7 @@ Pure primitives — no business logic, no data fetching, no zustand reads. Compo
 
 ### `frontend/components/<X>.tsx` — feature components
 
-43 feature components (after PR 4; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
+42 feature components (after PR 4; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
 - `page-shell.tsx` (the dispatcher; currently in the allow-list as `PageShell.tsx`)
 - `desktop-shell.tsx` / `mobile-shell.tsx` (the PageShell split from PR 3)
 - `command-palette.tsx` (the ⌘K palette)
@@ -54,7 +54,7 @@ The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the d
 ## File conventions
 
 - `components/ui/*` — kebab-case. PascalCase forbidden (CI check).
-- `components/<X>.tsx` — kebab-case by default. PascalCase allowed only via the allow-list in `scripts/check-component-filenames.sh` (currently 7 entries: 4 intentional — `PageShell.tsx`, `primitives.tsx`, `DesktopShell.tsx`, `MobileShell.tsx`; 3 transitional — `MobileComponents.tsx`, `MobileTabsEditor.tsx`, `RowActions.tsx`).
+- `components/<X>.tsx` — kebab-case by default. PascalCase allowed only via the allow-list in `scripts/check-component-filenames.sh` (currently 6 entries: 4 intentional — `PageShell.tsx`, `primitives.tsx`, `DesktopShell.tsx`, `MobileShell.tsx`; 2 transitional — `MobileTabsEditor.tsx`, `RowActions.tsx`).
 - `components/icons.tsx` — single barrel, no other icon files.
 
 ## Layer rules (enforced by code review; the CI script enforces filenames only)
@@ -83,7 +83,7 @@ import { ChevU, Bell, Fork } from '@/components/icons';
 <ChevU size={16} />
 ```
 
-The old `<Icon name="chev-u" />` shim is dead code (zero call sites; not yet deleted in `primitives.tsx`). Prefer typed lucide imports from `@/components/icons` for all new code. Typo'd names like `<Wrn />` are tsc errors.
+The old `<Icon name="chev-u" />` shim is deleted. Prefer typed lucide imports from `@/components/icons` for all new code. Typo'd names like `<Wrn />` are tsc errors.
 
 ## PageShell pattern (PR 3)
 
