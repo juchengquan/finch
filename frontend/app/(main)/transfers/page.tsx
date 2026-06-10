@@ -11,7 +11,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { EmptyState } from '@/components/empty-state';
 import { fmtNative } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
-import { RowActions } from '@/components/RowActions';
+import { RowActions } from '@/components/row-actions';
 import { useFinanceStore } from '@/lib/store';
 import { selectTransfers } from '@/lib/select';
 import { Button } from '@/components/ui/button';
