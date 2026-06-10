@@ -1,3 +1,8 @@
+// frontend/components/ui/apr-vs-may.tsx — extracted from
+// components/AprVsMay.tsx (34 lines; PR 4). One-off comparison
+// card showing the percent change between two periods (originally
+// April vs May). The filename drops the "AprVsMay" codename; the
+// data shape is generic.
 'use client';
 
 import { useMoney } from '@/components/use-money';

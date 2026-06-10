@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "bun test lib",
+    "check:naming": "bash scripts/check-component-filenames.sh",
     "db:probe": "node scripts/probe-bs3.mjs"
   },
   "dependencies": {

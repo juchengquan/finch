@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { Clock, Doc, Download, ShieldCheck, Sparkle, Sync, Upload } from '@/components/icons';
-import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import { MobileTabsEditor } from '@/components/MobileTabsEditor';
 import { SettingsTabs } from '@/components/settings-tabs';

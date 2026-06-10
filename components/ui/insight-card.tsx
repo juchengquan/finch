@@ -1,3 +1,8 @@
+// frontend/components/ui/insight-card.tsx — extracted from
+// components/InsightCard.tsx (43 lines; PR 4). A card used in the
+// Insights page: a tone-coloured circular icon, a serif title, and a
+// muted body. The icon key + tone come from the `Insight` type in
+// lib/insights; titles and bodies are i18n messages.
 'use client';
 
 import { useTranslations } from 'next-intl';

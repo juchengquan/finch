@@ -3,7 +3,10 @@
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Check } from '@/components/icons';
-import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/MobileComponents';
+import { SchemaChip } from '@/components/ui/schema-chip';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { IconButton } from '@/components/ui/icon-button';
 import { PendingRow } from '@/components/pending-row';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
