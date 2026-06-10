@@ -26,11 +26,11 @@ if [ -n "$non_kebab" ]; then
 fi
 
 # Check 2: components/*.tsx may be PascalCase only if in the allow-list.
-# 7 entries: 4 are the post-PR-4 "intentional" PascalCase files
+# 6 entries: 4 are the post-PR-4 "intentional" PascalCase files
 # (PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx),
-# 3 are transitional feature components that should be renamed to
-# kebab-case in a follow-up (MobileComponents.tsx, MobileTabsEditor.tsx,
-# RowActions.tsx). When those 3 are renamed, remove them from this list.
+# 2 are transitional feature components that should be renamed to
+# kebab-case in a follow-up (MobileTabsEditor.tsx, RowActions.tsx).
+# When those 2 are renamed, remove them from this list.
 allowlist="PageShell.tsx primitives.tsx DesktopShell.tsx MobileShell.tsx MobileTabsEditor.tsx RowActions.tsx"
 allowlist_re=$(echo "$allowlist" | tr ' ' '|')
 

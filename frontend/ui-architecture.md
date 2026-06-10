@@ -33,7 +33,7 @@ Pure primitives — no business logic, no data fetching, no zustand reads. Compo
 
 ### `frontend/components/<X>.tsx` — feature components
 
-42 feature components (after PR 4; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
+43 feature components (after PR 4 + PR A; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
 - `page-shell.tsx` (the dispatcher; currently in the allow-list as `PageShell.tsx`)
 - `desktop-shell.tsx` / `mobile-shell.tsx` (the PageShell split from PR 3)
 - `command-palette.tsx` (the ⌘K palette)
