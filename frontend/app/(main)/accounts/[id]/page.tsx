@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/select';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
-import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useTransactionDialog } from '@/components/transaction-dialog';
 import { MOCK, catById, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
@@ -124,7 +124,7 @@ export default function AccountDetailPage() {
   const reconcileAccount = useFinanceStore((s) => s.reconcileAccount);
   const addTransaction = useFinanceStore((s) => s.addTransaction);
   const storeCategories = useFinanceStore((s) => s.categories);
-  const { openTransaction } = useTransactionSheet();
+  const { openTransaction } = useTransactionDialog();
 
   const name = row?.name ?? mock?.name ?? '';
   const type = row?.type ?? (mock ? toDbType(mock.type) : 'savings');

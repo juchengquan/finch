@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Calendar, Chart, Clock, Plus, Target, Wallet } from '@/components/icons';
-import { useAddExpense } from '@/components/add-expense-sheet';
+import { useAddExpense } from '@/components/add-expense-dialog';
 import { cn } from '@/lib/utils';
 import type { PageShellProps, Tab } from './shell-types';
 

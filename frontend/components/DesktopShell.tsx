@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useAddExpense } from '@/components/add-expense-sheet';
+import { useAddExpense } from '@/components/add-expense-dialog';
 import { SearchButton } from '@/components/command-palette';
 import { acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';

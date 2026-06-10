@@ -28,11 +28,11 @@ const EditTransactionContext = createContext<EditTransactionValue | null>(null);
 
 export function useEditTransaction(): EditTransactionValue {
   const ctx = useContext(EditTransactionContext);
-  if (!ctx) throw new Error('useEditTransaction must be used within EditTransactionSheetProvider');
+  if (!ctx) throw new Error('useEditTransaction must be used within EditTransactionDialogProvider');
   return ctx;
 }
 
-export function EditTransactionSheetProvider({ children }: { children: React.ReactNode }) {
+export function EditTransactionDialogProvider({ children }: { children: React.ReactNode }) {
   // `open` drives the Dialog; `txId` is kept through the close animation so the
   // content doesn't blank out mid-transition (and so the next open with a
   // different id remounts the form with fresh state).

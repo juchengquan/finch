@@ -10,7 +10,7 @@ import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
 import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
-import { RuleBuilderSheet, type RulePrefill } from '@/components/rule-builder-sheet';
+import { RuleBuilderDialog, type RulePrefill } from '@/components/rule-builder-dialog';
 import type { Leaf, Action } from '@/lib/rules/types';
 import { cn } from '@/lib/utils';
 import {
@@ -39,7 +39,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useEditTransaction } from '@/components/edit-transaction-sheet';
+import { useEditTransaction } from '@/components/edit-transaction-dialog';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 
 interface SplitRow {
@@ -892,7 +892,7 @@ export function TransactionDetail({
         </DialogContent>
       </Dialog>
 
-      <RuleBuilderSheet
+      <RuleBuilderDialog
         rule={null}
         open={ruleBuilderOpen}
         onClose={() => setRuleBuilderOpen(false)}

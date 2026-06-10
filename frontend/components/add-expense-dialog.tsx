@@ -15,11 +15,11 @@ const AddExpenseContext = createContext<AddExpenseValue | null>(null);
 
 export function useAddExpense(): AddExpenseValue {
   const ctx = useContext(AddExpenseContext);
-  if (!ctx) throw new Error('useAddExpense must be used within AddExpenseSheetProvider');
+  if (!ctx) throw new Error('useAddExpense must be used within AddExpenseDialogProvider');
   return ctx;
 }
 
-export function AddExpenseSheetProvider({ children }: { children: React.ReactNode }) {
+export function AddExpenseDialogProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const tAdd = useTranslations('add');
 

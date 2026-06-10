@@ -36,11 +36,11 @@ const MerchantPickerContext = createContext<MerchantPickerValue | null>(null);
 
 export function useMerchantPicker(): MerchantPickerValue {
   const ctx = useContext(MerchantPickerContext);
-  if (!ctx) throw new Error('useMerchantPicker must be used within MerchantPickerSheetProvider');
+  if (!ctx) throw new Error('useMerchantPicker must be used within MerchantPickerDialogProvider');
   return ctx;
 }
 
-export function MerchantPickerSheetProvider({ children }: { children: React.ReactNode }) {
+export function MerchantPickerDialogProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [onResolveCb, setOnResolveCb] = useState<
