@@ -33,7 +33,7 @@ Pure primitives — no business logic, no data fetching, no zustand reads. Compo
 
 ### `frontend/components/<X>.tsx` — feature components
 
-40 feature components (after PR 4 + PR A; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
+21 feature components in `components/` (43 total `.tsx` + `.ts` files; 22 are in `ui/`). Kebab-case by default. Examples:
 - `page-shell.tsx` (the dispatcher; currently in the allow-list as `PageShell.tsx`)
 - `desktop-shell.tsx` / `mobile-shell.tsx` (the PageShell split from PR 3)
 - `command-palette.tsx` (the ⌘K palette)
@@ -127,4 +127,4 @@ Scenario: add a `<ColorDot />` primitive (a small colored circle for category co
 - The 388 `<Icon name="...">` call sites across 52 files are gone (PR 1; each was replaced with a typed lucide import from `@/components/icons`).
 - The 5 `*-sheet.tsx` files are renamed (PR 3).
 - The 12 promoted primitives are in `components/ui/` (PR 4).
-- The 7-file allow-list passes `bun run check:naming`.
+- The 4-file allow-list passes `bun run check:naming`.
