@@ -36,7 +36,7 @@ Layer rules (enforced by the CI script + code review):
 - `app/<page>.tsx` is the page itself — imports from `components/*` and `lib/*`.
 
 Renames that landed in the 4-PR refactor:
-- `components/PageShell.tsx` is a 30-line dispatcher (was 338 lines; PR 3 split it into DesktopShell + MobileShell).
+- `components/PageShell.tsx` is a 30-line dispatcher (was 366 lines; PR 3 split it into DesktopShell + MobileShell).
 - 5 `*-sheet.tsx` files renamed to `*-dialog.tsx` (they all use shadcn `Dialog`, not a real bottom-sheet).
 - `<Icon name="...">` shim deleted; use typed lucide imports from `@/components/icons`.
 

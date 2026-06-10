@@ -76,7 +76,7 @@ The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the d
 
 ```tsx
 // Import the typed lucide symbol from the barrel:
-import { ChevU, Warn, Fork } from '@/components/icons';
+import { ChevU, Bell, Fork } from '@/components/icons';
 
 // Use in JSX:
 <ChevU size={16} />
@@ -123,8 +123,8 @@ Scenario: add a `<ColorDot />` primitive (a small colored circle for category co
 ## Test counts (post-PR 4)
 
 - Total: 534 pass / 0 fail (matches the PR 3 baseline; PR 4 is pure refactor + docs).
-- The 41 external `useFinanceStore` consumers still work (PR 2 preserved the import path).
-- The 39 `<Icon name="...">` call sites are gone (PR 1).
+- The 44 `useFinanceStore` consumers still work (PR 2 preserved the import path).
+- The 388 `<Icon name="...">` call sites across 52 files are gone (PR 1; each was replaced with a typed lucide import from `@/components/icons`).
 - The 5 `*-sheet.tsx` files are renamed (PR 3).
 - The 12 promoted primitives are in `components/ui/` (PR 4).
 - The 7-file allow-list passes `bun run check:naming`.
