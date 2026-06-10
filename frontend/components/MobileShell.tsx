@@ -5,10 +5,6 @@
 // opens the add-expense dialog instead of navigating. This tree is
 // only rendered on viewports < 768px (gated by the PageShell
 // dispatcher, which uses useIsDesktop).
-//
-// Note: the `openAddExpense` import will be moved from
-// `./add-expense-sheet` to `./add-expense-dialog` in Task 2 of this
-// PR (the sheet→dialog rename). Leave the import path as-is for now.
 
 'use client';
 
