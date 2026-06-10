@@ -17,10 +17,10 @@ This is the contributor-facing reference for the post-refactor layout. The agent
 | File | Symbol | Source (PR 4) |
 |---|---|---|
 | `icon-button.tsx` | `IconButton` | `MobileComponents.tsx:134` |
-| `screen-header.tsx` | `ScreenHeader` | `MobileComponents.tsx:91` |
-| `page-header.tsx` | `PageHeader` | `MobileComponents.tsx:69` |
-| `profile-chip.tsx` | `ProfileChip` | `MobileComponents.tsx:51` |
-| `schema-chip.tsx` | `SchemaChip` | `MobileComponents.tsx:36` |
+| `screen-header.tsx` | `ScreenHeader` | `MobileComponents.tsx:37` |
+| `page-header.tsx` | `PageHeader` | `MobileComponents.tsx:95` |
+| `profile-chip.tsx` | `ProfileChip` | `MobileComponents.tsx:12` |
+| `schema-chip.tsx` | `SchemaChip` | `MobileComponents.tsx:118` |
 | `refund-badge.tsx` | `RefundBadge` | `refund-badge.tsx` |
 | `status-badge.tsx` | `StatusBadge` | `StatusBadge.tsx` |
 | `settings-item.tsx` | `SettingsItem` | `SettingsItem.tsx` |
@@ -33,7 +33,7 @@ Pure primitives — no business logic, no data fetching, no zustand reads. Compo
 
 ### `frontend/components/<X>.tsx` — feature components
 
-47 feature components (after PR 4). Kebab-case by default. Examples:
+43 feature components (after PR 4; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
 - `page-shell.tsx` (the dispatcher; currently in the allow-list as `PageShell.tsx`)
 - `desktop-shell.tsx` / `mobile-shell.tsx` (the PageShell split from PR 3)
 - `command-palette.tsx` (the ⌘K palette)
@@ -49,7 +49,7 @@ Sole entry point for lucide icons. ~50 re-exports (`ChevronUp as ChevU`, `ArrowD
 
 ### `frontend/app/<page>.tsx` — the pages
 
-The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the dispatcher from PR 3). Pages are mostly `'use client'`; the 3 server-component placeholders are `goals`, `reports`, `settings` (waiting on features).
+The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the dispatcher from PR 3). Pages are mostly `'use client'`; the 3 server-component placeholders `goals`, `reports`, `settings` are deliberate redirects to `/budgets`, `/insights`, `/settings/account` (not unfinished features).
 
 ## File conventions
 
@@ -57,11 +57,12 @@ The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the d
 - `components/<X>.tsx` — kebab-case by default. PascalCase allowed only via the allow-list in `scripts/check-component-filenames.sh` (currently 7 entries: 4 intentional — `PageShell.tsx`, `primitives.tsx`, `DesktopShell.tsx`, `MobileShell.tsx`; 3 transitional — `MobileComponents.tsx`, `MobileTabsEditor.tsx`, `RowActions.tsx`).
 - `components/icons.tsx` — single barrel, no other icon files.
 
-## Layer rules (enforced by the CI script + code review)
+## Layer rules (enforced by code review; the CI script enforces filenames only)
 
 | From | To | Allowed? |
 |---|---|---|
 | `components/ui/*` | `components/ui/*` | ✓ |
+| `components/ui/*` | `@/components/icons` | ✓ (typed lucide barrel is a one-off exception) |
 | `components/ui/*` | `components/*` | ✗ (primitives don't reference features) |
 | `components/ui/*` | `lib/store/*` | ✗ (primitives don't read state) |
 | `components/*` | `components/ui/*` | ✓ (composing primitives) |
@@ -82,7 +83,7 @@ import { ChevU, Bell, Fork } from '@/components/icons';
 <ChevU size={16} />
 ```
 
-The old `<Icon name="chev-u" />` shim is gone. Typo'd names like `<Wrn />` are tsc errors.
+The old `<Icon name="chev-u" />` shim is dead code (zero call sites; not yet deleted in `primitives.tsx`). Prefer typed lucide imports from `@/components/icons` for all new code. Typo'd names like `<Wrn />` are tsc errors.
 
 ## PageShell pattern (PR 3)
 
@@ -97,7 +98,7 @@ const isDesktop = useIsDesktop();
 return isDesktop ? <DesktopShell {...props} /> : <MobileShell {...props} />;
 ```
 
-The 4 props blocks (`tabs`, `navGroups`, `mobileTabs`, `activeTab`) are preserved bit-for-bit; the 1 consumer doesn't change.
+The PageShell consumer (`app/(main)/layout.tsx:54-67`) passes all 10+ props (brand, tabs, navGroups, mobileTabs, activeTab, user, sidebarOpen, onSidebarToggle, showAdd, sidebarFooter); the dispatcher passes them through to whichever shell is active.
 
 ## Worked example: adding a new `components/ui/` primitive
 

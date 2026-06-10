@@ -30,7 +30,7 @@ The `frontend/components/` directory is organized in three layers:
 - `components/<X>.tsx` — feature components (PageShell, DesktopShell, MobileShell, command-palette, add-expense-form, etc.). Kebab-case by default; PascalCase only via the allow-list in `scripts/check-component-filenames.sh` (currently 7 entries: 4 intentional — PageShell.tsx, primitives.tsx, DesktopShell.tsx, MobileShell.tsx; 3 transitional — MobileComponents.tsx, MobileTabsEditor.tsx, RowActions.tsx, candidates for kebab-case rename in a follow-up).
 - `icons.tsx` — the typed lucide barrel. Sole entry point for lucide icons. Consumers import from `@/components/icons`, not `lucide-react` directly.
 
-Layer rules (enforced by the CI script + code review):
+Layer rules (enforced by code review; the CI script enforces filenames only):
 - `components/ui/*` is pure primitives — no business logic, no data fetching. The shadcn wrappers are thin wrappers; the promoted primitives are similarly focused.
 - `components/<X>.tsx` is feature components — they compose primitives, fetch data, render pages.
 - `app/<page>.tsx` is the page itself — imports from `components/*` and `lib/*`.
@@ -38,6 +38,6 @@ Layer rules (enforced by the CI script + code review):
 Renames that landed in the 4-PR refactor:
 - `components/PageShell.tsx` is a 30-line dispatcher (was 366 lines; PR 3 split it into DesktopShell + MobileShell).
 - 5 `*-sheet.tsx` files renamed to `*-dialog.tsx` (they all use shadcn `Dialog`, not a real bottom-sheet).
-- `<Icon name="...">` shim deleted; use typed lucide imports from `@/components/icons`.
+- `<Icon name="...">` shim is dead code (zero call sites; not yet deleted in `primitives.tsx`). Prefer typed lucide imports from `@/components/icons` for all new code.
 
 See `frontend/ui-architecture.md` for the full layout, the per-file convention, the layer rules table, the icon pattern, and a worked example (adding a new `components/ui/` primitive).
