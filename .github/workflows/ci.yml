@@ -34,6 +34,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Naming check
+        run: bun run check:naming
+
       - name: Unit tests
         run: bun run test
 
