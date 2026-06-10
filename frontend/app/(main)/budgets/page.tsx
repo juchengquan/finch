@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Dots, Edit, Plus, Tags, Target, X } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { BudgetFormDialog } from '@/components/budget-form-dialog';
@@ -154,11 +154,11 @@ export default function BudgetsPage() {
   const addMenuItems = (
     <>
       <DropdownMenuItem onSelect={openCreate}>
-        <Icon name="target" size={14} />
+        <Target size={14} />
         {t('menu.newBudget')}
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={openCreateGroup}>
-        <Icon name="tags" size={14} />
+        <Tags size={14} />
         {t('menu.newGroup')}
       </DropdownMenuItem>
     </>
@@ -174,7 +174,7 @@ export default function BudgetsPage() {
             aria-label={t('addAria')}
             className="border-border text-foreground flex size-9 cursor-pointer items-center justify-center rounded-full border"
           >
-            <Icon name="plus" size={16} />
+            <Plus size={16} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">{addMenuItems}</DropdownMenuContent>
@@ -196,16 +196,16 @@ export default function BudgetsPage() {
                 aria-label={t('groupActionsAria', { name })}
                 className="text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md"
               >
-                <Icon name="dots" size={14} />
+                <Dots size={14} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => openEditGroup(groupId, name)}>
-                <Icon name="edit" size={14} />
+                <Edit size={14} />
                 {t('groupActions.rename')}
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelGroup(groupId)}>
-                <Icon name="x" size={14} />
+                <X size={14} />
                 {t('groupActions.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -247,7 +247,7 @@ export default function BudgetsPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" className="mb-5 hidden md:inline-flex">
-              <Icon name="plus" size={14} />
+              <Plus size={14} />
               {t('newButton')}
             </Button>
           </DropdownMenuTrigger>

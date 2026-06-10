@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Icon } from '@/components/primitives';
+import { Chev, ChevL, Doc, Download, Paperclip, Sync, Trash } from '@/components/icons';
 import { useFinanceStore } from '@/lib/store';
 import { attachmentUrl } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -97,7 +97,7 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
                     className="size-full object-cover"
                   />
                 ) : (
-                  <Icon name="doc" size={20} />
+                  <Doc size={20} />
                 )}
               </button>
             ))}
@@ -113,7 +113,7 @@ export function AttachmentsRow({ transactionId }: AttachmentsRowProps) {
             uploading ? 'bg-secondary text-muted-foreground' : 'bg-secondary text-foreground hover:bg-muted',
           )}
         >
-          <Icon name={uploading ? 'sync' : 'paperclip'} size={12} className={uploading ? 'animate-spin' : undefined} />
+          {uploading ? <Sync size={12} className="animate-spin" /> : <Paperclip size={12} />}
           {items.length === 0 ? (uploading ? t('uploading') : t('attach')) : '+'}
         </button>
         <input
@@ -212,7 +212,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
               className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-muted"
               aria-label={tv('downloadAria')}
             >
-              <Icon name="download" size={14} />
+              <Download size={14} />
             </a>
             <button
               type="button"
@@ -220,7 +220,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
               className="focus-ring text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-full px-2 py-1"
               aria-label={tv('deleteAria')}
             >
-              <Icon name="trash" size={14} />
+              <Trash size={14} />
             </button>
           </div>
           <div className="bg-muted/40 flex items-center justify-center" style={{ minHeight: '60vh', touchAction: 'pinch-zoom' }}>
@@ -248,7 +248,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
                 className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-muted disabled:opacity-30"
                 aria-label={tv('prevAria')}
               >
-                <Icon name="chev-l" size={14} />
+                <ChevL size={14} />
                 {tv('prev')}
               </button>
               <button
@@ -259,7 +259,7 @@ function AttachmentViewer({ transactionId, openId, onClose, onSwitch }: Attachme
                 aria-label={tv('nextAria')}
               >
                 {tv('next')}
-                <Icon name="chev" size={14} />
+                <Chev size={14} />
               </button>
             </div>
           )}

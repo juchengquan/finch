@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/primitives';
+import { Chev, Plus, Search } from '@/components/icons';
 import { useFinanceStore } from '@/lib/store';
 
 /** Resolution the picker returns to the caller. Mirrors the `confirmPendingWithMatch`
@@ -128,7 +128,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="px-5 pt-4 pb-3">
               <div className="bg-secondary flex h-10 items-center gap-2.5 rounded-full px-3.5">
-                <Icon name="search" size={14} className="text-muted-foreground" />
+                <Search size={14} className="text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -172,7 +172,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
                       )}
                     </div>
                   </div>
-                  <Icon name="chev" size={12} className="text-muted-foreground shrink-0 -rotate-180" />
+                  <Chev size={12} className="text-muted-foreground shrink-0 -rotate-180" />
                 </button>
               ))}
             </div>
@@ -183,7 +183,7 @@ export function MerchantPickerSheetProvider({ children }: { children: React.Reac
                   className="w-full justify-start"
                   onClick={() => createAndPick(query)}
                 >
-                  <Icon name="plus" size={14} />
+                  <Plus size={14} />
                   {t('createNew', { name: titleCase(query.trim()) })}
                 </Button>
               </div>

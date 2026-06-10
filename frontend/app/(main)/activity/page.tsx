@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Money, Icon, CatBar } from '@/components/primitives';
+import { CatBar, Money } from '@/components/primitives';
+import { Bookmark, Check, Doc, Filter, Search, X } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { Button } from '@/components/ui/button';
@@ -184,7 +185,7 @@ export default function ActivityPage() {
     >
       <div className="px-5 pb-[120px]">
         <div className="bg-secondary mb-3 flex h-9 items-center gap-2 rounded-full px-3.5">
-          <Icon name="search" size={14} className="text-muted-foreground" />
+          <Search size={14} className="text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -219,7 +220,7 @@ export default function ActivityPage() {
               activeRangeCount > 0 ? 'border-primary text-primary' : 'text-muted-foreground',
             )}
           >
-            <Icon name="filter" size={13} />
+            <Filter size={13} />
             {t('filtersLabel')}{activeRangeCount > 0 ? ` · ${activeRangeCount}` : ''}
           </button>
           {hasActiveFilters && !selectMode && (
@@ -229,7 +230,7 @@ export default function ActivityPage() {
               aria-label={t('saveSearchAria')}
               className="border-border text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium"
             >
-              <Icon name="bookmark" size={13} />
+              <Bookmark size={13} />
               {t('saveSearch')}
             </button>
           )}
@@ -243,7 +244,7 @@ export default function ActivityPage() {
               selectMode ? 'border-primary text-primary' : 'text-muted-foreground',
             )}
           >
-            <Icon name={selectMode ? 'x' : 'check'} size={13} />
+            {selectMode ? <X size={13} /> : <Check size={13} />}
             {selectMode ? t('selectMode.exit') : t('selectMode.enter')}
           </button>
           <button
@@ -256,7 +257,7 @@ export default function ActivityPage() {
               reviewOnly ? 'border-primary text-primary' : 'text-muted-foreground',
             )}
           >
-            <Icon name="doc" size={13} />
+            <Doc size={13} />
             {t('reviewToggle')}{unreviewedCount > 0 ? ` · ${unreviewedCount}` : ''}
           </button>
         </div>
@@ -280,7 +281,7 @@ export default function ActivityPage() {
         )}
         {reviewOnly && unreviewedCount === 0 && (
           <div className="text-muted-foreground mb-4 flex items-center gap-1.5 text-[12px]">
-            <Icon name="check" size={13} className="text-success" />
+            <Check size={13} className="text-success" />
             {t('reviewEmpty')}
           </div>
         )}
@@ -297,7 +298,7 @@ export default function ActivityPage() {
                   onClick={() => applySavedSearch(s)}
                   className="hover:text-foreground flex items-center gap-1"
                 >
-                  <Icon name="bookmark" size={11} />
+                  <Bookmark size={11} />
                   {s.name}
                 </button>
                 <button
@@ -306,7 +307,7 @@ export default function ActivityPage() {
                   aria-label={t('deleteSavedSearchAria', { name: s.name })}
                   className="hover:text-foreground text-muted-foreground flex size-4 items-center justify-center rounded-full"
                 >
-                  <Icon name="x" size={11} />
+                  <X size={11} />
                 </button>
               </span>
             ))}
@@ -427,7 +428,7 @@ export default function ActivityPage() {
                           )}
                           aria-hidden
                         >
-                          {selected && <Icon name="check" size={10} />}
+                              {selected && <Check size={10} />}
                         </span>
                       ) : (
                         <CatBar color={cat.color} />
@@ -508,7 +509,7 @@ export default function ActivityPage() {
                               )}
                               aria-hidden
                             >
-                              {selected && <Icon name="check" size={10} />}
+                          {selected && <Check size={10} />}
                             </span>
                           ) : (
                             <CatBar color={cat.color} className="h-4" />

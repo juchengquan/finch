@@ -3,7 +3,41 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import {
+  Calendar,
+  Chart,
+  Clock,
+  Cog,
+  Coins,
+  Doc,
+  Plus,
+  Search,
+  Sparkle,
+  Swap,
+  Sync,
+  Tag,
+  Tags,
+  Wallet,
+} from '@/components/icons';
+
+// r.icon is a string short-name (defined inline above and in the
+// transaction results). Resolve to the typed lucide component so the
+// palette row can stay declarative.
+const ICON_FOR: Record<string, typeof Wallet> = {
+  wallet: Wallet,
+  doc: Doc,
+  chart: Chart,
+  sparkle: Sparkle,
+  calendar: Calendar,
+  plus: Plus,
+  cog: Cog,
+  clock: Clock,
+  swap: Swap,
+  tag: Tag,
+  sync: Sync,
+  tags: Tags,
+  coins: Coins,
+};
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -60,7 +94,7 @@ export function SearchButton({ className }: { className?: string }) {
       aria-label={tShell('search')}
       onClick={open}
     >
-      <Icon name="search" size={16} />
+      <Search size={16} />
     </Button>
   );
 }
@@ -320,7 +354,7 @@ function PaletteBody({ close }: { close: () => void }) {
   return (
     <>
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <Icon name="search" size={16} className="text-muted-foreground" />
+        <Search size={16} className="text-muted-foreground" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -346,6 +380,7 @@ function PaletteBody({ close }: { close: () => void }) {
               {items.map((r) => {
                 const idx = results.indexOf(r);
                 const active = idx === safeHighlight;
+                const RowIcon = ICON_FOR[r.icon] ?? Doc;
                 return (
                   <button
                     key={r.key}
@@ -366,7 +401,7 @@ function PaletteBody({ close }: { close: () => void }) {
                           : { background: 'var(--secondary)' }
                       }
                     >
-                      <Icon name={r.icon} size={14} />
+                      <RowIcon size={14} />
                     </span>
                     <span className="flex-1 truncate">{r.label}</span>
                     {r.hint && <span className="text-muted-foreground shrink-0 font-mono text-[11px]">{r.hint}</span>}

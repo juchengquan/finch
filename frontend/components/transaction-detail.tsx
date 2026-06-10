@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon, CatBar } from '@/components/primitives';
+import { CatBar } from '@/components/primitives';
+import { Check, Doc, Pencil, Plus, Sparkle, Split, Sync, X } from '@/components/icons';
 import { AttachmentsRow } from '@/components/transaction-attachments';
 import { useMoney } from '@/components/use-money';
 import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
@@ -180,13 +181,13 @@ function SplitEditorBody({
               className="text-muted-foreground hover:text-foreground disabled:opacity-30 flex h-8 w-8 items-center justify-center rounded-md"
               aria-label={t('removeAria')}
             >
-              <Icon name="x" size={14} />
+              <X size={14} />
             </button>
           </div>
         ))}
         <div className="flex items-center gap-2 pt-1">
           <Button size="sm" variant="outline" onClick={add} type="button">
-            <Icon name="plus" size={12} />
+            <Plus size={12} />
             {t('addSplit')}
           </Button>
           <Button size="sm" variant="ghost" onClick={balanceLast} type="button">
@@ -560,7 +561,7 @@ export function TransactionDetail({
               splits.length ? 'border-primary text-primary' : 'border-border text-foreground',
             )}
           >
-            <Icon name="split" size={18} />
+            <Split size={18} />
             <span className="text-[10px] font-medium">{splits.length ? t('actions.splitCount', { count: splits.length }) : t('actions.split')}</span>
           </button>
         </SplitEditorDialog>
@@ -570,7 +571,7 @@ export function TransactionDetail({
             onClick={() => setRefundOpen(true)}
             className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
           >
-            <Icon name="sync" size={18} />
+            <Sync size={18} />
             <span className="text-[10px] font-medium">{t('actions.refund')}</span>
           </button>
         )}
@@ -580,7 +581,7 @@ export function TransactionDetail({
             onClick={() => setConvertOpen(true)}
             className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
           >
-            <Icon name="sync" size={18} />
+            <Sync size={18} />
             <span className="text-[10px] font-medium">{t('actions.toRefund')}</span>
           </button>
         )}
@@ -590,7 +591,7 @@ export function TransactionDetail({
           className="border-border text-foreground hover:border-primary flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
           aria-label={t('actions.editAria')}
         >
-          <Icon name="pencil" size={18} />
+          <Pencil size={18} />
           <span className="text-[10px] font-medium">{t('actions.edit')}</span>
         </button>
         <button
@@ -598,7 +599,7 @@ export function TransactionDetail({
           onClick={() => setConfirmDeleteOpen(true)}
           className="border-border text-destructive hover:border-destructive flex h-[60px] flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border transition-colors"
         >
-          <Icon name="x" size={18} />
+          <X size={18} />
           <span className="text-[10px] font-medium">{t('actions.delete')}</span>
         </button>
       </div>
@@ -620,7 +621,7 @@ export function TransactionDetail({
               </div>
             </div>
             <div className="bg-secondary text-secondary-foreground mt-2 inline-flex items-center gap-2 rounded-[12px] px-3 py-1 font-mono text-[10px] tracking-[0.5px]">
-              <Icon name="check" size={11} className="text-success" stroke={2} />
+              <Check size={11} className="text-success" strokeWidth={2} />
               {t('fx.rateLocked', { rate: Math.abs(rate).toFixed(6), from: tx.currency, to: base, date: tx.date })}
             </div>
           </div>
@@ -629,7 +630,7 @@ export function TransactionDetail({
 
       {suggestion && (
         <div className="bg-primary/5 border-primary/30 flex items-center gap-2 rounded-[14px] border px-3 py-2">
-          <Icon name="sparkle" size={14} className="text-primary shrink-0" />
+          <Sparkle size={14} className="text-primary shrink-0" />
           <div className="min-w-0 flex-1 text-[12px]">
             {t.rich('ruleSuggestion.prompt', {
               merchant: () => <span className="text-foreground font-medium">{suggestion.merchant}</span>,
@@ -667,7 +668,7 @@ export function TransactionDetail({
             aria-label={t('ruleSuggestion.dismissAria')}
             className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1"
           >
-            <Icon name="x" size={13} />
+            <X size={13} />
           </button>
         </div>
       )}
@@ -748,7 +749,7 @@ export function TransactionDetail({
                   : 'bg-secondary text-muted-foreground',
               )}
             >
-              <Icon name={tx.reviewedAt ? 'check' : 'doc'} size={12} />
+              {tx.reviewedAt ? <Check size={12} /> : <Doc size={12} />}
               {tx.reviewedAt ? t('rows.reviewed') : t('rows.needsReview')}
             </button>
           </div>
@@ -822,7 +823,7 @@ export function TransactionDetail({
                     style={tg?.color ? { color: tg.color } : undefined}
                   >
                     {tg?.name ?? id}
-                    <Icon name="x" size={11} />
+                    <X size={11} />
                   </button>
                 );
               })}

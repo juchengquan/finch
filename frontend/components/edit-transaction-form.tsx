@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Banknote, Calendar, Chev, Check, Clock, Coins, Fork, Tag, Wallet } from '@/components/icons';
 import { CURRENCIES } from '@/lib/data';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { useFinanceStore, type Tx } from '@/lib/store';
@@ -23,13 +23,27 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
+// Field.icon is a string short-name; resolve to the typed lucide component
+// so the form rows can be declared inline. Extend as new field types appear.
+const FIELD_ICON: Record<string, typeof Wallet> = {
+  banknote: Banknote,
+  coins: Coins,
+  tag: Tag,
+  fork: Fork,
+  wallet: Wallet,
+  calendar: Calendar,
+  clock: Clock,
+  check: Check,
+};
+
 type Option = { id: string; name: string };
 
 function Field({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  const Glyph = FIELD_ICON[icon] ?? Wallet;
   return (
     <div className="border-border flex items-center gap-3.5 border-b px-5 py-3.5">
       <div className="bg-secondary text-secondary-foreground flex size-8 shrink-0 items-center justify-center rounded-2xl">
-        <Icon name={icon} size={15} />
+        <Glyph size={15} />
       </div>
       <div className="text-muted-foreground w-20 shrink-0 text-[11px] tracking-[0.4px] uppercase">
         {label}
@@ -182,7 +196,7 @@ export function EditTransactionForm({
             <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
               {merchant || t('merchantPlaceholder')}
             </span>
-            <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
+            <Chev size={12} className="text-muted-foreground shrink-0" />
           </button>
         </Field>
         <Field icon="fork" label={t('category')}>

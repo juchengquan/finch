@@ -3,7 +3,24 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import {
+  Bag,
+  Car,
+  Chart,
+  Chev,
+  ChevD,
+  Coins,
+  Doc,
+  Film,
+  Fork,
+  Heart,
+  Home,
+  Plus,
+  Search,
+  Sync,
+  Tag,
+  Wallet,
+} from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -37,7 +54,25 @@ import {
 import { cn } from '@/lib/utils';
 
 const TYPES = ['expense', 'income'] as const;
-const ICON_CHOICES = ['fork', 'home', 'car', 'bag', 'film', 'heart', 'sync', 'tag', 'coins', 'wallet', 'chart', 'doc'];
+const ICON_CHOICES = ['fork', 'home', 'car', 'bag', 'film', 'heart', 'sync', 'tag', 'coins', 'wallet', 'chart', 'doc'] as const;
+// ICON_CHOICES values are short-names; resolve them to the typed lucide
+// component so both the IconPicker buttons and the per-row icons stay
+// declarative. Extend ICON_CHOICES + this map together when a new glyph
+// is added to the picker.
+const ICON_FOR: Record<string, typeof Fork> = {
+  fork: Fork,
+  home: Home,
+  car: Car,
+  bag: Bag,
+  film: Film,
+  heart: Heart,
+  sync: Sync,
+  tag: Tag,
+  coins: Coins,
+  wallet: Wallet,
+  chart: Chart,
+  doc: Doc,
+};
 // Curated palette of category colours, precomputed from the legacy hue list at
 // the standard category lightness/chroma so the picker keeps its palette feel.
 const COLOR_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320].map(categoryHex);
@@ -45,21 +80,24 @@ const COLOR_CHOICES = [12, 40, 90, 160, 200, 220, 280, 320].map(categoryHex);
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {ICON_CHOICES.map((ic) => (
-        <button
-          key={ic}
-          type="button"
-          aria-label={ic}
-          aria-pressed={value === ic}
-          onClick={() => onChange(ic)}
-          className={cn(
-            'flex size-9 items-center justify-center rounded-lg border transition-colors',
-            value === ic ? 'border-foreground bg-secondary' : 'border-border text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Icon name={ic} size={16} />
-        </button>
-      ))}
+      {ICON_CHOICES.map((ic) => {
+        const Glyph = ICON_FOR[ic] ?? Fork;
+        return (
+          <button
+            key={ic}
+            type="button"
+            aria-label={ic}
+            aria-pressed={value === ic}
+            onClick={() => onChange(ic)}
+            className={cn(
+              'flex size-9 items-center justify-center rounded-lg border transition-colors',
+              value === ic ? 'border-foreground bg-secondary' : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Glyph size={16} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -358,7 +396,7 @@ export default function CategoriesPage() {
         {/* Search + Add row (visible on both mobile and desktop, Tags-style) */}
         <div className="mb-3.5 flex items-center gap-2">
           <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
-            <Icon name="search" size={14} className="text-muted-foreground" />
+            <Search size={14} className="text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -374,7 +412,7 @@ export default function CategoriesPage() {
             aria-label={t('newAria')}
             title={t('newAria')}
           >
-            <Icon name="plus" size={16} stroke={2} />
+            <Plus size={16} strokeWidth={2} />
           </Button>
         </div>
 
@@ -407,7 +445,10 @@ export default function CategoriesPage() {
                   className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
                   style={{ background: colorOf(parent) }}
                 >
-                  <Icon name={parent.icon ?? 'tag'} size={16} />
+                  {(() => {
+                    const ParentIcon = ICON_FOR[parent.icon ?? 'tag'] ?? Tag;
+                    return <ParentIcon size={16} />;
+                  })()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{parent.name}</div>
@@ -423,7 +464,7 @@ export default function CategoriesPage() {
                     aria-label={parentOpen ? t('collapse', { name: parent.name }) : t('expand', { name: parent.name })}
                     aria-expanded={parentOpen}
                   >
-                    <Icon name={parentOpen ? 'chev-d' : 'chev'} size={14} />
+                    {parentOpen ? <ChevD size={14} /> : <Chev size={14} />}
                   </button>
                 )}
                 <button
@@ -433,7 +474,7 @@ export default function CategoriesPage() {
                   aria-label={t('newSubAria', { name: parent.name })}
                   title={t('newSubTitle')}
                 >
-                  <Icon name="plus" size={14} />
+                  <Plus size={14} />
                 </button>
                 <RowActions
                   onEdit={() => openEdit(parent)}
@@ -470,7 +511,10 @@ export default function CategoriesPage() {
                     className="flex size-6 flex-shrink-0 items-center justify-center rounded-md text-white"
                     style={{ background: colorOf(child) }}
                   >
-                    <Icon name={child.icon ?? parent.icon ?? 'tag'} size={12} />
+                    {(() => {
+                      const ChildIcon = ICON_FOR[child.icon ?? parent.icon ?? 'tag'] ?? Tag;
+                      return <ChildIcon size={12} />;
+                    })()}
                   </div>
                   <div className="min-w-0 flex-1 truncate text-[13px]">{child.name}</div>
                   {grand.length > 0 && (
@@ -481,7 +525,7 @@ export default function CategoriesPage() {
                       aria-label={childOpen ? t('collapse', { name: child.name }) : t('expand', { name: child.name })}
                       aria-expanded={childOpen}
                     >
-                      <Icon name={childOpen ? 'chev-d' : 'chev'} size={12} />
+                      {childOpen ? <ChevD size={12} /> : <Chev size={12} />}
                     </button>
                   )}
                   {childCanHaveMore && (
@@ -492,7 +536,7 @@ export default function CategoriesPage() {
                       aria-label={t('newSubSubAria', { name: child.name })}
                       title={t('newSubSubTitle')}
                     >
-                      <Icon name="plus" size={12} />
+                      <Plus size={12} />
                     </button>
                   )}
                   <RowActions
@@ -525,7 +569,10 @@ export default function CategoriesPage() {
                     className="flex size-5 flex-shrink-0 items-center justify-center rounded-md text-white"
                     style={{ background: colorOf(g) }}
                   >
-                    <Icon name={g.icon ?? child.icon ?? parent.icon ?? 'tag'} size={10} />
+                    {(() => {
+                      const GrandIcon = ICON_FOR[g.icon ?? child.icon ?? parent.icon ?? 'tag'] ?? Tag;
+                      return <GrandIcon size={10} />;
+                    })()}
                   </div>
                   <div className="min-w-0 flex-1 truncate text-[12px]">{g.name}</div>
                   <RowActions

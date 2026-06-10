@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Dots, Edit, Trash } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -68,18 +68,18 @@ export function RowActions({
             aria-label={resolvedTrigger}
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
           >
-            <Icon name="dots" size={16} />
+            <Dots size={16} />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align={align}>
           {onEdit && (
             <DropdownMenuItem onSelect={() => onEdit()}>
-              <Icon name="edit" size={14} />{resolvedEdit}
+              <Edit size={14} />{resolvedEdit}
             </DropdownMenuItem>
           )}
           {onDelete && (
             <DropdownMenuItem variant="destructive" onSelect={() => setConfirmOpen(true)}>
-              <Icon name="trash" size={14} />{resolvedDelete}
+              <Trash size={14} />{resolvedDelete}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

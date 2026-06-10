@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Check } from '@/components/icons';
 import { SchemaChip, ScreenHeader, IconButton, MobilePage } from '@/components/MobileComponents';
 import { PendingRow } from '@/components/pending-row';
 import { useLedger } from '@/components/ledger-provider';
@@ -51,7 +51,7 @@ export default function PendingPage() {
                 }}
                 className="bg-foreground text-background flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[19px] text-xs font-medium"
               >
-                <Icon name="check" size={14} />
+                <Check size={14} />
                 {t('confirmAll')}
               </button>
             </div>

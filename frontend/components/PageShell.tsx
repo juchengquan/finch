@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { Icon } from './primitives';
+import { ArrowR, Bag, Calendar, Chart, Chev, ChevU, Clock, Cog, Doc, Menu, Plus, Sparkle, Tag, Tags, Target, Wallet } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,6 +18,29 @@ import { SearchButton } from '@/components/command-palette';
 import { acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
+
+// Tab.icon is a string short-name; resolve it to the typed lucide component
+// so the renderTab helper can stay declarative. The fallback (Plus) mirrors
+// the old shim's behaviour for unknown names — pages that omit the icon in
+// a pinned tab land on the add glyph.
+const TAB_ICON: Record<string, typeof Plus> = {
+  wallet: Wallet,
+  target: Target,
+  calendar: Calendar,
+  chart: Chart,
+  clock: Clock,
+  doc: Doc,
+  bag: Bag,
+  tag: Tag,
+  tags: Tags,
+  sparkle: Sparkle,
+  plus: Plus,
+  chev: Chev,
+  'chev-u': ChevU,
+  cog: Cog,
+  menu: Menu,
+  'arrow-r': ArrowR,
+};
 
 interface Tab {
   id: string;
@@ -133,29 +156,32 @@ export function PageShell({
     (extraTitle ? (extraTitle.ns === 'shell' ? tShell(extraTitle.key) : tNav(extraTitle.key)) : undefined) ??
     headerTitle;
 
-  const renderTab = (tab: Tab) => (
-    <Link
-      key={tab.id}
-      href={tab.path ?? '/'}
-      title={tab.label}
-      className={cn(
-        // Fixed h-9 (not py): icon-only rows would otherwise be ~3.5px shorter
-        // than text rows, so icons creep upward cumulatively when collapsing.
-        'flex h-9 items-center gap-3 rounded-md px-2.5 text-[13px] transition-colors',
-        isActivePath(tab.path)
-          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-      )}
-    >
-      <span className="relative flex h-4 shrink-0 items-center">
-        <Icon name={tab.icon} size={16} />
-        {tab.warnDot && !isActivePath(tab.path) && (
-          <span className="bg-warning absolute -top-0.5 -right-0.5 size-2 rounded-full" />
+  const renderTab = (tab: Tab) => {
+    const TabIcon = TAB_ICON[tab.icon] ?? Plus;
+    return (
+      <Link
+        key={tab.id}
+        href={tab.path ?? '/'}
+        title={tab.label}
+        className={cn(
+          // Fixed h-9 (not py): icon-only rows would otherwise be ~3.5px shorter
+          // than text rows, so icons creep upward cumulatively when collapsing.
+          'flex h-9 items-center gap-3 rounded-md px-2.5 text-[13px] transition-colors',
+          isActivePath(tab.path)
+            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+            : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
         )}
-      </span>
-      {sidebarOpen && <span className="whitespace-nowrap">{tab.label}</span>}
-    </Link>
-  );
+      >
+        <span className="relative flex h-4 shrink-0 items-center">
+          <TabIcon size={16} />
+          {tab.warnDot && !isActivePath(tab.path) && (
+            <span className="bg-warning absolute -top-0.5 -right-0.5 size-2 rounded-full" />
+          )}
+        </span>
+        {sidebarOpen && <span className="whitespace-nowrap">{tab.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <div className="bg-background text-foreground flex h-[100dvh] overflow-hidden font-sans">
@@ -176,7 +202,7 @@ export function PageShell({
               className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-md px-2.5 py-2 transition-colors"
             >
               <span className="flex h-7 shrink-0 items-center">
-                <Icon name={sidebarOpen ? 'menu' : 'arrow-r'} size={16} />
+                {sidebarOpen ? <Menu size={16} /> : <ArrowR size={16} />}
               </span>
               {sidebarOpen && (
                 <span className="font-serif text-lg italic tracking-tight whitespace-nowrap">
@@ -247,7 +273,7 @@ export function PageShell({
                       <div className="text-foreground truncate font-medium">{user.name}</div>
                       <div className="text-muted-foreground text-[11px]">{user.label}</div>
                     </div>
-                    <Icon name="chev-u" size={14} className="text-muted-foreground shrink-0" />
+                    <ChevU size={14} className="text-muted-foreground shrink-0" />
                   </>
                 )}
               </button>
@@ -255,7 +281,7 @@ export function PageShell({
             <DropdownMenuContent side="top" align="start" className="w-[200px]">
               <DropdownMenuItem asChild>
                 <Link href="/settings">
-                  <Icon name="cog" size={16} />
+                  <Cog size={16} />
                   {tNav('settings')}
                 </Link>
               </DropdownMenuItem>
@@ -276,7 +302,7 @@ export function PageShell({
               <Link href={crumb.parent} className="text-muted-foreground shrink-0 hover:text-foreground">
                 {crumb.label}
               </Link>
-              <Icon name="chev" size={11} className="text-muted-foreground shrink-0" />
+              <Chev size={11} className="text-muted-foreground shrink-0" />
               <span className="text-foreground min-w-0 truncate font-medium">{crumb.current}</span>
             </nav>
           ) : (
@@ -292,7 +318,7 @@ export function PageShell({
                 title={tShell('addExpense')}
                 className="rounded-full"
               >
-                <Icon name="plus" size={16} stroke={2} />
+                <Plus size={16} strokeWidth={2} />
               </Button>
             )}
           </div>
@@ -314,17 +340,19 @@ export function PageShell({
             );
             // The pinned (+) tab opens the add-expense dialog instead of navigating.
             if (tab.pinned) {
+              const PinnedIcon = TAB_ICON[tab.icon ?? 'plus'] ?? Plus;
               return (
                 <button key={tab.id} type="button" aria-label={tab.label} onClick={openAddExpense} className={tabClass}>
                   <span className="bg-primary text-primary-foreground flex size-11 items-center justify-center rounded-full shadow-lg">
-                    <Icon name={tab.icon ?? 'plus'} size={22} stroke={2.5} />
+                    <PinnedIcon size={22} strokeWidth={2.5} />
                   </span>
                 </button>
               );
             }
+            const TabBarIcon = TAB_ICON[tab.icon] ?? Plus;
             return (
               <Link key={tab.id} href={tab.path ?? `/${tab.id}`} aria-label={tab.label} className={tabClass}>
-                <Icon name={tab.icon} size={22} />
+                <TabBarIcon size={22} />
                 <span className={cn('text-[10px]', tab.id === activeTab && 'font-semibold')}>
                   {tab.label}
                 </span>

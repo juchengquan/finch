@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Chev, Check, Coins, Pencil, Tag, Trash, Wallet } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { SearchButton } from '@/components/command-palette';
 import { SettingsTabs } from '@/components/settings-tabs';
@@ -37,11 +37,24 @@ import {
 
 const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'JPY', 'SGD', 'CNY'];
 
+// Row.icon is a string short-name; resolve to the typed lucide component so
+// the row template can stay declarative. Only the icons used in the ledger
+// settings rows appear here; extend as new rows are added.
+const ROW_ICON: Record<string, typeof Wallet> = {
+  coins: Coins,
+  wallet: Wallet,
+  tag: Tag,
+  pencil: Pencil,
+  check: Check,
+  trash: Trash,
+};
+
 function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  const Glyph = ROW_ICON[icon] ?? Wallet;
   return (
     <div className="border-border flex items-center gap-3.5 border-b py-3.5">
       <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
-        <Icon name={icon} size={14} />
+        <Glyph size={14} />
       </div>
       <div className="flex-1 text-sm">{label}</div>
       {children}
@@ -150,7 +163,7 @@ export default function LedgerSettingsPage() {
         <Row icon="tag" label={tLedger('categoriesRow')}>
           <Link href="/categories" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12px]">
             {tLedger('categoriesCount', { count: categoryCount })}
-            <Icon name="chev" size={11} />
+            <Chev size={11} />
           </Link>
         </Row>
         <Row icon="pencil" label={tLedger('nameAppearance')}>
