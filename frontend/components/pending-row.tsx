@@ -7,7 +7,7 @@ import { Chev, Check, Search, Sparkle, X } from '@/components/icons';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
-import { useMerchantPicker, type MerchantResolution } from '@/components/merchant-picker-sheet';
+import { useMerchantPicker, type MerchantResolution } from '@/components/merchant-picker-dialog';
 import { matchCounterparty, type CatalogEntry, type Match } from '@/lib/matcher/counterparty';
 import { cn } from '@/lib/utils';
 

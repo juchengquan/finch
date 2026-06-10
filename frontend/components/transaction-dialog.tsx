@@ -5,26 +5,26 @@ import { useTranslations } from 'next-intl';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { TransactionDetail } from '@/components/transaction-detail';
 
-interface TransactionSheetValue {
+interface TransactionDialogValue {
   /** Open the detail card for the given transaction id. */
   openTransaction: (id: string) => void;
   close: () => void;
 }
 
-const TransactionSheetContext = createContext<TransactionSheetValue | null>(null);
+const TransactionDialogContext = createContext<TransactionDialogValue | null>(null);
 
 /**
  * Use anywhere a transaction row is clickable. Calling `openTransaction(id)`
  * opens a single app-wide detail panel as a centered popout card (Dialog),
  * matching the other entity dialogs (budgets, exchange rates, …).
  */
-export function useTransactionSheet(): TransactionSheetValue {
-  const ctx = useContext(TransactionSheetContext);
-  if (!ctx) throw new Error('useTransactionSheet must be used within TransactionSheetProvider');
+export function useTransactionDialog(): TransactionDialogValue {
+  const ctx = useContext(TransactionDialogContext);
+  if (!ctx) throw new Error('useTransactionDialog must be used within TransactionDialogProvider');
   return ctx;
 }
 
-export function TransactionSheetProvider({ children }: { children: React.ReactNode }) {
+export function TransactionDialogProvider({ children }: { children: React.ReactNode }) {
   // `open` drives the Dialog; `txId` is kept through the close animation so the
   // content doesn't blank out mid-transition.
   const [open, setOpen] = useState(false);
@@ -40,7 +40,7 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
   const value = useMemo(() => ({ openTransaction, close }), [openTransaction, close]);
 
   return (
-    <TransactionSheetContext.Provider value={value}>
+    <TransactionDialogContext.Provider value={value}>
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto p-0 sm:max-w-md">
@@ -53,6 +53,6 @@ export function TransactionSheetProvider({ children }: { children: React.ReactNo
           )}
         </DialogContent>
       </Dialog>
-    </TransactionSheetContext.Provider>
+    </TransactionDialogContext.Provider>
   );
 }

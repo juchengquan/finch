@@ -6,10 +6,10 @@ import { I18nProvider } from '@/components/i18n-provider';
 import { LedgerProvider } from '@/components/ledger-provider';
 import { StoreHydration } from '@/components/store-hydration';
 import { SqliteBackupProvider } from '@/components/sqlite-backup-provider';
-import { TransactionSheetProvider } from '@/components/transaction-sheet';
-import { EditTransactionSheetProvider } from '@/components/edit-transaction-sheet';
-import { AddExpenseSheetProvider } from '@/components/add-expense-sheet';
-import { MerchantPickerSheetProvider } from '@/components/merchant-picker-sheet';
+import { TransactionDialogProvider } from '@/components/transaction-dialog';
+import { EditTransactionDialogProvider } from '@/components/edit-transaction-dialog';
+import { AddExpenseDialogProvider } from '@/components/add-expense-dialog';
+import { MerchantPickerDialogProvider } from '@/components/merchant-picker-dialog';
 import { CommandPaletteProvider } from '@/components/command-palette';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -61,21 +61,21 @@ export default function RootLayout({
           <LedgerProvider>
             <StoreHydration />
             <SqliteBackupProvider>
-              <MerchantPickerSheetProvider>
-                {/* Edit must wrap Transaction: TransactionSheetProvider renders
+              <MerchantPickerDialogProvider>
+                {/* Edit must wrap Transaction: TransactionDialogProvider renders
                     TransactionDetail (which calls useEditTransaction) in its own
                     subtree, not among its children. */}
-                <EditTransactionSheetProvider>
-                  <TransactionSheetProvider>
-                    <AddExpenseSheetProvider>
+                <EditTransactionDialogProvider>
+                  <TransactionDialogProvider>
+                    <AddExpenseDialogProvider>
                       <CommandPaletteProvider>
                         {children}
                         <Toaster />
                       </CommandPaletteProvider>
-                    </AddExpenseSheetProvider>
-                  </TransactionSheetProvider>
-                </EditTransactionSheetProvider>
-              </MerchantPickerSheetProvider>
+                    </AddExpenseDialogProvider>
+                  </TransactionDialogProvider>
+                </EditTransactionDialogProvider>
+              </MerchantPickerDialogProvider>
             </SqliteBackupProvider>
           </LedgerProvider>
           </I18nProvider>

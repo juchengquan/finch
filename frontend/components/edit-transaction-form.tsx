@@ -13,7 +13,7 @@ import { Banknote, Calendar, Chev, Check, Clock, Coins, Fork, Tag, Wallet } from
 import { CURRENCIES } from '@/lib/data';
 import { categoryPath } from '@/lib/db/domain/categories/queries';
 import { useFinanceStore, type Tx } from '@/lib/store';
-import { useMerchantPicker } from '@/components/merchant-picker-sheet';
+import { useMerchantPicker } from '@/components/merchant-picker-dialog';
 import {
   Select,
   SelectContent,

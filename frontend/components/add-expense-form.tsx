@@ -19,7 +19,7 @@ import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
-import { useMerchantPicker } from '@/components/merchant-picker-sheet';
+import { useMerchantPicker } from '@/components/merchant-picker-dialog';
 import {
   Select,
   SelectContent,

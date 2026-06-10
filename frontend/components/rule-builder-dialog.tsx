@@ -150,7 +150,7 @@ function makeDraft(rule: Rule | null, prefill?: RulePrefill): Draft {
 
 // ---------------------------------------------------------------------------
 
-export function RuleBuilderSheet({
+export function RuleBuilderDialog({
   rule,
   open,
   onClose,
