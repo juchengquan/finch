@@ -33,13 +33,12 @@ Pure primitives — no business logic, no data fetching, no zustand reads. Compo
 
 ### `frontend/components/<X>.tsx` — feature components
 
-43 feature components (after PR 4 + PR A; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
+40 feature components (after PR 4 + PR A; 38 `.tsx` + 5 `.ts` helpers, of which 22 are in `ui/`). Kebab-case by default. Examples:
 - `page-shell.tsx` (the dispatcher; currently in the allow-list as `PageShell.tsx`)
 - `desktop-shell.tsx` / `mobile-shell.tsx` (the PageShell split from PR 3)
 - `command-palette.tsx` (the ⌘K palette)
 - `add-expense-form.tsx` / `edit-transaction-form.tsx` (the form bodies inside their respective dialogs)
 - `rule-builder-dialog.tsx` / `merchant-picker-dialog.tsx` / etc. (renamed from `*-sheet.tsx` per PR 3)
-- `mobile-tabs-editor.tsx` / `row-actions.tsx` (transitional — currently in the allow-list; candidates for kebab-case rename; their current PascalCase names will be migrated)
 
 Each composes primitives from `components/ui/`, reads state from `lib/store/`, and renders. Pages are mostly `'use client'`.
 
@@ -54,7 +53,7 @@ The App Router. 19 routes in `(main)/`. Every page wraps in `<PageShell>` (the d
 ## File conventions
 
 - `components/ui/*` — kebab-case. PascalCase forbidden (CI check).
-- `components/<X>.tsx` — kebab-case by default. PascalCase allowed only via the allow-list in `scripts/check-component-filenames.sh` (currently 6 entries: 4 intentional — `PageShell.tsx`, `primitives.tsx`, `DesktopShell.tsx`, `MobileShell.tsx`; 2 transitional — `MobileTabsEditor.tsx`, `RowActions.tsx`).
+- `components/<X>.tsx` — kebab-case by default. PascalCase allowed only via the allow-list in `scripts/check-component-filenames.sh` (currently 4 entries: `PageShell.tsx`, `primitives.tsx`, `DesktopShell.tsx`, `MobileShell.tsx`).
 - `components/icons.tsx` — single barrel, no other icon files.
 
 ## Layer rules (enforced by code review; the CI script enforces filenames only)
