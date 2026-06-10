@@ -257,23 +257,6 @@ export function MerchantGlyph({ name, size = 36, color, fg = 'var(--foreground)'
   );
 }
 
-const FALLBACK_CAT_COLOR = '#9ca3af';
-
-export function CatDot({ color, size = 8 }: { color: string | null | undefined; size?: number }) {
-  return <span className="inline-block rounded-full" style={{ width: size, height: size, background: color || FALLBACK_CAT_COLOR }} />;
-}
-
-// Vertical category-colored accent bar, used as the leading element of transaction rows.
-export function CatBar({ color, className }: { color: string | null | undefined; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn('w-1 shrink-0 self-stretch rounded-full', className)}
-      style={{ background: color || FALLBACK_CAT_COLOR }}
-    />
-  );
-}
-
 interface CalendarHeatmapProps {
   /** Day buckets, oldest-first; each entry is one calendar day. */
   values: { date: string; value: number }[];

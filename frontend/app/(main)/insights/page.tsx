@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Money, BarChart, AreaChart, CalendarHeatmap, Sankey } from '@/components/primitives';
-import { ScreenHeader, MobilePage, PageHeader } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/MobileComponents';
+import { PageHeader } from '@/components/ui/page-header';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import {
   Select,
@@ -14,8 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MOCK } from '@/lib/data';
-import { InsightCard } from '@/components/InsightCard';
-import { AprVsMay } from '@/components/AprVsMay';
+import { InsightCard } from '@/components/ui/insight-card';
+import { AprVsMay } from '@/components/ui/apr-vs-may';
 import { WeeklyDigestCard } from '@/components/weekly-digest-card';
 import { NetWorthExplainedCard } from '@/components/net-worth-explained-card';
 import { NetWorthByTypeCard } from '@/components/net-worth-by-type-card';

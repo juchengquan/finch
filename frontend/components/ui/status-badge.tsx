@@ -1,11 +1,14 @@
+// frontend/components/ui/status-badge.tsx — extracted from
+// components/StatusBadge.tsx (30 lines; PR 4). Pending vs done
+// indicator for transactions and scheduled occurrences.
+// `pending` (unconfirmed) reads amber; `done` (confirmed, the
+// default) is muted. `upcoming` is for a scheduled occurrence that
+// hasn't been generated yet.
 'use client';
 
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
-// Pending vs done indicator for transactions and scheduled occurrences.
-// `pending` (unconfirmed) reads amber; `done` (confirmed, the default) is muted.
-// `upcoming` is for a scheduled occurrence that hasn't been generated yet.
 export function StatusBadge({
   status = 'done',
   className,

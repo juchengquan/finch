@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { CatBar } from '@/components/primitives';
+import { CatBar } from '@/components/ui/cat-bar';
 import { Check, Doc, Pencil, Plus, Sparkle, Split, Sync, X } from '@/components/icons';
 import { AttachmentsRow } from '@/components/transaction-attachments';
 import { useMoney } from '@/components/use-money';

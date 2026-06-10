@@ -21,7 +21,8 @@ import {
   Tag,
   Wallet,
 } from '@/components/icons';
-import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/MobileComponents';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

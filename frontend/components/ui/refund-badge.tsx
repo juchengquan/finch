@@ -1,10 +1,12 @@
+// frontend/components/ui/refund-badge.tsx — extracted from
+// components/refund-badge.tsx (16 lines; PR 4). Marks a `kind='refund'`
+// row in transaction lists: a positive entry that nets against its
+// category rather than counting as income.
 'use client';
 
 import { useTranslations } from 'next-intl';
 import { Sync } from '@/components/icons';
 
-/** Marks a `kind='refund'` row in transaction lists: a positive entry that nets
- *  against its category rather than counting as income. */
 export function RefundBadge() {
   const t = useTranslations('badges');
   return (
