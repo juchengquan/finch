@@ -8,7 +8,7 @@ import { CatBar } from '@/components/ui/cat-bar';
 import { Money } from '@/components/primitives';
 import { Chev, Dots, Edit, Filter, Plus, Tags, Wallet, X } from '@/components/icons';
 import { RefundBadge } from '@/components/ui/refund-badge';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Chev, Check, Coins, Pencil, Tag, Trash, Wallet } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import { SettingsTabs } from '@/components/settings-tabs';

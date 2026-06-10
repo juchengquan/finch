@@ -10,7 +10,7 @@ import { CatBar } from '@/components/ui/cat-bar';
 import { Money, Ring } from '@/components/primitives';
 import { Chev, Clock, Edit, Plus, X } from '@/components/icons';
 import { RefundBadge } from '@/components/ui/refund-badge';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';

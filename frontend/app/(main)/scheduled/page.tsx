@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Money } from '@/components/primitives';
 import { Chev, ChevL, Plus } from '@/components/icons';
-import { MobilePage } from '@/components/MobileComponents';
+import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { IconButton } from '@/components/ui/icon-button';
 import { Button } from '@/components/ui/button';
