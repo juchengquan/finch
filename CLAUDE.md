@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `frontend/` — the only running code: a **Next.js 16 / React 19 / TypeScript** app (App Router). All commands below run from inside `frontend/`.
 - `plans/` — design docs, not code. `database_design_en.md` is the domain model (SQLite ledger schema); `MASTER_PLAN.md` tracks the design-vs-implementation roadmap; `frontend_design/` is the original prototype.
-- The app has a small server API (9 routes under `app/api/`): `/api/mutate` (write), `/api/state` (read), plus `/api/accounts`, `/api/attachments`, `/api/backups`, `/api/db-info`, `/api/export`, `/api/import`, `/api/restore-backup` for DB administration. The client store is hydrated from `/api/state` on load and patches locally after every `/api/mutate`.
+- The app has a small server API (9 top-level route groups under `app/api/`, 12 `route.ts` files total). The route groups are: `/api/mutate` (write), `/api/state` (read), `/api/accounts` (just `/api/accounts/archived`), `/api/attachments` (root + `/api/attachments/[id]`), `/api/backups`, `/api/db-info`, `/api/export` (root + `/api/export/metadata` + `/api/export/transactions`), `/api/import`, `/api/restore-backup` — for DB administration. The client store is hydrated from `/api/state` on load and patches locally after every `/api/mutate`.
 
 See also `frontend/AGENTS.md` (Next.js 16 caveat) and `frontend/README.md`.
 
