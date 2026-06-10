@@ -227,7 +227,7 @@ export default function ScheduledPage() {
 
   return (
     <MobilePage
-      header={<ScreenHeader title={t('title')} trailing={<IconButton icon="plus" aria-label={t('newAria')} onClick={openCreate} />} />}
+      header={<ScreenHeader title={t('title')} trailing={<IconButton icon={Plus} aria-label={t('newAria')} onClick={openCreate} />} />}
     >
       <div className="px-5 pb-[22px]">
         <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{t('upcoming')}</div>

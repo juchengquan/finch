@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Check } from '@/components/icons';
+import { Check, Filter } from '@/components/icons';
 import { MobilePage } from '@/components/mobile-page';
 import { SchemaChip } from '@/components/ui/schema-chip';
 import { ScreenHeader } from '@/components/ui/screen-header';
@@ -24,7 +24,7 @@ export default function PendingPage() {
       header={
         <ScreenHeader
           title={t('title')}
-          trailing={<IconButton icon="filter" aria-label={t('filterAria')} />}
+          trailing={<IconButton icon={Filter} aria-label={t('filterAria')} />}
         />
       }
     >

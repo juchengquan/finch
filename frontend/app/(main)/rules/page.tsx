@@ -109,7 +109,7 @@ export default function RulesPage() {
         <ScreenHeader
           title={t('title')}
           trailing={
-            <IconButton icon="plus" aria-label={t('newAria')} variant="primary" onClick={openNewBuilder} />
+            <IconButton icon={Plus} aria-label={t('newAria')} variant="primary" onClick={openNewBuilder} />
           }
         />
       }
