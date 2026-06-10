@@ -43,8 +43,8 @@ import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
-import { useTransactionSheet } from '@/components/transaction-sheet';
-import { useAddExpense } from '@/components/add-expense-sheet';
+import { useTransactionDialog } from '@/components/transaction-dialog';
+import { useAddExpense } from '@/components/add-expense-dialog';
 
 // The set of pages we expose to the palette. `labelKey` is looked up under
 // `nav.*` for visible text; `keywords` are matching aliases — kept English
@@ -170,7 +170,7 @@ function CommandPaletteDialog({
 function PaletteBody({ close }: { close: () => void }) {
   const router = useRouter();
   const { activeId } = useLedger();
-  const { openTransaction } = useTransactionSheet();
+  const { openTransaction } = useTransactionDialog();
   const { openAddExpense } = useAddExpense();
   const transactions = useFinanceStore((s) => s.transactions);
   const counterparties = useFinanceStore((s) => s.counterparties);

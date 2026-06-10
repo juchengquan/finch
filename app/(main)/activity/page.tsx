@@ -16,7 +16,7 @@ import { catById, acctById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useSavedSearches, type SavedSearch } from '@/lib/use-saved-searches';
 import { useLedger } from '@/components/ledger-provider';
-import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useTransactionDialog } from '@/components/transaction-dialog';
 import { RefundBadge } from '@/components/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
 import { EmptyState } from '@/components/empty-state';
@@ -58,7 +58,7 @@ export default function ActivityPage() {
   const markAllReviewed = useFinanceStore((s) => s.markAllReviewed);
   const { searches: savedSearches, save: saveSearch, remove: deleteSavedSearch } = useSavedSearches();
   const { activeId } = useLedger();
-  const { openTransaction } = useTransactionSheet();
+  const { openTransaction } = useTransactionDialog();
   const ledgerTags = allTags.filter((t) => t.ledgerId === activeId);
   const ledgerCategories = allCategories.filter((c) => c.ledgerId === activeId);
 

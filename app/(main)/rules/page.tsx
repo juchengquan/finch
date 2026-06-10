@@ -13,7 +13,7 @@ import { useFinanceStore } from '@/lib/store';
 import { describeActions, describeCondition } from '@/lib/rules/describe';
 import { useDescribeDict } from '@/lib/rules/use-describe-dict';
 import { applyRules } from '@/lib/rules/engine';
-import { RuleBuilderSheet } from '@/components/rule-builder-sheet';
+import { RuleBuilderDialog } from '@/components/rule-builder-dialog';
 import { cn } from '@/lib/utils';
 import type { Rule } from '@/lib/rules/types';
 
@@ -200,7 +200,7 @@ export default function RulesPage() {
         describeDict={describeDict}
       />
 
-      <RuleBuilderSheet rule={builderRule} open={builderOpen} onClose={closeBuilder} />
+      <RuleBuilderDialog rule={builderRule} open={builderOpen} onClose={closeBuilder} />
 
       <Dialog open={!!confirmBackfill} onOpenChange={(o) => !o && setConfirmBackfill(null)}>
         <DialogContent>

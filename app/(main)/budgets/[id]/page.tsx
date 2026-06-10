@@ -17,7 +17,7 @@ import { budgetProgress, kindOf } from '@/lib/select';
 import { BudgetFormDialog } from '@/components/budget-form-dialog';
 import { periodLabel, nextPeriod, type Frequency } from '@/lib/budgets/period';
 import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
-import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useTransactionDialog } from '@/components/transaction-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,7 +41,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const allCategories = useFinanceStore((s) => s.categories);
   const removeBudget = useFinanceStore((s) => s.removeBudget);
   const contributeBudget = useFinanceStore((s) => s.contributeBudget);
-  const { openTransaction } = useTransactionSheet();
+  const { openTransaction } = useTransactionDialog();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [contribOpen, setContribOpen] = useState(false);

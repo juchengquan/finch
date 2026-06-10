@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
-import { useTransactionSheet } from '@/components/transaction-sheet';
+import { useTransactionDialog } from '@/components/transaction-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { useFinanceStore } from '@/lib/store';
 import { MOCK, catById, CURRENCIES } from '@/lib/data';
@@ -184,7 +184,7 @@ const EMPTY_GROUP_DRAFT: GroupDraft = { id: null, name: '' };
 export default function AccountsPage() {
   const { fmt, toBase } = useMoney();
   const { active, activeId } = useLedger();
-  const { openTransaction } = useTransactionSheet();
+  const { openTransaction } = useTransactionDialog();
   const t = useTranslations('accounts');
   const tCommon = useTranslations('common');
   const allTxns = useFinanceStore((s) => s.transactions);
