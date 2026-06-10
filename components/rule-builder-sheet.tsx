@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/primitives';
+import { Check, X } from '@/components/icons';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { applyRules, evaluateCondition } from '@/lib/rules/engine';
@@ -439,7 +439,7 @@ export function RuleBuilderSheet({
               {tCommon('cancel')}
             </Button>
             <Button onClick={save}>
-              <Icon name="check" size={14} />
+              <Check size={14} />
               {rule ? t('footer.saveChanges') : t('footer.createRule')}
             </Button>
           </div>
@@ -485,7 +485,7 @@ function LeafEditor({ leaf, accounts, categories, counterparties, tags, onChange
             aria-label={t('fieldLabels.removeConditionAria')}
             className="text-muted-foreground hover:text-foreground rounded p-1"
           >
-            <Icon name="x" size={14} />
+            <X size={14} />
           </button>
         )}
       </div>
@@ -747,7 +747,7 @@ function ActionEditor({ action, categories, counterparties, tags, onChange, onRe
             aria-label={t('fieldLabels.removeActionAria')}
             className="text-muted-foreground hover:text-foreground rounded p-1"
           >
-            <Icon name="x" size={14} />
+            <X size={14} />
           </button>
         )}
       </div>

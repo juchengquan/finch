@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Plus, Search } from '@/components/icons';
 import { ScreenHeader, MobilePage } from '@/components/MobileComponents';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,7 +84,7 @@ export default function TagsPage() {
         {/* Search + Add row (visible on both mobile and desktop, Categories-style) */}
         <div className="mb-3.5 flex items-center gap-2">
           <div className="bg-secondary flex h-[38px] flex-1 items-center gap-2.5 rounded-[19px] px-3.5 text-[13px]">
-            <Icon name="search" size={14} className="text-muted-foreground" />
+            <Search size={14} className="text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -100,7 +100,7 @@ export default function TagsPage() {
             aria-label={t('newAria')}
             title={t('newAria')}
           >
-            <Icon name="plus" size={16} stroke={2} />
+            <Plus size={16} strokeWidth={2} />
           </Button>
         </div>
 

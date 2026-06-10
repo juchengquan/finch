@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Chev, ChevD, Coins, Plus, Trash } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,13 +84,13 @@ export function ExchangeRates() {
         className="border-border flex w-full items-center gap-3.5 border-b py-3.5 text-left"
       >
         <div className="bg-secondary text-secondary-foreground flex size-[30px] shrink-0 items-center justify-center rounded-full">
-          <Icon name="coins" size={14} />
+          <Coins size={14} />
         </div>
         <div className="flex-1 text-sm">
           {t('summary', { count: byCurrency.length })}
           {lastUpdated && <span className="text-muted-foreground">{t('updatedSuffix', { date: lastUpdated })}</span>}
         </div>
-        <Icon name={expanded ? 'chev-d' : 'chev'} size={13} className="text-muted-foreground" />
+        {expanded ? <ChevD size={13} className="text-muted-foreground" /> : <Chev size={13} className="text-muted-foreground" />}
       </button>
 
       {expanded && (
@@ -119,7 +119,7 @@ export function ExchangeRates() {
                     }}
                     className="text-muted-foreground hover:text-destructive ml-1"
                   >
-                    <Icon name="trash" size={13} />
+                    <Trash size={13} />
                   </button>
                 )}
               </div>
@@ -127,7 +127,7 @@ export function ExchangeRates() {
           </div>
           <div className="mt-2.5 flex items-center justify-end px-1">
             <Button variant="outline" size="sm" onClick={openAdd}>
-              <Icon name="plus" size={12} />
+              <Plus size={12} />
               {t('addRate')}
             </Button>
           </div>

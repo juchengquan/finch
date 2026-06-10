@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useAppLocale } from '@/components/i18n-provider';
-import { Icon } from '@/components/primitives';
+import { Clock, Edit, Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -290,7 +290,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
               {budget?.pendingAmount != null && (
                 <div className="text-warning bg-warning/10 mt-0.5 flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px]">
                   <span>
-                    <Icon name="clock" size={11} className="-mt-0.5 mr-1 inline" />
+                    <Clock size={11} className="-mt-0.5 mr-1 inline" />
                     {nextPeriodLabel
                       ? t('pendingChipWithPeriod', { amount: fmt(budget.pendingAmount), period: nextPeriodLabel })
                       : t('pendingChip', { amount: fmt(budget.pendingAmount) })}
@@ -374,7 +374,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
             <Button variant="outline">{tCommon('cancel')}</Button>
           </DialogClose>
           <Button onClick={submit}>
-            <Icon name={editing ? 'edit' : 'plus'} size={14} />
+            {editing ? <Edit size={14} /> : <Plus size={14} />}
             {editing ? tCommon('save') : tCommon('create')}
           </Button>
         </DialogFooter>

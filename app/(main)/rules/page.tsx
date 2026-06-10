@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Chev, Check, Edit, Plus, Sync, Trash, X } from '@/components/icons';
 import { ScreenHeader, MobilePage, IconButton } from '@/components/MobileComponents';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -120,7 +120,7 @@ export default function RulesPage() {
             })}
           </div>
           <Button onClick={openNewBuilder} size="sm" className="hidden shrink-0 md:flex">
-            <Icon name="plus" size={14} />
+                <Plus size={14} />
             {t('newRule')}
           </Button>
         </div>
@@ -132,7 +132,7 @@ export default function RulesPage() {
             description={t('empty.description')}
             action={
               <Button onClick={openNewBuilder}>
-                <Icon name="plus" size={14} />
+            <Plus size={14} />
                 {t('newRule')}
               </Button>
             }
@@ -179,7 +179,7 @@ export default function RulesPage() {
                       {matchCount > 0 && <div>{t('row.matched', { count: matchCount })}</div>}
                       {lastApplied && <div className="mt-0.5">{lastApplied}</div>}
                     </div>
-                    <Icon name="chev" size={14} className="text-muted-foreground shrink-0" />
+                    <Chev size={14} className="text-muted-foreground shrink-0" />
                   </button>
                 </li>
               );
@@ -238,7 +238,7 @@ export default function RulesPage() {
               <Button variant="outline">{tCommon('cancel')}</Button>
             </DialogClose>
             <Button onClick={() => confirmBackfill && onBackfill(confirmBackfill)}>
-              <Icon name="check" size={14} />
+              <Check size={14} />
               {t('backfillDialog.confirm')}
             </Button>
           </DialogFooter>
@@ -300,17 +300,17 @@ function RuleDetailSheet({
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm">
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => onEdit(rule)}>
-                <Icon name="edit" size={13} />{t('edit')}
+                <Edit size={13} />{t('edit')}
               </Button>
               <Button size="sm" variant="outline" onClick={() => onToggle(rule)}>
-                <Icon name={rule.isActive ? 'x' : 'check'} size={13} />
+                {rule.isActive ? <X size={13} /> : <Check size={13} />}
                 {rule.isActive ? t('disable') : t('enable')}
               </Button>
               <Button size="sm" variant="outline" onClick={() => onAskBackfill(rule)}>
-                <Icon name="sync" size={13} />{t('applyExisting')}
+                <Sync size={13} />{t('applyExisting')}
               </Button>
               <Button size="sm" variant="outline" onClick={() => onAskDelete(rule)} className="text-destructive">
-                <Icon name="trash" size={13} />{t('delete')}
+                <Trash size={13} />{t('delete')}
               </Button>
             </div>
             <DetailRow label={t('status')}>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Edit, Plus, Sync, Trash } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -65,7 +65,7 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
       <div className="border-border flex items-center justify-between border-b px-[18px] py-3.5">
         <div className="text-sm font-semibold">{t('headerCount', { count: rows.length })}</div>
         <Button variant="ghost" size="sm" onClick={() => setAddOpen(true)}>
-          <Icon name="plus" size={13} />{t('addButton')}
+          <Plus size={13} />{t('addButton')}
         </Button>
       </div>
 
@@ -114,13 +114,13 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button size="icon" variant="ghost" className="size-8" aria-label={t('updatePriceAria', { symbol: h.symbol })} onClick={() => setPriceTarget(h)}>
-                    <Icon name="sync" size={13} />
+                    <Sync size={13} />
                   </Button>
                   <Button size="icon" variant="ghost" className="size-8" aria-label={t('editAria', { symbol: h.symbol })} onClick={() => setEditTarget(h)}>
-                    <Icon name="edit" size={13} />
+                    <Edit size={13} />
                   </Button>
                   <Button size="icon" variant="ghost" className="size-8" aria-label={t('deleteAria', { symbol: h.symbol })} onClick={() => setDeleteTarget(h)}>
-                    <Icon name="trash" size={13} />
+                    <Trash size={13} />
                   </Button>
                 </div>
               </div>

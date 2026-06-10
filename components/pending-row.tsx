@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Chev, Check, Search, Sparkle, X } from '@/components/icons';
 import { acctById, catById } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
@@ -121,7 +121,7 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
           </div>
           {tx.note && (
             <div className="bg-secondary text-secondary-foreground mt-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs">
-              <Icon name="sparkle" size={13} className="text-primary" style={{ flexShrink: 0 }} />
+              <Sparkle size={13} className="text-primary" style={{ flexShrink: 0 }} />
               {tx.note}
             </div>
           )}
@@ -153,7 +153,7 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
                 : 'bg-foreground/30 text-background/70 cursor-not-allowed',
             )}
           >
-            <Icon name="check" size={12} stroke={2} />
+            <Check size={12} strokeWidth={2} />
             {t(`confirm.${confirmLabelKey(match, resolution)}`)}
           </button>
           <button
@@ -162,7 +162,7 @@ export function PendingRow({ tx, readOnly = false }: PendingRowProps) {
             onClick={handleCancel}
             className="border-border text-muted-foreground flex h-8 w-8 items-center justify-center rounded-[16px] border"
           >
-            <Icon name="x" size={12} />
+            <X size={12} />
           </button>
         </div>
       )}
@@ -193,7 +193,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
           className="border-success/30 bg-success/10 text-success inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
         >
           {resolution.name}
-          <Icon name="chev" size={10} className="-rotate-180" />
+          <Chev size={10} className="-rotate-180" />
         </button>
         <button
           type="button"
@@ -201,7 +201,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
           aria-label={t('clearOverride')}
           className="text-muted-foreground hover:text-foreground ml-1 p-1"
         >
-          <Icon name="x" size={11} />
+          <X size={11} />
         </button>
       </div>
     );
@@ -216,9 +216,9 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
           onClick={() => onPick(tx.merchant)}
           className="border-success/30 bg-success/10 text-success inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
         >
-          <Icon name="check" size={10} stroke={2.5} />
+          <Check size={10} strokeWidth={2.5} />
           {match.candidate.name}
-          <Icon name="chev" size={10} className="-rotate-180" />
+          <Chev size={10} className="-rotate-180" />
         </button>
       </div>
     );
@@ -237,7 +237,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
           <span className="border-warning/40 rounded border px-1 py-0 font-mono text-[8px] tracking-[0.6px]">
             {t('unverified')}
           </span>
-          <Icon name="chev" size={10} className="-rotate-180" />
+          <Chev size={10} className="-rotate-180" />
         </button>
       </div>
     );
@@ -268,7 +268,7 @@ function MerchantRow({ tx, match, resolution, newName, onNewNameChange, onPick, 
             onClick={() => onPick(tx.merchant)}
             className="border-border text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs"
           >
-            <Icon name="search" size={10} />
+            <Search size={10} />
             {t('other')}
           </button>
         </div>

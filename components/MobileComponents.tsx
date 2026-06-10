@@ -3,11 +3,16 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Icon } from './primitives';
+import { ChevL, Filter, Plus } from '@/components/icons';
 import { SearchButton } from './command-palette';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+const ICON_FOR: Record<string, typeof Plus> = {
+  plus: Plus,
+  filter: Filter,
+};
 
 export function ProfileChip({ className }: { className?: string }) {
   const tNav = useTranslations('nav');
@@ -55,7 +60,7 @@ export function ScreenHeader({ title, back = false, backHref, leading, trailing 
                   aria-label={tShell('goBack')}
                   onClick={() => (backHref ? router.push(backHref) : router.back())}
                 >
-                  <Icon name="chev-l" size={18} />
+                  <ChevL size={18} />
                 </Button>
               ) : (
                 <ProfileChip className="size-11" />
@@ -93,6 +98,10 @@ const TREND_CLASS: Record<string, string> = {
 };
 
 export function PageHeader({ label, value, sublabel, trend, borderTop = false }: PageHeaderProps) {
+  // trend.icon is a string from PageHeader callers; today no caller passes
+  // a trend, so the chip below is dead. Keep the resolution here for the
+  // next time trend is wired up.
+  const TrendIcon = trend ? ICON_FOR[trend.icon] ?? Plus : null;
   return (
     <div className={cn('px-5 pb-[22px]', borderTop && 'border-border border-t pt-[18px]')}>
       <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{label}</div>
@@ -107,7 +116,7 @@ export function PageHeader({ label, value, sublabel, trend, borderTop = false }:
             TREND_CLASS[trend.color],
           )}
         >
-          <Icon name={trend.icon} size={12} />
+          {TrendIcon && <TrendIcon size={12} />}
           {trend.text}
         </div>
       )}
@@ -139,6 +148,7 @@ export function IconButton({
   disabled = false,
 }: IconButtonProps) {
   const mapped = variant === 'primary' ? 'default' : variant === 'ghost' ? 'ghost' : 'outline';
+  const Glyph = ICON_FOR[icon] ?? Plus;
   return (
     <Button
       variant={mapped}
@@ -148,7 +158,7 @@ export function IconButton({
       onClick={onClick}
       disabled={disabled}
     >
-      <Icon name={icon} size={16} />
+      <Glyph size={16} />
     </Button>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import { Check } from '@/components/icons';
 import { fmtNative } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
@@ -36,7 +36,7 @@ export function ReconcileStatus({
   if (!account.lastReconciledAt) {
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1.5 font-mono text-[11px]">
-        <Icon name="check" size={11} />
+        <Check size={11} />
         {t('never')}
       </span>
     );
@@ -53,7 +53,7 @@ export function ReconcileStatus({
       )}
       title={t('title', { date: account.lastReconciledAt })}
     >
-      <Icon name="check" size={11} />
+      <Check size={11} />
       {t('reconciledTo', { balance: fmtNative(balance, account.currency), when: ago })}
     </span>
   );

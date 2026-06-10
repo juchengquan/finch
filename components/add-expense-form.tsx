@@ -3,7 +3,18 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
-import { Icon } from '@/components/primitives';
+import {
+  ArrowR,
+  Banknote,
+  Bell,
+  Calendar,
+  Chev,
+  Coins,
+  Fork,
+  Sync,
+  Tag,
+  Wallet,
+} from '@/components/icons';
 import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
@@ -22,6 +33,18 @@ import { cn } from '@/lib/utils';
 
 type Option = { id: string; name: string };
 
+// Field.icon is a string short-name; resolve to the typed lucide component
+// so the form rows can be declared inline. Extend as new field types appear.
+const FIELD_ICON: Record<string, typeof Wallet> = {
+  banknote: Banknote,
+  wallet: Wallet,
+  'arrow-r': ArrowR,
+  coins: Coins,
+  tag: Tag,
+  fork: Fork,
+  calendar: Calendar,
+};
+
 // Scoped fallback used until the query DB is ready (MOCK isn't ledger-scoped).
 function mockOptions(list: { id: string; name: string; ledger?: string }[], ledgerId: string): Option[] {
   return list
@@ -38,10 +61,11 @@ function localDateTimeNow(): string {
 }
 
 function Field({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+  const Glyph = FIELD_ICON[icon] ?? Wallet;
   return (
     <div className="border-border flex items-center gap-3.5 border-b px-5 py-3.5">
       <div className="bg-secondary text-secondary-foreground flex size-8 shrink-0 items-center justify-center rounded-2xl">
-        <Icon name={icon} size={15} />
+        <Glyph size={15} />
       </div>
       <div className="text-muted-foreground w-20 shrink-0 text-[11px] tracking-[0.4px] uppercase">
         {label}
@@ -375,7 +399,7 @@ export function AddExpenseForm({
                 <span className={cn('truncate', merchant ? 'text-foreground' : 'text-muted-foreground')}>
                   {merchant || t('fields.merchantPlaceholder')}
                 </span>
-                <Icon name="chev" size={12} className="text-muted-foreground shrink-0" />
+                <Chev size={12} className="text-muted-foreground shrink-0" />
               </button>
             </Field>
             <Field icon="fork" label={t('fields.category')}>
@@ -400,7 +424,7 @@ export function AddExpenseForm({
                   className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors"
                   aria-label={t('suggestion.aria', { name: suggestedName })}
                 >
-                  <Icon name="sync" size={10} />
+                  <Sync size={10} />
                   <span>{t('suggestion.prefix')} <span className="font-medium">{suggestedName}</span></span>
                   <span className="text-muted-foreground">· {suggestion.count}×</span>
                 </button>
@@ -445,7 +469,7 @@ export function AddExpenseForm({
           role="status"
           className="border-warning/40 bg-warning/10 text-warning-foreground flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12px]"
         >
-          <Icon name="bell" size={14} className="text-warning mt-0.5 shrink-0" />
+          <Bell size={14} className="text-warning mt-0.5 shrink-0" />
           <span>
             {t('duplicateWarning', { merchant: duplicate.merchant, date: duplicate.date.slice(0, 10) })}
           </span>

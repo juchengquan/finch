@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Icon, Sparkline } from '@/components/primitives';
+import { ArrowR } from '@/components/icons';
+import { Sparkline } from '@/components/primitives';
 import { useFinanceStore } from '@/lib/store';
 import { fmtNative } from '@/lib/data';
 import { accountForecast, type ForecastEvent } from '@/lib/select';
@@ -160,7 +161,7 @@ function EventRow({ event, currency }: { event: ForecastEvent; currency: string 
       >
         {inflow ? '+' : ''}{fmtNative(event.amount, currency)}
       </div>
-      <Icon name={inflow ? 'arrow-r' : 'arrow-r'} size={12} />
+      <ArrowR size={12} />
     </div>
   );
 }
