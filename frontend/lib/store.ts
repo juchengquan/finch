@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { newId } from './store/_shared/ids';
 import transactionsData from '@/data/transactions.json';
 import scheduledData from '@/data/scheduled-templates.json';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
@@ -428,7 +429,7 @@ export const useFinanceStore = create<FinanceState>()(
 
       createLedger: (input) => {
         // App-side id like every other createX. Server validates non-collision.
-        const id = `ledger-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const id = newId('ledger');
         const base = input.base.toUpperCase();
         // Optimistic: project the new row with zero counts.
         set((s) => ({
@@ -506,7 +507,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       addTransaction: (tx) => {
-        const id = `t-${Date.now().toString(36)}`;
+        const id = newId('t', { long: false });
         set((s) => ({ transactions: [{ ...tx, id }, ...s.transactions] }));
         syncMutation('addTransaction', {
           ledgerId: tx.ledgerId ?? 'personal',
@@ -685,7 +686,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createAccount: (input) => {
-        const id = `acct-${Date.now().toString(36)}`;
+        const id = newId('acct', { long: false });
         syncMutation('createAccount', {
           id,
           ledgerId: input.ledgerId ?? 'personal',
@@ -715,7 +716,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createAccountGroup: (input) => {
-        const id = `ag-${Date.now().toString(36)}`;
+        const id = newId('ag', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         set((s) => ({
           accountGroups: [
@@ -742,7 +743,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createBudget: (input) => {
-        const id = `bgt-${Date.now().toString(36)}`;
+        const id = newId('bgt', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         const isRecurring = input.isRecurring != null ? (input.isRecurring ? 1 : 0) : input.type === 'income' ? 0 : 1;
         const row: BudgetRow = {
@@ -846,7 +847,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createBudgetGroup: (input) => {
-        const id = `bgg-${Date.now().toString(36)}`;
+        const id = newId('bgg', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         set((s) => ({
           budgetGroups: [...s.budgetGroups, { id, ledgerId, name: input.name, sortOrder: s.budgetGroups.length }],
@@ -917,7 +918,7 @@ export const useFinanceStore = create<FinanceState>()(
 
       createCategory: (input) => {
         const ledgerId = input.ledgerId ?? 'personal';
-        const id = `cat-${Date.now().toString(36)}`;
+        const id = newId('cat', { long: false });
         const type = input.type ?? 'expense';
         const icon = input.icon ?? null;
         const color = input.color ?? null;
@@ -938,7 +939,7 @@ export const useFinanceStore = create<FinanceState>()(
 
       createTag: (input) => {
         const ledgerId = input.ledgerId ?? 'personal';
-        const id = `tag-${Date.now().toString(36)}`;
+        const id = newId('tag', { long: false });
         const color = input.color ?? null;
         set((s) => ({ tags: [...s.tags, { id, ledgerId, name: input.name, color }] }));
         syncMutation('createTag', { id, ledgerId, name: input.name, color });
@@ -998,7 +999,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createRule: (input) => {
-        const id = `rule-${Date.now().toString(36)}`;
+        const id = newId('rule', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         const optimistic: Rule = {
           id,
@@ -1044,7 +1045,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createScheduled: (input) => {
-        const id = `sch-${Date.now().toString(36)}`;
+        const id = newId('sch', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         const type = input.type ?? 'expense';
         const frequency = input.frequency ?? 'monthly';
@@ -1095,7 +1096,7 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       createCounterparty: (input) => {
-        const id = `cp-${Date.now().toString(36)}`;
+        const id = newId('cp', { long: false });
         const ledgerId = input.ledgerId ?? 'personal';
         set((s) => ({ counterparties: [...s.counterparties, { id, ledgerId, name: input.name, verified: false }] }));
         syncMutation('createCounterparty', { id, ledgerId, name: input.name });
@@ -1132,7 +1133,7 @@ export const useFinanceStore = create<FinanceState>()(
       // them with an optimistic update + the projected state once the round-trip
       // returns. Currency defaults to the account's on the server when omitted.
       createHolding: (input) => {
-        const id = `h-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const id = newId('h');
         const symbol = input.symbol.trim().toUpperCase();
         const ledgerId = input.ledgerId ?? 'personal';
         set((s) => ({
