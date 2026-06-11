@@ -1,0 +1,545 @@
+# finch for iOS & macOS — Phase 8 Implementation Design
+
+> **Status**: design spec — **DEFERRED PER THE PLAN**. Per the
+> plan's §13 phase 8: "Row-level sync (the full §4.3-C), if
+> ever pursued. ... Not on the current roadmap; the pack
+> model in phase 5 is the answer for the foreseeable future."
+> This doc exists to capture the design IF we ever pursue
+> it; it is not on the implementation roadmap.
+>
+> Companion documents:
+>
+> - `plans/IOS_MACOS_PLAN.md` — direction brief
+> - `plans/IOS_MACOS_PHASE_1_DESIGN.md` — Phase 1.0 full design
+> - `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 full design
+> - `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 full design
+> - `plans/IOS_MACOS_PHASE_3_DESIGN.md` — Phase 3 full design
+> - `plans/IOS_MACOS_PHASE_4_DESIGN.md` — Phase 4 full design
+> - `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 full design
+> - `plans/IOS_MACOS_PHASE_6_SKETCH` (in roadmap) — Phase 6 sketch
+> - `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 full design
+> - `plans/IOS_MACOS_ROADMAP.md` — 8-phase arc
+> - `plans/IOS_MACOS_PHASE_8_DESIGN.md` (this file)
+>
+> _Audience: future engineers, IF this phase is ever pursued.
+> Assumes Phases 1.0-7 are complete; the chokepoint + iCloud
+> sync + widgets + Watch are all shipping._
+
+## §1. Goal & non-goals
+
+**Goal** (if pursued) — Replace the pack-based sync model
+(Phase 5) with **row-level sync** that gives sub-second
+latency across devices. The plan's §4.3-C sketches this
+option: "CloudKit or server sync atop the UUID-ready,
+single-choke-point mutation layer."
+
+The two viable implementations:
+
+- **CloudKit** (the proposal) — Apple's free, serverless
+  sync platform. One CloudKit private database per ledger;
+  the schema mirrors the shared SQLite schema. The chokepoint
+  publishes a `Mutation` event on every write; the sync
+  layer subscribes, batches, and pushes to CloudKit. Other
+  devices subscribe to CloudKit subscriptions; the sync
+  layer pulls deltas, dispatches them through the chokepoint
+  (the chokepoint is idempotent on `(entry_id, revision_id)`).
+  Conflict resolution: last-writer-wins on `(row_id,
+  revision_id)` with the audit gate as the safety net.
+- **Custom server** — a finch-server (Node.js or Go) that
+  the iOS app talks to via HTTPS + WebSocket. The schema
+  is the same; the server hosts the master copy. Custom
+  auth + custom conflict resolution.
+
+**The CloudKit path is the default** (per the Open
+questions; CloudKit is "free" and matches the plan's local-
+first promise). The custom-server path is sketched but
+not detailed.
+
+**Why this is deferred** (per the plan's §13):
+
+- The pack model in Phase 5 is **already correct** for
+  99% of users. Sync is eventual (sub-minute latency is
+  the typical case; sub-hour is the worst case). The
+  user's experience: edit on iPhone, see the change on
+  iPad within 1-2 minutes. That's good enough.
+- The complexity of row-level sync is **substantial**:
+  CloudKit subscriptions, batched sync, conflict
+  resolution, the `Mutation` event bus. The pack model
+  uses iCloud Drive's built-in file sync; the row-level
+  model uses CloudKit's record-store sync. The latter
+  is more code, more bugs, more edge cases.
+- The privacy story is **the same** for both models
+  (the data is end-to-end encrypted at rest; the user
+  trusts Apple/iCloud either way). The pack model is
+  simpler; the row-level model adds no privacy benefit.
+
+**Non-goals (firm)** — IF Phase 8 is ever pursued:
+
+- **No new chokepoint actions** — the 74 Phase 2 actions
+  are the full set. Phase 8 adds a **sync layer** that
+  observes the chokepoint and publishes mutations.
+- **No new tabs / write screens / power features** — the
+  6 tabs + 6 write screens + 7 power features are
+  unchanged. Phase 8 adds a background sync daemon.
+- **No changes to the chokepoint's invariants** — the
+  audit gate + the balance triggers + the schema
+  triggers are unchanged. Phase 8 layers on top.
+- **No changes to the pack engine** — the pack engine
+  (Phase 1.0) and the iCloud sync (Phase 5) continue to
+  exist. The row-level sync is a **complement**; users
+  can opt in to row-level sync or stick with the pack
+  model. (In practice, most users will use one or the
+  other; the opt-in is a safety net for the transition.)
+- **Multi-user / shared ledgers** — single-user iCloud
+  account = single finch install. Per the plan's §10
+  resolved decision. CloudKit's "shared database" feature
+  is not used.
+- **Android** — not in the plan.
+- **Custom-server path** — sketched but not detailed. If
+  pursued, it would be a separate spec.
+
+**Estimated scope** (IF pursued): ~1,500-2,500 lines Swift
+(the CloudKit subscription + the mutation event bus + the
+sync daemon) + ~500 lines SwiftUI (the Settings › Sync
+section additions for "row-level sync" vs. "pack-based
+sync") + ~1,000 lines tests (the CloudKit mock + the
+mutation round-trip tests). **2-4 months of full-time
+work** for a small team. This is a **large phase** if
+ever pursued.
+
+## §2. Architecture: CloudKit + the chokepoint
+
+The chokepoint (Phase 2) is the single write path. Every
+write flows through `FinchStore.apply(action, args)`. The
+sync layer **observes** the chokepoint and publishes a
+`Mutation` event for each successful write.
+
+### 2.1 — The `Mutation` event bus
+
+```swift
+// ios/FinchApp/Sync/MutationEventBus.swift
+@MainActor
+public final class MutationEventBus {
+    public static let shared = MutationEventBus()
+
+    private var subscribers: [UUID: (MutationEvent) -> Void] = [:]
+
+    public func subscribe(_ handler: @escaping (MutationEvent) -> Void) -> UUID {
+        let id = UUID()
+        subscribers[id] = handler
+        return id
+    }
+
+    public func unsubscribe(_ id: UUID) {
+        subscribers.removeValue(forKey: id)
+    }
+
+    public func publish(_ event: MutationEvent) {
+        for handler in subscribers.values {
+            handler(event)
+        }
+    }
+}
+
+public struct MutationEvent: Codable, Sendable {
+    public let mutationId: String  // UUID; idempotency key
+    public let ledgerId: String
+    public let action: String
+    public let args: [String: AnyCodable]
+    public let occurredAt: Date
+    public let deviceId: String
+    public let revisionId: Int64  // monotonic per device
+}
+```
+
+`FinchStore.apply` (from Phase 2) publishes a `MutationEvent`
+after every successful write (before the `getCachedAudit`
+invalidation). The sync layer subscribes to the bus and
+forwards the event to CloudKit.
+
+### 2.2 — CloudKit schema
+
+CloudKit's record store is a key-value store; the schema
+mirrors the shared SQLite schema. The proposal:
+
+```
+CKRecordType: "Entry"
+  recordID: ledger_id:entry_id (composite)
+  fields:
+    ledgerId: String
+    date: String (ISO 8601)
+    time: String?
+    description: String
+    kind: String
+    status: String
+    createdAt: Date
+    revisionId: Int64
+    deviceId: String  // last writer
+
+CKRecordType: "Posting"
+  recordID: ledger_id:entry_id:posting_id
+  fields:
+    entryId: String (FK)
+    accountId: String
+    categoryId: String?
+    amount: Double
+    currency: String
+    amountBase: Double
+    exchangeRate: Double
+    origAmount: Double?
+    origCurrency: String?
+    clearedAt: Date?
+    memo: String?
+    sortOrder: Int
+
+CKRecordType: "Mutation"
+  recordID: mutation_id (UUID)
+  fields:
+    ledgerId: String
+    action: String
+    argsData: Data (JSON-encoded)
+    occurredAt: Date
+    deviceId: String
+    revisionId: Int64
+    applied: Bool  // true once the receiving device has dispatched
+```
+
+**One CloudKit zone per ledger.** The zone is a
+`CKRecordZone` with the ledger's id as the zone name. The
+zone is created on first use; deleted on ledger delete.
+The zone's records are the Entry + Posting + Mutation
+records.
+
+### 2.3 — Subscriptions
+
+Each device subscribes to a **per-ledger subscription** on
+the ledger's zone. When a record changes (another device
+wrote), CloudKit fires a `CKQuerySubscription` notification.
+The device fetches the changed record(s) and dispatches
+the mutation through the chokepoint (the chokepoint is
+idempotent on `(entry_id, revision_id)`).
+
+```swift
+// ios/FinchApp/Sync/CloudKitSyncDaemon.swift
+@MainActor
+public final class CloudKitSyncDaemon {
+    private let container = CKContainer.default()
+    private let database: CKDatabase
+    private var subscriptionIDs: [String: CKSubscription.ID] = [:]
+
+    public init() {
+        self.database = container.privateCloudDatabase
+    }
+
+    public func subscribeToLedger(_ ledgerId: String) async throws {
+        let zoneID = CKRecordZone.ID(zoneName: ledgerId, ownerName: CKCurrentUserDefaultName)
+        let zone = CKRecordZone(zoneID: zoneID)
+        _ = try await database.save(zone)
+
+        let subscriptionID = "ledger-\(ledgerId)"
+        let subscription = CKQuerySubscription(
+            recordType: "Mutation",
+            predicate: NSPredicate(value: true),
+            subscriptionID: subscriptionID,
+            options: [.firesOnRecordCreation]
+        )
+        let notificationInfo = CKSubscription.NotificationInfo()
+        notificationInfo.shouldSendContentAvailable = true
+        subscription.notificationInfo = notificationInfo
+
+        _ = try await database.save(subscription)
+        subscriptionIDs[ledgerId] = subscriptionID
+    }
+
+    public func handleNotification(_ userInfo: [AnyHashable: Any]) async {
+        // CloudKit fires a silent push notification on every
+        // Mutation record creation. The handler fetches the
+        // new Mutation(s), dispatches them through the
+        // chokepoint, and marks the Mutation as applied.
+    }
+}
+```
+
+The silent push notification wakes the iOS app in the
+background; the app fetches the new Mutation(s) and
+dispatches them. The latency is sub-second (CloudKit
+notifications fire within ~100ms of the record creation).
+
+### 2.4 — The chokepoint's idempotency
+
+The chokepoint (Phase 2) is **idempotent on `(entry_id,
+revision_id)`**:
+- A `postEntry` with a known `entry_id` and a new
+  `revision_id` upserts the entry (overwriting the
+  previous version)
+- A `postEntry` with a known `entry_id` and the same
+  `revision_id` is a no-op (the entry is already at that
+  revision)
+- A `deleteEntry` with a known `entry_id` is idempotent
+  (deleting a deleted entry is a no-op)
+
+The sync layer relies on this: when a device receives a
+`Mutation` event from another device, it dispatches the
+chokepoint. If the device has already dispatched this
+mutation (because it was the original writer), the
+chokepoint is a no-op. The `Mutation` record's `applied`
+field is set to `true` once the receiving device has
+dispatched.
+
+### 2.5 — Conflict resolution
+
+The chokepoint's audit gate (`Args.auditLedger` on every
+import; per the plan's §4.9) is the safety net. If a sync-
+delivered mutation would create a corruption, the
+chokepoint's audit fails; the user is shown the typed
+problem set (Phase 2's `auditFailed` error case).
+
+In practice, conflicts are rare:
+- The `revisionId` is monotonic per device; the
+  chokepoint's upsert always picks the latest
+- The audit gate catches the rare cases (e.g., a date
+  edit that would change the balance in an unexpected
+  way)
+
+## §3. The migration from pack-based to row-level sync
+
+If Phase 8 is ever pursued, the transition is a **one-way
+migration**: the user opts in to row-level sync; the
+iCloud pack engine (Phase 5) is still available as a
+fallback (the user can switch back if row-level sync has
+issues).
+
+### 3.1 — The opt-in flow
+
+Settings › Sync gets a new section: **Sync mode** with
+two options: "Pack-based (default)" and "Row-level
+(beta)". The user picks one; the choice is stored in
+`app_state`.
+
+When the user switches to row-level sync:
+1. The CloudKit sync daemon is initialized
+2. The first sync run: every Entry + Posting in the
+   local DB is uploaded to CloudKit (as a Mutation with
+   `action: 'bootstrapLedger'`)
+3. Future writes are published to the Mutation bus and
+   pushed to CloudKit in real-time
+4. The iCloud pack engine continues to run as a fallback
+   (every 30 minutes, a pack is built and uploaded to
+   iCloud Drive)
+
+When the user switches back to pack-based:
+1. The CloudKit subscriptions are cancelled
+2. The Mutation bus is unsubscribed
+3. The iCloud pack engine continues as the primary sync
+   path
+
+### 3.2 — Backward compatibility
+
+The pack model in Phase 5 is the **fallback**. If row-
+level sync has a bug (e.g., a record corruption, a missed
+subscription), the pack model kicks in: the user edits
+on iPhone, the pack is built and uploaded to iCloud, the
+iPad downloads the pack via the Phase 5 folder-watcher,
+the iPad's CloudKit daemon is reset from the pack's
+contents.
+
+The two models coexist. The row-level model is the
+primary (sub-second latency); the pack model is the
+fallback (sub-minute latency). The user can switch at
+any time.
+
+## §4. Settings › Sync section (Phase 8 additions)
+
+The Phase 5 Settings › Sync section gets a new
+**Sync mode** row:
+
+```
+┌─────────────────────────────────────┐
+│  Sync                               │
+├─────────────────────────────────────┤
+│  Mode                               │
+│  (•) Pack-based (default)          │
+│  ( ) Row-level (beta)              │
+│                                      │
+│  ...                                │
+│                                      │
+│  Row-level sync                     │
+│  Status: ✓ Subscribed to 3 ledgers │
+│  Last sync: 12 seconds ago          │
+│  Pending mutations: 0               │
+│  Last error: —                      │
+│                                      │
+│  [Resync ledger]                    │
+│  [Switch back to pack-based]        │
+└─────────────────────────────────────┘
+```
+
+The "Resync ledger" button forces a full re-upload of the
+ledger (useful if the user suspects a corruption). The
+"Switch back to pack-based" button is a one-tap rollback.
+
+## §5. CI changes (if pursued)
+
+The macos job from Phase 1.0's `IOS_MACOS_PHASE_1_DESIGN §9`
+extends with:
+
+- A **CloudKit integration test** using a mock CloudKit
+  container (a `CKContainer` substitute; the test doesn't
+  need a real iCloud account)
+- A **mutation round-trip test**: device A writes →
+  mutation published → device B receives → chokepoint
+  dispatched → audit gate clean
+- A **conflict test**: device A and device B both write
+  the same `entry_id` with different `revisionId`s →
+  chokepoint's last-writer-wins → audit gate clean
+- A **migration test**: switch from pack-based to row-
+  level sync → first sync run uploads all entries →
+  switch back → verify the pack matches the local DB
+
+## §6. Open questions
+
+The plan's §14.1 still-open questions mostly land in Phase
+6, but for Phase 8 specifically:
+
+**Not blocking Phase 8 (decide later)**:
+
+- **CloudKit vs custom server**: CloudKit is the default
+  (free, matches the local-first promise, the schema
+  migration is straightforward). A custom server is
+  sketched but not detailed; if pursued, it would be a
+  separate spec.
+- **Per-ledger subscriptions vs single subscription**: the
+  proposal is per-ledger subscriptions (one per active
+  ledger). A single subscription (all ledgers, all
+  devices) is simpler but less scalable.
+- **Mutation retention in CloudKit**: the `Mutation`
+  records in CloudKit are retained for N days (the
+  proposal: 30 days) so late-joining devices can
+  catch up. After N days, the records are purged
+  (the devices that need them have already applied
+  them). The retention is a CloudKit `CKQueryOperation`
+  with a server-side filter.
+- **Bandwidth limits**: CloudKit has a per-second record
+  creation limit (the limit is generous; we won't hit
+  it). The sync daemon's batched uploads respect the
+  limit (back off + retry on rate-limit errors).
+- **Conflict UX**: the proposal is last-writer-wins on
+  `(row_id, revision_id)`. A more sophisticated
+  conflict resolution (e.g., three-way merge for
+  transaction edits) is a follow-up. The audit gate
+  catches the rare cases that LWW doesn't.
+
+**Specifically for the migration**:
+
+- **Pack + row-level coexistence**: the proposal has both
+  sync paths running in parallel. This is more complex
+  than running one or the other. The "one-way migration"
+  (switch from pack to row-level, never switch back) is
+  simpler but less forgiving of bugs.
+- **Cold-start bootstrap**: when the user first enables
+  row-level sync, the daemon uploads every Entry +
+  Posting in the local DB to CloudKit. For a 10,000-
+  entry ledger, this is a ~5-10 second upload. The
+  user sees a "Setting up row-level sync..." spinner.
+
+**Not blocking Phase 8 because they're Phase 6+ by design**:
+
+- **App Intents / Siri / Share Extension / Spotlight /
+  notifications / biometric lock** — Phase 6. The CloudKit
+  sync daemon is orthogonal to the App Intents; the
+  intents dispatch through the chokepoint (which is
+  sync-agnostic).
+- **Widgets / Live Activities / Watch** — Phase 7. The
+  widgets + Live Activities + Watch read from the local
+  DB; the sync model is irrelevant for the read path.
+
+## §7. Out of scope (firm)
+
+These are explicitly NOT in Phase 8:
+
+- **No new chokepoint actions** — the 74 Phase 2 actions
+  are the full set. Phase 8 adds a sync layer that
+  observes the chokepoint.
+- **No new tabs / write screens / power features** — the
+  6 tabs + 6 write screens + 7 power features are
+  unchanged.
+- **No changes to the chokepoint's invariants** — the
+  audit gate + the balance triggers + the schema
+  triggers are unchanged.
+- **No changes to the pack engine** — the pack engine
+  (Phase 1.0) and the iCloud sync (Phase 5) continue to
+  exist as a fallback. Phase 8 complements them.
+- **Custom-server path** — sketched but not detailed; if
+  pursued, it would be a separate spec.
+- **Multi-user / shared ledgers** — single-user iCloud
+  account = single finch install. Per the plan's §10
+  resolved decision. CloudKit's "shared database" feature
+  is not used.
+- **Android** — not in the plan.
+- **Three-way merge / sophisticated conflict resolution**
+  — last-writer-wins is the proposal. The audit gate is
+  the safety net.
+
+## §8. Why this is deferred
+
+This doc exists to capture the design IF Phase 8 is ever
+pursued. Per the plan's §13:
+
+> "Row-level sync (the full §4.3-C), if ever pursued. ...
+> Not on the current roadmap; the pack model in phase 5 is
+> the answer for the foreseeable future."
+
+The pack model in Phase 5 is **already correct** for 99%
+of users. The complexity of row-level sync is substantial;
+the benefit (sub-second latency vs. sub-minute latency) is
+marginal for a personal-finance app. The privacy story is
+the same for both models.
+
+**If a user product call demands row-level sync** (e.g.,
+"we need live collaboration between two people editing
+the same ledger"), this design doc is the starting point.
+A future team would:
+1. Re-read this design
+2. Update the CloudKit schema (the proposal's record
+   types are a starting point)
+3. Implement the `Mutation` event bus + the CloudKit
+   sync daemon
+4. Migrate existing users from pack-based to row-level
+   (the opt-in flow in §3.1)
+5. Add the Settings › Sync UI (§4)
+
+The estimated scope (2-4 months full-time) is comparable
+to Phase 4 (power features) and Phase 5 (iCloud sync).
+
+## §9. Spec self-review
+
+(Inline review at write time; not part of the published
+spec.)
+
+- **Placeholders**: none. Every section has concrete
+  content. The CloudKit schema, the `Mutation` event
+  bus, the chokepoint's idempotency, the migration flow,
+  the Settings UI — all concrete.
+- **Internal consistency**: §2.1's `Mutation` event is
+  published by `FinchStore.apply` (Phase 2's §9.1). §2.4's
+  chokepoint idempotency is the existing behavior (the
+  chokepoint's audit gate catches the rare cases that
+  idempotency doesn't handle). §3.1's migration uses the
+  Phase 5 iCloud pack engine as a fallback. §4's Settings
+  UI extends the Phase 5 Settings › Sync section.
+- **Scope**: focused on Phase 8 IF it's ever pursued.
+  Phases 1.0-7 are referenced as completed. Phase 6 is
+  explicitly out of scope (the App Intents dispatch through
+  the chokepoint; the sync model is orthogonal). The
+  estimated scope (2-4 months) reflects the
+  CloudKit + chokepoint + migration complexity.
+- **Ambiguity**: §2.1's `MutationEvent` struct is concrete
+  (the field set, the codability). §2.2's CloudKit schema
+  is concrete (the 3 record types, the field sets). §3.1's
+  opt-in flow is concrete (the user picks "Row-level
+  (beta)"; the daemon initializes). §6 enumerates the
+  open questions with proposed answers.
+- **Deferred framing**: this spec is explicitly framed as
+  "if pursued" throughout. The plan's §13 records the
+  deferral; this doc captures the design for future
+  reference.
