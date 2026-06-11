@@ -1,5 +1,5 @@
-// frontend/components/ui/page-header.tsx — extracted from
-// Extracted from the original `MobileComponents.tsx` (pre-PR-4; deleted in PR A); `MobilePage` now lives in `mobile-page.tsx`. Page chrome: a small
+// frontend/components/ui/page-header.tsx
+// Page chrome: a small
 // label, a large serif value, an optional sublabel, and an optional
 // trend chip. Border-top variant separates the header from the
 // content above it. The trend prop's `icon` is a string key resolved
