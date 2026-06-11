@@ -17,15 +17,17 @@
 
 _Audience: the engineers and designers who will build finch's native Apple
 apps. Assumes familiarity with the web app in `frontend/` and the design
-record in `plans/`. Last updated: 2026-06-07._
+record in `plans/`. Last updated: 2026-06-12._
 
-> **What changed since 2026-06-06 (the prior revision):**
+> **What changed since the 2026-06-07 revision:**
 >
-> - **3-level categories shipped** (PR #112, `plans/done/CATEGORIES_LEVEL3_PLAN.md`) — the taxonomy is now ≤ 3 levels deep, enforced in the mutation layer (no schema change). §2.1 (entity row) and §3 row 29 updated.
-> - **i18n shipped** (PRs #113 + #115, `plans/done/I18N_PLAN.md`) — `next-intl` foundation + structured server-error shape `{ code, params }` + mass extraction of every surface + initial `zh-CN` coverage. The data layer is locale-neutral; `.finch` packs are unaffected. §11 updated.
-> - **Double-entry storage migration shipped** (PRs #114 + #116; design record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` / `transfer_groups` / `transaction_splits` replaced by **`entries` + `postings`** with a balanced-leg invariant, schema triggers, and an `auditLedger` semantic sweep. The client `Tx` projection is preserved as a single-entry skin. **Structural change for native:** §2 is rewritten storage-first, §2.6 is the projection contract, §4.6 is the migration discipline, §4.9 is the audit-parity requirement.
+> - 3-level categories shipped (PR #112) — see prior revision.
+> - i18n shipped (PRs #113 + #115) — see prior revision.
+> - Double-entry storage migration shipped (PRs #114 + #116) — see prior revision.
+> - **DB layer refactored into `core/` + `domain/` + `queries/` (PRs #124-#129)** — the write chokepoint + checksum + entries-schema + pack + paths + repo + schema + sealed-entry + server + storage + seed all live under `frontend/lib/db/core/`; user-facing actions are now 14 per-domain files under `frontend/lib/db/domain/<x>/{mutations,queries,types,errors}.ts`; reads are exposed via thin re-export shims under `frontend/lib/db/queries/<x>.ts`; everything routes through the 53-line `frontend/lib/db/mutate.ts` dispatcher. The DE cutover that used to live in `lib/db/cutover.ts` is inlined into the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` inside `lib/db/core/entries.ts`. The `lib/db/mutations.ts` file is gone — replaced by per-domain `mutations.ts` files. Architecture intent and interop contract are unchanged. §2.1 code-reference table, §4.6 cutover path, §4.9 chokepoint path, §8 cross-app implications, and the canonical-references glossary all updated.
+> - **Frontend refactored: typed icons + per-domain store + split shells + primitive consolidation + post-refactor cleanup + doc sweep + final cleanup + pre-existing fixes (PRs #130-#138)** — typed `lucide-react` barrel at `components/icons.tsx`; zustand store split into 14 per-domain slices at `lib/store/<x>/{state,actions}.ts` wired by `lib/store/index.ts`; `PageShell.tsx` is now a 21-line dispatcher that renders once and switches chrome by CSS (sidebar on `md+`, bottom bar below); 12 promoted primitives consolidated into `components/ui/` + `components/primitives.tsx`; `components/MobileComponents.tsx` deleted (its content moved to `components/mobile-page.tsx`); `components/currency-provider.tsx` renamed to `components/use-currency.ts` (exports the `useCurrency` hook + `Currency` type). 534/0 tests preserved; no behavior change. §3 row 37 (responsive shell) and §4.1 architecture-direction prose updated to reflect the dispatcher pattern.
 >
-> Cross-app interop is unchanged by any of the above — the `.finch` pack format and the shared `SCHEMA_VERSION` lineage are the contract; what's inside is now DE-shaped, that's all (§8).
+> Cross-app interop is unchanged by all of the above — the `.finch` pack format and the shared `SCHEMA_VERSION` lineage are the contract (§8).
 
 ---
 
@@ -106,13 +108,13 @@ from screenshots — read the source.
 
 | Concern | Canonical source in `frontend/` | What it is |
 |---|---|---|
-| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` (canonical) + `lib/db/entries-schema.ts` (DE additions) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
+| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` (canonical; DE additions folded in) + `lib/db/core/entries-schema.ts` (PR-A standalone, kept as a historical reference) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
 | Schema rationale & business rules | `plans/database_design_en.md` + `plans/done/DOUBLE_ENTRY_PLAN.md` | The design doc behind the schema (decisions #18–#25 etc.) + the double-entry rewrite (§2-§3 invariants, §8 migration) |
 | Server projection contract (the `Tx` shape) | `lib/db/state.ts` (`projectState`) | The exact `Tx` / `AccountRow` shape the client consumes — see §2.6 |
-| **Write chokepoint** | `lib/db/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
-| **Cutover (the migration)** | `lib/db/cutover.ts` | The DOUBLE_ENTRY_PLAN §8.2 data-move builder: manual sealed inserts for id-fidelity, torn-write repair, per-entry idempotence guard. Replayed inside the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` — see §4.6 |
-| Mutations (the user-facing write API) | `lib/db/mutations.ts` | Every server-side action and its effects; under DE these delegate to the chokepoint |
-| Pure derivations (the read brains) | `lib/select.ts`, `lib/derive.ts` | All computed figures — see §2.4 |
+| **Write chokepoint** | `lib/db/core/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` + the `MIGRATIONS` array + `applyMigrations` runner — see §4.9 |
+| **Cutover (the migration)** | `lib/db/core/entries.ts` (`MIGRATIONS` entry stamped `2026-06-14T00:00:00Z`) + `lib/db/core/sealed-entry.ts` (per-entry sealed-write helper) | The DOUBLE_ENTRY_PLAN §8.2 data-move builder: manual sealed inserts for id-fidelity, torn-write repair, per-entry idempotence guard. Replayed inside the `MIGRATIONS` entry; the sealed-write helper carries the id-fidelity table and the torn-write repair rationale. — see §4.6 |
+| Mutations (the user-facing write API) | `lib/db/mutate.ts` (the 53-line dispatcher) → `lib/db/domain/<x>/mutations.ts` (per-domain handlers) | Every server-side action and its effects; under DE these delegate to the chokepoint. The `lib/db/domain/_args.ts` map is the central action-name → Args-type registry, smoke-tested at `lib/db/domain/_args.test.ts`. |
+| Pure derivations (the read brains) | `lib/select.ts` | All computed figures — see §2.4 |
 | Rules engine | `lib/rules/{engine,types,describe}.ts` | Condition/Action model + evaluator |
 | Reconcile math | `lib/reconcile.ts` | Cleared-balance / difference selector |
 | Recurrence math | `lib/recurrence.ts` | Scheduled-template occurrence generation |
@@ -389,7 +391,7 @@ independently-testable pure function:
 > `.finch` pack format with manifest validation + atomic swap (§2.5.3)
 > all match this section verbatim. Native apps inherit the schema as-
 > designed; the web-side implementation is the *canonical reference* for
-> shape (`frontend/lib/db/schema.ts`, `frontend/lib/db/pack.ts`,
+> shape (`frontend/lib/db/schema.ts`, `frontend/lib/db/core/pack.ts`,
 > `frontend/lib/db/paths.ts`). The DE cutover (PRs #114 + #116) reused
 > legacy transaction ids as entry ids per `DOUBLE_ENTRY_PLAN §8.3`, so
 > on-disk attachment paths are byte-identical across the cutover and
@@ -481,7 +483,7 @@ my-ledger.finch       (ZIP container)
 `manifest.json` carries: pack-format version, `app_name`, `app_version`,
 `schema_version`, `exported_at`, `exported_from` (device id + name),
 `db_sha256`, `row_counts` (mirroring the existing `db_metadata`
-integrity guard — `lib/db/checksum.ts` generalises straight into this),
+integrity guard — `lib/db/core/checksum.ts` generalises straight into this),
 and `attachment_count` + total bytes. **DE `row_counts` keys:** the
 manifest enumerates the post-DE canonical tables (`entries`, `postings`,
 `entry_tags`, `entry_attachments`, ...) — packs exported before the
@@ -542,8 +544,9 @@ MUST reproduce:
 > (resolve by the `system` column, never by id or name; rename-safe).
 
 > **Adapter preconditions for `rebuildEntry`** — code-level disciplines
-> enforced in `frontend/lib/db/entries.ts` (and its consumers in
-> `lib/db/mutations.ts`). When a mutation rewrites legs via the chokepoint's
+> enforced in `frontend/lib/db/core/entries.ts` (and its consumers in
+> the per-domain `frontend/lib/db/domain/<x>/mutations.ts` files, dispatched
+> through `lib/db/mutate.ts`). When a mutation rewrites legs via the chokepoint's
 > `rebuildEntry`, it MUST: (a) forward each account leg's `cleared_at` —
 > omission silently un-clears a reconciled row — and (b) pass explicit
 > `amountBase` values when the entry carries user-pinned rates that a date
@@ -599,7 +602,7 @@ at where the behaviour lives today.
 | 36 | Command palette (⌘K) | Jump-to-anything search | macOS ⌘K; iOS Spotlight (§7) | 2 (mac 1) | `command-palette.tsx` |
 | 37 | Responsive shell (sidebar/bottom-bar, breadcrumbs) | Adaptive nav (tab bar vs sidebar/split) | `TabView`/`NavigationSplitView` | 1 | `PageShell.tsx` |
 | 38 | Holdings management (add/edit/price/delete) | Position CRUD + price update | Form sheets | 2 | `account-holdings.tsx` |
-| 39 | Ledger CRUD (create / rename / restyle / set-default / delete) | Full ledger CRUD on both apps; mutations on the shared schema | Form sheet; settings row | 1 | `lib/db/queries/ledgers.ts`; `lib/db/mutations.ts` (createLedger / updateLedger / setDefaultLedger / deleteLedger); `components/ledger-switcher.tsx`; `app/(main)/settings/ledger/page.tsx`. Web ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md`. |
+| 39 | Ledger CRUD (create / rename / restyle / set-default / delete) | Full ledger CRUD on both apps; mutations on the shared schema | Form sheet; settings row | 1 | `lib/db/queries/ledgers.ts`; `lib/db/domain/ledgers/mutations.ts` (createLedger / updateLedger / setDefaultLedger / deleteLedger); `components/ledger-switcher.tsx`; `app/(main)/settings/ledger/page.tsx`. Web ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md`. |
 | 40 | **NEW — Receipt attachments** (capture / attach photo or PDF; view; delete) | Share Extension + in-app photo/PDF picker; thumbnail + viewer in tx detail | Share extension; `PhotosPicker`; `QuickLook` | 2 | §2.5; (web also adds attachment UI + a server-side attachments dir) |
 
 > Tiering is direction, not contract — the team MAY re-tier, but SHOULD keep
@@ -737,17 +740,20 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   snapshot, fresh entries / postings / entry_tags / entry_attachments /
   entries_fts tables + indexes + triggers, category-table rebuild for the
   new CHECK + `system` column, per-ledger `ensureSystemCategories`, then
-  the §8.2 data-move via `frontend/lib/db/cutover.ts` (per-entry sealed-
-  write, id-preserving so client ids stay bit-identical across the
-  cutover — id-stability table at `DOUBLE_ENTRY_PLAN §8.3`),
+  the §8.2 data-move via the `MIGRATIONS` entry inside
+  `frontend/lib/db/core/entries.ts` (per-entry sealed-write, id-preserving
+  so client ids stay bit-identical across the cutover — id-stability table
+  at `DOUBLE_ENTRY_PLAN §8.3`; sealed-write helper at
+  `frontend/lib/db/core/sealed-entry.ts`),
   `entries_fts` backfill, drop legacy tables, recompute every account,
   `auditLedger` clean-or-abort. The `.pre-de.bak` snapshot is the
   rollback. Native and web MUST run a byte-identical migration step so
   the same DB migrates once, consistently, regardless of which app opens
   it first; the migration is idempotent on a DB already at the new
-  version. Implementation reference: `frontend/lib/db/cutover.ts` (top-
-  of-file comment carries the id-fidelity table and the torn-write repair
-  rationale).
+  version. Implementation reference: `frontend/lib/db/core/entries.ts`
+  (the `MIGRATIONS` array + `applyMigrations` runner) and
+  `frontend/lib/db/core/sealed-entry.ts` (top-of-file comment carries the
+  id-fidelity table and the torn-write repair rationale).
 
 ### 4.7 Platform baselines (decided)
 
@@ -769,7 +775,7 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
 ### 4.9 The audit invariant (`auditLedger`)
 
 **Direction (required):** native MUST implement `auditLedger` in `FinchCore`,
-ported from `lib/db/entries.ts::auditLedger`
+ported from `lib/db/core/entries.ts::auditLedger`
 (`plans/done/DOUBLE_ENTRY_PLAN.md §3.3`). It is a read-only sweep returning typed
 problems:
 
@@ -964,7 +970,7 @@ finch already computes, so the data work is mostly done.
   in both directions and is the same artifact iCloud Drive replicates for
   sync (§4.3). On import, the receiver MUST validate `manifest.json` (incl.
   the existing checksum + row-counts guard, generalised from
-  `lib/db/checksum.ts`) and every attachment's sha256, **then run
+  `lib/db/core/checksum.ts`) and every attachment's sha256, **then run
   `auditLedger` for semantic integrity (§4.9)**, then atomically swap into
   place; refuse a tampered, partial, or audit-failing pack with a clear
   error.
@@ -1140,8 +1146,8 @@ Milestones as coherent slices, each independently shippable:
 2. **Entry + core CRUD.** Add transaction (all kinds), transaction detail
    edits, pending confirm, budgets, scheduled post-now, **ledger CRUD**
    (§2.1; web-side ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md` PR #109).
-   Entry CRUD goes through a Swift port of the `lib/db/entries.ts`
-   chokepoint (`postEntry` / `rebuildEntry` / `deleteEntry`) — the same
+    Entry CRUD goes through a Swift port of the `lib/db/core/entries.ts`
+    chokepoint (`postEntry` / `rebuildEntry` / `deleteEntry`) — the same
    single write path the web uses. The two `rebuildEntry` adapter
    preconditions called out in §2.6 (forward `cleared_at`; pass explicit
    `amountBase` for pinned rates) apply verbatim. Now "usable for real."
@@ -1190,7 +1196,7 @@ language. Each points at the sections of the doc that now reflect it.
    app reuses the same format end-to-end (build, parse, atomic-swap, manifest
    schema, sha256 integrity). What remains for native is the **iCloud Drive
    *delivery* layer** (the auto-pack debounce + folder-watcher + conflict-
-   copy UX). Reference implementation: `frontend/lib/db/pack.ts`.
+    copy UX). Reference implementation: `frontend/lib/db/core/pack.ts`.
 
 2. **Plain font, no editorial serif in v1.** Use the system sans-serif on
    Apple platforms (matching the live web look). Numerals tabular, Dynamic
@@ -1295,13 +1301,22 @@ during the relevant phase.
   Defined in §2.1, §2.2, §2.3.1, §2.6, and §4.9 of this brief; canonically
   in `plans/done/DOUBLE_ENTRY_PLAN.md §2-§3`.
 - **Canonical code references:** canonical schema `frontend/lib/db/schema.ts`
-  (+ DE additions `frontend/lib/db/entries-schema.ts`); write chokepoint
-  `frontend/lib/db/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
-  / `auditLedger` / `ensureSystemCategories`); projection
+  (DE additions folded in; the historical `frontend/lib/db/core/entries-schema.ts`
+  is the PR-A standalone kept as a reference); write chokepoint
+  `frontend/lib/db/core/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
+  / `auditLedger` / `ensureSystemCategories` + the `MIGRATIONS` array +
+  `applyMigrations` runner); sealed-write helper `frontend/lib/db/core/sealed-entry.ts`;
+  pack engine `frontend/lib/db/core/pack.ts`; checksum
+  `frontend/lib/db/core/checksum.ts`; projection
   `frontend/lib/db/state.ts` (`projectState`); mutations
-  `frontend/lib/db/mutations.ts` (delegate to the chokepoint under DE);
+  `frontend/lib/db/mutate.ts` (the 53-line dispatcher) → per-domain handlers
+  at `frontend/lib/db/domain/<x>/mutations.ts` (delegate to the chokepoint
+  under DE); central action-name → Args-type registry
+  `frontend/lib/db/domain/_args.ts`; read-side shims `frontend/lib/db/queries/<x>.ts`;
   derivations `frontend/lib/select.ts`; rules `frontend/lib/rules/*`; money
-  `frontend/components/use-money.ts` + `frontend/lib/fx.ts`; reconcile
+  `frontend/components/use-money.ts` + `frontend/components/use-currency.ts`
+  (the display-currency hook; renamed from `currency-provider.tsx` in
+  PR #137) + `frontend/lib/fx.ts`; reconcile
   `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`;
   budgets `frontend/lib/budgets/*`; tokens `frontend/app/globals.css`;
   design intent `plans/frontend_design/`.
