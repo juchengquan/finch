@@ -101,6 +101,7 @@ export function _resetServerDbForTests(): void {
 // staleness visible; a future PR can wire mutation-driven invalidation.
 
 let _auditCache: import('./entries').DbAudit | null = null;
+let _auditClock: () => number = () => Date.now();
 
 const AUDIT_MAX_PROBLEMS = 50;
 
@@ -114,7 +115,7 @@ export async function getCachedAudit(): Promise<import('./entries').DbAudit> {
   _auditCache = {
     problems: problems.slice(0, AUDIT_MAX_PROBLEMS),
     problemCount: problems.length,
-    checkedAt: new Date().toISOString(),
+    checkedAt: new Date(_auditClock()).toISOString(),
   };
   return _auditCache;
 }
@@ -123,6 +124,14 @@ export async function getCachedAudit(): Promise<import('./entries').DbAudit> {
  *  the audit. Never call from app code. */
 export function _resetAuditCacheForTests(): void {
   _auditCache = null;
+}
+
+/** Test-only: install a fake clock used to compute the `checkedAt`
+ *  timestamp. Returns a teardown that restores the real clock. */
+export function _setAuditClockForTests(fn: () => number): () => void {
+  const prev = _auditClock;
+  _auditClock = fn;
+  return () => { _auditClock = prev; };
 }
 
 // Best-effort graceful-shutdown checkpoint. SQLite auto-checkpoints when the
