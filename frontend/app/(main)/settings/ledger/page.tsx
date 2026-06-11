@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useCurrency, type Currency } from '@/components/currency-provider';
+import { useCurrency, type Currency } from '@/components/use-currency';
 import { useLedger } from '@/components/ledger-provider';
 import { useFinanceStore } from '@/lib/store';
 import { Input } from '@/components/ui/input';
