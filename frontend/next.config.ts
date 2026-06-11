@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['@sqlite.org/sqlite-wasm'],
   allowedDevOrigins: ['192.168.50.*', '*.local', 'blackmount8s-mac-mini.tailfc8710.ts.net'],
   basePath: isDev ? '' : BASE_PATH,
+  outputFileTracingExcludes: { '/*': ['./next.config.ts'] },
 };
 
 export default nextConfig;
