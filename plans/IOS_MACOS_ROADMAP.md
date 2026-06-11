@@ -424,76 +424,40 @@ debounce complexity)
 
 ---
 
-## Phase 6 — Native upside (part 1): App Intents / Siri / Share Extension / Spotlight / notifications / biometric lock
+## Phase 6 — Native upside (part 1): Spotlight / Notifications / Biometric / App Intents / Share Extension
 
-> **Sketch only** — Phase 6 is the broadest of the remaining
-> phases (6 distinct sub-features, each with its own design
-> surface). The full design for Phase 6 happens in a separate
-> brainstorming session. This roadmap sketch enumerates the
-> sub-features and their inter-dependencies so Phases 3, 4, 5,
-> 7 can proceed without blocking on Phase 6's design decisions.
+> **Phase 6 is decomposed into 5 sub-specs** (one per Apple
+> platform framework). Each sub-spec is a full design
+> (~500-700 lines); the 5 are independent and ship in any
+> order. The natural implementation order is
+> **6.1 → 6.2 → 6.3 → 6.4 → 6.5** (simplest to hardest).
 
 **Goal**: Land the platform-native features that make a wrapper
 insufficient. The data layer is the same as Phase 5; this phase
 is mostly integration work.
 
-**The 6 sub-features** (each will be a separate design pass
-before implementation):
+**The 5 sub-features** (each has its own full design spec):
 
-1. **App Intents / Siri** — "Add a $6 coffee to Personal" → an
-   `AddTransaction` intent over `FinchCore` (dispatches through
-   the Phase 2 chokepoint — there is no other write path). The
-   intent needs to handle: the active-ledger context (which
-   ledger to post to); the account/merchant/category disambiguation
-   (Siri's natural-language parsing may not match an existing
-   entity; the intent should ask via a `SNTextInput` if
-   ambiguous); the iOS 26+ App Intents `IntentDialog` API
-   (success / failure / clarification flows). Donate intents
-   to Siri Suggestions on first use; the system learns the
-   user's habitual entries.
-2. **Share Extension receipts** — the long-deferred
-   receipt-photo feature. Share a photo/PDF into finch from
-   Photos, Safari, Mail; create / attach to an entry. Writes
-   to `attachments/<entry_id>/...` (the path structure is stable
-   across the DE cutover per the plan's §2.5.1). The Share
-   Extension runs in a separate process and needs App Group
-   entitlements (see Open questions). The UX: the user
-   shares a photo → chooses finch → the extension shows a
-   mini-form (pick which entry to attach to, or create a new
-   entry) → the photo is saved to the app's `attachments/`
-   directory → the entry is updated with the attachment id.
-3. **Spotlight indexing** — index transactions / merchants /
-   accounts via `CoreSpotlight` so system search jumps into
-   finch (the iOS analogue of the web's ⌘K). On every
-   successful write, re-index the affected entities; on
-   background, re-index the full `Tx[]` (incremental from a
-   high-water mark). The deep-link opens the Transaction
-   Detail screen for the matched entry.
-4. **Notifications** — local notifications for: (a) scheduled
-   items due (per the `dueDates` of the templates); (b) budget
-   warning thresholds (`warning_pct` of the budget); (c) anomaly
-   flags (high `anomalyScore` on a recent transaction); (d) the
-   Sunday weekly digest (the `weeklyDigest` selector from
-   Phase 1.5). The notifications are local-only (no push
-   notifications; per the plan's §10 "no data collected" privacy
-   stance). The notification content is generated at schedule
-   time, not at fire time (avoids running the chokepoint in a
-   background context).
-5. **Biometric lock** — optional Face ID / Touch ID / Optic ID
-   gate on launch and on sensitive actions (export, delete-all,
-   base-currency change). The user-configurable policy lives in
-   `app_state` (the same table the web's `displayCurrencyByLedger`
-   already uses). Three policies: (a) "lock on launch" (default
-   for the "high security" setting); (b) "lock after N minutes
-   idle" (where N is user-configurable: 1, 5, 15, 60); (c) "lock
-   on background" (default for the "low friction" setting). The
-   data is `completeUnlessOpen` at rest (per the plan's §10).
-6. **Per-ledger display-currency override UI** (carried forward
-   from Phase 1.5 if not yet shipped) — wait, this is in
-   Phase 1.5; remove. Replaced with: nothing — Phase 6
-   has 5 sub-features, not 6.
+| # | Sub-feature | Spec | Apple framework | Estimated scope |
+|---|---|---|---|---|
+| 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | ~700 lines spec; 1-2 weeks |
+| 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | ~800 lines spec; 2-3 weeks |
+| 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | ~600 lines spec; 1-2 weeks |
+| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | ~800 lines spec; 2-3 weeks |
+| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | ~900 lines spec; 3-4 weeks |
 
-**Non-goals (out)**:
+Each sub-spec is independently reviewable. The 5 share
+infrastructure (the App Group container, the
+`DeepLinkRouter` for Spotlight + notification deep-links,
+the `BiometricGate` for sensitive actions, the Xcode
+project setup) but ship independently. **Total Phase 6
+scope**: ~3,800 lines spec; ~2,200 lines Swift + ~1,000
+lines SwiftUI; **2-3 months of full-time work** for a
+small team (less than the original 3-4 month estimate
+because the per-framework decomposition makes each
+sub-feature smaller than the combined "Phase 6" estimate).
+
+**Non-goals (out)** — applied to all 5 sub-features:
 
 - Widgets / Live Activities / Watch (Phase 7)
 - Row-level sync (Phase 8, may never ship)
@@ -502,97 +466,66 @@ before implementation):
 - In-app theme override (Phase 1.5)
 - iCloud folder-watcher (Phase 5)
 
-**Dependencies**: Phase 5 complete (the chokepoint + pack engine
-are stable; the intents can dispatch into them; the Share
-Extension can write into the same `attachments/` layout).
-**Plus**: App Group entitlements must be enabled at the
-Xcode project level (a one-time setup, not a per-feature
-concern).
+**Dependencies**: Phase 5 complete (the chokepoint + pack
+engine are stable; the intents can dispatch into them; the
+Share Extension can write into the same `attachments/`
+layout; the widgets + Watch can read from the App Group
+container). **Plus**: App Group entitlements must be
+enabled at the Xcode project level (a one-time setup,
+not a per-feature concern).
 
-**Acceptance criteria** (high level — each sub-feature's
-design pass will detail):
+**Acceptance criteria** (high level — each sub-spec
+details the specifics):
 
 - "Hey Siri, add a $6 coffee to Personal in finch" → the entry
-  appears in the Activity tab within 5 s
+  appears in the Activity tab within 5 s (Phase 6.4)
 - Share a photo from Photos → choose finch → the photo is
   attached to the most recent transaction (or the user picks
-  which entry)
+  which entry) (Phase 6.5)
 - Spotlight search for "starbucks" surfaces the matching entries
   as a top hit, deep-linking into the Transaction Detail screen
+  (Phase 6.1)
 - Local notification fires when a scheduled item is due, when
   a budget hits its `warning_pct`, when an anomaly is flagged,
-  and on Sunday morning for the weekly digest
+  and on Sunday morning for the weekly digest (Phase 6.2)
 - App launch on a fresh device requires Face ID (per the user's
   chosen policy); export still works after Face ID auth; the
   data is `completeUnlessOpen` at rest (per the plan's §10)
+  (Phase 6.3)
 
-**Open questions**:
+**Why the decomposition**:
 
-- The Share Extension runs in a separate process; it needs to
-  write into the same app's container. App Group entitlements
-  are required — does our iCloud-only container model support
-  this, or do we need to add a local `Application Support/`
-  container for the Share Extension's writes? **Decision needed
-  in the Phase 6 design pass.**
-- Biometric lock on launch vs. on sensitive actions only: the
-  plan says "gate app open + sensitive actions." What's the
-  user-configurable policy? (e.g., "lock on launch" vs.
-  "lock after 5 minutes idle" vs. "lock on background".) **The
-  sketch above proposes three policies; the design pass may
-  refine.**
-- App Intents: how does the intent handle the "no merchant match"
-  case? Does Siri ask via a dialog, or do we offer a
-  `SNTextInput` form? **Decision needed in the Phase 6 design
-  pass.**
-- Notifications: are they scheduled at write time (the chokepoint
-  schedules the notification) or at app launch (a background
-  task re-schedules all pending notifications)? The first is
-  simpler; the second is more robust to notification
-  re-installs. **Decision needed in the Phase 6 design pass.**
-- The 5 sub-features in this list are not in a strict order;
-  some are easier to ship than others. A natural ordering for
-  implementation: Spotlight (simplest) → Notifications →
-  Biometric lock → App Intents → Share Extension receipts
-  (hardest, due to App Group + process boundary). **The
-  ordering is a Phase 6 design pass concern; the roadmap
-  doesn't prescribe.**
+- Each sub-feature maps to a distinct Apple platform
+  framework (CoreSpotlight, UNUserNotificationCenter,
+  LocalAuthentication, AppIntents, Share Extension). The
+  frameworks are independent; the Xcode project setup
+  is per-framework.
+- Each sub-feature has its own design surface with
+  Apple-platform-specific UX patterns (Spotlight's
+  CSSearchableIndex, Notifications' UNUserNotificationCenter,
+  biometric's LAContext, App Intents' AppEntity + IntentDialog,
+  Share Extension's NSExtensionContext). Each deserves its
+  own design pass.
+- The 5 sub-features can ship in any order; no spec
+  depends on another. The natural implementation order
+  (6.1 → 6.2 → 6.3 → 6.4 → 6.5) goes from simplest to
+  hardest, but any subset can ship first.
 
-**Why this is a sketch, not a full design**:
+**Cross-cutting infrastructure** (shared across the 5):
 
-- The 5 sub-features each have a distinct design surface with
-  Apple-platform-specific UX patterns (App Intents / Siri's
-  natural-language disambiguation, Share Extension's
-  mini-form, Spotlight's deep-link routing, Notifications'
-  scheduling model, biometric lock's policy surface). Each
-  deserves its own design pass with mockups or at least
-  screen-flow diagrams.
-- The App Group entitlements question is a project-level
-  decision that affects the Xcode project setup; getting it
-  right requires understanding the iCloud container + local
-  container trade-off concretely, not abstractly.
-- The biometric policy surface is a UX question that depends
-  on user research (do users prefer "lock on launch" or
-  "lock on background"?). The sketch's 3-policy proposal
-  is a starting point; the design pass may validate or
-  revise.
-
-**What the full Phase 6 design will look like** (preview):
-
-- 5 sub-feature designs (one per sub-feature), each ~200-400
-  lines, with a screen-flow + a Swift code sketch for the
-  intent / extension / notification scheduling
-- A consolidated App Group + entitlements section
-- A notifications scheduling model (likely "schedule at write
-  time" for simplicity; the design pass may revise)
-- A biometric policy UI (the Settings tab adds a "Security"
-  section; 3 radio buttons for the 3 policies)
-- The per-sub-feature parity tests (the App Intents
-  invocation, the Share Extension's mini-form, etc.)
-- An updated roadmap and out-of-scope list
-
-**Estimated scope** (rough): 1,500-2,000 lines spec; 3,000-4,000
-lines Swift + 1,500-2,000 lines SwiftUI implementation; **3-4
-months** of full-time work for a small team.
+- **App Group container** (added at Phase 5's Xcode
+  setup): `group.com.juchengquan.finch`. Phase 6.5
+  (Share Extension) and Phase 7 (widgets + Watch) all
+  read/write the App Group; the iOS app is the
+  coordinator.
+- **`DeepLinkRouter`** (introduced in Phase 6.1): handles
+  Spotlight + notification deep-links. Phases 6.2,
+  6.4 reuse the router.
+- **`BiometricGate`** (introduced in Phase 6.3): gates
+  sensitive actions. Phases 6.4, 6.5 use the gate
+  (Phase 6.5 for the Share Extension's "Save"
+  action; Phase 6.4 doesn't use it since Siri is
+  already biometric-authenticated by the device).
 
 ---
 
