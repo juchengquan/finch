@@ -4,7 +4,7 @@
 // values; on save, calls `updateTransaction(id, patch)` with a patch covering
 // only the fields the user can change from this form. The server is the
 // source of truth — the store's optimistic-update + re-projection pattern
-// (lib/store.ts:357 + lib/db/mutations.ts:398) handles the round-trip.
+// (lib/store/accounts/actions.ts + lib/db/mutations.ts:398) handles the round-trip.
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -106,7 +106,7 @@ export function EditTransactionForm({
   }
 
   // Currency follows the selected account. An account's currency is fixed at
-  // creation (see AccountPatch in lib/store.ts), so the form shows the new
+  // creation (see AccountPatch in lib/db/domain/accounts/types), so the form shows the new
   // account's currency the moment the user picks it.
   const acct = storeAccts.find((a) => a.id === account);
   const accountCurrency = acct?.currency ?? tx.currency ?? 'SGD';

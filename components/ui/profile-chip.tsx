@@ -1,5 +1,5 @@
-// frontend/components/ui/profile-chip.tsx — extracted from
-// Extracted from the original `MobileComponents.tsx` (pre-PR-4; deleted in PR A); `MobilePage` now lives in `mobile-page.tsx`. The user "A" chip that
+// frontend/components/ui/profile-chip.tsx
+// The user "A" chip that
 // links to /settings, shown in the sidebar and inside ScreenHeader's
 // leading slot.
 'use client';

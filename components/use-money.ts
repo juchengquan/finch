@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useLedger } from '@/components/ledger-provider';
-import { useCurrency } from '@/components/currency-provider';
+import { useCurrency } from '@/components/use-currency';
 import { useFinanceStore } from '@/lib/store';
 import { convertAmount, fmtNative, fmtNativeShort } from '@/lib/data';
 import { latestRateMap, convertViaRates } from '@/lib/fx';
