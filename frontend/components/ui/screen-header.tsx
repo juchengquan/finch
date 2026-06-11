@@ -1,5 +1,5 @@
-// frontend/components/ui/screen-header.tsx — extracted from
-// Extracted from the original `MobileComponents.tsx` (pre-PR-4; deleted in PR A); `MobilePage` now lives in `mobile-page.tsx`. The mobile-only fixed
+// frontend/components/ui/screen-header.tsx
+// The mobile-only fixed
 // top header with a leading slot (back/profile), centered title, and
 // trailing slot (search). z-40 keeps it under modal/dialog overlays
 // (z-50). Button sizes are size-11 (44px) to meet WCAG 2.5.5 touch

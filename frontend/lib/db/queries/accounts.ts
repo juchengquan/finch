@@ -127,7 +127,7 @@ export async function netWorth(exec: Exec, ledgerId: string): Promise<number> {
 }
 
 // `currency` is deliberately not patchable — it's fixed at account creation
-// (see AccountPatch in lib/store.ts). Any stray key without a column mapping is
+  // (see AccountPatch in lib/db/domain/accounts/types). Any stray key without a column mapping is
 // skipped below.
 const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   name: 'name',

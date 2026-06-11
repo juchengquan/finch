@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Cog, Plus, Swap } from '@/components/icons';
 import { useLedger } from '@/components/ledger-provider';
-import { useCurrency } from '@/components/currency-provider';
+import { useCurrency } from '@/components/use-currency';
 import { useFinanceStore } from '@/lib/store';
 import { CURRENCIES as CURRENCY_RECORD } from '@/lib/data';
 import {
