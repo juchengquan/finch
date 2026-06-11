@@ -47,15 +47,29 @@ test('getCachedAudit returns the cached value on subsequent calls', async () => 
 });
 
 test('getCachedAudit resets on cache clear', async () => {
-  const { getCachedAudit, _resetAuditCacheForTests } = await import('./core/server');
-  const first = await getCachedAudit();
-  expect(typeof first.checkedAt).toBe('string');
-  _resetAuditCacheForTests();
-  // The second call repopulates the cache. Its checkedAt may share a
-  // timestamp with `first` (sub-second resolution) — sleep just over a
-  // second so the third call's timestamp is provably later.
-  await getCachedAudit();
-  await new Promise((r) => setTimeout(r, 1_100));
-  const third = await getCachedAudit();
-  expect(third.checkedAt).not.toBe(first.checkedAt);
+  const { getCachedAudit, _resetAuditCacheForTests, _setAuditClockForTests } = await import('./core/server');
+
+  // Install a controllable clock. The fake clock starts at 1_000_000 ms
+  // and advances by 2 ms on the second call, so the 2nd call's
+  // `checkedAt` is provably different from the 1st call's. The 3rd
+  // call is a cache hit and returns the 2nd call's value. No more
+  // `setTimeout` flakiness.
+  let clockValue = 1_000_000;
+  const restoreClock = _setAuditClockForTests(() => clockValue);
+
+  try {
+    const first = await getCachedAudit();
+    expect(typeof first.checkedAt).toBe('string');
+    _resetAuditCacheForTests();
+    // Advance the clock before the 2nd call so its `checkedAt` is
+    // provably different from the 1st call's. The 3rd call is a cache
+    // hit (the 2nd call repopulated the cache), so it returns the 2nd
+    // call's value — which is now different from the 1st's.
+    clockValue += 2;
+    await getCachedAudit();
+    const third = await getCachedAudit();
+    expect(third.checkedAt).not.toBe(first.checkedAt);
+  } finally {
+    restoreClock();
+  }
 });
