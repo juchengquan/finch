@@ -23,11 +23,12 @@
 SwiftUI's adaptive containers. The same code base serves all
 three platforms; the chrome switches by size class (iPhone =
 bottom tab bar; iPad = sidebar + tab bar; Mac = sidebar + tab
-bar + menu bar + keyboard shortcuts + ⌘K). The 6 read-only
-tabs (Accounts, Activity, Budgets, Insights, Scheduled,
-Settings) + the 6 write screens from Phase 2 all render on all
-three platforms. **Both Mac distribution paths** (Mac App Store
-+ notarised direct download) are set up.
+bar + menu bar + keyboard shortcuts + ⌘K). The 6 tabs
+(Accounts, Activity, Budgets, Insights, Reports, Scheduled —
+post-Phase-2; note: "Reports" is the 5th tab, "Settings" is
+a section, not a tab) + the 7 write screens from Phase 2
+all render on all three platforms. **Both Mac distribution
+paths** (Mac App Store + notarised direct download) are set up.
 
 **Phase 3 is mostly a layout-distribution exercise.** The
 chokepoint + selectors + parity tests from Phases 1.0-2 don't
@@ -55,7 +56,7 @@ change. Phase 3 adds:
 
 - **New features** — no new tabs, no new write surfaces, no new
   selectors. Phase 3 is purely a layout + distribution
-  exercise. The 6 tabs + 6 write screens are unchanged.
+  exercise. The 6 tabs + 7 write screens are unchanged.
 - **Watch** — that's Phase 7.
 - **Widgets / Live Activities** — Phase 7.
 - **App Intents / Siri / Share Extension / Spotlight /
@@ -78,9 +79,12 @@ chokepoint + selectors + write surfaces are unchanged.
 
 ## §2. The adaptive shell
 
-The Phase 1.0 spec's §5 describes the iPhone shell: a `TabView`
-with 6 tabs (Accounts, Activity, Budgets, Insights, Scheduled,
-Settings). Phase 3 wraps this in an **adaptive shell** that
+The Phase 1.0 spec's §5 describes the iPhone shell as a
+`TabView` with 4 tabs (Accounts, Activity, Budgets, Settings;
+Phase 1.5 adds Insights as the 5th; Phase 2 adds Scheduled
+as the 6th, Reports is the 5th by display order — see
+§2.1's size-class matrix). Phase 3 wraps this in an
+**adaptive shell** that
 switches chrome by size class.
 
 The pattern mirrors the web's PageShell dispatcher (per the
@@ -129,7 +133,7 @@ struct AdaptiveShell: View {
 (moved to its own file in Phase 3 for clarity). `SplitViewShell`
 is the new Phase 3 iPad/Mac shell. They share the same
 `FinchStore` + the same tab content (the 6 tabs from Phase
-1.0/1.5/2 + the 6 write screens from Phase 2).
+1.0/1.5/2 + the 7 write screens from Phase 2).
 
 ### 2.3 — `SplitViewShell`
 
@@ -345,7 +349,7 @@ searches across:
 The search is **client-side** (the in-memory `Tx[]` cache +
 the `AccountRow[]` + `Counterparty[]` arrays). For the
 **transactions** category, the search uses the FTS5 index
-(Phase 1.0's `Project.search`).
+(Phase 1.0's `listTransactions(exec, { query })` query path).
 
 ### 4.1 — Implementation
 

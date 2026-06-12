@@ -453,8 +453,9 @@ vertically-stacked cards).
 In **Settings → Active ledger → Display currency**, the user can
 pick a currency different from the ledger's base. The choice is
 persisted in the local DB's `app_state` table (key:
-`displayCurrency:<ledger_id>`) — matching the web's
-`displayCurrencyByLedger` map in `lib/store/`.
+`displayCurrencyByLedger`, holding a JSON `{[ledgerId]: currency}`
+map) — matching the web's `setDisplayCurrency` action in
+`lib/db/domain/ledgers/mutations.ts:58-64`.
 
 When the display currency changes, the **Insights tab re-renders
 in real time** (the `FinchStore`'s `@Observable` state changes,

@@ -18,7 +18,7 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete; the iPhone + iPad + Mac apps are
-> shipping with the 6 tabs + 6 write screens + 7 power features
+> shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
 
 ## §1. Goal & non-goals
@@ -51,7 +51,7 @@ Activity + Watch read paths.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are unchanged.
+  6 tabs + 7 write screens + 7 power features are unchanged.
   Phase 7 adds 3 new **system surfaces** (WidgetKit,
   ActivityKit, watchOS) that read from the existing data.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -258,8 +258,10 @@ The widget extension requires the **App Group entitlement**
 (same as the Phase 6 Share Extension). The entitlement
 key: `com.apple.security.application-groups` with value
 `group.com.juchengquan.finch`. The Xcode project is
-configured at Phase 5's Xcode setup; Phase 7 adds the
-widget target to the App Group.
+configured at Phase 6.5's Share Extension setup (Phase 7
+reuses the same entitlement for the widget + Watch
+extension; Phase 7's only addition is the widget target
+and the Watch app, both of which join the existing App Group).
 
 The App Group container is at
 `~/Library/Group Containers/group.com.juchengquan.finch/`.
@@ -597,7 +599,7 @@ extends with:
 These are explicitly NOT in Phase 7:
 
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged.
 - **No new selectors** — the Phase 1.5 selectors are the
   full set. The widgets + Live Activities + Watch reuse

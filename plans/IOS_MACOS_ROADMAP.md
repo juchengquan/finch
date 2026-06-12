@@ -182,7 +182,7 @@ ledger CRUD. All writes flow through the Swift port of the web's
 
 - `Store` module in FinchCore: the write chokepoint, ported from
   `lib/db/core/entries.ts` (823 lines)
-- The 14 per-domain `mutations.ts` files in `ios/FinchCore/Sources/FinchCore/Store/Domain/<x>/`,
+- The 13 per-domain `mutations.ts` files in `ios/FinchCore/Sources/FinchCore/Store/Domain/<x>/`,
   each ported from the corresponding `frontend/lib/db/domain/<x>/mutations.ts`
   file (74 actions total)
 - 7 new iOS screens: Add Transaction (the long form), Edit
@@ -221,8 +221,9 @@ data the existing read surface can render)
 - A "Add Transaction" tap → form fill → save round-trips correctly:
   the new entry appears in the Activity tab, the account balance
   updates, the audit gate (on next import) reports clean
-- The `?debug=1` "Force import" UI (from Phase 1.0) is preserved for
-  parity-test fixtures that intentionally violate the audit gate
+- The "Force import" UI (in Settings › Advanced, per Phase 1.0
+  §5.4; always visible, not behind a debug flag) is preserved
+  for parity-test fixtures that intentionally violate the audit gate
 - Per-domain mutations parity: every ported mutation produces the same
   `Tx[]` delta as the web's `lib/db/domain/<x>/mutations.ts` for the
   same Args
@@ -234,7 +235,7 @@ data the existing read surface can render)
   (write only via import/export)? The plan's §4.3 implies "always-
   pack," but the Phase 1.0 import UX is "open one pack, work
   locally"; the right answer depends on what feels native.
-- The 14 per-domain files have 5 known cross-domain deps (per
+- The 13 per-domain files have 5 known cross-domain deps (per
   `frontend/AGENTS.md`: `accounts → accountGroups`, `transactions →
   attachments`, `budgets → budgetGroups`, `rules → counterparties`,
   `scheduled → counterparties`). The plan is to expose them via
@@ -622,7 +623,7 @@ sub-second latency is worth the added complexity.
 - This is not a single-shot replacement of the pack model.
   Both sync paths can run in parallel; the user picks.
 - No new tabs / write screens / power features (the 6 tabs
-  + 6 write screens + 7 power features are unchanged).
+  + 7 write screens + 7 power features are unchanged).
 - No multi-user / shared ledgers (single-user iCloud
   account = one finch install).
 - No custom-server path (a separate spec; CloudKit is the

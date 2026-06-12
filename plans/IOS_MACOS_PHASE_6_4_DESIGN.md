@@ -48,7 +48,7 @@ constraint.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.4 adds a **voice surface** that dispatches
   existing actions.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -143,6 +143,9 @@ public struct AddTransactionIntent: AppIntent {
             return .result(dialog: "Please open finch and select a ledger first.")
         }
         // If account is nil, use the most-recently-used account
+        // (a local-only convenience on `FinchStore` — not a
+        // chokepoint action; tracked in memory based on
+        // the user's recent `addTransaction` history).
         let accountId: String
         if let a = account?.id {
             accountId = a
@@ -152,6 +155,7 @@ public struct AddTransactionIntent: AppIntent {
             return .result(dialog: "Please specify an account in finch first.")
         }
         // If category is nil, use the most-recently-used category
+        // (local-only convenience, same as `mostRecentAccountId`)
         let categoryId = category?.id ?? store.mostRecentCategoryId
 
         // 2. Dispatch the chokepoint
@@ -174,7 +178,7 @@ public struct AddTransactionIntent: AppIntent {
         try? await self.donate()
 
         // 4. Return a spoken confirmation
-        let amountString = amount.formatted(.currency(code: store.activeLedger.baseCurrency))
+        let amountString = amount.formatted(.currency(code: store.activeLedger.base))
         return .result(dialog: "Added \(description) for \(amountString) to finch.")
     }
 }
@@ -213,6 +217,9 @@ public struct CheckBalanceIntent: AppIntent {
 
     public func perform() async throws -> some IntentResult & ReturnsValue<Double> & ProvidesDialog {
         let store = FinchStore.shared
+        // `defaultAccountId` is a local-only FinchStore
+        // convenience (per-ledger, persisted in
+        // @AppStorage; not a chokepoint action).
         let accountId: String
         if let account = account {
             accountId = account.id
@@ -223,7 +230,7 @@ public struct CheckBalanceIntent: AppIntent {
         }
 
         let balance = store.accounts.first(where: { $0.id == accountId })?.currentBalance ?? 0
-        let balanceString = balance.formatted(.currency(code: store.activeLedger.baseCurrency))
+        let balanceString = balance.formatted(.currency(code: store.activeLedger.base))
         let accountName = store.accounts.first(where: { $0.id == accountId })?.name ?? "your account"
         return .result(value: balance, dialog: "Your \(accountName) balance is \(balanceString).")
     }
@@ -346,7 +353,11 @@ public struct SwitchLedgerIntent: AppIntent {
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
-        store.setActiveLedger(id: ledger.id)
+        // Active ledger is a per-user, per-device preference
+        // (not a chokepoint action — it doesn't touch the
+        // DB; it just changes which ledger's data the UI
+        // reads). Persist via @AppStorage or UserDefaults.
+        ActiveLedgerPreference.shared.ledgerId = ledger.id
         return .result(dialog: "Switched to \(ledger.name) in finch.")
     }
 }
@@ -368,7 +379,7 @@ public struct ShowInsightsIntent: AppIntent {
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
-        let router = DeepLinkRouter.shared
+        let router = DeepLinkRouter()  // Phase 6.1: regular class, not a singleton
         router.route(to: "insights")
         return .result(dialog: "Opening your insights in finch.")
     }
@@ -395,9 +406,9 @@ public struct OpenScreenIntent: AppIntent {
     }
 
     public func perform() async throws -> some IntentResult & ProvidesDialog {
-        let router = DeepLinkRouter.shared
+        let router = DeepLinkRouter()  // Phase 6.1: regular class, not a singleton
         switch screen.lowercased() {
-        case "accounts", "activity", "budgets", "insights", "scheduled", "settings":
+        case "accounts", "activity", "budgets", "insights", "reports", "scheduled":
             router.route(to: screen.lowercased())
             return .result(dialog: "Opening \(screen) in finch.")
         default:
@@ -432,12 +443,12 @@ public struct LedgerQuery: EntityQuery {
         let store = FinchStore.shared
         return store.ledgers
             .filter { identifiers.contains($0.id) }
-            .map { LedgerEntity(id: $0.id, name: $0.name, base: $0.baseCurrency) }
+            .map { LedgerEntity(id: $0.id, name: $0.name, base: $0.base) }
     }
 
     public func suggestedEntities() async throws -> [LedgerEntity] {
         let store = FinchStore.shared
-        return store.ledgers.map { LedgerEntity(id: $0.id, name: $0.name, base: $0.baseCurrency) }
+        return store.ledgers.map { LedgerEntity(id: $0.id, name: $0.name, base: $0.base) }
     }
 }
 ```
@@ -540,8 +551,7 @@ the intent to Siri so the system can learn the user's
 patterns:
 
 ```swift
-let donation = IntentDonation(self)
-try? await IntentDonationDonor.shared.donate(donation)
+try? await self.donate()
 ```
 
 Siri uses the donations to:
@@ -700,8 +710,9 @@ extends with:
   `MarkClearedIntent.perform()` with count=5; assert
   exactly 5 `setCleared` actions were dispatched
 - An **intent donation test**: invoke
-  `AddTransactionIntent.perform()`; assert an
-  `IntentDonation` was created
+  `AddTransactionIntent.perform()`; assert the
+  intent was donated to Siri (via the system's
+  `IntentDonationRegistry`)
 - A **disambiguation dialog test**: invoke
   `AddTransactionIntent.perform()` with amount=0; assert
   the result contains an `IntentDialog("How much?")`
@@ -765,11 +776,13 @@ These are explicitly NOT in Phase 6.4:
 
 - **No Siri on Mac** — iOS / iPadOS / watchOS only
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set
 - **No new chokepoint actions** — the chokepoint is
   unchanged; the intents dispatch the existing 74 actions
+  (Phase 6.5's `setEntryAttachment` brings the running
+  total to 75; Phase 6.4 doesn't add more)
 - **No Shortcuts on Mac** — a future phase
 - **No natural-language disambiguation beyond Siri's
   standard** — the proposal uses Siri's built-in

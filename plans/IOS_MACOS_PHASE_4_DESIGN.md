@@ -16,7 +16,7 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0, 1.5, 2, and 3 are complete; the iPhone + iPad + Mac
-> apps are shipping with the 6 tabs + 6 write screens + the 74-
+> apps are shipping with the 6 tabs + 7 write screens + the 74-
 > action chokepoint._
 
 ## §1. Goal & non-goals
@@ -681,7 +681,7 @@ it's a UI affordance only.
 All 7 features share these patterns:
 
 - **Form sheets** for the create / edit flows (the same
-  pattern as Phase 2's 6 write screens)
+  pattern as Phase 2's 7 write screens)
 - **Multi-step navigation** for the reconcile flow (Step 1,
   Step 2, Step 3 with a `NavigationStack` push)
 - **Multi-select mode** for the bulk recategorize flow (the
@@ -765,7 +765,9 @@ phases. For Phase 4 specifically:
 These are explicitly NOT in Phase 4:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 4 wires UI to them.
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 4 doesn't add more).
+  Phase 4 wires UI to them.
 - **No new tabs** — the 6 tabs (Accounts, Activity,
   Budgets, Insights, Scheduled, Settings) are unchanged.
   New features surface within existing tabs.

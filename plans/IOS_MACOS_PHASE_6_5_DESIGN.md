@@ -51,7 +51,7 @@
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.5 adds a **Share Extension** target to the Xcode
   project + a **mini-form** for "create a transaction from
   this receipt."
@@ -611,7 +611,7 @@ Phase 6.5 doesn't touch the iCloud folder.
 These are explicitly NOT in Phase 6.5:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set
 - **No new chokepoint actions** — wait, the proposal DOES
