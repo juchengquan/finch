@@ -547,8 +547,6 @@ Phase 6.5 doesn't touch the iCloud folder.
   text from PDFs (using `PDFKit`) to pre-populate the
   amount + description. The Vision framework supports
   PDFs natively; this is a small extension.
-  can extract text from PDFs (using `PDFKit`) to
-  pre-populate the amount / description.
 - **Share Extension on Mac**: macOS supports Share
   Extensions. The proposal is iOS / iPadOS only. A
   future phase can add macOS support.
@@ -641,8 +639,9 @@ spec.)
 - **Scope**: focused on Phase 6.5 only. Phases 6.1-6.4
   are referenced as separately shipped specs. Phase 7+
   are explicitly out of scope (§10). The estimated scope
-  (3-4 weeks) reflects the Share Extension target +
+  (5-6 weeks) reflects the Share Extension target +
   App Group + pending attachment pipeline + mini-form
+  + OCR (per Q20)
   complexity.
 - **Ambiguity**: §2.1's `Info.plist` is concrete. §2.3's
   `ShareViewController` has concrete code. §3.1's

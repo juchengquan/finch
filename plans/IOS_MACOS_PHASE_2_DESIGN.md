@@ -37,7 +37,7 @@ every later phase builds on.
 
 **Non-goals (firm)**:
 
-- **iPad / macOS adaptive layout** — Phase 3. The 6 new screens render
+- **iPad / macOS adaptive layout** — Phase 3. The 7 new screens render
   the same on iPhone as the 5 read-only tabs in Phase 1.5 do (a single
   `NavigationStack` per screen).
 - **Power features** (reconcile UI, rules engine + builder + backfill,
@@ -62,8 +62,9 @@ every later phase builds on.
 - **Android** — not in the plan.
 
 **Estimated scope**: ~2,200 lines TS to port (823-line chokepoint + 1,335
-lines per-domain + a few hundred lines of glue) + ~1,500 lines SwiftUI
-(6 new screens) + ~3,500 lines parity fixtures (74 fixtures × ~50 lines
+lines per-domain + a few hundred lines of glue) + ~1,750 lines SwiftUI
+(7 new screens, including the full Holdings CRUD UI per Q32) +
+~3,500 lines parity fixtures (74 fixtures × ~50 lines
 each) + ~200 lines UI plumbing. **3-4 months of full-time work** for a
 small team. **Larger than Phase 1.0 and Phase 1.5 combined.**
 
@@ -236,7 +237,7 @@ stay unchanged).
   `lib/db/core/server.ts::withWrite`)
 
 The Swift `Store` module is the **only** module that ever mutates
-the DB. Every UI action that writes (the 6 new screens in Phase 2,
+the DB. Every UI action that writes (the 7 new screens in Phase 2,
 the App Intents in Phase 6, the widgets in Phase 7) routes through
 `FinchStore.apply(action, args)` → `Apply.applyMutation` → the
 per-domain handler → the chokepoint.
@@ -494,9 +495,9 @@ duplicate" `I18nError` if a match is found. The web uses this in
 ~8 places (every action that creates a new transaction). The
 Swift port has the same pattern.
 
-## §7. The 6 new iOS screens
+## §7. The 7 new iOS screens
 
-Phase 2 ships 6 new iOS screens (the **write surfaces**). Each
+Phase 2 ships 7 new iOS screens (the **write surfaces**). Each
 screen is a SwiftUI form sheet that calls into the chokepoint via
 `FinchStore.apply(action, args)`. The screens are read-write
 companions to the read-only tabs from Phases 1.0 + 1.5.
@@ -676,13 +677,118 @@ ledger switcher to add one" screen. ~300 lines SwiftUI.
   dialog with the count of affected entries)
 - **Set default** → `Args.setDefaultLedger({id})` (a single tap)
 - **Delete** → `Args.deleteLedger({id})` (a destructive action;
-  the chokepoint cascades to every account/entry/category in the
-  ledger; the form shows a confirm dialog with the count of
-  affected rows)
+   the chokepoint cascades to every account/entry/category in the
+   ledger; the form shows a confirm dialog with the count of
+   affected rows)
 
-### 7.8 — Shared UX patterns
+### 7.8 — Holdings tab + full CRUD UI
 
-All 6 screens share these patterns:
+Per Q32, Phase 2 ships a full Holdings tab (the 7th of the 6
+new write screens). The tab is reachable from the Accounts
+tab (Accounts › [account name] › Holdings section) or as a
+top-level tab per the implementation-time UX decision.
+
+**Args** (the wire shape): the 4 holdings actions from the
+chokepoint:
+- `createHolding({accountId, symbol, quantity, costBasis})`
+- `updateHolding({id, patch: HoldingPatch})`
+- `deleteHolding({id})`
+- `setHoldingPrice({holdingId, date, price})`
+
+**Layout sketch** (the Holdings list view, embedded in the
+Account Detail screen):
+
+```
+┌─────────────────────────────────────┐
+│  ← Chase Checking                    │
+├─────────────────────────────────────┤
+│  Holdings (4)                       │
+│  ─────────────────                  │
+│  AAPL                                │
+│     10 shares @ $178.50              │
+│     Last price: $182.30 (Jun 12)     │
+│     Gain: ▲ $38.00 (+2.1%)           │
+│     [Edit price] [Edit] [Delete]     │
+│                                      │
+│  VTI                                │
+│     25 shares @ $220.00              │
+│     Last price: $235.10 (Jun 12)     │
+│     Gain: ▲ $377.50 (+6.9%)          │
+│     [Edit price] [Edit] [Delete]     │
+│                                      │
+│  [+ Add holding]                     │
+└─────────────────────────────────────┘
+```
+
+The **Add holding** form:
+```
+┌─────────────────────────────────────┐
+│  ← Add Holding                       │
+├─────────────────────────────────────┤
+│  Account (default: current account) │
+│  Chase Checking                  ▾   │
+│                                      │
+│  Symbol                              │
+│  ┌──────────────────────────────┐   │
+│  │ AAPL                          │   │
+│  └──────────────────────────────┘   │
+│                                      │
+│  Quantity                            │
+│  ┌──────────┐                        │
+│  │  10      │                        │
+│  └──────────┘                        │
+│                                      │
+│  Cost basis                          │
+│  ┌──────────┐  USD ▾               │
+│  │  178.50  │                       │
+│  └──────────┘                       │
+│                                      │
+│  Initial price (optional)            │
+│  ┌──────────┐  USD ▾               │
+│  │  178.50  │                       │
+│  └──────────┘                       │
+│                                      │
+│  [Cancel]                  [Save]    │
+└─────────────────────────────────────┘
+```
+
+The **Edit holding** form is similar (the symbol is read-only;
+the quantity + cost basis are editable; the price is editable
+via a separate "Edit price" action).
+
+The **Edit price** action is a single-field form:
+```
+┌─────────────────────────────────────┐
+│  ← Edit Price · AAPL                 │
+├─────────────────────────────────────┤
+│  Price                               │
+│  ┌──────────┐  USD ▾               │
+│  │  182.30  │                       │
+│  └──────────┘                       │
+│                                      │
+│  Date (default: today)               │
+│  Jun 12, 2026                    ▾   │
+│                                      │
+│  [Cancel]                  [Save]    │
+└─────────────────────────────────────┘
+```
+
+The **Delete holding** action shows a confirm dialog:
+"Delete this holding? The price history is preserved;
+the holding won't appear in the portfolio summary."
+On confirm, `Args.deleteHolding({id})` is dispatched.
+
+**Holdings + 1.5 + 2 selectors**: the Holdings tab reads from
+Phase 1.5's `holdingsForAccount`, `holdingValue`,
+`holdingGainLoss`, `holdingsValueForAccount` selectors (the
+Phase 1.5 spec's "Holdings" group of 4 selectors). The 4
+selectors are in-memory; the CRUD UI writes through the
+chokepoint and triggers a re-projection on the Phase 1.5
+selectors.
+
+### 7.9 — Shared UX patterns
+
+All 7 screens share these patterns:
 
 - **Form sheet** (modal in the SwiftUI `NavigationStack`; dismisses
   on Cancel or after a successful Save)
@@ -832,7 +938,7 @@ After Phase 2, the 3 SwiftPM test targets are:
   `auditLedger` parity, `.db` round-trip parity (Phase 1.0);
   per-selector JSON-golden parity (Phase 1.5);
   **per-action write-side round-trip parity** (Phase 2)
-- `FinchAppTests` — UI snapshot tests for the **6 new screens**
+- `FinchAppTests` — UI snapshot tests for the **7 new screens**
   + the 5 read-only tabs (Accounts, Activity, Budgets, Insights,
   Settings)
 
@@ -881,9 +987,9 @@ small wrapper that calls the 25 selectors in sequence (the
 Insights tab's "every card re-evaluates against the new
 end-month" behavior) and returns a `DerivedState` struct.
 
-### 9.3 — UI for the 6 new screens
+### 9.3 — UI for the 7 new screens
 
-Each of the 6 new screens is a new SwiftUI view in
+Each of the 7 new screens is a new SwiftUI view in
 `ios/FinchApp/FinchApp/`. The screens are reachable from:
 
 - **Add Transaction**: the + button in the bottom tab bar (a
@@ -1017,9 +1123,9 @@ These are explicitly NOT in Phase 2:
   price update. The chokepoint's 4 holdings actions
   (`createHolding`, `updateHolding`, `deleteHolding`,
   `setHoldingPrice`) are the full surface. **The Holdings
-  tab is the 7th of the 6 new write screens** (the spec
-  calls it "6 new write screens" but with Q32 Holdings is
-  the 7th; the spec's line count assumes 6).
+  tab is the 7th of the 7 new write screens** (the spec
+  now calls it "7 new write screens"; Holdings is the 7th;
+  the spec's line count has been updated to reflect 7).
 - **Rate editor** — Phase 4 ("FX / base tools").
 - **Offline write queue** — every write is synchronous. The
   pack-based sync model in Phase 5 effectively handles
@@ -1061,7 +1167,7 @@ These are explicitly NOT in Phase 2:
   bug 1:1 as a fallback).
 - **Scope**: focused on Phase 2. Phase 1.0 + 1.5 are
   referenced as completed. Phase 3+ are explicitly out of
-  scope (§11). The 6 new screens are specced at the same
+  scope (§11). The 7 new screens are specced at the same
   depth as Phase 1.0's tab specs.
 - **Ambiguity**: §2's per-domain table enumerates all 14
   domains with their line counts + action counts + cross-
@@ -1071,7 +1177,7 @@ These are explicitly NOT in Phase 2:
   pinned rates) are called out explicitly with the
   enforcement mechanism. §5's `ActionName` enum + `Args`
   enum shape is shown with a concrete code example. §6's
-  cross-domain shared helpers are named. §7's 6 new screens
+  cross-domain shared helpers are named. §7's 7 new screens
   each have a wire shape (the `Args` enum case), a layout
   sketch, and the actions surfaced. §8's parity fixture
   format is shown with a concrete example. The 5 cross-

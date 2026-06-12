@@ -49,9 +49,10 @@ via the system file picker, displays 4 read-only tabs, and exports a fresh
   FTS5 search + Transaction Detail), Budgets (progress bars + period
   header), Settings (Import / Export / DB info / audit status / active
   ledger switch / about)
-- 3 selectors ported: `accountBalance`, `selectTransactions`,
-  `budgetProgress` (plus the period/rollover math from
-  `lib/budgets/{period,rollover}.ts`)
+- 7 selectors ported: `accountBalance`, `selectTransactions`,
+  `categorySpend`, `budgetProgress`, `cycleWindow`,
+  `merchantStats`, `anomalyScore` (plus the period/rollover
+  math from `lib/budgets/{period,rollover}.ts`)
 - `.finch` import via system file picker (Settings tab → "Import .finch")
 - `.finch` export via `ShareLink` (Settings tab → "Export .finch")
 - iCloud `Documents/finch/` folder (visible in Files app; not enumerated
@@ -111,10 +112,11 @@ via the system file picker, displays 4 read-only tabs, and exports a fresh
 
 ## Phase 1.5 — Insights tab + remaining selectors + JSON-golden parity
 
-**Goal**: Add the Insights tab (5th tab) + port the remaining 10-11
-selectors from `lib/select.ts` + ship the JSON-golden parity test
-infrastructure. The app becomes "credible first release" coverage of
-the web's read surface.
+**Goal**: Add the Insights tab (5th tab) + port the remaining 25
+selectors from `lib/select.ts` (Phase 1.0 ships the 7 required by
+the 4 tabs + Account Detail; Phase 1.5 ships the rest) + ship the
+JSON-golden parity test infrastructure. The app becomes
+"credible first release" coverage of the web's read surface.
 
 **Scope (in)**:
 
@@ -122,8 +124,8 @@ the web's read surface.
 - Ports of: `categorySpend`, `currentMonth`, `prevMonth`,
   `monthlySpending`, `monthlyCashflow`, `topCategoryDeltas`,
   `dailySpending`, `netWorthByMonth`, `monthForecast`,
-  `incomeCategoryFlow`, `weeklyDigest` (10-11 selectors, all from
-  `lib/select.ts`)
+  `incomeCategoryFlow`, `weeklyDigest` (25 selectors total; the
+  full list is in `IOS_MACOS_PHASE_1_5_DESIGN §2`)
 - Insights tab UI: net worth chart (Swift Charts line), monthly
   cashflow chart (bar), top category deltas list, forecast figure
   card, weekly digest card
@@ -160,9 +162,9 @@ module + the in-memory `Tx[]` cache are the foundation for selectors)
 
 **Open questions**:
 
-- Does `monthForecast` (linear regression over historical data) need
-  to port the same training-set window as the web, or can we use a
-  simpler heuristic for v1?
+- `monthForecast` method (Q9) — **resolved**: port the web's
+  method verbatim (linear regression over 90 days). Parity is
+  the goal in Phase 1.5.
 - How does `weeklyDigest` handle weeks that span the active-ledger
   boundary (e.g., a Sunday `anchor` that lands in the prior ledger
   for a transfer)?
@@ -183,9 +185,10 @@ ledger CRUD. All writes flow through the Swift port of the web's
 - The 14 per-domain `mutations.ts` files in `ios/FinchCore/Sources/FinchCore/Store/Domain/<x>/`,
   each ported from the corresponding `frontend/lib/db/domain/<x>/mutations.ts`
   file (74 actions total)
-- 6 new iOS screens: Add Transaction (the long form), Edit
+- 7 new iOS screens: Add Transaction (the long form), Edit
   Transaction, Transaction Detail edits, Pending confirm flow, Budget
-  CRUD, Scheduled CRUD, Ledger CRUD (form sheets)
+  CRUD, Scheduled CRUD, Ledger CRUD, plus the full Holdings tab +
+  CRUD UI (per Q32)
 - The two `rebuildEntry` adapter preconditions from
   `lib/db/core/entries.ts` (forward `cleared_at`; pass explicit
   `amountBase` for pinned rates) — apply verbatim
@@ -204,7 +207,7 @@ ledger CRUD. All writes flow through the Swift port of the web's
 - App Intents / Siri / Share Extension receipts / Spotlight /
   notifications / biometric lock (Phase 6)
 - Widgets / Watch / Live Activities (Phase 7)
-- Row-level sync (Phase 8, may never ship)
+- Row-level sync (Phase 8, future roadmap item; committed to building per Q22)
 
 **Dependencies**: Phase 1.5 complete (the `Tx` projection + all
 selectors are read by the iOS UI; the write chokepoint must produce
@@ -383,7 +386,7 @@ already shipped (PRs #106, #107, #109); iOS matches.
 
 **Non-goals (out)**:
 
-- Row-level sync (Phase 8, may never ship; the pack model is the
+- Row-level sync (Phase 8, future roadmap item; committed to building per Q22; the pack model is the
   answer for the foreseeable future)
 - The pack **format** is already implemented (Phase 1.0 ported
   `lib/db/core/pack.ts`); this phase adds the **delivery layer**
@@ -443,24 +446,24 @@ is mostly integration work.
 | 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | ~700 lines spec; 1-2 weeks |
 | 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | ~800 lines spec; 2-3 weeks |
 | 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | ~600 lines spec; 1-2 weeks |
-| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | ~800 lines spec; 2-3 weeks |
-| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | ~900 lines spec; 3-4 weeks |
+| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | ~1,200 lines spec; 3-4 weeks (7 intents; grew from 3) |
+| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | ~1,400 lines spec; 5-6 weeks (OCR added; grew from 3-4) |
 
 Each sub-spec is independently reviewable. The 5 share
 infrastructure (the App Group container, the
 `DeepLinkRouter` for Spotlight + notification deep-links,
 the `BiometricGate` for sensitive actions, the Xcode
 project setup) but ship independently. **Total Phase 6
-scope**: ~3,800 lines spec; ~2,200 lines Swift + ~1,000
-lines SwiftUI; **2-3 months of full-time work** for a
-small team (less than the original 3-4 month estimate
-because the per-framework decomposition makes each
-sub-feature smaller than the combined "Phase 6" estimate).
+scope**: ~4,700 lines spec; ~3,500 lines Swift + ~1,500
+lines SwiftUI; **3-4 months of full-time work** for a
+small team (grew from 2-3 months with the resolution-pass
+additions: 4 extra intents in 6.4 + OCR in 6.5 + 1 extra
+write surface in 2).
 
 **Non-goals (out)** — applied to all 5 sub-features:
 
 - Widgets / Live Activities / Watch (Phase 7)
-- Row-level sync (Phase 8, may never ship)
+- Row-level sync (Phase 8, future roadmap item; committed to building per Q22)
 - Bank/feed import (out of scope per the plan's §7 boundary)
 - Per-ledger display-currency override UI (Phase 1.5)
 - In-app theme override (Phase 1.5)
@@ -550,7 +553,7 @@ focus; this phase is when they land.
 
 **Non-goals (out)**:
 
-- Row-level sync (Phase 8, may never ship)
+- Row-level sync (Phase 8, future roadmap item; committed to building per Q22)
 - Watch-side writes beyond "quick-add a recent expense"
 - Watch-side settings (the iPhone app is the source of truth for
   preferences; Watch is read + a single write action)

@@ -38,7 +38,7 @@ selectors + the JSON-golden parity test infrastructure.
 - App Intents / Siri / Share Extension receipts / Spotlight / notifications /
   biometric lock (Phase 6)
 - Widgets / Watch / Live Activities (Phase 7)
-- Row-level sync (Phase 8, may never ship)
+- Row-level sync (Phase 8; future roadmap item, committed to building per Q22)
 - An Inbox tab (the web has no Inbox page; the system file picker is the only
   import UX in Phase 1.0)
 - Per-ledger display-currency override (the user can switch active ledger, but
@@ -56,6 +56,30 @@ script that writes to `ios/FinchCore/Tests/Fixtures/`).
 **Estimated scope**: ~1,200-1,500 lines TS to port + ~850 lines SwiftUI to
 write + ~400 lines CI/test infrastructure + ~200 lines fixture export script.
 4-6 weeks of full-time work for a small team.
+
+**Phase 1.0 reads from 7 selectors** (the same shape as the web's
+`lib/select.ts`; each takes the in-memory `Tx[]` + `AccountRow[]`
++ `Budget[]` as input). The 7 are:
+
+- `accountBalance(accounts, accountId)` — single account balance
+  (Accounts tab, net worth footer)
+- `selectTransactions(txns, opts)` — filtered transaction list
+  (Activity tab)
+- `categorySpend(txns, ledgerId, month?)` — per-category spend
+  (Budgets tab, progress bars)
+- `budgetProgress(budget, ...)` — one budget's spent / limit /
+  period (Budgets tab, each row)
+- `cycleWindow(freq, startDate, ...)` — budget cycle window math
+  (Budgets tab, `budgetProgress` dependency)
+- `merchantStats(txns, ledgerId)` — per-merchant aggregate stats
+  (Activity tab, anomaly badge; Account Detail)
+- `anomalyScore(tx, stats)` — per-transaction anomaly z-score
+  (Activity tab, Account Detail)
+
+The remaining 25 selectors from `lib/select.ts` (the
+Insights-tab + supporting selectors) are ported in Phase 1.5.
+See `IOS_MACOS_PHASE_1_5_DESIGN §2` for the full Phase 1.5
+list.
 
 ## §2. Import UX
 
@@ -762,7 +786,7 @@ don't get lost.
 - App Intents / Siri / Spotlight / notifications / biometric lock — Phase 6
 - iPad/macOS adaptive layout — Phase 3
 - Auto-pack debounce + folder-watcher — Phase 5
-- Row-level sync — Phase 8 (may never ship)
+- Row-level sync — Phase 8 (future roadmap item; committed to building per Q22)
 
 ## §11. Out of scope (firm)
 

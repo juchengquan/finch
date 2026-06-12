@@ -720,11 +720,12 @@ chokepoint.
   intents. A "shorter" (multi-step intent) is a future
   phase. The proposal doesn't preclude it; the intents
   are designed to be composable.
-- **Biometric re-auth for sensitive intents**: the
-  proposal doesn't require biometric re-auth. A future
-  phase can add per-intent biometric gating (e.g.,
-  `MarkCleared` requires biometric; `CheckBalance`
-  doesn't).
+- **Biometric re-auth for sensitive intents** (Q19) — **resolved**:
+  no re-auth. The user is already biometric-authenticated by
+  the device to invoke Siri. A future phase can add
+  per-intent biometric gating (e.g., `MarkCleared` requires
+  biometric; `CheckBalance` doesn't) if user research
+  shows it's needed.
 
 **Specifically for the donation**:
 
