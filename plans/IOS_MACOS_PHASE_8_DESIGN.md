@@ -26,13 +26,14 @@
 > - `plans/IOS_MACOS_ROADMAP.md` — 8-phase arc
 > - `plans/IOS_MACOS_PHASE_8_DESIGN.md` (this file)
 >
-> _Audience: future engineers, IF this phase is ever pursued.
+> _Audience: future engineers who will build Phase 8
+> (committed to building per the resolution-pass decision Q22).
 > Assumes Phases 1.0-7 are complete; the chokepoint + iCloud
 > sync + widgets + Watch are all shipping._
 
 ## §1. Goal & non-goals
 
-**Goal** (if pursued) — Replace the pack-based sync model
+**Goal** — Replace the pack-based sync model
 (Phase 5) with **row-level sync** that gives sub-second
 latency across devices. The plan's §4.3-C sketches this
 option: "CloudKit or server sync atop the UUID-ready,
@@ -81,7 +82,9 @@ not detailed.
 **Non-goals (firm)** — IF Phase 8 is ever pursued:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 8 adds a **sync layer** that
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 8 doesn't add more).
+  Phase 8 adds a **sync layer** that
   observes the chokepoint and publishes mutations.
 - **No new tabs / write screens / power features** — the
   6 tabs + 6 write screens + 7 power features are
@@ -202,7 +205,16 @@ CKRecordType: "Mutation"
   fields:
     ledgerId: String
     action: String
-    argsData: Data (JSON-encoded)
+    argsData: Data (JSON-encoded)  // small actions; for large
+                                  // payloads (e.g., bulk
+                                  // recategorize, rebuildEntry
+                                  // with full posting arrays)
+                                  // use a CKAsset on
+                                  // `argsAsset: CKAsset` instead —
+                                  // CloudKit enforces a 1MB hard
+                                  // limit on `Data` fields and
+                                  // the server-side record size
+                                  // limit is 1MB
     occurredAt: Date
     deviceId: String
     revisionId: Int64
@@ -228,7 +240,7 @@ idempotent on `(entry_id, revision_id)`).
 // ios/FinchApp/Sync/CloudKitSyncDaemon.swift
 @MainActor
 public final class CloudKitSyncDaemon {
-    private let container = CKContainer.default()
+    private let container = CKContainer(identifier: "iCloud.com.juchengquan.finch")
     private let database: CKDatabase
     private var subscriptionIDs: [String: CKSubscription.ID] = [:]
 
@@ -244,7 +256,7 @@ public final class CloudKitSyncDaemon {
         let subscriptionID = "ledger-\(ledgerId)"
         let subscription = CKQuerySubscription(
             recordType: "Mutation",
-            predicate: NSPredicate(value: true),
+            predicate: NSPredicate(format: "TRUEPREDICATE"),
             subscriptionID: subscriptionID,
             options: [.firesOnRecordCreation]
         )
@@ -383,7 +395,7 @@ The "Resync ledger" button forces a full re-upload of the
 ledger (useful if the user suspects a corruption). The
 "Switch back to pack-based" button is a one-tap rollback.
 
-## §5. CI changes (if pursued)
+## §5. CI changes
 
 The macos job from Phase 1.0's `IOS_MACOS_PHASE_1_DESIGN §9`
 extends with:
@@ -411,8 +423,8 @@ The plan's §14.1 still-open questions mostly land in Phase
 - **CloudKit vs custom server**: CloudKit is the default
   (free, matches the local-first promise, the schema
   migration is straightforward). A custom server is
-  sketched but not detailed; if pursued, it would be a
-  separate spec.
+  sketched but not detailed; if the user later wants
+  custom-server sync, it would be a separate spec.
 - **Per-ledger subscriptions vs single subscription**: the
   proposal is per-ledger subscriptions (one per active
   ledger). A single subscription (all ledgers, all
@@ -463,7 +475,8 @@ The plan's §14.1 still-open questions mostly land in Phase
 These are explicitly NOT in Phase 8:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 8 adds a sync layer that
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 8 doesn't add more). Phase 8 adds a sync layer that
   observes the chokepoint.
 - **No new tabs / write screens / power features** — the
   6 tabs + 6 write screens + 7 power features are

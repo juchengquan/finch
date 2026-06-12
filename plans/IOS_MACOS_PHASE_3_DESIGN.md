@@ -150,10 +150,12 @@ struct SplitViewShell: View {
     }
 
     private var sidebar: some View {
+        // `List(selection:)` provides the link automatically
+        // for each row; wrapping in `NavigationLink(value:)`
+        // is double-handling and creates a nested-link
+        // presentation.
         List(AppTab.allCases, selection: $selectedTab) { tab in
-            NavigationLink(value: tab) {
-                Label(tab.title, systemImage: tab.icon)
-            }
+            Label(tab.title, systemImage: tab.icon)
         }
         .listStyle(.sidebar)
     }

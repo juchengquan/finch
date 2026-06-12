@@ -15,10 +15,10 @@
 >
 > Phase numbering follows the plan's §13, with the single exception that
 > Phase 1 is split into **1.0** (Accounts / Activity / Budgets / Settings;
-> ~1,500 lines TS to port) and **1.5** (Insights + the remaining 10-11
-> selectors + JSON-golden parity). The split is described in detail in
-> `IOS_MACOS_PHASE_1_DESIGN.md`. All later phases are sketched here as
-> 1-phase units.
+> ~1,500 lines TS to port; 7 selectors) and **1.5** (Insights + the
+> remaining 25 selectors + JSON-golden parity). The split is described
+> in detail in `IOS_MACOS_PHASE_1_DESIGN.md`. All later phases are
+> sketched here as 1-phase units.
 >
 > Each phase is independently shippable. The per-increment CI gate from
 > `IOS_MACOS_PHASE_1_DESIGN.md §9` ("build + unit/parity tests + UI snapshot
@@ -443,18 +443,19 @@ is mostly integration work.
 
 | # | Sub-feature | Spec | Apple framework | Estimated scope |
 |---|---|---|---|---|
-| 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | ~700 lines spec; 1-2 weeks |
-| 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | ~800 lines spec; 2-3 weeks |
-| 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | ~600 lines spec; 1-2 weeks |
-| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | ~1,200 lines spec; 3-4 weeks (7 intents; grew from 3) |
-| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | ~1,400 lines spec; 5-6 weeks (OCR added; grew from 3-4) |
+| 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | 493 lines spec; 1-2 weeks |
+| 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | 714 lines spec; 2-3 weeks |
+| 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | 571 lines spec; 1-2 weeks |
+| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | 810 lines spec; 3-4 weeks (7 intents; grew from 3) |
+| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | 656 lines spec; 5-6 weeks (OCR added; grew from 3-4) |
 
 Each sub-spec is independently reviewable. The 5 share
 infrastructure (the App Group container, the
 `DeepLinkRouter` for Spotlight + notification deep-links,
 the `BiometricGate` for sensitive actions, the Xcode
 project setup) but ship independently. **Total Phase 6
-scope**: ~4,700 lines spec; ~3,500 lines Swift + ~1,500
+scope**: ~3,200 lines spec (actual: 493+714+571+810+656);
+~3,500 lines Swift + ~1,500
 lines SwiftUI; **3-4 months of full-time work** for a
 small team (grew from 2-3 months with the resolution-pass
 additions: 4 extra intents in 6.4 + OCR in 6.5 + 1 extra
@@ -516,8 +517,9 @@ details the specifics):
 
 **Cross-cutting infrastructure** (shared across the 5):
 
-- **App Group container** (added at Phase 5's Xcode
-  setup): `group.com.juchengquan.finch`. Phase 6.5
+- **App Group container** (added at Phase 6.5's Xcode
+  setup; Phase 7 reuses it for the widget + Watch
+  extension): `group.com.juchengquan.finch`. Phase 6.5
   (Share Extension) and Phase 7 (widgets + Watch) all
   read/write the App Group; the iOS app is the
   coordinator.

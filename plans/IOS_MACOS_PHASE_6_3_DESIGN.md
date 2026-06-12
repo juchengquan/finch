@@ -151,6 +151,7 @@ public final class BiometricGate {
     public private(set) var isLocked: Bool = true
     public private(set) var lastUnlockAt: Date? = nil
     public private(set) var lastActivityAt: Date = Date()
+    public private(set) var lastBackgroundedAt: Date? = nil
     public private(set) var settings: BiometricSettings = .defaultSettings
 
     private let context = LAContext()
@@ -349,7 +350,14 @@ The action handler at the iOS UI level:
 Button("Export .finch") {
     Task {
         do {
-            try await store.apply(action: "exportDbBytes", args: [:], sensitive: true)
+            // Phase 1.0's export is a direct Pack.export(from:to:)
+            // call, NOT a chokepoint action. The export
+            // sensitive-action gating is a thin wrapper
+            // around the chokepoint, so the biometric check
+            // happens before the export, not via
+            // store.apply(action: "exportDbBytes", ...).
+            try await biometricGate.authenticate(reason: "Export your finch data")
+            let pack = try await Pack.export(from: store.db)
             // Show the share sheet
         } catch BiometricError.userCancelled {
             // User cancelled the biometric prompt
@@ -399,8 +407,13 @@ The iOS app applies `setFileProtection` to:
 - The WAL file (`Application Support/finch.sqlite3-wal`)
 - The attachments directory (recursively, every file
   inside)
-- The iCloud container's `Documents/finch/` directory
-  (though iCloud's data is also encrypted in transit
+- **NOT** the iCloud container's `Documents/finch/`
+  directory — iCloud's encryption is Apple's responsibility
+  (E2E with Advanced Data Protection), and setting
+  `completeUnlessOpen` on the iCloud pack would break the
+  iCloud daemon's ability to sync the file to other devices
+  when the originating device is locked. iCloud's encryption
+  also covers the data in transit
   and at rest by Apple's iCloud infrastructure)
 
 ## §6. Settings › Security section
@@ -448,9 +461,10 @@ extends with:
   `isLocked = true`
 - A **sensitive-action test**: configure
   `sensitiveActionsEnabled = true`; call
-  `apply(action: "exportDbBytes", sensitive: true)`;
-  assert the biometric prompt was requested
-  (mocked) and the action was dispatched
+  `biometricGate.authenticate(reason: "Export...")`
+  (the export-gated code path from §4.2); assert
+  the biometric prompt was requested (mocked) and
+  the export was dispatched
 - A **user-cancel test**: configure biometric to
   fail-on-cancel; call `unlock()`; assert the error
   is `BiometricError.userCancelled` and `isLocked` is

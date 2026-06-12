@@ -109,7 +109,9 @@ packages the result as a `TimelineEntry`.
 - Refresh: hourly
 - Tapping the widget deep-links to the iOS app's Budgets
   tab
-- The widget supports **WidgetConfigurationIntent** (the
+- The widget supports **AppIntentConfiguration** (the
+  iOS 17+ replacement for the legacy
+  `WidgetConfigurationIntent` / `IntentConfiguration`; the
   user picks which budget to show — the topmost "almost
   over" budget, or a specific budget by name)
 
@@ -385,7 +387,11 @@ public final class LiveActivityManager {
             limit: limit,
             percent: spent / limit
         )
-        await activity.update(.init(state: state, staleDate: nil))
+        // staleDate ~15 min ahead so the system can gracefully
+        // collapse the activity to a "needs update" state if
+        // the iOS app can't reach the chokepoint.
+        let staleDate = Date().addingTimeInterval(15 * 60)
+        await activity.update(.init(state: state, staleDate: staleDate))
     }
 }
 ```
@@ -568,7 +574,7 @@ extends with:
   may need 2 or 4 regions. The exact layout is per-
   activity.
 - **Widget configuration UX**: the Budget Ring widget has
-  a `WidgetConfigurationIntent` (the user picks which
+  an `AppIntentConfiguration` (the user picks which
   budget to show). The UX is the iOS standard
   configuration sheet. The proposal doesn't detail the
   exact pickers.
@@ -597,7 +603,9 @@ These are explicitly NOT in Phase 7:
   full set. The widgets + Live Activities + Watch reuse
   them.
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 7's Watch quick-add uses
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 7 doesn't add more).
+  Phase 7's Watch quick-add uses
   `Args.postScheduled` (Phase 2) for one specific case;
   the widgets + Live Activities don't write.
 - **No new iCloud sync** — the iCloud sync is Phase 5;
@@ -629,7 +637,9 @@ spec.)
   the `netWorthByMonth` selector from Phase 1.5. §3.2's
   `ScheduledItemAttributes` uses the `Args.postScheduled`
   action from Phase 2. §4.2's data flow uses the App
-  Group container (added in Phase 5's iCloud sync).
+  Group container (added in Phase 6.5's Share
+  Extension setup; Phase 7 reuses the same entitlement
+  for the Widget Extension + the Watch app).
   §4.4's Watch complications use the same data as the
   iOS widget. The snapshot JSON (§2.4) is the shared
   data format for the iOS app, the widget, and the Watch

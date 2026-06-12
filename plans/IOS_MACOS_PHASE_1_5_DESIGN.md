@@ -57,7 +57,7 @@ write chokepoint.
 
 **Estimated scope**: 25 selectors × ~50 lines each ≈ **1,250 lines TS
 to port** + ~600 lines SwiftUI (Insights tab) + ~300 lines fixture
-export script + ~800 lines new `ParityTests` files (25 selectors × ~30
+export script + ~750 lines new `ParityTests` files (25 selectors × ~30
 lines each) + ~200 lines UI plumbing. **2-3 months of full-time work**
 for a small team. This is larger than Phase 1.0.
 
@@ -125,7 +125,7 @@ module (§4) by their output shape, not by feature:
 4. **Net worth** (1 selector): `netWorthSeries`
 5. **Holdings** (4 selectors): `holdingsForAccount`, `holdingValue`,
    `holdingGainLoss`, `holdingsValueForAccount`
-6. **Account totals** (2 selectors): `investmentAccountTotal`,
+6. **Account totals** (3 selectors): `investmentAccountTotal`,
    `accountForecast`, `balanceSeries`
 7. **Transfers / duplicates** (2 selectors): `selectTransfers`,
    `findDuplicate`
@@ -204,7 +204,7 @@ public struct Selectors {
     public let money: Money
 
     public func monthForecast(txns: [Tx], accounts: [AccountRow], ledgerId: String, n: Int) throws -> [MonthForecast] {
-        let rates = try RateSnapshot.all(in: db)  // one DB read
+        let rates = try db.read { db in try RateSnapshot.fetchAll(db) }  // one DB read
         return /* ... pure compute over (txns, accounts, rates) ... */
     }
 }
@@ -332,6 +332,26 @@ final class SelectorParityTests: XCTestCase {
     }
 }
 ```
+
+**SwiftPM resource note**: `Bundle.module` is generated for
+the test target, and is the **test target's** bundle. The
+fixtures at `ios/FinchCore/Tests/Fixtures/` are accessed via
+`Bundle.module` only if the SwiftPM `testTarget` declares
+`resources: [.copy("Fixtures")]`. The `Package.swift`
+configuration:
+
+```swift
+.testTarget(
+    name: "ParityTests",
+    dependencies: ["FinchCore"],
+    resources: [.copy("Fixtures")]
+)
+```
+
+Without this, `Bundle.module.url(forResource:withExtension:)`
+returns `nil` and the force-unwrap crashes. The fixtures
+are exported by the web's `frontend/scripts/export-fixtures.ts`
+(per Phase 1.0 §8) and committed to `ios/FinchCore/Tests/Fixtures/`.
 
 `actual` and `expected` are `Decimal`-typed throughout; equality
 is to the cent (matching the web's `select.test.ts` assertions).
