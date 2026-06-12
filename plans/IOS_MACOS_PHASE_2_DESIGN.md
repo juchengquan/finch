@@ -67,6 +67,15 @@ lines per-domain + a few hundred lines of glue) + ~1,500 lines SwiftUI
 each) + ~200 lines UI plumbing. **3-4 months of full-time work** for a
 small team. **Larger than Phase 1.0 and Phase 1.5 combined.**
 
+**Pre-Phase-2 prerequisite**: a web-side cleanup PR that deletes the
+3 dead-code duplicates in `accounts/mutations.ts`
+(`createAccountGroup` / `updateAccountGroup` / `deleteAccountGroup`).
+This PR lands BEFORE the Phase 2 iOS port starts. The iOS port
+lands against the cleaned-up web. Estimated size: ~30 lines
+removed from `accounts/mutations.ts` + parity tests confirming
+the 3 actions still resolve correctly to the canonical
+`accountGroups/mutations.ts` versions. Landed in ~1 day.
+
 ## §2. What gets ported (the surface area)
 
 The web's write surface is **3 layers**:
@@ -137,11 +146,23 @@ includes `createAccountGroup`, `updateAccountGroup`, and
 `accountGroupsHandlers` and merges them into one `ALL` map. Because
 `accountsHandlers` is spread first (line 28 in `mutate.ts`), the
 `accounts` versions win for the 3 overlapping actions, making the
-`accountGroups/` handlers effectively dead code. The Swift port
-mirrors this layout 1:1 (the Swift dispatcher imports both; the
-`accounts` versions are the live ones for the 3 account-group
-actions). A future cleanup could remove the dead duplicates from
-`accounts/`, but that's not in scope for Phase 2.
+`accountGroups/` handlers effectively dead code.
+
+**The web gets the cleanup as a separate PR before Phase 2** (per
+the resolution-pass decision). The cleanup deletes the 3 dead
+duplicates from `accounts/mutations.ts`; the canonical
+`accountGroups/mutations.ts` versions are the live ones. The Phase
+2 iOS port lands against the cleaned-up web. The Swift dispatcher
+imports the per-domain `handlers` maps 1:1 with the web (the
+dispatcher order in `mutate.ts` is preserved on the Swift side;
+the 3 actions resolve to the `accountGroups/` handlers, not the
+`accounts/` handlers).
+
+If for any reason the web-side cleanup PR has not landed by the
+time the Phase 2 iOS port starts, the port mirrors the bug 1:1
+(the `accounts/` versions win in the Swift dispatcher) and a
+follow-up cleanup PR fixes both sides. The cleaner outcome is the
+upstream fix; the fallback is acceptable.
 
 Per the plan's §2.1 and the AGENTS.md layer rules, the **5 known
 cross-domain deps** are:
@@ -988,12 +1009,17 @@ These are explicitly NOT in Phase 2:
 - **In-app theme override** — Phase 2 follows the system
   light/dark setting.
 - **Anomaly threshold tuning UI** — Phase 4.
-- **Holding add / edit / price-update UI** — Phase 2's
-  `Holdings` tab is read-write (CRUD UI surfaces for
-  holdings + prices); but Holdings-as-a-PRD is Phase 4
-  ("Power features"). The Phase 2 surface is the minimum
-  needed for the Holdings card in the Insights tab to
-  render.
+- **Holdings tab + full CRUD UI** — Phase 2 ships a full
+  Holdings tab (Accounts tab › Holdings section, or a
+  dedicated tab per the UX; UI mockup at implementation
+  time). CRUD surfaces: add holding (symbol, quantity,
+  cost basis, account), edit holding, delete holding, add
+  price update. The chokepoint's 4 holdings actions
+  (`createHolding`, `updateHolding`, `deleteHolding`,
+  `setHoldingPrice`) are the full surface. **The Holdings
+  tab is the 7th of the 6 new write screens** (the spec
+  calls it "6 new write screens" but with Q32 Holdings is
+  the 7th; the spec's line count assumes 6).
 - **Rate editor** — Phase 4 ("FX / base tools").
 - **Offline write queue** — every write is synchronous. The
   pack-based sync model in Phase 5 effectively handles
@@ -1028,9 +1054,11 @@ These are explicitly NOT in Phase 2:
   action names; 3 are duplicates in `accounts/mutations.ts`
   for `createAccountGroup` / `updateAccountGroup` /
   `deleteAccountGroup` — these are dead in `accountGroups/`
-  but live in `accounts/`. The Swift port mirrors the
-  dispatcher import order; the dead duplicates are noted in
-  the §2 table and preserved 1:1).
+  but live in `accounts/`. The web gets the cleanup as a
+  separate PR before Phase 2; the iOS port lands against
+  the cleaned-up web. If the web cleanup hasn't landed by
+  the time the Phase 2 port starts, the port mirrors the
+  bug 1:1 as a fallback).
 - **Scope**: focused on Phase 2. Phase 1.0 + 1.5 are
   referenced as completed. Phase 3+ are explicitly out of
   scope (§11). The 6 new screens are specced at the same

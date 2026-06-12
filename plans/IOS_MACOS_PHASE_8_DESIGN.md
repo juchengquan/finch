@@ -1,11 +1,16 @@
 # finch for iOS & macOS — Phase 8 Implementation Design
 
-> **Status**: design spec — **DEFERRED PER THE PLAN**. Per the
-> plan's §13 phase 8: "Row-level sync (the full §4.3-C), if
-> ever pursued. ... Not on the current roadmap; the pack
-> model in phase 5 is the answer for the foreseeable future."
-> This doc exists to capture the design IF we ever pursue
-> it; it is not on the implementation roadmap.
+> **Status**: design spec — **COMMITTED TO BUILDING** (per
+> the resolution-pass decision). The plan's §13 originally
+> framed Phase 8 as deferred; that framing is updated in
+> `plans/IOS_MACOS_PLAN.md` §13 (per the resolution pass).
+> Phase 8 is a **future roadmap item after Phase 7 ships**;
+> not on the immediate roadmap, but planned.
+>
+> This doc exists to capture the design for the future
+> implementation. It is not on the immediate implementation
+> roadmap; the pack model in Phase 5 is correct for 99% of
+> users and ships first.
 >
 > Companion documents:
 >
@@ -480,33 +485,35 @@ These are explicitly NOT in Phase 8:
   — last-writer-wins is the proposal. The audit gate is
   the safety net.
 
-## §8. Why this is deferred
+## §8. Why we're building this in a future phase
 
-This doc exists to capture the design IF Phase 8 is ever
-pursued. Per the plan's §13:
+Per the resolution-pass decision (Q22): **Phase 8 is
+committed to building**. The plan's §13 framing is
+updated to remove the "if ever pursued" deferral language
+(per the parallel update to `plans/IOS_MACOS_PLAN.md` §13).
 
-> "Row-level sync (the full §4.3-C), if ever pursued. ...
-> Not on the current roadmap; the pack model in phase 5 is
-> the answer for the foreseeable future."
+That said, the pack model in Phase 5 is **correct for the
+first 99% of users** and ships first. Phase 8 is a future
+roadmap item that lands after Phase 7 ships. The user
+research will inform whether sub-second latency is
+worth the substantial added complexity (CloudKit
+subscriptions, batched sync, conflict resolution, the
+per-row sync state machine).
 
-The pack model in Phase 5 is **already correct** for 99%
-of users. The complexity of row-level sync is substantial;
-the benefit (sub-second latency vs. sub-minute latency) is
-marginal for a personal-finance app. The privacy story is
-the same for both models.
-
-**If a user product call demands row-level sync** (e.g.,
-"we need live collaboration between two people editing
-the same ledger"), this design doc is the starting point.
-A future team would:
-1. Re-read this design
+**When we build Phase 8, this design doc is the starting
+point**. A future team would:
+1. Re-read this design (the CloudKit schema, the
+   `Mutation` event bus, the chokepoint's idempotency on
+   `(entry_id, revision_id)`, the LWW + audit-gate conflict
+   resolution)
 2. Update the CloudKit schema (the proposal's record
    types are a starting point)
 3. Implement the `Mutation` event bus + the CloudKit
    sync daemon
 4. Migrate existing users from pack-based to row-level
    (the opt-in flow in §3.1)
-5. Add the Settings › Sync UI (§4)
+5. Add the Settings › Sync UI (§4) — the user picks
+   "Pack-based (default)" or "Row-level (beta)"
 
 The estimated scope (2-4 months full-time) is comparable
 to Phase 4 (power features) and Phase 5 (iCloud sync).

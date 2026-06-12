@@ -232,6 +232,22 @@ model:
 
 The web has 4 conditions and 4 actions in the engine
 core, plus the rule builder UI (`components/rule-builder-dialog.tsx`).
+**Phase 4 extends the engine to 6 conditions + 5 actions**
+(native users get a richer engine; the web catches up later):
+
+- **6 conditions**: `merchantMatches`, `descriptionMatches`,
+  `categoryIs`, `amountGreaterThan` (the web's 4) + 2 native
+  additions: `merchantMatchesRegex` (regex match) +
+  `amountInRange(min, max)` (amount in a numeric range)
+- **5 actions**: `setCategory`, `addTag`, `setCounterparty`,
+  `setNote` (the web's 4) + 1 native addition: `setCounterparty`
+  (replaces the web's `addTag`-only counterpart-set flow with a
+  full set-counterparty; the web's setCounterparty is renamed
+  from "auto-resolve on add" to "explicit set" in Phase 4)
+
+The native additions land in the Phase 4 iOS port; the web
+later ports them back. The rule builder UI in Phase 4
+surfaces all 6 conditions + 5 actions as form fields.
 
 ### 3.1 — iOS Phase 4 surface
 
@@ -333,15 +349,22 @@ and returns a list of `RuleMatch`es (each with the entry,
 the rule, and the proposed mutation). The chokepoint
 applies the mutations in a single transaction.
 
-The 4 web conditions + 4 web actions are ported 1:1:
-- **Conditions**: `merchantMatches`, `descriptionMatches`,
-  `categoryIs`, `amountGreaterThan`
-- **Actions**: `setCategory`, `addTag`, `setCounterparty`,
-  `setNote`
+Phase 4 ships **6 conditions + 5 actions** (the web's 4+4 plus
+2 native additions):
+- **Conditions** (6): `merchantMatches`, `descriptionMatches`,
+  `categoryIs`, `amountGreaterThan` (the web's 4) +
+  `merchantMatchesRegex` (regex match) + `amountInRange(min, max)`
+  (amount in a numeric range)
+- **Actions** (5): `setCategory`, `addTag`, `setCounterparty`,
+  `setNote` (the web's 4) + `setCounterparty` (replaces the
+  web's auto-resolve-on-add with an explicit set; the web's
+  setCounterparty is renamed in Phase 4 — the web catches
+  up later)
 
 The iOS rule builder's field set is the same as the web's
-(per the web's `lib/rules/types.ts::Condition` and `::Action`
-types).
+plus the 2 native additions (per the web's
+`lib/rules/types.ts::Condition` and `::Action` types,
+extended).
 
 ## §4. Feature: Transfers CRUD
 
@@ -689,10 +712,10 @@ phases. For Phase 4 specifically:
   back the transaction (the partial backfill is
   discarded).
 - **Rule engine condition/action set**: the web has 4
-  conditions + 4 actions in the engine core. Phase 4
-  ships the same 4+4. The "extend the engine" question
-  (e.g., "regular expression vs literal match") is a
-  future phase.
+  conditions + 4 actions; Phase 4 extends to 6 + 5
+  (per the §3 engine extension). The native additions
+  are the regex-match condition, the amount-in-range
+  condition, and the set-counterparty action.
 - **FX rate editor scope**: the web's `setExchangeRate`
   action is per `from × to × date`. The iOS editor is a
   per-rate form. The "bulk edit rates" question (e.g.,

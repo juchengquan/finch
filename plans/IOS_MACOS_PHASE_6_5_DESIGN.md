@@ -59,10 +59,16 @@
 - **No new chokepoint actions** — the chokepoint is
   unchanged. The Share Extension dispatches the existing
   74 actions (`addTransaction`, `removeAttachment`).
-- **No OCR** — the proposal doesn't OCR the receipt
-  photo to extract the amount / merchant. The user
-  manually enters the amount + description. OCR is a
-  future phase.
+- **OCR included** — Phase 6.5 ships OCR via Apple's local
+  `Vision` framework (no cloud, no data sent off-device).
+  When the user picks a receipt photo, the iOS app runs
+  `VNRecognizeTextRequest` on the image; the recognized
+  text is parsed for amount patterns (e.g., "Total:
+  $87.23") and merchant patterns (the first non-numeric
+  line near the top). The mini-form pre-fills amount +
+  description; the user can edit before saving. **OCR is
+  opt-in** (a "Use OCR" toggle in the mini-form; default
+  on for photos, off for PDFs).
 - **No multi-photo batching** — one photo/PDF per share
   invocation. Multi-photo is a future phase.
 - **No PDF annotation** — the user attaches a PDF as-is.
@@ -74,11 +80,13 @@
   then syncs to iCloud Drive (Phase 5) on the next pack
   build.
 
-**Estimated scope**: ~800-1,200 lines Swift (the Share
-Extension target + the mini-form + the attachment pipeline)
-+ ~300 lines SwiftUI (the mini-form) + ~300 lines tests.
-**3-4 weeks of full-time work** for a small team. **The
-largest of the 5 sub-specs.**
+**Estimated scope**: ~1,200-1,600 lines Swift (the Share
+Extension target + the mini-form + the attachment pipeline
++ the OCR via Vision) + ~400 lines SwiftUI (the mini-form)
++ ~400 lines tests. **5-6 weeks of full-time work** for a
+small team. **The largest of the 5 sub-specs** (the OCR
+addition grew 6.5 from 3-4 weeks to 5-6 weeks per the
+resolution-pass decision).
 
 ## §2. The Share Extension target
 
@@ -526,14 +534,19 @@ Phase 6.5 doesn't touch the iCloud folder.
 
 **Not blocking Phase 6.5 (decide later)**:
 
-- **OCR on the receipt photo**: the proposal doesn't OCR
-  the photo to extract the amount / merchant. The user
-  manually enters the amount + description. A future
-  phase can add OCR (using the system `Vision` framework).
+- **OCR quality**: the Vision framework's text recognition
+  is high-quality for printed receipts but lower for
+  handwritten or low-light photos. The user can always
+  edit the pre-filled amount + description before saving.
+  A future phase can add a "re-OCR" button (if the user
+  re-opens the mini-form to correct an OCR result).
 - **Multi-photo batching**: the proposal handles one
   photo per share invocation. The `NSExtensionActivationSupportsImageWithMaxCount`
   is set to 1. A future phase can lift this to N.
-- **PDF text extraction**: similar to OCR, a future phase
+- **PDF text extraction**: a future phase can extract
+  text from PDFs (using `PDFKit`) to pre-populate the
+  amount + description. The Vision framework supports
+  PDFs natively; this is a small extension.
   can extract text from PDFs (using `PDFKit`) to
   pre-populate the amount / description.
 - **Share Extension on Mac**: macOS supports Share
@@ -554,10 +567,12 @@ Phase 6.5 doesn't touch the iCloud folder.
 - **The Share Extension writes to the App Group
   container, NOT to iCloud Drive.** The iOS app's
   iCloud Drive sync (Phase 5) syncs the moved
-  attachment the next time a pack is built. The user
-  sees a slight delay (up to 30 seconds for the auto-
-  pack debounce) before the attachment syncs. This is
-  acceptable.
+  attachment the next time a pack is built. **Per Q47,
+  the iOS app's `PendingAttachmentProcessor` calls
+  `forceFlush()` on Phase 5's debouncer after moving the
+  file** — the iCloud sync happens within 1-2 seconds
+  (no 30-second debounce wait). This is the trade-off
+  selected in the resolution pass.
 - **The Share Extension CANNOT write directly to iCloud
   Drive.** iCloud Drive requires the iOS app's iCloud
   container entitlement, which the extension doesn't
@@ -589,8 +604,10 @@ These are explicitly NOT in Phase 6.5:
   add one: `setEntryAttachment` (the action that the iOS
   app dispatches after moving the staged file). This is
   the only new chokepoint action in Phase 6.
-- **No OCR** — the user manually enters the amount +
-  description
+- **OCR is included** (per Q20). The Vision framework runs
+  locally; the user can always edit the pre-filled amount
+  + description before saving. The OCR is opt-in (a
+  "Use OCR" toggle; default on for photos, off for PDFs).
 - **No multi-photo batching** — one photo per share
   invocation
 - **No PDF text extraction** — the user manually enters

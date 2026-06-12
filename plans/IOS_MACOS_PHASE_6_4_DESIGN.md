@@ -82,12 +82,18 @@ constraint.
   Siri). A future phase may add per-intent biometric
   re-auth for sensitive actions.
 
-**Estimated scope**: ~600-800 lines Swift (the 3 intents
-+ the intent donation + the dialog flow) + ~200 lines
-tests. **2-3 weeks of full-time work** for a small
-team.
+**Estimated scope**: ~1,000-1,400 lines Swift (the 7 intents
++ 3 AppEntity types + the intent donation + the dialog
+flow) + ~300 lines tests. **3-4 weeks of full-time work**
+for a small team.
 
-## §2. The 3 intents
+## §2. The 7 intents
+
+Phase 6.4 ships **7 intents** (the plan's §7 list, verbatim):
+AddTransaction, CheckBalance, MarkCleared, CreateBudget,
+SwitchLedger, ShowInsights, OpenScreen. The 3 in the
+proposal were the minimum useful set; the resolution-pass
+expanded to the full 7.
 
 ### 2.1 — `AddTransactionIntent`
 
@@ -261,6 +267,178 @@ cleared, the chokepoint's `setCleared` is a no-op (the
 action is idempotent). `openAppWhenRun: true` — the user
 sees the result in the Activity tab.
 
+### 2.4 — `CreateBudgetIntent`
+
+```swift
+public struct CreateBudgetIntent: AppIntent {
+    public static var title: LocalizedStringResource = "Create Budget"
+    public static var description = IntentDescription(
+        "Creates a new budget in your active finch ledger."
+    )
+    public static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Budget name")
+    var name: String
+
+    @Parameter(title: "Amount")
+    var amount: Double
+
+    @Parameter(title: "Period", default: "monthly")
+    var period: String
+
+    @Parameter(title: "Category", default: nil)
+    var category: CategoryEntity?
+
+    public init() {}
+
+    public init(name: String, amount: Double, period: String = "monthly", category: CategoryEntity? = nil) {
+        self.name = name
+        self.amount = amount
+        self.period = period
+        self.category = category
+    }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let store = FinchStore.shared
+        guard let activeLedgerId = store.activeLedgerId else {
+            return .result(dialog: "Please open finch and select a ledger first.")
+        }
+        let args: [String: Any] = [
+            "ledgerId": activeLedgerId,
+            "name": name,
+            "limit": amount,
+            "period": period,
+            "categoryId": category?.id as Any
+        ]
+        do {
+            try await store.apply(action: "createBudget", args: args)
+        } catch {
+            return .result(dialog: "Couldn't create the budget: \(error.localizedDescription)")
+        }
+        return .result(dialog: "Created \(name) budget for \(amount) per \(period) in finch.")
+    }
+}
+```
+
+### 2.5 — `SwitchLedgerIntent`
+
+```swift
+public struct SwitchLedgerIntent: AppIntent {
+    public static var title: LocalizedStringResource = "Switch Ledger"
+    public static var description = IntentDescription("Switches the active finch ledger.")
+    public static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Ledger")
+    var ledger: LedgerEntity
+
+    public init() {}
+
+    public init(ledger: LedgerEntity) {
+        self.ledger = ledger
+    }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let store = FinchStore.shared
+        store.setActiveLedger(id: ledger.id)
+        return .result(dialog: "Switched to \(ledger.name) in finch.")
+    }
+}
+```
+
+`LedgerEntity` is a new `AppEntity` (Phase 6.4 adds it
+alongside the 7 intents). It wraps the 4 ledgers from the
+web's `MOCK` data.
+
+### 2.6 — `ShowInsightsIntent`
+
+```swift
+public struct ShowInsightsIntent: AppIntent {
+    public static var title: LocalizedStringResource = "Show Insights"
+    public static var description = IntentDescription("Opens the finch Insights tab.")
+    public static var openAppWhenRun: Bool = true
+
+    public init() {}
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let store = FinchStore.shared
+        let router = DeepLinkRouter.shared
+        router.route(to: "insights")
+        return .result(dialog: "Opening your insights in finch.")
+    }
+}
+```
+
+This is a pure navigation intent; no DB read or write.
+
+### 2.7 — `OpenScreenIntent`
+
+```swift
+public struct OpenScreenIntent: AppIntent {
+    public static var title: LocalizedStringResource = "Open Screen"
+    public static var description = IntentDescription("Opens a finch screen by name.")
+    public static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Screen name")
+    var screen: String
+
+    public init() {}
+
+    public init(screen: String) {
+        self.screen = screen
+    }
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        let router = DeepLinkRouter.shared
+        switch screen.lowercased() {
+        case "accounts", "activity", "budgets", "insights", "scheduled", "settings":
+            router.route(to: screen.lowercased())
+            return .result(dialog: "Opening \(screen) in finch.")
+        default:
+            return .result(dialog: "Unknown screen: \(screen). Try accounts, activity, budgets, insights, scheduled, or settings.")
+        }
+    }
+}
+```
+
+This is a more general form of `ShowInsightsIntent`; the
+user can say "open my activity in finch" or "open budgets
+in finch" and the intent handles all 6 tabs.
+
+### 2.8 — `LedgerEntity`
+
+```swift
+public struct LedgerEntity: AppEntity, Identifiable {
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Ledger"
+    public static var defaultQuery = LedgerQuery()
+
+    public let id: String
+    public let name: String
+    public let base: String  // base currency
+
+    public var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(name)", subtitle: "\(base)")
+    }
+}
+
+public struct LedgerQuery: EntityQuery {
+    public func entities(for identifiers: [LedgerEntity.ID]) async throws -> [LedgerEntity] {
+        let store = FinchStore.shared
+        return store.ledgers
+            .filter { identifiers.contains($0.id) }
+            .map { LedgerEntity(id: $0.id, name: $0.name, base: $0.baseCurrency) }
+    }
+
+    public func suggestedEntities() async throws -> [LedgerEntity] {
+        let store = FinchStore.shared
+        return store.ledgers.map { LedgerEntity(id: $0.id, name: $0.name, base: $0.baseCurrency) }
+    }
+}
+```
+
+The `LedgerEntity` is referenced by `SwitchLedgerIntent`. The
+4 ledgers from the web's `MOCK` data (Personal, Business,
+Family, Taxes) are the suggested entities.
+
 ## §3. The `AccountEntity` and `CategoryEntity`
 
 The intents reference `AccountEntity` and `CategoryEntity`
@@ -412,6 +590,42 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
             shortTitle: "Mark Cleared",
             systemImageName: "checkmark.circle"
         )
+        AppShortcut(
+            intent: CreateBudgetIntent(),
+            phrases: [
+                "Create a budget in \(.applicationName)",
+                "Add a budget in \(.applicationName)"
+            ],
+            shortTitle: "Create Budget",
+            systemImageName: "target"
+        )
+        AppShortcut(
+            intent: SwitchLedgerIntent(),
+            phrases: [
+                "Switch ledger in \(.applicationName)",
+                "Change ledger in \(.applicationName)"
+            ],
+            shortTitle: "Switch Ledger",
+            systemImageName: "rectangle.stack"
+        )
+        AppShortcut(
+            intent: ShowInsightsIntent(),
+            phrases: [
+                "Show my insights in \(.applicationName)",
+                "Open my insights in \(.applicationName)"
+            ],
+            shortTitle: "Show Insights",
+            systemImageName: "chart.bar"
+        )
+        AppShortcut(
+            intent: OpenScreenIntent(),
+            phrases: [
+                "Open a screen in \(.applicationName)",
+                "Go to a tab in \(.applicationName)"
+            ],
+            shortTitle: "Open Screen",
+            systemImageName: "arrow.up.forward.app"
+        )
     }
 }
 ```
@@ -487,10 +701,9 @@ chokepoint.
 
 **Not blocking Phase 6.4 (decide later)**:
 
-- **Intent surface**: the proposal supports 3 intents
-  (`AddTransaction`, `CheckBalance`, `MarkCleared`). More
-  intents are possible (e.g., `CreateBudget`,
-  `SwitchLedger`, `ShowInsights`). A future phase can
+- **Intent surface**: the proposal ships 7 intents
+  (per Q12). More intents are possible (e.g.,
+  `CreateRecurring`, `MarkReviewed`) — a future phase can
   add intents; the proposal doesn't preclude it.
 - **Siri on Mac via Shortcuts**: macOS supports Siri but
   the App Intents framework is iOS / iPadOS / watchOS
@@ -503,7 +716,7 @@ chokepoint.
   A more sophisticated disambiguation (e.g., the user
   says "add the usual" and Siri infers the merchant /
   amount) is a future phase.
-- **Intent chaining**: the proposal has 3 single-step
+- **Intent chaining**: the proposal has 7 single-step
   intents. A "shorter" (multi-step intent) is a future
   phase. The proposal doesn't preclude it; the intents
   are designed to be composable.
@@ -549,8 +762,9 @@ These are explicitly NOT in Phase 6.4:
   `IntentDialog` + `EntityQuery`
 - **No biometric re-auth for Siri intents** — the
   proposal doesn't require it
-- **No additional intents beyond the 3** — `AddTransaction`,
-  `CheckBalance`, `MarkCleared` are the 3
+- **No additional intents beyond the 7** — `AddTransaction`,
+  `CheckBalance`, `MarkCleared`, `CreateBudget`,
+  `SwitchLedger`, `ShowInsights`, `OpenScreen` are the 7
 - **No intent chaining** — single-step intents only
 
 ## §10. Spec self-review
@@ -559,8 +773,9 @@ These are explicitly NOT in Phase 6.4:
 spec.)
 
 - **Placeholders**: none. Every section has concrete
-  content. The 3 intents (§2) each have a code sketch.
-  The 2 `AppEntity` types (§3) have concrete code. The
+  content. The 7 intents (§2) each have a code sketch.
+  The 3 `AppEntity` types (§3 — `AccountEntity`,
+  `CategoryEntity`, `LedgerEntity`) have concrete code. The
   `AppShortcuts` provider (§5) is concrete. The
   `IntentDialog` flow (§6) has a concrete example.
 - **Internal consistency**: §2.1's `AddTransactionIntent`
@@ -574,9 +789,9 @@ spec.)
   are referenced as separately shipped specs. Phase 6.5
   is referenced as a separate spec. Phase 7+ are
   explicitly out of scope (§9). The estimated scope
-  (2-3 weeks) reflects the 3 intents + the entity types
-  + the donation flow.
-- **Ambiguity**: §2's 3 intents have concrete code. §3's
+  (3-4 weeks) reflects the 7 intents + the 3 entity
+  types + the donation flow.
+- **Ambiguity**: §2's 7 intents have concrete code. §3's
   entity types have concrete code. §4's donation flow
   is concrete. §5's `AppShortcuts` provider is concrete.
   §6's `IntentDialog` flow is concrete. §7 enumerates

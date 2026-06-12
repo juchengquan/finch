@@ -539,14 +539,19 @@ extends with:
 - **Widget refresh budget**: WidgetKit enforces a system-
   wide refresh budget (Apple's recommendation: don't
   refresh more than ~40-60 times per day). The iOS app's
-  proposal refreshes hourly (24 times per day). The user
-  can force-refresh by opening the iOS app (which updates
-  the snapshot; the widget reads the new snapshot on
+  proposal refreshes hourly (24 times per day). **Per Q30,
+  no force-refresh button in Settings** — the user can
+  implicitly force-refresh by opening the iOS app (which
+  updates the snapshot; the widget reads the new snapshot on
   its next refresh).
 - **Live Activity lifetime**: a Live Activity can live up
-  to 8 hours (after that, the system collapses it). The
-  proposal uses a 1-hour default; the user can extend.
-  The exact limits are Apple-defined and may change.
+  to 8 hours (after that, the system collapses it). **Per
+  Q31, the lifetime is user-configurable** via Settings
+  › Live Activities › Scheduled-due window: 1 hour (default),
+  4 hours, 8 hours (max). The user can also disable Live
+  Activities for the scheduled-due category (fall back to
+  standard notifications). The exact limits are
+  Apple-defined and may change.
 - **Watch app scope**: the proposal is a **glance app +
   quick-add**. A full Watch app (with all 6 tabs) is a
   larger scope (the watchOS app would need its own

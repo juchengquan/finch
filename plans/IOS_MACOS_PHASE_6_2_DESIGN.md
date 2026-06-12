@@ -90,10 +90,10 @@ team.
 ## §2. Permission request
 
 iOS requires explicit user permission for local
-notifications. The iOS app requests permission on first
-launch (after the user has imported a `.finch` and has some
-data — no point asking permission before there's anything
-to notify about).
+notifications. **The iOS app requests permission on first
+app launch** (the standard iOS pattern; predictable moment
+for the user). The request is the standard iOS prompt; the
+user can grant or decline.
 
 ### 2.1 — The permission request
 
@@ -118,11 +118,12 @@ public final class NotificationPermission {
 }
 ```
 
-The permission is requested **after the first successful
-`.finch` import** (so the user has data to be notified
-about). The Settings › Notifications section also has a
-"Request permission" button for users who declined initially
-(so they can retry after fixing Settings).
+The permission is requested **on first app launch** (the
+standard iOS pattern; the user sees the prompt predictably).
+If the user declines, the Settings › Notifications section
+has a "Request permission" button (which deep-links to
+`UIApplication.openSettingsURLString`) for users who want
+to retry after fixing iOS Settings.
 
 The `Info.plist` key:
 

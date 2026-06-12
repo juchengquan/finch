@@ -333,9 +333,11 @@ One `PackError` enum with typed cases:
 
 The UI shows these as alerts with a "View details" disclosure that lists the
 audit problems (`entryId` + class + context). The user can choose "Cancel" or
-(in a `?debug=1` deep link) "Force import" — which skips the audit gate but
-still runs the rest of the pipeline. The "Force import" button is **not** in
-the user-facing UI in Phase 1.0; it's a recovery hatch for development.
+"Force import" — which skips the audit gate but still runs the rest of the
+pipeline. The "Force import" button lives in **Settings › Advanced**
+(always visible; not behind a debug flag). It's a recovery hatch for users
+who know their data is intentionally non-compliant with the audit gate (e.g.,
+a manually-edited `.finch`).
 
 ## §5. The iOS screens (Phase 1.0)
 
@@ -786,9 +788,11 @@ specs (Phase 1.5, Phase 2, etc.):
 - **Inbox tab / folder-listing UI** — explicitly rejected for Phase 1.0
   (the web has no Inbox page; the system file picker is the only import
   UX).
-- **Force-import UI** — the typed `PackError` model supports it, but the
-  "Force import" button is hidden behind a `?debug=1` deep link in
-  Phase 1.0 (recovery hatch for development, not user-facing).
+- **Force-import UI** — the typed `PackError` model supports it; the
+  "Force import" button is in **Settings › Advanced** (always visible
+  in Phase 1.0). It's a user-facing recovery hatch for users who know
+  their data is intentionally non-compliant with the audit gate
+  (e.g., a manually-edited `.finch`).
 - **Android** — the plan doesn't include Android. GRDB 7 added Linux/Windows
   support but the plan's §4.1 commits to "SwiftUI multiplatform" (Apple
   only).

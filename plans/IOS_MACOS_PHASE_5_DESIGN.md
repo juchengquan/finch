@@ -363,11 +363,20 @@ convention).
 
 ### 4.1 — Detection
 
-The folder-watcher detects a conflict copy by checking the
-filename for "Conflict" (or by checking the file's extended
-attributes — Apple's iCloud sets a `com.apple.fileprovider.conflict`
-attribute). When detected, the app does NOT auto-import
-either file; instead, it shows the **Conflict-copy sheet**.
+The folder-watcher detects a conflict copy using **both** signals,
+with the **extended attribute as the primary signal**:
+
+1. **Primary**: the file's `com.apple.fileprovider.conflict`
+   extended attribute (Apple's canonical signal). The
+   `URLResourceKey` API exposes this attribute; the watcher
+   queries it on every file in the iCloud folder.
+2. **Fallback**: the filename pattern `(Conflict YYYY-MM-DD)`
+   (the substring "Conflict" in the filename). Useful for
+   older iOS versions or edge cases where the extended
+   attribute API is incomplete.
+
+If either signal fires, the app does NOT auto-import either
+file; instead, it shows the **Conflict-copy sheet**.
 
 ### 4.2 — The conflict-copy sheet
 

@@ -584,13 +584,18 @@ path)
 
 ---
 
-## Phase 8 — Row-level sync (the full §4.3-C, if ever pursued)
+## Phase 8 — Row-level sync (the full §4.3-C) — committed to building (future roadmap)
 
 **Goal**: CloudKit or server sync atop the UUID-ready, single-
-chokepoint mutation layer. **Not on the current roadmap**; the
-pack model in Phase 5 is the answer for the foreseeable future.
+chokepoint mutation layer. **Per the resolution-pass decision
+(Q22), Phase 8 is committed to building** — the plan's §13
+framing is updated to remove the "if ever pursued" deferral.
+Phase 8 is a future roadmap item that lands after Phase 7
+ships. The pack model in Phase 5 is correct for the first
+99% of users; the user research will inform whether
+sub-second latency is worth the added complexity.
 
-**Scope (in)** — speculative, deferred:
+**Scope (in)**:
 
 - CloudKit private database, one per ledger, schema mirrors the
   shared SQLite schema
@@ -604,18 +609,24 @@ pack model in Phase 5 is the answer for the foreseeable future.
 - Conflict resolution: last-writer-wins on `(row_id,
   revision_id)` with the chokepoint's audit gate as the safety
   net
+- Backward compatibility: the pack model is the fallback;
+  users can opt in to row-level or stay on pack-based
 
 **Non-goals (out)**:
 
-- This phase is **explicitly deferred** per the plan's §13
-  ("if ever pursued"). It conflicts with the local-first
-  promise of the app; the pack model is the answer unless a
-  real product need arises.
+- This is not a single-shot replacement of the pack model.
+  Both sync paths can run in parallel; the user picks.
+- No new tabs / write screens / power features (the 6 tabs
+  + 6 write screens + 7 power features are unchanged).
+- No multi-user / shared ledgers (single-user iCloud
+  account = one finch install).
+- No custom-server path (a separate spec; CloudKit is the
+  proposal).
 
 **Dependencies**: All of Phases 1-7 complete; the chokepoint +
-audit gate + pack engine are the foundation
+audit gate + pack engine are the foundation.
 
-**Acceptance criteria** (if pursued):
+**Acceptance criteria** (when built):
 
 - A change on iPhone appears on iPad within 5 s
 - A change on iPad while iPhone is offline syncs within 5 s of
@@ -623,13 +634,14 @@ audit gate + pack engine are the foundation
 - The audit gate refuses any sync-delivered mutation that
   would create a corruption; the user is shown the typed
   problem set
+- Users can opt in to row-level sync in Settings › Sync
+  ("Pack-based (default)" or "Row-level (beta)")
 
 **Open questions**:
 
 - CloudKit vs. a custom server: CloudKit is "free" but limits
   schema flexibility; a custom server is more work but
-  matches the pack model. Probably CloudKit for v1 if ever
-  pursued.
+  matches the pack model. Probably CloudKit for v1.
 - Multi-user: does the app support per-user ledgers, or is
   one iCloud account = one finch install? The current answer
   is "one iCloud account = one install."
