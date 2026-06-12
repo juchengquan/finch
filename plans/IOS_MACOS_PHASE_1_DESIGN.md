@@ -9,6 +9,33 @@
 > (last updated 2026-06-12 via PR #139), and the double-entry design in
 > `plans/done/DOUBLE_ENTRY_PLAN.md`._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index (glossary, location index, master tab list)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` — the wire-format annex (74-action Args, pack format, I18nError, fixture format)
+- `plans/IOS_MACOS_PLAN.md` §2 — the domain model
+- `plans/IOS_MACOS_PLAN.md` §4 — the 8-step import pipeline
+- `plans/IOS_MACOS_PLAN.md` §12 — the parity suite
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (adds Insights tab + 25 selectors)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (74-action chokepoint + 7 write screens)
+
+## §0. Map — 8-section template
+
+The 8-section template (Goal / Architecture / UI / Cross-cutting /
+Wire / CI / Out-of-scope / Self-review) maps to this spec's
+existing sections as follows:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §3 (FinchCore layout) + §7 (Data model) |
+| §3. iOS UI surfaces | §5 (The iOS screens, Phase 1.0) |
+| §4. Cross-cutting concerns | §6 (Dependencies) |
+| §5. Wire contracts | §2 (Import UX) + §4 (The .finch pipeline + audit gate) |
+| §6. CI / test infrastructure | §8 (Parity suite) + §9 (CI) |
+| §7. Out of scope (firm) | §11 |
+| §8. Spec self-review + open questions | §12 + §10 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Ship a working, verifiable iOS app (iPhone 15 simulator, iOS 26+)

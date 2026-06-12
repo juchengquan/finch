@@ -24,6 +24,30 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; intents dispatch through it)
+- `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` — Phase 6.1 (Spotlight; same `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; sensitive intents gated)
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §3 (The `AccountEntity` and `CategoryEntity`) + §4 (Intent donation) + §5 (The `AppShortcuts` provider) + §6 (The `IntentDialog` flow) |
+| §3. iOS UI surfaces | §2 (The 7 intents — the user-facing Siri surface) |
+| §4. Cross-cutting concerns | §6 (The `IntentDialog` flow — error UX + disambiguation) |
+| §5. Wire contracts | §2 (each intent dispatches a chokepoint action) |
+| §6. CI / test infrastructure | §7 (CI changes) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add **Siri** integration so the user can:
