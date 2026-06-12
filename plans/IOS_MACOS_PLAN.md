@@ -1173,10 +1173,18 @@ Milestones as coherent slices, each independently shippable:
    Spotlight, notifications, biometric lock.
 7. **Native upside — part 2: Widgets / Live Activities / Watch.** Deferred
    from phase 6 by decision (§14); same data layer, mostly UI on top.
-8. **Row-level sync (the full §4.3-C), if ever pursued.** CloudKit or
-   server sync atop the UUID-ready, single-choke-point mutation layer.
-   Not on the current roadmap; the pack model in phase 5 is the answer
-   for the foreseeable future.
+8. **Row-level sync (the full §4.3-C) — committed to building
+    (future roadmap item).** CloudKit or server sync atop the
+    UUID-ready, single-choke-point mutation layer. **Per the
+    resolution-pass decision (Q22), Phase 8 is committed to
+    building** — the prior "if ever pursued" deferral framing
+    is removed. Phase 8 is a future roadmap item that lands
+    after Phase 7 ships. The pack model in phase 5 is correct
+    for the first 99% of users; the user research will inform
+    whether sub-second latency is worth the added complexity
+    (CloudKit subscriptions, batched sync, conflict resolution,
+    the per-row sync state machine). See
+    `plans/IOS_MACOS_PHASE_8_DESIGN.md` for the full design.
 
 ---
 
