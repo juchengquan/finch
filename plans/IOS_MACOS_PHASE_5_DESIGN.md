@@ -16,7 +16,7 @@
 > - `plans/IOS_MACOS_PHASE_5_DESIGN.md` (this file)
 >
 > _Audience: the engineers who will build the iOS app. Assumes
-> Phases 1.0-4 are complete; the 6 tabs + 6 write screens + 7
+> Phases 1.0-4 are complete; the 6 tabs + 7 write screens + 7
 > power features are shipped; the chokepoint + 74 actions are
 > the full write surface; the iCloud `Documents/finch/` folder
 > exists but is not yet watched._
@@ -48,7 +48,7 @@ policy" as still-open questions; Phase 5 answers them.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 5 adds: (a) a **Sync** section in the Settings tab;
   (b) a **Sync now** button; (c) the conflict-copy sheet (a
   modal that appears when a conflict is detected).
@@ -125,7 +125,7 @@ public final class AutoPackDebouncer {
 
     /// Called by the "Sync now" button. Bypasses the debounce.
     public func flush() async {
-        pendingWorkItem?.cancel()
+        pendingTask?.cancel()
         await buildAndWritePack()
     }
 
@@ -631,7 +631,7 @@ The plan's §14.1 still-open questions mostly land in Phase
 These are explicitly NOT in Phase 5:
 
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged.
 - **No row-level sync** — Phase 8.
 - **App Intents / Siri / Share Extension / Spotlight /
@@ -639,8 +639,10 @@ These are explicitly NOT in Phase 5:
 - **Widgets / Live Activities / Watch** — Phase 7.
 - **iOS-on-Mac (Catalyst)** — Phase 3.
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 5 wires the pack engine +
-  iCloud container; no new actions.
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 5 doesn't add more).
+  Phase 5 wires the pack engine + iCloud container;
+  no new actions.
 - **Multi-user / shared ledgers** — single-user iCloud
   account = single finch install. Per the plan's §10
   resolved decision.

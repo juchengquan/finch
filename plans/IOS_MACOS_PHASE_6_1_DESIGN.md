@@ -21,7 +21,7 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete; the iPhone + iPad + Mac apps are
-> shipping with the 6 tabs + 6 write screens + 7 power features
+> shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
 
 ## §1. Goal & non-goals
@@ -48,7 +48,7 @@ gives finch **system-wide** searchability on iOS.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.1 adds a **read-side** integration: iOS system
   search surfaces finch's entities.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -452,7 +452,7 @@ polluting the simulator's global index.
 These are explicitly NOT in Phase 6.1:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
 - **No new selectors** — the Phase 1.5 selectors are the
   full set.
 - **No new chokepoint actions** — Spotlight is read-only.

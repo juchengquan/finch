@@ -49,7 +49,7 @@ app:
   iOS manages). We don't implement our own passcode
   fallback.
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.3 adds a **lock surface** (a gate on app
   launch + a gate on sensitive actions).
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -533,7 +533,7 @@ These are explicitly NOT in Phase 6.3:
 - **No passcode fallback** — biometric only (iOS handles
   fallback to device passcode via `LAContext`)
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set
 - **No new chokepoint actions** — the chokepoint is

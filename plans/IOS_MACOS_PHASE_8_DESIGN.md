@@ -79,7 +79,7 @@ not detailed.
   trusts Apple/iCloud either way). The pack model is
   simpler; the row-level model adds no privacy benefit.
 
-**Non-goals (firm)** — IF Phase 8 is ever pursued:
+**Non-goals (firm)**:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
   are the full set (Phase 6.5's `setEntryAttachment` brings
@@ -87,7 +87,7 @@ not detailed.
   Phase 8 adds a **sync layer** that
   observes the chokepoint and publishes mutations.
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged. Phase 8 adds a background sync daemon.
 - **No changes to the chokepoint's invariants** — the
   audit gate + the balance triggers + the schema
@@ -106,7 +106,7 @@ not detailed.
 - **Custom-server path** — sketched but not detailed. If
   pursued, it would be a separate spec.
 
-**Estimated scope** (IF pursued): ~1,500-2,500 lines Swift
+**Estimated scope**: ~1,500-2,500 lines Swift
 (the CloudKit subscription + the mutation event bus + the
 sync daemon) + ~500 lines SwiftUI (the Settings › Sync
 section additions for "row-level sync" vs. "pack-based
@@ -479,7 +479,7 @@ These are explicitly NOT in Phase 8:
   the running total to 75; Phase 8 doesn't add more). Phase 8 adds a sync layer that
   observes the chokepoint.
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged.
 - **No changes to the chokepoint's invariants** — the
   audit gate + the balance triggers + the schema
@@ -559,7 +559,10 @@ spec.)
   opt-in flow is concrete (the user picks "Row-level
   (beta)"; the daemon initializes). §6 enumerates the
   open questions with proposed answers.
-- **Deferred framing**: this spec is explicitly framed as
-  "if pursued" throughout. The plan's §13 records the
-  deferral; this doc captures the design for future
-  reference.
+- **Framing**: this spec captures the Phase 8 design
+  (committed to building per Q22, future roadmap item
+  after Phase 7). The spec body uses active voice
+  throughout (no "if pursued" framing); only the
+  "custom-server path" sidebar in §1 retains a
+  conditional because that's a hypothetical beyond
+  Phase 8's committed scope.

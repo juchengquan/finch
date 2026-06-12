@@ -95,7 +95,7 @@ The web's write surface is **3 layers**:
    compose the chokepoint with cross-domain glue
    (`withDedupMessage`, `txTouches`, `invalidateRollover`,
    `unlinkAttachmentFiles`, etc.).
-3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the 14
+3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the 13
    per-domain `handlers` maps into one `ALL` map and routes
    `applyMutation(exec, action, args)` to the right handler.
 4. **The `_args.ts` registry** — `lib/db/domain/_args.ts` (225 lines) —
@@ -128,7 +128,7 @@ side's wire contract, identical to the web's.
 | `transactions` | 370 lines | 15 (`addTransaction`, `updateTransaction`, `deleteTransaction`, `setCleared`, `setReviewed`, `markAllReviewed`, `reconcileAccount`, `adjustAccountBalance`, `bulkRecategorize`, `removeAttachment`, `confirmTransaction`, `confirmPendingWithMerchant`, `confirmAllPending`, `setTransactionSplits`, `setTransactionTags`) | `attachments` (cleanup), `budgets/rollover` (invalidate) |
 | `scheduled` | 192 lines | 8 (`createScheduled`, `updateScheduled`, `deleteScheduled`, `addScheduledSplit`, `removeScheduledSplit`, `postScheduled`, `updateScheduledSplit`, `generateDueScheduled`) | `counterparties` (resolve) |
 | `rules` | 161 lines | 4 (`createRule`, `updateRule`, `deleteRule`, `backfillRule`) | `counterparties` (resolve) |
-| `budgets` | 106 lines | 10 (`createBudget`, `updateBudget`, `deleteBudget`, `contributeBudget`, `clearPendingAmount`, `createBudgetGroup`, `updateBudgetGroup`, `deleteBudgetGroup`, `updateBudgetCycle`, `removeBudget`) | `budgetGroups` (read; `createBudgetGroup` / `updateBudgetGroup` / `deleteBudgetGroup` also have a duplicate implementation in `accountGroups/`, see note below) |
+| `budgets` | 106 lines | 9 (`createBudget`, `updateBudget`, `removeBudget`, `contributeBudget`, `clearPendingAmount`, `createBudgetGroup`, `updateBudgetGroup`, `deleteBudgetGroup`, `updateBudgetCycle`) | `budgetGroups` (read; `createBudgetGroup` / `updateBudgetGroup` / `deleteBudgetGroup` also have a duplicate implementation in `accountGroups/`, see note below) |
 | `holdings` | 84 lines | 4 (`createHolding`, `updateHolding`, `deleteHolding`, `setHoldingPrice`) | — |
 | `ledgers` | 82 lines | 5 (`createLedger`, `updateLedger`, `changeLedgerBase`, `setDefaultLedger`, `deleteLedger`) | — |
 | `accounts` | 73 lines | 5 accounts-only (`createAccount`, `updateAccount`, `archiveAccount`, `unarchiveAccount`, `deleteAccount`) | `accountGroups` (read; `createAccountGroup` / `updateAccountGroup` / `deleteAccountGroup` are duplicated in this file — see note below) |

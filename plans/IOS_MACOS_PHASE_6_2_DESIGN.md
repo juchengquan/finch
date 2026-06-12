@@ -53,7 +53,7 @@ background context).
 - **No push notifications** — the plan's §10 is explicit:
   no server-side push. Local notifications only.
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.2 adds a **notification surface** that the user
   sees in the iOS Notification Center.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -551,7 +551,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             // Scheduled item due: dispatch the chokepoint
             guard let templateId = userInfo["templateId"] as? String else { return }
             Task { @MainActor in
-                try? await store.apply(action: "postScheduled", args: ["id": templateId])
+                try? await FinchStore.shared.apply(
+                    action: "postScheduled",
+                    args: ["id": templateId]
+                )
             }
         case "snooze1h":
             // Reschedule the notification for 1 hour from now
@@ -561,14 +564,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         case "viewBudgets":
             // Deep-link to the Budgets tab
-            router.route(to: "budget:\(userInfo["budgetId"] ?? "")")
+            // (router is held as a `DeepLinkRouter()` instance
+            // on the SwiftUI `FinchApp`; the scheduler posts
+            // a Notification that the app observes and routes
+            // via the router — see §3.2's AppDelegate wiring).
+            DeepLinkRouter().route(to: "budget:\(userInfo["budgetId"] ?? "")")
         case "viewTransaction":
             // Deep-link to the Transaction Detail screen
             guard let entryId = userInfo["entryId"] as? String else { return }
-            router.route(to: "tx:\(entryId)")
+            DeepLinkRouter().route(to: "tx:\(entryId)")
         case "openActivity":
             // Deep-link to the Activity tab
-            router.route(to: "activity")
+            DeepLinkRouter().route(to: "activity")
         default:
             // Tapping the notification body (no specific action)
             // — switch to the corresponding tab
@@ -683,7 +690,7 @@ These are explicitly NOT in Phase 6.2:
 - **No push notifications** — local notifications only
   (per the plan's §10)
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set (the weekly digest uses `weeklyDigest` from
   Phase 1.5)

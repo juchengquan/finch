@@ -589,14 +589,15 @@ not re-parse to `Date` until display time (this mirrors the web, which keeps
 struct Tx: Equatable, Sendable {
     let id: String
     let merchant: String
-    let category: String?         // resolved category name (display)
-    let categoryId: String?       // join key, matches the web's
-                                  // `Tx.category` field (id) —
-                                  // the web has BOTH a name and
-                                  // an id; the Swift `Tx` keeps
-                                  // both for parity with the
-                                  // server's `projectState`
-                                  // projection
+    let category: String?         // category id (join key); matches
+                                  // the web's `Tx.category` field
+                                  // (which is the id, not a name)
+                                  // — see `frontend/lib/store/
+                                  // transactions/state.ts:21`.
+                                  // Display names are looked up
+                                  // via a separate `Category`
+                                  // table; `Tx` itself holds the
+                                  // id only.
     let amount: Decimal            // signed, in ledger base
     let currency: String?          // omitted/equal to ledger base for same-currency
     let nativeAmount: Decimal?     // signed, in `currency`
@@ -824,7 +825,7 @@ These are explicitly NOT in Phase 1.0 and will be re-spec'd in their own
 specs (Phase 1.5, Phase 2, etc.):
 
 - **Write paths** — the 74-action chokepoint (`postEntry` / `rebuildEntry` /
-  `deleteEntry` and all 14 per-domain `mutations.ts` files) is Phase 2.
+  `deleteEntry` and all 13 per-domain `mutations.ts` files) is Phase 2.
   Phase 1.0 has no `Store` module.
 - **iPad/macOS adaptive layout** — Phase 3. Phase 1.0 is iPhone-only.
 - **Power features** — reconcile, rules engine + builder, transfers CRUD,
