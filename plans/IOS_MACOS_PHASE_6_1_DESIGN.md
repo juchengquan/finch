@@ -24,6 +24,17 @@
 > shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §5 (Tab 2) — the in-memory `Tx[]` cache the Spotlight index reads
+- `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` — Phase 6.2 (Notifications; reuses `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (Share Extension; same Xcode project)
+- `plans/IOS_MACOS_ROADMAP.md` — Phase 6.1 sketch
+
 ## §1. Goal & non-goals
 
 **Goal** — Index finch's transactions / merchants / accounts /

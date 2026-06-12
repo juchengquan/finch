@@ -5,6 +5,8 @@
 >
 > - `plans/IOS_MACOS_PLAN.md` — the direction brief (what native must do, the
 >   architecture choices, the trade-offs)
+> - `plans/IOS_MACOS_INDEX.md` — the navigation index (glossary, location index,
+>   master tab list) for the 16 iOS/macOS plan files
 > - `plans/IOS_MACOS_PHASE_1_DESIGN.md` — the **full design** for Phase 1.0
 >   (the only phase with detailed design work, because it's the one being
 >   built first)

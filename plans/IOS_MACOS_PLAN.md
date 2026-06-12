@@ -19,7 +19,15 @@ _Audience: the engineers and designers who will build finch's native Apple
 apps. Assumes familiarity with the web app in `frontend/` and the design
 record in `plans/`. Last updated: 2026-06-12._
 
-> **What changed since the 2026-06-07 revision:**
+**Companion navigation**: `plans/IOS_MACOS_INDEX.md` — the navigation
+index (glossary of recurring terms, "where do X live" location
+index, master iPhone tab list, cross-spec impact).
+
+**Companion reference**: `plans/IOS_MACOS_WIRE_FORMAT.md` — the
+wire-format annex (74-action Args, I18nError, `.finch` pack
+format, parity-test fixture format).
+
+> **What changed since 2026-06-06 (the prior revision):**
 >
 > - 3-level categories shipped (PR #112) — see prior revision.
 > - i18n shipped (PRs #113 + #115) — see prior revision.

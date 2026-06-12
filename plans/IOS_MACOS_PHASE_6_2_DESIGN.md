@@ -22,6 +22,15 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.15 — anomaly threshold (2.5)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §3 — I18nError wire format
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+- `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` — Phase 6.1 (Spotlight; reuses `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; same Xcode project)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` §3 — the weekly digest (uses `weeklyDigest` selector)
+
 ## §1. Goal & non-goals
 
 **Goal** — Schedule **local notifications** for 4 categories
