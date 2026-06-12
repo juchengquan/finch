@@ -111,8 +111,8 @@ from screenshots — read the source.
 | Server projection contract (the `Tx` shape) | `lib/db/state.ts` (`projectState`) | The exact `Tx` / `AccountRow` shape the client consumes — see §2.6 |
 | **Write chokepoint** | `lib/db/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
 | **Cutover (the migration)** | `lib/db/cutover.ts` | The DOUBLE_ENTRY_PLAN §8.2 data-move builder: manual sealed inserts for id-fidelity, torn-write repair, per-entry idempotence guard. Replayed inside the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` — see §4.6 |
-| Mutations (the user-facing write API) | `lib/db/mutations.ts` | Every server-side action and its effects; under DE these delegate to the chokepoint |
-| Pure derivations (the read brains) | `lib/select.ts`, `lib/derive.ts` | All computed figures — see §2.4 |
+| Mutations (the user-facing write API) | `lib/db/mutate.ts` (dispatcher) + `lib/db/domain/<x>/mutations.ts` (per-domain) | Every server-side action and its effects; under DE these delegate to the chokepoint. The dispatcher is 53 lines; the 13 per-domain `mutations.ts` files export `handlers` maps with 74 unique actions total (77 entries; 3 duplicates for `createAccountGroup`/`updateAccountGroup`/`deleteAccountGroup` in `accounts/`) |
+| Pure derivations (the read brains) | `lib/select.ts` | All 32 computed figures — see §2.4 (the legacy `lib/derive.ts` was retired in the 2026-06 DB refactor; selectors are now consolidated in `lib/select.ts`) |
 | Rules engine | `lib/rules/{engine,types,describe}.ts` | Condition/Action model + evaluator |
 | Reconcile math | `lib/reconcile.ts` | Cleared-balance / difference selector |
 | Recurrence math | `lib/recurrence.ts` | Scheduled-template occurrence generation |
@@ -543,7 +543,7 @@ MUST reproduce:
 
 > **Adapter preconditions for `rebuildEntry`** — code-level disciplines
 > enforced in `frontend/lib/db/entries.ts` (and its consumers in
-> `lib/db/mutations.ts`). When a mutation rewrites legs via the chokepoint's
+> `lib/db/mutate.ts` + `lib/db/domain/<x>/mutations.ts`). When a mutation rewrites legs via the chokepoint's
 > `rebuildEntry`, it MUST: (a) forward each account leg's `cleared_at` —
 > omission silently un-clears a reconciled row — and (b) pass explicit
 > `amountBase` values when the entry carries user-pinned rates that a date
@@ -599,7 +599,7 @@ at where the behaviour lives today.
 | 36 | Command palette (⌘K) | Jump-to-anything search | macOS ⌘K; iOS Spotlight (§7) | 2 (mac 1) | `command-palette.tsx` |
 | 37 | Responsive shell (sidebar/bottom-bar, breadcrumbs) | Adaptive nav (tab bar vs sidebar/split) | `TabView`/`NavigationSplitView` | 1 | `PageShell.tsx` |
 | 38 | Holdings management (add/edit/price/delete) | Position CRUD + price update | Form sheets | 2 | `account-holdings.tsx` |
-| 39 | Ledger CRUD (create / rename / restyle / set-default / delete) | Full ledger CRUD on both apps; mutations on the shared schema | Form sheet; settings row | 1 | `lib/db/queries/ledgers.ts`; `lib/db/mutations.ts` (createLedger / updateLedger / setDefaultLedger / deleteLedger); `components/ledger-switcher.tsx`; `app/(main)/settings/ledger/page.tsx`. Web ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md`. |
+| 39 | Ledger CRUD (create / rename / restyle / set-default / delete) | Full ledger CRUD on both apps; mutations on the shared schema | Form sheet; settings row | 1 | `lib/db/queries/ledgers.ts`; `lib/db/domain/ledgers/mutations.ts` (createLedger / updateLedger / setDefaultLedger / deleteLedger); `components/ledger-switcher.tsx`; `app/(main)/settings/ledger/page.tsx`. Web ✅ shipped via `plans/done/LEDGER_CRUD_PLAN.md`. |
 | 40 | **NEW — Receipt attachments** (capture / attach photo or PDF; view; delete) | Share Extension + in-app photo/PDF picker; thumbnail + viewer in tx detail | Share extension; `PhotosPicker`; `QuickLook` | 2 | §2.5; (web also adds attachment UI + a server-side attachments dir) |
 
 > Tiering is direction, not contract — the team MAY re-tier, but SHOULD keep
@@ -986,7 +986,8 @@ finch already computes, so the data work is mostly done.
   unchanged between web and native.
 - **Cross-app implications for the web app.** Shipping this native plan
   required three coordinated web-app changes so the apps stay file-
-  compatible. **Two are now shipped; one remains open.**
+  compatible. **All three are now shipped** (§13 records the
+  receipts).
   1. ✅ **Add the `transaction_attachments` table** + a server-side
      attachments directory (§2.5) — **shipped via PR #106**
      (`plans/done/RECEIPT_PHOTOS_PLAN.md`). Schema in
@@ -1039,7 +1040,9 @@ finch already computes, so the data work is mostly done.
 - **Local-first = strong default privacy:** no account, no server, no
   telemetry. Preserve this as a product promise.
 - **Biometric app lock:** optional Face ID/Touch ID/Optic ID gate on launch and
-  on sensitive actions (export, delete-all, base-currency change), with passcode
+  on sensitive actions (export, delete-all, base-currency change). The
+  iOS-device passcode is the fallback (via `LAContext`'s
+  `.deviceOwnerAuthentication` policy) — no app-implemented passcode
   fallback (`LocalAuthentication`).
 - **Encryption at rest:** **Decision — file-protection only in v1.** Write
   the live DB with `completeUnlessOpen` (readable while the app runs;
@@ -1134,8 +1137,10 @@ Milestones as coherent slices, each independently shippable:
    `SCHEMA_VERSION = 2026-06-14T00:00:00Z`. Seed the three system equity
    categories per ledger via `ensureSystemCategories`. Port the `Tx`
    projection (§2.6), the §2.4 selectors, and `auditLedger` (§4.9). Parity
-   suite green incl. projection-parity + audit-parity (§12). A read-only
-   iPhone app (Accounts/Activity/Budgets/Insights) over an imported `.finch`
+    suite green incl. projection-parity + audit-parity (§12). A read-only
+    iPhone app (Accounts/Activity/Budgets/Settings; the 4 tabs from
+    Phase 1.0 — Phase 1.5 adds the 5th tab, Insights) over an
+    imported `.finch`
    pack.
 2. **Entry + core CRUD.** Add transaction (all kinds), transaction detail
    edits, pending confirm, budgets, scheduled post-now, **ledger CRUD**
@@ -1307,7 +1312,7 @@ during the relevant phase.
   `frontend/lib/db/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
   / `auditLedger` / `ensureSystemCategories`); projection
   `frontend/lib/db/state.ts` (`projectState`); mutations
-  `frontend/lib/db/mutations.ts` (delegate to the chokepoint under DE);
+  `frontend/lib/db/mutate.ts` (dispatcher) + `frontend/lib/db/domain/<x>/mutations.ts` (delegate to the chokepoint under DE);
   derivations `frontend/lib/select.ts`; rules `frontend/lib/rules/*`; money
   `frontend/components/use-money.ts` + `frontend/lib/fx.ts`; reconcile
   `frontend/lib/reconcile.ts`; recurrence `frontend/lib/recurrence.ts`;

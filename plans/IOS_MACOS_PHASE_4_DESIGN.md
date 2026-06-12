@@ -44,8 +44,8 @@ engine, etc.).
 **Phase 4 is a UI-heavy phase** — the chokepoint is unchanged
 from Phase 2. Most of the work is in the iOS UI for the 7
 features. The selectors from Phase 1.5 already cover most of
-the read-side needs (`reconcileAccount` selector, the rules
-engine, etc.).
+the read-side needs (the rules engine, the budget progress
+selectors, etc.).
 
 **Non-goals (firm)**:
 
@@ -71,7 +71,7 @@ engine, etc.).
   resolved decision.
 - **Android** — not in the plan.
 
-**Estimated scope**: ~2,500-3,500 lines SwiftUI (7 features ×
+**Estimated scope**: ~2,100-3,500 lines SwiftUI (7 features ×
 ~300-500 lines each) + ~500 lines glue (the rules engine port +
 the reconcile CSV parser + the FX rate editor) + ~400 lines
 parity tests (the rules engine parity suite + reconcile
@@ -186,10 +186,15 @@ The reconcile flow uses the Phase 2 actions:
   (the web's `reconcileAccount` action handles the
   checkpoint + the optional adjustment entry in one call)
 
-The `reconcileAccount` selector from Phase 1.5 (`lib/select.ts::reconcileAccount`)
-computes the cleared sum, the gap, and the un-cleared entries
-list. The Swift port (Phase 1.5) already exists; Phase 4
-wires the UI to it.
+The reconcile UI's read-side math (cleared sum, gap, un-cleared
+entries list) is a small inline computation over the in-memory
+`Tx[]` cache, not a ported Phase 1.5 selector — there is no
+`reconcileAccount` selector in `lib/select.ts` (the 32
+selectors are listed in Phase 1.5 §2). The chokepoint
+`Args.reconcileAccount({accountId, statementBalance,
+statementDate, postAdjustment})` is a Phase 2 *write* action
+that handles the checkpoint + the optional adjustment entry
+in one call.
 
 ### 2.4 — Statement CSV import (optional, Phase 4.5)
 
@@ -794,13 +799,20 @@ spec.)
 - **Internal consistency**: §2's reconcile uses
   `Args.setCleared` + `Args.reconcileAccount` (both Phase
   2 actions). §3's rules engine uses `Args.backfillRule`
-  + `Args.setRuleEnabled` (both Phase 2 actions). §4's
+  + `Args.updateRule({id, patch: {isActive: true|false}})`
+  (the rule's `isActive` field is patchable via the
+  existing `updateRule` action — no separate
+  `setRuleEnabled` action; the Phase 2 chokepoint
+  inventory has no `setRuleEnabled`). §4's
   transfers use `Args.createTransfer` +
   `Args.updateTransfer` + `Args.deleteTransfer` (all
   Phase 2). §5's reference data uses
   `Args.createCategory` + `Args.updateCategory` +
-  `Args.deleteCategory` + `Args.archiveCategory` (all
-  Phase 2). §6's saved searches use the local DB's
+  `Args.deleteCategory` (all Phase 2; categories don't have
+  a separate "archive" action — deleted categories are
+  removed from the in-memory cache; the reconciliation
+  comes from the chokepoint's referential-integrity
+  enforcement). §6's saved searches use the local DB's
   `app_state` table (matches the web). §7's bulk
   recategorize uses `Args.bulkRecategorize` (Phase 2). §8's
   FX uses `Args.changeLedgerBase` + `Args.setExchangeRate`

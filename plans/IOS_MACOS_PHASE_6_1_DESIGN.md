@@ -173,7 +173,7 @@ public enum SpotlightEntity {
     var thumbnailURL: URL? { /* ... */ }
 
     func toSearchableItem() -> CSSearchableItem {
-        let attrs = CSSearchableItemAttributeSet(contentType: .text)
+        let attrs = CSSearchableItemAttributeSet(itemContentType: UTType.content.identifier)
         attrs.title = title
         attrs.contentDescription = contentDescription
         attrs.keywords = keywords
@@ -288,10 +288,10 @@ parses the unique identifier and routes to the right screen:
 public final class DeepLinkRouter {
     public var pendingNavigation: DeepLinkTarget? = nil
 
-    public func route(to: uniqueIdentifier: String) {
-        // uniqueIdentifier shape: "tx:<entry_id>", "account:<id>",
+    public func route(to identifier: String) {
+        // identifier shape: "tx:<entry_id>", "account:<id>",
         //   "category:<id>", "counterparty:<id>", "budget:<id>"
-        let parts = uniqueIdentifier.split(separator: ":", maxSplits: 1)
+        let parts = identifier.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
         guard parts.count == 2 else { return }
         let domain = String(parts[0])
         let id = String(parts[1])

@@ -102,7 +102,7 @@ port matches.
 @MainActor
 @Observable
 public final class AutoPackDebouncer {
-    private var pendingWorkItem: DispatchWorkItem?
+    private var pendingTask: Task<Void, Never>?
     private let debounceInterval: TimeInterval
     private let packBuilder: PackBuilder
     private let iCloudWriter: ICloudWriter
@@ -115,14 +115,12 @@ public final class AutoPackDebouncer {
 
     /// Called by FinchStore.apply after every successful write.
     public func schedule() {
-        pendingWorkItem?.cancel()  // cancel the previous pending pack
-        let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                await self?.buildAndWritePack()
-            }
+        pendingTask?.cancel()  // cancel the previous pending pack
+        pendingTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(debounceInterval))
+            if Task.isCancelled { return }
+            await self?.buildAndWritePack()
         }
-        pendingWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: work)
     }
 
     /// Called by the "Sync now" button. Bypasses the debounce.
@@ -206,10 +204,17 @@ public final class ICloudWriter {
         var writeError: Error?
         coordinator.coordinate(writingItemAt: destination, options: .forReplacing, error: &coordError) { url in
             do {
-                if FileManager.default.fileExists(atPath: url.path) {
-                    try FileManager.default.removeItem(at: url)
-                }
-                try FileManager.default.copyItem(at: pack, to: url)
+                // `replaceItemAt` is atomic and respects the
+                // iCloud file-presenter coordination; the
+                // two-step (remove + copy) leaves a window
+                // where the file is absent.
+                try FileManager.default.replaceItemAt(
+                    url,
+                    withItemAt: pack,
+                    backupItemName: nil,
+                    options: [],
+                    resultingItemURL: nil
+                )
             } catch {
                 writeError = error
             }
@@ -262,8 +267,11 @@ public final class ICloudFolderWatcher {
         self.folderURL = folderURL
         self.onNewFile = onNewFile
         let q = NSMetadataQuery()
-        q.searchScopes = [folderURL.path]
-        q.predicate = NSPredicate(format: "%K LIKE '*.finch'", NSMetadataItemFSNameKey)
+        q.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
+        // Filter on the filename key path (Spotlight metadata
+        // key, not NSMetadataItem). Gate on the `.finch` UTI
+        // (registered in Phase 1.0) for accurate matching.
+        q.predicate = NSPredicate(format: "kMDItemFSName LIKE[c] '*.finch'")
         self.query = q
     }
 
@@ -368,8 +376,9 @@ with the **extended attribute as the primary signal**:
 
 1. **Primary**: the file's `com.apple.fileprovider.conflict`
    extended attribute (Apple's canonical signal). The
-   `URLResourceKey` API exposes this attribute; the watcher
-   queries it on every file in the iCloud folder.
+   watcher reads this via `getxattr(2)` directly (not
+   via `URLResourceKey`, which doesn't expose the file-
+   provider conflict attribute on iOS).
 2. **Fallback**: the filename pattern `(Conflict YYYY-MM-DD)`
    (the substring "Conflict" in the filename). Useful for
    older iOS versions or edge cases where the extended
@@ -415,8 +424,12 @@ file; instead, it shows the **Conflict-copy sheet**.
 The user picks one (or taps "Compare side-by-side" for a
 more detailed diff). The chosen file is imported through
 the Phase 1.0 pipeline; the other is deleted from the
-iCloud folder (and added to a "Deleted conflicts" section
-in Settings, recoverable for 30 days).
+iCloud folder (and copied to `Application Support/
+deleted_conflicts/` for 30 days — this is the **app's**
+retention, not iCloud's, since iCloud Drive's conflict
+copies are deleted locally the moment we removeItem).
+The "Deleted conflicts" section in Settings lets the user
+recover the file for 30 days.
 
 ### 4.3 — Side-by-side compare
 
@@ -574,16 +587,20 @@ The plan's §14.1 still-open questions mostly land in Phase
   changes are saved locally and will sync when iCloud
   returns."
 
-- **App Group vs iCloud-only container**: Phase 1.0
-  designed the iOS app's data to live in the iCloud
-  `Documents/` directory. Phase 6 (Share Extension
-  receipts) needs the data to live in a **local** app
-  group container (so the Share Extension process can
-  read it). The Phase 5 design doesn't change this; the
-  data is in the iCloud container, and the Share
-  Extension in Phase 6 will need a different design
-  (e.g., copy the attachment to a shared local path
-  before the Share Extension writes).
+- **App Group vs iCloud-only container** (resolved in
+  Phase 6.5 §2.2): the iOS app's data lives in the
+  iCloud `Documents/finch/` directory (for iCloud Drive
+  sync). The App Group is a separate local container
+  (added in Phase 6.5's Xcode setup) that the Share
+  Extension + widgets + Watch app use as a shared
+  scratch space — the App Group holds
+  `pending_attachments/manifests/` (staged Share
+  Extension files), `widget_snapshot.json` (the
+  widget's read-side data), and any other cross-
+  process artifacts. The live DB + attachments are
+  NOT in the App Group; they're in the iCloud
+  container. The two coexist: iCloud container for
+  user data, App Group for cross-process state.
 
 **Specifically for the debouncer**:
 
@@ -592,7 +609,7 @@ The plan's §14.1 still-open questions mostly land in Phase
   background debounce is unreliable; the app may be
   killed mid-debounce). The proposal does this.
 - **Debounce across app launches**: the debouncer doesn't
-  survive an app launch (the in-memory `pendingWorkItem`
+  survive an app launch (the in-memory `pendingTask`
   is lost). On app launch, the folder-watcher does an
   initial scan (which catches any packs the previous
   session didn't sync). The proposal does this.

@@ -62,8 +62,11 @@ constraint.
   The Mac equivalent is **Shortcuts** (the macOS Sonoma+
   feature). Phase 6.4 is iOS-only; Shortcuts is a
   follow-up.
-- **No natural-language parsing of arbitrary phrases** —
-  the intents are **explicit** (the user invokes
+- **No app-implemented natural-language parsing** — the
+  intents use Siri's standard `@Parameter` extraction
+  (Siri parses the amount/description/account from the
+  user's phrase; the app doesn't add its own NLU layer).
+  The intents are **explicit** (the user invokes
   "add a $6 coffee to Personal in finch" and Siri matches
   it to the `AddTransaction` intent). The user doesn't
   need to guess the phrasing. If Siri can't disambiguate
@@ -140,9 +143,14 @@ public struct AddTransactionIntent: AppIntent {
             return .result(dialog: "Please open finch and select a ledger first.")
         }
         // If account is nil, use the most-recently-used account
-        let accountId = account?.id ?? store.mostRecentAccountId ?? {
+        let accountId: String
+        if let a = account?.id {
+            accountId = a
+        } else if let recent = store.mostRecentAccountId {
+            accountId = recent
+        } else {
             return .result(dialog: "Please specify an account in finch first.")
-        }()
+        }
         // If category is nil, use the most-recently-used category
         let categoryId = category?.id ?? store.mostRecentCategoryId
 
@@ -163,11 +171,10 @@ public struct AddTransactionIntent: AppIntent {
         }
 
         // 3. Donate the intent so Siri learns the pattern
-        let donation = IntentDonation(self)
-        try? await IntentDonationDonor.shared.donate(donation)
+        try? await self.donate()
 
         // 4. Return a spoken confirmation
-        let amountString = NumberFormatter.localizedString(from: NSNumber(value: amount), number: .currency)
+        let amountString = amount.formatted(.currency(code: store.activeLedger.baseCurrency))
         return .result(dialog: "Added \(description) for \(amountString) to finch.")
     }
 }
@@ -216,7 +223,7 @@ public struct CheckBalanceIntent: AppIntent {
         }
 
         let balance = store.accounts.first(where: { $0.id == accountId })?.currentBalance ?? 0
-        let balanceString = NumberFormatter.localizedString(from: NSNumber(value: balance), number: .currency)
+        let balanceString = balance.formatted(.currency(code: store.activeLedger.baseCurrency))
         let accountName = store.accounts.first(where: { $0.id == accountId })?.name ?? "your account"
         return .result(value: balance, dialog: "Your \(accountName) balance is \(balanceString).")
     }
@@ -436,8 +443,8 @@ public struct LedgerQuery: EntityQuery {
 ```
 
 The `LedgerEntity` is referenced by `SwitchLedgerIntent`. The
-4 ledgers from the web's `MOCK` data (Personal, Business,
-Family, Taxes) are the suggested entities.
+4 ledgers from the web's `data/ledgers.json` (Personal,
+Family, Side studio, Japan '26) are the suggested entities.
 
 ## §3. The `AccountEntity` and `CategoryEntity`
 
@@ -451,6 +458,7 @@ and categories, making them available as Siri parameters.
 public struct AccountEntity: AppEntity, Identifiable {
     public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Account"
     public static var defaultQuery = AccountQuery()
+    public static var defaultResult: AccountEntity? = nil  // iOS 17+ — no fallback
 
     public let id: String
     public let name: String
@@ -459,8 +467,6 @@ public struct AccountEntity: AppEntity, Identifiable {
     public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)", subtitle: "\(accountType)")
     }
-
-    public static var defaultQuery = AccountQuery()
 }
 
 public struct AccountQuery: EntityQuery {
@@ -570,7 +576,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Log an expense in \(.applicationName)"
             ],
             shortTitle: "Add Transaction",
-            systemImageName: "plus.circle"
+            systemImageName: "plus.circle",
+            parameterSummary: IntentParameterSummary("Add \(\.$amount) for \(\.$description) to \(\.$account)")
         )
         AppShortcut(
             intent: CheckBalanceIntent(),
@@ -579,7 +586,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "What's my \(.applicationName) balance"
             ],
             shortTitle: "Check Balance",
-            systemImageName: "dollarsign.circle"
+            systemImageName: "dollarsign.circle",
+            parameterSummary: IntentParameterSummary("Check balance for \(\.$account)")
         )
         AppShortcut(
             intent: MarkClearedIntent(),
@@ -588,7 +596,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Reconcile in \(.applicationName)"
             ],
             shortTitle: "Mark Cleared",
-            systemImageName: "checkmark.circle"
+            systemImageName: "checkmark.circle",
+            parameterSummary: IntentParameterSummary("Mark transactions cleared for \(\.$account)")
         )
         AppShortcut(
             intent: CreateBudgetIntent(),
@@ -597,7 +606,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Add a budget in \(.applicationName)"
             ],
             shortTitle: "Create Budget",
-            systemImageName: "target"
+            systemImageName: "target",
+            parameterSummary: IntentParameterSummary("Create a budget for \(\.$category)")
         )
         AppShortcut(
             intent: SwitchLedgerIntent(),
@@ -606,7 +616,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Change ledger in \(.applicationName)"
             ],
             shortTitle: "Switch Ledger",
-            systemImageName: "rectangle.stack"
+            systemImageName: "rectangle.stack",
+            parameterSummary: IntentParameterSummary("Switch to \(\.$ledger)")
         )
         AppShortcut(
             intent: ShowInsightsIntent(),
@@ -615,7 +626,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Open my insights in \(.applicationName)"
             ],
             shortTitle: "Show Insights",
-            systemImageName: "chart.bar"
+            systemImageName: "chart.bar",
+            parameterSummary: IntentParameterSummary("Show my insights")
         )
         AppShortcut(
             intent: OpenScreenIntent(),
@@ -624,7 +636,8 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
                 "Go to a tab in \(.applicationName)"
             ],
             shortTitle: "Open Screen",
-            systemImageName: "arrow.up.forward.app"
+            systemImageName: "arrow.up.forward.app",
+            parameterSummary: IntentParameterSummary("Open \(\.$screen)")
         )
     }
 }
