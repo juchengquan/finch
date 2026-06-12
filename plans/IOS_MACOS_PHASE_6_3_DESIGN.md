@@ -32,6 +32,21 @@
 - `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` — Phase 6.2 (Notifications; same Xcode project)
 - `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents; sensitive intents gated by biometric)
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §3 (The `BiometricGate` class) |
+| §3. iOS UI surfaces | §2 (The biometric policy — the 4 policies are the user-facing settings) |
+| §4. Cross-cutting concerns | §5 (Data protection at rest) + §6 (Settings › Security section) |
+| §5. Wire contracts | §4 (Sensitive-action gating — gates the chokepoint) |
+| §6. CI / test infrastructure | §7 (CI changes) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add an **optional biometric lock** to the iOS

@@ -26,6 +26,21 @@
 - `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; same shell)
 - `plans/IOS_MACOS_PLAN.md` §6 — the multi-platform strategy
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (The adaptive shell itself) |
+| §3. iOS UI surfaces | §3 (macOS menu bar + keyboard shortcuts) + §4 (the ⌘K command palette) + §5 (iPad-specific layout tweaks) |
+| §4. Cross-cutting concerns | §2 (The adaptive shell is the cross-cutting concern) |
+| §5. Wire contracts | §6 (Distribution: Mac App Store + direct download) |
+| §6. CI / test infrastructure | §7 (CI changes) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Adapt the iPhone app to **iPad** and **macOS** via

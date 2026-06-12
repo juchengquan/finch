@@ -31,6 +31,21 @@
 - `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; reuses App Group from Phase 6.5)
 - `plans/IOS_MACOS_PLAN.md` §4.3 — the pack-based sync model
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Auto-pack debounce) + §3 (iCloud folder-watcher) |
+| §3. iOS UI surfaces | §4 (Conflict-copy UX) + §5 (Settings › Sync section) |
+| §4. Cross-cutting concerns | §6 (Orphan attachment sweep) |
+| §5. Wire contracts | §2 (auto-pack debounce — chokepoint dispatches write) + §3 (iCloud folder-watcher — pack import) |
+| §6. CI / test infrastructure | §7 (CI changes) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Implement the **iCloud Drive sync layer** on top of
