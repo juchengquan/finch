@@ -31,6 +31,21 @@
 - `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; same Xcode project)
 - `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` §3 — the weekly digest (uses `weeklyDigest` selector)
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Permission request) + §3 (The `NotificationScheduler`) |
+| §3. iOS UI surfaces | §5 (Action handlers) |
+| §4. Cross-cutting concerns | §2 (Permission request flow) + §4 (Settings › Notifications section) |
+| §5. Wire contracts | §3 (The `NotificationScheduler` — its action handlers dispatch chokepoint writes) |
+| §6. CI / test infrastructure | §6 (CI changes) |
+| §7. Out of scope (firm) | §8 |
+| §8. Spec self-review + open questions | §9 + §7 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Schedule **local notifications** for 4 categories

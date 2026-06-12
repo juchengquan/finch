@@ -28,6 +28,21 @@
 - `plans/IOS_MACOS_PLAN.md` §2.1 — the chokepoint surface
 - `plans/IOS_MACOS_ROADMAP.md` — Phase 4 sketch
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | (covered across §2-§8, the 7 features; each has a wire shape and UI sketch) |
+| §3. iOS UI surfaces | §2-§8 (per-feature UI sketches for the 7 power features) |
+| §4. Cross-cutting concerns | §9 (Cross-cutting UI patterns) |
+| §5. Wire contracts | §2-§8 (each feature has a wire shape — the chokepoint action) |
+| §6. CI / test infrastructure | (not directly covered — stub to `IOS_MACOS_PLAN.md` §12) |
+| §7. Out of scope (firm) | §11 |
+| §8. Spec self-review + open questions | §12 + §10 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **power features** the web app ships that

@@ -35,6 +35,21 @@
 - `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (Share Extension; same Xcode project)
 - `plans/IOS_MACOS_ROADMAP.md` — Phase 6.1 sketch
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (The Spotlight index itself) |
+| §3. iOS UI surfaces | §3 (Deep-linking from Spotlight) |
+| §4. Cross-cutting concerns | §4 (Permissions + entitlement) |
+| §5. Wire contracts | (not directly covered — stub to `IOS_MACOS_WIRE_FORMAT.md` §4 for the pack format, since Spotlight indexes are persisted via the chokepoint projection) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §8 + §6 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Index finch's transactions / merchants / accounts /

@@ -36,6 +36,21 @@
 - `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; reuses App Group)
 - `plans/IOS_MACOS_PHASE_2_DESIGN.md` §3.3 — `setEntryAttachment` action
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (The Share Extension target) + §3 (The pending attachment manifest) + §6 (The Share Extension's entitlements) |
+| §3. iOS UI surfaces | §4 (The mini-form) + §5 (The "existing transaction" picker) + §7 (The `PhotosPicker` integration) |
+| §4. Cross-cutting concerns | §2 (The Share Extension target — process boundary + App Group) |
+| §5. Wire contracts | §3 (manifests are written to the App Group + the iOS app reads them and dispatches chokepoint writes) |
+| §6. CI / test infrastructure | §8 (CI changes) |
+| §7. Out of scope (firm) | §10 |
+| §8. Spec self-review + open questions | §11 + §9 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Land the **long-deferred receipt-photo feature**

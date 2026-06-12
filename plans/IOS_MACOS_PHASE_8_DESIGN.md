@@ -41,6 +41,21 @@
 - `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (the 75th action; Phase 8 row sync may add 1-2 more)
 - `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; Phase 8 doesn't change these)
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Architecture: CloudKit + the chokepoint) + §3 (The migration from pack-based to row-level sync) |
+| §3. iOS UI surfaces | §4 (Settings › Sync section, Phase 8 additions) |
+| §4. Cross-cutting concerns | §3 (the migration) + §8 (Why we're building this in a future phase — context) |
+| §5. Wire contracts | §2 (CloudKit schema — the row-level wire format) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §9 + §6 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Replace the pack-based sync model

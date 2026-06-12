@@ -31,6 +31,21 @@
 - `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack engine)
 - `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (App Group setup)
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Widgets) + §3 (Live Activities) + §4 (Apple Watch app) — the 3 extension targets |
+| §3. iOS UI surfaces | §2 (Widgets UI) + §3 (Live Activities UI) + §4 (Watch UI) |
+| §4. Cross-cutting concerns | (not directly covered — stub to `IOS_MACOS_PLAN.md` §10 for the multi-platform strategy) |
+| §5. Wire contracts | §2 (widget reads from the chokepoint projection) + §3 (Live Activity updates via the chokepoint) + §4 (Watch quick-add dispatches chokepoint writes) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §8 + §6 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **Apple-platform native surfaces** that

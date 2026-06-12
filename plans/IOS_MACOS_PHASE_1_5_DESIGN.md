@@ -26,6 +26,21 @@
 - `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint + write screens)
 - `plans/IOS_MACOS_PLAN.md` §2.4 — the selectors (read brains)
 
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Selector classification) + §3 (Selectors module layer rules) + §6 (Selectors module API surface) |
+| §3. iOS UI surfaces | §5 (Insights tab UI) |
+| §4. Cross-cutting concerns | §3 (Selectors module layer rules — the cross-domain DB access) |
+| §5. Wire contracts | §6 (Selectors module API surface — the wire from selectors to chokepoint) |
+| §6. CI / test infrastructure | §4 (JSON-golden parity test infrastructure) + §7 (Parity test file layout) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **Insights** tab (5th tab) + port the remaining 25
