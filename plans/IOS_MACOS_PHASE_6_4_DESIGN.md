@@ -24,6 +24,15 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; intents dispatch through it)
+- `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` — Phase 6.1 (Spotlight; same `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; sensitive intents gated)
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+
 ## §1. Goal & non-goals
 
 **Goal** — Add **Siri** integration so the user can:

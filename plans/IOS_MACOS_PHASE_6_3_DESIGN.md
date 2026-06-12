@@ -23,6 +23,15 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.13 — biometric / passcode fallback
+- `plans/IOS_MACOS_PLAN.md` §10 — the biometric policy
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` — Phase 1.0 (read-only shell; biometric gates the app)
+- `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` — Phase 6.1 (Spotlight; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` — Phase 6.2 (Notifications; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents; sensitive intents gated by biometric)
+
 ## §1. Goal & non-goals
 
 **Goal** — Add an **optional biometric lock** to the iOS

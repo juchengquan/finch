@@ -18,6 +18,17 @@
 > `Selectors` modules exist, the read-only UI is shipped, the
 > JSON-golden parity harness is in place._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.1 — the 74 actions location index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PLAN.md` §2.1 — the chokepoint surface
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` — Phase 1.0 (read-only shell)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (selectors + parity tests)
+- `plans/IOS_MACOS_PHASE_3_DESIGN.md` — Phase 3 (adaptive shell, post-Phase-2)
+- `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents dispatch)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (setEntryAttachment is the 75th)
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **74-action write chokepoint** to FinchCore (port of

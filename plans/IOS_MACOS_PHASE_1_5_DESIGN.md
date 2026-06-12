@@ -18,6 +18,14 @@
 > is complete and the `Project` + `Money` + `Audit` + `Pack` modules
 > exist._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §5 — the fixture format
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §1, §5, §8 — Phase 1.0 (the 4-tab shell + 7 selectors + parity suite)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint + write screens)
+- `plans/IOS_MACOS_PLAN.md` §2.4 — the selectors (read brains)
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **Insights** tab (5th tab) + port the remaining 25

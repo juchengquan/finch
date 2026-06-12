@@ -21,6 +21,16 @@
 > shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.4 — App Group container (added in Phase 6.5, reused here)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §4 — the pack format (widget snapshot reads from the live DB)
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §1 — the 4-tab list (the widget grid mirrors it)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (selectors that drive widget content)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; the Watch quick-add uses `addTransaction`)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack engine)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (App Group setup)
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **Apple-platform native surfaces** that

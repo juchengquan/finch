@@ -9,6 +9,16 @@
 > (last updated 2026-06-12 via PR #139), and the double-entry design in
 > `plans/done/DOUBLE_ENTRY_PLAN.md`._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index (glossary, location index, master tab list)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` — the wire-format annex (74-action Args, pack format, I18nError, fixture format)
+- `plans/IOS_MACOS_PLAN.md` §2 — the domain model
+- `plans/IOS_MACOS_PLAN.md` §4 — the 8-step import pipeline
+- `plans/IOS_MACOS_PLAN.md` §12 — the parity suite
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (adds Insights tab + 25 selectors)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (74-action chokepoint + 7 write screens)
+
 ## §1. Goal & non-goals
 
 **Goal** — Ship a working, verifiable iOS app (iPhone 15 simulator, iOS 26+)

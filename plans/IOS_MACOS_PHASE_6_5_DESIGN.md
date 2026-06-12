@@ -27,6 +27,15 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.4, §2.5 — App Group + 75th action (`setEntryAttachment`)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74+1 Args catalogue
+- `plans/IOS_MACOS_PLAN.md` §2.5 — the receipt attachments feature
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud; App Group is added here in Phase 6.5, not Phase 5)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; reuses App Group)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` §3.3 — `setEntryAttachment` action
+
 ## §1. Goal & non-goals
 
 **Goal** — Land the **long-deferred receipt-photo feature**

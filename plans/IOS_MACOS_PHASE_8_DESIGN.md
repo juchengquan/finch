@@ -31,6 +31,16 @@
 > Assumes Phases 1.0-7 are complete; the chokepoint + iCloud
 > sync + widgets + Watch are all shipping._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2, §3 — the 74+1 Args + I18nError wire format
+- `plans/IOS_MACOS_PLAN.md` §13 — the framing (Phase 8 is committed to building per Q22)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; CloudKit row-level sync observes it)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (pack-based sync model; Phase 8 is the row-level successor)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (the 75th action; Phase 8 row sync may add 1-2 more)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; Phase 8 doesn't change these)
+
 ## §1. Goal & non-goals
 
 **Goal** — Replace the pack-based sync model

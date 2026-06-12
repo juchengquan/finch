@@ -17,6 +17,15 @@
 > Phases 1.0, 1.5, and 2 are complete; the read + write surfaces
 > are shipped on iPhone._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §3 — the master iPhone tab list (4→5→6 tabs)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (6 tabs + 7 write screens)
+- `plans/IOS_MACOS_PHASE_4_DESIGN.md` — Phase 4 (power features; runs on the same adaptive shell)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack engine; same shell)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; same shell)
+- `plans/IOS_MACOS_PLAN.md` §6 — the multi-platform strategy
+
 ## §1. Goal & non-goals
 
 **Goal** — Adapt the iPhone app to **iPad** and **macOS** via

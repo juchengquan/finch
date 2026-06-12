@@ -19,6 +19,15 @@
 > apps are shipping with the 6 tabs + 7 write screens + the 74-
 > action chokepoint._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack; runs after Phase 4)
+- `plans/IOS_MACOS_PLAN.md` §2.1 — the chokepoint surface
+- `plans/IOS_MACOS_ROADMAP.md` — Phase 4 sketch
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **power features** the web app ships that

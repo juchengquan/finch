@@ -21,6 +21,16 @@
 > the full write surface; the iCloud `Documents/finch/` folder
 > exists but is not yet watched._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.7, §2.14 — pack format + iCloud conflict
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §4 — the pack format (build + parse + extract + detectFileKind)
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §4 — the Phase 1.0 import pipeline
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; pack entries dispatch through it)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (App Group is added here, not Phase 5)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; reuses App Group from Phase 6.5)
+- `plans/IOS_MACOS_PLAN.md` §4.3 — the pack-based sync model
+
 ## §1. Goal & non-goals
 
 **Goal** — Implement the **iCloud Drive sync layer** on top of
