@@ -22,7 +22,63 @@ public enum Transactions {
         .confirmAllPending: confirmAllPending,
         .setTransactionTags: setTransactionTags,
         .bulkRecategorize: bulkRecategorize,
+        .confirmTransaction: confirmTransaction,
+        .confirmPendingWithMerchant: confirmPendingWithMerchant,
+        .removeAttachment: removeAttachment,
+        // DEFERRED: setTransactionSplits — the web's per-split base allocation
+        // (sign × ratio + "absorb remainder") needs re-derivation against a
+        // Task-17 fixture before I trust the balance; left notImplemented.
     ]
+
+    // MARK: removeAttachment
+
+    /// Drop an attachment row. DEFERRED: the on-disk file unlink (no file store yet).
+    static func removeAttachment(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String }
+        try db.execute(sql: "DELETE FROM entry_attachments WHERE id = ?", arguments: [try args.to(A.self).id])
+    }
+
+    // MARK: confirm
+
+    private static func recomputeEntryAccounts(_ db: Database, _ entryId: String) throws {
+        for acct in try String.fetchAll(db, sql: "SELECT DISTINCT account_id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [entryId]) {
+            try Entries.recomputeAccountFromPostings(db, acct)
+        }
+    }
+
+    static func confirmTransaction(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String }
+        guard let ref = try Entries.resolveEntryRef(db, try args.to(A.self).id) else { return }
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+                       arguments: [ISO8601DateFormatter().string(from: Date()), ref.entryId])
+        try recomputeEntryAccounts(db, ref.entryId)
+    }
+
+    static func confirmPendingWithMerchant(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String; let counterpartyId: String?; let newCounterpartyName: String? }
+        let a = try args.to(A.self)
+        guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        guard let row = try Row.fetchOne(db, sql: "SELECT description, ledger_id FROM entries WHERE id = ?", arguments: [ref.entryId]) else { return }
+        let ledgerId: String = row["ledger_id"] ?? ""
+        var counterpartyId: String?
+        var description: String = row["description"] ?? ""
+        if let cpId = a.counterpartyId {
+            if let cp = try Row.fetchOne(db, sql: "SELECT name FROM counterparties WHERE id = ? AND ledger_id = ?", arguments: [cpId, ledgerId]) {
+                counterpartyId = cpId
+                description = cp["name"]
+            }
+        } else if let newName = a.newCounterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines), !newName.isEmpty {
+            let newCpId = Entries.newId("cp")
+            try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
+                           arguments: [newCpId, ledgerId, newName])
+            counterpartyId = newCpId
+            description = newName
+        }
+        try db.execute(sql: "UPDATE entries SET status = 'confirmed', confirmed_at = ?, counterparty_id = ?, description = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'",
+                       arguments: [ISO8601DateFormatter().string(from: Date()), counterpartyId, description, ref.entryId])
+        try recomputeEntryAccounts(db, ref.entryId)
+    }
+
 
     // MARK: addTransaction (same-currency path → postSimple)
 
