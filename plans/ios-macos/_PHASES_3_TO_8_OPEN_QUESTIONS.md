@@ -71,3 +71,18 @@ actions; the other 4 are documented below for a follow-up increment.
   display/projection.** The action exists; the EditTransaction "add receipt"
   PhotosPicker + an attachments projection on `Tx` are deferred (also need a file
   store + sha256 helper). Buildable later without new targets.
+
+## Phase 5 — Pack auto-sync + iCloud
+
+- ✅ **Auto-pack debounce + local backups.** `AutoBackupManager` debounces writes
+  (5s) into one `.finch` pack written to `Application Support/Backups/`, flushes
+  immediately on backgrounding / "Back up now", and prunes to the newest 14.
+  `BackupPruner` is a pure, unit-tested retention policy. Settings › Backups shows
+  last-backup + a manual trigger. (The seed uses `Apply.apply` directly so it
+  doesn't trigger a backup — only real `store.apply` writes do, by design.)
+- 🔧 **iCloud Drive sync.** The NSMetadataQuery folder-watch on the iCloud
+  `Documents/finch/` container, conflict detection + conflict-copy resolution, and
+  the iCloud entitlement/container are device infra — not headless-CI-buildable.
+  Deferred; the pack engine they'd use is in place (buildPack + this debouncer).
+- ⏳ **Retention source.** Hard-coded to 14; the existing `app_state.backupConfig`
+  (setBackupRetention) could feed it. Refinement.

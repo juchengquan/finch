@@ -30,6 +30,7 @@ struct FinchApp: App {
                 NotificationService.shared.configure(store: store, router: router)
                 await NotificationService.shared.requestPermissionIfNeeded()
                 await NotificationService.shared.refresh()
+                AutoBackupManager.shared.configure(store: store)   // Phase 5
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
@@ -38,7 +39,9 @@ struct FinchApp: App {
             }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
-                case .background: gate.didEnterBackground()
+                case .background:
+                    gate.didEnterBackground()
+                    Task { await AutoBackupManager.shared.flush() }   // Phase 5: flush before kill
                 case .active: gate.didBecomeActive()
                 default: break
                 }

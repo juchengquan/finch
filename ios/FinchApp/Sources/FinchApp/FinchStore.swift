@@ -103,6 +103,8 @@ public final class FinchStore: ObservableObject {
         Task { await SpotlightIndexer.shared.indexAll(store: self) }
         // Phase 6.2: re-plan notifications from the new state.
         Task { await NotificationService.shared.refresh() }
+        // Phase 5: debounce an auto-backup pack.
+        AutoBackupManager.shared.schedule()
     }
 
     // MARK: - Import (DESIGN §4)
