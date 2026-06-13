@@ -4,7 +4,7 @@ import Foundation
 // camelCase to match the web `Tx`/`AccountRow`/`BudgetRow` JSON verbatim (the
 // parity fixtures decode straight into these). Extra JSON keys are ignored.
 
-public struct Tx: Codable, Equatable, Sendable {
+public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var merchant: String
     public var category: String?
@@ -37,7 +37,7 @@ public struct TxSplit: Codable, Equatable, Sendable {
     public var description: String?
 }
 
-public struct AccountRow: Codable, Equatable, Sendable {
+public struct AccountRow: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var balance: Double
     public var ledgerId: String?
@@ -46,6 +46,9 @@ public struct AccountRow: Codable, Equatable, Sendable {
     public var isActive: Bool?
     public var name: String?
     public var type: String?
+    public var groupId: String?
+    public var groupName: String?
+    public var sortOrder: Int?
 }
 
 // `BudgetRow` lives in Project/Budget.swift (the full web-matching projection
