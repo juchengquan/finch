@@ -10,6 +10,7 @@
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import type { BudgetRow } from '@/lib/db/domain/budgets/types';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 
 /** The Phase-1.0 selectors (see _CANONICAL_WEB_FACTS.md §E) + the Phase-1.5
  *  selectors as they are ported batch-by-batch. */
@@ -26,7 +27,10 @@ export type SelectorName =
   | 'netWorthByMonth' | 'netWorthExplained' | 'balanceSeries'
   | 'netWorthSeries' | 'netWorthByAccountType' | 'selectTransfers'
   // Phase 1.5 — batch 3b (forecasts)
-  | 'monthForecast' | 'accountForecast';
+  | 'monthForecast' | 'accountForecast'
+  // Phase 1.5 — batch 4 (holdings / FX)
+  | 'holdingsForAccount' | 'holdingValue' | 'holdingGainLoss'
+  | 'holdingsValueForAccount' | 'investmentAccountTotal' | 'unrealizedFx';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -61,6 +65,10 @@ const schedOf = (over: Partial<ScheduledTemplate>): ScheduledTemplate => ({
   id: 'st1', name: 'Sched', type: 'expense', amount: -40, frequency: 'monthly',
   dayOfMonth: 25, accountId: 'a1', account: 'Checking', autoPost: 0,
   nextRun: '2026-01-25', lastRun: '', ...over,
+});
+const holdOf = (over: Partial<Holding>): Holding => ({
+  id: 'h1', ledgerId: 'personal', accountId: 'a1', symbol: 'AAPL', name: null,
+  shares: 10, costBasis: 1000, currency: 'USD', lastPrice: 120, lastPriceDate: null, notes: null, ...over,
 });
 
 export const CASES: SelectorCase[] = [
@@ -291,4 +299,37 @@ export const CASES: SelectorCase[] = [
       scheduled: [schedOf({ id: 'st1', name: 'Rent', type: 'expense', amount: -100,
         frequency: 'monthly', dayOfMonth: 20, accountId: 'a1', startDate: '2026-01-20', nextRun: '2026-01-20' })],
       today: '2026-05-15', horizonDays: 30 } },
+
+  // ════════════ Phase 1.5 — batch 4: holdings / FX ════════════
+
+  // ── holdingsForAccount(holdings, accountId) → [Holding] ──
+  { name: 'filter-by-account', selector: 'holdingsForAccount',
+    input: { holdings: [holdOf({ id: 'h1', accountId: 'a1' }), holdOf({ id: 'h2', accountId: 'a2' })],
+      accountId: 'a1' } },
+
+  // ── holdingValue(h) → number | null ──
+  { name: 'priced', selector: 'holdingValue', input: { h: holdOf({ shares: 10, lastPrice: 120 }) } },
+  { name: 'no-price', selector: 'holdingValue', input: { h: holdOf({ lastPrice: null }) } },
+
+  // ── holdingGainLoss(h) → number | null ──
+  { name: 'gain', selector: 'holdingGainLoss', input: { h: holdOf({ shares: 10, lastPrice: 120, costBasis: 1000 }) } },
+
+  // ── holdingsValueForAccount(holdings, accountId) → number (unpriced → cost basis) ──
+  { name: 'sum-with-fallback', selector: 'holdingsValueForAccount',
+    input: { holdings: [holdOf({ id: 'h1', accountId: 'a1', shares: 10, lastPrice: 120 }),
+                        holdOf({ id: 'h2', accountId: 'a1', lastPrice: null, costBasis: 500 })],
+      accountId: 'a1' } },
+
+  // ── investmentAccountTotal(account, holdings) → number ──
+  { name: 'investment', selector: 'investmentAccountTotal',
+    input: { account: acctOf({ id: 'a1', type: 'investment', balance: 5000 }),
+      holdings: [holdOf({ accountId: 'a1', shares: 10, lastPrice: 120 })] } },
+  { name: 'non-investment', selector: 'investmentAccountTotal',
+    input: { account: acctOf({ id: 'a1', type: 'cash', balance: 5000 }),
+      holdings: [holdOf({ accountId: 'a1', shares: 10, lastPrice: 120 })] } },
+
+  // ── unrealizedFx(account, txns, toBase) → number (identity toBase) ──
+  { name: 'cost-vs-current', selector: 'unrealizedFx',
+    input: { account: acctOf({ id: 'a1', ledgerId: 'personal', currency: 'USD', balance: 1000, openingBalanceBase: 200 }),
+      txns: [txOf({ id: 't1', account: 'a1', amount: 300 }), txOf({ id: 't2', account: 'a1', amount: 400 })] } },
 ];

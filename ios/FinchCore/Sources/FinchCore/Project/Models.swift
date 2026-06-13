@@ -49,6 +49,7 @@ public struct AccountRow: Identifiable, Codable, Equatable, Sendable {
     public var groupId: String?
     public var groupName: String?
     public var sortOrder: Int?
+    public var openingBalanceBase: Double?   // for unrealizedFx cost basis
 }
 
 // `BudgetRow` lives in Project/Budget.swift (the full web-matching projection

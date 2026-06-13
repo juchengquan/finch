@@ -1,0 +1,20 @@
+{
+  "name": "no-price",
+  "selector": "holdingValue",
+  "input": {
+    "h": {
+      "id": "h1",
+      "ledgerId": "personal",
+      "accountId": "a1",
+      "symbol": "AAPL",
+      "name": null,
+      "shares": 10,
+      "costBasis": 1000,
+      "currency": "USD",
+      "lastPrice": null,
+      "lastPriceDate": null,
+      "notes": null
+    }
+  },
+  "expected": null
+}

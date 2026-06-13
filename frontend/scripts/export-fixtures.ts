@@ -20,8 +20,11 @@ import {
   incomeCategoryFlow, recentExpenses, findDuplicate, suggestCategory, weeklyDigest,
   netWorthByMonth, netWorthExplained, balanceSeries, netWorthSeries,
   netWorthByAccountType, selectTransfers, monthForecast, accountForecast,
+  holdingsForAccount, holdingValue, holdingGainLoss, holdingsValueForAccount,
+  investmentAccountTotal, unrealizedFx,
 } from '@/lib/select';
 import type { ScheduledTemplate } from '@/lib/store';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
 import { buildPack } from '@/lib/db/core/pack';
@@ -86,6 +89,13 @@ function runSelector(c: SelectorCase): unknown {
     // Phase 1.5 — batch 3b
     case 'monthForecast':        return monthForecast(i.txns as Tx[], i.scheduled as ScheduledTemplate[], i.ledgerId as string, i.month as string, i.today as string);
     case 'accountForecast':      return accountForecast(i.account as AccountRow, i.scheduled as ScheduledTemplate[], i.today as string, i.horizonDays as number);
+    // Phase 1.5 — batch 4 (unrealizedFx toBase = identity)
+    case 'holdingsForAccount':       return holdingsForAccount(i.holdings as Holding[], i.accountId as string);
+    case 'holdingValue':             return holdingValue(i.h as Holding);
+    case 'holdingGainLoss':          return holdingGainLoss(i.h as Holding);
+    case 'holdingsValueForAccount':  return holdingsValueForAccount(i.holdings as Holding[], i.accountId as string);
+    case 'investmentAccountTotal':   return investmentAccountTotal(i.account as AccountRow, i.holdings as Holding[]);
+    case 'unrealizedFx':             return unrealizedFx(i.account as AccountRow, i.txns as Tx[], (a: number) => a);
   }
 }
 

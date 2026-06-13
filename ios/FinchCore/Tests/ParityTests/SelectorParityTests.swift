@@ -237,4 +237,52 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(Selectors.accountForecast(f.input.account, f.input.scheduled, f.input.today, f.input.horizonDays), f.expected, name)
         }
     }
+
+    // ──────────────── Phase 1.5 — batch 4: holdings / FX ────────────────
+
+    func test_holdingsForAccount() throws {
+        struct F: Decodable { let expected: [Holding]; let input: I
+            struct I: Decodable { let holdings: [Holding]; let accountId: String } }
+        for (name, f) in try load("holdingsForAccount", F.self) {
+            XCTAssertEqual(Selectors.holdingsForAccount(f.input.holdings, f.input.accountId), f.expected, name)
+        }
+    }
+
+    func test_holdingValue() throws {
+        struct F: Decodable { let expected: Double?; let input: I; struct I: Decodable { let h: Holding } }
+        for (name, f) in try load("holdingValue", F.self) {
+            XCTAssertEqual(Selectors.holdingValue(f.input.h), f.expected, name)
+        }
+    }
+
+    func test_holdingGainLoss() throws {
+        struct F: Decodable { let expected: Double?; let input: I; struct I: Decodable { let h: Holding } }
+        for (name, f) in try load("holdingGainLoss", F.self) {
+            XCTAssertEqual(Selectors.holdingGainLoss(f.input.h), f.expected, name)
+        }
+    }
+
+    func test_holdingsValueForAccount() throws {
+        struct F: Decodable { let expected: Double; let input: I
+            struct I: Decodable { let holdings: [Holding]; let accountId: String } }
+        for (name, f) in try load("holdingsValueForAccount", F.self) {
+            XCTAssertEqual(Selectors.holdingsValueForAccount(f.input.holdings, f.input.accountId), f.expected, name)
+        }
+    }
+
+    func test_investmentAccountTotal() throws {
+        struct F: Decodable { let expected: Double; let input: I
+            struct I: Decodable { let account: AccountRow; let holdings: [Holding] } }
+        for (name, f) in try load("investmentAccountTotal", F.self) {
+            XCTAssertEqual(Selectors.investmentAccountTotal(f.input.account, f.input.holdings), f.expected, name)
+        }
+    }
+
+    func test_unrealizedFx() throws {
+        struct F: Decodable { let expected: Double; let input: I
+            struct I: Decodable { let account: AccountRow; let txns: [Tx] } }
+        for (name, f) in try load("unrealizedFx", F.self) {
+            XCTAssertEqual(Selectors.unrealizedFx(f.input.account, f.input.txns), f.expected, name)
+        }
+    }
 }
