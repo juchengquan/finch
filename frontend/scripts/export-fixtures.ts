@@ -15,7 +15,16 @@ import { CASES, type SelectorCase } from '@/lib/select.fixtures';
 import {
   accountBalance, selectTransactions, categorySpend, budgetProgress,
   cycleWindow, merchantStats, anomalyScore, type MerchantStats,
+  currentMonth, prevMonth, monthlySpending, dailySpending,
+  monthlyCashflow, topCategoryDeltas,
+  incomeCategoryFlow, recentExpenses, findDuplicate, suggestCategory, weeklyDigest,
+  netWorthByMonth, netWorthExplained, balanceSeries, netWorthSeries,
+  netWorthByAccountType, selectTransfers, monthForecast, accountForecast,
+  holdingsForAccount, holdingValue, holdingGainLoss, holdingsValueForAccount,
+  investmentAccountTotal, unrealizedFx,
 } from '@/lib/select';
+import type { ScheduledTemplate } from '@/lib/store';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
 import { buildPack } from '@/lib/db/core/pack';
@@ -57,6 +66,36 @@ function runSelector(c: SelectorCase): unknown {
       const stats = new Map<string, MerchantStats>(Object.entries(i.stats as Record<string, MerchantStats>));
       return anomalyScore(i.tx as Tx, stats, i.opts as { minCount?: number; threshold?: number } | undefined);
     }
+    // Phase 1.5 — batch 1
+    case 'currentMonth':      return currentMonth(i.txns as Tx[], i.ledgerId as string | undefined);
+    case 'prevMonth':         return prevMonth(i.month as string);
+    case 'monthlySpending':   return monthlySpending(i.txns as Tx[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'dailySpending':     return dailySpending(i.txns as Tx[], i.ledgerId as string, i.endDate as string, i.n as number);
+    case 'monthlyCashflow':   return monthlyCashflow(i.txns as Tx[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'topCategoryDeltas': return topCategoryDeltas(i.txns as Tx[], i.ledgerId as string, i.curMonth as string, i.categories as { id: string; name: string }[], i.count as number | undefined);
+    // Phase 1.5 — batch 2
+    case 'incomeCategoryFlow': return incomeCategoryFlow(i.txns as Tx[], i.categories as { id: string; name: string; color?: string | null }[], i.ledgerId as string, i.month as string, i.topN as number | undefined);
+    case 'recentExpenses':     return recentExpenses(i.txns as Tx[], i.ledgerId as string, i.limit as number | undefined);
+    case 'findDuplicate':      return findDuplicate(i.txns as Tx[], i.ledgerId as string, i.draft as { merchant: string; amount: number; accountId: string; date: string; excludeId?: string });
+    case 'suggestCategory':    return suggestCategory(i.txns as Tx[], i.ledgerId as string, i.description as string, i.counterpartyId as string | null | undefined, i.opts as { minCount?: number; minConfidence?: number } | undefined);
+    case 'weeklyDigest':       return weeklyDigest(i.txns as Tx[], i.ledgerId as string, i.anchor as string);
+    // Phase 1.5 — batch 3a (toBase omitted → web default identity)
+    case 'netWorthByMonth':      return netWorthByMonth(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'netWorthExplained':    return netWorthExplained(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'balanceSeries':        return balanceSeries(i.txns as Tx[], i.accountId as string, i.currentBalance as number);
+    case 'netWorthSeries':       return netWorthSeries(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
+    case 'netWorthByAccountType': return netWorthByAccountType(i.accounts as AccountRow[], i.ledgerId as string);
+    case 'selectTransfers':      return selectTransfers(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
+    // Phase 1.5 — batch 3b
+    case 'monthForecast':        return monthForecast(i.txns as Tx[], i.scheduled as ScheduledTemplate[], i.ledgerId as string, i.month as string, i.today as string);
+    case 'accountForecast':      return accountForecast(i.account as AccountRow, i.scheduled as ScheduledTemplate[], i.today as string, i.horizonDays as number);
+    // Phase 1.5 — batch 4 (unrealizedFx toBase = identity)
+    case 'holdingsForAccount':       return holdingsForAccount(i.holdings as Holding[], i.accountId as string);
+    case 'holdingValue':             return holdingValue(i.h as Holding);
+    case 'holdingGainLoss':          return holdingGainLoss(i.h as Holding);
+    case 'holdingsValueForAccount':  return holdingsValueForAccount(i.holdings as Holding[], i.accountId as string);
+    case 'investmentAccountTotal':   return investmentAccountTotal(i.account as AccountRow, i.holdings as Holding[]);
+    case 'unrealizedFx':             return unrealizedFx(i.account as AccountRow, i.txns as Tx[], (a: number) => a);
   }
 }
 

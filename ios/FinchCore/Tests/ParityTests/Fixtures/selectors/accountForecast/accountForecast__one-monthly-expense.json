@@ -1,0 +1,188 @@
+{
+  "name": "one-monthly-expense",
+  "selector": "accountForecast",
+  "input": {
+    "account": {
+      "id": "a1",
+      "ledgerId": "personal",
+      "name": "Checking",
+      "type": "cash",
+      "currency": "USD",
+      "balance": 1000,
+      "openingBalance": 0,
+      "openingBalanceBase": 0,
+      "groupId": null,
+      "groupName": null,
+      "includeInNetWorth": 1,
+      "isActive": true,
+      "color": null,
+      "sortOrder": 0,
+      "lastReconciledAt": null,
+      "lastReconciledBalance": null,
+      "archivedAt": null
+    },
+    "scheduled": [
+      {
+        "id": "st1",
+        "name": "Rent",
+        "type": "expense",
+        "amount": -100,
+        "frequency": "monthly",
+        "dayOfMonth": 20,
+        "accountId": "a1",
+        "account": "Checking",
+        "autoPost": 0,
+        "nextRun": "2026-01-20",
+        "lastRun": "",
+        "startDate": "2026-01-20"
+      }
+    ],
+    "today": "2026-05-15",
+    "horizonDays": 30
+  },
+  "expected": {
+    "today": "2026-05-15",
+    "horizonDays": 30,
+    "currency": "USD",
+    "startingBalance": 1000,
+    "endingBalance": 900,
+    "trough": {
+      "date": "2026-05-20",
+      "balance": 900
+    },
+    "events": [
+      {
+        "date": "2026-05-20",
+        "amount": -100,
+        "description": "Rent",
+        "templateId": "st1"
+      }
+    ],
+    "series": [
+      {
+        "date": "2026-05-15",
+        "balance": 1000
+      },
+      {
+        "date": "2026-05-16",
+        "balance": 1000
+      },
+      {
+        "date": "2026-05-17",
+        "balance": 1000
+      },
+      {
+        "date": "2026-05-18",
+        "balance": 1000
+      },
+      {
+        "date": "2026-05-19",
+        "balance": 1000
+      },
+      {
+        "date": "2026-05-20",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-21",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-22",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-23",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-24",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-25",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-26",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-27",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-28",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-29",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-30",
+        "balance": 900
+      },
+      {
+        "date": "2026-05-31",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-01",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-02",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-03",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-04",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-05",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-06",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-07",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-08",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-09",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-10",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-11",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-12",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-13",
+        "balance": 900
+      },
+      {
+        "date": "2026-06-14",
+        "balance": 900
+      }
+    ]
+  }
+}

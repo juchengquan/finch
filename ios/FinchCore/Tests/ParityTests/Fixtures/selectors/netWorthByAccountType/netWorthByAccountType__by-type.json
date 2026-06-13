@@ -1,0 +1,92 @@
+{
+  "name": "by-type",
+  "selector": "netWorthByAccountType",
+  "input": {
+    "accounts": [
+      {
+        "id": "a1",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 1000,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      },
+      {
+        "id": "a2",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "savings",
+        "currency": "USD",
+        "balance": 500,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      },
+      {
+        "id": "a3",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "credit_card",
+        "currency": "USD",
+        "balance": -200,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      }
+    ],
+    "ledgerId": "personal"
+  },
+  "expected": [
+    {
+      "type": "cash",
+      "balance": 1000
+    },
+    {
+      "type": "savings",
+      "balance": 500
+    },
+    {
+      "type": "investment",
+      "balance": 0
+    },
+    {
+      "type": "credit_card",
+      "balance": -200
+    },
+    {
+      "type": "fx",
+      "balance": 0
+    },
+    {
+      "type": "virtual",
+      "balance": 0
+    }
+  ]
+}

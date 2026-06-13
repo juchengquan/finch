@@ -1,0 +1,26 @@
+{
+  "name": "no-match",
+  "selector": "findDuplicate",
+  "input": {
+    "txns": [
+      {
+        "id": "tx1",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -4.5,
+        "account": "a1",
+        "date": "2026-05-09",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal",
+    "draft": {
+      "merchant": "Zzz",
+      "amount": -9.9,
+      "accountId": "a1",
+      "date": "2026-05-10"
+    }
+  },
+  "expected": null
+}

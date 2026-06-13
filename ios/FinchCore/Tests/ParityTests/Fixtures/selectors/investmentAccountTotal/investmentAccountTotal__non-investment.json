@@ -1,0 +1,41 @@
+{
+  "name": "non-investment",
+  "selector": "investmentAccountTotal",
+  "input": {
+    "account": {
+      "id": "a1",
+      "ledgerId": "personal",
+      "name": "Checking",
+      "type": "cash",
+      "currency": "USD",
+      "balance": 5000,
+      "openingBalance": 0,
+      "openingBalanceBase": 0,
+      "groupId": null,
+      "groupName": null,
+      "includeInNetWorth": 1,
+      "isActive": true,
+      "color": null,
+      "sortOrder": 0,
+      "lastReconciledAt": null,
+      "lastReconciledBalance": null,
+      "archivedAt": null
+    },
+    "holdings": [
+      {
+        "id": "h1",
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "symbol": "AAPL",
+        "name": null,
+        "shares": 10,
+        "costBasis": 1000,
+        "currency": "USD",
+        "lastPrice": 120,
+        "lastPriceDate": null,
+        "notes": null
+      }
+    ]
+  },
+  "expected": 5000
+}
