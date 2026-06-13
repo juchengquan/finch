@@ -9,6 +9,7 @@ struct ActivityTab: View {
     @State private var searchQuery: String = ""
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
+    @State private var editing: Tx?
 
     var body: some View {
         NavigationStack {
@@ -20,7 +21,13 @@ struct ActivityTab: View {
                         ForEach(daySections, id: \.date) { section in
                             Section(section.date) {
                                 ForEach(section.txns) { txn in
-                                    TxRow(txn: txn)
+                                    Button { editing = txn } label: { TxRow(txn: txn) }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) { delete(txn) } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -40,7 +47,12 @@ struct ActivityTab: View {
                 }
             }
             .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
+            .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
         }
+    }
+
+    private func delete(_ txn: Tx) {
+        try? store.apply(.deleteTransaction, Args(["id": .string(txn.id)]))
     }
 
     /// Client-side filter mirroring selectTransactions(opts.query):
