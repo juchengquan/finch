@@ -33,6 +33,12 @@ extension JSONValue {
         return []
     }
 
+    /// Serialize back to a JSON string (for storing condition/actions blobs).
+    var jsonString: String {
+        guard let data = try? JSONEncoder().encode(self), let s = String(data: data, encoding: .utf8) else { return "null" }
+        return s
+    }
+
     /// JS-style truthiness (true, non-zero number, non-empty string).
     var isTruthy: Bool {
         switch self {
