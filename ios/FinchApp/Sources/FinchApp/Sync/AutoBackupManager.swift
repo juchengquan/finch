@@ -65,6 +65,7 @@ public final class AutoBackupManager: ObservableObject {
             let url = backupsDir.appendingPathComponent("finch-\(Self.stamp()).finch")
             try data.write(to: url)
             prune()
+            WidgetSnapshotWriter.write(from: store)   // Phase 7: refresh the widget data
             lastBackupAt = Date()
             lastError = nil
         } catch {

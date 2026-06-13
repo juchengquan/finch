@@ -86,3 +86,34 @@ actions; the other 4 are documented below for a follow-up increment.
   Deferred; the pack engine they'd use is in place (buildPack + this debouncer).
 - ⏳ **Retention source.** Hard-coded to 14; the existing `app_state.backupConfig`
   (setBackupRetention) could feed it. Refinement.
+
+## Phase 7 — Widgets / Live Activities / Watch
+
+- ✅ **Widget data layer.** `WidgetSnapshot` (Codable) + pure, unit-tested
+  computations (net worth over included accounts, aggregate budget-used %, weekly
+  spend) + `WidgetSnapshotWriter` that writes `widget_snapshot.json` after each
+  backup. This is the read-side the widgets/Watch render. Added `AccountRow`
+  public init + `store.baseAmount` for testing.
+- 🔧 **WidgetKit extension + Watch app targets.** Separate Xcode targets +
+  TimelineProvider + the App Group container the widget reads the snapshot from
+  (currently Application Support; App Group is Phase 6.5 deferred infra). New
+  signed targets — not headless-CI-buildable. Deferred; the data they render is in
+  place. Live Activities likewise.
+
+## Phase 8 — Row-level sync (CloudKit) — ARCHITECTURE ONLY (deferred)
+
+Phase 8 replaces the whole-pack sync (Phase 5) with per-row CloudKit sync. It is
+**entirely device/entitlement infrastructure** — a CloudKit container + the
+iCloud/CloudKit entitlement + a real iCloud account + push (CKSubscription).
+**None of it is buildable or verifiable in the headless simulator CI**, and it
+supersedes Phase 5 (so it shouldn't ship alongside it). No code written this pass.
+
+Documented approach for when it's picked up (needs a provisioned target):
+- Mirror each canonical table row to a `CKRecord` (recordType = table name,
+  recordName = row id); a `syncToken` per zone for incremental fetch.
+- Last-writer-wins on `updated_at` (the schema already stamps it), with the
+  double-entry invariants re-validated by the existing audit gate after a merge.
+- A `CKSyncEngine` (iOS 17+) state-serialization loop; conflicts resolved by
+  re-running the posting engine, not field-merging.
+- Gate behind the same App Group + a "CloudKit sync" Settings toggle; keep Phase
+  5 local backups as the offline/export path.

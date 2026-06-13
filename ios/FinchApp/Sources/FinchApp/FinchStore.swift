@@ -312,6 +312,8 @@ public final class FinchStore: ObservableObject {
     private func toBase(_ amount: Double, from currency: String?) -> Double {
         Money.convert(amount, from: currency ?? baseCurrency, to: baseCurrency, rates: rateMap) ?? amount
     }
+    /// account-currency → ledger base (public, for the Phase 7 widget snapshot).
+    public func baseAmount(_ amount: Double, from currency: String?) -> Double { toBase(amount, from: currency) }
     /// ledger base → display.
     public func displayMoneyBase(_ baseAmount: Double) -> String {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
