@@ -74,14 +74,14 @@ extension Projection {
     }
 
     /// `categories` — equity rows excluded (they're opening/adjustment markers).
-    public static func categories(dbQueue: DatabaseQueue, ledgerId: String) throws -> [Category] {
+    public static func categories(dbQueue: DatabaseQueue, ledgerId: String) throws -> [CategoryRow] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT id, ledger_id AS ledgerId, name, parent_id AS parentId, kind
                   FROM categories WHERE ledger_id = ? AND kind != 'equity' ORDER BY sort_order
                 """, arguments: [ledgerId]).map { r in
-                Category(id: r["id"], ledgerId: r["ledgerId"], name: r["name"],
-                         parentId: r["parentId"], kind: r["kind"])
+                CategoryRow(id: r["id"], ledgerId: r["ledgerId"], name: r["name"],
+                            parentId: r["parentId"], kind: r["kind"])
             }
         }
     }
@@ -95,6 +95,16 @@ extension Projection {
                 """, arguments: [ledgerId]).map { r in
                 Counterparty(id: r["id"], ledgerId: r["ledgerId"], name: r["name"])
             }
+        }
+    }
+
+    /// `budget_groups` id → name, for the Budgets tab grouping ("Ungrouped" for
+    /// budgets with a null `group_id`). ORDER BY sort_order, name.
+    public static func budgetGroupNames(dbQueue: DatabaseQueue, ledgerId: String) throws -> [String: String] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT id, name FROM budget_groups WHERE ledger_id = ? ORDER BY sort_order, name
+                """, arguments: [ledgerId]).reduce(into: [String: String]()) { $0[$1["id"]] = $1["name"] }
         }
     }
 

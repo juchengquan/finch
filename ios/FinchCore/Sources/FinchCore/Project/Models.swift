@@ -73,6 +73,9 @@ public struct ListOptions: Codable, Equatable, Sendable {
 public struct CategoryNode: Codable, Equatable, Sendable {
     public var id: String
     public var parentId: String?
+    public init(id: String, parentId: String?) {
+        self.id = id; self.parentId = parentId
+    }
 }
 
 // MARK: selector return types
