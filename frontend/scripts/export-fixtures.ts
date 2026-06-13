@@ -15,6 +15,8 @@ import { CASES, type SelectorCase } from '@/lib/select.fixtures';
 import {
   accountBalance, selectTransactions, categorySpend, budgetProgress,
   cycleWindow, merchantStats, anomalyScore, type MerchantStats,
+  currentMonth, prevMonth, monthlySpending, dailySpending,
+  monthlyCashflow, topCategoryDeltas,
 } from '@/lib/select';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
@@ -57,6 +59,13 @@ function runSelector(c: SelectorCase): unknown {
       const stats = new Map<string, MerchantStats>(Object.entries(i.stats as Record<string, MerchantStats>));
       return anomalyScore(i.tx as Tx, stats, i.opts as { minCount?: number; threshold?: number } | undefined);
     }
+    // Phase 1.5 — batch 1
+    case 'currentMonth':      return currentMonth(i.txns as Tx[], i.ledgerId as string | undefined);
+    case 'prevMonth':         return prevMonth(i.month as string);
+    case 'monthlySpending':   return monthlySpending(i.txns as Tx[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'dailySpending':     return dailySpending(i.txns as Tx[], i.ledgerId as string, i.endDate as string, i.n as number);
+    case 'monthlyCashflow':   return monthlyCashflow(i.txns as Tx[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'topCategoryDeltas': return topCategoryDeltas(i.txns as Tx[], i.ledgerId as string, i.curMonth as string, i.categories as { id: string; name: string }[], i.count as number | undefined);
   }
 }
 

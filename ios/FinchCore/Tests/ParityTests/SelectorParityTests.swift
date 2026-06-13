@@ -76,4 +76,52 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(got, f.expected, name)
         }
     }
+
+    // ──────────────── Phase 1.5 — batch 1: time series / deltas ────────────────
+
+    func test_currentMonth() throws {
+        struct F: Decodable { let expected: String; let input: I; struct I: Decodable { let txns: [Tx]; let ledgerId: String? } }
+        for (name, f) in try load("currentMonth", F.self) {
+            XCTAssertEqual(Selectors.currentMonth(f.input.txns, f.input.ledgerId), f.expected, name)
+        }
+    }
+
+    func test_prevMonth() throws {
+        struct F: Decodable { let expected: String; let input: I; struct I: Decodable { let month: String } }
+        for (name, f) in try load("prevMonth", F.self) {
+            XCTAssertEqual(Selectors.prevMonth(f.input.month), f.expected, name)
+        }
+    }
+
+    func test_monthlySpending() throws {
+        struct F: Decodable { let expected: [MonthlyPoint]; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let endMonth: String; let n: Int } }
+        for (name, f) in try load("monthlySpending", F.self) {
+            XCTAssertEqual(Selectors.monthlySpending(f.input.txns, f.input.ledgerId, f.input.endMonth, f.input.n), f.expected, name)
+        }
+    }
+
+    func test_dailySpending() throws {
+        struct F: Decodable { let expected: [DailyPoint]; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let endDate: String; let n: Int } }
+        for (name, f) in try load("dailySpending", F.self) {
+            XCTAssertEqual(Selectors.dailySpending(f.input.txns, f.input.ledgerId, f.input.endDate, f.input.n), f.expected, name)
+        }
+    }
+
+    func test_monthlyCashflow() throws {
+        struct F: Decodable { let expected: [CashflowPoint]; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let endMonth: String; let n: Int } }
+        for (name, f) in try load("monthlyCashflow", F.self) {
+            XCTAssertEqual(Selectors.monthlyCashflow(f.input.txns, f.input.ledgerId, f.input.endMonth, f.input.n), f.expected, name)
+        }
+    }
+
+    func test_topCategoryDeltas() throws {
+        struct F: Decodable { let expected: [CategoryDelta]; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let curMonth: String; let categories: [CategoryRef]; let count: Int? } }
+        for (name, f) in try load("topCategoryDeltas", F.self) {
+            XCTAssertEqual(Selectors.topCategoryDeltas(f.input.txns, f.input.ledgerId, f.input.curMonth, f.input.categories, f.input.count ?? 5), f.expected, name)
+        }
+    }
 }

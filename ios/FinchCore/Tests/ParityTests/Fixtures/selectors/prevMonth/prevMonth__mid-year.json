@@ -1,0 +1,8 @@
+{
+  "name": "mid-year",
+  "selector": "prevMonth",
+  "input": {
+    "month": "2026-03"
+  },
+  "expected": "2026-02"
+}

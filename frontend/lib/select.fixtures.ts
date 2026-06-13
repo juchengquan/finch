@@ -11,10 +11,14 @@ import type { Tx } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import type { BudgetRow } from '@/lib/db/domain/budgets/types';
 
-/** The 7 Phase-1.0 selectors (see _CANONICAL_WEB_FACTS.md §E). */
+/** The Phase-1.0 selectors (see _CANONICAL_WEB_FACTS.md §E) + the Phase-1.5
+ *  selectors as they are ported batch-by-batch. */
 export type SelectorName =
   | 'accountBalance' | 'selectTransactions' | 'categorySpend'
-  | 'budgetProgress' | 'cycleWindow' | 'merchantStats' | 'anomalyScore';
+  | 'budgetProgress' | 'cycleWindow' | 'merchantStats' | 'anomalyScore'
+  // Phase 1.5 — batch 1 (time series / deltas)
+  | 'currentMonth' | 'prevMonth' | 'monthlySpending' | 'dailySpending'
+  | 'monthlyCashflow' | 'topCategoryDeltas';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -109,4 +113,50 @@ export const CASES: SelectorCase[] = [
   { name: 'not-anomaly', selector: 'anomalyScore',
     input: { tx: txOf({ id: 't1', merchant: 'Coffee', amount: -5 }),
       stats: { 'm:coffee': { count: 5, mean: 4, std: 0.5 } } } },
+
+  // ════════════ Phase 1.5 — batch 1: time series / deltas ════════════
+
+  // ── currentMonth(txns, ledgerId?) → "YYYY-MM" (latest tx month) ──
+  { name: 'latest-month', selector: 'currentMonth',
+    input: { txns: [txOf({ id: 't1', date: '2026-04-10' }), txOf({ id: 't2', date: '2026-05-20' })],
+      ledgerId: 'personal' } },
+
+  // ── prevMonth(month) → "YYYY-MM" (incl. year rollover) ──
+  { name: 'mid-year', selector: 'prevMonth', input: { month: '2026-03' } },
+  { name: 'year-rollover', selector: 'prevMonth', input: { month: '2026-01' } },
+
+  // ── monthlySpending(txns, ledgerId, endMonth, n) → [{m,v}] (oldest first) ──
+  { name: 'three-months', selector: 'monthlySpending',
+    input: { txns: [
+      txOf({ id: 't1', category: 'food', amount: -10, date: '2026-03-05' }),
+      txOf({ id: 't2', category: 'food', amount: -25, date: '2026-04-10' }),
+      txOf({ id: 't3', category: 'transport', amount: -8, date: '2026-05-15' }),
+      txOf({ id: 't4', category: 'food', amount: 50, date: '2026-05-01' }),  // income — excluded
+    ], ledgerId: 'personal', endMonth: '2026-05', n: 3 } },
+
+  // ── dailySpending(txns, ledgerId, endDate, n) → [{date,value}] (oldest first) ──
+  { name: 'three-days', selector: 'dailySpending',
+    input: { txns: [
+      txOf({ id: 't1', amount: -10, date: '2026-05-01' }),
+      txOf({ id: 't2', amount: -5, date: '2026-05-03' }),
+      txOf({ id: 't3', amount: -7, date: '2026-05-03' }),
+    ], ledgerId: 'personal', endDate: '2026-05-03', n: 3 } },
+
+  // ── monthlyCashflow(txns, ledgerId, endMonth, n) → [{m,inc,exp}] ──
+  { name: 'two-months', selector: 'monthlyCashflow',
+    input: { txns: [
+      txOf({ id: 't1', amount: 200, date: '2026-04-01' }),   // income
+      txOf({ id: 't2', amount: -30, date: '2026-04-12' }),   // expense
+      txOf({ id: 't3', amount: -45, date: '2026-05-08' }),   // expense
+    ], ledgerId: 'personal', endMonth: '2026-05', n: 2 } },
+
+  // ── topCategoryDeltas(txns, ledgerId, curMonth, categories, count) → [{name,a,b,d}] ──
+  // Distinct abs-deltas (transport 50, food 20) so the ordering is unambiguous.
+  { name: 'mom-deltas', selector: 'topCategoryDeltas',
+    input: { txns: [
+      txOf({ id: 't1', category: 'food', amount: -100, date: '2026-04-10' }),
+      txOf({ id: 't2', category: 'food', amount: -120, date: '2026-05-10' }),
+      txOf({ id: 't3', category: 'transport', amount: -50, date: '2026-05-12' }),
+    ], ledgerId: 'personal', curMonth: '2026-05',
+      categories: [{ id: 'food', name: 'Food' }, { id: 'transport', name: 'Transport' }], count: 5 } },
 ];
