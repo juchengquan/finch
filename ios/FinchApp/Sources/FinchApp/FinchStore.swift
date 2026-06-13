@@ -43,6 +43,37 @@ public final class FinchStore: ObservableObject {
             .appendingPathComponent("finch.sqlite3")
     }
 
+    // MARK: - Launch bootstrap
+
+    /// Open the persisted live DB on launch so imported (and locally-written)
+    /// data survives relaunch. No-op when no DB exists yet (first launch before
+    /// any import) — the store stays empty until an import. Idempotent.
+    public func bootstrap() {
+        guard dbQueue == nil else { return }
+        guard FileManager.default.fileExists(atPath: liveDBURL.path),
+              let live = try? DatabaseQueue(path: liveDBURL.path) else { return }
+        try? Migrations.runAll(on: live)
+        self.dbQueue = live
+        self.auditProblems = (try? Audit.run(on: live)) ?? []
+        self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
+        let first = ledgers.first?.id ?? ""
+        if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
+        self.dbInfo = makeDBInfo()
+    }
+
+    // MARK: - Mutations (Task 16: the single mutating entry point)
+
+    /// Route a write through the FinchCore chokepoint, then re-project the active
+    /// ledger so the published state reflects the change. Throws `I18nError` on a
+    /// rejected mutation (forms surface `.message`). Every write screen calls this.
+    public func apply(_ action: ActionName, _ args: Args) throws {
+        guard let q = dbQueue else { throw I18nError("error.noDatabase", [:], "No database is open") }
+        try Apply.apply(dbQueue: q, action: action.rawValue, args: args)
+        self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
+        reprojectActiveLedger()
+        self.dbInfo = makeDBInfo()
+    }
+
     // MARK: - Import (DESIGN §4)
 
     /// Import pipeline. Throws `PackError` on any failure; on `auditFailed` the

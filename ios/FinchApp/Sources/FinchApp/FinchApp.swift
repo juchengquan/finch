@@ -11,6 +11,7 @@ struct FinchApp: App {
         WindowGroup {
             ContentTabs()
                 .environmentObject(store)
+                .task { store.bootstrap() }   // re-open the persisted live DB on launch
         }
     }
 }
