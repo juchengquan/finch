@@ -13,8 +13,63 @@ public enum Scheduled {
         .updateScheduledSplit: updateSplit,
         .removeScheduledSplit: removeSplit,
         .generateDueScheduled: generateDue,
-        // DEFERRED: postScheduled (needs installment-paid derivation + split posting).
+        .postScheduled: post,
     ]
+
+    private static func postSingle(_ db: Database, ledgerId: String, accountId: String, amount: Double,
+                                   description: String, date: String, sourceTemplateId: String, categoryId: String?) throws {
+        try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: accountId, amount: amount, date: date,
+            description: description, categoryId: categoryId, kind: amount > 0 ? .income : .expense,
+            sourceTemplateId: sourceTemplateId))
+    }
+
+    /// Post one transaction/transfer NOW from a template (confirmed). Honours the
+    /// installment cap and income splits.
+    static func post(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let templateId: String }
+        let templateId = try args.to(A.self).templateId
+        guard let t = try Row.fetchOne(db, sql: "SELECT * FROM scheduled_templates WHERE id = ?", arguments: [templateId]) else {
+            throw I18nError("error.notFound.template", [:], "Template not found")
+        }
+        let ledgerId: String = t["ledger_id"]
+        let name = (t["name"] as String?) ?? ""
+        if let total = t["installment_total"] as Int? {
+            let paid = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id = ? AND status = 'confirmed'", arguments: [templateId]) ?? 0
+            if paid >= total { throw I18nError("error.scheduled.installmentDone", ["name": name, "total": String(total)], "\"\(name)\" has finished its \(total)-payment plan") }
+        }
+        let date = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        let desc = (t["description"] as String?) ?? name
+        let type: String = t["kind"]
+        let accountId: String = t["account_id"]
+
+        if type == "transfer" {
+            guard let from = t["from_account_id"] as String? else { throw I18nError("error.scheduled.missingAccount", ["name": name], "\"\(name)\" is missing an account") }
+            try Entries.postTransfer(db, fromAccountId: from, toAccountId: accountId, fromAmount: abs((t["amount"] as Double?) ?? 0),
+                                     date: date, note: desc, sourceTemplateId: templateId)
+            return
+        }
+        guard let amount = t["amount"] as Double? else { throw I18nError("error.scheduled.variableAmount", ["name": name], "\"\(name)\" has a variable amount — add it manually") }
+        let categoryId = t["category_id"] as String?
+
+        if type == "income" {
+            let splits = try Row.fetchAll(db, sql: "SELECT account_id, amount_pct, amount_abs, description FROM scheduled_splits WHERE template_id = ? ORDER BY sort_order", arguments: [templateId])
+            if !splits.isEmpty {
+                var posted = 0
+                for sp in splits {
+                    let portion = (sp["amount_abs"] as Double?) ?? (amount * ((sp["amount_pct"] as Double?) ?? 0) / 100)
+                    if portion == 0 { continue }
+                    try postSingle(db, ledgerId: ledgerId, accountId: sp["account_id"], amount: portion,
+                                   description: "\(desc) · \((sp["description"] as String?) ?? "")", date: date,
+                                   sourceTemplateId: templateId, categoryId: categoryId)
+                    posted += 1
+                }
+                if posted == 0 { throw I18nError("error.scheduled.noSplits", ["name": name], "No split amounts to post for \"\(name)\"") }
+                return
+            }
+        }
+        try postSingle(db, ledgerId: ledgerId, accountId: accountId, amount: (type == "income" ? 1 : -1) * amount,
+                       description: desc, date: date, sourceTemplateId: templateId, categoryId: categoryId)
+    }
 
     /// Post every due (not-yet-generated) occurrence of each active template as a
     /// pending transaction/transfer. DEFERRED: split-enabled templates are
