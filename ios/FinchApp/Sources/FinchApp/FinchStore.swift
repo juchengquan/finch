@@ -15,6 +15,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var ledgers: [Ledger] = []
+    @Published public private(set) var holdings: [Holding] = []
     @Published public var activeLedgerId: String = "" {
         didSet { if oldValue != activeLedgerId { reprojectActiveLedger() } }  // switch → re-project
     }
@@ -113,6 +114,7 @@ public final class FinchStore: ObservableObject {
         self.categories = (try? Projection.categories(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.counterparties = (try? Projection.counterparties(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.budgetGroupNames = (try? Projection.budgetGroupNames(dbQueue: q, ledgerId: activeLedgerId)) ?? [:]
+        self.holdings = (try? Projection.holdings(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.rateMap = Money.latestRateMap((try? Projection.exchangeRates(dbQueue: q)) ?? [])
     }
 
