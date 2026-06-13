@@ -1,9 +1,8 @@
 import Foundation
 import GRDB
 
-/// Rules domain — port of lib/db/domain/rules/mutations.ts (CRUD).
-/// DEFERRED: backfillRule (applies a rule to existing transactions via the
-/// rules engine `applyRules`, which is itself deferred).
+/// Rules domain — port of lib/db/domain/rules/mutations.ts (CRUD) plus
+/// backfillRule, which replays the rules engine over existing entries.
 public enum Rules {
     public static let handlers: [ActionName: Apply.Handler] = [
         .createRule: create,
@@ -12,8 +11,15 @@ public enum Rules {
         .backfillRule: backfill,
     ]
 
+    /// Active rules for a ledger, priority then created_at — the web's
+    /// `listActiveRules`; used by both backfill and postEntry's on-insert hook.
+    static func activeRules(_ db: Database, _ ledgerId: String) throws -> [Rule] {
+        try Row.fetchAll(db, sql: "SELECT * FROM rules WHERE ledger_id = ? AND is_active = 1 ORDER BY priority, created_at",
+                         arguments: [ledgerId]).compactMap(ruleFromRow)
+    }
+
     /// Build a `Rule` from a `rules` row (parse the condition/actions JSON blobs).
-    private static func ruleFromRow(_ r: Row) -> Rule? {
+    static func ruleFromRow(_ r: Row) -> Rule? {
         guard let condStr = r["condition"] as String?,
               let condJSON = condStr.data(using: .utf8).flatMap({ try? JSONDecoder().decode(JSONValue.self, from: $0) }),
               let condition = RuleCondition.parse(condJSON) else { return nil }

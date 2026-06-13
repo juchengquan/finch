@@ -26,10 +26,48 @@ public enum Transactions {
         .confirmPendingWithMerchant: confirmPendingWithMerchant,
         .removeAttachment: removeAttachment,
         .reconcileAccount: reconcileAccount,
-        // DEFERRED: setTransactionSplits — the web's per-split base allocation
-        // (sign × ratio + "absorb remainder") needs re-derivation against a
-        // Task-17 fixture before I trust the balance; left notImplemented.
+        .setTransactionSplits: setTransactionSplits,
     ]
+
+    // MARK: setTransactionSplits — verbatim port of the web's per-split base
+    // allocation (sign × ratio, last leg absorbs the signed remainder); any
+    // residue lands on the fx leg via appendResidue, exactly like the web. The
+    // write-parity oracle confirms the match.
+    static func setTransactionSplits(_ db: Database, _ args: Args) throws {
+        struct Split: Decodable { let categoryId: String?; let amount: Double; let description: String? }
+        struct A: Decodable { let id: String; let splits: [Split]? }
+        let a = try args.to(A.self)
+        let splits = a.splits ?? []
+        guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        let entryId = ref.entryId
+        guard let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) else { return }
+        let acctBase: Double = acct["amount_base"]
+        var legs: [Entries.Leg] = [.account(Entries.AccountLeg(
+            accountId: acct["account_id"], amount: acct["amount"], amountBase: acctBase,
+            exchangeRate: (acct["exchange_rate"] as Double?) ?? 1, memo: acct["memo"], id: acct["id"]))]
+        if splits.isEmpty {
+            legs.append(.category(Entries.CategoryLeg(categoryId: nil, amountBase: -acctBase)))
+        } else {
+            if splits.count == 1 { throw I18nError("error.split.minTwo", [:], "Splits require at least two rows") }
+            let totalBase = abs(acctBase)
+            let splitTotal = splits.reduce(0.0) { $0 + abs($1.amount) }
+            if splitTotal > 0 && abs(splitTotal - totalBase) > 0.005 * Double(splits.count) {
+                throw I18nError("error.split.sumMismatch", [:], "Split amounts must sum to the transaction total")
+            }
+            let baseRatio = splitTotal > 0 ? totalBase / splitTotal : 1
+            let sign: Double = acctBase > 0 ? 1 : (acctBase < 0 ? -1 : 0)
+            var usedBase = 0.0
+            for (i, sp) in splits.enumerated() {
+                let isLast = i == splits.count - 1
+                let spBase = isLast ? Entries.r2(acctBase + usedBase) : Entries.r2(-abs(sp.amount) * baseRatio * sign)
+                if !isLast { usedBase += spBase }
+                legs.append(.category(Entries.CategoryLeg(categoryId: sp.categoryId, amountBase: spBase, memo: sp.description)))
+            }
+        }
+        var ep = Entries.EntryPatch()
+        ep.legs = .set(legs)
+        try Entries.rebuildEntry(db, entryId, ep)
+    }
 
     // MARK: reconcileAccount
 

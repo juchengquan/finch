@@ -5,11 +5,10 @@ import GRDB
 // the single insert path for entries + postings: resolve legs → auto-balance →
 // (counterparty) → FX residue → validate shape → insert + seal in a SAVEPOINT.
 //
-// SCOPE (Phase 2, first slice): the **no-rules** path. The web's rules-engine
-// branch (applyRules) and the cross-currency `rateToHub` derived-rate insert /
-// static fallback are DEFERRED — single-currency entries (currency == base) take
-// the identity FX path and exercise the full posting/validation logic. Both
-// deferrals are marked inline.
+// SCOPE: the full posting path including the rules-engine branch (applyRules) on
+// income/expense/refund insert. DEFERRED: the cross-currency `rateToHub`
+// derived-rate insert / static fallback — single-currency entries (currency ==
+// base) take the identity FX path. The deferral is marked inline.
 
 public enum Entries {
     public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund }
@@ -281,7 +280,7 @@ public enum Entries {
         }
     }
 
-    // MARK: postEntry (no-rules path)
+    // MARK: postEntry
 
     @discardableResult
     public static func postEntry(_ db: Database, _ e: NewEntry) throws -> String {
@@ -297,24 +296,80 @@ public enum Entries {
         }
 
         // nil → resolve a counterparty from the description (resolver returns nil
-        // when nothing matches). DEFERRED: the rules-engine branch (applyRules).
-        let counterpartyId: String?
-        if let cp = e.counterpartyId { counterpartyId = cp }
-        else { counterpartyId = try resolveCounterpartyIdByName(db, e.ledgerId, e.description) }
+        // when nothing matches).
+        var description = e.description
+        var notes = e.notes
+        var kind = e.kind
+        var counterpartyId: String? = try e.counterpartyId ?? resolveCounterpartyIdByName(db, e.ledgerId, e.description)
+        var appliedRuleIds: [String]? = nil
+        var tagIdsAdd: [String]? = nil
+        var reviewedAt: String? = nil
+
+        // Rules engine — income/expense/refund only, mirroring the web's hook.
+        let ruled: Set<Kind> = [.income, .expense, .refund]
+        if !e.skipRules && ruled.contains(kind) {
+            let rules = try Rules.activeRules(db, e.ledgerId)
+            if !rules.isEmpty, let acctLeg = legs.first(where: { $0.accountId != nil }) {
+                let firstCat = legs.first(where: { $0.accountId == nil })
+                let synthetic = Tx(
+                    id: entryId, merchant: description, category: firstCat?.categoryId,
+                    amount: acctLeg.amountBase, account: acctLeg.accountId!, date: e.date,
+                    pending: status == .pending, ledgerId: e.ledgerId, currency: acctLeg.currency,
+                    nativeAmount: acctLeg.amount, time: e.time, kind: kind.rawValue,
+                    counterpartyId: counterpartyId, tags: [], note: notes,
+                    sourceTemplateId: e.sourceTemplateId, refundedTransactionId: e.refundedEntryId)
+                let patch = RulesEngine.applyRules(synthetic, rules)
+                if !patch.appliedRuleIds.isEmpty {
+                    if let m = patch.merchant { description = m }
+                    if let n = patch.note { notes = n }
+                    if let k = patch.kind, let kk = Kind(rawValue: k), ruled.contains(kk) { kind = kk }
+                    if case .set(let cp) = patch.counterpartyId { counterpartyId = cp }
+                    if case .set(let cat) = patch.categoryId, let i = legs.firstIndex(where: { $0.accountId == nil }) {
+                        legs[i].categoryId = cat
+                    }
+                    if let splits = patch.splits, splits.count >= 2 {
+                        // Replace category legs with fraction-derived ones over the
+                        // account leg; the last split absorbs the rounding remainder
+                        // in BOTH native and base space (else r2 drift mints a phantom
+                        // sys:fx residue on cross-currency entries).
+                        let ratio = acctLeg.amount != 0 ? acctLeg.amountBase / acctLeg.amount : 1
+                        legs.removeAll { $0.accountId == nil }
+                        var remaining = acctLeg.amount
+                        var remainingBase = acctLeg.amountBase
+                        for (i, s) in splits.enumerated() {
+                            let isLast = i == splits.count - 1
+                            let portion = isLast ? r2(remaining) : r2(acctLeg.amount * s.fraction)
+                            remaining = r2(remaining - portion)
+                            let catBase = isLast ? r2(-remainingBase) : r2(-portion * ratio)
+                            remainingBase = r2(remainingBase + catBase)
+                            legs.append(categoryLeg(nil, s.categoryId, catBase, base, s.description))
+                        }
+                    }
+                    if patch.reviewed { reviewedAt = ts }
+                    if let t = patch.tagIdsAdd, !t.isEmpty { tagIdsAdd = t }
+                    appliedRuleIds = patch.appliedRuleIds
+                }
+            }
+        }
 
         try appendResidue(db, e.ledgerId, base, &legs)
-        try validateShape(e.kind, legs, try categoryMeta(db, legs))
+        try validateShape(kind, legs, try categoryMeta(db, legs))
 
         let sp = "pe_\(newId(""))".replacingOccurrences(of: "-", with: "")
         try db.execute(sql: "SAVEPOINT \(sp)")
         do {
+            let appliedJson = appliedRuleIds.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) } ?? nil
             try db.execute(sql: """
                 INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,0,?,?)
-                """, arguments: [entryId, e.ledgerId, e.date, e.time, e.description, e.kind.rawValue, status.rawValue,
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
+                """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
                                  status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId,
-                                 e.notes, dedupHash(e.date, e.time, e.description, legs), ts, ts])
+                                 notes, appliedJson, reviewedAt, dedupHash(e.date, e.time, description, legs), ts, ts])
             try insertPostings(db, entryId, legs)
+            // Rule-added tags land inside the same SAVEPOINT (the entry row exists).
+            for tagId in tagIdsAdd ?? [] {
+                try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [entryId, tagId])
+            }
             try db.execute(sql: "UPDATE entries SET sealed = 1 WHERE id = ?", arguments: [entryId])
             try db.execute(sql: "RELEASE \(sp)")
         } catch {

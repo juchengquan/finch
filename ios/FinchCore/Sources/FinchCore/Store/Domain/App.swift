@@ -1,10 +1,9 @@
 import Foundation
 import GRDB
 
-/// App/system domain — port of lib/db/domain/_app/mutations.ts: the FX rate pair
-/// + the app_state setters. DEFERRED: `reset` (truncate + re-seed reference data
-/// + transactions.json) is intentionally not registered — it stays
-/// notImplemented until the seed is ported.
+/// App/system domain — port of lib/db/domain/_app/mutations.ts: the FX rate pair,
+/// the app_state setters, and `reset` (truncate). DEFERRED on reset: the web's
+/// re-seed of reference data + transactions.json (iOS clears to empty).
 public enum AppDomain {
     public static let handlers: [ActionName: Apply.Handler] = [
         .setExchangeRate: setExchangeRate,
@@ -13,7 +12,22 @@ public enum AppDomain {
         .setDisplayCurrency: setDisplayCurrency,
         .setBackupFrequency: setBackupFrequency,
         .setBackupRetention: setBackupRetention,
+        .reset: reset,
     ]
+
+    /// Truncate the canonical tables (children first; the web's RESET_TABLES order,
+    /// minus the dropped legacy `transfers` table). DEFERRED: the web's re-seed of
+    /// reference data + transactions.json — iOS reset clears to empty; re-seeding
+    /// from a bundled default is a product decision for later.
+    static func reset(_ db: Database, _ args: Args) throws {
+        let tables = [
+            "holdings", "entry_attachments", "entry_tags", "postings", "entries",
+            "scheduled_splits", "scheduled_templates", "tags", "budgets", "budget_groups",
+            "counterparties", "categories", "accounts", "account_groups", "exchange_rates",
+            "rules", "ledgers", "app_state",
+        ]
+        for t in tables { try db.execute(sql: "DELETE FROM \(t)") }
+    }
 
     // MARK: app_state get/set (upsert)
 

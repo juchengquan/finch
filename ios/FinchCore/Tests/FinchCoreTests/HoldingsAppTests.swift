@@ -43,6 +43,18 @@ final class HoldingsAppTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates") }, 0)
     }
 
+    /// reset truncates the canonical tables (re-seed deferred → empty DB).
+    func test_reset() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "setExchangeRate", args: Args(["date": .string("2026-05-01"), "currency": .string("EUR"), "rate": .double(1.1)]))
+        try Apply.apply(dbQueue: q, action: "reset", args: Args([:]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ledgers"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM accounts"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM exchange_rates"), 0)
+        }
+    }
+
     func test_appState() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "setDisplayCurrency", args: Args(["ledgerId": .string("l1"), "currency": .string("EUR")]))
