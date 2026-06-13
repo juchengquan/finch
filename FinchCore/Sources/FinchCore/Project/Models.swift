@@ -4,7 +4,7 @@ import Foundation
 // camelCase to match the web `Tx`/`AccountRow`/`BudgetRow` JSON verbatim (the
 // parity fixtures decode straight into these). Extra JSON keys are ignored.
 
-public struct Tx: Codable, Equatable, Sendable {
+public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var merchant: String
     public var category: String?
@@ -37,7 +37,7 @@ public struct TxSplit: Codable, Equatable, Sendable {
     public var description: String?
 }
 
-public struct AccountRow: Codable, Equatable, Sendable {
+public struct AccountRow: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var balance: Double
     public var ledgerId: String?
@@ -46,23 +46,13 @@ public struct AccountRow: Codable, Equatable, Sendable {
     public var isActive: Bool?
     public var name: String?
     public var type: String?
+    public var groupId: String?
+    public var groupName: String?
+    public var sortOrder: Int?
 }
 
-public struct BudgetRow: Codable, Equatable, Sendable {
-    public var id: String
-    public var ledgerId: String
-    public var name: String
-    public var type: String
-    public var amount: Double
-    public var saved: Double
-    public var carryForward: Double
-    public var frequency: String
-    public var startDate: String
-    public var endDate: String?
-    public var isRecurring: Int
-    public var accountIds: [String]
-    public var categoryIds: [String]
-}
+// `BudgetRow` lives in Project/Budget.swift (the full web-matching projection
+// row consumed by both `Selectors.budgetProgress` and the Budgets tab).
 
 public struct ListOptions: Codable, Equatable, Sendable {
     public var ledgerId: String
@@ -83,6 +73,9 @@ public struct ListOptions: Codable, Equatable, Sendable {
 public struct CategoryNode: Codable, Equatable, Sendable {
     public var id: String
     public var parentId: String?
+    public init(id: String, parentId: String?) {
+        self.id = id; self.parentId = parentId
+    }
 }
 
 // MARK: selector return types

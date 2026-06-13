@@ -1,0 +1,73 @@
+import SwiftUI
+import FinchCore
+
+/// Budgets grouped by budget group, each row's figures from
+/// Selectors.budgetProgress (used/base/pct/over). `pct` is an INTEGER 0–100, so
+/// ProgressView needs pct/100 and thresholds compare against 70/90.
+///
+/// Native enhancements (NOT web parity): the green/yellow/red 3-color banding
+/// (green < 70, yellow 70–90, red > 90) and the "N days left" caption. The web
+/// budget bar is 2-state (over ? destructive : primary) with remaining-amount
+/// text and no day countdown.
+struct BudgetsTab: View {
+    @EnvironmentObject private var store: FinchStore
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if store.budgets.isEmpty {
+                    EmptyState(tab: .budgets)
+                } else {
+                    List {
+                        ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
+                            Section(groupName) {
+                                ForEach(store.budgets(in: groupName)) { budget in
+                                    BudgetRowView(budget: budget)
+                                }
+                            }
+                        }
+                        Section {
+                            let t = store.budgetTotalsDisplay
+                            HStack {
+                                Text("Total").fontWeight(.semibold)
+                                Spacer()
+                                Text("\(t.used) / \(t.base)")
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Budgets")
+        }
+    }
+}
+
+struct BudgetRowView: View {
+    @EnvironmentObject private var store: FinchStore
+    let budget: BudgetRow
+    var body: some View {
+        let progress = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(budget.name)
+                Spacer()
+                Text("\(store.displayMoneyBase(progress.used)) / \(store.displayMoneyBase(progress.base))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ProgressView(value: min(Double(progress.pct) / 100, 1.0))
+                .tint(thresholdColor(progress.pct))   // native enhancement
+            HStack {
+                Text("\(store.daysLeft(until: progress.to)) days left")
+                    .font(.caption2).foregroundStyle(.secondary)
+                if progress.over {
+                    Spacer()
+                    Text("Over").font(.caption2).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+    /// Native 3-color banding (NOT web parity). pct is an INTEGER 0–100.
+    private func thresholdColor(_ pct: Int) -> Color {
+        pct > 90 ? .red : (pct >= 70 ? .yellow : .green)
+    }
+}

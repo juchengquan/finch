@@ -1,13 +1,32 @@
 import SwiftUI
+import FinchCore
 
-// NOTE: this is the Xcode app target's entry point (Task 12 / XcodeGen). It is
-// NOT a SwiftPM target — `swift build` does not compile it. Task 8 builds out
-// the real 4-tab shell.
+// The Xcode app target's entry point (Task 12 / XcodeGen). NOT a SwiftPM target
+// — `swift build` does not compile it; it's built via FinchApp.xcodeproj.
 @main
 struct FinchApp: App {
+    @StateObject private var store = FinchStore.shared
+
     var body: some Scene {
         WindowGroup {
-            Text("finch — Phase 1.0 bootstrap")
+            ContentTabs()
+                .environmentObject(store)
+        }
+    }
+}
+
+/// The 4-tab shell. Mirrors Phase 1.0 §5.
+struct ContentTabs: View {
+    var body: some View {
+        TabView {
+            AccountsTab()
+                .tabItem { Label("Accounts", systemImage: "wallet.pass") }
+            ActivityTab()
+                .tabItem { Label("Activity", systemImage: "list.bullet") }
+            BudgetsTab()
+                .tabItem { Label("Budgets", systemImage: "chart.pie") }
+            SettingsTab()
+                .tabItem { Label("Settings", systemImage: "gear") }
         }
     }
 }

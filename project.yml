@@ -1,0 +1,50 @@
+name: FinchApp
+options:
+  bundleIdPrefix: com.juchengquan
+  deploymentTarget:
+    iOS: "26.0"
+packages:
+  FinchCore:
+    path: .                      # the local SwiftPM package (Package.swift)
+targets:
+  FinchApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: FinchApp/Sources/FinchApp
+    dependencies:
+      - package: FinchCore
+        product: FinchCore
+    settings:
+      base:
+        # Reference the hand-authored Info.plist (with the .finch UTI
+        # declarations) directly — do NOT use the `info:` block, which would
+        # GENERATE over it and wipe the UTI/document-type keys.
+        INFOPLIST_FILE: FinchApp/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+  FinchAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FinchApp/Tests/FinchAppTests
+        excludes: ["Fixtures"]
+      # Folder reference (blue) — preserves the Fixtures/roundtrip/ hierarchy in
+      # the bundle so Bundle(for:).url(..., subdirectory:) resolves it.
+      - path: FinchApp/Tests/FinchAppTests/Fixtures
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: FinchApp
+schemes:
+  FinchApp:
+    build:
+      targets:
+        FinchApp: all
+    test:
+      targets: [FinchAppTests]
