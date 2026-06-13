@@ -435,7 +435,8 @@ public struct OpenScreenIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         let router = DeepLinkRouter()  // Phase 6.1: regular class, not a singleton
         switch screen.lowercased() {
-        case "accounts", "activity", "budgets", "insights", "reports", "scheduled":
+        // The 6 shipped tabs. (A future Reports tab joins this list when built.)
+        case "accounts", "activity", "budgets", "insights", "scheduled", "settings":
             router.route(to: screen.lowercased())
             return .result(dialog: "Opening \(screen) in finch.")
         default:

@@ -733,12 +733,12 @@ ledger switcher to add one" screen. ~300 lines SwiftUI.
    ledger; the form shows a confirm dialog with the count of
    affected rows)
 
-### 7.8 — Holdings tab + full CRUD UI
+### 7.8 — Holdings + full CRUD UI
 
-Per Q32, Phase 2 ships a full Holdings tab (the 7th of the 6
-new write screens). The tab is reachable from the Accounts
-tab (Accounts › [account name] › Holdings section) or as a
-top-level tab per the implementation-time UX decision.
+Per Q32, Phase 2 ships a full Holdings surface (the 7th of the 7
+new write screens). As built, it is **reached from the Accounts
+tab** (a chart button → Holdings list), not a top-level tab —
+keeping the tab bar at 6.
 
 **Args** (the wire shape): the 4 holdings actions from the
 chokepoint:
