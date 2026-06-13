@@ -1,0 +1,94 @@
+{
+  "name": "income-expense-refund",
+  "selector": "netWorthExplained",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": 500,
+        "account": "a1",
+        "date": "2026-04-05",
+        "pending": false,
+        "ledgerId": "personal",
+        "kind": "income"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -100,
+        "account": "a1",
+        "date": "2026-04-10",
+        "pending": false,
+        "ledgerId": "personal",
+        "kind": "expense"
+      },
+      {
+        "id": "t3",
+        "merchant": "m",
+        "category": "food",
+        "amount": -50,
+        "account": "a1",
+        "date": "2026-05-08",
+        "pending": false,
+        "ledgerId": "personal",
+        "kind": "expense"
+      },
+      {
+        "id": "t4",
+        "merchant": "m",
+        "category": "food",
+        "amount": 20,
+        "account": "a1",
+        "date": "2026-05-12",
+        "pending": false,
+        "ledgerId": "personal",
+        "kind": "refund"
+      }
+    ],
+    "accounts": [
+      {
+        "id": "a1",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 1000,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      }
+    ],
+    "ledgerId": "personal",
+    "endMonth": "2026-05",
+    "n": 2
+  },
+  "expected": [
+    {
+      "m": "2026-04",
+      "income": 500,
+      "expense": 100,
+      "adjustment": 0,
+      "fx": 0,
+      "net": 400
+    },
+    {
+      "m": "2026-05",
+      "income": 0,
+      "expense": 30,
+      "adjustment": 0,
+      "fx": 0,
+      "net": -30
+    }
+  ]
+}

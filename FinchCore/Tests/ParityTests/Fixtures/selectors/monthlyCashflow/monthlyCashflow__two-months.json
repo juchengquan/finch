@@ -1,0 +1,53 @@
+{
+  "name": "two-months",
+  "selector": "monthlyCashflow",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": 200,
+        "account": "a1",
+        "date": "2026-04-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -30,
+        "account": "a1",
+        "date": "2026-04-12",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t3",
+        "merchant": "m",
+        "category": "food",
+        "amount": -45,
+        "account": "a1",
+        "date": "2026-05-08",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal",
+    "endMonth": "2026-05",
+    "n": 2
+  },
+  "expected": [
+    {
+      "m": "Apr",
+      "inc": 200,
+      "exp": 30
+    },
+    {
+      "m": "May",
+      "inc": 0,
+      "exp": 45
+    }
+  ]
+}

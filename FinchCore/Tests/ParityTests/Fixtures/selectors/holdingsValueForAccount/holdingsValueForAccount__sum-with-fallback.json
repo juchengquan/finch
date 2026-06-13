@@ -1,0 +1,36 @@
+{
+  "name": "sum-with-fallback",
+  "selector": "holdingsValueForAccount",
+  "input": {
+    "holdings": [
+      {
+        "id": "h1",
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "symbol": "AAPL",
+        "name": null,
+        "shares": 10,
+        "costBasis": 1000,
+        "currency": "USD",
+        "lastPrice": 120,
+        "lastPriceDate": null,
+        "notes": null
+      },
+      {
+        "id": "h2",
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "symbol": "AAPL",
+        "name": null,
+        "shares": 10,
+        "costBasis": 500,
+        "currency": "USD",
+        "lastPrice": null,
+        "lastPriceDate": null,
+        "notes": null
+      }
+    ],
+    "accountId": "a1"
+  },
+  "expected": 1700
+}

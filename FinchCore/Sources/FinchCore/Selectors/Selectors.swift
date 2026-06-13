@@ -113,22 +113,23 @@ public enum Selectors {
 
     // MARK: cycleWindow + date helpers
 
-    private static let cal: Calendar = {
+    // internal (not private) so the TimeSeries.swift extension can share them.
+    static let cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!
         return c
     }()
-    private static func date(_ ymd: String) -> Date {
+    static func date(_ ymd: String) -> Date {
         let p = ymd.prefix(10).split(separator: "-").map { Int($0) ?? 0 }
         var dc = DateComponents()
         dc.year = p.count > 0 ? p[0] : 0; dc.month = p.count > 1 ? p[1] : 1; dc.day = p.count > 2 ? p[2] : 1
         return cal.date(from: dc)!
     }
-    private static func ymd(_ d: Date) -> String {
+    static func ymd(_ d: Date) -> String {
         let c = cal.dateComponents([.year, .month, .day], from: d)
         return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
-    private static func addDays(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: d)! }
+    static func addDays(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: d)! }
     // Foundation's month-add clamps the day to the target month (Jan 31 +1mo → Feb 28), matching JS addMonths.
     private static func addMonths(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .month, value: n, to: d)! }
     private static func advance(_ d: Date, _ frequency: String) -> Date {

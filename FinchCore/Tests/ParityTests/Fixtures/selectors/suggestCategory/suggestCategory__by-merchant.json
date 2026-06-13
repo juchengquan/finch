@@ -1,0 +1,35 @@
+{
+  "name": "by-merchant",
+  "selector": "suggestCategory",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -4,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -5,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal",
+    "description": "Coffee"
+  },
+  "expected": {
+    "categoryId": "food",
+    "count": 2,
+    "confidence": 1
+  }
+}

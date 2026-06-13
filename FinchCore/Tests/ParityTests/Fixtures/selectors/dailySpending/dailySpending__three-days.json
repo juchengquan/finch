@@ -1,0 +1,55 @@
+{
+  "name": "three-days",
+  "selector": "dailySpending",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -10,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -5,
+        "account": "a1",
+        "date": "2026-05-03",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t3",
+        "merchant": "m",
+        "category": "food",
+        "amount": -7,
+        "account": "a1",
+        "date": "2026-05-03",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal",
+    "endDate": "2026-05-03",
+    "n": 3
+  },
+  "expected": [
+    {
+      "date": "2026-05-01",
+      "value": 10
+    },
+    {
+      "date": "2026-05-02",
+      "value": 0
+    },
+    {
+      "date": "2026-05-03",
+      "value": 12
+    }
+  ]
+}

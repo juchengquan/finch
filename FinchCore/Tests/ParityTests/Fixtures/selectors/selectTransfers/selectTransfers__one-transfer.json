@@ -1,0 +1,87 @@
+{
+  "name": "one-transfer",
+  "selector": "selectTransfers",
+  "input": {
+    "txns": [
+      {
+        "id": "tout",
+        "merchant": "m",
+        "category": "food",
+        "amount": -100,
+        "account": "a1",
+        "date": "2026-05-10",
+        "pending": false,
+        "ledgerId": "personal",
+        "transferGroupId": "tg1"
+      },
+      {
+        "id": "tin",
+        "merchant": "m",
+        "category": "food",
+        "amount": 100,
+        "account": "a2",
+        "date": "2026-05-10",
+        "pending": false,
+        "ledgerId": "personal",
+        "transferGroupId": "tg1"
+      }
+    ],
+    "accounts": [
+      {
+        "id": "a1",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 0,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      },
+      {
+        "id": "a2",
+        "ledgerId": "personal",
+        "name": "Savings",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 0,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      }
+    ],
+    "ledgerId": "personal"
+  },
+  "expected": [
+    {
+      "id": "tg1",
+      "date": "2026-05-10",
+      "time": null,
+      "amount": 100,
+      "toAmount": 100,
+      "fromCurrency": "USD",
+      "toCurrency": "USD",
+      "fromAccountId": "a1",
+      "toAccountId": "a2",
+      "fromName": "Checking",
+      "toName": "Savings",
+      "note": null
+    }
+  ]
+}

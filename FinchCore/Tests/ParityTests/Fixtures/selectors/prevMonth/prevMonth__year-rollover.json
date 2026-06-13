@@ -1,0 +1,8 @@
+{
+  "name": "year-rollover",
+  "selector": "prevMonth",
+  "input": {
+    "month": "2026-01"
+  },
+  "expected": "2025-12"
+}

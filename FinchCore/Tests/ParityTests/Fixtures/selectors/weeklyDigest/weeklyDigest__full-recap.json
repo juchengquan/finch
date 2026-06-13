@@ -1,0 +1,103 @@
+{
+  "name": "full-recap",
+  "selector": "weeklyDigest",
+  "input": {
+    "txns": [
+      {
+        "id": "w1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -50,
+        "account": "a1",
+        "date": "2026-05-12",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "w2",
+        "merchant": "m",
+        "category": "transport",
+        "amount": -30,
+        "account": "a1",
+        "date": "2026-05-13",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "w3",
+        "merchant": "m",
+        "category": "food",
+        "amount": 200,
+        "account": "a1",
+        "date": "2026-05-14",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "w4",
+        "merchant": "m",
+        "category": "shopping",
+        "amount": -80,
+        "account": "a1",
+        "date": "2026-05-15",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "p1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -100,
+        "account": "a1",
+        "date": "2026-05-06",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "a1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -60,
+        "account": "a1",
+        "date": "2026-03-10",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal",
+    "anchor": "2026-05-18"
+  },
+  "expected": {
+    "weekStart": "2026-05-11",
+    "weekEnd": "2026-05-17",
+    "spent": 160,
+    "income": 200,
+    "net": 40,
+    "prevSpent": 100,
+    "vsPrevPct": 0.6,
+    "avgSpent": 80,
+    "avgWeeks": 2,
+    "vsAvgPct": null,
+    "topCategories": [
+      {
+        "categoryId": "shopping",
+        "amount": 80
+      },
+      {
+        "categoryId": "food",
+        "amount": 50
+      },
+      {
+        "categoryId": "transport",
+        "amount": 30
+      }
+    ],
+    "biggestExpense": {
+      "txId": "w4",
+      "merchant": "m",
+      "amount": 80,
+      "date": "2026-05-15"
+    },
+    "txCount": 3
+  }
+}
