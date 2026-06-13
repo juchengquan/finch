@@ -11,12 +11,6 @@ import {
   deleteAccount as qDeleteAccount,
   type AccountPatch,
 } from './queries';
-import {
-  createAccountGroup as qCreateAccountGroup,
-  updateAccountGroup as qUpdateAccountGroup,
-  deleteAccountGroup as qDeleteAccountGroup,
-  type AccountGroupPatch,
-} from '../accountGroups/queries';
 
 type Handler<A extends ActionName> = (exec: Exec, args: Args[A]) => Promise<void>;
 
@@ -54,20 +48,4 @@ export const handlers = {
     qUnarchiveAccount(exec, str(args.id)),
   deleteAccount: (exec, args: Args['deleteAccount']) =>
     qDeleteAccount(exec, str(args.id)),
-  createAccountGroup: async (exec, args: Args['createAccountGroup']) => {
-    const name = str(args.name).trim();
-    if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-    await qCreateAccountGroup(exec, {
-      id: str(args.id || newId('ag')),
-      ledgerId: str(args.ledgerId || 'personal'),
-      name,
-    });
-  },
-  updateAccountGroup: async (exec, args: Args['updateAccountGroup']) => {
-    const patch = (args.patch ?? {}) as AccountGroupPatch;
-    if (patch.name !== undefined && !str(patch.name).trim()) throw new I18nError('error.required.groupName', {}, 'Group name is required');
-    await qUpdateAccountGroup(exec, str(args.id), patch);
-  },
-  deleteAccountGroup: (exec, args: Args['deleteAccountGroup']) =>
-    qDeleteAccountGroup(exec, str(args.id)),
 } satisfies Partial<{ [K in ActionName]: Handler<K> }>;

@@ -1,10 +1,23 @@
 import { test, expect } from 'bun:test';
 import { applyMutation } from '@/lib/db/mutate';
 import { seededAndAudited } from '@/lib/db/core/test-utils';
+import { handlers as accountsHandlers } from './mutations';
 import {
   listAccounts, netWorth, updateAccount, createAccount,
   archiveAccount, listArchivedAccounts, unarchiveAccount,
 } from '@/lib/db/queries/accounts';
+
+test('accounts/mutations owns only accounts-only actions — no accountGroup duplicates', () => {
+  // The account-group actions (createAccountGroup / updateAccountGroup /
+  // deleteAccountGroup) are owned by the canonical accountGroups/mutations.ts.
+  // accounts/mutations.ts must NOT re-export them: the dispatcher merges both
+  // handlers maps, so any duplicate here is dead code that shadows (or is
+  // shadowed by) the canonical version. Keeping the surfaces disjoint
+  // guarantees the 3 actions resolve to accountGroups/ and nowhere else.
+  expect(Object.keys(accountsHandlers).sort()).toEqual(
+    ['archiveAccount', 'createAccount', 'deleteAccount', 'unarchiveAccount', 'updateAccount'].sort(),
+  );
+});
 
 test('accounts: list, net worth, balance series, edit', async () => {
   const exec = await seededAndAudited();
