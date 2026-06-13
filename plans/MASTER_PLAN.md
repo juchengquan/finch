@@ -349,7 +349,7 @@ effort. The picks already landed are crossed off in the "Done since" coda
 below; what's still open is summarized here.
 
 **Current open items (high payoff):**
-1. **iOS &amp; macOS native apps** — `plans/IOS_MACOS_PLAN.md` (refreshed 2026-06-07).
+1. **iOS &amp; macOS native apps** — `plans/ios-macos/IOS_MACOS_PLAN.md` (refreshed 2026-06-07).
    Direction brief, not a build plan: inherited domain model under the now-
    shipped double-entry storage, parity matrix, architecture decisions
    (GRDB on the verbatim schema, Swift port of the chokepoint + selectors
@@ -416,7 +416,7 @@ below; what's still open is summarized here.
 written when the database lived in the browser (OPFS-backed `sqlite-wasm`);
 the data layer is now server-side and file-backed, so the §-by-§ caching
 strategy no longer applies. The native iOS/macOS direction
-(`plans/IOS_MACOS_PLAN.md §1.1`) explicitly supersedes the "PWA is good
+(`plans/ios-macos/IOS_MACOS_PLAN.md §1.1`) explicitly supersedes the "PWA is good
 enough" judgement — reach the home screen via real native apps, not a wrapped
 web view.
 
@@ -682,7 +682,7 @@ parentheses.
   mark-all-reviewed; primary dot on unreviewed rows; per-row toggle on the
   transaction detail. Backfill action applies it too.
 - **iOS &amp; macOS direction brief + receipt-photos scoping plan** (PR #105) —
-  two new planning docs. `plans/IOS_MACOS_PLAN.md` is a direction brief for
+  two new planning docs. `plans/ios-macos/IOS_MACOS_PLAN.md` is a direction brief for
   a future native Apple port (inherited domain model, parity matrix,
   architecture decisions, the `.finch` pack format for iCloud Drive
   file-pack sync, 8 resolved decisions including OS baseline + the

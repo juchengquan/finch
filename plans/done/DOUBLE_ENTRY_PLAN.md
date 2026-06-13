@@ -39,7 +39,7 @@ deliberately ~untouched.
 > shape (`lib/store.ts`), so pages, selectors (`lib/select.ts`), and the UI
 > vocabulary (expense / income / transfer — never "debit/credit") do not change.
 > The schema change stays on the shared `SCHEMA_VERSION` lineage so `.finch`
-> packs keep round-tripping (`plans/IOS_MACOS_PLAN.md`).
+> packs keep round-tripping (`plans/ios-macos/IOS_MACOS_PLAN.md`).
 
 ---
 

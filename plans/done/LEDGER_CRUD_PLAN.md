@@ -6,7 +6,7 @@ implementation followed the §10 file touch list and the 3-commit split
 postScheduled fix.
 Scope: `frontend/` (server-backed SQLite app)
 
-> Implements the web-app side of **`plans/IOS_MACOS_PLAN.md` §14.8** (resolved
+> Implements the web-app side of **`plans/ios-macos/IOS_MACOS_PLAN.md` §14.8** (resolved
 > decision: "Ledger CRUD — *for both apps*"; capability matrix §3 row 39). The
 > schema change here stays on the **shared `SCHEMA_VERSION` lineage** so `.finch`
 > packs keep round-tripping between the web and native apps.

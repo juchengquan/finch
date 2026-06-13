@@ -17,7 +17,7 @@ chosen direction.
 >    strategy below would need a rewrite against the server-side model.
 >
 > 2. **Native iOS / macOS supersedes the install-to-home-screen story.**
->    `plans/IOS_MACOS_PLAN.md §1.1` explicitly supersedes this plan's
+>    `plans/ios-macos/IOS_MACOS_PLAN.md §1.1` explicitly supersedes this plan's
 >    "PWA is good enough for install-to-home-screen" judgement. The chosen
 >    path is real native apps (SwiftUI, GRDB on the verbatim schema,
 >    iCloud Drive file-pack sync) — not a wrapped web view.

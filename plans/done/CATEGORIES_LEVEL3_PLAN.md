@@ -444,7 +444,7 @@ Total: 3 code commits + 1 docs commit. Roughly a small-to-medium PR.
 | Split editor (in `transaction-detail.tsx` or its own file) | Category Select uses `categoryPath`. |
 | `app/(main)/categories/page.tsx` | Sub-subcategory rendering + "New sub-subcategory" + parent-Select depth-3 disable. |
 | `plans/MASTER_PLAN.md` | Strike "3-level categories" once shipped. |
-| `plans/IOS_MACOS_PLAN.md` §3 row 29 | Update "2-level" to "≤ 3-level". |
+| `plans/ios-macos/IOS_MACOS_PLAN.md` §3 row 29 | Update "2-level" to "≤ 3-level". |
 
 ---
 
