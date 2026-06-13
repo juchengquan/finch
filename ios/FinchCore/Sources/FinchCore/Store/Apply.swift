@@ -28,6 +28,7 @@ public enum Apply {
         all.merge(Accounts.handlers) { _, new in new }
         all.merge(Transfers.handlers) { _, new in new }
         all.merge(Ledgers.handlers) { _, new in new }
+        all.merge(Budgets.handlers) { _, new in new }
         return all
     }
 
