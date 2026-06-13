@@ -25,6 +25,12 @@ struct SettingsTab: View {
                     NavigationLink("Manage ledgers") { LedgerManagementView() }
                 }
 
+                Section("Power tools") {
+                    NavigationLink("Rules") { RulesManagerView() }
+                    NavigationLink("Categories") { CategoryAdminView() }
+                    NavigationLink("Exchange rates") { ExchangeRatesView() }
+                }
+
                 Section("Database") {
                     LabeledContent("Filename", value: store.dbInfo.filename)
                     LabeledContent("Size", value: store.dbInfo.formattedSize)

@@ -27,6 +27,30 @@ than risk a red build or claim false completion.
   `FinchStore` a singleton with a single shared `activeLedgerId` (no per-window
   ledger) — multi-window would require de-singletoning the store, a large change.
   Revisit if per-window ledgers are wanted.
-- ⏳ **⌘K command palette / full keyboard-shortcut set.** Added basic tab
-  shortcuts; the full Mac ⌘K palette + menu commands are deferred with the Mac
-  target.
+- ⏳ **⌘K command palette / full keyboard-shortcut set.** The full Mac ⌘K
+  palette + menu commands are deferred with the Mac target.
+
+## Phase 4 — Power features (7 in the design; this pass ships 3)
+
+Phase 4 is the design's largest phase ("2-3 months", 7 features). This pass ships
+the 3 cleanest, highest-value features that map directly to existing chokepoint
+actions; the other 4 are documented below for a follow-up increment.
+
+- ✅ **Rules manager + builder + backfill.** List/toggle-active/delete/backfill +
+  a single-condition / single-action builder (createRule/updateRule/deleteRule/
+  backfillRule). Added `Projection.rules` + a `RuleSummary` type (tested).
+- ✅ **Categories admin.** Rename / add / delete spending categories
+  (create/update/deleteCategory). *Merge* is not a chokepoint action — deferred.
+- ✅ **FX rate editor.** View / add / delete exchange rates
+  (set/deleteExchangeRate). Exposed `store.exchangeRates`.
+- 🔧 **Reconcile UI.** `reconcileAccount` exists in the chokepoint; the
+  statement-balance/CSV-import UI is not built yet. Deferred increment.
+- 🔧 **Transfers CRUD edit/delete UI.** `createTransfer` is wired (Add screen);
+  a dedicated edit/delete transfers manager is deferred.
+- ⛔ **Bulk recategorize.** BLOCKED: the engine defers transaction *category*
+  edits (`updateTransaction` throws `notImplemented.txMoneyEdit`), so bulk
+  recategorize can't be built without first un-deferring that. Documented, not
+  attempted.
+- 🔧 **Saved searches + per-account base override + tag admin/merge + category
+  color/icon.** Deferred (saved searches → UserDefaults; per-account base + merge
+  have no chokepoint action yet).

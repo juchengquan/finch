@@ -2,7 +2,7 @@ import Foundation
 
 /// One projected exchange-rate row (`exchange_rates` table). `rate` is the
 /// USD-per-1-unit price of `currency` on `date` (USD is the hub = 1).
-public struct ExchangeRate: Equatable, Sendable, Codable {
+public struct ExchangeRate: Equatable, Hashable, Sendable, Codable {
     public let date: String
     public let currency: String
     public let rate: Double

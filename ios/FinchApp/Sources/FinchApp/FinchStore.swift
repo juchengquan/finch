@@ -17,6 +17,8 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var ledgers: [Ledger] = []
     @Published public private(set) var holdings: [Holding] = []
     @Published public private(set) var scheduled: [ScheduledTemplate] = []
+    @Published public private(set) var exchangeRates: [ExchangeRate] = []   // Phase 4 FX editor
+    @Published public private(set) var rules: [RuleSummary] = []            // Phase 4 rules manager
     @Published public var activeLedgerId: String = "" {
         didSet { if oldValue != activeLedgerId { reprojectActiveLedger() } }  // switch → re-project
     }
@@ -176,7 +178,9 @@ public final class FinchStore: ObservableObject {
         self.budgetGroupNames = (try? Projection.budgetGroupNames(dbQueue: q, ledgerId: activeLedgerId)) ?? [:]
         self.holdings = (try? Projection.holdings(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.scheduled = (try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.rateMap = Money.latestRateMap((try? Projection.exchangeRates(dbQueue: q)) ?? [])
+        self.exchangeRates = (try? Projection.exchangeRates(dbQueue: q)) ?? []
+        self.rules = (try? Projection.rules(dbQueue: q, ledgerId: activeLedgerId)) ?? []
+        self.rateMap = Money.latestRateMap(exchangeRates)
     }
 
     /// close live; rename live → finch.sqlite3.bak.<unix-ts>; move stagedDB →
