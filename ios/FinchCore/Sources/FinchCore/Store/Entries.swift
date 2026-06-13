@@ -1,0 +1,373 @@
+import Foundation
+import GRDB
+
+// The double-entry write chokepoint — port of lib/db/core/entries.ts. This is
+// the single insert path for entries + postings: resolve legs → auto-balance →
+// (counterparty) → FX residue → validate shape → insert + seal in a SAVEPOINT.
+//
+// SCOPE (Phase 2, first slice): the **no-rules** path. The web's rules-engine
+// branch (applyRules) and the cross-currency `rateToHub` derived-rate insert /
+// static fallback are DEFERRED — single-currency entries (currency == base) take
+// the identity FX path and exercise the full posting/validation logic. Both
+// deferrals are marked inline.
+
+public enum Entries {
+    public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund }
+    public enum Status: String, Sendable { case pending, confirmed }
+
+    static func newId(_ prefix: String) -> String {
+        let ts = String(Int(Date().timeIntervalSince1970 * 1000), radix: 36)
+        let rand = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(4).lowercased()
+        return "\(prefix)-\(ts)-\(rand)"
+    }
+    static func r2(_ n: Double) -> Double { (n * 100).rounded() / 100 }
+
+    // MARK: system (equity) categories
+
+    public struct SystemCategoryIds: Sendable {
+        public let opening: String
+        public let adjustment: String
+        public let fx: String
+    }
+    private static let systemCategories: [(system: String, name: String)] = [
+        ("opening", "Opening balance"), ("adjustment", "Balance adjustment"), ("fx", "FX gain/loss"),
+    ]
+
+    /// Idempotently seed the three equity system categories for a ledger and
+    /// return their ids (resolved by the `system` marker, rename-safe).
+    @discardableResult
+    public static func ensureSystemCategories(_ db: Database, _ ledgerId: String) throws -> SystemCategoryIds {
+        var ids: [String: String] = [:]
+        for (i, sc) in systemCategories.enumerated() {
+            if let existing = try String.fetchOne(db, sql:
+                "SELECT id FROM categories WHERE ledger_id = ? AND system = ?", arguments: [ledgerId, sc.system]) {
+                ids[sc.system] = existing; continue
+            }
+            let id = newId("cat")
+            try db.execute(sql: """
+                INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,system,created_at,updated_at)
+                VALUES (?,?,NULL,?,'equity',NULL,NULL,?,?,datetime('now'),datetime('now'))
+                """, arguments: [id, ledgerId, sc.name, 9000 + i, sc.system])
+            ids[sc.system] = id
+        }
+        return SystemCategoryIds(opening: ids["opening"]!, adjustment: ids["adjustment"]!, fx: ids["fx"]!)
+    }
+
+    // MARK: leg inputs
+
+    public struct AccountLeg: Sendable {
+        public var accountId: String
+        public var amount: Double          // signed, account currency
+        public var amountBase: Double?
+        public var exchangeRate: Double?
+        public var memo: String?
+        public init(accountId: String, amount: Double, amountBase: Double? = nil,
+                    exchangeRate: Double? = nil, memo: String? = nil) {
+            self.accountId = accountId; self.amount = amount; self.amountBase = amountBase
+            self.exchangeRate = exchangeRate; self.memo = memo
+        }
+    }
+    public struct CategoryLeg: Sendable {
+        public var categoryId: String?
+        public var amountBase: Double      // signed, ledger base
+        public var memo: String?
+        public init(categoryId: String?, amountBase: Double, memo: String? = nil) {
+            self.categoryId = categoryId; self.amountBase = amountBase; self.memo = memo
+        }
+    }
+    public enum Leg: Sendable { case account(AccountLeg), category(CategoryLeg) }
+
+    struct ResolvedLeg {
+        var id: String
+        var accountId: String?
+        var categoryId: String?
+        var amount: Double
+        var currency: String
+        var amountBase: Double
+        var exchangeRate: Double
+        var memo: String?
+    }
+
+    /// `autoBalanceCategoryId`: `.none` = don't add; `.category(id?)` = append one
+    /// category leg that exactly negates the account legs (id nil = uncategorized).
+    public enum AutoBalance: Sendable { case none, category(String?) }
+
+    public struct NewEntry: Sendable {
+        public var id: String?
+        public var ledgerId: String
+        public var date: String
+        public var time: String?
+        public var description: String
+        public var kind: Kind
+        public var status: Status?
+        public var legs: [Leg]
+        public var autoBalance: AutoBalance
+        public var notes: String?
+        /// nil → resolve a counterparty from the description; the resolver returns
+        /// nil when nothing matches (so "no counterparty" still works).
+        public var counterpartyId: String?
+        public var refundedEntryId: String?
+        public var sourceTemplateId: String?
+        public var timestamp: String?
+        public var skipRules: Bool
+        public init(id: String? = nil, ledgerId: String, date: String, time: String? = nil,
+                    description: String, kind: Kind, status: Status? = nil, legs: [Leg],
+                    autoBalance: AutoBalance = .none, notes: String? = nil, counterpartyId: String? = nil,
+                    refundedEntryId: String? = nil, sourceTemplateId: String? = nil,
+                    timestamp: String? = nil, skipRules: Bool = false) {
+            self.id = id; self.ledgerId = ledgerId; self.date = date; self.time = time
+            self.description = description; self.kind = kind; self.status = status; self.legs = legs
+            self.autoBalance = autoBalance; self.notes = notes; self.counterpartyId = counterpartyId
+            self.refundedEntryId = refundedEntryId; self.sourceTemplateId = sourceTemplateId
+            self.timestamp = timestamp; self.skipRules = skipRules
+        }
+    }
+
+    // MARK: helpers
+
+    private static func categoryLeg(_ id: String?, _ categoryId: String?, _ amountBase: Double,
+                                    _ base: String, _ memo: String?) -> ResolvedLeg {
+        ResolvedLeg(id: id ?? newId("p"), accountId: nil, categoryId: categoryId,
+                    amount: amountBase, currency: base, amountBase: amountBase, exchangeRate: 1, memo: memo)
+    }
+
+    private static func ledgerBase(_ db: Database, _ ledgerId: String) throws -> String {
+        guard let b = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?",
+                                          arguments: [ledgerId]) else {
+            throw I18nError("error.notFound.ledger", [:], "Ledger not found")
+        }
+        return b
+    }
+
+    /// USD-hub FX (HUB_CURRENCY = "USD"). DEFERRED: the derived-rate INSERT side
+    /// effect and the static units-per-USD fallback — unrated cross-currency
+    /// falls back to 1. Single-currency (currency == base) returns identity.
+    static func convertToBase(_ db: Database, _ native: Double, _ currency: String,
+                              _ base: String, _ date: String) throws -> (amountBase: Double, rate: Double) {
+        if currency == base { return (native, 1) }
+        let rc = try rateToHub(db, currency, date)
+        let rb = try rateToHub(db, base, date)
+        let rate = rb != 0 ? rc / rb : 1
+        return (r2(native * rate), (rate * 1e6).rounded() / 1e6)
+    }
+    private static func rateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double {
+        if currency == "USD" { return 1 }
+        if let row = try Row.fetchOne(db, sql:
+            "SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1",
+            arguments: [currency, date]) {
+            return row["r"]
+        }
+        if let after = try Double.fetchOne(db, sql:
+            "SELECT rate FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1",
+            arguments: [currency, date]) { return after }
+        return 1   // DEFERRED: staticFallback
+    }
+
+    private static func resolveCounterpartyIdByName(_ db: Database, _ ledgerId: String, _ name: String) throws -> String? {
+        try String.fetchOne(db, sql:
+            "SELECT id FROM counterparties WHERE ledger_id = ? AND name = ? COLLATE NOCASE LIMIT 1",
+            arguments: [ledgerId, name])
+    }
+
+    private static func resolveLegs(_ db: Database, _ ledgerId: String, _ date: String,
+                                    _ base: String, _ inputs: [Leg]) throws -> [ResolvedLeg] {
+        var legs: [ResolvedLeg] = []
+        for leg in inputs {
+            switch leg {
+            case .account(let a):
+                guard let acct = try Row.fetchOne(db, sql:
+                    "SELECT currency, ledger_id FROM accounts WHERE id = ?", arguments: [a.accountId]) else {
+                    throw I18nError("error.notFound.account", [:], "Account not found")
+                }
+                let acctLedger: String = acct["ledger_id"]
+                if acctLedger != ledgerId { throw I18nError("error.account.differentLedger", [:], "Account is in a different ledger") }
+                let currency: String = acct["currency"]
+                var amountBase = a.amountBase
+                var rate = a.exchangeRate
+                if amountBase == nil || rate == nil {
+                    let conv = try convertToBase(db, a.amount, currency, base, date)
+                    amountBase = conv.amountBase; rate = conv.rate
+                }
+                legs.append(ResolvedLeg(id: newId("p"), accountId: a.accountId, categoryId: nil,
+                    amount: r2(a.amount), currency: currency, amountBase: r2(amountBase!),
+                    exchangeRate: rate!, memo: a.memo))
+            case .category(let c):
+                if let cid = c.categoryId {
+                    guard let catLedger = try String.fetchOne(db, sql:
+                        "SELECT ledger_id FROM categories WHERE id = ?", arguments: [cid]) else {
+                        throw I18nError("error.notFound.category", [:], "Category not found")
+                    }
+                    if catLedger != ledgerId { throw I18nError("error.category.differentLedger", [:], "Category is in a different ledger") }
+                }
+                legs.append(categoryLeg(nil, c.categoryId, r2(c.amountBase), base, c.memo))
+            }
+        }
+        return legs
+    }
+
+    /// Whatever Σ amount_base leaves becomes an explicit fx equity leg, so the
+    /// entry balances to the cent (no tolerance).
+    private static func appendResidue(_ db: Database, _ ledgerId: String, _ base: String,
+                                      _ legs: inout [ResolvedLeg]) throws {
+        let residue = r2(legs.reduce(0.0) { $0 + $1.amountBase })
+        if abs(residue) >= 0.005 {
+            let sys = try ensureSystemCategories(db, ledgerId)
+            legs.append(categoryLeg(nil, sys.fx, r2(-residue), base, nil))
+        }
+    }
+
+    private static func categoryMeta(_ db: Database, _ legs: [ResolvedLeg]) throws -> [String: (kind: String, system: String?)] {
+        let ids = Array(Set(legs.compactMap { $0.categoryId }))
+        if ids.isEmpty { return [:] }
+        let ph = ids.map { _ in "?" }.joined(separator: ",")
+        var out: [String: (kind: String, system: String?)] = [:]
+        for r in try Row.fetchAll(db, sql: "SELECT id, kind, system FROM categories WHERE id IN (\(ph))",
+                                  arguments: StatementArguments(ids)) {
+            out[r["id"]] = (r["kind"], r["system"])
+        }
+        return out
+    }
+
+    /// The kind label must match the postings shape (web `validateShape`).
+    private static func validateShape(_ kind: Kind, _ legs: [ResolvedLeg],
+                                      _ meta: [String: (kind: String, system: String?)]) throws {
+        let acct = legs.filter { $0.accountId != nil }
+        let cats = legs.filter { $0.accountId == nil }
+        if legs.count < 2 || acct.count < 1 {
+            throw I18nError("error.entry.minPostings", [:], "An entry needs at least two postings including an account leg")
+        }
+        func sysOf(_ l: ResolvedLeg) -> String? { l.categoryId.flatMap { meta[$0]?.system } }
+        func isEquity(_ l: ResolvedLeg) -> Bool { l.categoryId != nil && meta[l.categoryId!]?.kind == "equity" }
+        let equity = cats.filter(isEquity)
+        let plain = cats.filter { !isEquity($0) }
+
+        switch kind {
+        case .transfer:
+            if acct.count != 2 { throw I18nError("error.transfer.twoLegs", [:], "A transfer has exactly two account legs") }
+            if !plain.isEmpty { throw I18nError("error.transfer.noCategory", [:], "A transfer has no category leg") }
+            if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.transfer.fxOnly", [:], "Only the FX residue may balance a transfer") }
+        case .opening, .adjustment:
+            let want = kind == .opening ? "opening" : "adjustment"
+            let ok = acct.count == 1 && plain.isEmpty
+                && equity.contains(where: { sysOf($0) == want })
+                && equity.allSatisfy { sysOf($0) == want || sysOf($0) == "fx" }
+            if !ok { throw I18nError("error.entry.equityShape", ["kind": kind.rawValue], "An \(kind.rawValue) entry is one account leg against the \(want) equity category") }
+        default: // income / expense / refund
+            if acct.count != 1 { throw I18nError("error.entry.oneAccountLeg", ["kind": kind.rawValue], "A \(kind.rawValue) entry has exactly one account leg") }
+            if plain.count < 1 { throw I18nError("error.entry.needCategory", ["kind": kind.rawValue], "A \(kind.rawValue) entry needs a category leg") }
+            if equity.contains(where: { sysOf($0) != "fx" }) { throw I18nError("error.entry.noDirectEquity", [:], "Equity categories cannot be booked directly") }
+            if kind == .refund && acct[0].amount <= 0 { throw I18nError("error.refund.positive", [:], "A refund must be positive") }
+        }
+    }
+
+    /// Double-submit backstop hash; nil when time is nil (parity with the web).
+    static func dedupHash(_ date: String, _ time: String?, _ description: String, _ legs: [ResolvedLeg]) -> String? {
+        guard let time else { return nil }
+        let acct = legs.filter { $0.accountId != nil }
+            .map { "\($0.accountId!):\(String(format: "%.2f", $0.amount))" }
+            .sorted().joined(separator: ",")
+        return Pack.sha256Hex(Data("\(date)|\(time)|\(description)|\(acct)".utf8))
+    }
+
+    private static func insertPostings(_ db: Database, _ entryId: String, _ legs: [ResolvedLeg]) throws {
+        for (i, l) in legs.enumerated() {
+            try db.execute(sql: """
+                INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,orig_amount,orig_currency,memo,cleared_at,sort_order)
+                VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,NULL,?)
+                """, arguments: [l.id, entryId, l.accountId, l.categoryId, l.amount, l.currency,
+                                 l.amountBase, l.exchangeRate, l.memo, i])
+        }
+    }
+
+    // MARK: postEntry (no-rules path)
+
+    @discardableResult
+    public static func postEntry(_ db: Database, _ e: NewEntry) throws -> String {
+        let entryId = e.id ?? newId("e")
+        let ts = e.timestamp ?? ISO8601DateFormatter().string(from: Date())
+        let status = e.status ?? .confirmed
+        let base = try ledgerBase(db, e.ledgerId)
+
+        var legs = try resolveLegs(db, e.ledgerId, e.date, base, e.legs)
+        if case .category(let autoCat) = e.autoBalance {
+            let acctSum = r2(legs.filter { $0.accountId != nil }.reduce(0.0) { $0 + $1.amountBase })
+            legs.append(categoryLeg(nil, autoCat, r2(-acctSum), base, nil))
+        }
+
+        // nil → resolve a counterparty from the description (resolver returns nil
+        // when nothing matches). DEFERRED: the rules-engine branch (applyRules).
+        let counterpartyId: String?
+        if let cp = e.counterpartyId { counterpartyId = cp }
+        else { counterpartyId = try resolveCounterpartyIdByName(db, e.ledgerId, e.description) }
+
+        try appendResidue(db, e.ledgerId, base, &legs)
+        try validateShape(e.kind, legs, try categoryMeta(db, legs))
+
+        let sp = "pe_\(newId(""))".replacingOccurrences(of: "-", with: "")
+        try db.execute(sql: "SAVEPOINT \(sp)")
+        do {
+            try db.execute(sql: """
+                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,0,?,?)
+                """, arguments: [entryId, e.ledgerId, e.date, e.time, e.description, e.kind.rawValue, status.rawValue,
+                                 status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId,
+                                 e.notes, dedupHash(e.date, e.time, e.description, legs), ts, ts])
+            try insertPostings(db, entryId, legs)
+            try db.execute(sql: "UPDATE entries SET sealed = 1 WHERE id = ?", arguments: [entryId])
+            try db.execute(sql: "RELEASE \(sp)")
+        } catch {
+            try? db.execute(sql: "ROLLBACK TO \(sp)")
+            try? db.execute(sql: "RELEASE \(sp)")
+            throw error
+        }
+        return entryId
+    }
+
+    // MARK: postSimple
+
+    public struct SimpleEntryInput: Sendable {
+        public var ledgerId: String
+        public var accountId: String
+        public var amount: Double           // signed, account currency
+        public var date: String
+        public var description: String
+        public var categoryId: String?
+        public var kind: Kind?
+        public var time: String?
+        public var notes: String?
+        public var status: Status?
+        public var counterpartyId: String?
+        public var skipRules: Bool
+        public var id: String?
+        public init(ledgerId: String, accountId: String, amount: Double, date: String, description: String,
+                    categoryId: String? = nil, kind: Kind? = nil, time: String? = nil, notes: String? = nil,
+                    status: Status? = nil, counterpartyId: String? = nil, skipRules: Bool = false, id: String? = nil) {
+            self.ledgerId = ledgerId; self.accountId = accountId; self.amount = amount; self.date = date
+            self.description = description; self.categoryId = categoryId; self.kind = kind; self.time = time
+            self.notes = notes; self.status = status; self.counterpartyId = counterpartyId
+            self.skipRules = skipRules; self.id = id
+        }
+    }
+
+    /// One account leg + one auto-balanced category leg — addTransaction's shape.
+    /// Kind defaults to income/expense by sign.
+    @discardableResult
+    public static func postSimple(_ db: Database, _ s: SimpleEntryInput) throws -> String {
+        let kind = s.kind ?? (s.amount > 0 ? Kind.income : Kind.expense)
+        return try postEntry(db, NewEntry(
+            id: s.id, ledgerId: s.ledgerId, date: s.date, time: s.time, description: s.description,
+            kind: kind, status: s.status, legs: [.account(AccountLeg(accountId: s.accountId, amount: s.amount))],
+            autoBalance: .category(s.categoryId), notes: s.notes, counterpartyId: s.counterpartyId,
+            skipRules: s.skipRules))
+    }
+
+    /// Rebuild a confirmed account's cached balance from its postings.
+    public static func recomputeAccountFromPostings(_ db: Database, _ accountId: String) throws {
+        let total = try Double.fetchOne(db, sql: """
+            SELECT COALESCE(SUM(p.amount), 0) FROM postings p JOIN entries e ON e.id = p.entry_id
+             WHERE p.account_id = ? AND e.status = 'confirmed'
+            """, arguments: [accountId]) ?? 0
+        try db.execute(sql: "UPDATE accounts SET current_balance = ROUND(?, 2), updated_at = datetime('now') WHERE id = ?",
+                       arguments: [total, accountId])
+    }
+}
