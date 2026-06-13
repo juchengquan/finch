@@ -14,9 +14,11 @@ public enum Budgets {
         .contributeBudget: contribute,
     ]
 
-    private static func idsToJson(_ ids: [String]) -> String {
-        guard let data = try? JSONEncoder().encode(ids), let s = String(data: data, encoding: .utf8) else { return "[]" }
-        return s
+    /// JSON array text, or nil for an empty list — matches the web `idsToJson`
+    /// (`ids.length ? JSON.stringify(ids) : null`), so the column stores NULL.
+    private static func idsToJson(_ ids: [String]) -> String? {
+        if ids.isEmpty { return nil }
+        return (try? JSONEncoder().encode(ids)).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     static func create(_ db: Database, _ args: Args) throws {

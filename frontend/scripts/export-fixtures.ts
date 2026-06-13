@@ -26,6 +26,7 @@ import {
 import type { ScheduledTemplate } from '@/lib/store';
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
+import { applyMutation } from '@/lib/db/mutate';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
 import { buildPack } from '@/lib/db/core/pack';
 import { auditLedger, postSimple, ensureSystemCategories } from '@/lib/db/core/entries';
@@ -341,8 +342,120 @@ async function writeRoundtripFixtures(): Promise<void> {
   }
 }
 
+// ───────────────────────── write-side round-trip parity ─────────────────────────
+
+// A canonical, id-/timestamp-agnostic snapshot of the DB. Entries nest their
+// postings (both minus random ids); timestamps collapse to booleans; all numbers
+// render as fixed "%.6f" strings so the Swift port can compare structurally
+// without float/JSON-format drift. Domain tables keep their (arg-provided) ids.
+const num = (v: unknown): string | null => (v == null ? null : Number(v).toFixed(6));
+
+async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
+  const rows = (sql: string, b: unknown[] = []) => x(sql, b as never);
+  const entries = await rows('SELECT * FROM entries');
+  const entryObjs = [];
+  for (const e of entries) {
+    const ps = await rows('SELECT account_id, category_id, amount, currency, amount_base, exchange_rate, orig_amount, orig_currency, memo, cleared_at, sort_order FROM postings WHERE entry_id = ? ORDER BY sort_order', [e.id]);
+    entryObjs.push({
+      ledger_id: e.ledger_id, date: e.date, time: e.time ?? null, description: e.description ?? null,
+      kind: e.kind, status: e.status, counterparty_id: e.counterparty_id ?? null,
+      refunded_entry_id: e.refunded_entry_id ?? null, source_template_id: e.source_template_id ?? null,
+      notes: e.notes ?? null, applied_rule_ids: e.applied_rule_ids ?? null,
+      reviewed: e.reviewed_at != null, sealed: Number(e.sealed),
+      postings: ps.map((p) => ({
+        account_id: p.account_id ?? null, category_id: p.category_id ?? null, amount: num(p.amount),
+        currency: p.currency, amount_base: num(p.amount_base), exchange_rate: num(p.exchange_rate),
+        orig_amount: num(p.orig_amount), orig_currency: p.orig_currency ?? null, memo: p.memo ?? null,
+        cleared: p.cleared_at != null, sort_order: Number(p.sort_order),
+      })),
+    });
+  }
+  // Content tuple (id-free, order-independent of dictionary key order) so the
+  // Swift port can reproduce the exact same entry ordering.
+  const ekey = (o: { date: unknown; kind: unknown; description: unknown; postings: { account_id: unknown; category_id: unknown; amount_base: unknown }[] }) =>
+    `${o.date}|${o.kind}|${o.description ?? ''}|` +
+    o.postings.map((p) => `${p.account_id ?? ''}:${p.category_id ?? ''}:${p.amount_base ?? ''}`).join(';');
+  entryObjs.sort((a, b) => (ekey(a) < ekey(b) ? -1 : ekey(a) > ekey(b) ? 1 : 0));
+
+  const map = (rs: Record<string, unknown>[], cols: Record<string, (r: Record<string, unknown>) => unknown>) =>
+    rs.map((r) => Object.fromEntries(Object.entries(cols).map(([k, f]) => [k, f(r)])));
+
+  return {
+    entries: entryObjs,
+    ledgers: map(await rows('SELECT * FROM ledgers ORDER BY id'), { id: (r) => r.id, name: (r) => r.name, base: (r) => r.base_currency, is_default: (r) => Number(r.is_default), color: (r) => r.color ?? null, tagline: (r) => r.tagline ?? null }),
+    account_groups: map(await rows('SELECT * FROM account_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
+    accounts: map(await rows('SELECT * FROM accounts ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, type: (r) => r.type, currency: (r) => r.currency, current_balance: (r) => num(r.current_balance), sort_order: (r) => Number(r.sort_order), include_in_net_worth: (r) => Number(r.include_in_net_worth), is_active: (r) => Number(r.is_active), archived: (r) => r.archived_at != null }),
+    categories: map(await rows('SELECT * FROM categories ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, parent_id: (r) => r.parent_id ?? null, name: (r) => r.name, kind: (r) => r.kind, system: (r) => r.system ?? null, sort_order: (r) => Number(r.sort_order) }),
+    counterparties: map(await rows('SELECT * FROM counterparties ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, is_verified: (r) => Number(r.is_verified) }),
+    tags: map(await rows('SELECT * FROM tags ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, color: (r) => r.color ?? null }),
+    budgets: map(await rows('SELECT * FROM budgets ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, kind: (r) => r.kind, amount: (r) => num(r.amount), saved: (r) => num(r.saved), frequency: (r) => r.frequency, start_date: (r) => r.start_date, end_date: (r) => r.end_date ?? null, is_recurring: (r) => Number(r.is_recurring), rollover: (r) => Number(r.rollover), account_ids: (r) => r.account_ids ?? null, category_ids: (r) => r.category_ids ?? null, warning_pct: (r) => num(r.warning_pct), pending_amount: (r) => num(r.pending_amount) }),
+    budget_groups: map(await rows('SELECT * FROM budget_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
+    holdings: map(await rows('SELECT * FROM holdings ORDER BY id'), { id: (r) => r.id, account_id: (r) => r.account_id, symbol: (r) => r.symbol, shares: (r) => num(r.shares), cost_basis: (r) => num(r.cost_basis), currency: (r) => r.currency, last_price: (r) => num(r.last_price) }),
+    exchange_rates: map(await rows('SELECT * FROM exchange_rates ORDER BY date, currency'), { date: (r) => r.date, currency: (r) => r.currency, rate: (r) => num(r.rate), source: (r) => r.source ?? null }),
+    scheduled_templates: map(await rows('SELECT * FROM scheduled_templates ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, kind: (r) => r.kind, amount: (r) => num(r.amount), frequency: (r) => r.frequency, day_of_month: (r) => Number(r.day_of_month), account_id: (r) => r.account_id, from_account_id: (r) => r.from_account_id ?? null, start_date: (r) => r.start_date ?? null, is_active: (r) => Number(r.is_active), splits_enabled: (r) => Number(r.splits_enabled) }),
+    rules: map(await rows('SELECT * FROM rules ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, priority: (r) => Number(r.priority), condition: (r) => JSON.parse(String(r.condition)), actions: (r) => JSON.parse(String(r.actions)), is_active: (r) => Number(r.is_active) }),
+    app_state: map(await rows('SELECT * FROM app_state ORDER BY key'), { key: (r) => r.key, value: (r) => r.value }),
+  };
+}
+
+// A fixed-id base seed (raw SQL, run identically on both sides) for the entities
+// whose handlers generate random ids — the ledger, the three system equity
+// categories (resolved by `system` marker, so postOpening/postAdjustment REUSE
+// these instead of minting random ones), the user categories, and the accounts.
+// createCategory/createLedger/ensureSystemCategories mint random ids, so they
+// can't be referenced by a fixed id in later steps; seeding sidesteps that and
+// keeps canonicalState comparable.
+const N = "datetime('now')";
+const SEED_SQL: string[] = [
+  `INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('personal','Personal','USD',1,${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-open','personal',NULL,'Opening balance','equity',9000,'opening',${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-adj','personal',NULL,'Balance adjustment','equity',9001,'adjustment',${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-fx','personal',NULL,'FX gain/loss','equity',9002,'fx',${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('food','personal',NULL,'Food','expense',0,${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('pay','personal',NULL,'Salary','income',1,${N},${N})`,
+  `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,${N},${N})`,
+  `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,${N},${N})`,
+];
+
+/** A deterministic write-action sequence over the seeded fixed ids. Every entity
+ *  it creates is either arg-id-honoring (counterparty/tag/budget/group/scheduled/
+ *  rule) or an entry/posting (canonicalState nests those minus ids). No action
+ *  references a randomly-generated id, so web + Swift converge on one end state. */
+const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
+  { action: 'createCounterparty', args: { id: 'cp1', ledgerId: 'personal', name: 'Starbucks' } },
+  { action: 'createTag', args: { id: 'tg1', ledgerId: 'personal', name: 'work', color: '#f00' } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -25, merchant: 'Coffee', categoryId: 'food', date: '2026-05-01', skipRules: true } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: 2000, merchant: 'Pay', categoryId: 'pay', date: '2026-05-02', kind: 'income', skipRules: true } },
+  { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 500, date: '2026-05-03' } },
+  { action: 'createBudget', args: { id: 'b1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 300, categoryIds: ['food'] } },
+  { action: 'createBudgetGroup', args: { id: 'bg1', ledgerId: 'personal', name: 'Essentials' } },
+  { action: 'contributeBudget', args: { id: 'b1', amount: 50 } },
+  { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'EUR', rate: 1.1 } },
+  { action: 'setDisplayCurrency', args: { ledgerId: 'personal', currency: 'USD' } },
+  { action: 'createScheduled', args: { id: 's1', ledgerId: 'personal', name: 'Rent', type: 'expense', amount: 1500, frequency: 'monthly', dayOfMonth: 1, accountId: 'a1', startDate: '2026-01-01' } },
+  { action: 'createRule', args: { id: 'r1', ledgerId: 'personal', name: 'Coffee', condition: { field: 'merchant', op: 'contains', value: 'coffee' }, actions: [{ type: 'set_category', categoryId: 'food' }] } },
+  { action: 'adjustAccountBalance', args: { accountId: 'a2', targetBalance: 600, date: '2026-05-04' } },
+];
+
+async function writeWriteParityFixture(): Promise<void> {
+  const driver = await openDb(':memory:');
+  applyPragmaBootstrap(driver);
+  const x = execFor(driver);
+  await applySchema(x);
+  for (const sql of SEED_SQL) await x(sql, []);
+  for (const step of WRITE_SEQUENCE) await applyMutation(x, step.action, step.args);
+  const expected = await canonicalState(x);
+  const dir = path.join(OUT, 'writeparity');
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, 'sequence.json'),
+    JSON.stringify({ seedSql: SEED_SQL, sequence: WRITE_SEQUENCE, expected }, null, 2) + '\n');
+  driver.close();
+}
+
 async function main(): Promise<void> {
   await fs.mkdir(OUT, { recursive: true });
+  await writeWriteParityFixture();
+  console.log('  write-parity fixture: sequence.json');
   const sel = await writeSelectorFixtures();
   const aud = await writeAuditFixtures();
   const proj = await writeProjectionFixture();
