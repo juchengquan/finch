@@ -10,7 +10,12 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test lib",
     "check:naming": "bash scripts/check-component-filenames.sh",
-    "db:probe": "node scripts/probe-bs3.mjs"
+    "db:probe": "node scripts/probe-bs3.mjs",
+    "ios:fixtures": "bun scripts/export-fixtures.ts",
+    "ios:test": "cd ../ios && swift test",
+    "ios:gen": "cd ../ios && xcodegen generate",
+    "ios:build": "cd ../ios && xcodebuild -project FinchApp.xcodeproj -scheme FinchApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build",
+    "ios:apptest": "cd ../ios && xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest'"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
