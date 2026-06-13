@@ -31,6 +31,29 @@ final class TransfersLedgersTests: XCTestCase {
         }
     }
 
+    /// changeLedgerBase re-derives every entry's amount_base at the new base; the
+    /// entry stays balanced and the native account balance is unchanged.
+    func test_changeLedgerBase() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('food','l1',NULL,'Food','expense',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sysfx','l1',NULL,'FX','equity',9002,'fx',datetime('now'),datetime('now'))")
+            // EUR rate so USD→EUR conversion resolves.
+            try db.execute(sql: "INSERT INTO exchange_rates (date,currency,rate) VALUES ('2026-05-01','EUR',0.9)")
+        }
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args(["ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-100), "merchant": .string("Coffee"), "categoryId": .string("food"), "date": .string("2026-05-01"), "skipRules": .bool(true)]))
+        try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args(["ledgerId": .string("l1"), "newBase": .string("EUR")]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id='l1'"), "EUR")
+            // entry still balances (account leg re-locked + category reconverted at the same rate)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base),2) FROM postings p JOIN entries e ON e.id=p.entry_id WHERE e.kind='expense'") ?? -1, 0, accuracy: 0.001)
+            // native USD balance is unchanged by the base switch
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a1'") ?? 0, -100, accuracy: 0.001)
+            // amount_base now re-locked at the new base (≈ -111.11 EUR for the account leg)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount_base FROM postings WHERE account_id='a1'") ?? 0, -111.11, accuracy: 0.01)
+        }
+    }
+
     func test_ledgerCrud() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createLedger", args: Args(["id": .string("biz"), "name": .string("Business"), "base": .string("eur")]))

@@ -2,15 +2,54 @@ import Foundation
 import GRDB
 
 /// Ledgers domain — port of lib/db/domain/ledgers/mutations.ts.
-/// DEFERRED: changeLedgerBase (recomputeAmountBases — re-derives every
-/// amount_base at the new base via FX).
 public enum Ledgers {
     public static let handlers: [ActionName: Apply.Handler] = [
         .createLedger: create,
         .updateLedger: update,
         .setDefaultLedger: setDefault,
         .deleteLedger: delete,
+        .changeLedgerBase: changeBase,
     ]
+
+    /// Re-derive every entry's amount_base at the new base: account legs re-lock
+    /// (omit amountBase), category legs reconvert old→new base at the entry date,
+    /// fx residue legs are dropped (rebuildEntry re-derives them).
+    /// DEFERRED: the final auditLedger safety check (Audit needs a DatabaseQueue;
+    /// the seal trigger + per-entry recompute already enforce balance) — and the
+    /// FX path is the simplified rateToHub (no derived-rate insert / static map).
+    static func changeBase(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ledgerId: String; let newBase: String }
+        let a = try args.to(A.self)
+        let ledgerId = a.ledgerId
+        let newBase = a.newBase.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if ledgerId.isEmpty { throw I18nError("error.required.ledgerId", [:], "ledgerId is required") }
+        if !isISO3(newBase) { throw I18nError("error.ledger.newBaseISO", [:], "newBase must be a 3-letter ISO code") }
+        guard let oldBase = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [ledgerId]) else {
+            throw I18nError("error.notFound.ledger", [:], "Ledger not found")
+        }
+        if oldBase == newBase { return }
+
+        try Entries.ensureSystemCategories(db, ledgerId)
+        try db.execute(sql: "UPDATE ledgers SET base_currency = ?, updated_at = datetime('now') WHERE id = ?", arguments: [newBase, ledgerId])
+        let fxCatId = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+        for e in try Row.fetchAll(db, sql: "SELECT id, date FROM entries WHERE ledger_id = ? ORDER BY date, id", arguments: [ledgerId]) {
+            let entryId: String = e["id"], entryDate: String = e["date"]
+            var legs: [Entries.Leg] = []
+            for p in try Row.fetchAll(db, sql: "SELECT id, account_id, category_id, amount, amount_base, memo FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId]) {
+                if let acctId = p["account_id"] as String? {
+                    legs.append(.account(Entries.AccountLeg(accountId: acctId, amount: p["amount"], memo: p["memo"], id: p["id"])))   // omit amountBase → re-lock
+                } else {
+                    let catId = p["category_id"] as String?
+                    if let fx = fxCatId, catId == fx { continue }   // drop fx residue
+                    let conv = try Entries.convertToBase(db, p["amount_base"], oldBase, newBase, entryDate)
+                    legs.append(.category(Entries.CategoryLeg(categoryId: catId, amountBase: Entries.r2(conv.amountBase), memo: p["memo"], id: p["id"])))
+                }
+            }
+            var ep = Entries.EntryPatch()
+            ep.legs = .set(legs)
+            try Entries.rebuildEntry(db, entryId, ep)
+        }
+    }
 
     private static func isISO3(_ s: String) -> Bool { s.count == 3 && s.allSatisfy { $0.isLetter && $0.isUppercase } }
 
