@@ -20,6 +20,8 @@ public enum Transactions {
         .setReviewed: setReviewed,
         .markAllReviewed: markAllReviewed,
         .confirmAllPending: confirmAllPending,
+        .setTransactionTags: setTransactionTags,
+        .bulkRecategorize: bulkRecategorize,
     ]
 
     // MARK: addTransaction (same-currency path → postSimple)
@@ -164,6 +166,49 @@ public enum Transactions {
             try db.execute(sql: "UPDATE entries SET reviewed_at = datetime('now') WHERE ledger_id = ? AND reviewed_at IS NULL",
                            arguments: [ledgerId])
         }
+    }
+
+    // MARK: setTransactionTags
+
+    static func setTransactionTags(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String; let tagIds: [String] }
+        let a = try args.to(A.self)
+        let entryId = try Entries.resolveEntryRef(db, a.id)?.entryId ?? a.id
+        try db.execute(sql: "DELETE FROM entry_tags WHERE entry_id = ?", arguments: [entryId])
+        for tagId in a.tagIds {
+            try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [entryId, tagId])
+        }
+    }
+
+    // MARK: bulkRecategorize (→ rebuildEntry with [acctLeg, new category leg])
+
+    /// Single-category entries only; splits (≥2 category legs) are skipped, like
+    /// the web. NOTE: the account leg is forwarded verbatim, but my simplified
+    /// ResolvedLeg/insertPostings drop cleared_at/orig_* — so a cleared or FX leg
+    /// would lose that metadata on rebuild (DEFERRED, fine for plain entries).
+    static func bulkRecategorize(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ids: [String]; let categoryId: String? }
+        let a = try args.to(A.self)
+        if a.ids.isEmpty { return }
+        for id in a.ids {
+            guard let ref = try Entries.resolveEntryRef(db, id) else { continue }
+            let entryId = ref.entryId
+            let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
+            if catCount >= 2 { continue }
+            guard let acct = try Row.fetchOne(db, sql:
+                "SELECT id, account_id, amount, amount_base, exchange_rate, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
+                arguments: [entryId]) else { continue }
+            let amountBase: Double = acct["amount_base"]
+            var ep = Entries.EntryPatch()
+            ep.legs = .set([
+                .account(Entries.AccountLeg(accountId: acct["account_id"], amount: acct["amount"],
+                    amountBase: acct["amount_base"], exchangeRate: (acct["exchange_rate"] as Double?) ?? 1,
+                    memo: acct["memo"], id: acct["id"])),
+                .category(Entries.CategoryLeg(categoryId: a.categoryId, amountBase: -amountBase)),
+            ])
+            try Entries.rebuildEntry(db, entryId, ep)
+        }
+        // DEFERRED: invalidateRollover.
     }
 
     // MARK: confirmAllPending

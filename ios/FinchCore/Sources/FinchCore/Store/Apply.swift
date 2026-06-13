@@ -18,6 +18,8 @@ public enum Apply {
         var all: [ActionName: Handler] = [:]
         // Domains fold in their handlers as they are ported (Tasks 3–15):
         all.merge(Transactions.handlers) { _, new in new }
+        all.merge(Counterparties.handlers) { _, new in new }
+        all.merge(Tags.handlers) { _, new in new }
         return all
     }
 
