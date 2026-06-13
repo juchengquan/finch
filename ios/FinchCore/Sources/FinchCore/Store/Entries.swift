@@ -377,6 +377,41 @@ public enum Entries {
         return EntryRef(entryId: id, postingId: leg?["id"], accountId: leg?["account_id"])
     }
 
+    /// Two account legs (from −amount, to +amount) + any FX residue — the
+    /// double-entry transfer. Same-currency requires matching magnitudes.
+    @discardableResult
+    public static func postTransfer(_ db: Database, ledgerId: String? = nil, fromAccountId: String,
+                                    toAccountId: String, fromAmount: Double, toAmount: Double? = nil,
+                                    date: String, time: String? = nil, note: String? = nil,
+                                    sourceTemplateId: String? = nil, id: String? = nil,
+                                    timestamp: String? = nil) throws -> String {
+        let fromAmt = abs(fromAmount)
+        if fromAmt == 0 { throw I18nError("error.transfer.amountGt0", [:], "Transfer amount must be greater than 0") }
+        if fromAccountId == toAccountId { throw I18nError("error.transfer.sameAccount", [:], "Pick two different accounts") }
+        guard let from = try Row.fetchOne(db, sql: "SELECT ledger_id, currency, name FROM accounts WHERE id = ?", arguments: [fromAccountId]),
+              let to = try Row.fetchOne(db, sql: "SELECT currency, name FROM accounts WHERE id = ?", arguments: [toAccountId]) else {
+            throw I18nError("error.notFound.account", [:], "Account not found")
+        }
+        let lid = ledgerId ?? (from["ledger_id"] as String)
+        let fromCcy: String = from["currency"], toCcy: String = to["currency"]
+        let toAmt: Double
+        if let ta = toAmount {
+            toAmt = abs(ta)
+            if !(toAmt > 0) { throw I18nError("error.transfer.receivedGt0", [:], "Received amount must be greater than 0") }
+            if fromCcy == toCcy && abs(toAmt - fromAmt) > 0.005 {
+                throw I18nError("error.transfer.sameCurrencyMismatch", [:], "Same-currency transfer amounts must match")
+            }
+        } else {
+            toAmt = try convertToBase(db, fromAmt, fromCcy, toCcy, date).amountBase
+        }
+        let fromName: String = from["name"], toName: String = to["name"]
+        return try postEntry(db, NewEntry(
+            id: id, ledgerId: lid, date: date, time: time, description: "Transfer", kind: .transfer,
+            legs: [.account(AccountLeg(accountId: fromAccountId, amount: -fromAmt, memo: "Transfer to \(toName)")),
+                   .account(AccountLeg(accountId: toAccountId, amount: toAmt, memo: "Transfer from \(fromName)"))],
+            notes: note, sourceTemplateId: sourceTemplateId, timestamp: timestamp, skipRules: true))
+    }
+
     /// One account leg against the `adjustment` equity category — the manual
     /// balance-reconciliation entry. Zero/sub-cent delta is a silent no-op.
     @discardableResult
