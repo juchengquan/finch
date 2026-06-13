@@ -48,21 +48,8 @@ public struct AccountRow: Codable, Equatable, Sendable {
     public var type: String?
 }
 
-public struct BudgetRow: Codable, Equatable, Sendable {
-    public var id: String
-    public var ledgerId: String
-    public var name: String
-    public var type: String
-    public var amount: Double
-    public var saved: Double
-    public var carryForward: Double
-    public var frequency: String
-    public var startDate: String
-    public var endDate: String?
-    public var isRecurring: Int
-    public var accountIds: [String]
-    public var categoryIds: [String]
-}
+// `BudgetRow` lives in Project/Budget.swift (the full web-matching projection
+// row consumed by both `Selectors.budgetProgress` and the Budgets tab).
 
 public struct ListOptions: Codable, Equatable, Sendable {
     public var ledgerId: String
