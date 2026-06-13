@@ -8,25 +8,41 @@ import FinchCore
 struct FinchApp: App {
     @StateObject private var store = FinchStore.shared
     @StateObject private var router = DeepLinkRouter()
+    @StateObject private var gate = BiometricGate.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            ContentTabs()
-                .environmentObject(store)
-                .environmentObject(router)
-                .task {
-                    store.bootstrap()   // re-open the persisted live DB on launch
-                    await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1
-                    // Phase 6.2: notifications
-                    NotificationService.shared.configure(store: store, router: router)
-                    await NotificationService.shared.requestPermissionIfNeeded()
-                    await NotificationService.shared.refresh()
+            ZStack {
+                ContentTabs()
+                    .environmentObject(store)
+                    .environmentObject(router)
+                    .environmentObject(gate)
+                if gate.isLocked {   // Phase 6.3: biometric cover
+                    LockView().environmentObject(gate)
                 }
-                .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                    if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
-                        router.route(to: id)
-                    }
+            }
+            .task {
+                store.bootstrap()   // re-open the persisted live DB on launch
+                gate.start()        // Phase 6.3: evaluate lock state
+                await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1
+                // Phase 6.2: notifications
+                NotificationService.shared.configure(store: store, router: router)
+                await NotificationService.shared.requestPermissionIfNeeded()
+                await NotificationService.shared.refresh()
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                    router.route(to: id)
                 }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                switch phase {
+                case .background: gate.didEnterBackground()
+                case .active: gate.didBecomeActive()
+                default: break
+                }
+            }
         }
     }
 }
