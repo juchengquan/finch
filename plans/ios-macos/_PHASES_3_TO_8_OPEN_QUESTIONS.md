@@ -161,7 +161,10 @@ Genuinely remaining (true environment limits, not code):
   target (self-contained watchOS app reading the App Group `WidgetSnapshot`)
   **builds for the watchOS simulator**. Wired into project.yml; iOS + Mac builds
   unaffected. (CI builds the iOS scheme only, so CI doesn't rebuild it.)
-- 📐 **CloudKit row-level sync** (Phase 8) — needs a real iCloud/CloudKit account
-  + container at runtime to be meaningful; unverifiable in any CI. The
-  entitlement compiles; the sync engine remains the architecture note. It also
+- ✅/🔧 **CloudKit row-level sync** (Phase 8) — the **CI-verifiable core is
+  built + unit-tested**: the row↔CKRecord mapping (round-trips headless) and the
+  LWW conflict resolution (`CloudKitRecordMapper` / `CloudKitConflict`). The
+  push/fetch loop (`CloudKitSyncService`) compiles + declares the CloudKit
+  entitlement, but no-ops without a signed-in iCloud account, so the actual
+  sync I/O + full CKSyncEngine state loop can't be runtime-verified in CI. It
   supersedes Phase 5's pack sync by design.
