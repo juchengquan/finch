@@ -16,7 +16,9 @@ struct FinchApp: App {
     }
 }
 
-/// The tab shell. Phase 2 adds Scheduled (the 6th, writable tab).
+/// The 6-tab shell, in the canonical display order: Accounts, Activity, Budgets,
+/// Insights (1.5), Scheduled (2), Settings. A future Reports tab slots between
+/// Insights and Scheduled (not built yet).
 struct ContentTabs: View {
     var body: some View {
         TabView {
@@ -26,10 +28,10 @@ struct ContentTabs: View {
                 .tabItem { Label("Activity", systemImage: "list.bullet") }
             BudgetsTab()
                 .tabItem { Label("Budgets", systemImage: "chart.pie") }
-            ScheduledTab()   // NEW in Phase 2
-                .tabItem { Label("Scheduled", systemImage: "calendar") }
             InsightsTab()   // NEW in Phase 1.5
                 .tabItem { Label("Insights", systemImage: "chart.line.uptrend.xyaxis") }
+            ScheduledTab()   // NEW in Phase 2
+                .tabItem { Label("Scheduled", systemImage: "calendar") }
             SettingsTab()
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
