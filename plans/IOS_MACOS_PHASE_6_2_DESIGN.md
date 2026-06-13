@@ -22,6 +22,30 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.15 — anomaly threshold (2.5)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §3 — I18nError wire format
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+- `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` — Phase 6.1 (Spotlight; reuses `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; same Xcode project)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` §3 — the weekly digest (uses `weeklyDigest` selector)
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Permission request) + §3 (The `NotificationScheduler`) |
+| §3. iOS UI surfaces | §5 (Action handlers) |
+| §4. Cross-cutting concerns | §2 (Permission request flow) + §4 (Settings › Notifications section) |
+| §5. Wire contracts | §3 (The `NotificationScheduler` — its action handlers dispatch chokepoint writes) |
+| §6. CI / test infrastructure | §6 (CI changes) |
+| §7. Out of scope (firm) | §8 |
+| §8. Spec self-review + open questions | §9 + §7 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Schedule **local notifications** for 4 categories
@@ -34,7 +58,8 @@ of events:
    limit` exceeds its `warning_pct` (default 90%), fire a
    notification with a "View budgets" action button
 3. **Anomaly flagged** — when a recent transaction has
-   `anomalyScore` > 3 (Phase 1.0's anomaly threshold), fire
+   `anomalyScore` > 2.5 (the web's `anomalyScore` threshold
+   in `lib/select.ts`), fire
    a notification with a "View transaction" action button
 4. **Weekly digest** — every Sunday morning at the user's
    configured time (default 9 AM), fire a notification
@@ -52,7 +77,7 @@ background context).
 - **No push notifications** — the plan's §10 is explicit:
   no server-side push. Local notifications only.
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.2 adds a **notification surface** that the user
   sees in the iOS Notification Center.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -105,8 +130,14 @@ public final class NotificationPermission {
         let current = await center.notificationSettings()
         switch current.authorizationStatus {
         case .notDetermined:
-            // First time — request permission
-            return try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            // First time — request permission.
+            // requestAuthorization returns Bool, so re-fetch
+            // notificationSettings() to get the new status.
+            _ = try? await center.requestAuthorization(
+                options: [.alert, .badge, .sound],
+                localizedReason: "finch sends you reminders for scheduled transactions, budget warnings, and your weekly spending digest."
+            )
+            return await center.notificationSettings().authorizationStatus
         case .denied:
             return .denied
         case .authorized, .provisional, .ephemeral:
@@ -125,13 +156,12 @@ has a "Request permission" button (which deep-links to
 `UIApplication.openSettingsURLString`) for users who want
 to retry after fixing iOS Settings.
 
-The `Info.plist` key:
-
-```xml
-<key>NSUserNotificationsUsageDescription</key>
-<string>finch sends you reminders for scheduled transactions,
-budget warnings, and your weekly spending digest.</string>
-```
+No `Info.plist` key is required for `UNUserNotificationCenter` —
+the system uses the `localizedReason:` argument passed to
+`center.requestAuthorization(options:)` for the permission
+prompt's body text (and there's no legacy
+`NSUserNotificationsUsageDescription` key for the modern
+`UNUserNotificationCenter` API on iOS 17+).
 
 ### 2.2 — The 4 notification categories
 
@@ -224,6 +254,16 @@ writes.
 @MainActor
 public final class NotificationScheduler {
     public static let shared = NotificationScheduler()
+
+    /// Called on app launch + foreground (in the scenePhase
+    /// handler that Phase 6.3 already has). Re-schedules the
+    /// weekly digest so the body content reflects the
+    /// latest digest (captured at schedule time by
+    /// UNUserNotificationCenter; the body would otherwise
+    /// be stale once a `repeats: true` digest is scheduled).
+    public func evaluateOnLaunch(currentState: FinchStore) async {
+        await rescheduleAll(newState: currentState)
+    }
 
     private let center = UNUserNotificationCenter.current()
     private var enabledCategories: Set<NotificationCategory> = []
@@ -350,8 +390,8 @@ times).
 ### 3.4 — Anomaly flagged
 
 For each transaction in the last 24 hours with
-`anomalyScore > 3` (the Phase 1.0 threshold), schedule a
-notification:
+`anomalyScore > 2.5` (the web's `anomalyScore` threshold
+in `lib/select.ts`), schedule a notification:
 
 ```swift
 private func scheduleAnomalyNotifications(newState: FinchStore) async {
@@ -359,7 +399,7 @@ private func scheduleAnomalyNotifications(newState: FinchStore) async {
     let recent = newState.txns.filter { $0.date >= ISO8601DateFormatter().string(from: Date().addingTimeInterval(-24 * 3600)) }
     for tx in recent {
         let score = try? Selectors.anomalyScore(tx, stats: merchantStats(newState.txns))
-        guard let score = score, abs(score) > 3 else { continue }
+        guard let score = score, abs(score) > 2.5 else { continue }
 
         let content = UNMutableNotificationContent()
         content.title = "Unusual: \(tx.merchant)"
@@ -403,7 +443,8 @@ private func scheduleWeeklyDigestNotification() async {
     // (or app foreground) re-schedules the next digest for the
     // following Sunday.
 
-    let calendar = Calendar.current
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.firstWeekday = 1  // Pin Sunday-first (locale-independent)
     let now = Date()
     let nextSunday = calendar.nextDate(
         after: now,
@@ -416,7 +457,10 @@ private func scheduleWeeklyDigestNotification() async {
 
     let content = UNMutableNotificationContent()
     content.title = "Your week: $\(digest?.totalSpent ?? 0)"
-    content.body = digest.map { "Top category: \(String(describing: $0.topCategory)) ($\($0.topCategoryAmount))" } ?? "Open finch to see your weekly digest"
+    content.body = digest.map {
+        let cat = $0.topCategory ?? "(none)"
+        return "Top category: \(cat) ($\($0.topCategoryAmount))"
+    } ?? "Open finch to see your weekly digest"
     content.categoryIdentifier = "weeklyDigest"
     content.sound = .default
     content.userInfo = ["type": "weeklyDigest"]
@@ -531,7 +575,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             // Scheduled item due: dispatch the chokepoint
             guard let templateId = userInfo["templateId"] as? String else { return }
             Task { @MainActor in
-                try? await store.apply(action: "postScheduled", args: ["id": templateId])
+                try? await FinchStore.shared.apply(
+                    action: "postScheduled",
+                    args: ["id": templateId]
+                )
             }
         case "snooze1h":
             // Reschedule the notification for 1 hour from now
@@ -541,14 +588,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         case "viewBudgets":
             // Deep-link to the Budgets tab
-            router.route(to: "budget:\(userInfo["budgetId"] ?? "")")
+            // (router is held as a `DeepLinkRouter()` instance
+            // on the SwiftUI `FinchApp`; the scheduler posts
+            // a Notification that the app observes and routes
+            // via the router — see §3.2's AppDelegate wiring).
+            DeepLinkRouter().route(to: "budget:\(userInfo["budgetId"] ?? "")")
         case "viewTransaction":
             // Deep-link to the Transaction Detail screen
             guard let entryId = userInfo["entryId"] as? String else { return }
-            router.route(to: "tx:\(entryId)")
+            DeepLinkRouter().route(to: "tx:\(entryId)")
         case "openActivity":
             // Deep-link to the Activity tab
-            router.route(to: "activity")
+            DeepLinkRouter().route(to: "activity")
         default:
             // Tapping the notification body (no specific action)
             // — switch to the corresponding tab
@@ -608,7 +659,7 @@ notifications.
 **Not blocking Phase 6.2 (decide later)**:
 
 - **Threshold tuning**: the proposal uses the defaults
-  (90% for budget warning, 3.0 for anomaly, 1 hour for
+  (90% for budget warning, 2.5 for anomaly, 1 hour for
   scheduled due). User-configurable thresholds are a
   future phase.
 - **Per-ledger notification preferences**: the proposal
@@ -663,7 +714,7 @@ These are explicitly NOT in Phase 6.2:
 - **No push notifications** — local notifications only
   (per the plan's §10)
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set (the weekly digest uses `weeklyDigest` from
   Phase 1.5)

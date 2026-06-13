@@ -16,8 +16,32 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0, 1.5, 2, and 3 are complete; the iPhone + iPad + Mac
-> apps are shipping with the 6 tabs + 6 write screens + the 74-
+> apps are shipping with the 6 tabs + 7 write screens + the 74-
 > action chokepoint._
+
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack; runs after Phase 4)
+- `plans/IOS_MACOS_PLAN.md` §2.1 — the chokepoint surface
+- `plans/IOS_MACOS_ROADMAP.md` — Phase 4 sketch
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | (covered across §2-§8, the 7 features; each has a wire shape and UI sketch) |
+| §3. iOS UI surfaces | §2-§8 (per-feature UI sketches for the 7 power features) |
+| §4. Cross-cutting concerns | §9 (Cross-cutting UI patterns) |
+| §5. Wire contracts | §2-§8 (each feature has a wire shape — the chokepoint action) |
+| §6. CI / test infrastructure | (not directly covered — stub to `IOS_MACOS_PLAN.md` §12) |
+| §7. Out of scope (firm) | §11 |
+| §8. Spec self-review + open questions | §12 + §10 |
 
 ## §1. Goal & non-goals
 
@@ -44,8 +68,8 @@ engine, etc.).
 **Phase 4 is a UI-heavy phase** — the chokepoint is unchanged
 from Phase 2. Most of the work is in the iOS UI for the 7
 features. The selectors from Phase 1.5 already cover most of
-the read-side needs (`reconcileAccount` selector, the rules
-engine, etc.).
+the read-side needs (the rules engine, the budget progress
+selectors, etc.).
 
 **Non-goals (firm)**:
 
@@ -71,7 +95,7 @@ engine, etc.).
   resolved decision.
 - **Android** — not in the plan.
 
-**Estimated scope**: ~2,500-3,500 lines SwiftUI (7 features ×
+**Estimated scope**: ~2,100-3,500 lines SwiftUI (7 features ×
 ~300-500 lines each) + ~500 lines glue (the rules engine port +
 the reconcile CSV parser + the FX rate editor) + ~400 lines
 parity tests (the rules engine parity suite + reconcile
@@ -186,10 +210,15 @@ The reconcile flow uses the Phase 2 actions:
   (the web's `reconcileAccount` action handles the
   checkpoint + the optional adjustment entry in one call)
 
-The `reconcileAccount` selector from Phase 1.5 (`lib/select.ts::reconcileAccount`)
-computes the cleared sum, the gap, and the un-cleared entries
-list. The Swift port (Phase 1.5) already exists; Phase 4
-wires the UI to it.
+The reconcile UI's read-side math (cleared sum, gap, un-cleared
+entries list) is a small inline computation over the in-memory
+`Tx[]` cache, not a ported Phase 1.5 selector — there is no
+`reconcileAccount` selector in `lib/select.ts` (the 32
+selectors are listed in Phase 1.5 §2). The chokepoint
+`Args.reconcileAccount({accountId, statementBalance,
+statementDate, postAdjustment})` is a Phase 2 *write* action
+that handles the checkpoint + the optional adjustment entry
+in one call.
 
 ### 2.4 — Statement CSV import (optional, Phase 4.5)
 
@@ -676,7 +705,7 @@ it's a UI affordance only.
 All 7 features share these patterns:
 
 - **Form sheets** for the create / edit flows (the same
-  pattern as Phase 2's 6 write screens)
+  pattern as Phase 2's 7 write screens)
 - **Multi-step navigation** for the reconcile flow (Step 1,
   Step 2, Step 3 with a `NavigationStack` push)
 - **Multi-select mode** for the bulk recategorize flow (the
@@ -760,7 +789,9 @@ phases. For Phase 4 specifically:
 These are explicitly NOT in Phase 4:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 4 wires UI to them.
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 4 doesn't add more).
+  Phase 4 wires UI to them.
 - **No new tabs** — the 6 tabs (Accounts, Activity,
   Budgets, Insights, Scheduled, Settings) are unchanged.
   New features surface within existing tabs.
@@ -794,13 +825,20 @@ spec.)
 - **Internal consistency**: §2's reconcile uses
   `Args.setCleared` + `Args.reconcileAccount` (both Phase
   2 actions). §3's rules engine uses `Args.backfillRule`
-  + `Args.setRuleEnabled` (both Phase 2 actions). §4's
+  + `Args.updateRule({id, patch: {isActive: true|false}})`
+  (the rule's `isActive` field is patchable via the
+  existing `updateRule` action — no separate
+  `setRuleEnabled` action; the Phase 2 chokepoint
+  inventory has no `setRuleEnabled`). §4's
   transfers use `Args.createTransfer` +
   `Args.updateTransfer` + `Args.deleteTransfer` (all
   Phase 2). §5's reference data uses
   `Args.createCategory` + `Args.updateCategory` +
-  `Args.deleteCategory` + `Args.archiveCategory` (all
-  Phase 2). §6's saved searches use the local DB's
+  `Args.deleteCategory` (all Phase 2; categories don't have
+  a separate "archive" action — deleted categories are
+  removed from the in-memory cache; the reconciliation
+  comes from the chokepoint's referential-integrity
+  enforcement). §6's saved searches use the local DB's
   `app_state` table (matches the web). §7's bulk
   recategorize uses `Args.bulkRecategorize` (Phase 2). §8's
   FX uses `Args.changeLedgerBase` + `Args.setExchangeRate`

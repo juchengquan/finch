@@ -21,8 +21,34 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete; the iPhone + iPad + Mac apps are
-> shipping with the 6 tabs + 6 write screens + 7 power features
+> shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
+
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_PLAN.md` §7 — the platform integrations
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §5 (Tab 2) — the in-memory `Tx[]` cache the Spotlight index reads
+- `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` — Phase 6.2 (Notifications; reuses `DeepLinkRouter`)
+- `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` — Phase 6.3 (Biometric; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents; same Xcode project)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (Share Extension; same Xcode project)
+- `plans/IOS_MACOS_ROADMAP.md` — Phase 6.1 sketch
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (The Spotlight index itself) |
+| §3. iOS UI surfaces | §3 (Deep-linking from Spotlight) |
+| §4. Cross-cutting concerns | §4 (Permissions + entitlement) |
+| §5. Wire contracts | (not directly covered — stub to `IOS_MACOS_WIRE_FORMAT.md` §4 for the pack format, since Spotlight indexes are persisted via the chokepoint projection) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §8 + §6 |
 
 ## §1. Goal & non-goals
 
@@ -48,7 +74,7 @@ gives finch **system-wide** searchability on iOS.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.1 adds a **read-side** integration: iOS system
   search surfaces finch's entities.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -173,7 +199,7 @@ public enum SpotlightEntity {
     var thumbnailURL: URL? { /* ... */ }
 
     func toSearchableItem() -> CSSearchableItem {
-        let attrs = CSSearchableItemAttributeSet(contentType: .text)
+        let attrs = CSSearchableItemAttributeSet(itemContentType: UTType.content.identifier)
         attrs.title = title
         attrs.contentDescription = contentDescription
         attrs.keywords = keywords
@@ -288,10 +314,10 @@ parses the unique identifier and routes to the right screen:
 public final class DeepLinkRouter {
     public var pendingNavigation: DeepLinkTarget? = nil
 
-    public func route(to: uniqueIdentifier: String) {
-        // uniqueIdentifier shape: "tx:<entry_id>", "account:<id>",
+    public func route(to identifier: String) {
+        // identifier shape: "tx:<entry_id>", "account:<id>",
         //   "category:<id>", "counterparty:<id>", "budget:<id>"
-        let parts = uniqueIdentifier.split(separator: ":", maxSplits: 1)
+        let parts = identifier.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
         guard parts.count == 2 else { return }
         let domain = String(parts[0])
         let id = String(parts[1])
@@ -452,7 +478,7 @@ polluting the simulator's global index.
 These are explicitly NOT in Phase 6.1:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
 - **No new selectors** — the Phase 1.5 selectors are the
   full set.
 - **No new chokepoint actions** — Spotlight is read-only.

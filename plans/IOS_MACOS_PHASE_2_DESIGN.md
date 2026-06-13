@@ -18,13 +18,40 @@
 > `Selectors` modules exist, the read-only UI is shipped, the
 > JSON-golden parity harness is in place._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.1 — the 74 actions location index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74-action Args catalogue
+- `plans/IOS_MACOS_PLAN.md` §2.1 — the chokepoint surface
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` — Phase 1.0 (read-only shell)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (selectors + parity tests)
+- `plans/IOS_MACOS_PHASE_3_DESIGN.md` — Phase 3 (adaptive shell, post-Phase-2)
+- `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` — Phase 6.4 (App Intents dispatch)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (setEntryAttachment is the 75th)
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (What gets ported) + §3 (Store module layer rules) + §5 (the `_args.ts` registry) + §6 (per-domain `mutations.ts` ports) |
+| §3. iOS UI surfaces | §7 (The 7 new iOS screens) |
+| §4. Cross-cutting concerns | §9 (Cross-cutting changes to existing code) |
+| §5. Wire contracts | §4 (The chokepoint port) + §5 (the `_args.ts` registry) |
+| §6. CI / test infrastructure | §8 (Write-side round-trip parity) |
+| §7. Out of scope (firm) | §11 |
+| §8. Spec self-review + open questions | §12 + §10 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **74-action write chokepoint** to FinchCore (port of
-`lib/db/core/entries.ts` + 14 per-domain `lib/db/domain/<x>/mutations.ts`
-files) + ship the **6 new iOS write screens** (Add Transaction, Edit
+`lib/db/core/entries.ts` + 13 per-domain `lib/db/domain/<x>/mutations.ts`
+files) + ship the **7 new iOS write screens** (Add Transaction, Edit
 Transaction, Transaction Detail edits, Pending confirm, Budget CRUD,
-Scheduled CRUD, Ledger CRUD) + ship the **write-side round-trip parity
+Scheduled CRUD, Ledger CRUD, plus the full Holdings tab + CRUD UI
+per Q32) + ship the **write-side round-trip parity
 suite** (74 fixtures, one per action). The app becomes "usable for real"
 — every action the web supports, the iOS app supports, with the same
 final state.
@@ -61,12 +88,13 @@ every later phase builds on.
   finch install. Per the plan's §10 resolved decision.
 - **Android** — not in the plan.
 
-**Estimated scope**: ~2,200 lines TS to port (823-line chokepoint + 1,335
-lines per-domain + a few hundred lines of glue) + ~1,750 lines SwiftUI
+**Estimated scope**: ~2,400 lines TS to port (823-line chokepoint + 1,335
+lines per-domain + ~250 lines of glue) + ~1,750 lines SwiftUI
 (7 new screens, including the full Holdings CRUD UI per Q32) +
-~3,500 lines parity fixtures (74 fixtures × ~50 lines
+~3,700 lines parity fixtures (74 fixtures × ~50 lines
 each) + ~200 lines UI plumbing. **3-4 months of full-time work** for a
-small team. **Larger than Phase 1.0 and Phase 1.5 combined.**
+small team. **Largest in Swift port scope (larger than Phase 1.0 and
+Phase 1.5 combined).**
 
 **Pre-Phase-2 prerequisite**: a web-side cleanup PR that deletes the
 3 dead-code duplicates in `accounts/mutations.ts`
@@ -88,12 +116,12 @@ The web's write surface is **3 layers**:
    (`postEntry`, `postSimple`, `postTransfer`, `postAdjustment`,
    `postOpening`, `rebuildEntry`, `deleteEntry`, plus `ensureSystemCategories`,
    `resolveEntryRef`, `dedupHash`, `isAccountLeg`).
-2. **The 14 per-domain `mutations.ts` files** — 1,335 lines total —
+2. **The 13 per-domain `mutations.ts` files** — 1,335 lines total —
    each exporting a `handlers` map keyed by action name. The handlers
    compose the chokepoint with cross-domain glue
    (`withDedupMessage`, `txTouches`, `invalidateRollover`,
    `unlinkAttachmentFiles`, etc.).
-3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the 14
+3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the 13
    per-domain `handlers` maps into one `ALL` map and routes
    `applyMutation(exec, action, args)` to the right handler.
 4. **The `_args.ts` registry** — `lib/db/domain/_args.ts` (225 lines) —
@@ -126,7 +154,7 @@ side's wire contract, identical to the web's.
 | `transactions` | 370 lines | 15 (`addTransaction`, `updateTransaction`, `deleteTransaction`, `setCleared`, `setReviewed`, `markAllReviewed`, `reconcileAccount`, `adjustAccountBalance`, `bulkRecategorize`, `removeAttachment`, `confirmTransaction`, `confirmPendingWithMerchant`, `confirmAllPending`, `setTransactionSplits`, `setTransactionTags`) | `attachments` (cleanup), `budgets/rollover` (invalidate) |
 | `scheduled` | 192 lines | 8 (`createScheduled`, `updateScheduled`, `deleteScheduled`, `addScheduledSplit`, `removeScheduledSplit`, `postScheduled`, `updateScheduledSplit`, `generateDueScheduled`) | `counterparties` (resolve) |
 | `rules` | 161 lines | 4 (`createRule`, `updateRule`, `deleteRule`, `backfillRule`) | `counterparties` (resolve) |
-| `budgets` | 106 lines | 9 (`createBudget`, `updateBudget`, `deleteBudget`, `contributeBudget`, `clearPendingAmount`, `createBudgetGroup`, `updateBudgetGroup`, `deleteBudgetGroup`, `updateBudgetCycle`, `removeBudget`) | `budgetGroups` (read; `createBudgetGroup` / `updateBudgetGroup` / `deleteBudgetGroup` also have a duplicate implementation in `accountGroups/`, see note below) |
+| `budgets` | 106 lines | 9 (`createBudget`, `updateBudget`, `removeBudget`, `contributeBudget`, `clearPendingAmount`, `createBudgetGroup`, `updateBudgetGroup`, `deleteBudgetGroup`, `updateBudgetCycle`) | `budgetGroups` (read; `createBudgetGroup` / `updateBudgetGroup` / `deleteBudgetGroup` also have a duplicate implementation in `accountGroups/`, see note below) |
 | `holdings` | 84 lines | 4 (`createHolding`, `updateHolding`, `deleteHolding`, `setHoldingPrice`) | — |
 | `ledgers` | 82 lines | 5 (`createLedger`, `updateLedger`, `changeLedgerBase`, `setDefaultLedger`, `deleteLedger`) | — |
 | `accounts` | 73 lines | 5 accounts-only (`createAccount`, `updateAccount`, `archiveAccount`, `unarchiveAccount`, `deleteAccount`) | `accountGroups` (read; `createAccountGroup` / `updateAccountGroup` / `deleteAccountGroup` are duplicated in this file — see note below) |
@@ -224,7 +252,7 @@ stay unchanged).
 
 - `Store/Entries/` — the chokepoint port (12 exports from
   `lib/db/core/entries.ts`)
-- `Store/Domain/<x>/` — the 14 per-domain `mutations.ts` ports
+- `Store/Domain/<x>/` — the 13 per-domain `mutations.ts` ports
   (each exporting a `handlers` map)
 - `Store/Apply.swift` — the dispatcher (53 lines, mirrors
   `lib/db/mutate.ts`)
@@ -426,7 +454,7 @@ public enum Store {
 
 ## §6. Per-domain `mutations.ts` ports
 
-The 14 per-domain `mutations.ts` files (1,335 lines total) port
+The 13 per-domain `mutations.ts` files (1,335 lines total) port
 mechanically. The pattern is identical in every file:
 
 ```swift
@@ -639,8 +667,9 @@ one" screen. ~400 lines SwiftUI.
 The "tap a scheduled template to edit it; tap + in the Scheduled
 tab to add one" screen. ~400 lines SwiftUI. Note: the **Scheduled
 tab** itself is read-only in Phase 1.0; Phase 2 adds the read-write
-**Scheduled** tab (with the existing 4-tab navigation getting a 5th
-write-able Scheduled tab — but the read surface mirrors what Phase
+**Scheduled** tab (with the existing 5-tab navigation — from
+Phase 1.5's Insights add — getting a 6th write-able Scheduled
+tab — but the read surface mirrors what Phase
 1.0's `scheduled` selector would have shown, had we included it in
 Phase 1.5). ~600 lines SwiftUI total for the tab + form.
 
@@ -885,7 +914,7 @@ to also write the 74 action fixtures. For each action:
 6. Write the `.finch` (pre-state) and `.json` (expected
    post-state) to `ios/FinchCore/Tests/Fixtures/actions/`
 
-The script handles 74 actions × ~5 KB per fixture ≈ ~350 KB
+The script handles 74 actions × ~5 KB per fixture ≈ ~370 KB
 total. CI runs the script before `FinchCore` tests; the Swift
 parity tests read the fixtures and assert.
 
@@ -1052,8 +1081,9 @@ For Phase 2 specifically:
   "Rate pinned" as a warning and offer an "Unpin and
   re-lock from rates table" option. Phase 2 ships the
   warning; the "Unpin" action is Phase 4 (FX / base tools).
-- **The `?debug=1` "Force import" UI** (from Phase 1.0) is
-  preserved for parity-test fixtures that intentionally
+- **The "Force import" UI** (from Phase 1.0's Settings
+  › Advanced — always visible, not behind a debug flag)
+  is preserved for parity-test fixtures that intentionally
   violate the audit gate. The "Force write" equivalent
   doesn't exist — there's no scenario where a write should
   bypass the chokepoint's invariants (that's the whole

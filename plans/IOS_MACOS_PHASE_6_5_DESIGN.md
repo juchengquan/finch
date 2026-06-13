@@ -27,6 +27,30 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.4, §2.5 — App Group + 75th action (`setEntryAttachment`)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2 — the 74+1 Args catalogue
+- `plans/IOS_MACOS_PLAN.md` §2.5 — the receipt attachments feature
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud; App Group is added here in Phase 6.5, not Phase 5)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; reuses App Group)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` §3.3 — `setEntryAttachment` action
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (The Share Extension target) + §3 (The pending attachment manifest) + §6 (The Share Extension's entitlements) |
+| §3. iOS UI surfaces | §4 (The mini-form) + §5 (The "existing transaction" picker) + §7 (The `PhotosPicker` integration) |
+| §4. Cross-cutting concerns | §2 (The Share Extension target — process boundary + App Group) |
+| §5. Wire contracts | §3 (manifests are written to the App Group + the iOS app reads them and dispatches chokepoint writes) |
+| §6. CI / test infrastructure | §8 (CI changes) |
+| §7. Out of scope (firm) | §10 |
+| §8. Spec self-review + open questions | §11 + §9 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Land the **long-deferred receipt-photo feature**
@@ -42,13 +66,16 @@
 - The attachment is linked to an existing transaction
   (the user picks which one) OR creates a new transaction
   (with a mini-form: amount + description)
-- The chokepoint dispatches the `removeAttachment` /
-  `addTransaction` action with the attachment id
+- The chokepoint dispatches the `addTransaction` action
+  (for new entries) + the new `setEntryAttachment` action
+  (for the attachment row); `removeAttachment` is the
+  inverse (used from the Transaction Detail's "remove
+  attachment" affordance)
 
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged.
+  tabs + 7 write screens + 7 power features are unchanged.
   Phase 6.5 adds a **Share Extension** target to the Xcode
   project + a **mini-form** for "create a transaction from
   this receipt."
@@ -56,9 +83,14 @@
   full set. The Share Extension reads the `Tx[]` cache
   (via the App Group container) to populate the
   "attach to existing transaction" picker.
-- **No new chokepoint actions** — the chokepoint is
-  unchanged. The Share Extension dispatches the existing
-  74 actions (`addTransaction`, `removeAttachment`).
+- **One new chokepoint action** — `setEntryAttachment`
+  (§3.3). The chokepoint's only new action in Phase 6.5;
+  the action is needed because the Share Extension stages
+  the file to the App Group, then the iOS app moves it to
+  the live `attachments/<entry_id>/...` directory and
+  dispatches `setEntryAttachment` to record the row.
+  `addTransaction` + `removeAttachment` (Phase 2) are
+  reused; the 74 unique Phase 2 actions become 75.
 - **OCR included** — Phase 6.5 ships OCR via Apple's local
   `Vision` framework (no cloud, no data sent off-device).
   When the user picks a receipt photo, the iOS app runs
@@ -297,6 +329,8 @@ The iOS app polls for pending attachments on:
 
 ```swift
 // ios/FinchApp/ShareExtension/PendingAttachmentProcessor.swift
+import UniformTypeIdentifiers
+
 @MainActor
 public final class PendingAttachmentProcessor {
     public static let shared = PendingAttachmentProcessor()
@@ -307,15 +341,21 @@ public final class PendingAttachmentProcessor {
             let manifest = try? JSONDecoder().decode(PendingAttachment.self, from: Data(contentsOf: manifestURL))
             guard let manifest = manifest else { continue }
 
-            // 1. If isNewEntry, dispatch addTransaction first
+            // 1. If isNewEntry, dispatch addTransaction first.
+            //    The chokepoint's addTransaction returns Void
+            //    (the wire contract is `applyMutation(exec,
+            //    action, args): Promise<void>`), so the
+            //    client-generated entryId is what the
+            //    attachment row is keyed to. The form's
+            //    `id` is included in `form.toArgs()`.
             var entryId = manifest.entryId
             if manifest.isNewEntry, let form = manifest.newTransactionForm {
                 do {
-                    let result = try await store.apply(
+                    try await store.apply(
                         action: "addTransaction",
                         args: form.toArgs()
                     )
-                    entryId = result.entryId
+                    entryId = form.id
                 } catch {
                     // Log and skip
                     continue
@@ -326,22 +366,22 @@ public final class PendingAttachmentProcessor {
             let attachmentId = UUID().uuidString
             let destDir = attachmentsDir.appendingPathComponent(entryId)
             try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-            let destURL = destDir.appendingPathComponent("\(attachmentId).\(manifest.attachment.mimeType.fileExtension)")
+            let fileExt = UTType(mimeType: manifest.attachment.mimeType)?.preferredFilenameExtension ?? "bin"
+            let destURL = destDir.appendingPathComponent("\(attachmentId).\(fileExt)")
             try? FileManager.default.moveItem(
                 at: stagedFileURL(for: manifest),
                 to: destURL
             )
 
-            // 3. Dispatch removeAttachment (no, this is wrong — we
-            //    want to add the attachment, not remove). The actual
-            //    action is setEntryAttachment (an internal helper
-            //    that Phase 2's chokepoint exposes).
+            // 3. Dispatch setEntryAttachment (the chokepoint's
+            //    only new action in Phase 6.5; added in §3.3).
+            //    addTransaction was already dispatched above.
             try? await store.apply(
-                action: "_internalSetEntryAttachment",
+                action: "setEntryAttachment",
                 args: [
                     "entryId": entryId,
                     "attachmentId": attachmentId,
-                    "relPath": "\(entryId)/\(attachmentId).\(manifest.attachment.mimeType.fileExtension)",
+                    "relPath": "\(entryId)/\(attachmentId).\(fileExt)",
                     "mimeType": manifest.attachment.mimeType,
                     "fileSize": manifest.attachment.fileSize,
                     "sha256": manifest.attachment.sha256
@@ -595,7 +635,7 @@ Phase 6.5 doesn't touch the iCloud folder.
 These are explicitly NOT in Phase 6.5:
 
 - **No new tabs / write screens / power features** — the 6
-  tabs + 6 write screens + 7 power features are unchanged
+  tabs + 7 write screens + 7 power features are unchanged
 - **No new selectors** — the Phase 1.5 selectors are the
   full set
 - **No new chokepoint actions** — wait, the proposal DOES

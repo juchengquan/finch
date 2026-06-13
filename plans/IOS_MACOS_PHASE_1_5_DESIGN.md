@@ -18,6 +18,29 @@
 > is complete and the `Project` + `Money` + `Audit` + `Pack` modules
 > exist._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §5 — the fixture format
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §1, §5, §8 — Phase 1.0 (the 4-tab shell + 7 selectors + parity suite)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint + write screens)
+- `plans/IOS_MACOS_PLAN.md` §2.4 — the selectors (read brains)
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Selector classification) + §3 (Selectors module layer rules) + §6 (Selectors module API surface) |
+| §3. iOS UI surfaces | §5 (Insights tab UI) |
+| §4. Cross-cutting concerns | §3 (Selectors module layer rules — the cross-domain DB access) |
+| §5. Wire contracts | §6 (Selectors module API surface — the wire from selectors to chokepoint) |
+| §6. CI / test infrastructure | §4 (JSON-golden parity test infrastructure) + §7 (Parity test file layout) |
+| §7. Out of scope (firm) | §9 |
+| §8. Spec self-review + open questions | §10 + §8 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Add the **Insights** tab (5th tab) + port the remaining 25
@@ -57,7 +80,7 @@ write chokepoint.
 
 **Estimated scope**: 25 selectors × ~50 lines each ≈ **1,250 lines TS
 to port** + ~600 lines SwiftUI (Insights tab) + ~300 lines fixture
-export script + ~800 lines new `ParityTests` files (25 selectors × ~30
+export script + ~750 lines new `ParityTests` files (25 selectors × ~30
 lines each) + ~200 lines UI plumbing. **2-3 months of full-time work**
 for a small team. This is larger than Phase 1.0.
 
@@ -125,7 +148,7 @@ module (§4) by their output shape, not by feature:
 4. **Net worth** (1 selector): `netWorthSeries`
 5. **Holdings** (4 selectors): `holdingsForAccount`, `holdingValue`,
    `holdingGainLoss`, `holdingsValueForAccount`
-6. **Account totals** (2 selectors): `investmentAccountTotal`,
+6. **Account totals** (3 selectors): `investmentAccountTotal`,
    `accountForecast`, `balanceSeries`
 7. **Transfers / duplicates** (2 selectors): `selectTransfers`,
    `findDuplicate`
@@ -204,7 +227,7 @@ public struct Selectors {
     public let money: Money
 
     public func monthForecast(txns: [Tx], accounts: [AccountRow], ledgerId: String, n: Int) throws -> [MonthForecast] {
-        let rates = try RateSnapshot.all(in: db)  // one DB read
+        let rates = try db.read { db in try RateSnapshot.fetchAll(db) }  // one DB read
         return /* ... pure compute over (txns, accounts, rates) ... */
     }
 }
@@ -333,6 +356,26 @@ final class SelectorParityTests: XCTestCase {
 }
 ```
 
+**SwiftPM resource note**: `Bundle.module` is generated for
+the test target, and is the **test target's** bundle. The
+fixtures at `ios/FinchCore/Tests/Fixtures/` are accessed via
+`Bundle.module` only if the SwiftPM `testTarget` declares
+`resources: [.copy("Fixtures")]`. The `Package.swift`
+configuration:
+
+```swift
+.testTarget(
+    name: "ParityTests",
+    dependencies: ["FinchCore"],
+    resources: [.copy("Fixtures")]
+)
+```
+
+Without this, `Bundle.module.url(forResource:withExtension:)`
+returns `nil` and the force-unwrap crashes. The fixtures
+are exported by the web's `frontend/scripts/export-fixtures.ts`
+(per Phase 1.0 §8) and committed to `ios/FinchCore/Tests/Fixtures/`.
+
 `actual` and `expected` are `Decimal`-typed throughout; equality
 is to the cent (matching the web's `select.test.ts` assertions).
 
@@ -433,8 +476,9 @@ vertically-stacked cards).
 In **Settings → Active ledger → Display currency**, the user can
 pick a currency different from the ledger's base. The choice is
 persisted in the local DB's `app_state` table (key:
-`displayCurrency:<ledger_id>`) — matching the web's
-`displayCurrencyByLedger` map in `lib/store/`.
+`displayCurrencyByLedger`, holding a JSON `{[ledgerId]: currency}`
+map) — matching the web's `setDisplayCurrency` action in
+`lib/db/domain/ledgers/mutations.ts:58-64`.
 
 When the display currency changes, the **Insights tab re-renders
 in real time** (the `FinchStore`'s `@Observable` state changes,

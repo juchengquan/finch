@@ -5,6 +5,8 @@
 >
 > - `plans/IOS_MACOS_PLAN.md` — the direction brief (what native must do, the
 >   architecture choices, the trade-offs)
+> - `plans/IOS_MACOS_INDEX.md` — the navigation index (glossary, location index,
+>   master tab list) for the 16 iOS/macOS plan files
 > - `plans/IOS_MACOS_PHASE_1_DESIGN.md` — the **full design** for Phase 1.0
 >   (the only phase with detailed design work, because it's the one being
 >   built first)
@@ -15,10 +17,10 @@
 >
 > Phase numbering follows the plan's §13, with the single exception that
 > Phase 1 is split into **1.0** (Accounts / Activity / Budgets / Settings;
-> ~1,500 lines TS to port) and **1.5** (Insights + the remaining 10-11
-> selectors + JSON-golden parity). The split is described in detail in
-> `IOS_MACOS_PHASE_1_DESIGN.md`. All later phases are sketched here as
-> 1-phase units.
+> ~1,500 lines TS to port; 7 selectors) and **1.5** (Insights + the
+> remaining 25 selectors + JSON-golden parity). The split is described
+> in detail in `IOS_MACOS_PHASE_1_DESIGN.md`. All later phases are
+> sketched here as 1-phase units.
 >
 > Each phase is independently shippable. The per-increment CI gate from
 > `IOS_MACOS_PHASE_1_DESIGN.md §9` ("build + unit/parity tests + UI snapshot
@@ -182,7 +184,7 @@ ledger CRUD. All writes flow through the Swift port of the web's
 
 - `Store` module in FinchCore: the write chokepoint, ported from
   `lib/db/core/entries.ts` (823 lines)
-- The 14 per-domain `mutations.ts` files in `ios/FinchCore/Sources/FinchCore/Store/Domain/<x>/`,
+- The 13 per-domain `mutations.ts` files in `ios/FinchCore/Sources/FinchCore/Store/Domain/<x>/`,
   each ported from the corresponding `frontend/lib/db/domain/<x>/mutations.ts`
   file (74 actions total)
 - 7 new iOS screens: Add Transaction (the long form), Edit
@@ -221,8 +223,9 @@ data the existing read surface can render)
 - A "Add Transaction" tap → form fill → save round-trips correctly:
   the new entry appears in the Activity tab, the account balance
   updates, the audit gate (on next import) reports clean
-- The `?debug=1` "Force import" UI (from Phase 1.0) is preserved for
-  parity-test fixtures that intentionally violate the audit gate
+- The "Force import" UI (in Settings › Advanced, per Phase 1.0
+  §5.4; always visible, not behind a debug flag) is preserved
+  for parity-test fixtures that intentionally violate the audit gate
 - Per-domain mutations parity: every ported mutation produces the same
   `Tx[]` delta as the web's `lib/db/domain/<x>/mutations.ts` for the
   same Args
@@ -234,7 +237,7 @@ data the existing read surface can render)
   (write only via import/export)? The plan's §4.3 implies "always-
   pack," but the Phase 1.0 import UX is "open one pack, work
   locally"; the right answer depends on what feels native.
-- The 14 per-domain files have 5 known cross-domain deps (per
+- The 13 per-domain files have 5 known cross-domain deps (per
   `frontend/AGENTS.md`: `accounts → accountGroups`, `transactions →
   attachments`, `budgets → budgetGroups`, `rules → counterparties`,
   `scheduled → counterparties`). The plan is to expose them via
@@ -443,18 +446,19 @@ is mostly integration work.
 
 | # | Sub-feature | Spec | Apple framework | Estimated scope |
 |---|---|---|---|---|
-| 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | ~700 lines spec; 1-2 weeks |
-| 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | ~800 lines spec; 2-3 weeks |
-| 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | ~600 lines spec; 1-2 weeks |
-| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | ~1,200 lines spec; 3-4 weeks (7 intents; grew from 3) |
-| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | ~1,400 lines spec; 5-6 weeks (OCR added; grew from 3-4) |
+| 6.1 | **Spotlight indexing** | `plans/IOS_MACOS_PHASE_6_1_DESIGN.md` | `CoreSpotlight` | 493 lines spec; 1-2 weeks |
+| 6.2 | **Notifications** | `plans/IOS_MACOS_PHASE_6_2_DESIGN.md` | `UNUserNotificationCenter` | 714 lines spec; 2-3 weeks |
+| 6.3 | **Biometric lock** | `plans/IOS_MACOS_PHASE_6_3_DESIGN.md` | `LocalAuthentication` | 571 lines spec; 1-2 weeks |
+| 6.4 | **App Intents / Siri** | `plans/IOS_MACOS_PHASE_6_4_DESIGN.md` | `AppIntents` | 810 lines spec; 3-4 weeks (7 intents; grew from 3) |
+| 6.5 | **Share Extension receipts** | `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` | Share Extension target | 656 lines spec; 5-6 weeks (OCR added; grew from 3-4) |
 
 Each sub-spec is independently reviewable. The 5 share
 infrastructure (the App Group container, the
 `DeepLinkRouter` for Spotlight + notification deep-links,
 the `BiometricGate` for sensitive actions, the Xcode
 project setup) but ship independently. **Total Phase 6
-scope**: ~4,700 lines spec; ~3,500 lines Swift + ~1,500
+scope**: ~3,200 lines spec (actual: 493+714+571+810+656);
+~3,500 lines Swift + ~1,500
 lines SwiftUI; **3-4 months of full-time work** for a
 small team (grew from 2-3 months with the resolution-pass
 additions: 4 extra intents in 6.4 + OCR in 6.5 + 1 extra
@@ -516,8 +520,9 @@ details the specifics):
 
 **Cross-cutting infrastructure** (shared across the 5):
 
-- **App Group container** (added at Phase 5's Xcode
-  setup): `group.com.juchengquan.finch`. Phase 6.5
+- **App Group container** (added at Phase 6.5's Xcode
+  setup; Phase 7 reuses it for the widget + Watch
+  extension): `group.com.juchengquan.finch`. Phase 6.5
   (Share Extension) and Phase 7 (widgets + Watch) all
   read/write the App Group; the iOS app is the
   coordinator.
@@ -620,7 +625,7 @@ sub-second latency is worth the added complexity.
 - This is not a single-shot replacement of the pack model.
   Both sync paths can run in parallel; the user picks.
 - No new tabs / write screens / power features (the 6 tabs
-  + 6 write screens + 7 power features are unchanged).
+  + 7 write screens + 7 power features are unchanged).
 - No multi-user / shared ledgers (single-user iCloud
   account = one finch install).
 - No custom-server path (a separate spec; CloudKit is the

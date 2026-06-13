@@ -18,8 +18,33 @@
 >
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete; the iPhone + iPad + Mac apps are
-> shipping with the 6 tabs + 6 write screens + 7 power features
+> shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
+
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` §2.4 — App Group container (added in Phase 6.5, reused here)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §4 — the pack format (widget snapshot reads from the live DB)
+- `plans/IOS_MACOS_PHASE_1_DESIGN.md` §1 — the 4-tab list (the widget grid mirrors it)
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (selectors that drive widget content)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; the Watch quick-add uses `addTransaction`)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (iCloud + pack engine)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (App Group setup)
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Widgets) + §3 (Live Activities) + §4 (Apple Watch app) — the 3 extension targets |
+| §3. iOS UI surfaces | §2 (Widgets UI) + §3 (Live Activities UI) + §4 (Watch UI) |
+| §4. Cross-cutting concerns | (not directly covered — stub to `IOS_MACOS_PLAN.md` §10 for the multi-platform strategy) |
+| §5. Wire contracts | §2 (widget reads from the chokepoint projection) + §3 (Live Activity updates via the chokepoint) + §4 (Watch quick-add dispatches chokepoint writes) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §8 + §6 |
 
 ## §1. Goal & non-goals
 
@@ -51,7 +76,7 @@ Activity + Watch read paths.
 **Non-goals (firm)**:
 
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are unchanged.
+  6 tabs + 7 write screens + 7 power features are unchanged.
   Phase 7 adds 3 new **system surfaces** (WidgetKit,
   ActivityKit, watchOS) that read from the existing data.
 - **No new selectors** — the Phase 1.5 selectors are the
@@ -109,7 +134,9 @@ packages the result as a `TimelineEntry`.
 - Refresh: hourly
 - Tapping the widget deep-links to the iOS app's Budgets
   tab
-- The widget supports **WidgetConfigurationIntent** (the
+- The widget supports **AppIntentConfiguration** (the
+  iOS 17+ replacement for the legacy
+  `WidgetConfigurationIntent` / `IntentConfiguration`; the
   user picks which budget to show — the topmost "almost
   over" budget, or a specific budget by name)
 
@@ -256,8 +283,10 @@ The widget extension requires the **App Group entitlement**
 (same as the Phase 6 Share Extension). The entitlement
 key: `com.apple.security.application-groups` with value
 `group.com.juchengquan.finch`. The Xcode project is
-configured at Phase 5's Xcode setup; Phase 7 adds the
-widget target to the App Group.
+configured at Phase 6.5's Share Extension setup (Phase 7
+reuses the same entitlement for the widget + Watch
+extension; Phase 7's only addition is the widget target
+and the Watch app, both of which join the existing App Group).
 
 The App Group container is at
 `~/Library/Group Containers/group.com.juchengquan.finch/`.
@@ -385,7 +414,11 @@ public final class LiveActivityManager {
             limit: limit,
             percent: spent / limit
         )
-        await activity.update(.init(state: state, staleDate: nil))
+        // staleDate ~15 min ahead so the system can gracefully
+        // collapse the activity to a "needs update" state if
+        // the iOS app can't reach the chokepoint.
+        let staleDate = Date().addingTimeInterval(15 * 60)
+        await activity.update(.init(state: state, staleDate: staleDate))
     }
 }
 ```
@@ -568,7 +601,7 @@ extends with:
   may need 2 or 4 regions. The exact layout is per-
   activity.
 - **Widget configuration UX**: the Budget Ring widget has
-  a `WidgetConfigurationIntent` (the user picks which
+  an `AppIntentConfiguration` (the user picks which
   budget to show). The UX is the iOS standard
   configuration sheet. The proposal doesn't detail the
   exact pickers.
@@ -591,13 +624,15 @@ extends with:
 These are explicitly NOT in Phase 7:
 
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged.
 - **No new selectors** — the Phase 1.5 selectors are the
   full set. The widgets + Live Activities + Watch reuse
   them.
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 7's Watch quick-add uses
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 7 doesn't add more).
+  Phase 7's Watch quick-add uses
   `Args.postScheduled` (Phase 2) for one specific case;
   the widgets + Live Activities don't write.
 - **No new iCloud sync** — the iCloud sync is Phase 5;
@@ -629,7 +664,9 @@ spec.)
   the `netWorthByMonth` selector from Phase 1.5. §3.2's
   `ScheduledItemAttributes` uses the `Args.postScheduled`
   action from Phase 2. §4.2's data flow uses the App
-  Group container (added in Phase 5's iCloud sync).
+  Group container (added in Phase 6.5's Share
+  Extension setup; Phase 7 reuses the same entitlement
+  for the Widget Extension + the Watch app).
   §4.4's Watch complications use the same data as the
   iOS widget. The snapshot JSON (§2.4) is the shared
   data format for the iOS app, the widget, and the Watch

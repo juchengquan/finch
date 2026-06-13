@@ -9,6 +9,33 @@
 > (last updated 2026-06-12 via PR #139), and the double-entry design in
 > `plans/done/DOUBLE_ENTRY_PLAN.md`._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index (glossary, location index, master tab list)
+- `plans/IOS_MACOS_WIRE_FORMAT.md` — the wire-format annex (74-action Args, pack format, I18nError, fixture format)
+- `plans/IOS_MACOS_PLAN.md` §2 — the domain model
+- `plans/IOS_MACOS_PLAN.md` §4 — the 8-step import pipeline
+- `plans/IOS_MACOS_PLAN.md` §12 — the parity suite
+- `plans/IOS_MACOS_PHASE_1_5_DESIGN.md` — Phase 1.5 (adds Insights tab + 25 selectors)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (74-action chokepoint + 7 write screens)
+
+## §0. Map — 8-section template
+
+The 8-section template (Goal / Architecture / UI / Cross-cutting /
+Wire / CI / Out-of-scope / Self-review) maps to this spec's
+existing sections as follows:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §3 (FinchCore layout) + §7 (Data model) |
+| §3. iOS UI surfaces | §5 (The iOS screens, Phase 1.0) |
+| §4. Cross-cutting concerns | §6 (Dependencies) |
+| §5. Wire contracts | §2 (Import UX) + §4 (The .finch pipeline + audit gate) |
+| §6. CI / test infrastructure | §8 (Parity suite) + §9 (CI) |
+| §7. Out of scope (firm) | §11 |
+| §8. Spec self-review + open questions | §12 + §10 |
+
 ## §1. Goal & non-goals
 
 **Goal** — Ship a working, verifiable iOS app (iPhone 15 simulator, iOS 26+)
@@ -21,8 +48,9 @@ container, file picker, share sheet, SwiftUI, Swift Charts. The Swift port and
 the TypeScript web app must agree to the cent on the audit and the
 projection — that's the parity gate.
 
-**Phase 1.5 (separate spec)** adds the Insights tab + the remaining 10-11
-selectors + the JSON-golden parity test infrastructure.
+**Phase 1.5 (separate spec)** adds the Insights tab + the remaining 25
+selectors (out of 32 in `lib/select.ts`; the 7 listed in §1 land in
+Phase 1.0) + the JSON-golden parity test infrastructure.
 
 **Phase 2 (separate spec)** adds the 74-action write chokepoint (`postEntry` /
 `rebuildEntry` / `deleteEntry` ported from `frontend/lib/db/core/entries.ts`).
@@ -117,6 +145,14 @@ on iOS.
   `FileManager.default.ubiquityIdentityToken`; if the user is signed into
   iCloud, the app calls `FileManager.url(forUbiquityContainerIdentifier:)`
   and creates `Documents/finch/` if it doesn't exist.
+  - **iOS**: `forUbiquityContainerIdentifier:` returns `nil` if
+    the user is signed out (i.e., the call is `nil`-returning
+    when no iCloud account).
+  - **macOS**: `forUbiquityContainerIdentifier:` returns the
+    **local** container path even when iCloud is unavailable
+    (it doesn't return `nil`); the macOS path must additionally
+    check `ubiquityIdentityToken` to know whether to write to
+    the iCloud-replicated path or a local-only path.
 - The user can drop `.finch` files into this folder from Mail, Safari,
   AirDrop, or "Save to Files." The Files app shows the folder under
   "iCloud Drive › Finch › finch/" automatically — no custom file-provider
@@ -261,7 +297,7 @@ the staging directory is deleted and the live DB is untouched.
   (`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL`) — matches the web's
   `better-sqlite3` setup from `lib/db/core/driver.ts`
 - Migrations run on open: each entry in the shared `MIGRATIONS` array from
-  `lib/db/core/entries.ts` is ported to Swift; idempotent on a DB already at
+  `lib/db/core/schema.ts` is ported to Swift; idempotent on a DB already at
   the target version
 - For pre-DE packs: the DE cutover migration runs (the per-entry sealed-write
   + id-fidelity logic from `lib/db/core/entries.ts` and
@@ -433,10 +469,14 @@ amount, account(s), category, tags, notes, splits (if any), and audit status
 (clean / problem-class). All read-only. Attachments are deferred to Phase 6
 (Share Extension receipts).
 
-Search bar at the top triggers FTS5 search across `entries.description`,
-`entries.notes`, `counterparties.name`, `merchants.name` (the web's
-`lib/db/domain/transactions/queries.ts` FTS5 path). The Swift port calls
-`Project.search(query: String) -> [Tx]`.
+Search bar at the top triggers FTS5 search across `entries.description`
+and `entries.notes` (the `entries_fts` virtual table in
+`lib/db/core/schema.ts` indexes only these two columns — not
+`counterparties.name` or `merchants.name`). The Swift port calls
+`Transactions.listTransactions(exec, opts: { query: String, ... }) -> [Tx]`
+(the same `listTransactions` function the web uses, with the
+`query` field triggering the FTS5 `MATCH` predicate in
+`lib/db/queries/transactions.ts:240`).
 
 ### Tab 3 — Budgets
 
@@ -487,6 +527,11 @@ land in Phase 1.5 or 2). Sections (top to bottom):
   counts (entries / postings / accounts / categories)
 - **Audit status** — "Clean" or "N problems" (tap to see the typed problem
   list)
+- **Advanced** — collapsed by default. Contains:
+  - **Force import** — a button that bypasses the audit gate (per
+    Q15; this is a recovery hatch for `.finch` files that have
+    audit problems the user wants to import anyway). Always
+    visible; not behind a debug flag.
 - **About** — app version, FinchCore version, build hash. (A deep link to
   the project repo or the docs site is a Phase 1.5 polish; not in 1.0.)
 
@@ -571,7 +616,15 @@ not re-parse to `Date` until display time (this mirrors the web, which keeps
 struct Tx: Equatable, Sendable {
     let id: String
     let merchant: String
-    let category: String?         // resolved category name, not id
+    let category: String?         // category id (join key); matches
+                                  // the web's `Tx.category` field
+                                  // (which is the id, not a name)
+                                  // — see `frontend/lib/store/
+                                  // transactions/state.ts:21`.
+                                  // Display names are looked up
+                                  // via a separate `Category`
+                                  // table; `Tx` itself holds the
+                                  // id only.
     let amount: Decimal            // signed, in ledger base
     let currency: String?          // omitted/equal to ledger base for same-currency
     let nativeAmount: Decimal?     // signed, in `currency`
@@ -668,8 +721,13 @@ For every golden DB fixture:
 
 A new web-side script at `frontend/scripts/export-fixtures.ts` that:
 
-1. Runs the web's `bun test lib` cases (or a curated subset) and captures
-   the inputs + expected outputs for each selector
+1. Defines a curated list of `(selector, input, expected)`
+   test cases (calling each selector function directly with
+   the named fixture inputs; **not** by reflecting on
+   `bun:test` cases — `bun:test` doesn't expose the test
+   function as a value you can call outside the test
+   runner, so trying to extract from `select.test.ts` at
+   runtime won't work)
 2. Serializes them as JSON: `{ selector: "accountBalance", input: [...],
    expected: ... }`
 3. Generates the 8 audit-corruption fixtures by running the seed with a
@@ -794,7 +852,7 @@ These are explicitly NOT in Phase 1.0 and will be re-spec'd in their own
 specs (Phase 1.5, Phase 2, etc.):
 
 - **Write paths** — the 74-action chokepoint (`postEntry` / `rebuildEntry` /
-  `deleteEntry` and all 14 per-domain `mutations.ts` files) is Phase 2.
+  `deleteEntry` and all 13 per-domain `mutations.ts` files) is Phase 2.
   Phase 1.0 has no `Store` module.
 - **iPad/macOS adaptive layout** — Phase 3. Phase 1.0 is iPhone-only.
 - **Power features** — reconcile, rules engine + builder, transfers CRUD,

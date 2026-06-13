@@ -26,13 +26,39 @@
 > - `plans/IOS_MACOS_ROADMAP.md` — 8-phase arc
 > - `plans/IOS_MACOS_PHASE_8_DESIGN.md` (this file)
 >
-> _Audience: future engineers, IF this phase is ever pursued.
+> _Audience: future engineers who will build Phase 8
+> (committed to building per the resolution-pass decision Q22).
 > Assumes Phases 1.0-7 are complete; the chokepoint + iCloud
 > sync + widgets + Watch are all shipping._
 
+## See also
+
+- `plans/IOS_MACOS_INDEX.md` — the navigation index
+- `plans/IOS_MACOS_WIRE_FORMAT.md` §2, §3 — the 74+1 Args + I18nError wire format
+- `plans/IOS_MACOS_PLAN.md` §13 — the framing (Phase 8 is committed to building per Q22)
+- `plans/IOS_MACOS_PHASE_2_DESIGN.md` — Phase 2 (chokepoint; CloudKit row-level sync observes it)
+- `plans/IOS_MACOS_PHASE_5_DESIGN.md` — Phase 5 (pack-based sync model; Phase 8 is the row-level successor)
+- `plans/IOS_MACOS_PHASE_6_5_DESIGN.md` — Phase 6.5 (the 75th action; Phase 8 row sync may add 1-2 more)
+- `plans/IOS_MACOS_PHASE_7_DESIGN.md` — Phase 7 (widgets + Watch; Phase 8 doesn't change these)
+
+## §0. Map — 8-section template
+
+The 8-section template maps to this spec's existing sections:
+
+| Template section | Maps to |
+|---|---|
+| §1. Goal & non-goals | §1 |
+| §2. Architecture / data model | §2 (Architecture: CloudKit + the chokepoint) + §3 (The migration from pack-based to row-level sync) |
+| §3. iOS UI surfaces | §4 (Settings › Sync section, Phase 8 additions) |
+| §4. Cross-cutting concerns | §3 (the migration) + §8 (Why we're building this in a future phase — context) |
+| §5. Wire contracts | §2 (CloudKit schema — the row-level wire format) |
+| §6. CI / test infrastructure | §5 (CI changes) |
+| §7. Out of scope (firm) | §7 |
+| §8. Spec self-review + open questions | §9 + §6 |
+
 ## §1. Goal & non-goals
 
-**Goal** (if pursued) — Replace the pack-based sync model
+**Goal** — Replace the pack-based sync model
 (Phase 5) with **row-level sync** that gives sub-second
 latency across devices. The plan's §4.3-C sketches this
 option: "CloudKit or server sync atop the UUID-ready,
@@ -78,13 +104,15 @@ not detailed.
   trusts Apple/iCloud either way). The pack model is
   simpler; the row-level model adds no privacy benefit.
 
-**Non-goals (firm)** — IF Phase 8 is ever pursued:
+**Non-goals (firm)**:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 8 adds a **sync layer** that
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 8 doesn't add more).
+  Phase 8 adds a **sync layer** that
   observes the chokepoint and publishes mutations.
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged. Phase 8 adds a background sync daemon.
 - **No changes to the chokepoint's invariants** — the
   audit gate + the balance triggers + the schema
@@ -103,7 +131,7 @@ not detailed.
 - **Custom-server path** — sketched but not detailed. If
   pursued, it would be a separate spec.
 
-**Estimated scope** (IF pursued): ~1,500-2,500 lines Swift
+**Estimated scope**: ~1,500-2,500 lines Swift
 (the CloudKit subscription + the mutation event bus + the
 sync daemon) + ~500 lines SwiftUI (the Settings › Sync
 section additions for "row-level sync" vs. "pack-based
@@ -202,7 +230,16 @@ CKRecordType: "Mutation"
   fields:
     ledgerId: String
     action: String
-    argsData: Data (JSON-encoded)
+    argsData: Data (JSON-encoded)  // small actions; for large
+                                  // payloads (e.g., bulk
+                                  // recategorize, rebuildEntry
+                                  // with full posting arrays)
+                                  // use a CKAsset on
+                                  // `argsAsset: CKAsset` instead —
+                                  // CloudKit enforces a 1MB hard
+                                  // limit on `Data` fields and
+                                  // the server-side record size
+                                  // limit is 1MB
     occurredAt: Date
     deviceId: String
     revisionId: Int64
@@ -228,7 +265,7 @@ idempotent on `(entry_id, revision_id)`).
 // ios/FinchApp/Sync/CloudKitSyncDaemon.swift
 @MainActor
 public final class CloudKitSyncDaemon {
-    private let container = CKContainer.default()
+    private let container = CKContainer(identifier: "iCloud.com.juchengquan.finch")
     private let database: CKDatabase
     private var subscriptionIDs: [String: CKSubscription.ID] = [:]
 
@@ -244,7 +281,7 @@ public final class CloudKitSyncDaemon {
         let subscriptionID = "ledger-\(ledgerId)"
         let subscription = CKQuerySubscription(
             recordType: "Mutation",
-            predicate: NSPredicate(value: true),
+            predicate: NSPredicate(format: "TRUEPREDICATE"),
             subscriptionID: subscriptionID,
             options: [.firesOnRecordCreation]
         )
@@ -383,7 +420,7 @@ The "Resync ledger" button forces a full re-upload of the
 ledger (useful if the user suspects a corruption). The
 "Switch back to pack-based" button is a one-tap rollback.
 
-## §5. CI changes (if pursued)
+## §5. CI changes
 
 The macos job from Phase 1.0's `IOS_MACOS_PHASE_1_DESIGN §9`
 extends with:
@@ -411,8 +448,8 @@ The plan's §14.1 still-open questions mostly land in Phase
 - **CloudKit vs custom server**: CloudKit is the default
   (free, matches the local-first promise, the schema
   migration is straightforward). A custom server is
-  sketched but not detailed; if pursued, it would be a
-  separate spec.
+  sketched but not detailed; if the user later wants
+  custom-server sync, it would be a separate spec.
 - **Per-ledger subscriptions vs single subscription**: the
   proposal is per-ledger subscriptions (one per active
   ledger). A single subscription (all ledgers, all
@@ -463,10 +500,11 @@ The plan's §14.1 still-open questions mostly land in Phase
 These are explicitly NOT in Phase 8:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set. Phase 8 adds a sync layer that
+  are the full set (Phase 6.5's `setEntryAttachment` brings
+  the running total to 75; Phase 8 doesn't add more). Phase 8 adds a sync layer that
   observes the chokepoint.
 - **No new tabs / write screens / power features** — the
-  6 tabs + 6 write screens + 7 power features are
+  6 tabs + 7 write screens + 7 power features are
   unchanged.
 - **No changes to the chokepoint's invariants** — the
   audit gate + the balance triggers + the schema
@@ -546,7 +584,10 @@ spec.)
   opt-in flow is concrete (the user picks "Row-level
   (beta)"; the daemon initializes). §6 enumerates the
   open questions with proposed answers.
-- **Deferred framing**: this spec is explicitly framed as
-  "if pursued" throughout. The plan's §13 records the
-  deferral; this doc captures the design for future
-  reference.
+- **Framing**: this spec captures the Phase 8 design
+  (committed to building per Q22, future roadmap item
+  after Phase 7). The spec body uses active voice
+  throughout (no "if pursued" framing); only the
+  "custom-server path" sidebar in §1 retains a
+  conditional because that's a hypothetical beyond
+  Phase 8's committed scope.
