@@ -16,7 +16,7 @@ struct FinchApp: App {
     }
 }
 
-/// The 4-tab shell. Mirrors Phase 1.0 §5.
+/// The tab shell. Phase 2 adds Scheduled (the 6th, writable tab).
 struct ContentTabs: View {
     var body: some View {
         TabView {
@@ -26,6 +26,8 @@ struct ContentTabs: View {
                 .tabItem { Label("Activity", systemImage: "list.bullet") }
             BudgetsTab()
                 .tabItem { Label("Budgets", systemImage: "chart.pie") }
+            ScheduledTab()   // NEW in Phase 2
+                .tabItem { Label("Scheduled", systemImage: "calendar") }
             InsightsTab()   // NEW in Phase 1.5
                 .tabItem { Label("Insights", systemImage: "chart.line.uptrend.xyaxis") }
             SettingsTab()
