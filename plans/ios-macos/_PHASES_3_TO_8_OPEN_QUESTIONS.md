@@ -54,3 +54,20 @@ actions; the other 4 are documented below for a follow-up increment.
 - 🔧 **Saved searches + per-account base override + tag admin/merge + category
   color/icon.** Deferred (saved searches → UserDefaults; per-account base + merge
   have no chokepoint action yet).
+
+## Phase 6.5 — Share Extension + App Group + 75th action
+
+- ✅ **`setEntryAttachment` (the 75th action).** Built + tested in FinchCore:
+  inserts an `entry_attachments` row (ledger derived from the entry), validates
+  kind ∈ {image, pdf}; `removeAttachment` is the inverse. Action count is now 75
+  (ArgsTests updated). This is the native-only equivalent of the web's
+  `POST /api/attachments` route.
+- 🔧 **Share Extension target + App Group container.** A separate Xcode app-
+  extension target + the `group.com.juchengquan.finch` App Group entitlement +
+  the cross-process pending-manifest handoff. NOT headless-CI-buildable (needs a
+  new signed target + entitlement). Deferred infra — the 75th action it depends
+  on is now in place.
+- 🔧 **In-app attachment UI (PhotosPicker on a transaction) + attachment
+  display/projection.** The action exists; the EditTransaction "add receipt"
+  PhotosPicker + an attachments projection on `Tx` are deferred (also need a file
+  store + sha256 helper). Buildable later without new targets.
