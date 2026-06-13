@@ -212,7 +212,7 @@
     "title": "Rules",
     "newAria": "New rule",
     "newRule": "New rule",
-    "intro": "Rules run automatically on every new transaction in {ledger}. A matching rule can set the category, add a tag, rename the merchant, or split the row.",
+    "intro": "Rules run automatically on every new transaction in <ledger></ledger>. A matching rule can set the category, add a tag, rename the merchant, or split the row.",
     "empty": {
       "title": "No rules yet",
       "description": "Rules categorise repeat merchants automatically. Tap \"New rule\" to set one up — start with the merchant you re-categorise most often."
@@ -338,7 +338,7 @@
     "title": "Scheduled",
     "newAria": "New scheduled item",
     "upcoming": "Upcoming",
-    "incoming": "+ {amount} incoming",
+    "incoming": "+ <amount></amount> incoming",
     "month": "Month",
     "year": "Year",
     "prevMonth": "Previous month",
@@ -610,7 +610,7 @@
     "ungroupedLabel": "Ungrouped",
     "emptyGroup": "No {type} budgets",
     "empty": {
-      "title": "No {type} budgets in {ledger} yet",
+      "title": "No {type} budgets in <ledger></ledger> yet",
       "description": "Tap + to set a monthly cap or savings target."
     },
     "card": {
@@ -864,7 +864,7 @@
     "ungroupedLabel": "Ungrouped",
     "emptyGroup": "No accounts",
     "empty": {
-      "title": "No accounts linked in {ledger} yet.",
+      "title": "No accounts linked in <ledger></ledger> yet.",
       "description": "Add your first account to start tracking balances and transactions."
     },
     "createDialog": {
@@ -1202,7 +1202,7 @@
       "rateLocked": "RATE LOCKED @ {rate} · {from}→{to} · {date}"
     },
     "ruleSuggestion": {
-      "prompt": "Always categorize {merchant} as {category}?",
+      "prompt": "Always categorize <merchant></merchant> as <category></category>?",
       "createRule": "Create rule",
       "dismissAria": "Dismiss"
     },
