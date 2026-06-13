@@ -34,6 +34,25 @@ final class ScheduledDomainTests: XCTestCase {
         }
     }
 
+    /// postScheduled posts one confirmed transaction NOW from the template,
+    /// linked via source_template_id, moving the account balance.
+    func test_postScheduledExpense() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Rent','expense',0,datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: q, action: "createScheduled", args: Args([
+            "id": .string("s1"), "ledgerId": .string("l1"), "name": .string("Rent"), "type": .string("expense"),
+            "amount": .double(1500), "frequency": .string("monthly"), "dayOfMonth": .int(1), "accountId": .string("a1"), "category": .string("c1"),
+        ]))
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args(["templateId": .string("s1")]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id='s1' AND kind='expense' AND status='confirmed'"), 1)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a1'") ?? 0, -1500, accuracy: 0.001)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT category_id FROM postings WHERE category_id='c1'"), "c1")
+        }
+    }
+
     func test_scheduledSplits() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createScheduled", args: Args(["id": .string("s1"), "ledgerId": .string("l1"), "name": .string("Paycheck"), "type": .string("income"), "amount": .double(5000), "accountId": .string("a1")]))

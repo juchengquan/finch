@@ -18,12 +18,16 @@ final class ApplyTests: XCTestCase {
         }
     }
 
-    func test_unportedActionThrowsNotImplemented() throws {
+    /// All 74 web actions now route to a handler (none throw error.notImplemented).
+    func test_allActionsRegistered() throws {
         let q = try freshDB()
-        // changeLedgerBase is a real action but its domain handler isn't ported yet.
-        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args([:]))) { err in
-            guard let e = err as? I18nError else { return XCTFail("expected I18nError") }
-            XCTAssertEqual(e.code, "error.notImplemented")
+        for action in ActionName.allCases {
+            // An unregistered action would throw error.notImplemented; a registered
+            // one fails differently (bad args / FK / etc.) or succeeds. Either way,
+            // never notImplemented.
+            do { try Apply.apply(dbQueue: q, action: action.rawValue, args: Args([:])) }
+            catch let e as I18nError { XCTAssertNotEqual(e.code, "error.notImplemented", "\(action.rawValue) unregistered") }
+            catch { /* any other error is fine — the action is registered */ }
         }
     }
 

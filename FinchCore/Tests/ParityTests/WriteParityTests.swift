@@ -20,7 +20,13 @@ final class WriteParityTests: XCTestCase {
         try Migrations.runAll(on: q)
         try q.write { db in for sql in fx.seedSql { try db.execute(sql: sql) } }
         for step in fx.sequence {
-            guard case .object(let o) = step.args else { continue }
+            guard case .object(var o) = step.args else { continue }
+            // Resolve $lastAccountPosting to the most-recent account-leg posting id.
+            for (k, v) in o where v == .string("$lastAccountPosting") {
+                if let pid = try q.read({ db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1") }) {
+                    o[k] = .string(pid)
+                }
+            }
             try Apply.apply(dbQueue: q, action: step.action, args: Args(o))
         }
 
