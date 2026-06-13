@@ -42,6 +42,28 @@ interface ServerDb {
   file: string;
 }
 
+/** A finch database created before the double-entry cutover has a `categories`
+ *  table that lacks the equity `system` marker column. The canonical schema's
+ *  `idx_cat_system` index references that column, so applySchema would otherwise
+ *  fail deep inside `exec(SCHEMA)` with the opaque "no such column: system" —
+ *  500-ing every read/write. Such files can't be carried forward: the
+ *  transactions→entries data-move was intentionally not retained (pre-release;
+ *  no legacy databases preserved — see the MIGRATIONS note in schema.ts). Detect
+ *  the shape up front and surface the remedy instead of the opaque failure. */
+export async function assertCarryForwardable(exec: Exec, dbPath: string): Promise<void> {
+  const hasCategories =
+    (await exec(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'categories'`)).length > 0;
+  if (!hasCategories) return; // brand-new file — applySchema will create it
+  const cols = await exec('PRAGMA table_info(categories)');
+  if (cols.some((c) => String(c.name) === 'system')) return; // already on the DE schema
+  throw new Error(
+    `This finch database predates the double-entry migration (its "categories" table has ` +
+      `no "system" column) and cannot be carried forward — the transactions→entries data-move ` +
+      `was intentionally not retained (pre-release; no legacy databases preserved). Delete the ` +
+      `database file to recreate a fresh one:\n  rm "${dbPath}"*`,
+  );
+}
+
 let _db: Promise<ServerDb> | null = null;
 
 async function open(): Promise<ServerDb> {
@@ -52,6 +74,11 @@ async function open(): Promise<ServerDb> {
   const driver = await openDb(full);
   applyPragmaBootstrap(driver);
   const exec = execFor(driver);
+
+  // Reject pre-double-entry files before applySchema touches them — its
+  // idx_cat_system index would otherwise fail with an opaque "no such column:
+  // system" on a categories table that predates the equity `system` marker.
+  if (!isFresh) await assertCarryForwardable(exec, full);
 
   // applySchema's CREATE TABLE/INDEX IF NOT EXISTS statements are idempotent —
   // they pick up any tables/indexes added since the file was last opened. Then

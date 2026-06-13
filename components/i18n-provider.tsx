@@ -74,12 +74,10 @@ function subscribePersistedLocale(cb: () => void): () => void {
   return () => window.removeEventListener('storage', onStorage);
 }
 
-/** First-time visitor: match navigator.languages against the supported
- *  set. Tries the exact tag first (zh-CN), then the language-only tag
- *  (zh -> zh-CN). Returns null when nothing matches. */
-function detectBrowserLocale(): Locale | null {
-  if (typeof navigator === 'undefined') return null;
-  const langs = navigator.languages ?? (navigator.language ? [navigator.language] : []);
+/** Pure browser-locale matcher: exact tag first (zh-CN), then the
+ *  language-only tag (zh -> zh-CN, en-GB -> en). Returns null when nothing
+ *  matches. Exported for tests; the runtime caller passes navigator.languages. */
+export function matchBrowserLocale(langs: readonly string[]): Locale | null {
   for (const tag of langs) {
     if (isSupported(tag)) return tag;
     const short = tag.split('-')[0];
@@ -87,6 +85,28 @@ function detectBrowserLocale(): Locale | null {
     if (hit) return hit;
   }
   return null;
+}
+
+/** navigator.languages, normalised to a plain array (empty on the server). */
+function navigatorLangs(): string[] {
+  if (typeof navigator === 'undefined') return [];
+  return [...(navigator.languages ?? (navigator.language ? [navigator.language] : []))];
+}
+
+/** SSR + hydration snapshot. ALWAYS the default locale — it never consults the
+ *  browser, so the client's hydration render matches the server HTML. Browser
+ *  detection is deferred to the post-hydration client snapshot below; folding
+ *  it in here (or computing it inline during render) is what caused the
+ *  账户-vs-Accounts hydration mismatch. */
+export function resolveServerLocale(): Locale {
+  return DEFAULT;
+}
+
+/** Post-hydration client snapshot: persisted choice > detected browser locale >
+ *  default. Pure (takes persisted + browser languages) so the decision is
+ *  unit-testable without a DOM. */
+export function resolveClientLocale(persisted: Locale | null, langs: readonly string[]): Locale {
+  return persisted ?? matchBrowserLocale(langs) ?? DEFAULT;
 }
 
 interface I18nContextValue {
@@ -101,14 +121,17 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 /** Wraps the tree with NextIntlClientProvider + a small context that
  *  exposes the active locale + a setter. Drop in at app/layout.tsx. */
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const persisted = useSyncExternalStore(
+  // Locale flows entirely through useSyncExternalStore so its hydration
+  // contract holds: the SERVER snapshot (resolveServerLocale = default) is used
+  // for SSR *and* the client's hydration render, so they always match; the
+  // CLIENT snapshot (persisted > detected browser locale > default) applies
+  // only on the post-hydration commit. Detecting the browser inline during
+  // render — as this used to — broke that contract (账户-vs-Accounts mismatch).
+  const locale = useSyncExternalStore(
     subscribePersistedLocale,
-    readPersistedLocale,
-    () => null,
+    () => resolveClientLocale(readPersistedLocale(), navigatorLangs()),
+    resolveServerLocale,
   );
-  // Effective locale: persisted > detected > default. Derived during
-  // render so there's no setState-in-effect cascade.
-  const locale: Locale = persisted ?? detectBrowserLocale() ?? DEFAULT;
 
   const setLocale = useCallback((next: Locale) => {
     writePersistedLocale(next);
