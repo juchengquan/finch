@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 8 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — **COMMITTED TO BUILDING** (per
 > the resolution-pass decision). The plan's §13 originally
 > framed Phase 8 as deferred; that framing is updated in
@@ -72,10 +75,18 @@ The two viable implementations:
   publishes a `Mutation` event on every write; the sync
   layer subscribes, batches, and pushes to CloudKit. Other
   devices subscribe to CloudKit subscriptions; the sync
-  layer pulls deltas, dispatches them through the chokepoint
-  (the chokepoint is idempotent on `(entry_id, revision_id)`).
-  Conflict resolution: last-writer-wins on `(row_id,
-  revision_id)` with the audit gate as the safety net.
+  layer pulls deltas, dispatches them through the chokepoint.
+  **Phase 8 adds two new sync columns — `revision_id` and
+  `device_id` — to `entries` and `postings`** (a native,
+  CloudKit-driven schema extension); the sync-layer idempotency
+  key becomes `(entry_id, revision_id)`. The web schema today
+  has NO such columns: its real idempotency backstop is
+  `dedup_hash` (the unique index `idx_entry_dedup`) plus
+  `postEntry` being replay-idempotent keyed on `entry_id`
+  alone (`entries-schema.ts:8-34,72`; `entries.ts:258`).
+  Conflict resolution: last-writer-wins on `(entry_id,
+  revision_id)` (using the Phase-8-added columns) with the
+  audit gate as the safety net.
 - **Custom server** — a finch-server (Node.js or Go) that
   the iOS app talks to via HTTPS + WebSocket. The schema
   is the same; the server hosts the master copy. Custom
@@ -107,8 +118,10 @@ not detailed.
 **Non-goals (firm)**:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set (Phase 6.5's `setEntryAttachment` brings
-  the running total to 75; Phase 8 doesn't add more).
+  are the full set (Phase 6.5's `setEntryAttachment` is a
+  **native-only addition** — the web has no such chokepoint
+  action; attachments upload via `/api/attachments` — bringing
+  the native running total to 75; Phase 8 doesn't add more).
   Phase 8 adds a **sync layer** that
   observes the chokepoint and publishes mutations.
 - **No new tabs / write screens / power features** — the
@@ -193,7 +206,15 @@ forwards the event to CloudKit.
 ### 2.2 — CloudKit schema
 
 CloudKit's record store is a key-value store; the schema
-mirrors the shared SQLite schema. The proposal:
+mirrors the shared SQLite schema. **Note:** the `revisionId`
+and `deviceId` fields below correspond to the new
+`revision_id` / `device_id` columns Phase 8 ADDS to `entries`
+and `postings` (§2.1, §2.4) — they do not exist in the web
+schema today and are introduced by this phase. All other
+fields map to existing columns (`createdAt`→`created_at`,
+`clearedAt`→`cleared_at`, `sortOrder`→`sort_order`, plus
+`memo`, `amountBase`, `exchangeRate`, `origAmount`,
+`origCurrency`). The proposal:
 
 ```
 CKRecordType: "Entry"
@@ -258,8 +279,8 @@ Each device subscribes to a **per-ledger subscription** on
 the ledger's zone. When a record changes (another device
 wrote), CloudKit fires a `CKQuerySubscription` notification.
 The device fetches the changed record(s) and dispatches
-the mutation through the chokepoint (the chokepoint is
-idempotent on `(entry_id, revision_id)`).
+the mutation through the chokepoint (idempotent on the
+Phase-8-added `(entry_id, revision_id)` key — see §2.4).
 
 ```swift
 // ios/FinchApp/Sync/CloudKitSyncDaemon.swift
@@ -309,8 +330,19 @@ notifications fire within ~100ms of the record creation).
 
 ### 2.4 — The chokepoint's idempotency
 
-The chokepoint (Phase 2) is **idempotent on `(entry_id,
-revision_id)`**:
+**Today (web), the chokepoint idempotency is `entry_id` +
+`dedup_hash`**, NOT `(entry_id, revision_id)`. `postEntry`
+is replay-idempotent keyed on `entry_id` alone
+(`entries.ts:258`), and the unique index `idx_entry_dedup`
+over `dedup_hash` (`entries-schema.ts:72`) is the duplicate
+backstop. There is **no `revision_id` or `device_id` column**
+in the web `entries` / `postings` schema.
+
+**Phase 8 ADDS** `revision_id` and `device_id` columns to
+both tables (a native CloudKit-driven schema extension) so
+the sync layer can key last-writer-wins on `(entry_id,
+revision_id)`. With those columns present, the chokepoint
+becomes **idempotent on `(entry_id, revision_id)`**:
 - A `postEntry` with a known `entry_id` and a new
   `revision_id` upserts the entry (overwriting the
   previous version)
@@ -466,7 +498,8 @@ The plan's §14.1 still-open questions mostly land in Phase
   it). The sync daemon's batched uploads respect the
   limit (back off + retry on rate-limit errors).
 - **Conflict UX**: the proposal is last-writer-wins on
-  `(row_id, revision_id)`. A more sophisticated
+  `(entry_id, revision_id)` (using the Phase-8-added
+  `revision_id` column). A more sophisticated
   conflict resolution (e.g., three-way merge for
   transaction edits) is a follow-up. The audit gate
   catches the rare cases that LWW doesn't.
@@ -500,9 +533,11 @@ The plan's §14.1 still-open questions mostly land in Phase
 These are explicitly NOT in Phase 8:
 
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set (Phase 6.5's `setEntryAttachment` brings
-  the running total to 75; Phase 8 doesn't add more). Phase 8 adds a sync layer that
-  observes the chokepoint.
+  are the full set (Phase 6.5's `setEntryAttachment` is a
+  native-only addition — the web has no such action;
+  attachments upload via `/api/attachments` — bringing the
+  native running total to 75; Phase 8 doesn't add more).
+  Phase 8 adds a sync layer that observes the chokepoint.
 - **No new tabs / write screens / power features** — the
   6 tabs + 7 write screens + 7 power features are
   unchanged.
@@ -541,9 +576,11 @@ per-row sync state machine).
 **When we build Phase 8, this design doc is the starting
 point**. A future team would:
 1. Re-read this design (the CloudKit schema, the
-   `Mutation` event bus, the chokepoint's idempotency on
-   `(entry_id, revision_id)`, the LWW + audit-gate conflict
-   resolution)
+   `Mutation` event bus, the Phase-8-added `revision_id` /
+   `device_id` columns and the resulting `(entry_id,
+   revision_id)` idempotency — vs. the web's current
+   `entry_id` + `dedup_hash` backstop — and the LWW +
+   audit-gate conflict resolution)
 2. Update the CloudKit schema (the proposal's record
    types are a starting point)
 3. Implement the `Mutation` event bus + the CloudKit
@@ -567,9 +604,11 @@ spec.)
   the Settings UI — all concrete.
 - **Internal consistency**: §2.1's `Mutation` event is
   published by `FinchStore.apply` (Phase 2's §9.1). §2.4's
-  chokepoint idempotency is the existing behavior (the
-  chokepoint's audit gate catches the rare cases that
-  idempotency doesn't handle). §3.1's migration uses the
+  chokepoint idempotency relies on the `revision_id` /
+  `device_id` columns Phase 8 ADDS (the web today is
+  idempotent on `entry_id` + `dedup_hash`); the chokepoint's
+  audit gate catches the rare cases that idempotency doesn't
+  handle. §3.1's migration uses the
   Phase 5 iCloud pack engine as a fallback. §4's Settings
   UI extends the Phase 5 Settings › Sync section.
 - **Scope**: focused on Phase 8 IF it's ever pursued.

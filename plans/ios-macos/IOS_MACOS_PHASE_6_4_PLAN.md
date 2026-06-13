@@ -1,5 +1,8 @@
 # Phase 6.4 Implementation Plan — App Intents / Siri
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add **Siri integration** with 7 intents: `AddTransactionIntent`, `CheckBalanceIntent`, `MarkClearedIntent`, `CreateBudgetIntent`, `SwitchLedgerIntent`, `ShowInsightsIntent`, `OpenScreenIntent`. Each intent dispatches a chokepoint action (from Phase 2) or routes to a screen (via the `DeepLinkRouter` from Phase 6.1).

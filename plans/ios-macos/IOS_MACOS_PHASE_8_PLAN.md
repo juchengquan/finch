@@ -1,8 +1,13 @@
 # Phase 8 Implementation Plan — CloudKit row-level sync
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add **row-level sync** via CloudKit. After Phase 8, when the user writes a transaction (via Phase 2's chokepoint), the iOS app immediately enqueues a `Mutation` record to CloudKit; the other device receives the record via a `CKQuerySubscription` and dispatches the same chokepoint action. Sub-second latency. Last-writer-wins on conflict (the audit gate is the safety net). Phase 8 is a **future roadmap item** after Phase 7 ships.
+
+> **Schema prerequisite:** Phase 8 ADDS two new sync columns — `revision_id` and `device_id` — to `entries` and `postings`. These do **not** exist in the web schema today: the web's idempotency backstop is `dedup_hash` (unique index `idx_entry_dedup`, `entries-schema.ts:72`) plus `postEntry` being replay-idempotent keyed on `entry_id` alone (`entries.ts:258`). The `revisionId` / `deviceId` fields on `MutationEvent` (Task 1) and the CloudKit `Mutation` record map to these Phase-8-added columns, and the `(entry_id, revision_id)` last-writer-wins key depends on them.
 
 **Architecture:** A new `FinchCore/CloudKit/` module hosts the `CloudKitSyncDaemon` (the writer + the reader). The writer enqueues `Mutation` records to a private CloudKit database; the reader subscribes to `Mutation` records via `CKQuerySubscription` and dispatches each via `FinchStore.apply`. Per Q22, Phase 8 is **committed to building** (not deferred).
 

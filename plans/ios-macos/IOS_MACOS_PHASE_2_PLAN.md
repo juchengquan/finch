@@ -1,5 +1,8 @@
 # Phase 2 Implementation Plan — 74-action chokepoint + 7 write screens
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add the **write surface** to the iOS app. Phase 1.0 is read-only; Phase 2 adds the **chokepoint dispatcher** (the 74-action write surface) plus **7 new SwiftUI form sheets** that call into it. After Phase 2, the iOS app is a full read-write twin of the web app's data layer.
@@ -386,8 +389,8 @@ git commit -m "feat(ios): implement chokepoint dispatcher (Apply.apply)"
 Each task is a port of one per-domain `mutations.ts` file from the web. The 13 tasks are:
 
 - Task 3: `Domain/Transactions.swift` (15 actions — the largest)
-- Task 4: `Domain/Budgets.swift` (6 actions; 3 also in AccountGroups)
-- Task 5: `Domain/Accounts.swift` (5 actions; 3 also in AccountGroups)
+- Task 4: `Domain/Budgets.swift` (6 actions; +3 budgetGroup actions live in `budgets/mutations.ts`, since `budgetGroups` has no own `mutations.ts`)
+- Task 5: `Domain/Accounts.swift` (5 actions)
 - Task 6: `Domain/AccountGroups.swift` (3 actions)
 - Task 7: `Domain/Categories.swift` (3 actions)
 - Task 8: `Domain/Counterparties.swift` (5 actions)

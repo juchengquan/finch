@@ -2,6 +2,9 @@
 
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 **Goal:** Add **Spotlight indexing** for the in-memory `Tx[]` cache. When the user opens Spotlight on iOS and types a search, they see finch transactions in the results. Tapping a result deep-links into the Transaction Detail screen.
 
 **Architecture:** A new `FinchCore/Spotlight/` module hosts the `SpotlightIndexer` (which re-indexes the Tx[] cache via `CSSearchableIndex.default()`) and the `DeepLinkRouter` (which handles Spotlight taps and routes them to the right SwiftUI view). The indexer is called by `FinchStore.loadPack` (full re-index) and by `FinchStore.apply` (incremental re-index of the changed txn).

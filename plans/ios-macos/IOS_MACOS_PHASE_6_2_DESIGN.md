@@ -22,6 +22,9 @@
 > _Audience: the engineers who will build the iOS app. Assumes
 > Phases 1.0-5 are complete._
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 ## See also
 
 - `plans/ios-macos/IOS_MACOS_INDEX.md` §2.15 — anomaly threshold (2.5)
@@ -52,14 +55,16 @@ The 8-section template maps to this spec's existing sections:
 of events:
 
 1. **Scheduled item due** — when a scheduled template's
-   `dueDate` is within the next hour, fire a notification
-   with a "Confirm now" action button
+   derived due date (via `cycleWindow` / `generateDueScheduled`;
+   templates carry no stored `dueDate`) is within the next
+   hour, fire a notification with a "Confirm now" action button
 2. **Budget over threshold** — when a budget's `spent /
-   limit` exceeds its `warning_pct` (default 90%), fire a
+   limit` exceeds its `warningPct` (default 80%), fire a
    notification with a "View budgets" action button
-3. **Anomaly flagged** — when a recent transaction has
-   `anomalyScore` > 2.5 (the web's `anomalyScore` threshold
-   in `lib/select.ts`), fire
+3. **Anomaly flagged** — when a recent transaction's
+   `anomalyScore(...).isAnomaly` is true (the web's
+   `anomalyScore` precomputes the verdict against its 2.5
+   threshold in `lib/select.ts`), fire
    a notification with a "View transaction" action button
 4. **Weekly digest** — every Sunday morning at the user's
    configured time (default 9 AM), fire a notification
@@ -91,7 +96,7 @@ background context).
 - **No notification customization UI** — the 4
   notification categories are user-toggleable (on/off in
   Settings) but not deeply configurable. Threshold
-  tuning (e.g., "alert me at 80% not 90%") is a future
+  tuning (e.g., "alert me at 90% not 80%") is a future
   phase.
 - **No per-transaction notifications** — only the 4
   categories above. (Per-transaction alerts would
@@ -280,7 +285,7 @@ public final class NotificationScheduler {
         //    scheduled templates that will be due in the next
         //    24 hours.
         // 2. Budget over threshold: re-evaluate the affected
-        //    budget's progress; if over warning_pct, schedule
+        //    budget's progress; if over warningPct, schedule
         //    a notification (with a 1-hour dedup).
         // 3. Anomaly flagged: re-evaluate recent transactions
         //    (last 24h) with high anomalyScore; schedule
@@ -309,23 +314,28 @@ public enum NotificationCategory: String, Codable, CaseIterable {
 ### 3.2 — Scheduled item due
 
 For each scheduled template that will be due in the next
-24 hours, schedule a notification at the template's
-`dueDate`:
+24 hours, derive its due date (templates carry no stored
+`dueDate`; due dates come from `cycleWindow` /
+`generateDueScheduled`) and schedule a notification at that
+derived date:
 
 ```swift
 private func scheduleScheduledDueNotifications(newState: FinchStore) async {
     guard enabledCategories.contains(.scheduledDue) else { return }
-    let upcoming = newState.scheduled.filter { $0.dueDate <= Date().addingTimeInterval(24 * 3600) }
-    for template in upcoming {
+    // Templates have no stored due date — derive each via cycleWindow.
+    let due = Selectors.generateDueScheduled(newState.scheduled, today: ISO8601DateFormatter().string(from: Date()))
+    let upcoming = due.filter { $0.dueDate <= Date().addingTimeInterval(24 * 3600) }
+    for item in upcoming {
+        let template = item.template
         let content = UNMutableNotificationContent()
         content.title = "Coming up: \(template.name)"
-        content.body = "$\(template.amount) due \(formatRelative(template.dueDate))"
+        content.body = "$\(template.amount) due \(formatRelative(item.dueDate))"
         content.categoryIdentifier = "scheduledDue"
         content.userInfo = ["templateId": template.id, "entryId": nil]
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(
-            dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: template.dueDate),
+            dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.dueDate),
             repeats: false
         )
         let request = UNNotificationRequest(
@@ -340,22 +350,22 @@ private func scheduleScheduledDueNotifications(newState: FinchStore) async {
 
 Each scheduled template gets **one notification** with a
 unique identifier (`scheduled-<template_id>`). The
-notification is scheduled at the template's `dueDate`; it
-fires once.
+notification is scheduled at the template's derived due
+date; it fires once.
 
 ### 3.3 — Budget over threshold
 
 After every write that affects a budget's progress, re-
 evaluate the budget's `spent / limit` against its
-`warning_pct`. If over the threshold and no notification has
-fired in the last hour, schedule one:
+`warningPct` (default 80). If over the threshold and no
+notification has fired in the last hour, schedule one:
 
 ```swift
 private func scheduleBudgetWarningNotifications(newState: FinchStore) async {
     guard enabledCategories.contains(.budgetWarning) else { return }
     for budget in newState.budgets {
-        let progress = try? Selectors.budgetProgress(budget, txns: newState.txns, accounts: newState.accounts, ...)
-        guard let progress = progress else { continue }
+        // budgetProgress(budget, txns, today, categories?) — no accounts param.
+        let progress = Selectors.budgetProgress(budget, txns: newState.txns, today: today, categories: newState.categories)
         let pct = progress.spent / progress.limit
         guard pct >= budget.warningPct else { continue }
 
@@ -389,17 +399,20 @@ times).
 
 ### 3.4 — Anomaly flagged
 
-For each transaction in the last 24 hours with
-`anomalyScore > 2.5` (the web's `anomalyScore` threshold
-in `lib/select.ts`), schedule a notification:
+For each transaction in the last 24 hours whose
+`anomalyScore(...)` returns an `AnomalyScore` with
+`isAnomaly == true` (the web precomputes the verdict against
+its 2.5 threshold in `lib/select.ts`), schedule a
+notification:
 
 ```swift
 private func scheduleAnomalyNotifications(newState: FinchStore) async {
     guard enabledCategories.contains(.anomalyFlagged) else { return }
     let recent = newState.txns.filter { $0.date >= ISO8601DateFormatter().string(from: Date().addingTimeInterval(-24 * 3600)) }
+    let stats = Selectors.merchantStats(newState.txns, ledgerId: newState.activeLedgerId)
     for tx in recent {
-        let score = try? Selectors.anomalyScore(tx, stats: merchantStats(newState.txns))
-        guard let score = score, abs(score) > 2.5 else { continue }
+        // anomalyScore returns AnomalyScore? — read the precomputed isAnomaly verdict.
+        guard let score = Selectors.anomalyScore(tx, stats: stats), score.isAnomaly else { continue }
 
         let content = UNMutableNotificationContent()
         content.title = "Unusual: \(tx.merchant)"
@@ -456,10 +469,11 @@ private func scheduleWeeklyDigestNotification() async {
     let digest = try? Selectors.weeklyDigest(txns: store.txns, ledgerId: store.activeLedgerId, anchor: ISO8601DateFormatter().string(from: nextSunday))
 
     let content = UNMutableNotificationContent()
-    content.title = "Your week: $\(digest?.totalSpent ?? 0)"
+    content.title = "Your week: $\(digest?.spent ?? 0)"
     content.body = digest.map {
-        let cat = $0.topCategory ?? "(none)"
-        return "Top category: \(cat) ($\($0.topCategoryAmount))"
+        let top = $0.topCategories.first
+        let cat = top?.categoryId ?? "(none)"
+        return "Top category: \(cat) ($\(top?.amount ?? 0))"
     } ?? "Open finch to see your weekly digest"
     content.categoryIdentifier = "weeklyDigest"
     content.sound = .default
@@ -639,7 +653,7 @@ extends with:
   assert the notification is scheduled with the right
   trigger time
 - A **budget warning test**: write enough transactions to
-  push a budget past 90%; assert the notification is
+  push a budget past 80%; assert the notification is
   scheduled
 - A **dedup test**: write the same budget-warning event
   twice; assert only one notification is scheduled
@@ -659,7 +673,7 @@ notifications.
 **Not blocking Phase 6.2 (decide later)**:
 
 - **Threshold tuning**: the proposal uses the defaults
-  (90% for budget warning, 2.5 for anomaly, 1 hour for
+  (80% for budget warning, 2.5 for anomaly, 1 hour for
   scheduled due). User-configurable thresholds are a
   future phase.
 - **Per-ledger notification preferences**: the proposal

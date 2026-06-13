@@ -1,5 +1,7 @@
 # iOS/macOS Plans Coherence Pass — Design
 
+> _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
+
 > - This is a **design doc** for a coherence pass on the 16 iOS/macOS plan files
 > - The pass produces: a new `IOS_MACOS_INDEX.md` + an 8-section template applied to 15 specs + cross-reference backfill + stale-pointer fixes
 > - Single commit; everything lands together
@@ -35,7 +37,7 @@ A new index file with 4 sections:
 - `74 unique chokepoint actions` (75 with Phase 6.5's `setEntryAttachment`)
 - `32 selectors` (7 in 1.0, 25 in 1.5; 8 selector groups)
 - `13 per-domain mutations.ts files` (out of 14 first-class domains; `attachments/` is queries-only)
-- `8 audit-corruption fixtures` (the web's 8 audit problem classes)
+- `10 audit-corruption fixtures` (the web's 10 audit problem classes)
 - `4 tabs → 5 tabs → 6 tabs` (post-Phase 1.0 / 1.5 / 2)
 - `7 write screens` (Phase 2 + Holdings tab; 6 without)
 - `App Group container: group.com.juchengquan.finch` (added in Phase 6.5 §2.2, not Phase 5)

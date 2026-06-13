@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 7 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce a
 > step-by-step implementation plan for Phase 7.
@@ -119,8 +122,8 @@ packages the result as a `TimelineEntry`.
 
 - A 2-row widget: net worth figure (large) + 6-month line
   chart (small)
-- Reads: `netWorthByMonth(txns, accounts, endMonth: now,
-  n: 6)` (Phase 1.5)
+- Reads: `netWorthByMonth(txns, accounts, ledgerId,
+  endMonth: now, n: 6)` (Phase 1.5)
 - Refresh: hourly (the system budget may be tighter; the
   widget respects the system-enforced budget)
 - Tapping the widget deep-links to the iOS app's Insights
@@ -142,9 +145,12 @@ packages the result as a `TimelineEntry`.
 
 **Widget 3: Month-forecast tile**
 
-- A 1-row widget: "Forecast: $1,847 spend next month"
-- Reads: `monthForecast(txns, accounts, ledgerId, n: 1)`
-  (Phase 1.5)
+- A 1-row widget: "Forecast: $1,847 spend this month"
+- Reads: `monthForecast(txns, scheduled, ledgerId, month,
+  today)` (Phase 1.5) — a SINGLE month (the `month` string),
+  month-to-date actuals + daily run-rate × days-remaining +
+  upcoming scheduled; 2nd param is `scheduled[]`, not
+  `accounts`
 - Refresh: daily (the forecast doesn't change intra-day)
 - Tapping the widget deep-links to the Insights tab
 
@@ -265,7 +271,7 @@ data:
   },
   "monthForecast": 1847.00,
   "weeklyDigest": {
-    "totalSpent": 234.56,
+    "spent": 234.56,
     "previousWeekDelta": -12.00,
     "previousWeekDeltaPercent": -0.05
   }
@@ -308,7 +314,7 @@ mode. They're updated by the iOS app's chokepoint (via
   hour
 - Surface: a "Coming up: <description> due in N minutes"
   with a "Confirm now" button
-- Tapping the button dispatches `Args.postScheduled({id})`
+- Tapping the button dispatches `Args.postScheduled({templateId})`
   via the chokepoint
 - Refresh: the iOS app schedules a `UNUserNotificationCenter`
   trigger to fire the Live Activity update at the right
@@ -630,8 +636,11 @@ These are explicitly NOT in Phase 7:
   full set. The widgets + Live Activities + Watch reuse
   them.
 - **No new chokepoint actions** — the 74 Phase 2 actions
-  are the full set (Phase 6.5's `setEntryAttachment` brings
-  the running total to 75; Phase 7 doesn't add more).
+  are the full set (Phase 6.5's `setEntryAttachment` is a
+  planned **native-only** 75th action — the web has no such
+  chokepoint action; it adds attachments via the
+  `/api/attachments` route — which brings the running total
+  to 75; Phase 7 doesn't add more).
   Phase 7's Watch quick-add uses
   `Args.postScheduled` (Phase 2) for one specific case;
   the widgets + Live Activities don't write.

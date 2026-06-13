@@ -1,8 +1,11 @@
 # Phase 5 Implementation Plan — iCloud sync + auto-pack debouncer
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Add the **iCloud sync** layer. After Phase 5, when the user writes a transaction (via Phase 2's chokepoint), an auto-pack debouncer waits ~30 seconds (configurable), then writes a fresh `.finch` pack to the iCloud `Documents/finch/` folder. On the other device, the iCloud folder-watcher detects the new pack and imports it.
+**Goal:** Add the **iCloud sync** layer. After Phase 5, when the user writes a transaction (via Phase 2's chokepoint), an auto-pack debouncer waits a short, configurable idle window (a native cadence — the design suggests ~30s; this is a native product choice, NOT the web's `autoBackup`, which is a 1-hour age-since-newest-backup throttle), then writes a fresh `.finch` pack to the iCloud `Documents/finch/` folder. On the other device, the iCloud folder-watcher detects the new pack and imports it.
 
 **Architecture:** A new `FinchCore/Sync/` module hosts the `AutoPackDebouncer` (the Swift `Task.sleep`-based debouncer from the Phase 1.0 spec) and the `iCloudFolderWatcher` (the `NSMetadataQuery`-based folder watcher). The `FinchStore.apply` (from Phase 2) triggers the debouncer after every successful chokepoint write. The debouncer writes a fresh pack to iCloud. The folder watcher on the other side detects the new pack + handles conflicts.
 
@@ -280,11 +283,14 @@ struct ConflictCopySheet: View {
 
     private func loadSummary(url: URL) async throws -> PackSummary {
         let data = try Data(contentsOf: url)
-        let parsed = try Pack.parse(data)
+        // parsePack(zipBytes) → { manifest, zip } (pack.ts:179).
+        // The manifest is nested + snake_case: db.row_counts,
+        // exported_at (pack.ts:43-64).
+        let parsed = try parsePack(data)
         return PackSummary(
-            entries: parsed.manifest.db.rowCounts["entries"] ?? 0,
-            accounts: parsed.manifest.db.rowCounts["accounts"] ?? 0,
-            exportedAt: parsed.manifest.exportedAt
+            entries: parsed.manifest.db.row_counts["entries"] ?? 0,
+            accounts: parsed.manifest.db.row_counts["accounts"] ?? 0,
+            exportedAt: parsed.manifest.exported_at
         )
     }
 }
@@ -334,6 +340,9 @@ import FinchCore
 
 struct SyncSettingsView: View {
     @EnvironmentObject private var store: FinchStore
+    // Native cadence (a debounce idle window). NOT the web's
+    // autoBackup default — that is a 1-hour age-since-newest
+    // throttle (lib/db/state.ts:211). ~30s is a native choice.
     @State private var debounceSeconds: Double = 30
 
     var body: some View {

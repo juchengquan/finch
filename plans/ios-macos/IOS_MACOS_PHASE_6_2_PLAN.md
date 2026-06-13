@@ -2,6 +2,9 @@
 
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 **Goal:** Add **local notifications** for 4 categories: scheduled item due, budget warning, anomaly flagged, weekly digest. The user grants permission on first app launch; the iOS app schedules notifications via `UNUserNotificationCenter`.
 
 **Architecture:** A new `FinchCore/Notifications/` module hosts the `NotificationScheduler` (which schedules the 4 categories). The scheduler is called by `FinchStore.apply` (for immediate notifications like budget warning) and by a daily timer (for the weekly digest). Action handlers in `UNUserNotificationCenterDelegate` route taps to the existing `DeepLinkRouter` (from Phase 6.1).
@@ -174,11 +177,21 @@ git commit -m "feat(ios): implement NotificationScheduler (4 categories)"
 import Foundation
 
 public struct WeeklyDigest: Equatable, Sendable, Codable {
-    public let totalSpent: Decimal
-    public let topCategory: String?
-    public let topCategoryAmount: Decimal
-    public let weekStart: String
-    public let weekEnd: String
+    public struct CategoryAmount: Equatable, Sendable, Codable {
+        public let categoryId: String
+        public let amount: Decimal
+    }
+    public let spent: Decimal
+    public let income: Decimal
+    public let net: Decimal
+    public let prevSpent: Decimal
+    public let vsPrevPct: Double
+    public let avgSpent: Decimal
+    public let avgWeeks: Int
+    public let vsAvgPct: Double
+    public let topCategories: [CategoryAmount]
+    public let biggestExpense: Decimal
+    public let txCount: Int
 }
 ```
 
@@ -280,7 +293,7 @@ struct NotificationsSettingsView: View {
         Form {
             Section("Categories") {
                 Toggle("Scheduled item due", isOn: $scheduledDueEnabled)
-                Toggle("Budget warning (90% spent)", isOn: $budgetWarningEnabled)
+                Toggle("Budget warning (80% spent)", isOn: $budgetWarningEnabled)
                 Toggle("Anomaly flagged", isOn: $anomalyEnabled)
                 Toggle("Weekly digest (Sunday 9 AM)", isOn: $weeklyDigestEnabled)
             }

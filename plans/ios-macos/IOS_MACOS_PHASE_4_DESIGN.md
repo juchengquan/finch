@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 4 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce
 > a step-by-step implementation plan for Phase 4.
@@ -110,7 +113,9 @@ statement's balance + statement date; finch computes the
 un-cleared entries in the account between the last reconcile
 checkpoint and now; the user marks them as cleared; the gap
 (cleared sum vs statement balance) becomes an adjustment
-entry if it exceeds a configurable tolerance.
+entry when its magnitude is non-trivial (the web posts when
+`|delta| >= 0.005`, hardcoded — there is no configurable
+tolerance).
 
 ### 2.1 — Web's reconcile flow
 
@@ -124,14 +129,21 @@ Detail page) has a "Reconcile" section:
 4. The user marks the entries they see on the statement
    (the ones they recognize)
 5. finch computes the gap: `cleared_sum - statement_balance`
-6. If the gap is within the tolerance (configurable; default
-   $0.01), the user taps "Mark reconciled" → the checkpoint
-   is set
-7. If the gap exceeds the tolerance, the user can either:
+6. If the gap is effectively zero (`|gap| < 0.005`, the web's
+   hardcoded threshold), the user taps "Mark reconciled" → the
+   checkpoint is set with no adjustment
+7. If the gap is non-trivial (`|gap| >= 0.005`), the user can
+   either:
    (a) "Post adjustment" → finch posts a `kind='adjustment'`
        entry for the gap
    (b) "Cancel" → no checkpoint, the un-cleared entries
        remain un-cleared
+
+There is **no configurable tolerance** in the web's
+`reconcileAccount` action — the $0.005 threshold is hardcoded
+(`lib/db/domain/transactions/mutations.ts:147`). A tolerance
+picker would be a **native addition**, not a port of web
+behavior.
 
 ### 2.2 — iOS Phase 4 surface
 
@@ -153,12 +165,18 @@ opens a `NavigationStack` with a multi-step reconcile flow:
 │  Statement date                      │
 │  Jun 30, 2026                    ▾   │
 │                                      │
-│  Tolerance                           │
+│  Tolerance (native-only)             │
 │  ± $0.01                         ▾   │
 │                                      │
 │  [Next]                              │
 └─────────────────────────────────────┘
 ```
+
+> The **Tolerance** row is a **native enhancement** — the web
+> has no tolerance control; its `reconcileAccount` posts an
+> adjustment whenever `|gap| >= 0.005` (hardcoded). If we ship
+> the native picker, default it to that same $0.005 floor and
+> treat anything the user sets as a native-only divergence.
 
 ```
 ┌─────────────────────────────────────┐
@@ -206,9 +224,11 @@ The reconcile flow uses the Phase 2 actions:
 - `Args.setCleared({id, cleared: true})` for each entry the
   user marks
 - `Args.reconcileAccount({accountId, statementBalance,
-  statementDate, postAdjustment})` for the final reconcile
+  statementDate?, postAdjustment?})` for the final reconcile
   (the web's `reconcileAccount` action handles the
-  checkpoint + the optional adjustment entry in one call)
+  checkpoint + the optional adjustment entry in one call;
+  args per `lib/db/domain/_args.ts:47` — there is **no**
+  `tolerance` param)
 
 The reconcile UI's read-side math (cleared sum, gap, un-cleared
 entries list) is a small inline computation over the in-memory
@@ -216,7 +236,7 @@ entries list) is a small inline computation over the in-memory
 `reconcileAccount` selector in `lib/select.ts` (the 32
 selectors are listed in Phase 1.5 §2). The chokepoint
 `Args.reconcileAccount({accountId, statementBalance,
-statementDate, postAdjustment})` is a Phase 2 *write* action
+statementDate?, postAdjustment?})` is a Phase 2 *write* action
 that handles the checkpoint + the optional adjustment entry
 in one call.
 
@@ -245,38 +265,41 @@ Phase 4 ships the manual flow. The CSV import is a Phase
 The web's rules engine (`lib/rules/`) is a condition/action
 model:
 
-- A **rule** is a `(condition, action)` pair
-- A **condition** is a predicate over an entry: `merchant
-  matches /Starbucks/`, `amount > $50`, `category is null`,
-  etc.
-- An **action** is a mutation: `set category = 'Coffee'`,
-  `add tag = 'recurring'`, `set counterparty = 'Starbucks
-  Inc'`, etc.
+- A **rule** is a `(condition, action[])` pair
+- A **condition** is a **recursive `all` / `any` / `not`
+  tree** over leaf comparators (`lib/rules/types.ts:15-64`).
+  The ~14 leaves are: `merchant` (`is` / `contains` /
+  `startsWith`), `amount` (incl. `between`), `account_id`,
+  `category_id`, `counterparty_id`, `currency`, `date_dow`,
+  `date_dom`, `kind`, `tag_id`, `note`. There is **no regex
+  comparator** — merchant matching is only `is` / `contains`
+  / `startsWith`.
+- An **action** is a mutation. There are **9 action types**:
+  `set_category`, `set_counterparty`, `set_merchant`,
+  `set_note`, `set_kind`, `add_tag`, `remove_tag`,
+  `mark_reviewed`, `split`.
 - **Backfill** applies a rule to historical entries (the
-  rule's action is run on every entry that matches the
+  rule's actions are run on every entry that matches the
   condition)
 - **Live** rules are applied to new entries as they're
   posted (the chokepoint runs the rules engine after every
   `postEntry`)
 
-The web has 4 conditions and 4 actions in the engine
-core, plus the rule builder UI (`components/rule-builder-dialog.tsx`).
-**Phase 4 extends the engine to 6 conditions + 5 actions**
-(native users get a richer engine; the web catches up later):
+The web's engine is already rich: the recursive condition
+tree, the `amount between` comparator, and the
+`set_counterparty` action **all already exist on the web**.
+So Phase 4 is a **faithful port of the existing engine**, not
+an extension of a "4 conditions + 4 actions" core (there is no
+such thin core). The rule builder UI
+(`components/rule-builder-dialog.tsx`) is ported as-is.
 
-- **6 conditions**: `merchantMatches`, `descriptionMatches`,
-  `categoryIs`, `amountGreaterThan` (the web's 4) + 2 native
-  additions: `merchantMatchesRegex` (regex match) +
-  `amountInRange(min, max)` (amount in a numeric range)
-- **5 actions**: `setCategory`, `addTag`, `setCounterparty`,
-  `setNote` (the web's 4) + 1 native addition: `setCounterparty`
-  (replaces the web's `addTag`-only counterpart-set flow with a
-  full set-counterparty; the web's setCounterparty is renamed
-  from "auto-resolve on add" to "explicit set" in Phase 4)
-
-The native additions land in the Phase 4 iOS port; the web
-later ports them back. The rule builder UI in Phase 4
-surfaces all 6 conditions + 5 actions as form fields.
+**If** native users want a **regex** merchant comparator, frame
+it as a genuinely **new native addition** (the web has no regex
+op today): a `merchant matches /…/` leaf alongside the existing
+`is` / `contains` / `startsWith`. Anything else the native
+builder surfaces (amount ranges, set-counterparty) is simply
+the existing web engine — not a new capability. The web would
+later port back only the regex leaf, if we ship it.
 
 ### 3.1 — iOS Phase 4 surface
 
@@ -319,9 +342,9 @@ Builder** form:
 ├─────────────────────────────────────┤
 │  When (condition)                    │
 │  Field:    merchant               ▾  │
-│  Operator: matches                ▾  │
-│  Value:    /Starbucks/              │
-│  [+ Add condition]                   │
+│  Operator: contains               ▾  │
+│  Value:    Starbucks                │
+│  [+ Add condition]   (all / any)     │
 │                                      │
 │  Then (action)                       │
 │  Set:     category                 ▾ │
@@ -334,8 +357,9 @@ Builder** form:
 
 The form is a faithful port of the web's
 `rule-builder-dialog.tsx` (the web has a 161-line
-`lib/domain/rules/mutations.ts`; the iOS form mirrors the
-same field set).
+`lib/db/domain/rules/mutations.ts`; the iOS form mirrors the
+same field set — the recursive condition tree + the 9 action
+types).
 
 ### 3.2 — Backfill UI
 
@@ -364,9 +388,10 @@ button. Tapping opens:
 ```
 
 The backfill is a **batch mutation** — for each matching
-entry, the rule's action is applied. The web's
-`backfillRule` action takes a `RulePatchInput` and applies
-the rule to all matching entries in one call (the chokepoint
+entry, the rule's actions are applied. The web's
+`backfillRule` action takes just `{ id }` (the rule id;
+`lib/db/domain/_args.ts:148`) and applies that rule to all
+matching entries in one call (the chokepoint loads the rule,
 iterates the entries; the UI shows a progress bar).
 
 ### 3.3 — iOS implementation
@@ -374,26 +399,26 @@ iterates the entries; the UI shows a progress bar).
 The rules engine is ported from `lib/rules/{engine,types,describe}.ts`
 to `ios/FinchCore/Sources/FinchCore/Rules/`. The engine is
 pure compute (no IO); it takes a `Tx` and a list of `Rule`s
-and returns a list of `RuleMatch`es (each with the entry,
-the rule, and the proposed mutation). The chokepoint
-applies the mutations in a single transaction.
+and returns a merged patch (the `RulePatch` shape — see
+`lib/rules/engine.ts:186`). The chokepoint applies the patch
+in a single transaction.
 
-Phase 4 ships **6 conditions + 5 actions** (the web's 4+4 plus
-2 native additions):
-- **Conditions** (6): `merchantMatches`, `descriptionMatches`,
-  `categoryIs`, `amountGreaterThan` (the web's 4) +
-  `merchantMatchesRegex` (regex match) + `amountInRange(min, max)`
-  (amount in a numeric range)
-- **Actions** (5): `setCategory`, `addTag`, `setCounterparty`,
-  `setNote` (the web's 4) + `setCounterparty` (replaces the
-  web's auto-resolve-on-add with an explicit set; the web's
-  setCounterparty is renamed in Phase 4 — the web catches
-  up later)
+Phase 4 ships the **existing web engine verbatim**:
+- **Conditions**: the recursive `all` / `any` / `not` tree
+  over the ~14 leaf comparators — `merchant` (`is` /
+  `contains` / `startsWith`), `amount` (incl. `between`),
+  `account_id`, `category_id`, `counterparty_id`, `currency`,
+  `date_dow`, `date_dom`, `kind`, `tag_id`, `note`.
+- **Actions** (9): `set_category`, `set_counterparty`,
+  `set_merchant`, `set_note`, `set_kind`, `add_tag`,
+  `remove_tag`, `mark_reviewed`, `split`.
 
-The iOS rule builder's field set is the same as the web's
-plus the 2 native additions (per the web's
-`lib/rules/types.ts::Condition` and `::Action` types,
-extended).
+The iOS rule builder's field set is **identical** to the web's
+(per `lib/rules/types.ts::Condition` and `::Action`). The only
+candidate **native addition** is a **regex** merchant leaf
+(the web has no regex comparator); if shipped, it slots in
+beside `is` / `contains` / `startsWith` and is the one thing
+the web would later port back.
 
 ## §4. Feature: Transfers CRUD
 
@@ -440,10 +465,13 @@ two-account form:
 ```
 
 The form submits to `Args.createTransfer({fromAccountId,
-toAccountId, amount, date, note})` (Phase 2's action).
-The chokepoint posts the paired entries atomically (the
-two legs are one entry; the balance triggers fire for
-both accounts).
+toAccountId, fromAmount, toAmount?, date, time?, note,
+sourceTemplateId?})` (Phase 2's action; args per
+`lib/db/domain/_args.ts:180`). Note it's **`fromAmount`**
+(required) plus an optional **`toAmount`** for cross-currency
+transfers — **not** a single `amount`. The chokepoint posts
+the paired entries atomically (the two legs are one entry; the
+balance triggers fire for both accounts).
 
 ### 4.2 — Edit + delete
 
@@ -506,7 +534,7 @@ Tapping a row opens an edit form:
 │  Food                              ▾ │
 │                                      │
 │  ── Danger zone ──                   │
-│  [Archive]    [Merge into ▾]         │
+│  [Merge into ▾]                      │
 │  [Delete]                            │
 │                                      │
 │  [Cancel]              [Save]        │
@@ -515,15 +543,20 @@ Tapping a row opens an edit form:
 
 The "Merge into" action opens a sub-picker; the user picks
 a target category; the chokepoint updates every entry
-referencing the source category to the target. The source
-category is archived (not deleted, so historic entries
-still resolve).
+referencing the source category to the target, then the
+source is **deleted** (there is **no `archiveCategory`
+action** — categories are create / update / delete only,
+`lib/db/domain/_args.ts:119`; no archive flag exists). Merge
+is therefore re-point-then-delete; once every entry has been
+re-pointed to the target, deleting the now-unreferenced source
+leaves all historic entries resolving against the target.
 
 ### 5.2 — Tags
 
-Tags are simpler than categories: no parent, no color (the
-web uses a color from a fixed palette). The edit form is
-just name + color + archive.
+Tags are simpler than categories: no parent (the web uses a
+color from a fixed palette). The edit form is just name +
+color + delete (tags, like categories, are create / update /
+delete only — there is no archive).
 
 ### 5.3 — Merchants
 
@@ -537,9 +570,14 @@ sheet.
 
 ## §6. Feature: Saved searches
 
-The web's command palette (the desktop ⌘K) supports
-"save current search as a named shortcut." The iOS Phase
-4 surface mirrors this in the Activity tab's filter bar.
+**Saved searches are a separate Activity-page feature** —
+*not* a command-palette capability. The web's ⌘K palette only
+navigates pages, opens add-expense, and searches
+transactions / merchants / accounts; it does **not** "save the
+current search." Saved searches are pinned Activity filter
+sets, created from the Activity page itself
+(`lib/use-saved-searches.ts`). The iOS Phase 4 surface mirrors
+that Activity-page feature in the filter bar.
 
 ### 6.1 — iOS Phase 4 surface
 
@@ -593,10 +631,20 @@ matching transactions.
 
 ### 6.2 — iOS implementation
 
-Saved searches live in the local DB's `app_state` table
-(key: `saved_searches:<ledger_id>`, value: JSON array of
-`{name, filters, createdAt}`). The web stores them the
-same way; the iOS port reads + writes the same shape.
+On the **web**, saved searches are **localStorage-only** —
+persisted under the key `finch.savedSearches`
+(`lib/use-saved-searches.ts:5,30`), **client-only**, **not**
+in the `app_state` table or the server DB. They never travel
+with a DB export / backup, and there is **no `setAppState`
+action** for them (they bypass the chokepoint entirely; the
+shape is `{id, ledgerId, name, query, direction, tagId,
+fromDate, toDate, minAmount, maxAmount}`).
+
+The iOS port may store them in the **native local DB**
+(e.g. an `app_state` row) for convenience — but frame that as
+a **native divergence**, not "the same as web." Like the web,
+they should **not** travel with the pack-based sync model
+(Phase 5), matching the web's local-only behavior.
 
 The iOS Phase 4 surface ships a **+ button** on the
 saved-searches section for creating a new one, and a
@@ -642,7 +690,7 @@ that lets the user:
 
 - Override the **base currency** of a ledger (a destructive
   action; re-rates every historic entry at the new base)
-- Edit **historical rates** (the `rates` table; the
+- Edit **historical rates** (the `exchange_rates` table; the
   user can fix a rate that was incorrectly converted)
 - **Rename a currency** (e.g., `USD` → `US Dollar` in the
   display; the storage is unaffected)
@@ -672,9 +720,9 @@ button). Tapping opens:
 ```
 
 The **Edit historical rates** sub-section shows a list of
-rates (the `rates` table; the web shows a rate per
-`from-currency × to-currency × date`). Tapping a rate
-opens an edit form.
+rates (the `exchange_rates` table, `lib/db/core/schema.ts:296`;
+each row is a `{currency, date}` rate **into the ledger base**,
+with an optional `source`). Tapping a rate opens an edit form.
 
 The **Rename currency** sub-section lets the user edit
 the display name (per ledger or globally; the web's
@@ -684,12 +732,14 @@ implementation is global).
 
 The FX / base tools use the existing Phase 2 actions:
 
-- `Args.changeLedgerBase({id, newBase})` — the destructive
-  re-rate
-- `Args.setExchangeRate({from, to, date, rate})` — the
-  historical rate editor
-- `Args.deleteExchangeRate({from, to, date})` — remove a
-  rate
+- `Args.changeLedgerBase({ledgerId, newBase})` — the
+  destructive re-rate
+- `Args.setExchangeRate({date, currency, rate, source?})` —
+  the historical rate editor (a rate for `currency` on `date`,
+  expressed against the ledger base; `_args.ts:210`). **Not**
+  `{from, to, date, rate}` — there is no `from`/`to` pair.
+- `Args.deleteExchangeRate({date, currency})` — remove a
+  rate (`_args.ts:211`)
 - `Args.setDisplayCurrency({ledgerId, currency})` — the
   per-ledger display-currency override (Phase 1.5's UI;
   Phase 4 may refine)
@@ -740,27 +790,30 @@ phases. For Phase 4 specifically:
   progress bar with a cancel button. The cancel rolls
   back the transaction (the partial backfill is
   discarded).
-- **Rule engine condition/action set**: the web has 4
-  conditions + 4 actions; Phase 4 extends to 6 + 5
-  (per the §3 engine extension). The native additions
-  are the regex-match condition, the amount-in-range
-  condition, and the set-counterparty action.
+- **Rule engine condition/action set**: the web's engine is
+  already rich — a recursive `all`/`any`/`not` tree over ~14
+  leaf comparators + 9 action types (per §3). Phase 4 **ports
+  it as-is**. The only candidate native addition is a **regex**
+  merchant comparator (the web has none today); amount ranges
+  (`between`) and set-counterparty already exist on the web,
+  so they are not additions.
 - **FX rate editor scope**: the web's `setExchangeRate`
-  action is per `from × to × date`. The iOS editor is a
-  per-rate form. The "bulk edit rates" question (e.g.,
-  "re-rate all entries in a date range") is a future
-  phase.
+  action is per `{currency, date}` (a rate into the ledger
+  base), `_args.ts:210`. The iOS editor is a per-rate form.
+  The "bulk edit rates" question (e.g., "re-rate all entries
+  in a date range") is a future phase.
 - **Anomaly threshold tuning UI**: the existing
   `anomalyScore` thresholds from the web are used as-is
   in Phase 1.0. A UI for tuning the thresholds is a
   Phase 4 follow-up (the `lib/insights.ts` constants
   become a `Settings › Insights` section).
-- **Saved searches sync across devices**: the iOS app
-  stores saved searches in the local DB. They don't
-  sync across devices (the pack-based sync model in
-  Phase 5 doesn't carry `app_state` data). The web's
-  saved searches also don't sync (per the web's
-  implementation). Phase 5 may add this.
+- **Saved searches sync across devices**: the iOS app stores
+  saved searches locally (a native divergence — the web keeps
+  them in `localStorage` under `finch.savedSearches`, never in
+  the DB). They don't sync across devices: the web's are
+  per-browser and never travel with an export / backup, and
+  the iOS port should keep them out of the pack-based sync
+  model (Phase 5). Phase 5 may revisit.
 
 **Specifically for the rules engine**:
 
@@ -771,10 +824,16 @@ phases. For Phase 4 specifically:
   this. If the user creates a rule with a condition that
   matches an existing entry, the rule doesn't apply
   retroactively (the user must explicitly backfill).
-- **Rule ordering**: the web's rules engine iterates
-  rules in the order they're stored in the DB. The
-  first match wins (subsequent rules don't run on the
-  same entry). The iOS port matches.
+- **Rule ordering**: the web's rules engine is **not**
+  first-match-wins. **All** matching active rules run, in
+  **priority order** — lower `priority` first — and a later
+  rule's `set_*` action **overrides** an earlier one's; the
+  patches merge into a single `RulePatch`
+  (`lib/rules/engine.ts:186-193`, `lib/rules/types.ts:73`).
+  The `appliedRuleIds` trail records every rule that fired, in
+  order, even when a later rule overrode its writes. The iOS
+  port matches: run all matches in priority order, last write
+  wins.
 
 **Not blocking Phase 4 because they're Phase 5+ by design**:
 
@@ -834,12 +893,13 @@ spec.)
   `Args.updateTransfer` + `Args.deleteTransfer` (all
   Phase 2). §5's reference data uses
   `Args.createCategory` + `Args.updateCategory` +
-  `Args.deleteCategory` (all Phase 2; categories don't have
-  a separate "archive" action — deleted categories are
-  removed from the in-memory cache; the reconciliation
-  comes from the chokepoint's referential-integrity
-  enforcement). §6's saved searches use the local DB's
-  `app_state` table (matches the web). §7's bulk
+  `Args.deleteCategory` (all Phase 2; categories have **no**
+  `archiveCategory` action — they're create / update / delete
+  only, `_args.ts:119`; merge is re-point-then-delete). §6's
+  saved searches are **localStorage-only on the web**
+  (`finch.savedSearches`), never in `app_state` / the server
+  DB; the iOS port storing them in a native local row is a
+  divergence, not a match. §7's bulk
   recategorize uses `Args.bulkRecategorize` (Phase 2). §8's
   FX uses `Args.changeLedgerBase` + `Args.setExchangeRate`
   (both Phase 2). All 7 features use existing Phase 2

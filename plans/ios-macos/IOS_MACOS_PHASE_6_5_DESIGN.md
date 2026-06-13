@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 6.5 Implementation Design (Share Extension receipts)
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce a
 > step-by-step implementation plan for Phase 6.5.
@@ -308,7 +311,7 @@ public struct PendingAttachment: Codable, Sendable {
 public struct AttachmentPayload: Codable, Sendable {
     public let filename: String  // e.g., "IMG_1234.jpg" or "receipt.pdf"
     public let mimeType: String
-    public let fileSize: Int64
+    public let byteSize: Int64  // echoes the DB column `byte_size`
     public let sha256: String
     public let stagedPath: String  // relative to the App Group container
 }
@@ -383,7 +386,7 @@ public final class PendingAttachmentProcessor {
                     "attachmentId": attachmentId,
                     "relPath": "\(entryId)/\(attachmentId).\(fileExt)",
                     "mimeType": manifest.attachment.mimeType,
-                    "fileSize": manifest.attachment.fileSize,
+                    "byteSize": manifest.attachment.byteSize,
                     "sha256": manifest.attachment.sha256
                 ]
             )
@@ -407,6 +410,16 @@ The proposal adds **one new chokepoint action**:
 app dispatches after moving the staged file. The
 `removeAttachment` action (Phase 2) is the opposite
 (deletes an existing attachment).
+
+**This is a NATIVE-ONLY addition — the web has no such
+chokepoint action.** On the web, attachments are added
+via the multipart `POST /api/attachments` route (which
+writes the file + inserts the `entry_attachments` row
+server-side), not through a `mutate` chokepoint action.
+The native app has no HTTP server, so it introduces
+`setEntryAttachment` as the equivalent local chokepoint
+write. Its arg names echo the `entry_attachments` DB
+columns (`relPath` ↔ `rel_path`, `byteSize` ↔ `byte_size`).
 
 The `setEntryAttachment` action:
 1. Inserts a row into `entry_attachments` (the table
