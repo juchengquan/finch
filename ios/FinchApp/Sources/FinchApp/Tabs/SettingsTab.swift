@@ -21,6 +21,7 @@ struct SettingsTab: View {
                         }
                     }
                     LabeledContent("Display currency", value: store.displayCurrency)
+                    NavigationLink("Manage ledgers") { LedgerManagementView() }
                 }
 
                 Section("Database") {
