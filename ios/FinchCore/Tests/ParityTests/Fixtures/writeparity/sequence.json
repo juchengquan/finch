@@ -192,6 +192,17 @@
         "id": "$lastAccountPosting",
         "reviewed": true
       }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": -8,
+        "merchant": "Morning Coffee",
+        "categoryId": "pay",
+        "date": "2026-05-07"
+      }
     }
   ],
   "expected": {
@@ -479,6 +490,49 @@
             "sort_order": 1
           }
         ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-07",
+        "time": null,
+        "description": "Morning Coffee",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": "[\"r1\"]",
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-8.000000",
+            "currency": "USD",
+            "amount_base": "-8.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "8.000000",
+            "currency": "USD",
+            "amount_base": "8.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
       }
     ],
     "ledgers": [
@@ -500,7 +554,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "1375.000000",
+        "current_balance": "1367.000000",
         "sort_order": 0,
         "include_in_net_worth": 1,
         "is_active": 1,

@@ -442,6 +442,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // Confirm the income tx via its account-posting id (re-uses the same chain pattern).
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -7, merchant: 'Pending', categoryId: 'food', date: '2026-05-06', status: 'pending', skipRules: true } },
   { action: 'setReviewed', args: { id: '$lastAccountPosting', reviewed: true } },
+  // Rules-on-insert: r1 (Coffee→food) exists by now; this tx omits skipRules, so
+  // the postEntry hook fires — categoryId 'pay' is re-pointed to 'food' and
+  // applied_rule_ids stamps 'r1'. Verified byte-for-byte against the oracle.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -8, merchant: 'Morning Coffee', categoryId: 'pay', date: '2026-05-07' } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the

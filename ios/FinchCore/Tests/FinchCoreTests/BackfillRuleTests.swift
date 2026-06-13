@@ -55,4 +55,33 @@ final class BackfillRuleTests: XCTestCase {
             XCTAssertTrue(applied.contains("r1"), applied)
         }
     }
+
+    /// On-insert: an active set_category rule fires inside addTransaction (the
+    /// postEntry rules hook), re-pointing the category leg and stamping
+    /// applied_rule_ids — without a separate backfill pass.
+    func test_rulesApplyOnInsert() throws {
+        let q = try seeded()
+        let condition: JSONValue = .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("coffee")])
+        let actions: JSONValue = .array([.object(["type": .string("set_category"), "categoryId": .string("c2")])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args(["id": .string("r1"), "ledgerId": .string("l1"), "name": .string("Coffee→c2"), "condition": condition, "actions": actions]))
+        // categoryId c1 in args, but the rule should re-point it to c2 on insert.
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25),
+            "merchant": .string("Blue Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-01"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT category_id FROM postings WHERE category_id IS NOT NULL"), "c2")
+            let applied = try String.fetchOne(db, sql: "SELECT applied_rule_ids FROM entries") ?? ""
+            XCTAssertTrue(applied.contains("r1"), applied)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a1'") ?? 0, -25, accuracy: 0.001)
+        }
+        // skipRules bypasses the hook → category stays c1.
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-5),
+            "merchant": .string("More Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-03"), "skipRules": .bool(true),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE category_id='c1'"), 1)
+        }
+    }
 }
