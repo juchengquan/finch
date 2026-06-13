@@ -46,8 +46,9 @@ actions; the other 4 are documented below for a follow-up increment.
   (create/update/deleteCategory). *Merge* is not a chokepoint action — deferred.
 - ✅ **FX rate editor.** View / add / delete exchange rates
   (set/deleteExchangeRate). Exposed `store.exchangeRates`.
-- 🔧 **Reconcile UI.** `reconcileAccount` exists in the chokepoint; the
-  statement-balance/CSV-import UI is not built yet. Deferred increment.
+- ✅ **Reconcile UI.** ReconcileSheet (account → statement balance → posts the
+  adjustment via reconcileAccount). Reached from the Accounts toolbar. CSV
+  statement import remains a refinement.
 - 🔧 **Transfers CRUD edit/delete UI.** `createTransfer` is wired (Add screen);
   a dedicated edit/delete transfers manager is deferred.
 - ✅ **Bulk recategorize + in-place category edit.** *(Correction: was NOT
@@ -57,9 +58,10 @@ actions; the other 4 are documented below for a follow-up increment.
   `bulkRecategorize` on save), and Activity has a Select mode → multi-select →
   Recategorize sheet. `updateTransaction` still defers *amount* edits only.
   Tested (single + bulk).
-- 🔧 **Saved searches + per-account base override + tag admin/merge + category
-  color/icon.** Deferred (saved searches → UserDefaults; per-account base + merge
-  have no chokepoint action yet).
+- ✅ **Tag admin** (create/rename/delete) + **Saved searches** (UserDefaults,
+  Activity toolbar menu; pure upsert tested). Phase 4 is now 6 of 7 features.
+- 🔧 **Per-account base override + category/tag merge.** No chokepoint action
+  exists for these — genuinely unsupported by the engine, not just unbuilt.
 
 ## Phase 6.5 — Share Extension + App Group + 75th action
 

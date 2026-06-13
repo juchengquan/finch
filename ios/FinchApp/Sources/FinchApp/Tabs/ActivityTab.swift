@@ -13,6 +13,7 @@ struct ActivityTab: View {
     @State private var isSelecting = false
     @State private var selected: Set<String> = []
     @State private var showingBulkCat = false
+    @State private var savedSearches: [SavedSearch] = []
 
     var body: some View {
         NavigationStack {
@@ -50,6 +51,21 @@ struct ActivityTab: View {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Transaction")
                         .disabled(store.accounts.isEmpty)
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    Menu {
+                        if !searchQuery.isEmpty {
+                            Button("Save “\(searchQuery)”") { SavedSearches.save(name: searchQuery, query: searchQuery); savedSearches = SavedSearches.all() }
+                        }
+                        if !savedSearches.isEmpty {
+                            Section("Saved") {
+                                ForEach(savedSearches) { s in
+                                    Button(s.name) { searchQuery = s.query }
+                                }
+                            }
+                        }
+                    } label: { Label("Saved searches", systemImage: "bookmark") }
+                        .onAppear { savedSearches = SavedSearches.all() }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button(isSelecting ? "Done" : "Select") {

@@ -135,6 +135,14 @@ extension Projection {
         }
     }
 
+    /// Tags for a ledger (Phase 4 tag admin), name-ordered.
+    public static func tags(dbQueue: DatabaseQueue, ledgerId: String) throws -> [TagRow] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, name, color FROM tags WHERE ledger_id = ? ORDER BY name",
+                             arguments: [ledgerId]).map { TagRow(id: $0["id"], name: $0["name"], color: $0["color"]) }
+        }
+    }
+
     /// Lightweight rule rows for the Phase 4 rules manager (name/priority/active).
     public static func rules(dbQueue: DatabaseQueue, ledgerId: String) throws -> [RuleSummary] {
         try dbQueue.read { db in

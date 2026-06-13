@@ -51,6 +51,7 @@ struct SettingsTab: View {
                 Section("Power tools") {
                     NavigationLink("Rules") { RulesManagerView() }
                     NavigationLink("Categories") { CategoryAdminView() }
+                    NavigationLink("Tags") { TagAdminView() }
                     NavigationLink("Exchange rates") { ExchangeRatesView() }
                 }
 

@@ -19,6 +19,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var scheduled: [ScheduledTemplate] = []
     @Published public private(set) var exchangeRates: [ExchangeRate] = []   // Phase 4 FX editor
     @Published public private(set) var rules: [RuleSummary] = []            // Phase 4 rules manager
+    @Published public private(set) var tags: [TagRow] = []                  // Phase 4 tag admin
     @Published public var activeLedgerId: String = "" {
         didSet { if oldValue != activeLedgerId { reprojectActiveLedger() } }  // switch → re-project
     }
@@ -182,6 +183,7 @@ public final class FinchStore: ObservableObject {
         self.scheduled = (try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.exchangeRates = (try? Projection.exchangeRates(dbQueue: q)) ?? []
         self.rules = (try? Projection.rules(dbQueue: q, ledgerId: activeLedgerId)) ?? []
+        self.tags = (try? Projection.tags(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.rateMap = Money.latestRateMap(exchangeRates)
     }
 
