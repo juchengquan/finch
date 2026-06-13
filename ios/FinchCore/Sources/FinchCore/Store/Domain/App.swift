@@ -5,7 +5,7 @@ import GRDB
 /// + the app_state setters. DEFERRED: `reset` (truncate + re-seed reference data
 /// + transactions.json) is intentionally not registered — it stays
 /// notImplemented until the seed is ported.
-public enum App {
+public enum AppDomain {
     public static let handlers: [ActionName: Apply.Handler] = [
         .setExchangeRate: setExchangeRate,
         .deleteExchangeRate: deleteExchangeRate,
