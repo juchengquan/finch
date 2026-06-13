@@ -20,6 +20,9 @@ public enum Apply {
         all.merge(Transactions.handlers) { _, new in new }
         all.merge(Counterparties.handlers) { _, new in new }
         all.merge(Tags.handlers) { _, new in new }
+        all.merge(AccountGroups.handlers) { _, new in new }
+        all.merge(BudgetGroups.handlers) { _, new in new }
+        all.merge(Categories.handlers) { _, new in new }
         return all
     }
 

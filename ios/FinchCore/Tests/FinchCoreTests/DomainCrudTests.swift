@@ -47,6 +47,41 @@ final class DomainCrudTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry_tags") }, 1)
     }
 
+    func test_accountGroupCrud() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createAccountGroup", args: Args(["id": .string("ag1"), "ledgerId": .string("l1"), "name": .string("Cash")]))
+        try Apply.apply(dbQueue: q, action: "createAccountGroup", args: Args(["id": .string("ag2"), "ledgerId": .string("l1"), "name": .string("Cards")]))
+        try Apply.apply(dbQueue: q, action: "updateAccountGroup", args: Args(["id": .string("ag1"), "patch": .object(["name": .string("Liquid")])]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT name FROM account_groups WHERE id='ag1'"), "Liquid")
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT sort_order FROM account_groups WHERE id='ag2'"), 1)
+        }
+        try Apply.apply(dbQueue: q, action: "deleteAccountGroup", args: Args(["id": .string("ag2")]))
+        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM account_groups") }, 1)
+    }
+
+    func test_budgetGroupCrud() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createBudgetGroup", args: Args(["id": .string("bg1"), "ledgerId": .string("l1"), "name": .string("Essentials")]))
+        try Apply.apply(dbQueue: q, action: "updateBudgetGroup", args: Args(["id": .string("bg1"), "patch": .object(["name": .string("Needs")])]))
+        XCTAssertEqual(try q.read { db in try String.fetchOne(db, sql: "SELECT name FROM budget_groups WHERE id='bg1'") }, "Needs")
+    }
+
+    func test_categoryCrud() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createCategory", args: Args(["id": .string("c3"), "ledgerId": .string("l1"), "name": .string("Coffee"), "type": .string("expense"), "color": .string("#abc")]))
+        try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("c3"), "patch": .object(["name": .string("Cafés"), "color": .null])]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT name FROM categories WHERE id='c3'"), "Cafés")
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT color FROM categories WHERE id='c3'"))
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT kind FROM categories WHERE id='c3'"), "expense")
+        }
+        // self-parent guard
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "updateCategory", args: Args(["id": .string("c3"), "patch": .object(["parentId": .string("c3")])]))) {
+            XCTAssertEqual(($0 as? I18nError)?.code, "error.category.selfParent")
+        }
+    }
+
     func test_bulkRecategorize() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "addTransaction", args: Args(["ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25), "merchant": .string("Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true)]))
