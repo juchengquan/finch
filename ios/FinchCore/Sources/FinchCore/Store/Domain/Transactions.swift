@@ -25,10 +25,38 @@ public enum Transactions {
         .confirmTransaction: confirmTransaction,
         .confirmPendingWithMerchant: confirmPendingWithMerchant,
         .removeAttachment: removeAttachment,
+        .reconcileAccount: reconcileAccount,
         // DEFERRED: setTransactionSplits — the web's per-split base allocation
         // (sign × ratio + "absorb remainder") needs re-derivation against a
         // Task-17 fixture before I trust the balance; left notImplemented.
     ]
+
+    // MARK: reconcileAccount
+
+    /// Stamp the reconcile checkpoint; optionally post a reconcile adjustment for
+    /// the gap between the statement balance and the cleared (confirmed + cleared)
+    /// posting sum, marking that adjustment cleared.
+    static func reconcileAccount(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let accountId: String; let statementBalance: Double; let statementDate: String?; let postAdjustment: Bool? }
+        let a = try args.to(A.self)
+        if !a.statementBalance.isFinite { throw I18nError("error.reconcile.statementBalance", [:], "Statement balance is required") }
+        let statementDate = a.statementDate ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        if a.postAdjustment == true {
+            guard let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM accounts WHERE id = ?", arguments: [a.accountId]) else {
+                throw I18nError("error.notFound.account", [:], "Account not found")
+            }
+            let cleared = Entries.r2(try Double.fetchOne(db, sql: """
+                SELECT COALESCE(SUM(p.amount), 0) FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE p.account_id = ? AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL
+                """, arguments: [a.accountId]) ?? 0)
+            let delta = Entries.r2(a.statementBalance - cleared)
+            if abs(delta) >= 0.005, let adjEntryId = try Entries.postAdjustment(db, ledgerId: ledgerId, accountId: a.accountId, delta: delta, date: statementDate, source: "reconcile") {
+                try db.execute(sql: "UPDATE postings SET cleared_at = datetime('now') WHERE entry_id = ? AND account_id IS NOT NULL", arguments: [adjEntryId])
+            }
+        }
+        try db.execute(sql: "UPDATE accounts SET last_reconciled_at = ?, last_reconciled_balance = ?, updated_at = datetime('now') WHERE id = ?",
+                       arguments: [statementDate, a.statementBalance, a.accountId])
+    }
 
     // MARK: removeAttachment
 
