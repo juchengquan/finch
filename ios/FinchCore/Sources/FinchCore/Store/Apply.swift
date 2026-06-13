@@ -25,6 +25,7 @@ public enum Apply {
         all.merge(Categories.handlers) { _, new in new }
         all.merge(Holdings.handlers) { _, new in new }
         all.merge(AppDomain.handlers) { _, new in new }
+        all.merge(Accounts.handlers) { _, new in new }
         return all
     }
 

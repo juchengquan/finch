@@ -392,6 +392,24 @@ public enum Entries {
             autoBalance: .category(sys.adjustment), notes: note, timestamp: timestamp, skipRules: true))
     }
 
+    /// The opening-balance entry (`open-<accountId>`), one account leg against
+    /// the `opening` equity category. Idempotent; zero amount → no entry (nil).
+    /// NOTE: the web marks the opening leg cleared (reconcile anchor); my
+    /// simplified leg drops cleared_at (DEFERRED) — the balance is unaffected.
+    @discardableResult
+    public static func postOpening(_ db: Database, ledgerId: String, accountId: String, amount: Double,
+                                   date: String, timestamp: String? = nil) throws -> String? {
+        if r2(amount) == 0 { return nil }
+        let id = "open-\(accountId)"
+        if try Int.fetchOne(db, sql: "SELECT 1 FROM entries WHERE id = ?", arguments: [id]) != nil { return id }
+        let sys = try ensureSystemCategories(db, ledgerId)
+        let ts = timestamp ?? ISO8601DateFormatter().string(from: Date())
+        return try postEntry(db, NewEntry(
+            id: id, ledgerId: ledgerId, date: date, description: "Opening balance", kind: .opening,
+            legs: [.account(AccountLeg(accountId: accountId, amount: r2(amount)))],
+            autoBalance: .category(sys.opening), timestamp: ts, skipRules: true))
+    }
+
     /// Delete the whole entry (postings cascade) then recompute touched accounts.
     @discardableResult
     public static func deleteEntry(_ db: Database, _ entryId: String) throws -> [String] {
