@@ -7,14 +7,30 @@
 // (Phase 1.5 will also iterate CASES from lib/select.test.ts.)
 //
 // FIXED ids only — NO Math.random() — so the fixtures are deterministic.
-import type { Tx } from '@/lib/store';
+import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import type { BudgetRow } from '@/lib/db/domain/budgets/types';
+import type { Holding } from '@/lib/db/domain/holdings/types';
 
-/** The 7 Phase-1.0 selectors (see _CANONICAL_WEB_FACTS.md §E). */
+/** The Phase-1.0 selectors (see _CANONICAL_WEB_FACTS.md §E) + the Phase-1.5
+ *  selectors as they are ported batch-by-batch. */
 export type SelectorName =
   | 'accountBalance' | 'selectTransactions' | 'categorySpend'
-  | 'budgetProgress' | 'cycleWindow' | 'merchantStats' | 'anomalyScore';
+  | 'budgetProgress' | 'cycleWindow' | 'merchantStats' | 'anomalyScore'
+  // Phase 1.5 — batch 1 (time series / deltas)
+  | 'currentMonth' | 'prevMonth' | 'monthlySpending' | 'dailySpending'
+  | 'monthlyCashflow' | 'topCategoryDeltas'
+  // Phase 1.5 — batch 2 (aggregates / digest)
+  | 'incomeCategoryFlow' | 'recentExpenses' | 'findDuplicate'
+  | 'suggestCategory' | 'weeklyDigest'
+  // Phase 1.5 — batch 3a (account / net worth)
+  | 'netWorthByMonth' | 'netWorthExplained' | 'balanceSeries'
+  | 'netWorthSeries' | 'netWorthByAccountType' | 'selectTransfers'
+  // Phase 1.5 — batch 3b (forecasts)
+  | 'monthForecast' | 'accountForecast'
+  // Phase 1.5 — batch 4 (holdings / FX)
+  | 'holdingsForAccount' | 'holdingValue' | 'holdingGainLoss'
+  | 'holdingsValueForAccount' | 'investmentAccountTotal' | 'unrealizedFx';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -44,6 +60,15 @@ const budgetOf = (over: Partial<BudgetRow>): BudgetRow => ({
   frequency: 'monthly', startDate: '2026-01-01', endDate: null, isRecurring: 1,
   rollover: 0, rolloverLimit: null, pendingAmount: null, lastRolledPeriod: null,
   accountIds: [], categoryIds: ['food'], warningPct: 80, ...over,
+});
+const schedOf = (over: Partial<ScheduledTemplate>): ScheduledTemplate => ({
+  id: 'st1', name: 'Sched', type: 'expense', amount: -40, frequency: 'monthly',
+  dayOfMonth: 25, accountId: 'a1', account: 'Checking', autoPost: 0,
+  nextRun: '2026-01-25', lastRun: '', ...over,
+});
+const holdOf = (over: Partial<Holding>): Holding => ({
+  id: 'h1', ledgerId: 'personal', accountId: 'a1', symbol: 'AAPL', name: null,
+  shares: 10, costBasis: 1000, currency: 'USD', lastPrice: 120, lastPriceDate: null, notes: null, ...over,
 });
 
 export const CASES: SelectorCase[] = [
@@ -109,4 +134,202 @@ export const CASES: SelectorCase[] = [
   { name: 'not-anomaly', selector: 'anomalyScore',
     input: { tx: txOf({ id: 't1', merchant: 'Coffee', amount: -5 }),
       stats: { 'm:coffee': { count: 5, mean: 4, std: 0.5 } } } },
+
+  // ════════════ Phase 1.5 — batch 1: time series / deltas ════════════
+
+  // ── currentMonth(txns, ledgerId?) → "YYYY-MM" (latest tx month) ──
+  { name: 'latest-month', selector: 'currentMonth',
+    input: { txns: [txOf({ id: 't1', date: '2026-04-10' }), txOf({ id: 't2', date: '2026-05-20' })],
+      ledgerId: 'personal' } },
+
+  // ── prevMonth(month) → "YYYY-MM" (incl. year rollover) ──
+  { name: 'mid-year', selector: 'prevMonth', input: { month: '2026-03' } },
+  { name: 'year-rollover', selector: 'prevMonth', input: { month: '2026-01' } },
+
+  // ── monthlySpending(txns, ledgerId, endMonth, n) → [{m,v}] (oldest first) ──
+  { name: 'three-months', selector: 'monthlySpending',
+    input: { txns: [
+      txOf({ id: 't1', category: 'food', amount: -10, date: '2026-03-05' }),
+      txOf({ id: 't2', category: 'food', amount: -25, date: '2026-04-10' }),
+      txOf({ id: 't3', category: 'transport', amount: -8, date: '2026-05-15' }),
+      txOf({ id: 't4', category: 'food', amount: 50, date: '2026-05-01' }),  // income — excluded
+    ], ledgerId: 'personal', endMonth: '2026-05', n: 3 } },
+
+  // ── dailySpending(txns, ledgerId, endDate, n) → [{date,value}] (oldest first) ──
+  { name: 'three-days', selector: 'dailySpending',
+    input: { txns: [
+      txOf({ id: 't1', amount: -10, date: '2026-05-01' }),
+      txOf({ id: 't2', amount: -5, date: '2026-05-03' }),
+      txOf({ id: 't3', amount: -7, date: '2026-05-03' }),
+    ], ledgerId: 'personal', endDate: '2026-05-03', n: 3 } },
+
+  // ── monthlyCashflow(txns, ledgerId, endMonth, n) → [{m,inc,exp}] ──
+  { name: 'two-months', selector: 'monthlyCashflow',
+    input: { txns: [
+      txOf({ id: 't1', amount: 200, date: '2026-04-01' }),   // income
+      txOf({ id: 't2', amount: -30, date: '2026-04-12' }),   // expense
+      txOf({ id: 't3', amount: -45, date: '2026-05-08' }),   // expense
+    ], ledgerId: 'personal', endMonth: '2026-05', n: 2 } },
+
+  // ── topCategoryDeltas(txns, ledgerId, curMonth, categories, count) → [{name,a,b,d}] ──
+  // Distinct abs-deltas (transport 50, food 20) so the ordering is unambiguous.
+  { name: 'mom-deltas', selector: 'topCategoryDeltas',
+    input: { txns: [
+      txOf({ id: 't1', category: 'food', amount: -100, date: '2026-04-10' }),
+      txOf({ id: 't2', category: 'food', amount: -120, date: '2026-05-10' }),
+      txOf({ id: 't3', category: 'transport', amount: -50, date: '2026-05-12' }),
+    ], ledgerId: 'personal', curMonth: '2026-05',
+      categories: [{ id: 'food', name: 'Food' }, { id: 'transport', name: 'Transport' }], count: 5 } },
+
+  // ════════════ Phase 1.5 — batch 2: aggregates / digest ════════════
+
+  // ── incomeCategoryFlow(txns, categories, ledgerId, month, topN?) → IncomeFlow ──
+  { name: 'income-vs-spend', selector: 'incomeCategoryFlow',
+    input: { txns: [
+      txOf({ id: 't1', amount: 500, date: '2026-05-01' }),                       // income
+      txOf({ id: 't2', category: 'food', amount: -100, date: '2026-05-05' }),
+      txOf({ id: 't3', category: 'transport', amount: -60, date: '2026-05-10' }),
+    ], categories: [{ id: 'food', name: 'Food', color: '#ff0000' },
+                    { id: 'transport', name: 'Transport', color: '#00ff00' }],
+      ledgerId: 'personal', month: '2026-05', topN: 6 } },
+
+  // ── recentExpenses(txns, ledgerId, limit?) → [RecentExpense] (most-recent first) ──
+  { name: 'dedup-recent', selector: 'recentExpenses',
+    input: { txns: [
+      txOf({ id: 't1', merchant: 'Coffee', category: 'food', amount: -10, account: 'a1', date: '2026-05-03', time: '08:00' }),
+      txOf({ id: 't2', merchant: 'Gas', category: 'transport', amount: -20, account: 'a1', date: '2026-05-05', time: '12:00' }),
+    ], ledgerId: 'personal', limit: 5 } },
+
+  // ── findDuplicate(txns, ledgerId, draft) → DuplicateMatch | null ──
+  { name: 'near-match', selector: 'findDuplicate',
+    input: { txns: [txOf({ id: 'tdup', merchant: 'Coffee', amount: -4.5, account: 'a1', date: '2026-05-09' })],
+      ledgerId: 'personal',
+      draft: { merchant: 'Coffee', amount: -4.5, accountId: 'a1', date: '2026-05-10' } } },
+  { name: 'no-match', selector: 'findDuplicate',
+    input: { txns: [txOf({ id: 'tx1', merchant: 'Coffee', amount: -4.5, account: 'a1', date: '2026-05-09' })],
+      ledgerId: 'personal',
+      draft: { merchant: 'Zzz', amount: -9.9, accountId: 'a1', date: '2026-05-10' } } },
+
+  // ── suggestCategory(txns, ledgerId, description, counterpartyId?, opts?) → CategorySuggestion | null ──
+  { name: 'by-merchant', selector: 'suggestCategory',
+    input: { txns: [
+      txOf({ id: 't1', merchant: 'Coffee', category: 'food', amount: -4 }),
+      txOf({ id: 't2', merchant: 'Coffee', category: 'food', amount: -5 }),
+    ], ledgerId: 'personal', description: 'Coffee' } },
+
+  // ── weeklyDigest(txns, ledgerId, anchor) → WeeklyDigest | null ──
+  // anchor 2026-05-18 is a Monday → reported week is Mon 05-11 … Sun 05-17.
+  // Distinct this-week category totals (shopping 80 > food 50 > transport 30).
+  { name: 'full-recap', selector: 'weeklyDigest',
+    input: { txns: [
+      txOf({ id: 'w1', category: 'food', amount: -50, date: '2026-05-12' }),       // this week
+      txOf({ id: 'w2', category: 'transport', amount: -30, date: '2026-05-13' }),   // this week
+      txOf({ id: 'w3', amount: 200, date: '2026-05-14' }),                          // this week income
+      txOf({ id: 'w4', category: 'shopping', amount: -80, date: '2026-05-15' }),    // this week (biggest)
+      txOf({ id: 'p1', category: 'food', amount: -100, date: '2026-05-06' }),       // prev week
+      txOf({ id: 'a1', category: 'food', amount: -60, date: '2026-03-10' }),        // avg window
+    ], ledgerId: 'personal', anchor: '2026-05-18' } },
+
+  // ════════════ Phase 1.5 — batch 3a: account / net worth ════════════
+
+  // ── netWorthByMonth(txns, accounts, ledgerId, endMonth, n) → [{m,v}] ──
+  { name: 'three-months', selector: 'netWorthByMonth',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-04-15' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })],
+      ledgerId: 'personal', endMonth: '2026-05', n: 3 } },
+
+  // ── netWorthExplained(txns, accounts, ledgerId, endMonth, n) → [{m,income,expense,adjustment,fx,net}] ──
+  { name: 'income-expense-refund', selector: 'netWorthExplained',
+    input: { txns: [
+      txOf({ id: 't1', kind: 'income', amount: 500, date: '2026-04-05' }),
+      txOf({ id: 't2', kind: 'expense', amount: -100, date: '2026-04-10' }),
+      txOf({ id: 't3', kind: 'expense', amount: -50, date: '2026-05-08' }),
+      txOf({ id: 't4', kind: 'refund', amount: 20, date: '2026-05-12' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })],
+      ledgerId: 'personal', endMonth: '2026-05', n: 2 } },
+
+  // ── balanceSeries(txns, accountId, currentBalance) → [number] ──
+  { name: 'two-txns', selector: 'balanceSeries',
+    input: { txns: [
+      txOf({ id: 't1', account: 'a1', amount: -10, date: '2026-05-01' }),
+      txOf({ id: 't2', account: 'a1', amount: -20, date: '2026-05-03' }),
+    ], accountId: 'a1', currentBalance: 100 } },
+
+  // ── netWorthSeries(txns, accounts, ledgerId) → [number] ──
+  { name: 'series', selector: 'netWorthSeries',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-04-15' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })], ledgerId: 'personal' } },
+
+  // ── netWorthByAccountType(accounts, ledgerId) → [{type,balance}] (6 canonical types) ──
+  { name: 'by-type', selector: 'netWorthByAccountType',
+    input: { accounts: [
+      acctOf({ id: 'a1', type: 'cash', balance: 1000 }),
+      acctOf({ id: 'a2', type: 'savings', balance: 500 }),
+      acctOf({ id: 'a3', type: 'credit_card', balance: -200 }),
+    ], ledgerId: 'personal' } },
+
+  // ── selectTransfers(txns, accounts, ledgerId) → [Transfer] ──
+  { name: 'one-transfer', selector: 'selectTransfers',
+    input: { txns: [
+      txOf({ id: 'tout', account: 'a1', amount: -100, date: '2026-05-10', transferGroupId: 'tg1' }),
+      txOf({ id: 'tin', account: 'a2', amount: 100, date: '2026-05-10', transferGroupId: 'tg1' }),
+    ], accounts: [acctOf({ id: 'a1', name: 'Checking' }), acctOf({ id: 'a2', name: 'Savings' })],
+      ledgerId: 'personal' } },
+
+  // ════════════ Phase 1.5 — batch 3b: forecasts ════════════
+
+  // ── monthForecast(txns, scheduled, ledgerId, month, today) → MonthForecast | null ──
+  { name: 'mtd-plus-scheduled', selector: 'monthForecast',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-05-05' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+      txOf({ id: 't3', amount: -30, date: '2026-05-20' }),                       // future — excluded
+    ], scheduled: [
+      schedOf({ id: 's1', type: 'expense', frequency: 'monthly', amount: -40, dayOfMonth: 25 }),  // after today
+      schedOf({ id: 's2', type: 'expense', frequency: 'monthly', amount: -99, dayOfMonth: 10 }),  // before today — excluded
+    ], ledgerId: 'personal', month: '2026-05', today: '2026-05-15' } },
+
+  // ── accountForecast(account, scheduled, today, horizonDays) → AccountForecast ──
+  { name: 'one-monthly-expense', selector: 'accountForecast',
+    input: { account: acctOf({ id: 'a1', balance: 1000, currency: 'USD' }),
+      scheduled: [schedOf({ id: 'st1', name: 'Rent', type: 'expense', amount: -100,
+        frequency: 'monthly', dayOfMonth: 20, accountId: 'a1', startDate: '2026-01-20', nextRun: '2026-01-20' })],
+      today: '2026-05-15', horizonDays: 30 } },
+
+  // ════════════ Phase 1.5 — batch 4: holdings / FX ════════════
+
+  // ── holdingsForAccount(holdings, accountId) → [Holding] ──
+  { name: 'filter-by-account', selector: 'holdingsForAccount',
+    input: { holdings: [holdOf({ id: 'h1', accountId: 'a1' }), holdOf({ id: 'h2', accountId: 'a2' })],
+      accountId: 'a1' } },
+
+  // ── holdingValue(h) → number | null ──
+  { name: 'priced', selector: 'holdingValue', input: { h: holdOf({ shares: 10, lastPrice: 120 }) } },
+  { name: 'no-price', selector: 'holdingValue', input: { h: holdOf({ lastPrice: null }) } },
+
+  // ── holdingGainLoss(h) → number | null ──
+  { name: 'gain', selector: 'holdingGainLoss', input: { h: holdOf({ shares: 10, lastPrice: 120, costBasis: 1000 }) } },
+
+  // ── holdingsValueForAccount(holdings, accountId) → number (unpriced → cost basis) ──
+  { name: 'sum-with-fallback', selector: 'holdingsValueForAccount',
+    input: { holdings: [holdOf({ id: 'h1', accountId: 'a1', shares: 10, lastPrice: 120 }),
+                        holdOf({ id: 'h2', accountId: 'a1', lastPrice: null, costBasis: 500 })],
+      accountId: 'a1' } },
+
+  // ── investmentAccountTotal(account, holdings) → number ──
+  { name: 'investment', selector: 'investmentAccountTotal',
+    input: { account: acctOf({ id: 'a1', type: 'investment', balance: 5000 }),
+      holdings: [holdOf({ accountId: 'a1', shares: 10, lastPrice: 120 })] } },
+  { name: 'non-investment', selector: 'investmentAccountTotal',
+    input: { account: acctOf({ id: 'a1', type: 'cash', balance: 5000 }),
+      holdings: [holdOf({ accountId: 'a1', shares: 10, lastPrice: 120 })] } },
+
+  // ── unrealizedFx(account, txns, toBase) → number (identity toBase) ──
+  { name: 'cost-vs-current', selector: 'unrealizedFx',
+    input: { account: acctOf({ id: 'a1', ledgerId: 'personal', currency: 'USD', balance: 1000, openingBalanceBase: 200 }),
+      txns: [txOf({ id: 't1', account: 'a1', amount: 300 }), txOf({ id: 't2', account: 'a1', amount: 400 })] } },
 ];
