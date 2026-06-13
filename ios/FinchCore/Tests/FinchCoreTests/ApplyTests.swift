@@ -47,4 +47,41 @@ final class ApplyTests: XCTestCase {
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, -25, accuracy: 0.001)
         }
     }
+
+    private func seedLedgerAccount(_ q: DatabaseQueue) throws {
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','USD',1,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','l1','Cash','cash','USD',0,0,1,1,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Food','expense',0,datetime('now'),datetime('now'))")
+        }
+    }
+
+    /// adjustAccountBalance posts a one-leg adjustment that moves the balance to target.
+    func test_applyAdjustAccountBalance() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "adjustAccountBalance", args: Args([
+            "accountId": .string("a1"), "targetBalance": .double(500), "date": .string("2026-05-01"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, 500, accuracy: 0.001)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE kind = 'adjustment'"), 1)
+        }
+    }
+
+    /// deleteTransaction (by the Tx id = account-posting id) removes the entry + recomputes.
+    func test_applyDeleteTransaction() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25),
+            "merchant": .string("Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true),
+        ]))
+        let txId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id = 'a1'")! }
+        try Apply.apply(dbQueue: q, action: "deleteTransaction", args: Args(["id": .string(txId)]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries"), 0)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, 0, accuracy: 0.001)
+        }
+    }
 }

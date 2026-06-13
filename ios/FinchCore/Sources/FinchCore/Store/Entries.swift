@@ -375,6 +375,32 @@ public enum Entries {
         return EntryRef(entryId: id, postingId: leg?["id"], accountId: leg?["account_id"])
     }
 
+    /// One account leg against the `adjustment` equity category — the manual
+    /// balance-reconciliation entry. Zero/sub-cent delta is a silent no-op.
+    @discardableResult
+    public static func postAdjustment(_ db: Database, ledgerId: String, accountId: String, delta: Double,
+                                      date: String, note: String? = nil, source: String? = nil,
+                                      id: String? = nil, timestamp: String? = nil) throws -> String? {
+        if r2(delta) == 0 { return nil }
+        let sys = try ensureSystemCategories(db, ledgerId)
+        return try postEntry(db, NewEntry(
+            id: id, ledgerId: ledgerId, date: date,
+            description: source == "reconcile" ? "Reconciliation adjustment" : "Balance adjustment",
+            kind: .adjustment, legs: [.account(AccountLeg(accountId: accountId, amount: r2(delta)))],
+            autoBalance: .category(sys.adjustment), notes: note, timestamp: timestamp, skipRules: true))
+    }
+
+    /// Delete the whole entry (postings cascade) then recompute touched accounts.
+    @discardableResult
+    public static func deleteEntry(_ db: Database, _ entryId: String) throws -> [String] {
+        let accts = try String.fetchAll(db, sql:
+            "SELECT DISTINCT account_id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL",
+            arguments: [entryId]).sorted()
+        try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [entryId])
+        for id in accts { try recomputeAccountFromPostings(db, id) }
+        return accts
+    }
+
     /// Rebuild a confirmed account's cached balance from its postings.
     public static func recomputeAccountFromPostings(_ db: Database, _ accountId: String) throws {
         let total = try Double.fetchOne(db, sql: """

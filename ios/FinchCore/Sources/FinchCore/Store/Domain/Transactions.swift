@@ -13,6 +13,8 @@ public enum Transactions {
     /// The handlers this domain currently contributes to the chokepoint registry.
     public static let handlers: [ActionName: Apply.Handler] = [
         .addTransaction: addTransaction,
+        .adjustAccountBalance: adjustAccountBalance,
+        .deleteTransaction: deleteTransaction,
         .setCleared: setCleared,
         .setReviewed: setReviewed,
         .markAllReviewed: markAllReviewed,
@@ -62,6 +64,33 @@ public enum Transactions {
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+    }
+
+    // MARK: adjustAccountBalance (→ postAdjustment)
+
+    struct AdjustArgs: Decodable { let accountId: String; let targetBalance: Double; let date: String?; let note: String?; let source: String? }
+    static func adjustAccountBalance(_ db: Database, _ args: Args) throws {
+        let a = try args.to(AdjustArgs.self)
+        guard a.targetBalance.isFinite else { throw I18nError("error.adjust.targetRequired", [:], "Enter a target balance") }
+        guard let acct = try Row.fetchOne(db, sql: "SELECT ledger_id, current_balance FROM accounts WHERE id = ?", arguments: [a.accountId]) else {
+            throw I18nError("error.notFound.account", [:], "Account not found")
+        }
+        let ledgerId: String = acct["ledger_id"]
+        let current: Double = acct["current_balance"]
+        let delta = Entries.r2(a.targetBalance - current)
+        let date = a.date ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        try Entries.postAdjustment(db, ledgerId: ledgerId, accountId: a.accountId, delta: delta,
+                                   date: date, note: a.note, source: a.source == "reconcile" ? "reconcile" : "manual")
+    }
+
+    // MARK: deleteTransaction (→ resolveEntryRef + deleteEntry)
+
+    struct IdArg: Decodable { let id: String }
+    static func deleteTransaction(_ db: Database, _ args: Args) throws {
+        let a = try args.to(IdArg.self)
+        guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        try Entries.deleteEntry(db, ref.entryId)
+        // DEFERRED: attachment-file cleanup + budget-rollover invalidation.
     }
 
     // MARK: setCleared / setReviewed / markAllReviewed
