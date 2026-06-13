@@ -1,0 +1,10 @@
+{
+  "code": "currency-mismatch",
+  "expected": [
+    {
+      "code": "currency-mismatch",
+      "entryId": "e1",
+      "detail": "posting p1 not in its account's currency"
+    }
+  ]
+}

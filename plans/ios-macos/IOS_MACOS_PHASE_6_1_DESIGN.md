@@ -24,6 +24,9 @@
 > shipping with the 6 tabs + 7 write screens + 7 power features
 > + iCloud sync._
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 ## See also
 
 - `plans/ios-macos/IOS_MACOS_INDEX.md` — the navigation index

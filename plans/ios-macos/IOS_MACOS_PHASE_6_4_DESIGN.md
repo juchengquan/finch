@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 6.4 Implementation Design (App Intents / Siri)
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce a
 > step-by-step implementation plan for Phase 6.4.
@@ -88,7 +91,7 @@ constraint.
   follow-up.
 - **No app-implemented natural-language parsing** — the
   intents use Siri's standard `@Parameter` extraction
-  (Siri parses the amount/description/account from the
+  (Siri parses the amount/merchant/account from the
   user's phrase; the app doesn't add its own NLU layer).
   The intents are **explicit** (the user invokes
   "add a $6 coffee to Personal in finch" and Siri matches
@@ -138,8 +141,8 @@ public struct AddTransactionIntent: AppIntent {
     @Parameter(title: "Amount")
     var amount: Double
 
-    @Parameter(title: "Description")
-    var description: String
+    @Parameter(title: "Merchant")
+    var merchant: String
 
     @Parameter(title: "Account", default: nil)
     var account: AccountEntity?
@@ -152,9 +155,9 @@ public struct AddTransactionIntent: AppIntent {
 
     public init() {}
 
-    public init(amount: Double, description: String, account: AccountEntity? = nil, category: CategoryEntity? = nil, note: String? = nil) {
+    public init(amount: Double, merchant: String, account: AccountEntity? = nil, category: CategoryEntity? = nil, note: String? = nil) {
         self.amount = amount
-        self.description = description
+        self.merchant = merchant
         self.account = account
         self.category = category
         self.note = note
@@ -188,7 +191,7 @@ public struct AddTransactionIntent: AppIntent {
             "accountId": accountId,
             "amount": amount,
             "date": ISO8601DateFormatter().string(from: Date()),
-            "description": description,
+            "merchant": merchant,
             "categoryId": categoryId as Any,
             "note": note as Any
         ]
@@ -203,7 +206,7 @@ public struct AddTransactionIntent: AppIntent {
 
         // 4. Return a spoken confirmation
         let amountString = amount.formatted(.currency(code: store.activeLedger.base))
-        return .result(dialog: "Added \(description) for \(amountString) to finch.")
+        return .result(dialog: "Added \(merchant) for \(amountString) to finch.")
     }
 }
 ```
@@ -218,7 +221,7 @@ The intent's `perform()`:
 
 If the user invokes the intent with insufficient
 parameters (e.g., "Hey Siri, add a transaction in finch"
-without amount / description), the system shows a
+without amount / merchant), the system shows a
 disambiguation dialog (handled by the `IntentDialog`
 machinery + the iOS app's intent confirmation flow).
 
@@ -321,18 +324,18 @@ public struct CreateBudgetIntent: AppIntent {
     @Parameter(title: "Amount")
     var amount: Double
 
-    @Parameter(title: "Period", default: "monthly")
-    var period: String
+    @Parameter(title: "Frequency", default: "monthly")
+    var frequency: String
 
     @Parameter(title: "Category", default: nil)
     var category: CategoryEntity?
 
     public init() {}
 
-    public init(name: String, amount: Double, period: String = "monthly", category: CategoryEntity? = nil) {
+    public init(name: String, amount: Double, frequency: String = "monthly", category: CategoryEntity? = nil) {
         self.name = name
         self.amount = amount
-        self.period = period
+        self.frequency = frequency
         self.category = category
     }
 
@@ -344,8 +347,8 @@ public struct CreateBudgetIntent: AppIntent {
         let args: [String: Any] = [
             "ledgerId": activeLedgerId,
             "name": name,
-            "limit": amount,
-            "period": period,
+            "amount": amount,
+            "frequency": frequency,
             "categoryId": category?.id as Any
         ]
         do {
@@ -353,7 +356,7 @@ public struct CreateBudgetIntent: AppIntent {
         } catch {
             return .result(dialog: "Couldn't create the budget: \(error.localizedDescription)")
         }
-        return .result(dialog: "Created \(name) budget for \(amount) per \(period) in finch.")
+        return .result(dialog: "Created \(name) budget for \(amount) per \(frequency) in finch.")
     }
 }
 ```
@@ -611,7 +614,7 @@ public struct FinchAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Add Transaction",
             systemImageName: "plus.circle",
-            parameterSummary: IntentParameterSummary("Add \(\.$amount) for \(\.$description) to \(\.$account)")
+            parameterSummary: IntentParameterSummary("Add \(\.$amount) for \(\.$merchant) to \(\.$account)")
         )
         AppShortcut(
             intent: CheckBalanceIntent(),
@@ -690,7 +693,7 @@ first. The user can:
 
 When the user invokes an intent with insufficient
 parameters (e.g., "Hey Siri, add a transaction in finch"
-without amount / description), Siri shows a
+without amount / merchant), Siri shows a
 disambiguation dialog. The iOS app's intent can provide
 custom dialogs via the `IntentDialog` API:
 
@@ -722,7 +725,7 @@ extends with:
 
 - An **AddTransaction intent test**: build a DB with 1
   account + 1 category; invoke `AddTransactionIntent.perform()`
-  with amount=6.00, description="Coffee", account=Chase
+  with amount=6.00, merchant="Coffee", account=Chase
   Checking, category=Coffee; assert the chokepoint's
   `addTransaction` was dispatched with the right args
 - A **CheckBalance intent test**: build a DB with 1

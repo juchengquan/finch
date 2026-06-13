@@ -1,5 +1,8 @@
 # Phase 6.5 Implementation Plan — Share Extension receipts (with OCR)
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add the **Share Extension** for receipt photos + PDFs. The user shares a receipt from Photos / Files / Mail to finch; the Share Extension stages the file to the App Group, then the iOS app moves it to the live attachments directory and dispatches the new `setEntryAttachment` chokepoint action (the 75th action; running total: 75).
@@ -188,7 +191,7 @@ public final class PendingAttachmentProcessor: ObservableObject {
                         "attachmentId": .string(UUID().uuidString),
                         "relPath": .string("\(entryId)/\(dest.lastPathComponent)"),
                         "mimeType": .string(manifest.mimeType),
-                        "fileSize": .int((try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? 0),
+                        "byteSize": .int((try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? 0),
                         "sha256": .string(sha256Hex(of: dest))
                     ])
                 )

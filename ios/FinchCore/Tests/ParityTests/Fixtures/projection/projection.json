@@ -1,0 +1,49 @@
+{
+  "expected": [
+    {
+      "id": "p-mqc7slzi-z7zk",
+      "merchant": "Pay",
+      "category": "c1",
+      "amount": 100,
+      "currency": "SGD",
+      "nativeAmount": 100,
+      "account": "a1",
+      "date": "2026-05-03",
+      "pending": false,
+      "kind": "income",
+      "ledgerId": "l1",
+      "clearedAt": null,
+      "reviewedAt": null
+    },
+    {
+      "id": "p-mqc7slzi-jj9y",
+      "merchant": "Lunch",
+      "category": "c1",
+      "amount": -10,
+      "currency": "SGD",
+      "nativeAmount": -10,
+      "account": "a1",
+      "date": "2026-05-02",
+      "pending": false,
+      "kind": "expense",
+      "ledgerId": "l1",
+      "clearedAt": null,
+      "reviewedAt": null
+    },
+    {
+      "id": "p-mqc7slzh-4gsk",
+      "merchant": "Coffee",
+      "category": "c1",
+      "amount": -25,
+      "currency": "SGD",
+      "nativeAmount": -25,
+      "account": "a1",
+      "date": "2026-05-01",
+      "pending": false,
+      "kind": "expense",
+      "ledgerId": "l1",
+      "clearedAt": null,
+      "reviewedAt": null
+    }
+  ]
+}

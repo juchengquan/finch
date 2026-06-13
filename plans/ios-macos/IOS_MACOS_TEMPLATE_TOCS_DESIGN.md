@@ -1,5 +1,7 @@
 # iOS/macOS Plans — 8-Section Template TOCs — Design
 
+> _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
+
 > - This is a **design doc** for the deferred §2.2 of
 >   `plans/ios-macos/IOS_MACOS_COHERENCE_PASS_DESIGN.md` — adding 8-section
 >   template TOCs (top-of-doc mapping tables) to all 12 phase

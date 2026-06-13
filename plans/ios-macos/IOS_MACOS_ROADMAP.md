@@ -1,5 +1,7 @@
 # finch for iOS & macOS — Phased Roadmap (2026-06)
 
+> _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: roadmap sketch — 1-2 pages per phase. Not an implementation plan
 > for any phase. The companion documents are:
 >
@@ -165,7 +167,9 @@ module + the in-memory `Tx[]` cache are the foundation for selectors)
 **Open questions**:
 
 - `monthForecast` method (Q9) — **resolved**: port the web's
-  method verbatim (linear regression over 90 days). Parity is
+  method verbatim — month-to-date actuals + daily run-rate ×
+  days-remaining + upcoming scheduled/recurring, for a single
+  month (not regression, not 90-day, not multi-month). Parity is
   the goal in Phase 1.5.
 - How does `weeklyDigest` handle weeks that span the active-ledger
   boundary (e.g., a Sunday `anchor` that lands in the prior ledger
@@ -237,10 +241,10 @@ data the existing read surface can render)
   (write only via import/export)? The plan's §4.3 implies "always-
   pack," but the Phase 1.0 import UX is "open one pack, work
   locally"; the right answer depends on what feels native.
-- The 13 per-domain files have 5 known cross-domain deps (per
-  `frontend/AGENTS.md`: `accounts → accountGroups`, `transactions →
-  attachments`, `budgets → budgetGroups`, `rules → counterparties`,
-  `scheduled → counterparties`). The plan is to expose them via
+- The per-domain files have 4 known cross-domain deps (per
+  `frontend/AGENTS.md`: `transactions → attachments`, `budgets →
+  budgetGroups`, `rules → counterparties`, `scheduled →
+  counterparties`). The plan is to expose them via
   per-domain `_deps.ts` shims — but the shims aren't created yet on
   the web side. Do we create the shims first on the web, or in
   parallel on iOS?

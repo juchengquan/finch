@@ -1,5 +1,8 @@
 # Phase 7 Implementation Plan — Widgets + Live Activities + Apple Watch
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add **3 extension targets** to the iOS app: (1) a WidgetKit widget that shows recent transactions or budget progress; (2) Live Activities for budget alerts + scheduled item due; (3) a watchOS app for quick transaction entry + glance at totals.

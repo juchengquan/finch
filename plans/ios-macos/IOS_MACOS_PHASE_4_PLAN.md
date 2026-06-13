@@ -1,10 +1,13 @@
 # Phase 4 Implementation Plan — 7 power features (reconcile, rules, transfers, etc.)
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add the **7 power features** that the web has: reconcile, rules engine (extended), transfers CRUD, reference data (merchants/categories/tags) admin, saved searches, bulk recategorize, FX / base tools. Each power feature is a write screen that calls into the Phase 2 chokepoint.
 
-**Architecture:** Each power feature is a SwiftUI view + a write sheet. The 7 features all use the existing `FinchStore.apply(action: .X, args: [...])` from Phase 2. The reconcile feature adds a small new selector (`reconcileAccount`) that the chokepoint already has (it's a write action; the iOS port just adds the UI). The rules engine extension requires a new selector (the existing rule engine has 4+4; the extension is 6+5 — but Phase 4 ships the UI for the 4+4 first, with the 6+5 landing later).
+**Architecture:** Each power feature is a SwiftUI view + a write sheet. The 7 features all use the existing `FinchStore.apply(action: .X, args: [...])` from Phase 2. The reconcile feature wires UI to the **existing `reconcileAccount` write action** (it is **not** a selector — there is no `reconcileAccount` in `lib/select.ts`; the read-side math is a small inline computation over the in-memory `Tx[]` cache). The rules engine is a **faithful port of the existing web engine** (a recursive `all`/`any`/`not` condition tree over ~14 leaf comparators + 9 action types — see `lib/rules/types.ts:15-64`); there is no "4+4 → 6+5" extension. The one candidate **native addition** is a regex merchant comparator (the web has none).
 
 **Tech Stack:** Same as Phase 2.
 
@@ -58,8 +61,11 @@ frontend/ios/FinchApp/
 
 - [ ] **Step 1: Read the web's reconcile UI**
 
-Open `frontend/components/reconcile-page.tsx` (or wherever
-the reconcile UI is on the web).
+There is **no** `reconcile-page.tsx`. The reconcile UI lives on
+the Account Detail page, `frontend/app/(main)/accounts/[id]/page.tsx`,
+plus the `frontend/components/reconcile-status.tsx` component.
+The write action is `reconcileAccount`
+(`frontend/lib/db/domain/transactions/mutations.ts:147`).
 
 - [ ] **Step 2: Build the `ReconcileView` (read)**
 
@@ -213,12 +219,12 @@ git commit -m "feat(ios): add Reconcile feature (read + write)"
 
 Tasks 2-7 follow the same pattern as Task 1:
 
-- **Task 2: Rules engine** — `RulesListView` (list) + `RuleEditorSheet` (create/edit a rule). Calls `createRule` / `updateRule` / `deleteRule` chokepoint actions.
-- **Task 3: Transfers CRUD** — `TransfersListView` (list) + `TransferEditorSheet`. Calls `createTransfer` / `updateTransfer` / `deleteTransfer`.
-- **Task 4: Reference data admin** — `MerchantsListView` / `CategoriesListView` / `TagsListView`. Calls `createX` / `updateX` / `deleteX` for each.
-- **Task 5: Saved searches** — `SavedSearchesListView`. Stores searches in `app_state` table (via `setAppState` chokepoint action).
+- **Task 2: Rules engine** — `RulesListView` (list) + `RuleEditorSheet` (create/edit a rule). Calls `createRule` / `updateRule` / `deleteRule` chokepoint actions, plus `backfillRule({ id })` for backfill. The rule shape is the web's recursive `all`/`any`/`not` condition tree + 9 action types (`lib/rules/types.ts`); rules run in **priority order with last-write-wins**, **not** first-match-wins (`lib/rules/engine.ts:186-193`). Port `lib/rules/{engine,types,describe}.ts` and `lib/db/domain/rules/mutations.ts` (161 lines).
+- **Task 3: Transfers CRUD** — `TransfersListView` (list) + `TransferEditorSheet`. Calls `createTransfer({fromAccountId, toAccountId, fromAmount, toAmount?, date, time?, note, sourceTemplateId?})` (note **`fromAmount`** + optional **`toAmount`**, **not** a single `amount`; `_args.ts:180`) / `updateTransfer` / `deleteTransfer`.
+- **Task 4: Reference data admin** — `MerchantsListView` / `CategoriesListView` / `TagsListView`. Calls `createX` / `updateX` / `deleteX` for each. **No `archiveCategory`** — categories (and tags) are create / update / delete only (`_args.ts:119`); "merge" is re-point-then-delete the source.
+- **Task 5: Saved searches** — `SavedSearchesListView`. On the **web** these are **localStorage-only** (`finch.savedSearches`, `lib/use-saved-searches.ts:5`), **not** in `app_state` / the server DB, and there is **no `setAppState` action** for them. They are a **separate Activity-page feature**, not a ⌘K-palette capability. The iOS port may persist them in a **native local row** (a deliberate divergence) but must keep them out of the pack-sync model, matching the web's local-only behavior.
 - **Task 6: Bulk recategorize** — `BulkRecategorizeSheet`. Calls `bulkRecategorize` chokepoint action.
-- **Task 7: FX / base tools** — `ExchangeRatesView` (the `exchange_rates` table) + `LedgerBaseSettingsView` (the `changeLedgerBase` action).
+- **Task 7: FX / base tools** — `ExchangeRatesView` (the `exchange_rates` table; `setExchangeRate({date, currency, rate, source?})` / `deleteExchangeRate({date, currency})`, **not** `{from, to, date, rate}`) + `LedgerBaseSettingsView` (the `changeLedgerBase({ledgerId, newBase})` action). Reconcile (Task 1) calls `reconcileAccount({accountId, statementBalance, statementDate?, postAdjustment?})` — **no `tolerance` param** (adjustment posts when `|delta| >= 0.005`, hardcoded).
 
 Each task is ~150-250 lines of plan + ~150-250 lines of Swift.
 

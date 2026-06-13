@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 2 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once approved,
 > this becomes the input to `writing-plans` to produce a step-by-step
 > implementation plan for Phase 2.
@@ -47,8 +50,9 @@ The 8-section template maps to this spec's existing sections:
 ## §1. Goal & non-goals
 
 **Goal** — Add the **74-action write chokepoint** to FinchCore (port of
-`lib/db/core/entries.ts` + 13 per-domain `lib/db/domain/<x>/mutations.ts`
-files) + ship the **7 new iOS write screens** (Add Transaction, Edit
+`lib/db/core/entries.ts` + the **12** first-class per-domain
+`lib/db/domain/<x>/mutations.ts` files, plus the `_app/` merged
+handlers map as the 13th) + ship the **7 new iOS write screens** (Add Transaction, Edit
 Transaction, Transaction Detail edits, Pending confirm, Budget CRUD,
 Scheduled CRUD, Ledger CRUD, plus the full Holdings tab + CRUD UI
 per Q32) + ship the **write-side round-trip parity
@@ -88,7 +92,7 @@ every later phase builds on.
   finch install. Per the plan's §10 resolved decision.
 - **Android** — not in the plan.
 
-**Estimated scope**: ~2,400 lines TS to port (823-line chokepoint + 1,335
+**Estimated scope**: ~2,400 lines TS to port (823-line chokepoint + ~1,313
 lines per-domain + ~250 lines of glue) + ~1,750 lines SwiftUI
 (7 new screens, including the full Holdings CRUD UI per Q32) +
 ~3,700 lines parity fixtures (74 fixtures × ~50 lines
@@ -118,18 +122,22 @@ the 3 actions still resolve correctly to the canonical
 The web's write surface is **3 layers**:
 
 1. **The chokepoint** — `lib/db/core/entries.ts` (823 lines) — the
-   12-export module that owns entries/postings writes. Phase 1.0
+   module with 13 callable exports that owns entries/postings writes
+   (enumerated in §4.1). Phase 1.0
    ported the **read-only half** (`auditLedger` +
    `recomputeAccountFromPostings`). Phase 2 ports the **write half**
    (`postEntry`, `postSimple`, `postTransfer`, `postAdjustment`,
    `postOpening`, `rebuildEntry`, `deleteEntry`, plus `ensureSystemCategories`,
    `resolveEntryRef`, `dedupHash`, `isAccountLeg`).
-2. **The 13 per-domain `mutations.ts` files** — 1,335 lines total —
-   each exporting a `handlers` map keyed by action name. The handlers
+2. **The 12 first-class per-domain `mutations.ts` files (+ the `_app/`
+   merged map as the 13th)** — ~1,313 lines total — each exporting a
+   `handlers` map keyed by action name. The handlers
    compose the chokepoint with cross-domain glue
    (`withDedupMessage`, `txTouches`, `invalidateRollover`,
-   `unlinkAttachmentFiles`, etc.).
-3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the 13
+   `unlinkAttachmentFiles`, etc.). Two first-class domains carry no
+   `mutations.ts`: `attachments` (queries-only) and `budgetGroups`
+   (its 3 group actions live in `budgets/mutations.ts`).
+3. **The dispatcher** — `lib/db/mutate.ts` (53 lines) — merges the
    per-domain `handlers` maps into one `ALL` map and routes
    `applyMutation(exec, action, args)` to the right handler.
 4. **The `_args.ts` registry** — `lib/db/domain/_args.ts` (225 lines) —
@@ -165,18 +173,19 @@ side's wire contract, identical to the web's.
 | `budgets` | 106 lines | 9 (`createBudget`, `updateBudget`, `removeBudget`, `contributeBudget`, `clearPendingAmount`, `createBudgetGroup`, `updateBudgetGroup`, `deleteBudgetGroup`, `updateBudgetCycle`) | `budgetGroups` (read; `createBudgetGroup` / `updateBudgetGroup` / `deleteBudgetGroup` also have a duplicate implementation in `accountGroups/`, see note below) |
 | `holdings` | 84 lines | 4 (`createHolding`, `updateHolding`, `deleteHolding`, `setHoldingPrice`) | — |
 | `ledgers` | 82 lines | 5 (`createLedger`, `updateLedger`, `changeLedgerBase`, `setDefaultLedger`, `deleteLedger`) | — |
-| `accounts` | 73 lines | 5 accounts-only (`createAccount`, `updateAccount`, `archiveAccount`, `unarchiveAccount`, `deleteAccount`) | `accountGroups` (read; `createAccountGroup` / `updateAccountGroup` / `deleteAccountGroup` are duplicated in this file — see note below) |
+| `accounts` | 51 lines | 5 accounts-only (`createAccount`, `updateAccount`, `archiveAccount`, `unarchiveAccount`, `deleteAccount`) | — (the `accountGroups` duplicates were removed by the cleanup; see note below) |
 | `transfers` | 57 lines | 3 (`createTransfer`, `updateTransfer`, `deleteTransfer`) | `transactions` (read), `accounts` (read) |
 | `tags` | 38 lines | 3 (`createTag`, `updateTag`, `deleteTag`) | `transactions` (read; tag application is via `setTransactionTags`, not a separate `addTagToTransaction` action) |
 | `counterparties` | 41 lines | 5 (`createCounterparty`, `updateCounterparty`, `deleteCounterparty`, `verifyCounterparty`, `unverifyCounterparty`) | — |
 | `categories` | 48 lines | 3 (`createCategory`, `updateCategory`, `deleteCategory`) | — |
 | `accountGroups` | 35 lines | 3 (`createAccountGroup`, `updateAccountGroup`, `deleteAccountGroup`) | — (these are also duplicated in `accounts/`, see note below) |
 | `app` (cross-cutting) | 48 lines | 7 (`setMobileTabIds`, `setBackupFrequency`, `setBackupRetention`, `setDisplayCurrency`, `setExchangeRate`, `deleteExchangeRate`, `reset`) | — |
-| **Total** | **1,335 lines** | **77 entries / 74 unique actions** | 5 known cross-domain deps |
+| **Total** | **~1,313 lines** | **74 entries / 74 unique / 0 duplicates** | 4 known cross-domain deps |
 
 **Note on the `accountGroups` / `accounts` duplication**: the web's
-`accounts/mutations.ts` (73 lines) exports a `handlers` map that
-includes `createAccountGroup`, `updateAccountGroup`, and
+`accounts/mutations.ts` (formerly 73 lines, now 51 after the cleanup)
+historically exported a `handlers` map that
+included `createAccountGroup`, `updateAccountGroup`, and
 `deleteAccountGroup` — the same 3 actions exported by the canonical
 `accountGroups/mutations.ts` (35 lines). The dispatcher
 (`lib/db/mutate.ts`) imports **both** `accountsHandlers` and
@@ -205,17 +214,17 @@ time the Phase 2 iOS port starts, the port mirrors the bug 1:1
 follow-up cleanup PR fixes both sides. The cleaner outcome is the
 upstream fix; the fallback is acceptable.
 
-Per the plan's §2.1 and the AGENTS.md layer rules, the **5 known
+Per the plan's §2.1 and the AGENTS.md layer rules, the **4 known
 cross-domain deps** are:
 
-- `accounts → accountGroups`
 - `transactions → attachments`
 - `budgets → budgetGroups`
 - `rules → counterparties`
 - `scheduled → counterparties`
 
-These were called out in the AGENTS.md as "5 known cross-domain deps
-currently use direct `queries` imports." The Swift port mirrors the
+These were called out in the AGENTS.md as cross-domain deps that
+currently use direct `queries` imports (the `accounts → accountGroups`
+dep was dropped by the dead-code cleanup). The Swift port mirrors the
 same direct-import pattern (not via `_deps.ts` shims — those aren't
 created yet on the web side; we don't create them in Phase 2 either).
 
@@ -262,15 +271,15 @@ stay unchanged).
 
 `Store` is the **only module that writes**. It contains:
 
-- `Store/Entries/` — the chokepoint port (12 exports from
+- `Store/Entries/` — the chokepoint port (13 callable exports from
   `lib/db/core/entries.ts`)
-- `Store/Domain/<x>/` — the 13 per-domain `mutations.ts` ports
-  (each exporting a `handlers` map)
+- `Store/Domain/<x>/` — the 12 first-class per-domain `mutations.ts`
+  ports (+ the `_app/` merged map; each exporting a `handlers` map)
 - `Store/Apply.swift` — the dispatcher (53 lines, mirrors
   `lib/db/mutate.ts`)
 - `Store/Args.swift` — the `_args.ts` port (the central
   `ActionName` enum + `Args` type registry)
-- `Store/Shared/` — cross-domain helpers (the 5 known
+- `Store/Shared/` — cross-domain helpers (the 4 known
   cross-domain deps + `withDedupMessage`, `txTouches`,
   `invalidateRollover`, `unlinkAttachmentFiles`, etc.)
 - `Store/WithWrite.swift` — the write-lock primitive (mirrors
@@ -292,7 +301,8 @@ verifies both.
 
 ## §4. The chokepoint port
 
-`lib/db/core/entries.ts` is **823 lines** with 12 exports. Phase 1.0
+`lib/db/core/entries.ts` is **823 lines** with 13 callable exports
+(enumerated in §4.1). Phase 1.0
 ported the **read-only half** (`auditLedger` (already done) +
 `recomputeAccountFromPostings` (already done)). Phase 2 ports the
 **write half**:
@@ -321,7 +331,7 @@ through (the 5 sugar functions are thin wrappers). The port
 preserves every invariant the web enforces:
 
 - The legs balance to 0 in the ledger base (rounded to 2 dp; the
-  `r2` helper from `lib/db/core/entries.ts` line 24)
+  `r2` helper from `lib/db/core/entries.ts` line 18)
 - The `currency` on each account leg is the account's currency
   (the schema's I3 invariant; the audit gate catches violations)
 - The `amountBase` is derived from `amount + exchangeRate` unless
@@ -466,8 +476,9 @@ public enum Store {
 
 ## §6. Per-domain `mutations.ts` ports
 
-The 13 per-domain `mutations.ts` files (1,335 lines total) port
-mechanically. The pattern is identical in every file:
+The 12 first-class per-domain `mutations.ts` files (+ the `_app/`
+merged map as the 13th; ~1,313 lines total) port mechanically. The
+pattern is identical in every file:
 
 ```swift
 // Store/Domain/<x>/Mutations.swift
@@ -489,10 +500,10 @@ Each handler:
 4. Returns nothing (writes are fire-and-forget; the dispatcher
    returns the post-write projected state to the caller)
 
-The 5 known cross-domain deps are direct `queries` imports (not
+The 4 known cross-domain deps are direct `queries` imports (not
 via `_deps.ts` shims — those aren't created on the web side; we
-don't create them in Phase 2 either, per the AGENTS.md "5 known
-cross-domain deps currently use direct `queries` imports" note).
+don't create them in Phase 2 either, per the AGENTS.md note that
+these cross-domain deps currently use direct `queries` imports).
 
 **Example: `transactions/mutations.ts` port** (370 lines TS →
 ~370 lines Swift; the patterns are 1:1)
@@ -1054,9 +1065,12 @@ Each of the 7 new screens is a new SwiftUI view in
 
 The web's `I18nError(code, params)` shape is the wire contract.
 The iOS side maps each `code` to a `Localizable.strings` entry.
-Phase 2's first cut ships `en` (English) + the codes from the
-web's `lib/i18n-error.ts` (~30 codes total). `zh-CN` lands
-later as a product call.
+Phase 2's first cut ships `en` (English) + the web's error codes.
+Those codes do NOT live in `lib/i18n-error.ts` (that file holds the
+`I18nError` class + the wire helpers only); the constants live in
+the per-domain `errors.ts` files (≈14 distinct code constants /
+≈65 total `error.*` strings across `lib/`). `zh-CN` lands later as
+a product call.
 
 ## §10. Open questions
 
@@ -1093,12 +1107,15 @@ For Phase 2 specifically:
   "Rate pinned" as a warning and offer an "Unpin and
   re-lock from rates table" option. Phase 2 ships the
   warning; the "Unpin" action is Phase 4 (FX / base tools).
-- **The "Force import" UI** (from Phase 1.0's Settings
-  › Advanced — always visible, not behind a debug flag)
-  is preserved for parity-test fixtures that intentionally
-  violate the audit gate. The "Force write" equivalent
-  doesn't exist — there's no scenario where a write should
-  bypass the chokepoint's invariants (that's the whole
+- **The "Force import" UI** is a **native-only** safety hatch
+  added in Phase 1.0 (Settings › Advanced — always visible, not
+  behind a debug flag). It has no web counterpart (the web's
+  import is a plain file-picker with no force affordance); it's a
+  deliberate native addition, not something inherited from or
+  mirrored in the web. It's preserved here for parity-test fixtures
+  that intentionally violate the audit gate. The "Force write"
+  equivalent doesn't exist — there's no scenario where a write
+  should bypass the chokepoint's invariants (that's the whole
   point of the chokepoint).
 - **Sealed-entry id stability**: the chokepoint's id-reuse
   policy (preserve the original entry id when patching) is
@@ -1193,7 +1210,7 @@ These are explicitly NOT in Phase 2:
   job, not the chokepoint's). §4's chokepoint exports match
   the web's `lib/db/core/entries.ts` line-by-line. §6's per-
   domain handlers match the web's per-domain
-  `mutations.ts` files (the 5 known cross-domain deps are
+  `mutations.ts` files (the 4 known cross-domain deps are
   direct `queries` imports per the AGENTS.md note). §8's
   parity harness extends the Phase 1.5 harness.
 

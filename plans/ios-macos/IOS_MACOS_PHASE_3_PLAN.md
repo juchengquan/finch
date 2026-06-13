@@ -1,5 +1,7 @@
 # Phase 3 Implementation Plan — iPad + macOS adaptive shell
 
+> _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Adapt the iPhone app (Phases 1.0, 1.5, 2) to **iPad** and **macOS** via SwiftUI's `NavigationSplitView`. After Phase 3, the iPad has a sidebar + tab bar; the Mac has a sidebar + tab bar + menu bar + keyboard shortcuts + ⌘K. The 6 tabs (Accounts, Activity, Budgets, Insights, Scheduled, Settings) + the 7 write screens from Phase 2 all render on all three platforms.

@@ -2,6 +2,9 @@
 
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 **Goal:** Add **biometric app lock**. The user can opt in via Settings › Security; when enabled, the iOS app requires Face ID / Touch ID / Optic ID on launch and on sensitive actions (export, delete-all, base-currency change). No app-implemented passcode fallback — the iOS device passcode is the fallback via `LAContext.evaluatePolicy(.deviceOwnerAuthentication, ...)`.
 
 **Architecture:** A new `FinchCore/Security/` module hosts the `BiometricGate` (the policy + sensitive-action gating). The gate wraps every sensitive call; the UI prompts the user before dispatching.

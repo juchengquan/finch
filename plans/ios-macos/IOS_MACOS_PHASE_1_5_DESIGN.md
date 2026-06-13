@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 1.5 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once approved,
 > this becomes the input to `writing-plans` to produce a step-by-step
 > implementation plan for Phase 1.5.
@@ -112,9 +115,9 @@ in Phase 1.5** (the Insights tab + supporting selectors).
 | `prevMonth(month)` | Previous month string | Insights, Budgets |
 | `monthlySpending(txns, ledgerId, endMonth, n)` | Last N months of total spend | Insights (spending trend) |
 | `dailySpending(txns, ledgerId, endDate, n)` | Last N days of daily spend | Insights (daily chart) |
-| `netWorthByMonth(txns, accounts, endMonth, n)` | Last N months of net worth | Insights (net worth chart) |
+| `netWorthByMonth(txns, accounts, ledgerId, endMonth, n, toBase?)` | Last N months of net worth | Insights (net worth chart) |
 | `netWorthExplained(txns, accounts, ledgerId, month)` | Net-worth delta decomposition | Insights (net worth explained) |
-| `monthForecast(txns, accounts, ledgerId, n)` | Linear-regression forecast for next N months | Insights (forecast card) |
+| `monthForecast(txns, scheduled, ledgerId, month, today)` | Single-month forecast: MTD actuals + daily run-rate × days-remaining + upcoming scheduled | Insights (forecast card) |
 | `incomeCategoryFlow(txns, ledgerId, endMonth, n)` | Monthly income by category | Insights (income breakdown) |
 | `monthlyCashflow(txns, ledgerId, endMonth, n)` | Monthly income vs expense | Insights (cashflow chart) |
 | `topCategoryDeltas(txns, ledgerId, month, n)` | Top N categories by month-over-month delta | Insights (top movers) |
@@ -131,8 +134,8 @@ in Phase 1.5** (the Insights tab + supporting selectors).
 | `netWorthSeries(txns, accounts, ledgerId)` | Net worth time series | Insights (net worth chart) — `netWorthByMonth` may supersede |
 | `netWorthByAccountType(accounts, ledgerId)` | Net worth broken down by account type | Insights (net worth explained) |
 | `selectTransfers(txns, accounts, ledgerId)` | Paired transfer entries | Activity tab (transfer drill-down) |
-| `unrealizedFx(txns, accounts, ledgerId)` | Unrealized FX gain/loss | Insights (FX card) |
-| `suggestCategory(tx, options)` | Category suggestion for a new transaction | Phase 2 (Add Transaction form) — but port the selector now for parity coverage |
+| `unrealizedFx(account, txns, toBase)` | Per-account unrealized FX gain/loss | Insights (FX card) |
+| `suggestCategory(txns, ledgerId, description, counterpartyId?, opts?)` | Category suggestion (object: category + confidence + count) for a new transaction | Phase 2 (Add Transaction form) — but port the selector now for parity coverage |
 
 **Total Phase 1.5: 25 selectors**.
 
@@ -196,12 +199,13 @@ via `DB`. It does not write; it does not depend on `Audit` (the
 audit gate is the import-time check, not a per-selector check).
 
 **All 25 selectors are pure functions** over their inputs (no IO,
-no time-dependent hidden state). They take either:
+no time-dependent hidden state). **None of them reads the DB.** They
+take either:
 - A pre-projected `Tx[]` (matching the web's `lib/select.ts` shape)
 - A pre-fetched `AccountRow[]` and `Holding[]` (for selectors that
   need accounts/holdings)
-- A pre-fetched `RateSnapshot` (for FX selectors — this lives in
-  the schema's `rates` table; see §6)
+- A `toBase` conversion closure (for FX selectors — the caller
+  supplies the rate function; the selector itself does no lookup)
 
 The web's selectors all read from the in-memory `Tx[]` (or
 `AccountRow[]` / `Holding[]` arrays) — they don't hit the DB
@@ -209,33 +213,34 @@ directly. The Swift port matches: `FinchStore` keeps the projected
 `Tx[]` in memory after open (from Phase 1.0); selectors read from
 that array.
 
-**Two exceptions** in the web's selectors that hit the DB directly:
+**No selector hits the DB.** In particular:
 
-- `monthForecast` reads historical `RateSnapshot` rows for FX
-  conversion
-- `weeklyDigest` reads the `app_state` table for the user's
-  configured "first day of week" preference
+- `monthForecast` does **not** read `RateSnapshot` / FX rows — it
+  computes from the passed `txns` + `scheduled` only.
+- `weeklyDigest` does **not** read `app_state` for a configurable
+  "first day of week" — the week start is **hardcoded ISO Monday**.
 
-Both of these are **narrow DB lookups** (one row each), not the
-full transaction query. The Swift port handles them via a
-`Selectors.DBContext` struct that holds a `GRDB.DatabaseReader`
-reference:
+Because no selector needs a DB read, there is **no
+`Selectors.DBContext`**, no `GRDB.DatabaseReader` reference, and no
+`throws` on the selector functions. The Swift port is a plain set of
+free functions / a stateless value:
 
 ```swift
-public struct Selectors {
-    public let db: any GRDB.DatabaseReader  // for narrow lookups
-    public let money: Money
-
-    public func monthForecast(txns: [Tx], accounts: [AccountRow], ledgerId: String, n: Int) throws -> [MonthForecast] {
-        let rates = try db.read { db in try RateSnapshot.fetchAll(db) }  // one DB read
-        return /* ... pure compute over (txns, accounts, rates) ... */
+public enum Selectors {
+    // All selectors are pure free functions over their inputs.
+    // No DB reader, no throws, no hidden state.
+    public static func monthForecast(
+        txns: [Tx], scheduled: [ScheduledTemplate],
+        ledgerId: String, month: String, today: String
+    ) -> MonthForecast? {
+        // pure compute over (txns, scheduled) for the single `month`
     }
 }
 ```
 
-This keeps the selector bodies pure (one DB read at the top, then
-pure compute) while matching the web's pattern (which reads rates
-via the store at call time).
+This matches the web exactly: the web's selectors are pure functions
+over their arguments; any FX conversion a selector needs is passed in
+as a `toBase` closure by the caller, not fetched inside the selector.
 
 ## §4. JSON-golden parity test infrastructure
 
@@ -246,17 +251,31 @@ JSON-golden parity**.
 
 ### 4.1 — What the harness does
 
-For each of the 25 ported selectors:
+The single source of truth for selector fixtures is a standalone,
+**deterministic** TypeScript module — `frontend/lib/select.fixtures.ts`
+— that exports `export const CASES: SelectorFixture[]`. Each case is
+`{ name, selector, input, expected, seed? }`, built from **fixed ids
+(no `Math.random`)** so the serialized output is byte-stable across
+runs. `CASES` is consumed by BOTH sides:
 
-1. The web side has a `bun test lib/select.test.ts` test that
-   constructs a known input, runs the selector, and asserts the
-   output
-2. The fixture export script (`frontend/scripts/export-fixtures.ts`,
-   which already exists from Phase 1.0) **also** serializes the
-   selector test inputs + expected outputs to JSON
+1. The web side's `bun test lib/select.test.ts` **iterates `CASES`**,
+   runs each selector against `input`, and asserts it equals
+   `expected` — this is the web-side oracle.
+2. The fixture export script
+   (`frontend/scripts/export-fixtures.ts`, a Phase 1.0 artifact **to
+   be created**) imports the same `CASES` and serializes each case to
+   the JSON the Swift parity target reads.
 3. The Swift `ParityTests` target reads the JSON, constructs the
    same input, runs the Swift selector, and asserts the output
-   matches to the cent
+   matches to the cent.
+
+Because both the web oracle and the exported JSON read the identical
+`CASES`, the Swift side is guaranteed to check the exact same expected
+values the web asserts. (The web's `lib/select.test.ts` is today **74
+flat `test('…', () => {…})` calls with inline literals and
+`Math.random()` ids** — there is no structured array to scrape;
+**refactoring those 74 inline tests onto `CASES` is part of the Phase
+1.5 work.**)
 
 The JSON format is one file per selector (25 files) at
 `ios/FinchCore/Tests/Fixtures/selectors/<selector-name>.json`:
@@ -290,25 +309,68 @@ mirrors the function signature.
 
 ### 4.2 — Fixture export script changes
 
-The Phase 1.0 `frontend/scripts/export-fixtures.ts` already writes
-the 8 audit-corruption `.finch` fixtures + 1 sample `.finch` + 1
-pre-DE `.finch`. Phase 1.5 extends it to also write the 25
-selector JSON fixtures.
+The Phase 1.0 `frontend/scripts/export-fixtures.ts` (a Phase 1.0
+artifact **to be created**) writes the 8 audit-corruption `.finch`
+fixtures + 1 sample `.finch` + 1 pre-DE `.finch`. Phase 1.5 extends
+it to also write the 25 selector JSON fixtures — by importing the
+deterministic `CASES` array from `frontend/lib/select.fixtures.ts`
+and serializing each case. It does **not** scrape the bun test file;
+there is nothing structured to scrape (see §4.1).
 
-The script becomes:
+The new standalone fixtures module:
 
 ```typescript
-// frontend/scripts/export-fixtures.ts
-import { test } from 'bun:test';
-import { /* selectors */ } from '@/lib/select';
-import { /* fixture txns / accounts / etc. */ } from '@/lib/db/seed';
+// frontend/lib/select.fixtures.ts
+import type { Tx, AccountRow } from '@/lib/select';
 
-// Re-run every select.test.ts test case and serialize (input, expected) to JSON.
-for (const testCase of extractTestCases('select.test.ts')) {
-  // Run the test, capture the (input, output) tuple, serialize.
-  const input = testCase.input;
-  const expected = testCase.fn(input);
-  writeFixture(testCase.name, { selector: testCase.selector, input, expected });
+export interface SelectorFixture {
+  name: string;          // human-readable case label
+  selector: string;      // e.g. "monthlySpending"
+  input: Record<string, unknown>;  // mirrors the selector's args
+  expected: unknown;     // the serialized expected output
+  seed?: number;         // optional deterministic seed
+}
+
+// Deterministic — fixed ids, NO Math.random — so serialization is byte-stable.
+export const CASES: SelectorFixture[] = [
+  {
+    name: 'last 3 months of spending for a ledger with 5 months of data',
+    selector: 'monthlySpending',
+    input: { txns: [/* fixed-id txns */], ledgerId: 'personal', endMonth: '2026-06', n: 3 },
+    expected: [{ m: '2026-04', v: 1234.56 }, { m: '2026-05', v: 2345.67 }, { m: '2026-06', v: 1500.0 }],
+  },
+  // … one entry per selector case (the refactored 74 web tests) …
+];
+```
+
+The export script consumes it:
+
+```typescript
+// frontend/scripts/export-fixtures.ts (to be created in Phase 1.0)
+import * as select from '@/lib/select';
+import { CASES, type SelectorFixture } from '@/lib/select.fixtures';
+
+// Group CASES by selector and serialize each group to one JSON file.
+for (const fixture of CASES) {
+  // expected is precomputed in CASES (the same value select.test.ts asserts);
+  // serialize { selector, input, expected } into the per-selector JSON.
+  appendCase(fixture.selector, { name: fixture.name, input: fixture.input, expected: fixture.expected });
+}
+```
+
+And `lib/select.test.ts` becomes the oracle over the same array:
+
+```typescript
+// frontend/lib/select.test.ts
+import { test, expect } from 'bun:test';
+import * as select from '@/lib/select';
+import { CASES } from '@/lib/select.fixtures';
+
+for (const c of CASES) {
+  test(`${c.selector}: ${c.name}`, () => {
+    const actual = (select as any)[c.selector](...Object.values(c.input));
+    expect(actual).toEqual(c.expected);
+  });
 }
 ```
 
@@ -318,9 +380,10 @@ fixtures stay in sync with the web. The script is checked into the
 repo at `frontend/scripts/export-fixtures.ts` with its own
 `bun test` smoke test.
 
-**The script's output is the source of truth for the Swift
-parity tests.** If the web's `select.test.ts` test cases change,
-the script regenerates the JSON, and the Swift parity tests run
+**`lib/select.fixtures.ts`'s `CASES` is the source of truth for both
+the web oracle and the Swift parity tests.** If the selector logic
+changes, the maintainer updates `CASES`; `select.test.ts` and the
+exported JSON both move in lockstep, and the Swift parity tests run
 against the new expected outputs.
 
 ### 4.3 — Swift `ParityTests` extension
@@ -426,11 +489,11 @@ vertically-stacked cards).
 │     │   last 6 months]           │  │
 │     └────────────────────────────┘  │
 │                                      │
-│  🔮 Forecast (next 30 days)         │
-│     Expected spend:  $1,847.00       │
-│     Range:          $1,500 - $2,200 │
-│     [Method: linear regression      │
-│      over last 90 days of spend]     │
+│  🔮 Forecast (this month)           │
+│     Spent so far:    $1,120.00       │
+│     Projected total: $1,847.00       │
+│     [MTD actuals + daily run-rate ×  │
+│      days-remaining + scheduled]     │
 │                                      │
 │  📈 Top movers (this month)          │
 │     🛒 Groceries      +$87 (vs May) │
@@ -469,7 +532,19 @@ vertically-stacked cards).
 | Top movers | `topCategoryDeltas` | List of (category, delta, vs-last-month) |
 | Holdings | `holdingsValueForAccount` + `holdingValue` + `holdingGainLoss` + `holdingsForAccount` | Per-account block |
 | Weekly digest | `weeklyDigest` | Text card (spent + top cat + delta) |
-| Unrealized FX | `unrealizedFx` | Text card (total + per-account breakdown) |
+| Unrealized FX | `unrealizedFx` (per account) | Text card (total + per-account breakdown) |
+
+> **Intentional native enhancement (NOT web parity)** — In the web,
+> the **Holdings** and **Unrealized FX** cards (and `recentExpenses` /
+> `netWorthSeries`) live on **Account Detail**, not Insights. The
+> native app **deliberately** also surfaces them on the Insights tab as
+> a first-class enhancement, so the user sees portfolio + FX exposure
+> alongside the other trend cards. This is a designed divergence, not a
+> mis-citation: the selectors are the same web selectors; only their
+> screen placement differs. The `unrealizedFx` card composes the
+> per-account `unrealizedFx(account, txns, toBase)` selector across the
+> ledger's accounts (the web computes it one account at a time on
+> Account Detail).
 
 ### 5.3 — Per-ledger display-currency override UI
 
@@ -501,7 +576,7 @@ with a "Change" button. Tapping opens a picker sheet:
 ```
 
 Picking a non-base currency triggers an FX conversion at the
-active rate from the `rates` table (no rate editor in Phase 1.5;
+active rate from the `exchange_rates` table (no rate editor in Phase 1.5;
 that's Phase 4 "FX / base tools").
 
 ### 5.4 — Month navigation
@@ -522,9 +597,10 @@ navigates, all cards re-evaluate against the new "end month."
   recent import): full-tab `ProgressView` (the import-time
   loading is in Settings; Insights re-renders as soon as the
   projection finishes)
-- **Error** (a selector throws — should never happen in 1.5;
-  selectors are pure): the affected card shows an inline error
-  banner "Could not compute this figure" with a "Retry" button
+- **Error** (a card fails to render — should essentially never
+  happen in 1.5; selectors are pure, total functions and don't
+  throw): the affected card shows an inline error banner "Could
+  not compute this figure" with a "Retry" button
 
 ### 5.6 — Accessibility
 
@@ -556,23 +632,25 @@ public struct MonthlySpending: Equatable, Sendable { let m: String; let v: Decim
 public struct DailySpending: Equatable, Sendable { let date: String; let value: Decimal }
 
 // Selectors/NetWorth.swift
-public func netWorthByMonth(txns: [Tx], accounts: [AccountRow], endMonth: String, n: Int) throws -> [NetWorthByMonth]
-public func netWorthExplained(txns: [Tx], accounts: [AccountRow], ledgerId: String, month: String) throws -> NetWorthExplained
+// netWorthByMonth(txns: Tx[], accounts: AccountRow[], ledgerId: string, endMonth: string, n: number, toBase?: ToBase): {m; v}[]
+public func netWorthByMonth(txns: [Tx], accounts: [AccountRow], ledgerId: String, endMonth: String, n: Int, toBase: ToBase? = nil) -> [NetWorthByMonth]
+public func netWorthExplained(txns: [Tx], accounts: [AccountRow], ledgerId: String, month: String) -> NetWorthExplained
 public func netWorthByAccountType(accounts: [AccountRow], ledgerId: String) -> [AccountTypeNetWorth]
-public func netWorthSeries(txns: [Tx], accounts: [AccountRow], ledgerId: String) throws -> [NetWorthPoint]
+public func netWorthSeries(txns: [Tx], accounts: [AccountRow], ledgerId: String) -> [NetWorthPoint]
 public struct AccountTypeNetWorth: Equatable, Sendable {
     let accountType: String  // "checking", "savings", "investment", etc.
     let total: Decimal       // signed, in ledger base
 }
 
 // Selectors/Forecast.swift
-public func monthForecast(txns: [Tx], accounts: [AccountRow], ledgerId: String, n: Int) throws -> [MonthForecast]
+// monthForecast(txns: Tx[], scheduled: ScheduledTemplate[], ledgerId: string, month: string, today: string): MonthForecast | null
+// Algorithm: month-to-date actuals + daily-run-rate × days-remaining + upcoming
+// scheduled/recurring, for the SINGLE `month`. Past months collapse to actuals.
+public func monthForecast(txns: [Tx], scheduled: [ScheduledTemplate], ledgerId: String, month: String, today: String) -> MonthForecast?
 public struct MonthForecast: Equatable, Sendable {
     let month: String
-    let expected: Decimal
-    let low: Decimal
-    let high: Decimal
-    let method: ForecastMethod  // .linearRegression, .naiveAverage
+    let actual: Decimal     // month-to-date actuals
+    let projected: Decimal  // actual + run-rate × days-remaining + upcoming scheduled
 }
 
 // Selectors/Cashflow.swift
@@ -598,10 +676,17 @@ public func selectTransfers(txns: [Tx], accounts: [AccountRow], ledgerId: String
 public func weeklyDigest(txns: [Tx], ledgerId: String, anchor: String) -> WeeklyDigest?
 public struct WeeklyDigest: Equatable, Sendable {
     let anchor: String  // "YYYY-MM-DD"
-    let totalSpent: Decimal
-    let topCategory: String?
-    let topCategoryAmount: Decimal
-    let previousWeekDelta: Decimal
+    let spent: Decimal
+    let income: Decimal
+    let net: Decimal
+    let prevSpent: Decimal
+    let vsPrevPct: Decimal
+    let avgSpent: Decimal
+    let avgWeeks: Int
+    let vsAvgPct: Decimal
+    let topCategories: [CategoryAmount]   // { categoryId, amount }
+    let biggestExpense: Tx?
+    let txCount: Int
 }
 
 // Selectors/Holdings.swift
@@ -612,30 +697,43 @@ public func holdingsValueForAccount(holdings: [Holding], accountId: String) -> D
 public func investmentAccountTotal(account: AccountRow, holdings: [Holding]) -> Decimal
 
 // Selectors/Account.swift
-public func accountForecast(txns: [Tx], account: AccountRow, n: Int) throws -> [AccountForecastPoint]
+public func accountForecast(txns: [Tx], account: AccountRow, n: Int) -> [AccountForecastPoint]
 public func balanceSeries(txns: [Tx], accountId: String, currentBalance: Decimal) -> [Decimal]
 
 // Selectors/FX.swift
-public func unrealizedFx(txns: [Tx], accounts: [AccountRow], ledgerId: String) throws -> [UnrealizedFx]
-public struct UnrealizedFx: Equatable, Sendable {
-    let accountId: String; let currency: String
-    let unrealized: Decimal  // signed, in ledger base
-}
+// unrealizedFx(account: AccountRow, txns: Tx[], toBase: ToBase): number — PER-ACCOUNT.
+// Returns the single account's unrealized FX (signed, in ledger base). The caller
+// supplies the `toBase` conversion closure; the selector does no DB/holdings lookup.
+public func unrealizedFx(account: AccountRow, txns: [Tx], toBase: ToBase) -> Decimal
 
 // Selectors/Suggestion.swift
-public func suggestCategory(tx: Tx, options: [Category]) -> String?  // category id
+// suggestCategory(txns: Tx[], ledgerId: string, description: string,
+//   counterpartyId?: string|null, opts?: { minCount?=1; minConfidence?=0.5 }): CategorySuggestion | null
+// Returns an object (category + confidence + count), NOT a bare id.
+public func suggestCategory(
+    txns: [Tx], ledgerId: String, description: String,
+    counterpartyId: String? = nil,
+    opts: SuggestCategoryOptions = .init()
+) -> CategorySuggestion?
+public struct CategorySuggestion: Equatable, Sendable {
+    let categoryId: String; let confidence: Double; let count: Int
+}
+public struct SuggestCategoryOptions: Equatable, Sendable {
+    var minCount: Int = 1; var minConfidence: Double = 0.5
+}
 ```
 
-All 25 functions are `throws` if they need a DB lookup (for
-`RateSnapshot` or `app_state`); the rest are non-throwing pure
-functions. Every function is `Equatable, Sendable` for the
-parity tests.
+**No selector throws** — none of them needs a DB lookup (see §3); they
+are all non-throwing pure functions over their inputs. Every output
+type is `Equatable, Sendable` for the parity tests.
 
-**Note on `monthForecast`**: the web's `monthForecast` uses
-linear regression over the last 90 days of spend. The Swift port
-matches. The `ForecastMethod` enum lets the parity test verify
-both implementations use the same method (if the web's
-implementation changes, the parity test surfaces it).
+**Note on `monthForecast`**: the web's `monthForecast` is **not** a
+regression. It computes a single month's forecast as **month-to-date
+actuals + daily-run-rate × days-remaining + upcoming
+scheduled/recurring**; for a past month it collapses to actuals.
+It takes `(txns, scheduled, ledgerId, month, today)` and returns
+`MonthForecast | null`. The Swift port matches exactly, and the
+parity test asserts `actual` + `projected` to the cent.
 
 ## §7. Parity test file layout
 
@@ -722,12 +820,12 @@ For Phase 1.5 specifically:
 
 **Specifically for the Insights tab**:
 
-- **`monthForecast` method**: the web uses linear regression
-  over the last 90 days. Should the iOS port match exactly, or
-  can it use a different method (e.g., a moving average)? Per
-  the plan's §12, "parity suite" implies exact match. The Swift
-  port matches exactly. If the web's method is later swapped
-  for a better one, the parity test surfaces it.
+- **`monthForecast` method**: the web computes a single month's
+  forecast as **MTD actuals + daily-run-rate × days-remaining +
+  upcoming scheduled/recurring** (not a regression, not multi-month).
+  Per the plan's §12, "parity suite" implies exact match. The Swift
+  port matches exactly. If the web's method is later swapped for a
+  different one, the parity test surfaces it.
 - **Chart libraries**: Swift Charts is iOS 16+; we target iOS
   26+. The 2 chart types we need (line + stacked bar) are
   well-supported by Swift Charts. No third-party chart
@@ -773,7 +871,7 @@ These are explicitly NOT in Phase 1.5:
 - **Holding add / edit / price-update UI** — read-only display
   in Phase 1.5; full holdings CRUD is Phase 2.
 - **Rate editor** — the per-ledger display-currency override
-  uses the existing `rates` table values; editing rates is
+  uses the existing `exchange_rates` table values; editing rates is
   Phase 4 ("FX / base tools").
 - **Saved searches** — Phase 4.
 - **Anomaly threshold tuning** — the existing
@@ -802,8 +900,8 @@ These are explicitly NOT in Phase 1.5:
   §6's API surface has typed structs for non-trivial outputs
   (`MonthlySpending`, `MonthForecast`, `DailySpending`,
   `AccountTypeNetWorth`, etc.). §4's JSON fixture format is
-  shown with a concrete example. The `Selectors.DBContext`
-  pattern (§3) is explicit about which selectors need DB
-  access and why. Cross-checked: all 25 selectors appear
+  shown with a concrete example. §3 is explicit that **all
+  selectors are pure** — none reads the DB, so there is no
+  `DBContext` / reader / `throws` machinery. Cross-checked: all 25 selectors appear
   1:1 in §2's classification table, §6's API surface, and
   §7's fixture file list.

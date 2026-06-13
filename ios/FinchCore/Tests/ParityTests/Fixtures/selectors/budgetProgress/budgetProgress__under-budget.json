@@ -1,0 +1,67 @@
+{
+  "name": "under-budget",
+  "selector": "budgetProgress",
+  "input": {
+    "budget": {
+      "id": "b1",
+      "ledgerId": "personal",
+      "groupId": null,
+      "name": "Food",
+      "type": "expense",
+      "amount": 500,
+      "saved": 0,
+      "carryForward": 0,
+      "frequency": "monthly",
+      "startDate": "2026-01-01",
+      "endDate": null,
+      "isRecurring": 1,
+      "rollover": 0,
+      "rolloverLimit": null,
+      "pendingAmount": null,
+      "lastRolledPeriod": null,
+      "accountIds": [],
+      "categoryIds": [
+        "food"
+      ],
+      "warningPct": 80
+    },
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -120,
+        "account": "a1",
+        "date": "2026-05-03",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -80,
+        "account": "a1",
+        "date": "2026-05-10",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "today": "2026-05-15",
+    "categories": [
+      {
+        "id": "food",
+        "parentId": null
+      }
+    ]
+  },
+  "expected": {
+    "from": "2026-05-01",
+    "to": "2026-05-31",
+    "base": 500,
+    "used": 200,
+    "remaining": 300,
+    "pct": 40,
+    "over": false
+  }
+}

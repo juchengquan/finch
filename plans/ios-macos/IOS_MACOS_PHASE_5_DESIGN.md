@@ -1,5 +1,8 @@
 # finch for iOS & macOS — Phase 5 Implementation Design
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce
 > a step-by-step implementation plan for Phase 5.
@@ -38,10 +41,10 @@ The 8-section template maps to this spec's existing sections:
 | Template section | Maps to |
 |---|---|
 | §1. Goal & non-goals | §1 |
-| §2. Architecture / data model | §2 (Auto-pack debounce) + §3 (iCloud folder-watcher) |
+| §2. Architecture / data model | §2 (Auto-pack throttle) + §3 (iCloud folder-watcher) |
 | §3. iOS UI surfaces | §4 (Conflict-copy UX) + §5 (Settings › Sync section) |
-| §4. Cross-cutting concerns | §6 (Orphan attachment sweep) |
-| §5. Wire contracts | §2 (auto-pack debounce — chokepoint dispatches write) + §3 (iCloud folder-watcher — pack import) |
+| §4. Cross-cutting concerns | §6 (Orphan attachment sweep — native-only) |
+| §5. Wire contracts | §2 (auto-pack throttle — chokepoint dispatches write) + §3 (iCloud folder-watcher — pack import) |
 | §6. CI / test infrastructure | §7 (CI changes) |
 | §7. Out of scope (firm) | §9 |
 | §8. Spec self-review + open questions | §10 + §8 |
@@ -52,9 +55,10 @@ The 8-section template maps to this spec's existing sections:
 the existing `.finch` pack engine (Phase 1.0) and chokepoint
 (Phase 2):
 
-1. **Auto-pack debounce** — after any write, wait ~30 seconds
-   of idle, then build a fresh `.finch` and write it to the
-   iCloud `Documents/finch/` folder
+1. **Auto-pack debounce** — after any write, wait a short idle
+   window (a native debounce — see §2 for cadence), then build
+   a fresh `.finch` and write it to the iCloud `Documents/finch/`
+   folder
 2. **Manual "Sync now"** — a button in Settings that forces
    an immediate pack (no debounce)
 3. **iCloud folder-watcher** — when iCloud surfaces a new
@@ -98,27 +102,38 @@ the web's `autoBackup` + integration tests for the debouncer).
 ## §2. Auto-pack debounce
 
 After any successful write, the iOS app schedules a
-**30-second idle timer**. If another write happens within
-those 30 seconds, the timer resets. When the timer fires,
-the app builds a fresh `.finch` and writes it to the iCloud
-`Documents/finch/` folder.
+**short idle timer** (a native debounce — see §2.1 for the
+chosen cadence). If another write happens within that window,
+the timer resets. When the timer fires, the app builds a
+fresh `.finch` and writes it to the iCloud `Documents/finch/`
+folder.
 
-The 30-second window is **configurable** (the web's
-`backupConfig.frequencyMs` lives in `app_state`; the iOS app
-mirrors this with a `Settings › Sync › Auto-pack frequency`
-slider: 10s, 30s, 1min, 5min, 15min). The default is 30s.
+The debounce window is **configurable** (the iOS app exposes
+a `Settings › Sync › Auto-pack frequency` slider: 10s, 30s,
+1min, 5min, 15min). Note this is **not** the web's
+`backupConfig.frequencyMs` semantics: the web's `autoBackup`
+is a **throttle** with a **1-hour** (`3,600,000 ms`) default
+(`lib/db/state.ts:211`) that gates by age-since-the-newest-
+backup (`server.ts:642`), not an idle debounce. The native
+app deliberately chooses a much shorter, debounce-style
+cadence because iCloud sync is interactive; that is a native
+product choice, not the web's default.
 
 ### 2.1 — Why debounce?
 
 Without debouncing, a burst of writes (e.g., the user
 backfills 100 entries via the rules engine) would generate
 100 pack writes — one per write. The debouncer coalesces
-the burst into a single pack write 30 seconds after the
+the burst into a single pack write a short interval after the
 last write.
 
-The 30-second default is the web's `lib/db/core/server.ts::autoBackup`
-default (the web debounces on a similar cadence). The iOS
-port matches.
+The native default cadence is a **native product choice**
+(the design suggests a short, interactive window like ~30s).
+The web's `lib/db/core/server.ts::autoBackup` does NOT do
+this — it is an age-since-newest-backup **throttle** with a
+**1-hour** default. The iOS port intentionally diverges to a
+shorter, debounce-style cadence; do not describe this as
+"matching the web's default."
 
 ### 2.2 — The debouncer
 
@@ -181,14 +196,17 @@ see §3).
 ### 2.3 — The pack builder (reusing Phase 1.0)
 
 The `packBuilder.build()` is a wrapper around Phase 1.0's
-`Pack.export(from: live: URL, to: URL)` (the
-`lib/db/core/pack.ts` port). The build:
+`buildPack(input) → { bytes, manifest }` (`pack.ts:99`),
+orchestrated server-side by `exportPackBytes()` (`server.ts:714`)
+— the `lib/db/core/pack.ts` port. (The parse/extract side is
+`parsePack(zipBytes) → { manifest, zip }`, `extractPack`, and
+`detectFileKind`.) The build:
 
 1. Opens the live DB read-only via GRDB
 2. Runs `VACUUM INTO 'tmp/finch-<uuid>.sqlite3'`
-3. Writes a fresh `manifest.json` with the current
-   `schema_version` + `db_sha256` + per-file attachment
-   checksums + `row_counts`
+3. Writes a fresh `manifest.json` (nested, snake_case) with
+   the current `schema_version` + `db.sha256` + per-file
+   attachment checksums + `db.row_counts`
 4. Copies the `attachments/` directory
 5. Zips the staging directory into `finch.sqlite3.finch` (or
    `<ledger-slug>-<yyyy-mm-dd>.finch` if the user has
@@ -266,11 +284,11 @@ auto-packs per day don't overwrite each other in the
 iCloud folder.
 
 The **retention policy**: the iCloud folder keeps the
-last 7 packs (one per day for the past week, plus today's
-auto-packs). Older packs are deleted on each new pack
+last 14 packs. Older packs are deleted on each new pack
 write. The retention is user-configurable (Settings › Sync
-› Keep last N packs: 7, 14, 30, 60, 90; default 7). The
-web's retention is similar (the `.finch.bak` policy).
+› Keep last N packs: 7, 14, 30, 60, 90; default 14). This
+matches the web's default retention of **14** packs
+(`lib/db/state.ts:216`, `backup-config.ts:16`).
 
 ## §3. iCloud folder-watcher
 
@@ -340,7 +358,7 @@ On app launch (and on every app foreground), the folder-
 watcher does an **initial scan**: it lists all `.finch`
 files in the folder and imports any that haven't been
 imported yet. The "imported" tracking is in a local SQLite
-table `imported_packs` (keyed on the file's `db_sha256`):
+table `imported_packs` (keyed on the manifest's `db.sha256`):
 
 ```sql
 CREATE TABLE imported_packs (
@@ -359,7 +377,7 @@ When a new `.finch` arrives (the user is on iPhone; iPad
 just wrote), the folder-watcher fires `onNewFile(url)`. The
 app:
 
-1. Checks the file's `db_sha256` against `imported_packs`
+1. Checks the manifest's `db.sha256` against `imported_packs`
 2. If already imported, ignore
 3. If not, run the Phase 1.0 import pipeline (validate →
    audit → atomic swap)
@@ -510,7 +528,7 @@ the iCloud sync configuration:
 │  Last error: —                      │
 │                                      │
 │  Auto-pack                          │
-│  [On]  Every 30s after a change     │
+│  [On]  ~30s after a change (native) │
 │                                      │
 │  [Sync now]                         │
 │                                      │
@@ -521,7 +539,7 @@ the iCloud sync configuration:
 │  [Open in Files]                    │
 │                                      │
 │  Retention                          │
-│  Keep last 7 packs               ▾  │
+│  Keep last 14 packs              ▾  │
 │                                      │
 │  Conflicts (1)                      │
 │  └─ 2026-06-12 18:50 iPad           │
@@ -533,14 +551,14 @@ The "Conflicts" row appears when there's an unresolved
 conflict in the folder; tapping opens the conflict-copy
 sheet (§4.2).
 
-## §6. Orphan attachment sweep
+## §6. Orphan attachment sweep (native-only)
 
 When the iOS app builds a fresh pack, it includes every
 attachment in `Application Support/attachments/`. Some
 attachments may be orphaned (the DB no longer references
 them — e.g., the user deleted the entry but the file
 remained). The pack's manifest includes the
-`attachment_count`; the build also does an orphan sweep:
+`attachments.count`; the build also does an orphan sweep:
 
 1. List all files in `Application Support/attachments/`
 2. List all `entry_attachments.rel_path` values from the
@@ -550,8 +568,17 @@ remained). The pack's manifest includes the
    than 1 hour; this prevents the sweep from racing with
    a concurrent write)
 
-The sweep runs as part of every `buildAndWritePack`. The
-web's `lib/db/core/server.ts::autoBackup` does the same.
+The sweep runs as part of every `buildAndWritePack`.
+
+**This is a native-only feature.** The web's `autoBackup`
+does **NO** orphan sweep — there is no disk-scan + DB-diff +
+1-hour safety window in the web. The web's only attachment-
+file cleanup is the per-mutation best-effort
+`unlinkAttachmentFiles` (`_shared/attachment-cleanup.ts`),
+which deletes the files for attachments removed within that
+one mutation — not a periodic disk reconciliation. The iOS
+sweep is a deliberate native addition; do not describe it as
+"the web does the same."
 
 ## §7. CI changes
 
@@ -567,9 +594,15 @@ extends with:
 - A **folder-watcher test** (a test that creates a
   `.finch` in the iCloud folder, asserts the watcher
   fires, asserts the import runs)
-- A **migration test** (a test that imports a pre-DE
-  pack, asserts the migration runs, asserts the audit is
-  clean post-migration)
+- A **schema-version-replay test** (a test that imports a
+  pack stamped at an older `schema_version`, asserts
+  `migrate(exec, { fresh: false })` replays every MIGRATIONS
+  entry that sorts after the recorded version, asserts the
+  audit is clean post-replay). Note there is **no** pre-DE
+  migration codepath — the double-entry cutover data-move is
+  dead code in git history only; `MIGRATIONS` replays by
+  version, so this is a generic schema-version-replay test,
+  not a double-entry-cutover migration.
 
 The iCloud integration test uses a **mock iCloud container**
 (a `FileManager` substitute) so CI doesn't require a real
@@ -582,17 +615,23 @@ The plan's §14.1 still-open questions mostly land in Phase
 
 **Not blocking Phase 5 (decide later)**:
 
-- **Pack cadence**: the 30-second default is the web's
-  default. The iOS app makes it user-configurable
-  (Settings › Sync › Auto-pack frequency: 10s, 30s, 1min,
-  5min, 15min). The user research will inform the
-  default; for Phase 5, the default is 30s.
+- **Pack cadence**: the native default is a short,
+  interactive debounce window (the design suggests ~30s) —
+  a **native product choice**, NOT the web's default. The web
+  `autoBackup` is an age-since-newest-backup **throttle** with
+  a **1-hour** (`3,600,000 ms`) default (`lib/db/state.ts:211`,
+  `server.ts:642`). The iOS app makes the window user-
+  configurable (Settings › Sync › Auto-pack frequency: 10s,
+  30s, 1min, 5min, 15min). User research will inform the
+  native default.
 - **Sweep policy**: orphan attachments are swept on every
   pack build. The "1 hour safety" check prevents racing
-  with concurrent writes. The web's sweep is the same.
-- **Retention default**: 7 packs. The user can configure
-  7, 14, 30, 60, 90. The web's `.finch.bak` retention is
-  the same.
+  with concurrent writes. This is **native-only** — the web
+  does no orphan sweep (its only cleanup is per-mutation
+  best-effort `unlinkAttachmentFiles`).
+- **Retention default**: 14 packs (matches the web default,
+  `lib/db/state.ts:216`). The user can configure 7, 14, 30,
+  60, 90.
 - **Conflict-copy UX polish**: the current sketch is a
   basic sheet. The Phase 5 implementation may add:
   - A "preview the entries" button for each candidate
@@ -686,8 +725,9 @@ spec.)
   conflict-copy sheet in §4.2, the compare view in §4.3,
   the Settings › Sync section in §5 — all concrete.
 - **Internal consistency**: §2's debouncer uses
-  `Pack.export` from Phase 1.0. §3's folder-watcher uses
-  `Pack.import` from Phase 1.0. §4's conflict-copy uses
+  `buildPack` / `exportPackBytes` from Phase 1.0. §3's
+  folder-watcher uses the `parsePack` / import pipeline from
+  Phase 1.0. §4's conflict-copy uses
   `projectState` from Phase 1.0 + the chokepoint from
   Phase 2. The Settings › Sync section (§5) is the only
   new UI; the rest of the app's UI is unchanged.

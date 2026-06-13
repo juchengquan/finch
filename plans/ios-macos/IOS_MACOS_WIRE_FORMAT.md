@@ -16,6 +16,9 @@
 > a near-direct translation; the implementer reads this + the cited
 > web files and writes the Swift side._
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 ## §1. Goal & non-goals
 
 **Goal** — Pin the three wire contracts that the iOS app and the web
@@ -185,10 +188,13 @@ Also: `adjustAccountBalance` (per `_args.ts:36-42`):
 | `updateAccountGroup` | `{ id: string; patch: AccountGroupPatch }` |
 | `deleteAccountGroup` | `{ id: string }` |
 
-(`_args.ts:84-86`) — duplicated in `accounts/mutations.ts` (per the
-Phase 2 spec note); 13 per-domain `mutations.ts` files produce 77
-entries / 74 unique (3 duplicates for `createAccountGroup`,
-`updateAccountGroup`, `deleteAccountGroup`).
+(`_args.ts:84-86`) — these `accountGroup` actions live **only** in
+`accountGroups/mutations.ts`. The dispatcher (`mutate.ts`) merges the
+per-domain handler maps into one `ALL` map producing **74
+entries / 74 unique / 0 duplicates**. (12 first-class domains carry a
+`mutations.ts`; the 13th merged map is `_app/` — an escape-hatch
+domain, not first-class. `budgetGroups` also has no `mutations.ts`:
+its 3 group actions live in `budgets/mutations.ts`.)
 
 #### Budgets (6 actions)
 
@@ -205,8 +211,8 @@ entries / 74 unique (3 duplicates for `createAccountGroup`,
 
 **iOS port note**: budget `rollover` accepts either `number` (the
 SQLite-stored value, 0 or 1) OR `boolean` (TypeScript convenience).
-The chokepoint's handler (`budgets/mutations.ts:88`) coerces
-`boolean → number` (`Number(args.rollover)`). The Swift port must
+The chokepoint's handler (`budgets/mutations.ts:50`) coerces
+truthy → 0/1 (`rollover: args.rollover ? 1 : 0`). The Swift port must
 mirror this — store as `Int` (0/1) but accept `Bool` in the wire
 shape and convert at the boundary.
 
@@ -340,8 +346,10 @@ has `base: string` (NOT `baseCurrency`). The iOS Phase 6.4 spec used
 `IOS_MACOS_PHASE_1_5_DESIGN.md` §5.3) is **NOT** per-ledger keys
 (`displayCurrency:<id>`). The web uses a **single** `app_state` key
 `'displayCurrencyByLedger'` whose value is a JSON
-`{[ledgerId]: currency}` map (see
-`lib/db/domain/ledgers/mutations.ts:58-64`). The iOS port must
+`{[ledgerId]: currency}` map. The `setDisplayCurrency` handler lives
+in `lib/db/domain/_app/mutations.ts` (writes that single `app_state`
+key); `ledgers/mutations.ts:58-64` is `deleteLedger`'s cleanup of the
+same key, not the setter. The iOS port must
 follow this exact pattern — don't introduce per-ledger keys.
 
 ### §2.3 — Wire format invariants
@@ -1034,10 +1042,10 @@ The reverse (export) flow:
 ## §5. The fixture format
 
 The JSON format for parity-test fixtures (per Phase 1.0 §8.4 and
-Phase 1.5 §4). Each fixture captures one test case from
-`frontend/lib/select.test.ts` (selector, input, expected output).
-The iOS port's parity suite reads these JSON files and runs each
-selector.
+Phase 1.5 §4). Each fixture captures one curated case from
+`frontend/lib/select.fixtures.ts`'s `CASES` array (selector, input,
+expected output). The iOS port's parity suite reads these JSON files
+and runs each selector.
 
 ### §5.1 — `SelectorFixture` JSON schema
 
@@ -1050,23 +1058,25 @@ interface SelectorFixture {
   name: string;
   /** The selector function name (e.g., 'accountBalance', 'selectTransactions'). */
   selector: string;
-  /** The input tuple, serialized as a JSON object. The shape depends on
-   *  the selector — see the per-selector-group table below. */
+  /** The selector's inputs as a **named-object** map (key = the selector's
+   *  parameter name, value = that argument's JSON form). Not a positional
+   *  array — the shape depends on the selector; see the table below. */
   input: Record<string, unknown>;
   /** The expected output, serialized as JSON. Shape depends on the
    *  selector (Decimal → number; array → array; etc.). */
   expected: unknown;
   /** Optional: the seed identifier used to produce the input. The iOS
    *  port doesn't need this for parity (the input is self-contained);
-   *  the web's `extractTestCases` function records it for traceability. */
+   *  each case in the web's `lib/select.fixtures.ts` `CASES` array may
+   *  carry one for traceability (see Phase 1.5 §4). */
   seed?: string;
 }
 ```
 
 **File naming**: one fixture per file,
-`ios/FinchCore/Tests/Fixtures/selectors/<group>/<selector>__<case>.json`.
-The iOS SwiftPM test target (per Phase 1.5 §4.4) declares
-`resources: [.copy("Fixtures")]` so the fixtures are available via
+`ios/FinchCore/Tests/ParityTests/Fixtures/selectors/<group>/<selector>__<case>.json`.
+The `.copy("Fixtures")` resource is declared on the **`ParityTests`**
+target (per Phase 1.5 §4.4), so the fixtures are available via
 `Bundle.module.url(forResource: ...)`.
 
 ### §5.2 — Number serialization (Decimal → number)
@@ -1082,12 +1092,21 @@ accuracy: 0.005)` (cent-level) for amounts.
 
 ### §5.3 — Per-selector-group fixture examples
 
-The 32 selectors are grouped into 8 groups (per Phase 1.5 §2).
-One example per group:
+The 32 selectors (= all `lib/select.ts` exports except the `kindOf`
+helper; the code has 33 exports) are grouped into 8 groups (per
+Phase 1.5 §2). One example per group.
+
+**Phase-1.0 set (the canonical seven, Task 6):** `accountBalance`,
+`selectTransactions`, `categorySpend`, `budgetProgress`, `cycleWindow`,
+`merchantStats`, `anomalyScore`. Everything else — including
+`balanceSeries` and `netWorthSeries`, which are chart-series selectors —
+is **Phase 1.5**, not 1.0. The per-group examples below are illustrative
+of the JSON shape across the full 32; only the seven named here ship in
+Phase 1.0.
 
 #### Group 1: Time series (8 selectors)
 
-**`balanceSeries`** (Phase 1.0, 7 selectors) — the simplest example.
+**`balanceSeries`** (Phase 1.5) — the simplest example.
 
 ```json
 {
@@ -1113,7 +1132,7 @@ One example per group:
 
 #### Group 2: Net worth + per-account breakdowns (4 selectors)
 
-**`netWorthSeries`** (Phase 1.0) — checks `includeInNetWorth` filter.
+**`netWorthSeries`** (Phase 1.5) — checks `includeInNetWorth` filter.
 
 ```json
 {
@@ -1301,27 +1320,48 @@ is `{ total, breakdown, ... }` per Phase 1.5 §6. The web's
 
 ### §5.4 — The export script (web-side)
 
-The web's `frontend/scripts/export-fixtures.ts` (per Phase 1.0 §8.4)
-reads each test case from `frontend/lib/select.test.ts`, calls the
-selector function, and writes the JSON. The script interface:
+The web's `frontend/scripts/export-fixtures.ts` does **not** exist
+yet — it is to be created in Phase 1.0 (§8.4). It does **not** scrape
+test cases out of `frontend/lib/select.test.ts` (that file is 74 flat
+`test('…', () => {…})` calls with inline literals and
+`Math.random()`-generated ids — there is no structured, deterministic
+source to extract). Instead the fixtures are **generated** from a
+single curated source of truth: the **`export const CASES: SelectorFixture[]`**
+array in `frontend/lib/select.fixtures.ts` (deterministic — fixed ids,
+no `Math.random`; see Phase 1.5 §4). The same `CASES` array is also
+consumed by `select.test.ts` as the web-side oracle, so the web and
+the Swift parity target check the identical expected values.
+
+The script imports `CASES`, and for each case serializes
+`{ name, selector, input, expected, seed? }` to the §5.1 JSON. The
+interface:
 
 ```typescript
 // plans/ios-macos/IOS_MACOS_WIRE_FORMAT.md §5.4 — informal interface;
 // the implementer can re-design as long as the output matches §5.1.
 interface ExportFixturesInput {
-  /** Path to the iOS test fixtures directory. */
+  /** Path to the iOS test fixtures directory
+   *  (ios/FinchCore/Tests/ParityTests/Fixtures/selectors). */
   outDir: string;
-  /** The selectors to export (default: all 32). */
+  /** Optional filter; default exports every case in CASES. */
   selectors?: string[];
-  /** Optional: skip the seed-store dependency by inlining inputs. */
-  inlineInputs?: boolean;
 }
 
+// Imports CASES from `@/lib/select.fixtures` and writes one JSON file
+// per case, normalizing any Map → plain object before stringify.
 export async function exportFixtures(input: ExportFixturesInput): Promise<void>;
 ```
 
-The script produces the per-selector-group output files. The iOS
-port's SwiftPM test target reads them via `Bundle.module` (per
+**`Map` → object normalization (required).** Several Phase-1.0
+selectors traffic in `Map`s — `merchantStats` returns
+`Map<string, MerchantStats>` and `anomalyScore` consumes one. A bare
+`JSON.stringify(map)` yields `{}`, silently emptying those fixtures.
+The generator MUST normalize any `Map` to a plain object before
+`JSON.stringify` — e.g. a replacer that converts `value instanceof Map`
+to `Object.fromEntries(value)` — applied to both `input` and `expected`.
+
+The script produces the per-selector-group output files under `outDir`.
+The iOS port's `ParityTests` target reads them via `Bundle.module` (per
 Phase 1.5 §4.4).
 
 ## §6. Cross-spec impact
@@ -1396,8 +1436,8 @@ Ambiguity check: the only "ambiguous" fields are:
   **single** `app_state` key holding a JSON map (§2.2 app_state).
   The Phase 1.5 spec was updated in grill pass #3 to match.
 - `rollover` on budgets — accepts `number | boolean` (§2.2 budgets);
-  the chokepoint coerces `boolean → number`. The Swift port must
-  mirror this.
+  the chokepoint coerces truthy → 0/1 (`args.rollover ? 1 : 0`,
+  `budgets/mutations.ts:50`). The Swift port must mirror this.
 
 Both are explicit in the annex.
 

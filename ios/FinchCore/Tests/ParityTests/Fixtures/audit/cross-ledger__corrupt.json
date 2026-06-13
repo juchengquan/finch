@@ -1,0 +1,10 @@
+{
+  "code": "cross-ledger",
+  "expected": [
+    {
+      "code": "cross-ledger",
+      "entryId": "e1",
+      "detail": "posting p1 references another ledger"
+    }
+  ]
+}

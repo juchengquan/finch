@@ -15,6 +15,9 @@
 > option(s), the trade-off, and a recommendation — the recommendation is a
 > default to argue *against*, not a mandate.
 
+> _Web facts verified against commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13.
+> See `_WEB_DRIFT_CHECKLIST.md`._
+
 _Audience: the engineers and designers who will build finch's native Apple
 apps. Assumes familiarity with the web app in `frontend/` and the design
 record in `plans/`. Last updated: 2026-06-12._
@@ -32,7 +35,7 @@ format, parity-test fixture format).
 > - 3-level categories shipped (PR #112) — see prior revision.
 > - i18n shipped (PRs #113 + #115) — see prior revision.
 > - Double-entry storage migration shipped (PRs #114 + #116) — see prior revision.
-> - **DB layer refactored into `core/` + `domain/` + `queries/` (PRs #124-#129)** — the write chokepoint + checksum + entries-schema + pack + paths + repo + schema + sealed-entry + server + storage + seed all live under `frontend/lib/db/core/`; user-facing actions are now 14 per-domain files under `frontend/lib/db/domain/<x>/{mutations,queries,types,errors}.ts`; reads are exposed via thin re-export shims under `frontend/lib/db/queries/<x>.ts`; everything routes through the 53-line `frontend/lib/db/mutate.ts` dispatcher. The DE cutover that used to live in `lib/db/cutover.ts` is inlined into the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` inside `lib/db/core/entries.ts`. The `lib/db/mutations.ts` file is gone — replaced by per-domain `mutations.ts` files. Architecture intent and interop contract are unchanged. §2.1 code-reference table, §4.6 cutover path, §4.9 chokepoint path, §8 cross-app implications, and the canonical-references glossary all updated.
+> - **DB layer refactored into `core/` + `domain/` + `queries/` (PRs #124-#129)** — the write chokepoint + checksum + entries-schema + pack + paths + repo + schema + sealed-entry + server + storage + seed all live under `frontend/lib/db/core/`; user-facing actions are now 14 per-domain files under `frontend/lib/db/domain/<x>/{mutations,queries,types,errors}.ts`; reads are exposed via thin re-export shims under `frontend/lib/db/queries/<x>.ts`; everything routes through the 53-line `frontend/lib/db/mutate.ts` dispatcher. The DE cutover data-move was removed as dead code (no pre-DE databases exist pre-release; the canonical `SCHEMA` already carries the post-cutover shape), so there is no `lib/db/cutover.ts` and no `2026-06-14` data-move migration — the only double-entry `MIGRATIONS` entry is the `2026-06-13T00:00:00Z` table-creation entry, replayed by the `migrate` runner in `lib/db/core/schema.ts`. The `lib/db/mutations.ts` file is gone — replaced by per-domain `mutations.ts` files. Architecture intent and interop contract are unchanged. §2.1 code-reference table, §4.6 cutover path, §4.9 chokepoint path, §8 cross-app implications, and the canonical-references glossary all updated.
 > - **Frontend refactored: typed icons + per-domain store + split shells + primitive consolidation + post-refactor cleanup + doc sweep + final cleanup + pre-existing fixes (PRs #130-#138)** — typed `lucide-react` barrel at `components/icons.tsx`; zustand store split into 14 per-domain slices at `lib/store/<x>/{state,actions}.ts` wired by `lib/store/index.ts`; `PageShell.tsx` is now a 21-line dispatcher that renders once and switches chrome by CSS (sidebar on `md+`, bottom bar below); 12 promoted primitives consolidated into `components/ui/` + `components/primitives.tsx`; `components/MobileComponents.tsx` deleted (its content moved to `components/mobile-page.tsx`); `components/currency-provider.tsx` renamed to `components/use-currency.ts` (exports the `useCurrency` hook + `Currency` type). 534/0 tests preserved; no behavior change. §3 row 37 (responsive shell) and §4.1 architecture-direction prose updated to reflect the dispatcher pattern.
 >
 > Cross-app interop is unchanged by all of the above — the `.finch` pack format and the shared `SCHEMA_VERSION` lineage are the contract (§8).
@@ -116,13 +119,12 @@ from screenshots — read the source.
 
 | Concern | Canonical source in `frontend/` | What it is |
 |---|---|---|
-| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/schema.ts` (canonical; DE additions folded in) + `lib/db/core/entries-schema.ts` (PR-A standalone, kept as a historical reference) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
+| Relational schema (tables, indexes, triggers, FTS5) | `lib/db/core/schema.ts` (canonical; DE additions folded in) + `lib/db/core/entries-schema.ts` (PR-A standalone, kept as a historical reference) | The full `CREATE …` SQL string + the version/migration runner; under DE the entries/postings tables + the seal/posting/balance triggers live here |
 | Schema rationale & business rules | `plans/database_design_en.md` + `plans/done/DOUBLE_ENTRY_PLAN.md` | The design doc behind the schema (decisions #18–#25 etc.) + the double-entry rewrite (§2-§3 invariants, §8 migration) |
 | Server projection contract (the `Tx` shape) | `lib/db/state.ts` (`projectState`) | The exact `Tx` / `AccountRow` shape the client consumes — see §2.6 |
-| **Write chokepoint** | `lib/db/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
-| **Cutover (the migration)** | `lib/db/cutover.ts` | The DOUBLE_ENTRY_PLAN §8.2 data-move builder: manual sealed inserts for id-fidelity, torn-write repair, per-entry idempotence guard. Replayed inside the `MIGRATIONS` entry stamped `2026-06-14T00:00:00Z` — see §4.6 |
-| Mutations (the user-facing write API) | `lib/db/mutate.ts` (dispatcher) + `lib/db/domain/<x>/mutations.ts` (per-domain) | Every server-side action and its effects; under DE these delegate to the chokepoint. The dispatcher is 53 lines; the 13 per-domain `mutations.ts` files export `handlers` maps with 74 unique actions total (77 entries; 3 duplicates for `createAccountGroup`/`updateAccountGroup`/`deleteAccountGroup` in `accounts/`) |
-| Pure derivations (the read brains) | `lib/select.ts` | All 32 computed figures — see §2.4 (the legacy `lib/derive.ts` was retired in the 2026-06 DB refactor; selectors are now consolidated in `lib/select.ts`) |
+| **Write chokepoint** | `lib/db/core/entries.ts` | The single write path: `postEntry` / `rebuildEntry` / `deleteEntry` / `resolveEntryRef` / `auditLedger` / `ensureSystemCategories` — see §4.9 |
+| Mutations (the user-facing write API) | `lib/db/mutate.ts` (dispatcher) + `lib/db/domain/<x>/mutations.ts` (per-domain) | Every server-side action and its effects; under DE these delegate to the chokepoint. The dispatcher is 53 lines; the per-domain `mutations.ts` files export `handlers` maps with 74 unique actions total (74 entries, 74 unique, 0 duplicates) |
+| Pure derivations (the read brains) | `lib/select.ts` | All 32 computed figures (all `lib/select.ts` exports except the `kindOf` helper) — see §2.4 (the legacy `lib/derive.ts` was retired in the 2026-06 DB refactor; selectors are now consolidated in `lib/select.ts`) |
 | Rules engine | `lib/rules/{engine,types,describe}.ts` | Condition/Action model + evaluator |
 | Reconcile math | `lib/reconcile.ts` | Cleared-balance / difference selector |
 | Recurrence math | `lib/recurrence.ts` | Scheduled-template occurrence generation |
@@ -130,7 +132,7 @@ from screenshots — read the source.
 | FX conversion | `lib/fx.ts`, `components/use-money.ts` | Rate lookup + base↔display conversion |
 | Installments | `lib/installment.ts` | Finite-plan progress derivation |
 | Counterparty matching | `lib/matcher/counterparty.ts` | Name-resolution on write |
-| **Migration discipline** | `lib/db/schema.ts` (`SCHEMA_VERSION` + `MIGRATIONS`) | ISO-datetime version lineage + additive-migration runner; the DE cutover stamps `2026-06-14T00:00:00Z` — see §4.6 |
+| **Migration discipline** | `lib/db/core/schema.ts` (`SCHEMA_VERSION` + `MIGRATIONS` + the `migrate` runner) | ISO-datetime version lineage + additive-migration runner; `SCHEMA_VERSION` is `2026-06-14T00:00:00Z`, and the only double-entry `MIGRATIONS` entry is the `2026-06-13T00:00:00Z` table-creation entry (no data-move entry) — see §4.6 |
 
 ### 2.1 Entities (and the relationships that matter)
 
@@ -294,7 +296,7 @@ wrong one. They are non-negotiable.
    `posting.amount` for any account leg — currency mismatch is impossible
    by §2.3.1 invariant I3). `current_balance` is **derived/cached**, never
    the source of truth — under DE it is recomputed from `Σ confirmed
-   account-leg amounts of postings` (`recomputeAccount`; the opening entry's
+   account-leg amounts of postings` (`recomputeAccountFromPostings`; the opening entry's
    account leg is in the sum, so there is no separate opening-balance seed
    term).
 3. **Display ≠ storage.** Amounts are stored in ledger base; the UI converts to
@@ -342,7 +344,7 @@ balance, cached-balance drift) are checked by `auditLedger` (§4.9).
 | I3 | Account-leg `currency` = the account's `currency`; category-leg `currency` = ledger base (this is the trigger guard that **kills the long-standing currency-mixing class of bug** by construction) | chokepoint + posting trigger |
 | I4 | Postings of a sealed entry are immutable; postings never exist without their entry (FK CASCADE); legs are never written/edited/deleted individually | seal + posting triggers |
 | I5 | Every posting's account/category belongs to the entry's ledger | chokepoint + `auditLedger` |
-| I6 | Only `status='confirmed'` entries move cached balances; `current_balance = Σ confirmed account-leg amounts` (the opening leg is in the sum — no separate seed term) | trigger + `recomputeAccount` |
+| I6 | Only `status='confirmed'` entries move cached balances; `current_balance = Σ confirmed account-leg amounts` (the opening leg is in the sum — no separate seed term) | trigger + `recomputeAccountFromPostings` |
 | I7 | `entries.kind` matches the postings shape: `transfer` ⟺ 2 account legs; `opening`/`adjustment` ⟺ equity leg with matching `system`; `refund` ⟹ positive account leg (+ optional `refunded_entry_id`) | chokepoint + `auditLedger` |
 | I8 | Global trial balance: `Σ all postings.amount_base = 0` per ledger | `auditLedger` (§4.9) |
 | I9 | Display-currency identity: `amount = amount_base` exactly when `currency` = ledger base | chokepoint + `auditLedger` |
@@ -435,8 +437,8 @@ CREATE TABLE entry_attachments (
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );
-CREATE INDEX idx_attach_entry  ON entry_attachments(entry_id);
-CREATE INDEX idx_attach_ledger ON entry_attachments(ledger_id);
+CREATE INDEX idx_eattach_entry  ON entry_attachments(entry_id);
+CREATE INDEX idx_eattach_ledger ON entry_attachments(ledger_id);
 ```
 
 > The legacy `transaction_attachments` table + `idx_attach_txn` index were
@@ -488,15 +490,16 @@ my-ledger.finch       (ZIP container)
         └── <attachment_id>.<ext>
 ```
 
-`manifest.json` carries: pack-format version, `app_name`, `app_version`,
-`schema_version`, `exported_at`, `exported_from` (device id + name),
-`db_sha256`, `row_counts` (mirroring the existing `db_metadata`
-integrity guard — `lib/db/core/checksum.ts` generalises straight into this),
-and `attachment_count` + total bytes. **DE `row_counts` keys:** the
-manifest enumerates the post-DE canonical tables (`entries`, `postings`,
-`entry_tags`, `entry_attachments`, ...) — packs exported before the
-cutover still import because migrations run when the swapped file is
-opened (§4.6).
+`manifest.json` carries: `pack_format_version`, `app_name`, `app_version`,
+`schema_version`, `exported_at`, `exported_from` (device id + name), a
+nested **`db` block** (`db: { sha256, row_counts, byte_size }` — `row_counts`
+mirrors the existing `db_metadata` integrity guard, which
+`lib/db/core/checksum.ts` generalises straight into this), and a nested
+**`attachments` block** (`attachments: { count, byte_size, ... }`). **DE
+`db.row_counts` keys:** the manifest enumerates the post-DE canonical tables
+(`entries`, `postings`, `entry_tags`, `entry_attachments`, ...) — packs
+exported before the cutover still import because migrations run when the
+swapped file is opened (§4.6).
 
 - **Atomic swap on receive:** the receiving device unpacks to a tmp
   directory, validates the manifest + every attachment's sha256, then
@@ -579,11 +582,11 @@ at where the behaviour lives today.
 | 6 | Activity filters (date/amount range), saved searches | Filter sheet (date/amount); saved-search chips (device-local) | Filter sheet; chips; `@AppStorage` | 2 | `use-saved-searches.ts` |
 | 7 | Select-mode bulk recategorise | Multi-select → apply one category | Edit-mode multi-select + toolbar | 2 | `activity/page.tsx` |
 | 8 | Needs-review filter + mark-all-reviewed | "Needs review · N" filter + bulk clear + per-row dot | Filter chip; swipe action | 2 | `activity/page.tsx`, `setReviewed`/`markAllReviewed` |
-| 9 | Per-row badges: refund, anomaly, needs-review | Inline badges on rows | SwiftUI label styles | 1–2 | `refund-badge.tsx`, `anomaly-badge.tsx` |
+| 9 | Per-row badges: refund, anomaly, needs-review | Inline badges on rows | SwiftUI label styles | 1–2 | `components/ui/refund-badge.tsx`, `anomaly-badge.tsx` |
 | 10 | Add transaction: type toggle, big amount, recent chips | Expense/Income/Transfer; large amount keypad; recent chips | Modal sheet; decimal pad; FAB entry | 1 | `add-expense-form.tsx` |
 | 11 | Category suggestion + duplicate nudge | Suggested-category chip; soft dup warning | Inline chip; non-blocking banner | 2 | `suggestCategory`, `findDuplicate` |
 | 12 | Multi-currency entry + cross-currency transfer (rate lock) | Currency follows account; received-amount locks rate | Inline secondary field | 2 | `add-expense-form.tsx`, `createTransfer` |
-| 13 | Merchant picker | Counterparty search/create on entry | Searchable picker sheet | 2 | `merchant-picker-sheet.tsx` |
+| 13 | Merchant picker | Counterparty search/create on entry | Searchable picker sheet | 2 | `merchant-picker-dialog.tsx` |
 | 14 | Budgets list: rings, groups, tabs (expense/income) | Grouped budget cards w/ progress rings; type tabs | `List`/grid; Swift Charts ring | 1 | `budgets/page.tsx` |
 | 15 | Budget detail: ring, carry-forward, contribute, cycle tx list | Ring + figures + cycle tx list; contribute (income); edit cycle | Detail view; form sheet | 1 | `budgets/[id]/page.tsx` |
 | 16 | Budget rollover + staged amount change | Rollover toggle/cap; next-cycle amount staging | Toggle + stepper | 2 | `lib/budgets/*` |
@@ -601,7 +604,7 @@ at where the behaviour lives today.
 | 28 | Merchants/counterparties admin (verify/rename/delete) | Counterparty manager w/ verify + CRUD + search | `List` + edit | 2 | `merchants/page.tsx` |
 | 29 | Categories admin (≤ 3-level tree, icon/colour) | Tree editor; create/edit/delete w/ promote-on-delete; depth cap enforced in mutation layer (mirror the web's `assertCanBeParent` / `assertSubtreeFitsUnder` in `Categories.addCategory(parentId:)`); recursive rollup + recursive budget category match | Outline/`DisclosureGroup` | 2 | `categories/page.tsx`; design: `plans/done/CATEGORIES_LEVEL3_PLAN.md` (✅ shipped on web) |
 | 30 | Tags admin | Tag CRUD w/ colour | `List` + edit | 2 | `tags/page.tsx` |
-| 31 | Rules: list, builder, backfill w/ preview, inline create-rule | Rule list; condition/action builder; backfill preview; "create rule" after manual recat | Form builder; sheet | 2–3 | `rules/page.tsx`, `rule-builder-sheet.tsx`, `lib/rules/*` |
+| 31 | Rules: list, builder, backfill w/ preview, inline create-rule | Rule list; condition/action builder; backfill preview; "create rule" after manual recat | Form builder; sheet | 2–3 | `rules/page.tsx`, `rule-builder-dialog.tsx`, `lib/rules/*` |
 | 32 | Transaction detail: recat, split, tags, refund, review/cleared toggles, FX card, rule provenance, delete | Full detail w/ all inline edits + provenance | Detail sheet; menus; swipe | 1 | `transaction-detail.tsx` |
 | 33 | Settings/Account: theme, mobile-tab editor, sample data, DB card, export/import, backup/restore, backup-frequency + backups-kept | Appearance, data/backup, export/import `.finch` + `.csv`; auto-backups are `.finch.bak` packs; user-configurable frequency + retention persisted in app_state | Settings screen; Files/share | 1–2 | `settings/account/page.tsx` |
 | 34 | Settings/Ledger: active ledger, display currency, base-currency change, exchange rates | Ledger settings + FX book + base-change tool | Pickers; warned destructive action | 2 | `settings/ledger/page.tsx`, `exchange-rates.tsx` |
@@ -739,28 +742,29 @@ Rate lookup mirrors `lib/fx.ts` (nearest on-or-before `date`).
   **UUIDv4** precisely for a multi-device sync model. **Direction:** native
   app generates **UUIDs** for new rows (PKs are `TEXT`, so they coexist with
   legacy ids), paying forward the §4.3-C sync option at no cost today.
-- **The double-entry migration.** `SCHEMA_VERSION` is bumped to
-  `2026-06-14T00:00:00Z` by the DE cutover (PRs #114 + #116,
-  `plans/done/DOUBLE_ENTRY_PLAN.md §8`). A native install that opens a
-  pre-DE `.finch` pack from the web (or vice versa) runs the same
-  `MIGRATIONS` entry — defensive `VACUUM INTO '<file>.pre-de.bak'`
-  snapshot, fresh entries / postings / entry_tags / entry_attachments /
-  entries_fts tables + indexes + triggers, category-table rebuild for the
-  new CHECK + `system` column, per-ledger `ensureSystemCategories`, then
-  the §8.2 data-move via the `MIGRATIONS` entry inside
-  `frontend/lib/db/core/entries.ts` (per-entry sealed-write, id-preserving
-  so client ids stay bit-identical across the cutover — id-stability table
-  at `DOUBLE_ENTRY_PLAN §8.3`; sealed-write helper at
-  `frontend/lib/db/core/sealed-entry.ts`),
-  `entries_fts` backfill, drop legacy tables, recompute every account,
-  `auditLedger` clean-or-abort. The `.pre-de.bak` snapshot is the
-  rollback. Native and web MUST run a byte-identical migration step so
-  the same DB migrates once, consistently, regardless of which app opens
-  it first; the migration is idempotent on a DB already at the new
-  version. Implementation reference: `frontend/lib/db/core/entries.ts`
-  (the `MIGRATIONS` array + `applyMigrations` runner) and
+- **The double-entry schema lineage.** `SCHEMA_VERSION` is
+  `2026-06-14T00:00:00Z` (PRs #114 + #116,
+  `plans/done/DOUBLE_ENTRY_PLAN.md §8`). The canonical `SCHEMA` already
+  carries the post-cutover double-entry shape, so the DE **data-move
+  cutover was removed as dead code** — there are no pre-DE databases to
+  migrate pre-release, and no `lib/db/cutover.ts`. The only double-entry
+  `MIGRATIONS` entry is the `2026-06-13T00:00:00Z` table-creation entry
+  (the entries / postings / entry_tags / entry_attachments / entries_fts
+  tables + indexes + triggers + the `system` column and CHECK); there is
+  **no `2026-06-14` data-move entry**. The runner is `migrate(exec,
+  { fresh })` in `frontend/lib/db/core/schema.ts` (not `applyMigrations`,
+  and not in `entries.ts`): a fresh DB is stamped with `SCHEMA_VERSION` via
+  `ensureMetadataRow`; an existing DB replays every `MIGRATIONS` entry whose
+  key sorts after the recorded `db_metadata.schema_version`. Native and web
+  MUST share this version lineage and the verbatim `MIGRATIONS` record so a
+  shared DB migrates once, consistently, regardless of which app opens it
+  first; each migration step is idempotent. The id-preserving sealed-write
+  discipline still applies to live entry writes — id-stability table at
+  `DOUBLE_ENTRY_PLAN §8.3`; sealed-write helper at
   `frontend/lib/db/core/sealed-entry.ts` (top-of-file comment carries the
-  id-fidelity table and the torn-write repair rationale).
+  id-fidelity table and the torn-write repair rationale). Implementation
+  reference for the runner: `frontend/lib/db/core/schema.ts`
+  (the `MIGRATIONS` record + `migrate` runner + `SCHEMA_VERSION`).
 
 ### 4.7 Platform baselines (decided)
 
@@ -797,7 +801,7 @@ problems:
 - Cross-ledger postings (I5) and `amount ≠ amount_base` on base-currency
   legs (I9).
 - Non-zero global trial balance per ledger (I8).
-- Cached `current_balance` drift vs the `recomputeAccount` sum.
+- Cached `current_balance` drift vs the `recomputeAccountFromPostings` sum.
 
 **When it runs (parity with the web — `DOUBLE_ENTRY_PLAN.md §3.3`):**
 
@@ -1231,7 +1235,7 @@ language. Each points at the sections of the doc that now reflect it.
 4. **Receipt attachments are designed *now*, and the files live *outside*
    the SQLite database.** A new `transaction_attachments` table stores
    pointers only (`rel_path`, `sha256`, mime, size); the actual photos and
-   PDFs live under `attachments/<transaction_id>/<attachment_id>.<ext>` and
+   PDFs live under `attachments/<entry_id>/<attachment_id>.<ext>` and
    travel alongside the DB inside every `.finch` pack. This table is added
    to the shared schema so both apps adopt it together. → §2.5 (whole
    subsection), §3 row 40, §8 cross-app implications. **✅ Shipped on the
@@ -1324,8 +1328,9 @@ during the relevant phase.
   (DE additions folded in; the historical `frontend/lib/db/core/entries-schema.ts`
   is the PR-A standalone kept as a reference); write chokepoint
   `frontend/lib/db/core/entries.ts` (`postEntry` / `rebuildEntry` / `deleteEntry`
-  / `auditLedger` / `ensureSystemCategories` + the `MIGRATIONS` array +
-  `applyMigrations` runner); sealed-write helper `frontend/lib/db/core/sealed-entry.ts`;
+  / `auditLedger` / `ensureSystemCategories`); migration runner
+  `frontend/lib/db/core/schema.ts` (the `MIGRATIONS` record + the `migrate`
+  runner + `SCHEMA_VERSION`); sealed-write helper `frontend/lib/db/core/sealed-entry.ts`;
   pack engine `frontend/lib/db/core/pack.ts`; checksum
   `frontend/lib/db/core/checksum.ts`; projection
   `frontend/lib/db/state.ts` (`projectState`); mutations

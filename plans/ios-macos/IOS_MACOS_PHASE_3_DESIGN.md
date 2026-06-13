@@ -1,5 +1,7 @@
 # finch for iOS & macOS — Phase 3 Implementation Design
 
+> _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
+
 > **Status**: design spec — not yet an implementation plan. Once
 > approved, this becomes the input to `writing-plans` to produce a
 > step-by-step implementation plan for Phase 3.
