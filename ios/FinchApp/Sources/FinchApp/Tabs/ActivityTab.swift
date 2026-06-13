@@ -8,6 +8,7 @@ struct ActivityTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var searchQuery: String = ""
     @State private var visibleCount: Int = 50
+    @State private var showingAdd = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,14 @@ struct ActivityTab: View {
             }
             .searchable(text: $searchQuery)
             .navigationTitle("Activity")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Transaction")
+                        .disabled(store.accounts.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
         }
     }
 

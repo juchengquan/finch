@@ -46,19 +46,42 @@ public final class FinchStore: ObservableObject {
     // MARK: - Launch bootstrap
 
     /// Open the persisted live DB on launch so imported (and locally-written)
-    /// data survives relaunch. No-op when no DB exists yet (first launch before
-    /// any import) — the store stays empty until an import. Idempotent.
+    /// data survives relaunch. On first launch (or any DB with no ledgers) it
+    /// seeds the minimal starter — a Personal/USD ledger + a Cash account + a few
+    /// common categories — so the write screens are usable immediately. A later
+    /// import atomically replaces whatever this opened. Idempotent.
     public func bootstrap() {
         guard dbQueue == nil else { return }
-        guard FileManager.default.fileExists(atPath: liveDBURL.path),
-              let live = try? DatabaseQueue(path: liveDBURL.path) else { return }
+        try? FileManager.default.createDirectory(
+            at: liveDBURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard let live = try? DatabaseQueue(path: liveDBURL.path) else { return }
         try? Migrations.runAll(on: live)
         self.dbQueue = live
+        if (try? Projection.ledgers(dbQueue: live))?.isEmpty ?? true {
+            try? seedMinimalStarter(live)
+        }
         self.auditProblems = (try? Audit.run(on: live)) ?? []
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
         let first = ledgers.first?.id ?? ""
         if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
         self.dbInfo = makeDBInfo()
+    }
+
+    /// Minimal starter so a brand-new install can write immediately (per the
+    /// first-launch product decision): one default Personal/USD ledger, a Cash
+    /// account, and Food/Transport/Shopping/Income categories — all through the
+    /// chokepoint so the system categories + invariants are seeded correctly.
+    private func seedMinimalStarter(_ q: DatabaseQueue) throws {
+        try Apply.apply(dbQueue: q, action: "createLedger",
+                        args: Args(["id": .string("personal"), "name": .string("Personal"), "base": .string("USD")]))
+        try Apply.apply(dbQueue: q, action: "setDefaultLedger", args: Args(["id": .string("personal")]))
+        try Apply.apply(dbQueue: q, action: "createAccount", args: Args([
+            "id": .string("cash"), "ledgerId": .string("personal"),
+            "name": .string("Cash"), "type": .string("cash"), "currency": .string("USD")]))
+        for (name, kind) in [("Food", "expense"), ("Transport", "expense"), ("Shopping", "expense"), ("Income", "income")] {
+            try Apply.apply(dbQueue: q, action: "createCategory",
+                            args: Args(["ledgerId": .string("personal"), "name": .string(name), "type": .string(kind)]))
+        }
     }
 
     // MARK: - Mutations (Task 16: the single mutating entry point)
@@ -258,6 +281,12 @@ public final class FinchStore: ObservableObject {
 
     public var categoryNodes: [CategoryNode] {
         categories.map { CategoryNode(id: $0.id, parentId: $0.parentId) }
+    }
+    /// Non-system categories for the active ledger (write-screen pickers), in
+    /// projection order. System equity categories (opening/adjustment/fx) are
+    /// excluded — they're booked by the engine, never picked by the user.
+    public var pickableCategories: [CategoryRow] {
+        categories.filter { ($0.kind ?? "") != "equity" }
     }
     public func categoryName(_ id: String?) -> String? {
         guard let id else { return nil }
