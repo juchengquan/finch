@@ -14,6 +14,7 @@ public enum Transactions {
     public static let handlers: [ActionName: Apply.Handler] = [
         .addTransaction: addTransaction,
         .adjustAccountBalance: adjustAccountBalance,
+        .updateTransaction: updateTransaction,
         .deleteTransaction: deleteTransaction,
         .setCleared: setCleared,
         .setReviewed: setReviewed,
@@ -91,6 +92,42 @@ public enum Transactions {
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
         try Entries.deleteEntry(db, ref.entryId)
         // DEFERRED: attachment-file cleanup + budget-rollover invalidation.
+    }
+
+    // MARK: updateTransaction (header-only path → rebuildEntry)
+
+    /// Reads the patch via JSONValue to honor key-presence (present-null = clear,
+    /// absent = keep) — which plain Decodable optionals can't distinguish.
+    /// DEFERRED: money edits (amount/category/account/currency) need the
+    /// legs-rebuild re-lock path; they throw notImplemented here.
+    static func updateTransaction(_ db: Database, _ args: Args) throws {
+        guard case .string(let id)? = args.values["id"] else {
+            throw I18nError("error.invalidArgs", [:], "updateTransaction requires an id")
+        }
+        guard case .object(let patch)? = args.values["patch"] else { return }
+        if patch.keys.contains(where: { ["amount", "category", "account", "currency"].contains($0) }) {
+            throw I18nError("error.notImplemented.txMoneyEdit", [:],
+                            "Editing a transaction's amount/category/account isn't supported on iOS yet")
+        }
+        guard let ref = try Entries.resolveEntryRef(db, id) else { return }
+        let entryId = ref.entryId
+
+        func strOrNil(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s }; return nil }
+
+        var ep = Entries.EntryPatch()
+        if case .string(let s)? = patch["date"] { ep.date = .set(s) }
+        if patch.keys.contains("time") { ep.time = .set(strOrNil(patch["time"])) }
+        if case .string(let s)? = patch["merchant"] {
+            ep.description = .set(s)
+            let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+            ep.counterpartyId = .set(ledgerId.isEmpty ? nil : (try Entries.resolveCounterpartyIdByName(db, ledgerId, s)))
+        }
+        if patch.keys.contains("note") { ep.notes = .set(strOrNil(patch["note"])) }
+        if case .string(let s)? = patch["kind"], let k = Entries.Kind(rawValue: s) { ep.kind = .set(k) }
+        if patch.keys.contains("refundedTransactionId") { ep.refundedEntryId = .set(strOrNil(patch["refundedTransactionId"])) }
+        if case .string(let s)? = patch["status"], let st = Entries.Status(rawValue: s) { ep.status = .set(st) }
+
+        try Entries.rebuildEntry(db, entryId, ep)
     }
 
     // MARK: setCleared / setReviewed / markAllReviewed

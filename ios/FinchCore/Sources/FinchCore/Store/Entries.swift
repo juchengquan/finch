@@ -61,18 +61,20 @@ public enum Entries {
         public var amountBase: Double?
         public var exchangeRate: Double?
         public var memo: String?
+        public var id: String?             // preserve the posting id across a rebuild
         public init(accountId: String, amount: Double, amountBase: Double? = nil,
-                    exchangeRate: Double? = nil, memo: String? = nil) {
+                    exchangeRate: Double? = nil, memo: String? = nil, id: String? = nil) {
             self.accountId = accountId; self.amount = amount; self.amountBase = amountBase
-            self.exchangeRate = exchangeRate; self.memo = memo
+            self.exchangeRate = exchangeRate; self.memo = memo; self.id = id
         }
     }
     public struct CategoryLeg: Sendable {
         public var categoryId: String?
         public var amountBase: Double      // signed, ledger base
         public var memo: String?
-        public init(categoryId: String?, amountBase: Double, memo: String? = nil) {
-            self.categoryId = categoryId; self.amountBase = amountBase; self.memo = memo
+        public var id: String?
+        public init(categoryId: String?, amountBase: Double, memo: String? = nil, id: String? = nil) {
+            self.categoryId = categoryId; self.amountBase = amountBase; self.memo = memo; self.id = id
         }
     }
     public enum Leg: Sendable { case account(AccountLeg), category(CategoryLeg) }
@@ -163,7 +165,7 @@ public enum Entries {
         return 1   // DEFERRED: staticFallback
     }
 
-    private static func resolveCounterpartyIdByName(_ db: Database, _ ledgerId: String, _ name: String) throws -> String? {
+    static func resolveCounterpartyIdByName(_ db: Database, _ ledgerId: String, _ name: String) throws -> String? {
         try String.fetchOne(db, sql:
             "SELECT id FROM counterparties WHERE ledger_id = ? AND name = ? COLLATE NOCASE LIMIT 1",
             arguments: [ledgerId, name])
@@ -188,7 +190,7 @@ public enum Entries {
                     let conv = try convertToBase(db, a.amount, currency, base, date)
                     amountBase = conv.amountBase; rate = conv.rate
                 }
-                legs.append(ResolvedLeg(id: newId("p"), accountId: a.accountId, categoryId: nil,
+                legs.append(ResolvedLeg(id: a.id ?? newId("p"), accountId: a.accountId, categoryId: nil,
                     amount: r2(a.amount), currency: currency, amountBase: r2(amountBase!),
                     exchangeRate: rate!, memo: a.memo))
             case .category(let c):
@@ -199,7 +201,7 @@ public enum Entries {
                     }
                     if catLedger != ledgerId { throw I18nError("error.category.differentLedger", [:], "Category is in a different ledger") }
                 }
-                legs.append(categoryLeg(nil, c.categoryId, r2(c.amountBase), base, c.memo))
+                legs.append(categoryLeg(c.id, c.categoryId, r2(c.amountBase), base, c.memo))
             }
         }
         return legs
@@ -399,6 +401,133 @@ public enum Entries {
         try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [entryId])
         for id in accts { try recomputeAccountFromPostings(db, id) }
         return accts
+    }
+
+    // MARK: rebuildEntry (the edit path)
+
+    /// A patch field: `.keep` (absent) vs `.set(value)` (present, incl. null).
+    public enum Field<T: Sendable>: Sendable { case keep, set(T) }
+
+    public struct EntryPatch: Sendable {
+        public var date: Field<String> = .keep
+        public var time: Field<String?> = .keep
+        public var description: Field<String> = .keep
+        public var kind: Field<Kind> = .keep
+        public var notes: Field<String?> = .keep
+        public var counterpartyId: Field<String?> = .keep
+        public var refundedEntryId: Field<String?> = .keep
+        public var status: Field<Status> = .keep
+        public var legs: Field<[Leg]> = .keep
+        public init() {}
+    }
+
+    private static func rowToResolved(_ r: Row) -> ResolvedLeg {
+        ResolvedLeg(id: r["id"], accountId: r["account_id"], categoryId: r["category_id"],
+                    amount: r["amount"], currency: r["currency"], amountBase: r["amount_base"],
+                    exchangeRate: (r["exchange_rate"] as Double?) ?? 1, memo: r["memo"])
+    }
+
+    /// Unseal → patch header → (maybe) rewrite legs → reseal → recompute touched
+    /// accounts. Mirrors the web `rebuildEntry`. Returns the touched account ids.
+    @discardableResult
+    public static func rebuildEntry(_ db: Database, _ entryId: String, _ patch: EntryPatch) throws -> [String] {
+        guard let cur = try Row.fetchOne(db, sql: "SELECT * FROM entries WHERE id = ?", arguments: [entryId]) else { return [] }
+        let oldLegRows = try Row.fetchAll(db, sql: "SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId])
+        var touched = Set(oldLegRows.compactMap { (r: Row) -> String? in r["account_id"] })
+
+        let ledgerId: String = cur["ledger_id"]
+        let base = try ledgerBase(db, ledgerId)
+        let curDate: String = cur["date"]
+        let curKind: String = cur["kind"]
+        let curStatus: String = cur["status"]
+        var date = curDate
+        if case .set(let d) = patch.date { date = d }
+        var kind = Kind(rawValue: curKind) ?? .expense
+        if case .set(let k) = patch.kind { kind = k }
+        let ts = ISO8601DateFormatter().string(from: Date())
+
+        let dateChanged: Bool = { if case .set(let d) = patch.date { return d != curDate }; return false }()
+        let legsProvided: Bool = { if case .set = patch.legs { return true }; return false }()
+        let mustRebuildLegs = legsProvided || dateChanged
+
+        let sp = "re_" + newId("x").replacingOccurrences(of: "-", with: "")
+        try db.execute(sql: "SAVEPOINT \(sp)")
+        do {
+            try db.execute(sql: "UPDATE entries SET sealed = 0 WHERE id = ?", arguments: [entryId])
+
+            var sets: [String] = []
+            var bind: [DatabaseValueConvertible?] = []
+            if case .set(let v) = patch.date { sets.append("date = ?"); bind.append(v) }
+            if case .set(let v) = patch.time { sets.append("time = ?"); bind.append(v) }
+            if case .set(let v) = patch.description { sets.append("description = ?"); bind.append(v) }
+            if case .set(let v) = patch.kind { sets.append("kind = ?"); bind.append(v.rawValue) }
+            if case .set(let v) = patch.notes { sets.append("notes = ?"); bind.append(v) }
+            if case .set(let v) = patch.counterpartyId { sets.append("counterparty_id = ?"); bind.append(v) }
+            if case .set(let v) = patch.refundedEntryId { sets.append("refunded_entry_id = ?"); bind.append(v) }
+            if case .set(let v) = patch.status, v.rawValue != curStatus {
+                sets.append("status = ?"); bind.append(v.rawValue)
+                if v == .confirmed { sets.append("confirmed_at = ?"); bind.append(ts) } else { sets.append("confirmed_at = NULL") }
+            }
+            sets.append("updated_at = ?"); bind.append(ts); bind.append(entryId)
+            try db.execute(sql: "UPDATE entries SET \(sets.joined(separator: ", ")) WHERE id = ?", arguments: StatementArguments(bind))
+
+            var rebuiltLegs: [ResolvedLeg]? = nil
+            if mustRebuildLegs {
+                var inputs: [Leg]
+                if case .set(let provided) = patch.legs {
+                    inputs = provided
+                } else {
+                    let fxId = try String.fetchOne(db, sql: "SELECT id FROM categories WHERE ledger_id = ? AND system = 'fx'", arguments: [ledgerId])
+                    inputs = oldLegRows.compactMap { r -> Leg? in
+                        let catId: String? = r["category_id"]
+                        if catId != nil && catId == fxId { return nil }
+                        if let acctId: String = r["account_id"] {
+                            return .account(AccountLeg(accountId: acctId, amount: r["amount"], memo: r["memo"], id: r["id"]))
+                        }
+                        return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"]))
+                    }
+                }
+                try db.execute(sql: "DELETE FROM postings WHERE entry_id = ?", arguments: [entryId])
+                var resolved = try resolveLegs(db, ledgerId, date, base, inputs)
+                if !legsProvided {
+                    // date-only re-lock: scale kept category legs by newSum/oldSum.
+                    let oldSum = oldLegRows.filter { ($0["account_id"] as String?) != nil }.reduce(0.0) { $0 + ($1["amount_base"] as Double) }
+                    let newSum = resolved.filter { $0.accountId != nil }.reduce(0.0) { $0 + $1.amountBase }
+                    let scale = oldSum != 0 ? newSum / oldSum : 1
+                    for i in resolved.indices where resolved[i].accountId == nil {
+                        resolved[i].amountBase = r2(resolved[i].amountBase * scale)
+                        resolved[i].amount = resolved[i].amountBase
+                    }
+                }
+                try appendResidue(db, ledgerId, base, &resolved)
+                try validateShape(kind, resolved, try categoryMeta(db, resolved))
+                try insertPostings(db, entryId, resolved)
+                for l in resolved where l.accountId != nil { touched.insert(l.accountId!) }
+                rebuiltLegs = resolved
+            } else if case .set(let k) = patch.kind, k.rawValue != curKind {
+                let current = oldLegRows.map(rowToResolved)
+                try validateShape(kind, current, try categoryMeta(db, current))
+            }
+
+            // Re-stamp the dedup hash from the entry's EFFECTIVE content.
+            var effTime: String? = cur["time"]
+            if case .set(let t) = patch.time { effTime = t }
+            var effDesc: String = (cur["description"] as String?) ?? ""
+            if case .set(let d) = patch.description { effDesc = d }
+            let hashLegs = rebuiltLegs ?? oldLegRows.map(rowToResolved)
+            try db.execute(sql: "UPDATE entries SET dedup_hash = ? WHERE id = ?",
+                           arguments: [dedupHash(date, effTime, effDesc, hashLegs), entryId])
+
+            try db.execute(sql: "UPDATE entries SET sealed = 1 WHERE id = ?", arguments: [entryId])
+            try db.execute(sql: "RELEASE \(sp)")
+        } catch {
+            try? db.execute(sql: "ROLLBACK TO \(sp)")
+            try? db.execute(sql: "RELEASE \(sp)")
+            throw error
+        }
+
+        for id in touched.sorted() { try recomputeAccountFromPostings(db, id) }
+        return touched.sorted()
     }
 
     /// Rebuild a confirmed account's cached balance from its postings.

@@ -69,6 +69,32 @@ final class ApplyTests: XCTestCase {
         }
     }
 
+    /// updateTransaction header edit (merchant + note) goes through rebuildEntry;
+    /// balance unchanged; a money edit is refused (deferred).
+    func test_applyUpdateTransactionHeader() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25),
+            "merchant": .string("Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true),
+        ]))
+        let txId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id = 'a1'")! }
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(txId), "patch": .object(["merchant": .string("Latte"), "note": .string("morning")]),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT description FROM entries"), "Latte")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT notes FROM entries"), "morning")
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, -25, accuracy: 0.001)
+        }
+        // A money edit is deferred → notImplemented.
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(txId), "patch": .object(["amount": .double(-99)]),
+        ]))) { err in
+            XCTAssertEqual((err as? I18nError)?.code, "error.notImplemented.txMoneyEdit")
+        }
+    }
+
     /// deleteTransaction (by the Tx id = account-posting id) removes the entry + recomputes.
     func test_applyDeleteTransaction() throws {
         let q = try freshDB()
