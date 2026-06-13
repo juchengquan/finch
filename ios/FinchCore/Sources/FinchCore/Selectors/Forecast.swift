@@ -22,6 +22,19 @@ public struct ScheduledTemplate: Equatable, Sendable, Codable {
     public let maxExecutions: Int?
     public let installmentTotal: Int?
     public let installmentPaid: Int?
+
+    public init(id: String, name: String, description: String? = nil, type: String,
+                amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
+                accountId: String, fromAccountId: String? = nil, startDate: String? = nil,
+                endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
+                installmentTotal: Int? = nil, installmentPaid: Int? = nil) {
+        self.id = id; self.name = name; self.description = description; self.type = type
+        self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
+        self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
+        self.startDate = startDate; self.endDate = endDate; self.nextRun = nextRun
+        self.maxExecutions = maxExecutions; self.installmentTotal = installmentTotal
+        self.installmentPaid = installmentPaid
+    }
 }
 
 public struct MonthForecast: Equatable, Sendable, Codable {

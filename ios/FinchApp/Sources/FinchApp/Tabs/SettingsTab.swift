@@ -34,6 +34,17 @@ struct SettingsTab: View {
                     }
                 }
 
+                Section("Notifications") {
+                    ForEach(NotificationKind.allCases, id: \.rawValue) { kind in
+                        Toggle(kind.title, isOn: Binding(
+                            get: { NotificationPrefs.isOn(kind) },
+                            set: { on in
+                                NotificationPrefs.set(kind, on: on)
+                                Task { await NotificationService.shared.refresh() }
+                            }))
+                    }
+                }
+
                 Section("Audit") {
                     if store.auditProblems.isEmpty {
                         Label("Clean", systemImage: "checkmark.seal")

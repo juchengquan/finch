@@ -17,6 +17,10 @@ struct FinchApp: App {
                 .task {
                     store.bootstrap()   // re-open the persisted live DB on launch
                     await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1
+                    // Phase 6.2: notifications
+                    NotificationService.shared.configure(store: store, router: router)
+                    await NotificationService.shared.requestPermissionIfNeeded()
+                    await NotificationService.shared.refresh()
                 }
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in
                     if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {

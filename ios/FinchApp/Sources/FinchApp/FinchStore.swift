@@ -99,6 +99,8 @@ public final class FinchStore: ObservableObject {
         // Phase 6.1: keep Spotlight in sync (idempotent full re-index; the
         // in-memory store is the UI's source of truth regardless).
         Task { await SpotlightIndexer.shared.indexAll(store: self) }
+        // Phase 6.2: re-plan notifications from the new state.
+        Task { await NotificationService.shared.refresh() }
     }
 
     // MARK: - Import (DESIGN §4)
