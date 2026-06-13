@@ -17,7 +17,8 @@ import {
 } from '@/lib/select';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema } from '@/lib/db/core/schema';
-import { auditLedger } from '@/lib/db/core/entries';
+import { auditLedger, postSimple, ensureSystemCategories } from '@/lib/db/core/entries';
+import { projectState } from '@/lib/db/state';
 import type { Exec } from '@/lib/db/core/repo';
 
 // Canonical fixture root (single spelling, repo-root `ios/`). scripts/ lives at
@@ -191,10 +192,42 @@ async function writeAuditFixtures(): Promise<{ count: number; covered: Set<strin
   return { count: RECIPES.length, covered };
 }
 
+/** Projection golden fixture (DESIGN §8.1): a real DB seeded via the chokepoint,
+ *  plus the web `projectState`'s `transactions` output, for the Swift Projection
+ *  parity test. */
+async function writeProjectionFixture(): Promise<number> {
+  const driver = await openDb(':memory:');
+  applyPragmaBootstrap(driver);
+  const x = execFor(driver);
+  await applySchema(x);
+  await addLedger(x, 'l1', 'SGD');
+  await addAccount(x, 'a1', 'l1');
+  await addAccount(x, 'a2', 'l1');
+  await addCategory(x, 'c1', 'l1');
+  await ensureSystemCategories(x, 'l1');
+  // A few valid entries through the chokepoint (sealed + balanced).
+  await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: -25, date: '2026-05-01', description: 'Coffee', categoryId: 'c1', skipRules: true });
+  await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: -10, date: '2026-05-02', description: 'Lunch', categoryId: 'c1', skipRules: true });
+  await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: 100, date: '2026-05-03', description: 'Pay', categoryId: 'c1', skipRules: true });
+
+  const state = await projectState(x);
+  const dir = path.join(OUT, 'projection');
+  await fs.mkdir(dir, { recursive: true });
+  const dbPath = path.join(dir, 'projection.sqlite3');
+  await fs.rm(dbPath, { force: true });
+  await x('VACUUM INTO ?', [dbPath]);
+  await fs.writeFile(path.join(dir, 'projection.json'),
+    JSON.stringify({ expected: state.transactions }, null, 2) + '\n');
+  driver.close();
+  return state.transactions.length;
+}
+
 async function main(): Promise<void> {
   await fs.mkdir(OUT, { recursive: true });
   const sel = await writeSelectorFixtures();
   const aud = await writeAuditFixtures();
+  const proj = await writeProjectionFixture();
+  console.log(`  projection fixture: ${proj} txns`);
   const allCodes = ['unsealed', 'unbalanced', 'too-few-legs', 'no-account-leg', 'currency-mismatch',
     'cross-ledger', 'base-identity', 'kind-shape', 'trial-balance', 'balance-drift'];
   const missing = allCodes.filter((c) => !aud.covered.has(c));

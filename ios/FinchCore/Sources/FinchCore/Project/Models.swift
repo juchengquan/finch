@@ -21,6 +21,12 @@ public struct Tx: Codable, Equatable, Sendable {
     public var counterpartyId: String?
     public var splits: [TxSplit]?
     public var tags: [String]?
+    public var note: String?
+    public var sourceTemplateId: String?
+    public var refundedTransactionId: String?
+    public var clearedAt: String?
+    public var appliedRuleIds: [String]?
+    public var reviewedAt: String?
 }
 
 public struct TxSplit: Codable, Equatable, Sendable {
