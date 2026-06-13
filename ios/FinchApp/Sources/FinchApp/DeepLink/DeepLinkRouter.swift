@@ -1,7 +1,24 @@
 import SwiftUI
 
 /// The 6 shipped tabs, in display order (the canonical list reconciled in #160).
-public enum AppTab: Hashable { case accounts, activity, budgets, insights, scheduled, settings }
+public enum AppTab: Hashable, CaseIterable, Identifiable {
+    case accounts, activity, budgets, insights, scheduled, settings
+    public var id: Self { self }
+    public var title: String {
+        switch self {
+        case .accounts: return "Accounts"; case .activity: return "Activity"
+        case .budgets: return "Budgets"; case .insights: return "Insights"
+        case .scheduled: return "Scheduled"; case .settings: return "Settings"
+        }
+    }
+    public var icon: String {
+        switch self {
+        case .accounts: return "wallet.pass"; case .activity: return "list.bullet"
+        case .budgets: return "chart.pie"; case .insights: return "chart.line.uptrend.xyaxis"
+        case .scheduled: return "calendar"; case .settings: return "gear"
+        }
+    }
+}
 
 /// Phase 6.1 — routes a deep link (a tapped Spotlight result; later: App Intents,
 /// notifications) to the owning tab. Detail-screen pushes await Phase 3/4; until

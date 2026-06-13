@@ -6,6 +6,8 @@ import FinchCore
 struct SettingsTab: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
+    @StateObject private var backups = AutoBackupManager.shared
+    @StateObject private var icloud = ICloudSync.shared
 
     var body: some View {
         NavigationStack {
@@ -23,6 +25,34 @@ struct SettingsTab: View {
                     }
                     LabeledContent("Display currency", value: store.displayCurrency)
                     NavigationLink("Manage ledgers") { LedgerManagementView() }
+                }
+
+                Section {
+                    LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(date: .abbreviated, time: .shortened) ?? "—")
+                    Button("Back up now") { Task { await backups.flush() } }
+                        .disabled(store.ledgers.isEmpty)
+                    if let err = backups.lastError {
+                        Text(err).foregroundStyle(.red).font(.caption)
+                    }
+                    LabeledContent("iCloud Drive", value: icloud.available ? "On" : "Unavailable")
+                    if icloud.newerRemotePack != nil {
+                        Button("Import newer version from iCloud") {
+                            if let data = icloud.dataForImport() {
+                                Task { try? await store.loadPack(from: data); icloud.clearPendingImport() }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Backups")
+                } footer: {
+                    Text("Automatic local .finch backups after edits (kept: last 14), mirrored to iCloud Drive when signed in. Newer versions from other devices are offered for import (never auto-replaced).")
+                }
+
+                Section("Power tools") {
+                    NavigationLink("Rules") { RulesManagerView() }
+                    NavigationLink("Categories") { CategoryAdminView() }
+                    NavigationLink("Tags") { TagAdminView() }
+                    NavigationLink("Exchange rates") { ExchangeRatesView() }
                 }
 
                 Section("Database") {

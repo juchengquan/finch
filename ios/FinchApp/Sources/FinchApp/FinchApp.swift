@@ -14,7 +14,7 @@ struct FinchApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                ContentTabs()
+                AdaptiveShell()   // Phase 3: tab bar (compact) ↔ sidebar+split (regular)
                     .environmentObject(store)
                     .environmentObject(router)
                     .environmentObject(gate)
@@ -30,6 +30,9 @@ struct FinchApp: App {
                 NotificationService.shared.configure(store: store, router: router)
                 await NotificationService.shared.requestPermissionIfNeeded()
                 await NotificationService.shared.refresh()
+                AutoBackupManager.shared.configure(store: store)   // Phase 5
+                ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
+                PendingAttachmentImporter.importPending(into: store)   // Phase 6.5: import shared receipts
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
@@ -38,7 +41,9 @@ struct FinchApp: App {
             }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
-                case .background: gate.didEnterBackground()
+                case .background:
+                    gate.didEnterBackground()
+                    Task { await AutoBackupManager.shared.flush() }   // Phase 5: flush before kill
                 case .active: gate.didBecomeActive()
                 default: break
                 }
@@ -47,25 +52,7 @@ struct FinchApp: App {
     }
 }
 
-/// The 6-tab shell, in the canonical display order: Accounts, Activity, Budgets,
-/// Insights (1.5), Scheduled (2), Settings. A future Reports tab slots between
-/// Insights and Scheduled (not built yet).
-struct ContentTabs: View {
-    @EnvironmentObject private var router: DeepLinkRouter
-    var body: some View {
-        TabView(selection: Binding(get: { router.selectedTab }, set: { router.selectedTab = $0 })) {
-            AccountsTab()
-                .tabItem { Label("Accounts", systemImage: "wallet.pass") }.tag(AppTab.accounts)
-            ActivityTab()
-                .tabItem { Label("Activity", systemImage: "list.bullet") }.tag(AppTab.activity)
-            BudgetsTab()
-                .tabItem { Label("Budgets", systemImage: "chart.pie") }.tag(AppTab.budgets)
-            InsightsTab()   // NEW in Phase 1.5
-                .tabItem { Label("Insights", systemImage: "chart.line.uptrend.xyaxis") }.tag(AppTab.insights)
-            ScheduledTab()   // NEW in Phase 2
-                .tabItem { Label("Scheduled", systemImage: "calendar") }.tag(AppTab.scheduled)
-            SettingsTab()
-                .tabItem { Label("Settings", systemImage: "gear") }.tag(AppTab.settings)
-        }
-    }
-}
+// The 6-tab shell now lives in Shell/AdaptiveShell.swift (Phase 3): TabBarShell
+// for compact width, SplitViewShell for regular. Canonical order: Accounts,
+// Activity, Budgets, Insights, Scheduled, Settings (a future Reports tab slots
+// between Insights and Scheduled).

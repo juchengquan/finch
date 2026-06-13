@@ -2,16 +2,16 @@ import XCTest
 @testable import FinchCore
 
 final class ArgsTests: XCTestCase {
-    /// The chokepoint catalogue is exactly the web's 74 actions (Phase 2).
+    /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment` = 75.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 74)
+        XCTAssertEqual(ActionName.allCases.count, 75)
     }
 
     func test_actionNameRawValues() {
         XCTAssertEqual(ActionName.addTransaction.rawValue, "addTransaction")
         XCTAssertNotNil(ActionName(rawValue: "reset"))
-        // setEntryAttachment is deferred to Phase 6.5 — not part of the 74.
-        XCTAssertNil(ActionName(rawValue: "setEntryAttachment"))
+        // setEntryAttachment is the 75th action (Phase 6.5; native-only).
+        XCTAssertNotNil(ActionName(rawValue: "setEntryAttachment"))
     }
 
     /// Args decodes a JSON object and `to(_:)` projects it into a concrete

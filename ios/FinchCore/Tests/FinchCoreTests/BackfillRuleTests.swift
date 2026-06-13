@@ -56,6 +56,20 @@ final class BackfillRuleTests: XCTestCase {
         }
     }
 
+    /// The Phase 4 rules projection lists name/priority/active.
+    func test_rulesProjection() throws {
+        let q = try seeded()
+        let condition: JSONValue = .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("x")])
+        let actions: JSONValue = .array([.object(["type": .string("set_reviewed")])])
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args(["id": .string("r1"), "ledgerId": .string("l1"), "name": .string("Rev"), "priority": .int(50), "condition": condition, "actions": actions]))
+        try Apply.apply(dbQueue: q, action: "updateRule", args: Args(["id": .string("r1"), "patch": .object(["isActive": .bool(false)])]))
+        let rules = try Projection.rules(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(rules.count, 1)
+        XCTAssertEqual(rules.first?.name, "Rev")
+        XCTAssertEqual(rules.first?.priority, 50)
+        XCTAssertEqual(rules.first?.isActive, false)
+    }
+
     /// On-insert: an active set_category rule fires inside addTransaction (the
     /// postEntry rules hook), re-pointing the category leg and stamping
     /// applied_rule_ids — without a separate backfill pass.
