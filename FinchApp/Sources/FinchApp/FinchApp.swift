@@ -25,6 +25,8 @@ struct ContentTabs: View {
                 .tabItem { Label("Activity", systemImage: "list.bullet") }
             BudgetsTab()
                 .tabItem { Label("Budgets", systemImage: "chart.pie") }
+            InsightsTab()   // NEW in Phase 1.5
+                .tabItem { Label("Insights", systemImage: "chart.line.uptrend.xyaxis") }
             SettingsTab()
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
