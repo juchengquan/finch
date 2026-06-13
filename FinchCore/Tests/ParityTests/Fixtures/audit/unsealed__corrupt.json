@@ -1,0 +1,10 @@
+{
+  "code": "unsealed",
+  "expected": [
+    {
+      "code": "unsealed",
+      "entryId": "e1",
+      "detail": "entry was never sealed (torn write)"
+    }
+  ]
+}

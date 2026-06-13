@@ -1,0 +1,15 @@
+{
+  "code": "too-few-legs",
+  "expected": [
+    {
+      "code": "too-few-legs",
+      "entryId": "e1",
+      "detail": "1 postings, 1 account legs"
+    },
+    {
+      "code": "kind-shape",
+      "entryId": "e1",
+      "detail": "kind=expense but shape is acct=1 plain=0 eq=[0,0,0]"
+    }
+  ]
+}

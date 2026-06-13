@@ -1,0 +1,9 @@
+{
+  "name": "empty",
+  "selector": "categorySpend",
+  "input": {
+    "txns": [],
+    "ledgerId": "personal"
+  },
+  "expected": {}
+}

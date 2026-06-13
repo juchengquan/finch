@@ -1,0 +1,10 @@
+{
+  "code": "base-identity",
+  "expected": [
+    {
+      "code": "base-identity",
+      "entryId": "e1",
+      "detail": "posting p1: amount != amount_base in the base currency (I9)"
+    }
+  ]
+}

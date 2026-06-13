@@ -1,0 +1,29 @@
+{
+  "name": "is-anomaly",
+  "selector": "anomalyScore",
+  "input": {
+    "tx": {
+      "id": "t1",
+      "merchant": "Coffee",
+      "category": "food",
+      "amount": -40,
+      "account": "a1",
+      "date": "2026-05-01",
+      "pending": false,
+      "ledgerId": "personal"
+    },
+    "stats": {
+      "m:coffee": {
+        "count": 5,
+        "mean": 4,
+        "std": 0.5
+      }
+    }
+  },
+  "expected": {
+    "zScore": 72,
+    "mean": 4,
+    "count": 5,
+    "isAnomaly": true
+  }
+}

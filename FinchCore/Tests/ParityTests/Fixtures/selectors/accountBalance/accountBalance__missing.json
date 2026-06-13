@@ -1,0 +1,29 @@
+{
+  "name": "missing",
+  "selector": "accountBalance",
+  "input": {
+    "accounts": [
+      {
+        "id": "a1",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 100,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      }
+    ],
+    "accountId": "zzz"
+  },
+  "expected": 0
+}

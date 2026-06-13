@@ -1,0 +1,14 @@
+{
+  "name": "weekly-recurring",
+  "selector": "cycleWindow",
+  "input": {
+    "frequency": "weekly",
+    "startDate": "2026-01-01",
+    "today": "2026-05-15",
+    "isRecurring": 1
+  },
+  "expected": {
+    "from": "2026-05-14",
+    "to": "2026-05-20"
+  }
+}
