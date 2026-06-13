@@ -213,7 +213,7 @@
     "title": "规则",
     "newAria": "新建规则",
     "newRule": "新建规则",
-    "intro": "规则会在 {ledger} 的每笔新交易上自动运行。匹配的规则可以设置类别、添加标签、重命名商户或拆分该笔。",
+    "intro": "规则会在 <ledger></ledger> 的每笔新交易上自动运行。匹配的规则可以设置类别、添加标签、重命名商户或拆分该笔。",
     "empty": {
       "title": "暂无规则",
       "description": "规则会自动归类重复商户。点击「新建规则」开始创建 —— 可以从你最常改类别的商户入手。"
@@ -339,7 +339,7 @@
     "title": "计划",
     "newAria": "新建计划项",
     "upcoming": "即将到期",
-    "incoming": "+ {amount} 入账",
+    "incoming": "+ <amount></amount> 入账",
     "month": "月份",
     "year": "年份",
     "prevMonth": "上一月",
@@ -611,7 +611,7 @@
     "ungroupedLabel": "未分组",
     "emptyGroup": "暂无{type}预算",
     "empty": {
-      "title": "{ledger} 还没有{type}预算",
+      "title": "<ledger></ledger> 还没有{type}预算",
       "description": "点击 + 设置每月上限或储蓄目标。"
     },
     "card": {
@@ -865,7 +865,7 @@
     "ungroupedLabel": "未分组",
     "emptyGroup": "无账户",
     "empty": {
-      "title": "{ledger} 还未关联任何账户。",
+      "title": "<ledger></ledger> 还未关联任何账户。",
       "description": "添加第一个账户开始跟踪余额与交易。"
     },
     "createDialog": {
@@ -1203,7 +1203,7 @@
       "rateLocked": "汇率锁定 @ {rate} · {from}→{to} · {date}"
     },
     "ruleSuggestion": {
-      "prompt": "始终将 {merchant} 归类为 {category}?",
+      "prompt": "始终将 <merchant></merchant> 归类为 <category></category>?",
       "createRule": "创建规则",
       "dismissAria": "关闭"
     },
