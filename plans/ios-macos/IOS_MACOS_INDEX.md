@@ -180,9 +180,11 @@ The recurring terms + their canonical numbers, alphabetized.
   `IOS_MACOS_PHASE_1_DESIGN.md` §5.
 - **Tab list (Phase 1.5)** — 5 tabs (adds Insights). See
   `IOS_MACOS_PHASE_1_5_DESIGN.md` §1.
-- **Tab list (Phase 2)** — 6 tabs (adds writable Scheduled;
-  Reports is the 5th by display order, Settings is a section,
-  not a tab). See `IOS_MACOS_PHASE_2_DESIGN.md` §7.6.
+- **Tab list (Phase 2)** — 6 tabs, in display order: Accounts,
+  Activity, Budgets, Insights, Scheduled, Settings. **Settings IS
+  a tab** (matching Phase 1.0/1.5 and the shipped app). Reports is
+  a web section **not yet ported** — a future Reports tab slots
+  between Insights and Scheduled. See `IOS_MACOS_INDEX.md` §3.
 
 ### W
 
@@ -218,7 +220,7 @@ For each recurring topic, 1 canonical location + cross-references.
 
 - **Phase 1.0 (4 tabs)**: `IOS_MACOS_PHASE_1_DESIGN.md` §5
 - **Phase 1.5 (5 tabs)**: `IOS_MACOS_PHASE_1_5_DESIGN.md` §1
-- **Phase 2 (6 tabs)**: `IOS_MACOS_PHASE_2_DESIGN.md` §7.6
+- **Phase 2 (6 tabs)**: `IOS_MACOS_INDEX.md` §3 (canonical; Phase 2's spec has no tab-list section — §7.6 is Scheduled CRUD)
 - **Phase 3 (adaptive shell)**: `IOS_MACOS_PHASE_3_DESIGN.md` §2.1
 - **App Intents (OpenScreenIntent)**: `IOS_MACOS_PHASE_6_4_DESIGN.md` §2.7
 - **Plan brief §13**: `IOS_MACOS_PLAN.md` §13
@@ -354,9 +356,8 @@ Adds **Insights** as the 5th tab (between Budgets and Settings).
 
 ### Phase 2 (6 tabs)
 
-Adds **Scheduled** as the 6th tab (writable in Phase 2).
-**Reports** is the 5th by display order (per the size-class matrix);
-**Settings** is a section within the app, not a tab.
+Adds **Scheduled** as a writable tab. The 6 tabs, in display order
+(matches the shipped app, `ios/FinchApp/Sources/FinchApp/FinchApp.swift`):
 
 | # | Tab | Read-only? |
 |---|---|---|
@@ -364,12 +365,13 @@ Adds **Scheduled** as the 6th tab (writable in Phase 2).
 | 2 | Activity | Yes (Phase 1.0) |
 | 3 | Budgets | Yes (Phase 1.0) |
 | 4 | Insights | Yes (Phase 1.5) |
-| 5 | **Reports** | **Yes (web has it; the iOS port may or may not have it — see Phase 2 §7.6)** |
-| 6 | **Scheduled** | **No (writable in Phase 2)** |
-| 7 | Holdings | Accessible via Accounts tab › [account] › Holdings section |
+| 5 | **Scheduled** | **No (writable in Phase 2)** |
+| 6 | Settings | No (interactive: active ledger, import/export, manage ledgers) |
 
-**iOS Settings** is reached via a gear icon in the top bar (not
-a tab).
+**Settings is a tab** (the 6th) — consistent with Phase 1.0/1.5 and
+the shipped app. **Reports** is a web section **not yet ported**; a
+future Reports tab slots between Insights and Scheduled. **Holdings**
+is not a tab — it's reached from Accounts › Holdings.
 
 ### Phase 3+ (adaptive shell)
 

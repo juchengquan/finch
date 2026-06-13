@@ -50,11 +50,11 @@ SwiftUI's adaptive containers. The same code base serves all
 three platforms; the chrome switches by size class (iPhone =
 bottom tab bar; iPad = sidebar + tab bar; Mac = sidebar + tab
 bar + menu bar + keyboard shortcuts + ⌘K). The 6 tabs
-(Accounts, Activity, Budgets, Insights, Reports, Scheduled —
-post-Phase-2; note: "Reports" is the 5th tab, "Settings" is
-a section, not a tab) + the 7 write screens from Phase 2
-all render on all three platforms. **Both Mac distribution
-paths** (Mac App Store + notarised direct download) are set up.
+(Accounts, Activity, Budgets, Insights, Scheduled, Settings —
+post-Phase-2; **Settings IS a tab**; a future Reports tab slots
+between Insights and Scheduled, not yet built) + the 7 write
+screens from Phase 2 all render on all three platforms. **Both Mac
+distribution paths** (Mac App Store + notarised direct download) are set up.
 
 **Phase 3 is mostly a layout-distribution exercise.** The
 chokepoint + selectors + parity tests from Phases 1.0-2 don't
@@ -107,11 +107,11 @@ chokepoint + selectors + write surfaces are unchanged.
 
 The Phase 1.0 spec's §5 describes the iPhone shell as a
 `TabView` with 4 tabs (Accounts, Activity, Budgets, Settings;
-Phase 1.5 adds Insights as the 5th; Phase 2 adds Scheduled
-as the 6th, Reports is the 5th by display order — see
-§2.1's size-class matrix). Phase 3 wraps this in an
-**adaptive shell** that
-switches chrome by size class.
+Phase 1.5 adds Insights; Phase 2 adds Scheduled), giving the
+canonical 6-tab order: Accounts, Activity, Budgets, Insights,
+Scheduled, Settings — see §2.1's size-class matrix. (A future
+Reports tab slots between Insights and Scheduled.) Phase 3 wraps
+this in an **adaptive shell** that switches chrome by size class.
 
 The pattern mirrors the web's PageShell dispatcher (per the
 CLAUDE.md note about PageShell.tsx being a 21-line dispatcher
