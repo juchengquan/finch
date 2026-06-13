@@ -118,6 +118,23 @@ extension Projection {
         }
     }
 
+    /// `holdings` for a ledger (Phase 1.5) — the investment positions the
+    /// Insights/holdings selectors consume.
+    public static func holdings(dbQueue: DatabaseQueue, ledgerId: String) throws -> [Holding] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT id, ledger_id AS ledgerId, account_id AS accountId, symbol, name,
+                       shares, cost_basis AS costBasis, currency, last_price AS lastPrice,
+                       last_price_date AS lastPriceDate, notes
+                  FROM holdings WHERE ledger_id = ? ORDER BY symbol
+                """, arguments: [ledgerId]).map { r in
+                Holding(id: r["id"], ledgerId: r["ledgerId"], accountId: r["accountId"], symbol: r["symbol"],
+                        name: r["name"], shares: r["shares"], costBasis: r["costBasis"], currency: r["currency"],
+                        lastPrice: r["lastPrice"], lastPriceDate: r["lastPriceDate"], notes: r["notes"])
+            }
+        }
+    }
+
     /// JSON-array text column → `[String]` (empty on null/malformed) — mirrors
     /// the web `parseIds` helper (budgets.ts:16).
     private static func parseIds(_ raw: String?) -> [String] {
