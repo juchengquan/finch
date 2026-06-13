@@ -12,7 +12,58 @@ public enum Scheduled {
         .addScheduledSplit: addSplit,
         .updateScheduledSplit: updateSplit,
         .removeScheduledSplit: removeSplit,
+        .generateDueScheduled: generateDue,
+        // DEFERRED: postScheduled (needs installment-paid derivation + split posting).
     ]
+
+    /// Post every due (not-yet-generated) occurrence of each active template as a
+    /// pending transaction/transfer. DEFERRED: split-enabled templates are
+    /// skipped (as on the web), and the rules engine isn't applied.
+    static func generateDue(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let today: String? }
+        let today = (try? args.to(A.self).today.flatMap { $0 }) ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        let ts = ISO8601DateFormatter().string(from: Date())
+        for r in try Row.fetchAll(db, sql: "SELECT * FROM scheduled_templates WHERE is_active = 1") {
+            let type: String = r["kind"]
+            guard let amount = r["amount"] as Double? else { continue }
+            if (r["splits_enabled"] as Int? ?? 0) != 0 { continue }
+            if type == "transfer" && (r["from_account_id"] as String?) == nil { continue }
+
+            let template = ScheduledTemplate(
+                id: r["id"], name: (r["name"] as String?) ?? "", description: nil, type: type,
+                amount: amount, frequency: r["frequency"], dayOfMonth: (r["day_of_month"] as Int?) ?? 1,
+                weekDay: r["day_of_week"], accountId: r["account_id"], fromAccountId: r["from_account_id"],
+                startDate: r["start_date"], endDate: r["end_date"], nextRun: (r["next_run"] as String?) ?? "",
+                maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
+            var dates = Selectors.occurrencesUpTo(template, today)
+            if dates.isEmpty { continue }
+            let have = Set(try String.fetchAll(db, sql: "SELECT date FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
+            dates = dates.filter { !have.contains($0) }
+            if let maxEx = r["max_executions"] as Int? { dates = Array(dates.prefix(Swift.max(0, maxEx - have.count))) }
+            if let instTotal = r["installment_total"] as Int? { dates = Array(dates.prefix(Swift.max(0, instTotal - have.count))) }
+            if dates.isEmpty { continue }
+
+            let ledgerId: String = r["ledger_id"]
+            let acctId: String = r["account_id"]
+            let description = (r["description"] as String?) ?? (r["name"] as String?) ?? ""
+            if type == "transfer" {
+                let fromAccountId: String = r["from_account_id"]
+                for date in dates {
+                    try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
+                                             date: date, note: description.isEmpty ? nil : description, sourceTemplateId: r["id"], timestamp: ts)
+                }
+                continue
+            }
+            let signed = (type == "income" ? 1.0 : -1.0) * amount
+            let categoryId: String? = r["category_id"]
+            let cpId = try Entries.resolveCounterpartyIdByName(db, ledgerId, description)
+            for date in dates {
+                try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
+                    description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
+                    status: .pending, counterpartyId: cpId, id: nil, sourceTemplateId: r["id"]))
+            }
+        }
+    }
 
     /// null/empty → nil; otherwise a positive whole number (else throws).
     private static func parseInstallmentTotal(_ v: JSONValue?) throws -> Int? {

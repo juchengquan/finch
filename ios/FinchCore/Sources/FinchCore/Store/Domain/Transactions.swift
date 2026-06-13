@@ -24,10 +24,19 @@ public enum Transactions {
         .bulkRecategorize: bulkRecategorize,
         .confirmTransaction: confirmTransaction,
         .confirmPendingWithMerchant: confirmPendingWithMerchant,
+        .removeAttachment: removeAttachment,
         // DEFERRED: setTransactionSplits — the web's per-split base allocation
         // (sign × ratio + "absorb remainder") needs re-derivation against a
         // Task-17 fixture before I trust the balance; left notImplemented.
     ]
+
+    // MARK: removeAttachment
+
+    /// Drop an attachment row. DEFERRED: the on-disk file unlink (no file store yet).
+    static func removeAttachment(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String }
+        try db.execute(sql: "DELETE FROM entry_attachments WHERE id = ?", arguments: [try args.to(A.self).id])
+    }
 
     // MARK: confirm
 
