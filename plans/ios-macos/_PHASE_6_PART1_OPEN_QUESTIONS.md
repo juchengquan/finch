@@ -24,17 +24,14 @@ with the default I chose, to reconcile at the end.
 
 ## 6.3 — Biometric
 
-- ⏳ **Settings storage: UserDefaults vs app_state.** The design files
-  `BiometricSettings` under `app_state` (key `biometric_settings`). **Default
-  chosen:** store in **UserDefaults** instead. Rationale: a biometric policy is a
-  *device* preference, not ledger data — putting it in `app_state` would export
-  it inside a `.finch` pack and import it onto another device (you don't want a
-  recipient inheriting your lock policy). Matches where 6.2's notification prefs
-  live. Revisit if cross-device policy sync is actually wanted.
-- ⏳ **Sensitive-action gating coverage.** The gate exposes `confirmSensitive()`,
-  but this pass wires it only to **Export** (next commit). Change-base and a
-  future delete-all should also call it. Parked rather than threading auth through
-  every destructive path now.
+- ✅ **Settings storage: UserDefaults vs app_state.** **Resolved (user
+  confirmed): UserDefaults.** A biometric policy is a *device* preference — it
+  must not travel inside an exported `.finch` pack onto another device. Diverges
+  intentionally from the design's `app_state`.
+- ✅ **Sensitive-action gating coverage.** **Resolved (user): expand to
+  change-base.** `confirmSensitive()` now gates both **Export** and
+  **changeLedgerBase** (the ledger editor) when sensitive-actions is on. A future
+  delete-all should call it too.
 - ⏳ **`onIdle` precision.** Implemented as "now − lastActivity > timeout",
   re-evaluated on foreground/interaction rather than via a live idle timer (no
   background timer firing while truly idle). Adequate for a lock-on-return model;
