@@ -15,6 +15,7 @@ targets:
     dependencies:
       - package: FinchCore
         product: FinchCore
+      - target: FinchWidget   # Phase 7 — embed the widget extension
     settings:
       base:
         # Reference the hand-authored Info.plist (with the .finch UTI
@@ -25,6 +26,30 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: FinchApp/FinchApp.entitlements
+        CODE_SIGNING_ALLOWED: "NO"
+
+  # Phase 7 — WidgetKit extension. Builds for the simulator without signing
+  # (CODE_SIGNING_ALLOWED: NO); reads the WidgetSnapshot from the App Group.
+  FinchWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FinchWidget
+    dependencies:
+      - package: FinchCore
+        product: FinchCore
+    settings:
+      base:
+        INFOPLIST_FILE: FinchWidget/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.widget
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: FinchWidget/FinchWidget.entitlements
+        CODE_SIGNING_ALLOWED: "NO"
+        SKIP_INSTALL: "NO"
+
   FinchAppTests:
     type: bundle.unit-test
     platform: iOS
