@@ -1,0 +1,71 @@
+{
+  "name": "income-vs-spend",
+  "selector": "incomeCategoryFlow",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": 500,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": -100,
+        "account": "a1",
+        "date": "2026-05-05",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t3",
+        "merchant": "m",
+        "category": "transport",
+        "amount": -60,
+        "account": "a1",
+        "date": "2026-05-10",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "categories": [
+      {
+        "id": "food",
+        "name": "Food",
+        "color": "#ff0000"
+      },
+      {
+        "id": "transport",
+        "name": "Transport",
+        "color": "#00ff00"
+      }
+    ],
+    "ledgerId": "personal",
+    "month": "2026-05",
+    "topN": 6
+  },
+  "expected": {
+    "income": 500,
+    "categories": [
+      {
+        "id": "food",
+        "name": "Food",
+        "color": "#ff0000",
+        "spent": 100
+      },
+      {
+        "id": "transport",
+        "name": "Transport",
+        "color": "#00ff00",
+        "spent": 60
+      }
+    ],
+    "saved": 340
+  }
+}

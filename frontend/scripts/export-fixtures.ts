@@ -17,6 +17,7 @@ import {
   cycleWindow, merchantStats, anomalyScore, type MerchantStats,
   currentMonth, prevMonth, monthlySpending, dailySpending,
   monthlyCashflow, topCategoryDeltas,
+  incomeCategoryFlow, recentExpenses, findDuplicate, suggestCategory, weeklyDigest,
 } from '@/lib/select';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
@@ -66,6 +67,12 @@ function runSelector(c: SelectorCase): unknown {
     case 'dailySpending':     return dailySpending(i.txns as Tx[], i.ledgerId as string, i.endDate as string, i.n as number);
     case 'monthlyCashflow':   return monthlyCashflow(i.txns as Tx[], i.ledgerId as string, i.endMonth as string, i.n as number);
     case 'topCategoryDeltas': return topCategoryDeltas(i.txns as Tx[], i.ledgerId as string, i.curMonth as string, i.categories as { id: string; name: string }[], i.count as number | undefined);
+    // Phase 1.5 — batch 2
+    case 'incomeCategoryFlow': return incomeCategoryFlow(i.txns as Tx[], i.categories as { id: string; name: string; color?: string | null }[], i.ledgerId as string, i.month as string, i.topN as number | undefined);
+    case 'recentExpenses':     return recentExpenses(i.txns as Tx[], i.ledgerId as string, i.limit as number | undefined);
+    case 'findDuplicate':      return findDuplicate(i.txns as Tx[], i.ledgerId as string, i.draft as { merchant: string; amount: number; accountId: string; date: string; excludeId?: string });
+    case 'suggestCategory':    return suggestCategory(i.txns as Tx[], i.ledgerId as string, i.description as string, i.counterpartyId as string | null | undefined, i.opts as { minCount?: number; minConfidence?: number } | undefined);
+    case 'weeklyDigest':       return weeklyDigest(i.txns as Tx[], i.ledgerId as string, i.anchor as string);
   }
 }
 

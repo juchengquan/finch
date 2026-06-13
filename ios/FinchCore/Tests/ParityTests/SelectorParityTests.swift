@@ -124,4 +124,49 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(Selectors.topCategoryDeltas(f.input.txns, f.input.ledgerId, f.input.curMonth, f.input.categories, f.input.count ?? 5), f.expected, name)
         }
     }
+
+    // ──────────────── Phase 1.5 — batch 2: aggregates / digest ────────────────
+
+    func test_incomeCategoryFlow() throws {
+        struct F: Decodable { let expected: IncomeFlow; let input: I
+            struct I: Decodable { let txns: [Tx]; let categories: [ColoredCategory]; let ledgerId: String; let month: String; let topN: Int? } }
+        for (name, f) in try load("incomeCategoryFlow", F.self) {
+            XCTAssertEqual(Selectors.incomeCategoryFlow(f.input.txns, f.input.categories, f.input.ledgerId, f.input.month, f.input.topN ?? 6), f.expected, name)
+        }
+    }
+
+    func test_recentExpenses() throws {
+        struct F: Decodable { let expected: [RecentExpense]; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let limit: Int? } }
+        for (name, f) in try load("recentExpenses", F.self) {
+            XCTAssertEqual(Selectors.recentExpenses(f.input.txns, f.input.ledgerId, f.input.limit ?? 5), f.expected, name)
+        }
+    }
+
+    func test_findDuplicate() throws {
+        struct F: Decodable { let expected: DuplicateMatch?; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let draft: DuplicateDraft } }
+        for (name, f) in try load("findDuplicate", F.self) {
+            XCTAssertEqual(Selectors.findDuplicate(f.input.txns, f.input.ledgerId, f.input.draft), f.expected, name)
+        }
+    }
+
+    func test_suggestCategory() throws {
+        struct F: Decodable { let expected: CategorySuggestion?; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let description: String; let counterpartyId: String?; let opts: O?
+                struct O: Decodable { let minCount: Int?; let minConfidence: Double? } } }
+        for (name, f) in try load("suggestCategory", F.self) {
+            let got = Selectors.suggestCategory(f.input.txns, f.input.ledgerId, f.input.description, f.input.counterpartyId,
+                minCount: f.input.opts?.minCount ?? 1, minConfidence: f.input.opts?.minConfidence ?? 0.5)
+            XCTAssertEqual(got, f.expected, name)
+        }
+    }
+
+    func test_weeklyDigest() throws {
+        struct F: Decodable { let expected: WeeklyDigest?; let input: I
+            struct I: Decodable { let txns: [Tx]; let ledgerId: String; let anchor: String } }
+        for (name, f) in try load("weeklyDigest", F.self) {
+            XCTAssertEqual(Selectors.weeklyDigest(f.input.txns, f.input.ledgerId, f.input.anchor), f.expected, name)
+        }
+    }
 }

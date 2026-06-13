@@ -18,7 +18,10 @@ export type SelectorName =
   | 'budgetProgress' | 'cycleWindow' | 'merchantStats' | 'anomalyScore'
   // Phase 1.5 — batch 1 (time series / deltas)
   | 'currentMonth' | 'prevMonth' | 'monthlySpending' | 'dailySpending'
-  | 'monthlyCashflow' | 'topCategoryDeltas';
+  | 'monthlyCashflow' | 'topCategoryDeltas'
+  // Phase 1.5 — batch 2 (aggregates / digest)
+  | 'incomeCategoryFlow' | 'recentExpenses' | 'findDuplicate'
+  | 'suggestCategory' | 'weeklyDigest';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -159,4 +162,53 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 't3', category: 'transport', amount: -50, date: '2026-05-12' }),
     ], ledgerId: 'personal', curMonth: '2026-05',
       categories: [{ id: 'food', name: 'Food' }, { id: 'transport', name: 'Transport' }], count: 5 } },
+
+  // ════════════ Phase 1.5 — batch 2: aggregates / digest ════════════
+
+  // ── incomeCategoryFlow(txns, categories, ledgerId, month, topN?) → IncomeFlow ──
+  { name: 'income-vs-spend', selector: 'incomeCategoryFlow',
+    input: { txns: [
+      txOf({ id: 't1', amount: 500, date: '2026-05-01' }),                       // income
+      txOf({ id: 't2', category: 'food', amount: -100, date: '2026-05-05' }),
+      txOf({ id: 't3', category: 'transport', amount: -60, date: '2026-05-10' }),
+    ], categories: [{ id: 'food', name: 'Food', color: '#ff0000' },
+                    { id: 'transport', name: 'Transport', color: '#00ff00' }],
+      ledgerId: 'personal', month: '2026-05', topN: 6 } },
+
+  // ── recentExpenses(txns, ledgerId, limit?) → [RecentExpense] (most-recent first) ──
+  { name: 'dedup-recent', selector: 'recentExpenses',
+    input: { txns: [
+      txOf({ id: 't1', merchant: 'Coffee', category: 'food', amount: -10, account: 'a1', date: '2026-05-03', time: '08:00' }),
+      txOf({ id: 't2', merchant: 'Gas', category: 'transport', amount: -20, account: 'a1', date: '2026-05-05', time: '12:00' }),
+    ], ledgerId: 'personal', limit: 5 } },
+
+  // ── findDuplicate(txns, ledgerId, draft) → DuplicateMatch | null ──
+  { name: 'near-match', selector: 'findDuplicate',
+    input: { txns: [txOf({ id: 'tdup', merchant: 'Coffee', amount: -4.5, account: 'a1', date: '2026-05-09' })],
+      ledgerId: 'personal',
+      draft: { merchant: 'Coffee', amount: -4.5, accountId: 'a1', date: '2026-05-10' } } },
+  { name: 'no-match', selector: 'findDuplicate',
+    input: { txns: [txOf({ id: 'tx1', merchant: 'Coffee', amount: -4.5, account: 'a1', date: '2026-05-09' })],
+      ledgerId: 'personal',
+      draft: { merchant: 'Zzz', amount: -9.9, accountId: 'a1', date: '2026-05-10' } } },
+
+  // ── suggestCategory(txns, ledgerId, description, counterpartyId?, opts?) → CategorySuggestion | null ──
+  { name: 'by-merchant', selector: 'suggestCategory',
+    input: { txns: [
+      txOf({ id: 't1', merchant: 'Coffee', category: 'food', amount: -4 }),
+      txOf({ id: 't2', merchant: 'Coffee', category: 'food', amount: -5 }),
+    ], ledgerId: 'personal', description: 'Coffee' } },
+
+  // ── weeklyDigest(txns, ledgerId, anchor) → WeeklyDigest | null ──
+  // anchor 2026-05-18 is a Monday → reported week is Mon 05-11 … Sun 05-17.
+  // Distinct this-week category totals (shopping 80 > food 50 > transport 30).
+  { name: 'full-recap', selector: 'weeklyDigest',
+    input: { txns: [
+      txOf({ id: 'w1', category: 'food', amount: -50, date: '2026-05-12' }),       // this week
+      txOf({ id: 'w2', category: 'transport', amount: -30, date: '2026-05-13' }),   // this week
+      txOf({ id: 'w3', amount: 200, date: '2026-05-14' }),                          // this week income
+      txOf({ id: 'w4', category: 'shopping', amount: -80, date: '2026-05-15' }),    // this week (biggest)
+      txOf({ id: 'p1', category: 'food', amount: -100, date: '2026-05-06' }),       // prev week
+      txOf({ id: 'a1', category: 'food', amount: -60, date: '2026-03-10' }),        // avg window
+    ], ledgerId: 'personal', anchor: '2026-05-18' } },
 ];

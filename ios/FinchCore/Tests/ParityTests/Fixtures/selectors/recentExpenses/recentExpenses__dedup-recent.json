@@ -1,0 +1,48 @@
+{
+  "name": "dedup-recent",
+  "selector": "recentExpenses",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -10,
+        "account": "a1",
+        "date": "2026-05-03",
+        "pending": false,
+        "ledgerId": "personal",
+        "time": "08:00"
+      },
+      {
+        "id": "t2",
+        "merchant": "Gas",
+        "category": "transport",
+        "amount": -20,
+        "account": "a1",
+        "date": "2026-05-05",
+        "pending": false,
+        "ledgerId": "personal",
+        "time": "12:00"
+      }
+    ],
+    "ledgerId": "personal",
+    "limit": 5
+  },
+  "expected": [
+    {
+      "merchant": "Gas",
+      "amount": 20,
+      "currency": "USD",
+      "accountId": "a1",
+      "categoryId": "transport"
+    },
+    {
+      "merchant": "Coffee",
+      "amount": 10,
+      "currency": "USD",
+      "accountId": "a1",
+      "categoryId": "food"
+    }
+  ]
+}
