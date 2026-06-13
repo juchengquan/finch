@@ -75,10 +75,12 @@ actions; the other 4 are documented below for a follow-up increment.
   stages file + manifest into the App Group; `PendingAttachmentImporter` imports
   on launch (creates a pending placeholder tx + setEntryAttachment). The App Group
   entitlement builds on the simulator without signing.
-- ⏳ **In-app attachment UI + attachment display/projection.** The share-in path
-  works; an in-app EditTransaction "add receipt" PhotosPicker + an attachments
-  projection on `Tx` (to show/remove existing receipts) are a refinement. The
-  placeholder tx is created at amount 0 + status pending for the user to fill in.
+- ✅ **In-app attachment UI + display.** EditTransaction now has a "Receipts"
+  section: a PhotosPicker "Add receipt photo" (saves to the live attachments tree
+  + setEntryAttachment, sha256 via CryptoKit) and a list of existing receipts with
+  swipe-to-remove (removeAttachment). Added Projection.attachments(txId) +
+  AttachmentRow (resolves a posting id → entry). The receipt feature now works
+  both via the Share Extension AND in-app.
 
 ## Phase 5 — Pack auto-sync + iCloud
 

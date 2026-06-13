@@ -123,6 +123,26 @@ final class SeedAndScreenFlowTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM scheduled_templates") }, 0)
     }
 
+    /// In-app receipts: setEntryAttachment then project the tx's attachments by
+    /// its client Tx id (posting id), then remove.
+    func test_attachmentProjectionByTxId() throws {
+        let q = try seededStarter()
+        let food = try firstCategory(q, kind: "expense")
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("personal"), "accountId": .string("cash"), "amount": .double(-12),
+            "merchant": .string("Lunch"), "categoryId": .string(food), "date": .string("2026-05-01"), "skipRules": .bool(true)]))
+        let txId = try lastAccountPosting(q)
+        try Apply.apply(dbQueue: q, action: "setEntryAttachment", args: Args([
+            "entryId": .string(txId), "kind": .string("image"), "relPath": .string("attachments/\(txId)/r.jpg"),
+            "mimeType": .string("image/jpeg"), "byteSize": .double(99), "sha256": .string("x"), "originalFilename": .string("r.jpg")]))
+        let atts = try Projection.attachments(dbQueue: q, txId: txId)   // resolves posting id → entry
+        XCTAssertEqual(atts.count, 1)
+        XCTAssertEqual(atts.first?.kind, "image")
+        XCTAssertEqual(atts.first?.originalFilename, "r.jpg")
+        try Apply.apply(dbQueue: q, action: "removeAttachment", args: Args(["id": .string(atts[0].id)]))
+        XCTAssertTrue(try Projection.attachments(dbQueue: q, txId: txId).isEmpty)
+    }
+
     /// Tag admin (create/rename/delete) + reconcile (statement balance → adjustment).
     func test_tagAdminAndReconcileFlow() throws {
         let q = try seededStarter()
