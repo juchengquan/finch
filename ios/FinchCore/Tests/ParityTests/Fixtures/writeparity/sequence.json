@@ -1,0 +1,505 @@
+{
+  "seedSql": [
+    "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('personal','Personal','USD',1,datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-open','personal',NULL,'Opening balance','equity',9000,'opening',datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-adj','personal',NULL,'Balance adjustment','equity',9001,'adjustment',datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-fx','personal',NULL,'FX gain/loss','equity',9002,'fx',datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('food','personal',NULL,'Food','expense',0,datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('pay','personal',NULL,'Salary','income',1,datetime('now'),datetime('now'))",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,datetime('now'),datetime('now'))",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))"
+  ],
+  "sequence": [
+    {
+      "action": "createCounterparty",
+      "args": {
+        "id": "cp1",
+        "ledgerId": "personal",
+        "name": "Starbucks"
+      }
+    },
+    {
+      "action": "createTag",
+      "args": {
+        "id": "tg1",
+        "ledgerId": "personal",
+        "name": "work",
+        "color": "#f00"
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": -25,
+        "merchant": "Coffee",
+        "categoryId": "food",
+        "date": "2026-05-01",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": 2000,
+        "merchant": "Pay",
+        "categoryId": "pay",
+        "date": "2026-05-02",
+        "kind": "income",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "createTransfer",
+      "args": {
+        "fromAccountId": "a1",
+        "toAccountId": "a2",
+        "fromAmount": 500,
+        "date": "2026-05-03"
+      }
+    },
+    {
+      "action": "createBudget",
+      "args": {
+        "id": "b1",
+        "ledgerId": "personal",
+        "name": "Food",
+        "type": "expense",
+        "amount": 300,
+        "categoryIds": [
+          "food"
+        ]
+      }
+    },
+    {
+      "action": "createBudgetGroup",
+      "args": {
+        "id": "bg1",
+        "ledgerId": "personal",
+        "name": "Essentials"
+      }
+    },
+    {
+      "action": "contributeBudget",
+      "args": {
+        "id": "b1",
+        "amount": 50
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-01",
+        "currency": "EUR",
+        "rate": 1.1
+      }
+    },
+    {
+      "action": "setDisplayCurrency",
+      "args": {
+        "ledgerId": "personal",
+        "currency": "USD"
+      }
+    },
+    {
+      "action": "createScheduled",
+      "args": {
+        "id": "s1",
+        "ledgerId": "personal",
+        "name": "Rent",
+        "type": "expense",
+        "amount": 1500,
+        "frequency": "monthly",
+        "dayOfMonth": 1,
+        "accountId": "a1",
+        "startDate": "2026-01-01"
+      }
+    },
+    {
+      "action": "createRule",
+      "args": {
+        "id": "r1",
+        "ledgerId": "personal",
+        "name": "Coffee",
+        "condition": {
+          "field": "merchant",
+          "op": "contains",
+          "value": "coffee"
+        },
+        "actions": [
+          {
+            "type": "set_category",
+            "categoryId": "food"
+          }
+        ]
+      }
+    },
+    {
+      "action": "adjustAccountBalance",
+      "args": {
+        "accountId": "a2",
+        "targetBalance": 600,
+        "date": "2026-05-04"
+      }
+    }
+  ],
+  "expected": {
+    "entries": [
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-01",
+        "time": null,
+        "description": "Coffee",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-25.000000",
+            "currency": "USD",
+            "amount_base": "-25.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "25.000000",
+            "currency": "USD",
+            "amount_base": "25.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-02",
+        "time": null,
+        "description": "Pay",
+        "kind": "income",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "2000.000000",
+            "currency": "USD",
+            "amount_base": "2000.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "pay",
+            "amount": "-2000.000000",
+            "currency": "USD",
+            "amount_base": "-2000.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-03",
+        "time": null,
+        "description": "Transfer",
+        "kind": "transfer",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-500.000000",
+            "currency": "USD",
+            "amount_base": "-500.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": "Transfer to Savings",
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "500.000000",
+            "currency": "USD",
+            "amount_base": "500.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": "Transfer from Checking",
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-04",
+        "time": null,
+        "description": "Balance adjustment",
+        "kind": "adjustment",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "100.000000",
+            "currency": "USD",
+            "amount_base": "100.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "sys-adj",
+            "amount": "-100.000000",
+            "currency": "USD",
+            "amount_base": "-100.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      }
+    ],
+    "ledgers": [
+      {
+        "id": "personal",
+        "name": "Personal",
+        "base": "USD",
+        "is_default": 1,
+        "color": null,
+        "tagline": null
+      }
+    ],
+    "account_groups": [],
+    "accounts": [
+      {
+        "id": "a1",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "current_balance": "1475.000000",
+        "sort_order": 0,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false
+      },
+      {
+        "id": "a2",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Savings",
+        "type": "savings",
+        "currency": "USD",
+        "current_balance": "600.000000",
+        "sort_order": 1,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false
+      }
+    ],
+    "categories": [
+      {
+        "id": "food",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "Food",
+        "kind": "expense",
+        "system": null,
+        "sort_order": 0
+      },
+      {
+        "id": "pay",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "Salary",
+        "kind": "income",
+        "system": null,
+        "sort_order": 1
+      },
+      {
+        "id": "sys-adj",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "Balance adjustment",
+        "kind": "equity",
+        "system": "adjustment",
+        "sort_order": 9001
+      },
+      {
+        "id": "sys-fx",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "FX gain/loss",
+        "kind": "equity",
+        "system": "fx",
+        "sort_order": 9002
+      },
+      {
+        "id": "sys-open",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "Opening balance",
+        "kind": "equity",
+        "system": "opening",
+        "sort_order": 9000
+      }
+    ],
+    "counterparties": [
+      {
+        "id": "cp1",
+        "ledger_id": "personal",
+        "name": "Starbucks",
+        "is_verified": 0
+      }
+    ],
+    "tags": [
+      {
+        "id": "tg1",
+        "ledger_id": "personal",
+        "name": "work",
+        "color": "#f00"
+      }
+    ],
+    "budgets": [
+      {
+        "id": "b1",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Food",
+        "kind": "expense",
+        "amount": "300.000000",
+        "saved": "50.000000",
+        "frequency": "monthly",
+        "start_date": "2026-06-13",
+        "end_date": null,
+        "is_recurring": 1,
+        "rollover": 0,
+        "account_ids": null,
+        "category_ids": "[\"food\"]",
+        "warning_pct": "80.000000",
+        "pending_amount": null
+      }
+    ],
+    "budget_groups": [
+      {
+        "id": "bg1",
+        "ledger_id": "personal",
+        "name": "Essentials",
+        "sort_order": 0
+      }
+    ],
+    "holdings": [],
+    "exchange_rates": [
+      {
+        "date": "2026-05-01",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": null
+      }
+    ],
+    "scheduled_templates": [
+      {
+        "id": "s1",
+        "ledger_id": "personal",
+        "name": "Rent",
+        "kind": "expense",
+        "amount": "1500.000000",
+        "frequency": "monthly",
+        "day_of_month": 1,
+        "account_id": "a1",
+        "from_account_id": null,
+        "start_date": "2026-01-01",
+        "is_active": 1,
+        "splits_enabled": 0
+      }
+    ],
+    "rules": [
+      {
+        "id": "r1",
+        "ledger_id": "personal",
+        "priority": 100,
+        "condition": {
+          "field": "merchant",
+          "op": "contains",
+          "value": "coffee"
+        },
+        "actions": [
+          {
+            "type": "set_category",
+            "categoryId": "food"
+          }
+        ],
+        "is_active": 1
+      }
+    ],
+    "app_state": [
+      {
+        "key": "displayCurrencyByLedger",
+        "value": "{\"personal\":\"USD\"}"
+      }
+    ]
+  }
+}
