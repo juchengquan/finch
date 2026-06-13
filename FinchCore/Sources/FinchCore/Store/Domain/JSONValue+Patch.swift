@@ -26,6 +26,23 @@ extension JSONValue {
     var asDouble: Double? {
         switch self { case .int(let i): return Double(i); case .double(let d): return d; default: return nil }
     }
+
+    /// String elements of an array value (empty for non-arrays).
+    var asStringArray: [String] {
+        if case .array(let a) = self { return a.compactMap { $0.asString } }
+        return []
+    }
+
+    /// JS-style truthiness (true, non-zero number, non-empty string).
+    var isTruthy: Bool {
+        switch self {
+        case .bool(let b): return b
+        case .int(let i): return i != 0
+        case .double(let d): return d != 0
+        case .string(let s): return !s.isEmpty
+        case .null, .array, .object: return false
+        }
+    }
 }
 
 extension Args {
