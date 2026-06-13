@@ -20,6 +20,10 @@ import { applySchema } from '@/lib/db/core/schema';
 import { auditLedger, postSimple, ensureSystemCategories } from '@/lib/db/core/entries';
 import { projectState } from '@/lib/db/state';
 import type { Exec } from '@/lib/db/core/repo';
+import type { Tx } from '@/lib/store';
+import type { AccountRow } from '@/lib/db/domain/accounts/types';
+import type { ListOptions } from '@/lib/db/domain/transactions/types';
+import type { BudgetRow } from '@/lib/db/domain/budgets/types';
 
 // Canonical fixture root (single spelling, repo-root `ios/`). scripts/ lives at
 // frontend/scripts, so the repo root is two levels up.
@@ -38,18 +42,18 @@ function mapToObjectReplacer(_key: string, value: unknown): unknown {
 
 /** Run the real web selector for a case and return its output (the `expected`). */
 function runSelector(c: SelectorCase): unknown {
-  const i = c.input as Record<string, any>;
+  const i = c.input as Record<string, unknown>;
   switch (c.selector) {
-    case 'accountBalance':     return accountBalance(i.accounts, i.accountId);
-    case 'selectTransactions': return selectTransactions(i.txns, i.opts);
-    case 'categorySpend':      return categorySpend(i.txns, i.ledgerId, i.month);
-    case 'budgetProgress':     return budgetProgress(i.budget, i.txns, i.today, i.categories);
-    case 'cycleWindow':        return cycleWindow(i.frequency, i.startDate, i.today, i.endDate, i.isRecurring);
-    case 'merchantStats':      return merchantStats(i.txns, i.ledgerId);
+    case 'accountBalance':     return accountBalance(i.accounts as AccountRow[], i.accountId as string);
+    case 'selectTransactions': return selectTransactions(i.txns as Tx[], i.opts as ListOptions);
+    case 'categorySpend':      return categorySpend(i.txns as Tx[], i.ledgerId as string, i.month as string | undefined);
+    case 'budgetProgress':     return budgetProgress(i.budget as BudgetRow, i.txns as Tx[], i.today as string, i.categories as { id: string; parentId: string | null }[]);
+    case 'cycleWindow':        return cycleWindow(i.frequency as string, i.startDate as string, i.today as string, i.endDate as string | null, i.isRecurring as number | undefined);
+    case 'merchantStats':      return merchantStats(i.txns as Tx[], i.ledgerId as string);
     case 'anomalyScore': {
       // `stats` is authored as a plain object; rebuild it into the Map the selector expects.
       const stats = new Map<string, MerchantStats>(Object.entries(i.stats as Record<string, MerchantStats>));
-      return anomalyScore(i.tx, stats, i.opts);
+      return anomalyScore(i.tx as Tx, stats, i.opts as { minCount?: number; threshold?: number } | undefined);
     }
   }
 }
