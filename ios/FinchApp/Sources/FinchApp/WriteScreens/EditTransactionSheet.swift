@@ -15,6 +15,7 @@ struct EditTransactionSheet: View {
     @State private var merchant: String
     @State private var note: String
     @State private var date: Date
+    @State private var categoryId: String
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
 
@@ -23,6 +24,11 @@ struct EditTransactionSheet: View {
         _merchant = State(initialValue: txn.merchant)
         _note = State(initialValue: txn.note ?? "")
         _date = State(initialValue: Self.parse(txn.date, txn.time) ?? Date())
+        _categoryId = State(initialValue: txn.category ?? "")
+    }
+
+    private var categories: [CategoryRow] {
+        store.pickableCategories.filter { txn.amount > 0 ? $0.kind == "income" : $0.kind != "income" }
     }
 
     var body: some View {
@@ -35,11 +41,13 @@ struct EditTransactionSheet: View {
                 }
                 Section {
                     LabeledContent("Amount", value: store.displayMoneyBase(txn.amount))
-                    LabeledContent("Category", value: store.categoryName(txn.category) ?? "—")
+                    Picker("Category", selection: $categoryId) {
+                        ForEach(categories) { Text($0.name).tag($0.id) }
+                    }
                 } header: {
                     Text("Amount & category")
                 } footer: {
-                    Text("Amount and category can't be edited on iOS yet — delete and re-add to change them.")
+                    Text("Amount can't be edited — delete and re-add to change it.")
                 }
 
                 Section {
@@ -78,6 +86,10 @@ struct EditTransactionSheet: View {
         ]
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
+            // Category edits go through bulkRecategorize (rebuilds the category leg).
+            if !categoryId.isEmpty, categoryId != txn.category {
+                try store.apply(.bulkRecategorize, Args(["ids": .array([.string(txn.id)]), "categoryId": .string(categoryId)]))
+            }
             dismiss()
         } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
     }

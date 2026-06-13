@@ -47,10 +47,13 @@ actions; the other 4 are documented below for a follow-up increment.
   statement-balance/CSV-import UI is not built yet. Deferred increment.
 - 🔧 **Transfers CRUD edit/delete UI.** `createTransfer` is wired (Add screen);
   a dedicated edit/delete transfers manager is deferred.
-- ⛔ **Bulk recategorize.** BLOCKED: the engine defers transaction *category*
-  edits (`updateTransaction` throws `notImplemented.txMoneyEdit`), so bulk
-  recategorize can't be built without first un-deferring that. Documented, not
-  attempted.
+- ✅ **Bulk recategorize + in-place category edit.** *(Correction: was NOT
+  actually blocked — the engine already ships a working `bulkRecategorize` action
+  that rebuilds the category leg.)* Per the user decision to un-defer category
+  editing: EditTransaction's category is now an editable picker (applies via
+  `bulkRecategorize` on save), and Activity has a Select mode → multi-select →
+  Recategorize sheet. `updateTransaction` still defers *amount* edits only.
+  Tested (single + bulk).
 - 🔧 **Saved searches + per-account base override + tag admin/merge + category
   color/icon.** Deferred (saved searches → UserDefaults; per-account base + merge
   have no chokepoint action yet).
@@ -117,3 +120,15 @@ Documented approach for when it's picked up (needs a provisioned target):
   re-running the posting engine, not field-merging.
 - Gate behind the same App Group + a "CloudKit sync" Settings toggle; keep Phase
   5 local backups as the offline/export path.
+
+## Decisions taken at end-of-batch review
+
+- ✅ **Un-defer tx category edit** (user: yes). Shipped via the existing
+  `bulkRecategorize` action — EditTransaction category picker + Activity
+  multi-select. No engine change was needed (the action already existed).
+- 🔧 **Signed targets** (user: "set up signing so I build them"). Once an Apple
+  dev team / signing is configured in the Xcode project, I'll add the actual
+  Share Extension (6.5), Widget + Watch (7), Mac (3) targets + the App Group /
+  iCloud / CloudKit entitlements. Those still can't be fully verified in headless
+  CI, but the CI-verifiable cores are already in place for each. **Waiting on the
+  signing/dev-team config before scaffolding** (so it doesn't red the CI).
