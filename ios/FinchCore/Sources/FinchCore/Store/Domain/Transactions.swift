@@ -123,8 +123,13 @@ public enum Transactions {
         if !["image", "pdf"].contains(a.kind) {
             throw I18nError("error.attachment.kind", [:], "Attachment kind must be image or pdf")
         }
+        // entryId may be an entries.id OR a client Tx id (account-posting id) —
+        // resolveEntryRef handles both (like deleteTransaction / setCleared).
+        guard let entryId = try Entries.resolveEntryRef(db, a.entryId)?.entryId else {
+            throw I18nError("error.notFound.entry", [:], "Entry not found")
+        }
         guard let ledgerId = try a.ledgerId ?? String.fetchOne(db,
-            sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [a.entryId]) else {
+            sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) else {
             throw I18nError("error.notFound.entry", [:], "Entry not found")
         }
         let id = a.id ?? Entries.newId("att")
@@ -132,7 +137,7 @@ public enum Transactions {
             INSERT INTO entry_attachments (id, ledger_id, entry_id, kind, rel_path, mime_type,
                 byte_size, sha256, original_filename, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
-            """, arguments: [id, ledgerId, a.entryId, a.kind, a.relPath, a.mimeType,
+            """, arguments: [id, ledgerId, entryId, a.kind, a.relPath, a.mimeType,
                              Int(a.byteSize), a.sha256, a.originalFilename])
     }
 

@@ -31,6 +31,7 @@ struct FinchApp: App {
                 await NotificationService.shared.requestPermissionIfNeeded()
                 await NotificationService.shared.refresh()
                 AutoBackupManager.shared.configure(store: store)   // Phase 5
+                PendingAttachmentImporter.importPending(into: store)   // Phase 6.5: import shared receipts
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {

@@ -16,6 +16,7 @@ targets:
       - package: FinchCore
         product: FinchCore
       - target: FinchWidget   # Phase 7 — embed the widget extension
+      - target: FinchShare    # Phase 6.5 — embed the share extension
     settings:
       base:
         # Reference the hand-authored Info.plist (with the .finch UTI
@@ -47,6 +48,26 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: FinchWidget/FinchWidget.entitlements
+        CODE_SIGNING_ALLOWED: "NO"
+        SKIP_INSTALL: "NO"
+
+  # Phase 6.5 — Share Extension (receipt photos/PDFs → staged to the App Group).
+  FinchShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FinchShare
+    dependencies:
+      - package: FinchCore
+        product: FinchCore
+    settings:
+      base:
+        INFOPLIST_FILE: FinchShare/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.share
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: FinchShare/FinchShare.entitlements
         CODE_SIGNING_ALLOWED: "NO"
         SKIP_INSTALL: "NO"
 

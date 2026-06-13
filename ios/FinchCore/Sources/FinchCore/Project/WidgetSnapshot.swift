@@ -58,4 +58,25 @@ public enum AppGroup {
         guard let data = try? Data(contentsOf: widgetSnapshotURL) else { return nil }
         return try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
     }
+
+    // Phase 6.5 — Share Extension handoff: the extension stages files +
+    // manifests here; the app imports them on launch.
+    public static var pendingManifestsDir: URL { containerURL.appendingPathComponent("pending_attachments/manifests", isDirectory: true) }
+    public static var pendingFilesDir: URL { containerURL.appendingPathComponent("pending_attachments/files", isDirectory: true) }
+}
+
+/// Phase 6.5 — a receipt staged by the Share Extension into the App Group,
+/// awaiting import by the app (which dispatches addTransaction + setEntryAttachment).
+public struct PendingAttachment: Codable, Equatable, Sendable {
+    public let id: String
+    public let kind: String          // "image" | "pdf"
+    public let relPath: String       // relative to the App Group container
+    public let mimeType: String
+    public let byteSize: Int
+    public let sha256: String
+    public let originalFilename: String?
+    public init(id: String, kind: String, relPath: String, mimeType: String, byteSize: Int, sha256: String, originalFilename: String?) {
+        self.id = id; self.kind = kind; self.relPath = relPath; self.mimeType = mimeType
+        self.byteSize = byteSize; self.sha256 = sha256; self.originalFilename = originalFilename
+    }
 }
