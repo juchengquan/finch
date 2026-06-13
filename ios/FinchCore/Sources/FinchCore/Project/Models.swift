@@ -27,6 +27,22 @@ public struct Tx: Identifiable, Codable, Equatable, Sendable {
     public var clearedAt: String?
     public var appliedRuleIds: [String]?
     public var reviewedAt: String?
+
+    public init(id: String, merchant: String, category: String? = nil, amount: Double,
+                account: String, date: String, pending: Bool? = nil, ledgerId: String? = nil,
+                currency: String? = nil, nativeAmount: Double? = nil, time: String? = nil,
+                kind: String? = nil, transferGroupId: String? = nil, counterpartyId: String? = nil,
+                splits: [TxSplit]? = nil, tags: [String]? = nil, note: String? = nil,
+                sourceTemplateId: String? = nil, refundedTransactionId: String? = nil,
+                clearedAt: String? = nil, appliedRuleIds: [String]? = nil, reviewedAt: String? = nil) {
+        self.id = id; self.merchant = merchant; self.category = category; self.amount = amount
+        self.account = account; self.date = date; self.pending = pending; self.ledgerId = ledgerId
+        self.currency = currency; self.nativeAmount = nativeAmount; self.time = time; self.kind = kind
+        self.transferGroupId = transferGroupId; self.counterpartyId = counterpartyId; self.splits = splits
+        self.tags = tags; self.note = note; self.sourceTemplateId = sourceTemplateId
+        self.refundedTransactionId = refundedTransactionId; self.clearedAt = clearedAt
+        self.appliedRuleIds = appliedRuleIds; self.reviewedAt = reviewedAt
+    }
 }
 
 public struct TxSplit: Codable, Equatable, Sendable {

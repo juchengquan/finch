@@ -5,6 +5,7 @@ import FinchCore
 /// loaded (no ledgers).
 struct ExportButton: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
     @State private var exportedFile: ExportedFile?
     @State private var isExporting = false
     @State private var exportError: ImportError?
@@ -26,6 +27,9 @@ struct ExportButton: View {
     }
 
     private func export() async {
+        // Phase 6.3: a pack contains all financial data — gate behind Face ID
+        // when the user enabled sensitive-action protection.
+        guard await gate.confirmSensitive() else { return }
         isExporting = true
         defer { isExporting = false }
         do {
