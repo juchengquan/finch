@@ -21,7 +21,10 @@ export type SelectorName =
   | 'monthlyCashflow' | 'topCategoryDeltas'
   // Phase 1.5 — batch 2 (aggregates / digest)
   | 'incomeCategoryFlow' | 'recentExpenses' | 'findDuplicate'
-  | 'suggestCategory' | 'weeklyDigest';
+  | 'suggestCategory' | 'weeklyDigest'
+  // Phase 1.5 — batch 3a (account / net worth)
+  | 'netWorthByMonth' | 'netWorthExplained' | 'balanceSeries'
+  | 'netWorthSeries' | 'netWorthByAccountType' | 'selectTransfers';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -211,4 +214,54 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 'p1', category: 'food', amount: -100, date: '2026-05-06' }),       // prev week
       txOf({ id: 'a1', category: 'food', amount: -60, date: '2026-03-10' }),        // avg window
     ], ledgerId: 'personal', anchor: '2026-05-18' } },
+
+  // ════════════ Phase 1.5 — batch 3a: account / net worth ════════════
+
+  // ── netWorthByMonth(txns, accounts, ledgerId, endMonth, n) → [{m,v}] ──
+  { name: 'three-months', selector: 'netWorthByMonth',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-04-15' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })],
+      ledgerId: 'personal', endMonth: '2026-05', n: 3 } },
+
+  // ── netWorthExplained(txns, accounts, ledgerId, endMonth, n) → [{m,income,expense,adjustment,fx,net}] ──
+  { name: 'income-expense-refund', selector: 'netWorthExplained',
+    input: { txns: [
+      txOf({ id: 't1', kind: 'income', amount: 500, date: '2026-04-05' }),
+      txOf({ id: 't2', kind: 'expense', amount: -100, date: '2026-04-10' }),
+      txOf({ id: 't3', kind: 'expense', amount: -50, date: '2026-05-08' }),
+      txOf({ id: 't4', kind: 'refund', amount: 20, date: '2026-05-12' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })],
+      ledgerId: 'personal', endMonth: '2026-05', n: 2 } },
+
+  // ── balanceSeries(txns, accountId, currentBalance) → [number] ──
+  { name: 'two-txns', selector: 'balanceSeries',
+    input: { txns: [
+      txOf({ id: 't1', account: 'a1', amount: -10, date: '2026-05-01' }),
+      txOf({ id: 't2', account: 'a1', amount: -20, date: '2026-05-03' }),
+    ], accountId: 'a1', currentBalance: 100 } },
+
+  // ── netWorthSeries(txns, accounts, ledgerId) → [number] ──
+  { name: 'series', selector: 'netWorthSeries',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-04-15' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+    ], accounts: [acctOf({ id: 'a1', balance: 1000 })], ledgerId: 'personal' } },
+
+  // ── netWorthByAccountType(accounts, ledgerId) → [{type,balance}] (6 canonical types) ──
+  { name: 'by-type', selector: 'netWorthByAccountType',
+    input: { accounts: [
+      acctOf({ id: 'a1', type: 'cash', balance: 1000 }),
+      acctOf({ id: 'a2', type: 'savings', balance: 500 }),
+      acctOf({ id: 'a3', type: 'credit_card', balance: -200 }),
+    ], ledgerId: 'personal' } },
+
+  // ── selectTransfers(txns, accounts, ledgerId) → [Transfer] ──
+  { name: 'one-transfer', selector: 'selectTransfers',
+    input: { txns: [
+      txOf({ id: 'tout', account: 'a1', amount: -100, date: '2026-05-10', transferGroupId: 'tg1' }),
+      txOf({ id: 'tin', account: 'a2', amount: 100, date: '2026-05-10', transferGroupId: 'tg1' }),
+    ], accounts: [acctOf({ id: 'a1', name: 'Checking' }), acctOf({ id: 'a2', name: 'Savings' })],
+      ledgerId: 'personal' } },
 ];

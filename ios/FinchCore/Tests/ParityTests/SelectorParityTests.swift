@@ -169,4 +169,54 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(Selectors.weeklyDigest(f.input.txns, f.input.ledgerId, f.input.anchor), f.expected, name)
         }
     }
+
+    // ──────────────── Phase 1.5 — batch 3a: account / net worth ────────────────
+
+    func test_netWorthByMonth() throws {
+        struct F: Decodable { let expected: [MonthlyPoint]; let input: I
+            struct I: Decodable { let txns: [Tx]; let accounts: [AccountRow]; let ledgerId: String; let endMonth: String; let n: Int } }
+        for (name, f) in try load("netWorthByMonth", F.self) {
+            XCTAssertEqual(Selectors.netWorthByMonth(f.input.txns, f.input.accounts, f.input.ledgerId, f.input.endMonth, f.input.n), f.expected, name)
+        }
+    }
+
+    func test_netWorthExplained() throws {
+        struct F: Decodable { let expected: [NetWorthExplained]; let input: I
+            struct I: Decodable { let txns: [Tx]; let accounts: [AccountRow]; let ledgerId: String; let endMonth: String; let n: Int } }
+        for (name, f) in try load("netWorthExplained", F.self) {
+            XCTAssertEqual(Selectors.netWorthExplained(f.input.txns, f.input.accounts, f.input.ledgerId, f.input.endMonth, f.input.n), f.expected, name)
+        }
+    }
+
+    func test_balanceSeries() throws {
+        struct F: Decodable { let expected: [Double]; let input: I
+            struct I: Decodable { let txns: [Tx]; let accountId: String; let currentBalance: Double } }
+        for (name, f) in try load("balanceSeries", F.self) {
+            XCTAssertEqual(Selectors.balanceSeries(f.input.txns, f.input.accountId, f.input.currentBalance), f.expected, name)
+        }
+    }
+
+    func test_netWorthSeries() throws {
+        struct F: Decodable { let expected: [Double]; let input: I
+            struct I: Decodable { let txns: [Tx]; let accounts: [AccountRow]; let ledgerId: String } }
+        for (name, f) in try load("netWorthSeries", F.self) {
+            XCTAssertEqual(Selectors.netWorthSeries(f.input.txns, f.input.accounts, f.input.ledgerId), f.expected, name)
+        }
+    }
+
+    func test_netWorthByAccountType() throws {
+        struct F: Decodable { let expected: [AccountTypeBalance]; let input: I
+            struct I: Decodable { let accounts: [AccountRow]; let ledgerId: String } }
+        for (name, f) in try load("netWorthByAccountType", F.self) {
+            XCTAssertEqual(Selectors.netWorthByAccountType(f.input.accounts, f.input.ledgerId), f.expected, name)
+        }
+    }
+
+    func test_selectTransfers() throws {
+        struct F: Decodable { let expected: [Transfer]; let input: I
+            struct I: Decodable { let txns: [Tx]; let accounts: [AccountRow]; let ledgerId: String } }
+        for (name, f) in try load("selectTransfers", F.self) {
+            XCTAssertEqual(Selectors.selectTransfers(f.input.txns, f.input.accounts, f.input.ledgerId), f.expected, name)
+        }
+    }
 }

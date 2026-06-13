@@ -18,6 +18,8 @@ import {
   currentMonth, prevMonth, monthlySpending, dailySpending,
   monthlyCashflow, topCategoryDeltas,
   incomeCategoryFlow, recentExpenses, findDuplicate, suggestCategory, weeklyDigest,
+  netWorthByMonth, netWorthExplained, balanceSeries, netWorthSeries,
+  netWorthByAccountType, selectTransfers,
 } from '@/lib/select';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
@@ -73,6 +75,13 @@ function runSelector(c: SelectorCase): unknown {
     case 'findDuplicate':      return findDuplicate(i.txns as Tx[], i.ledgerId as string, i.draft as { merchant: string; amount: number; accountId: string; date: string; excludeId?: string });
     case 'suggestCategory':    return suggestCategory(i.txns as Tx[], i.ledgerId as string, i.description as string, i.counterpartyId as string | null | undefined, i.opts as { minCount?: number; minConfidence?: number } | undefined);
     case 'weeklyDigest':       return weeklyDigest(i.txns as Tx[], i.ledgerId as string, i.anchor as string);
+    // Phase 1.5 — batch 3a (toBase omitted → web default identity)
+    case 'netWorthByMonth':      return netWorthByMonth(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'netWorthExplained':    return netWorthExplained(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string, i.endMonth as string, i.n as number);
+    case 'balanceSeries':        return balanceSeries(i.txns as Tx[], i.accountId as string, i.currentBalance as number);
+    case 'netWorthSeries':       return netWorthSeries(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
+    case 'netWorthByAccountType': return netWorthByAccountType(i.accounts as AccountRow[], i.ledgerId as string);
+    case 'selectTransfers':      return selectTransfers(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
   }
 }
 
