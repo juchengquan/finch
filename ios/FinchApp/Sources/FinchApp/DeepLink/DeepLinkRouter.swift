@@ -9,6 +9,10 @@ public enum AppTab: Hashable { case accounts, activity, budgets, insights, sched
 /// for a future detail/filter consumer.
 @MainActor
 public final class DeepLinkRouter: ObservableObject {
+    /// Shared instance so App Intents / notifications (which run outside the
+    /// SwiftUI tree) drive the same router the UI observes.
+    public static let shared = DeepLinkRouter()
+
     @Published public var selectedTab: AppTab = .accounts
     @Published public var focusedId: String? = nil
 

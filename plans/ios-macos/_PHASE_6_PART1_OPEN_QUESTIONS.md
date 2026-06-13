@@ -42,4 +42,17 @@ with the default I chose, to reconcile at the end.
 
 ## 6.4 — App Intents
 
-- (parked questions added as they arise)
+- ⏳ **Siri AddTransaction sign = expense.** A voiced "add a $6 coffee" posts a
+  negative (expense) amount. **Default chosen:** always expense via Siri; income
+  isn't distinguished (no clean way to phrase it). A future `AddIncomeIntent`
+  could cover it.
+- ⏳ **MarkCleared default count = 5.** "Mark my transactions cleared" with no
+  number clears the 5 most-recent (setCleared). Arbitrary default; matches the
+  design's example phrasing.
+- ⏳ **No biometric re-auth for Siri writes.** Per the design's non-goal: a
+  Siri-dispatched write isn't gated by Phase 6.3 (the user already authed to the
+  device). Revisit if sensitive Siri actions should re-prompt.
+- ⏳ **Account/category fallback.** When Siri omits account/category, the intent
+  uses the *first* account / first non-system category rather than a
+  most-recently-used heuristic (the design's `mostRecentAccountId` convenience
+  isn't built). Good enough; an MRU heuristic is a refinement.

@@ -7,7 +7,7 @@ import FinchCore
 @main
 struct FinchApp: App {
     @StateObject private var store = FinchStore.shared
-    @StateObject private var router = DeepLinkRouter()
+    @StateObject private var router = DeepLinkRouter.shared
     @StateObject private var gate = BiometricGate.shared
     @Environment(\.scenePhase) private var scenePhase
 
