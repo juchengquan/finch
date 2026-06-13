@@ -87,7 +87,7 @@ extension Selectors {
     private static func dayDiff(_ a: String, _ b: String) -> Int {
         Int((date(a).timeIntervalSince(date(b)) / 86_400).rounded())
     }
-    private static func addDaysIso(_ iso: String, _ n: Int) -> String { ymd(addDays(date(iso), n)) }
+    static func addDaysIso(_ iso: String, _ n: Int) -> String { ymd(addDays(date(iso), n)) }
     /// YYYY-MM-DD for the Monday of the ISO week containing `d` (UTC).
     private static func isoWeekMonday(_ d: String) -> String {
         let dt = date(d)

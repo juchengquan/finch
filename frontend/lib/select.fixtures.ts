@@ -7,7 +7,7 @@
 // (Phase 1.5 will also iterate CASES from lib/select.test.ts.)
 //
 // FIXED ids only — NO Math.random() — so the fixtures are deterministic.
-import type { Tx } from '@/lib/store';
+import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import type { BudgetRow } from '@/lib/db/domain/budgets/types';
 
@@ -24,7 +24,9 @@ export type SelectorName =
   | 'suggestCategory' | 'weeklyDigest'
   // Phase 1.5 — batch 3a (account / net worth)
   | 'netWorthByMonth' | 'netWorthExplained' | 'balanceSeries'
-  | 'netWorthSeries' | 'netWorthByAccountType' | 'selectTransfers';
+  | 'netWorthSeries' | 'netWorthByAccountType' | 'selectTransfers'
+  // Phase 1.5 — batch 3b (forecasts)
+  | 'monthForecast' | 'accountForecast';
 
 /** One parity case. `input` is a NAMED-OBJECT (the selector's named args, per
  *  _CANONICAL_WEB_FACTS.md §E) — NOT a positional array. `expected` is NOT stored
@@ -54,6 +56,11 @@ const budgetOf = (over: Partial<BudgetRow>): BudgetRow => ({
   frequency: 'monthly', startDate: '2026-01-01', endDate: null, isRecurring: 1,
   rollover: 0, rolloverLimit: null, pendingAmount: null, lastRolledPeriod: null,
   accountIds: [], categoryIds: ['food'], warningPct: 80, ...over,
+});
+const schedOf = (over: Partial<ScheduledTemplate>): ScheduledTemplate => ({
+  id: 'st1', name: 'Sched', type: 'expense', amount: -40, frequency: 'monthly',
+  dayOfMonth: 25, accountId: 'a1', account: 'Checking', autoPost: 0,
+  nextRun: '2026-01-25', lastRun: '', ...over,
 });
 
 export const CASES: SelectorCase[] = [
@@ -264,4 +271,24 @@ export const CASES: SelectorCase[] = [
       txOf({ id: 'tin', account: 'a2', amount: 100, date: '2026-05-10', transferGroupId: 'tg1' }),
     ], accounts: [acctOf({ id: 'a1', name: 'Checking' }), acctOf({ id: 'a2', name: 'Savings' })],
       ledgerId: 'personal' } },
+
+  // ════════════ Phase 1.5 — batch 3b: forecasts ════════════
+
+  // ── monthForecast(txns, scheduled, ledgerId, month, today) → MonthForecast | null ──
+  { name: 'mtd-plus-scheduled', selector: 'monthForecast',
+    input: { txns: [
+      txOf({ id: 't1', amount: -100, date: '2026-05-05' }),
+      txOf({ id: 't2', amount: -50, date: '2026-05-10' }),
+      txOf({ id: 't3', amount: -30, date: '2026-05-20' }),                       // future — excluded
+    ], scheduled: [
+      schedOf({ id: 's1', type: 'expense', frequency: 'monthly', amount: -40, dayOfMonth: 25 }),  // after today
+      schedOf({ id: 's2', type: 'expense', frequency: 'monthly', amount: -99, dayOfMonth: 10 }),  // before today — excluded
+    ], ledgerId: 'personal', month: '2026-05', today: '2026-05-15' } },
+
+  // ── accountForecast(account, scheduled, today, horizonDays) → AccountForecast ──
+  { name: 'one-monthly-expense', selector: 'accountForecast',
+    input: { account: acctOf({ id: 'a1', balance: 1000, currency: 'USD' }),
+      scheduled: [schedOf({ id: 'st1', name: 'Rent', type: 'expense', amount: -100,
+        frequency: 'monthly', dayOfMonth: 20, accountId: 'a1', startDate: '2026-01-20', nextRun: '2026-01-20' })],
+      today: '2026-05-15', horizonDays: 30 } },
 ];

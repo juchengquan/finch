@@ -219,4 +219,22 @@ final class SelectorParityTests: XCTestCase {
             XCTAssertEqual(Selectors.selectTransfers(f.input.txns, f.input.accounts, f.input.ledgerId), f.expected, name)
         }
     }
+
+    // ──────────────── Phase 1.5 — batch 3b: forecasts ────────────────
+
+    func test_monthForecast() throws {
+        struct F: Decodable { let expected: MonthForecast?; let input: I
+            struct I: Decodable { let txns: [Tx]; let scheduled: [ScheduledTemplate]; let ledgerId: String; let month: String; let today: String } }
+        for (name, f) in try load("monthForecast", F.self) {
+            XCTAssertEqual(Selectors.monthForecast(f.input.txns, f.input.scheduled, f.input.ledgerId, f.input.month, f.input.today), f.expected, name)
+        }
+    }
+
+    func test_accountForecast() throws {
+        struct F: Decodable { let expected: AccountForecast; let input: I
+            struct I: Decodable { let account: AccountRow; let scheduled: [ScheduledTemplate]; let today: String; let horizonDays: Int } }
+        for (name, f) in try load("accountForecast", F.self) {
+            XCTAssertEqual(Selectors.accountForecast(f.input.account, f.input.scheduled, f.input.today, f.input.horizonDays), f.expected, name)
+        }
+    }
 }

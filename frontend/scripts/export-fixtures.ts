@@ -19,8 +19,9 @@ import {
   monthlyCashflow, topCategoryDeltas,
   incomeCategoryFlow, recentExpenses, findDuplicate, suggestCategory, weeklyDigest,
   netWorthByMonth, netWorthExplained, balanceSeries, netWorthSeries,
-  netWorthByAccountType, selectTransfers,
+  netWorthByAccountType, selectTransfers, monthForecast, accountForecast,
 } from '@/lib/select';
+import type { ScheduledTemplate } from '@/lib/store';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
 import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
 import { buildPack } from '@/lib/db/core/pack';
@@ -82,6 +83,9 @@ function runSelector(c: SelectorCase): unknown {
     case 'netWorthSeries':       return netWorthSeries(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
     case 'netWorthByAccountType': return netWorthByAccountType(i.accounts as AccountRow[], i.ledgerId as string);
     case 'selectTransfers':      return selectTransfers(i.txns as Tx[], i.accounts as AccountRow[], i.ledgerId as string);
+    // Phase 1.5 — batch 3b
+    case 'monthForecast':        return monthForecast(i.txns as Tx[], i.scheduled as ScheduledTemplate[], i.ledgerId as string, i.month as string, i.today as string);
+    case 'accountForecast':      return accountForecast(i.account as AccountRow, i.scheduled as ScheduledTemplate[], i.today as string, i.horizonDays as number);
   }
 }
 
