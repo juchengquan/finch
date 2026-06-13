@@ -25,6 +25,7 @@ public enum Transactions {
         .confirmTransaction: confirmTransaction,
         .confirmPendingWithMerchant: confirmPendingWithMerchant,
         .removeAttachment: removeAttachment,
+        .setEntryAttachment: setEntryAttachment,
         .reconcileAccount: reconcileAccount,
         .setTransactionSplits: setTransactionSplits,
     ]
@@ -102,6 +103,42 @@ public enum Transactions {
     static func removeAttachment(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
         try db.execute(sql: "DELETE FROM entry_attachments WHERE id = ?", arguments: [try args.to(A.self).id])
+    }
+
+    // MARK: setEntryAttachment (Phase 6.5 — the 75th action, native-only)
+
+    /// Record an attachment row for an entry. NATIVE-ONLY: the web adds
+    /// attachments via the multipart `POST /api/attachments` route (file write +
+    /// row insert server-side); the native app has no HTTP server, so it stages
+    /// the file (Share Extension / PhotosPicker) and then dispatches this to
+    /// record the row. Arg names echo the `entry_attachments` columns. The
+    /// ledger is derived from the entry when omitted.
+    static func setEntryAttachment(_ db: Database, _ args: Args) throws {
+        struct A: Decodable {
+            let id: String?; let ledgerId: String?; let entryId: String; let kind: String
+            let relPath: String; let mimeType: String; let byteSize: Double
+            let sha256: String; let originalFilename: String?
+        }
+        let a = try args.to(A.self)
+        if !["image", "pdf"].contains(a.kind) {
+            throw I18nError("error.attachment.kind", [:], "Attachment kind must be image or pdf")
+        }
+        // entryId may be an entries.id OR a client Tx id (account-posting id) —
+        // resolveEntryRef handles both (like deleteTransaction / setCleared).
+        guard let entryId = try Entries.resolveEntryRef(db, a.entryId)?.entryId else {
+            throw I18nError("error.notFound.entry", [:], "Entry not found")
+        }
+        guard let ledgerId = try a.ledgerId ?? String.fetchOne(db,
+            sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) else {
+            throw I18nError("error.notFound.entry", [:], "Entry not found")
+        }
+        let id = a.id ?? Entries.newId("att")
+        try db.execute(sql: """
+            INSERT INTO entry_attachments (id, ledger_id, entry_id, kind, rel_path, mime_type,
+                byte_size, sha256, original_filename, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+            """, arguments: [id, ledgerId, entryId, a.kind, a.relPath, a.mimeType,
+                             Int(a.byteSize), a.sha256, a.originalFilename])
     }
 
     // MARK: confirm

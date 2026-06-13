@@ -66,6 +66,16 @@ public struct AccountRow: Identifiable, Codable, Equatable, Sendable {
     public var groupName: String?
     public var sortOrder: Int?
     public var openingBalanceBase: Double?   // for unrealizedFx cost basis
+
+    public init(id: String, balance: Double, ledgerId: String? = nil, currency: String? = nil,
+                includeInNetWorth: Int? = nil, isActive: Bool? = nil, name: String? = nil,
+                type: String? = nil, groupId: String? = nil, groupName: String? = nil,
+                sortOrder: Int? = nil, openingBalanceBase: Double? = nil) {
+        self.id = id; self.balance = balance; self.ledgerId = ledgerId; self.currency = currency
+        self.includeInNetWorth = includeInNetWorth; self.isActive = isActive; self.name = name
+        self.type = type; self.groupId = groupId; self.groupName = groupName
+        self.sortOrder = sortOrder; self.openingBalanceBase = openingBalanceBase
+    }
 }
 
 // `BudgetRow` lives in Project/Budget.swift (the full web-matching projection

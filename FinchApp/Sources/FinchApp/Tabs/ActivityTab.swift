@@ -10,6 +10,10 @@ struct ActivityTab: View {
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
     @State private var editing: Tx?
+    @State private var isSelecting = false
+    @State private var selected: Set<String> = []
+    @State private var showingBulkCat = false
+    @State private var savedSearches: [SavedSearch] = []
 
     var body: some View {
         NavigationStack {
@@ -30,19 +34,7 @@ struct ActivityTab: View {
                         ForEach(daySections, id: \.date) { section in
                             Section(section.date) {
                                 ForEach(section.txns) { txn in
-                                    Button { editing = txn } label: { TxRow(txn: txn) }
-                                        .buttonStyle(.plain)
-                                        .swipeActions(edge: .trailing) {
-                                            Button(role: .destructive) { delete(txn) } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
-                                        .swipeActions(edge: .leading) {
-                                            if txn.pending == true {
-                                                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
-                                                    .tint(.green)
-                                            }
-                                        }
+                                    row(txn)
                                 }
                             }
                         }
@@ -60,9 +52,64 @@ struct ActivityTab: View {
                         .accessibilityLabel("Add Transaction")
                         .disabled(store.accounts.isEmpty)
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    Menu {
+                        if !searchQuery.isEmpty {
+                            Button("Save “\(searchQuery)”") { SavedSearches.save(name: searchQuery, query: searchQuery); savedSearches = SavedSearches.all() }
+                        }
+                        if !savedSearches.isEmpty {
+                            Section("Saved") {
+                                ForEach(savedSearches) { s in
+                                    Button(s.name) { searchQuery = s.query }
+                                }
+                            }
+                        }
+                    } label: { Label("Saved searches", systemImage: "bookmark") }
+                        .onAppear { savedSearches = SavedSearches.all() }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(isSelecting ? "Done" : "Select") {
+                        isSelecting.toggle(); selected.removeAll()
+                    }.disabled(store.txns.isEmpty)
+                }
+                if isSelecting {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("Recategorize \(selected.count)") { showingBulkCat = true }
+                            .disabled(selected.isEmpty)
+                    }
+                }
             }
             .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
             .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+            .sheet(isPresented: $showingBulkCat) {
+                BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
+            }
+        }
+    }
+
+    private func toggle(_ txn: Tx) {
+        if selected.contains(txn.id) { selected.remove(txn.id) } else { selected.insert(txn.id) }
+    }
+
+    @ViewBuilder
+    private func row(_ txn: Tx) -> some View {
+        Button { isSelecting ? toggle(txn) : (editing = txn) } label: {
+            HStack {
+                if isSelecting {
+                    Image(systemName: selected.contains(txn.id) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                }
+                TxRow(txn: txn)
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { delete(txn) } label: { Label("Delete", systemImage: "trash") }
+        }
+        .swipeActions(edge: .leading) {
+            if txn.pending == true {
+                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
+            }
         }
     }
 

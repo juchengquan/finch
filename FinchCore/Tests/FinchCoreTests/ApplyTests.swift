@@ -99,6 +99,38 @@ final class ApplyTests: XCTestCase {
         }
     }
 
+    /// Phase 6.5 — setEntryAttachment (the 75th action) records an attachment row,
+    /// deriving the ledger from the entry; removeAttachment is the inverse.
+    func test_setEntryAttachment() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-9),
+            "merchant": .string("Lunch"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true),
+        ]))
+        let entryId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM entries LIMIT 1")! }
+        try Apply.apply(dbQueue: q, action: "setEntryAttachment", args: Args([
+            "entryId": .string(entryId), "kind": .string("image"),
+            "relPath": .string("attachments/\(entryId)/a.jpg"), "mimeType": .string("image/jpeg"),
+            "byteSize": .double(1234), "sha256": .string("abc"), "originalFilename": .string("receipt.jpg"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry_attachments WHERE entry_id = ?", arguments: [entryId]), 1)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT kind FROM entry_attachments"), "image")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT ledger_id FROM entry_attachments"), "l1")  // derived from entry
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT byte_size FROM entry_attachments"), 1234)
+        }
+        // bad kind rejected
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "setEntryAttachment", args: Args([
+            "entryId": .string(entryId), "kind": .string("video"), "relPath": .string("x"),
+            "mimeType": .string("x"), "byteSize": .double(1), "sha256": .string("x")]))) {
+            XCTAssertEqual(($0 as? I18nError)?.code, "error.attachment.kind")
+        }
+        let attId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM entry_attachments LIMIT 1")! }
+        try Apply.apply(dbQueue: q, action: "removeAttachment", args: Args(["id": .string(attId)]))
+        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry_attachments") }, 0)
+    }
+
     /// deleteTransaction (by the Tx id = account-posting id) removes the entry + recomputes.
     func test_applyDeleteTransaction() throws {
         let q = try freshDB()

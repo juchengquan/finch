@@ -55,6 +55,31 @@ final class SeedAndScreenFlowTests: XCTestCase {
         }
     }
 
+    /// Category edit (EditTransaction picker + bulk recategorize) via the
+    /// bulkRecategorize action — re-points the category leg, balance unchanged.
+    func test_recategorizeFlow() throws {
+        let q = try seededStarter()
+        let food = try firstCategory(q, kind: "expense")
+        // add a second expense category to move into
+        try Apply.apply(dbQueue: q, action: "createCategory", args: Args(["ledgerId": .string("personal"), "name": .string("Transport"), "type": .string("expense")]))
+        let transport = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM categories WHERE name='Transport'")! }
+        for (i, amt) in [(-10.0), (-20.0)].enumerated() {
+            try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+                "ledgerId": .string("personal"), "accountId": .string("cash"), "amount": .double(amt),
+                "merchant": .string("Tx\(i)"), "categoryId": .string(food), "date": .string("2026-05-0\(i+1)"), "skipRules": .bool(true)]))
+        }
+        let txIds = try q.read { db in try String.fetchAll(db, sql: "SELECT id FROM postings WHERE account_id='cash' ORDER BY rowid") }
+        // single (EditTransaction path): move tx0 → Transport
+        try Apply.apply(dbQueue: q, action: "bulkRecategorize", args: Args(["ids": .array([.string(txIds[0])]), "categoryId": .string(transport)]))
+        // bulk (Activity multi-select): move both → Transport
+        try Apply.apply(dbQueue: q, action: "bulkRecategorize", args: Args(["ids": .array(txIds.map { .string($0) }), "categoryId": .string(transport)]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE category_id=?", arguments: [transport]), 2)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE category_id=?", arguments: [food]), 0)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='cash'") ?? 0, -30, accuracy: 0.001)
+        }
+    }
+
     /// Pending review: add a pending tx, confirm-all → balance moves.
     func test_pendingConfirmFlow() throws {
         let q = try seededStarter()
@@ -96,6 +121,24 @@ final class SeedAndScreenFlowTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id=?", arguments: [sid]) }, 1)
         try Apply.apply(dbQueue: q, action: "deleteScheduled", args: Args(["id": .string(sid)]))
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM scheduled_templates") }, 0)
+    }
+
+    /// Tag admin (create/rename/delete) + reconcile (statement balance → adjustment).
+    func test_tagAdminAndReconcileFlow() throws {
+        let q = try seededStarter()
+        try Apply.apply(dbQueue: q, action: "createTag", args: Args(["ledgerId": .string("personal"), "name": .string("work")]))
+        let tags = try Projection.tags(dbQueue: q, ledgerId: "personal")
+        XCTAssertEqual(tags.map(\.name), ["work"])
+        try Apply.apply(dbQueue: q, action: "updateTag", args: Args(["id": .string(tags[0].id), "patch": .object(["name": .string("business")])]))
+        XCTAssertEqual(try Projection.tags(dbQueue: q, ledgerId: "personal").first?.name, "business")
+        try Apply.apply(dbQueue: q, action: "deleteTag", args: Args(["id": .string(tags[0].id)]))
+        XCTAssertTrue(try Projection.tags(dbQueue: q, ledgerId: "personal").isEmpty)
+
+        // Reconcile Cash (opening 0) to a $250 statement → posts a +250 adjustment.
+        try Apply.apply(dbQueue: q, action: "reconcileAccount", args: Args([
+            "accountId": .string("cash"), "statementBalance": .double(250),
+            "statementDate": .string("2026-05-31"), "postAdjustment": .bool(true)]))
+        XCTAssertEqual(try q.read { db in try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='cash'") ?? -1 }, 250, accuracy: 0.001)
     }
 
     /// LedgerManagementView: create → rename → change base → set default → delete.

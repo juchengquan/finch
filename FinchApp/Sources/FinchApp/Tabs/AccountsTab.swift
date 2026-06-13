@@ -7,6 +7,7 @@ import FinchCore
 /// rows are NOT NavigationLinks in Phase 1.0.
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var showingReconcile = false
 
     var body: some View {
         NavigationStack {
@@ -44,7 +45,12 @@ struct AccountsTab: View {
                     NavigationLink { HoldingsView() } label: { Image(systemName: "chart.bar") }
                         .accessibilityLabel("Holdings")
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
+                        .disabled(store.accounts.isEmpty)
+                }
             }
+            .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
         }
     }
 }
