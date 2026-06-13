@@ -5,6 +5,7 @@ import FinchCore
 /// the audit summary, and the iOS-only "Force import" override (D7).
 struct SettingsTab: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,41 @@ struct SettingsTab: View {
                     LabeledContent("Last imported", value: store.dbInfo.lastImportedAtDisplay)
                     ForEach(store.dbInfo.rowCountsOrdered, id: \.0) { name, count in
                         LabeledContent(name, value: "\(count)")
+                    }
+                }
+
+                Section {
+                    Picker("App lock", selection: Binding(
+                        get: { gate.settings.policy },
+                        set: { gate.settings.policy = $0 })) {
+                        ForEach(BiometricPolicy.allCases, id: \.rawValue) { Text($0.displayName).tag($0) }
+                    }
+                    if gate.settings.policy == .onBackground || gate.settings.policy == .onIdle {
+                        Picker("Lock after", selection: Binding(
+                            get: { gate.settings.timeoutSeconds },
+                            set: { gate.settings.timeoutSeconds = $0 })) {
+                            ForEach([60, 300, 900, 1800, 3600], id: \.self) { Text("\($0 / 60) min").tag($0) }
+                        }
+                    }
+                    if gate.settings.policy != .off {
+                        Toggle("Require Face ID for export & destructive actions", isOn: Binding(
+                            get: { gate.settings.sensitiveActionsEnabled },
+                            set: { gate.settings.sensitiveActionsEnabled = $0 }))
+                    }
+                } header: {
+                    Text("Security")
+                } footer: {
+                    Text("Uses Face ID / Touch ID, falling back to your device passcode. finch never stores a passcode of its own.")
+                }
+
+                Section("Notifications") {
+                    ForEach(NotificationKind.allCases, id: \.rawValue) { kind in
+                        Toggle(kind.title, isOn: Binding(
+                            get: { NotificationPrefs.isOn(kind) },
+                            set: { on in
+                                NotificationPrefs.set(kind, on: on)
+                                Task { await NotificationService.shared.refresh() }
+                            }))
                     }
                 }
 

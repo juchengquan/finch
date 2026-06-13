@@ -96,6 +96,11 @@ public final class FinchStore: ObservableObject {
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
         reprojectActiveLedger()
         self.dbInfo = makeDBInfo()
+        // Phase 6.1: keep Spotlight in sync (idempotent full re-index; the
+        // in-memory store is the UI's source of truth regardless).
+        Task { await SpotlightIndexer.shared.indexAll(store: self) }
+        // Phase 6.2: re-plan notifications from the new state.
+        Task { await NotificationService.shared.refresh() }
     }
 
     // MARK: - Import (DESIGN §4)
@@ -290,6 +295,9 @@ public final class FinchStore: ObservableObject {
     public var pickableCategories: [CategoryRow] {
         categories.filter { ($0.kind ?? "") != "equity" }
     }
+    /// Counterparties ("merchants") for the active ledger — read surface for
+    /// Spotlight indexing and merchant pickers.
+    public var merchants: [Counterparty] { counterparties }
     public func categoryName(_ id: String?) -> String? {
         guard let id else { return nil }
         return categories.first { $0.id == id }?.name

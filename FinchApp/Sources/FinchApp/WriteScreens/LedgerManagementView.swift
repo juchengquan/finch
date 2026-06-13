@@ -97,12 +97,12 @@ struct AddLedgerSheet: View {
 /// amount_base), and make it the active/default ledger.
 struct EditLedgerSheet: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
     @Environment(\.dismiss) private var dismiss
     let ledger: Ledger
     @State private var name: String
     @State private var base: String
     @State private var errorMessage: String?
-    @State private var confirmingBaseChange = false
 
     init(ledger: Ledger) {
         self.ledger = ledger
@@ -137,15 +137,17 @@ struct EditLedgerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await save() } }.bold() }
             }
         }
     }
 
-    private func save() {
+    private func save() async {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
+        // Changing the base re-derives every entry — a sensitive action (Phase 6.3).
+        if baseChanged, await !gate.confirmSensitive() { return }
         do {
             if trimmed != ledger.name {
                 try store.apply(.updateLedger, Args(["id": .string(ledger.id), "patch": .object(["name": .string(trimmed)])]))
