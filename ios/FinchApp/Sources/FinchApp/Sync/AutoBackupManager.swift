@@ -66,6 +66,7 @@ public final class AutoBackupManager: ObservableObject {
             try data.write(to: url)
             prune()
             WidgetSnapshotWriter.write(from: store)   // Phase 7: refresh the widget data
+            ICloudSync.shared.push(data, name: url.lastPathComponent)   // Phase 5: push to iCloud Drive
             lastBackupAt = Date()
             lastError = nil
         } catch {
