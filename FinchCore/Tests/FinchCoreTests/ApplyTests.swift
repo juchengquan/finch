@@ -20,8 +20,8 @@ final class ApplyTests: XCTestCase {
 
     func test_unportedActionThrowsNotImplemented() throws {
         let q = try freshDB()
-        // backfillRule is a real action but its domain handler isn't ported yet.
-        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "backfillRule", args: Args([:]))) { err in
+        // changeLedgerBase is a real action but its domain handler isn't ported yet.
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args([:]))) { err in
             guard let e = err as? I18nError else { return XCTFail("expected I18nError") }
             XCTAssertEqual(e.code, "error.notImplemented")
         }
