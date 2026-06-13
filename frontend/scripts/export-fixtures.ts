@@ -435,7 +435,27 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'createScheduled', args: { id: 's1', ledgerId: 'personal', name: 'Rent', type: 'expense', amount: 1500, frequency: 'monthly', dayOfMonth: 1, accountId: 'a1', startDate: '2026-01-01' } },
   { action: 'createRule', args: { id: 'r1', ledgerId: 'personal', name: 'Coffee', condition: { field: 'merchant', op: 'contains', value: 'coffee' }, actions: [{ type: 'set_category', categoryId: 'food' }] } },
   { action: 'adjustAccountBalance', args: { accountId: 'a2', targetBalance: 600, date: '2026-05-04' } },
+  // Stateful chain: split the just-added tx (id resolved at runtime, identically
+  // on both sides) — exercises setTransactionSplits against the oracle.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -100, merchant: 'SplitMe', categoryId: 'food', date: '2026-05-05', skipRules: true } },
+  { action: 'setTransactionSplits', args: { id: '$lastAccountPosting', splits: [{ categoryId: 'food', amount: -60 }, { categoryId: 'pay', amount: -40 }] } },
+  // Confirm the income tx via its account-posting id (re-uses the same chain pattern).
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -7, merchant: 'Pending', categoryId: 'food', date: '2026-05-06', status: 'pending', skipRules: true } },
+  { action: 'setReviewed', args: { id: '$lastAccountPosting', reviewed: true } },
 ];
+
+/** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the
+ *  same logical row on web + Swift), so the declarative sequence can chain. */
+async function resolveArgs(x: Exec, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (v === '$lastAccountPosting') {
+      const r = await x('SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1', []);
+      out[k] = String(r[0].id);
+    } else out[k] = v;
+  }
+  return out;
+}
 
 async function writeWriteParityFixture(): Promise<void> {
   const driver = await openDb(':memory:');
@@ -443,7 +463,7 @@ async function writeWriteParityFixture(): Promise<void> {
   const x = execFor(driver);
   await applySchema(x);
   for (const sql of SEED_SQL) await x(sql, []);
-  for (const step of WRITE_SEQUENCE) await applyMutation(x, step.action, step.args);
+  for (const step of WRITE_SEQUENCE) await applyMutation(x, step.action, await resolveArgs(x, step.args));
   const expected = await canonicalState(x);
   const dir = path.join(OUT, 'writeparity');
   await fs.mkdir(dir, { recursive: true });
