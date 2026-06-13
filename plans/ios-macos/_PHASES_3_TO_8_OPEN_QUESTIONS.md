@@ -156,9 +156,11 @@ simulator without signing, I went back and BUILT what had been deferred:
   (verified locally; the iOS CI scheme builds iOS only).
 
 Genuinely remaining (true environment limits, not code):
-- 🚧 **Apple Watch glance** (Phase 7) — code written (`_drafts/FinchWatch/`) but
-  the **watchOS platform runtime isn't installed** in this build environment, so
-  it can't be compiled/verified. Wiring instructions in the draft README.
+- ✅ **Apple Watch glance** (Phase 7) — after installing the watchOS 26.5
+  simulator runtime (`xcodebuild -downloadPlatform watchOS`), the `FinchWatch`
+  target (self-contained watchOS app reading the App Group `WidgetSnapshot`)
+  **builds for the watchOS simulator**. Wired into project.yml; iOS + Mac builds
+  unaffected. (CI builds the iOS scheme only, so CI doesn't rebuild it.)
 - 📐 **CloudKit row-level sync** (Phase 8) — needs a real iCloud/CloudKit account
   + container at runtime to be meaningful; unverifiable in any CI. The
   entitlement compiles; the sync engine remains the architecture note. It also

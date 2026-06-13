@@ -4,6 +4,7 @@ options:
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
+    watchOS: "26.0"
 packages:
   FinchCore:
     path: .                      # the local SwiftPM package (Package.swift)
@@ -94,6 +95,24 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
 
+  # Phase 7 — the Apple Watch glance (self-contained watchOS app; reads the
+  # WidgetSnapshot from the App Group). Built for the watchOS simulator.
+  FinchWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: FinchWatch
+    settings:
+      base:
+        INFOPLIST_FILE: FinchWatch/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.watch
+        PRODUCT_NAME: finch
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_ENTITLEMENTS: FinchWatch/FinchWatch.entitlements
+        CODE_SIGNING_ALLOWED: "NO"
+
   FinchAppTests:
     type: bundle.unit-test
     platform: iOS
@@ -121,3 +140,7 @@ schemes:
     build:
       targets:
         FinchMac: all
+  FinchWatch:
+    build:
+      targets:
+        FinchWatch: all
