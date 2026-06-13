@@ -39,6 +39,12 @@ struct AccountsTab: View {
                 }
             }
             .navigationTitle("Accounts")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink { HoldingsView() } label: { Image(systemName: "chart.bar") }
+                        .accessibilityLabel("Holdings")
+                }
+            }
         }
     }
 }

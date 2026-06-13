@@ -3,7 +3,7 @@ import Foundation
 // Phase 1.5 batch 4 — holdings / FX selectors (mirror of lib/select.ts).
 
 /// A holding/position (mirror of lib/db/domain/holdings/types.ts::Holding).
-public struct Holding: Equatable, Sendable, Codable {
+public struct Holding: Equatable, Sendable, Codable, Identifiable {
     public let id: String
     public let ledgerId: String
     public let accountId: String
