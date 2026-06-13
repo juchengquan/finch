@@ -96,14 +96,22 @@ each) + ~200 lines UI plumbing. **3-4 months of full-time work** for a
 small team. **Largest in Swift port scope (larger than Phase 1.0 and
 Phase 1.5 combined).**
 
-**Pre-Phase-2 prerequisite**: a web-side cleanup PR that deletes the
-3 dead-code duplicates in `accounts/mutations.ts`
+**Pre-Phase-2 prerequisite** ✅ **LANDED**: a web-side cleanup PR that
+deletes the 3 dead-code duplicates in `accounts/mutations.ts`
 (`createAccountGroup` / `updateAccountGroup` / `deleteAccountGroup`).
 This PR lands BEFORE the Phase 2 iOS port starts. The iOS port
 lands against the cleaned-up web. Estimated size: ~30 lines
 removed from `accounts/mutations.ts` + parity tests confirming
 the 3 actions still resolve correctly to the canonical
 `accountGroups/mutations.ts` versions. Landed in ~1 day.
+
+> **Done.** The 3 duplicate handlers (and their now-unused
+> `accountGroups/queries` imports) were removed from
+> `accounts/mutations.ts`. A structural test in
+> `accounts/mutations.test.ts` pins the handlers map to the 5
+> accounts-only actions, and the existing end-to-end tests in
+> `mutate.test.ts` confirm the 3 group actions still resolve
+> correctly (now unambiguously to `accountGroups/`).
 
 ## §2. What gets ported (the surface area)
 
@@ -173,9 +181,13 @@ includes `createAccountGroup`, `updateAccountGroup`, and
 `accountGroups/mutations.ts` (35 lines). The dispatcher
 (`lib/db/mutate.ts`) imports **both** `accountsHandlers` and
 `accountGroupsHandlers` and merges them into one `ALL` map. Because
-`accountsHandlers` is spread first (line 28 in `mutate.ts`), the
-`accounts` versions win for the 3 overlapping actions, making the
-`accountGroups/` handlers effectively dead code.
+`accountGroupsHandlers` is spread *after* `accountsHandlers` and
+later keys win in an object spread, the `accountGroups/` versions
+actually win for the 3 overlapping actions — making the `accounts/`
+duplicates the effectively dead code. (Either way the two
+implementations are functionally identical: `accounts/` delegated to
+the same `accountGroups/queries` functions.) **This duplication has
+since been removed** — see the prerequisite note in §1.
 
 **The web gets the cleanup as a separate PR before Phase 2** (per
 the resolution-pass decision). The cleanup deletes the 3 dead
@@ -1186,15 +1198,15 @@ These are explicitly NOT in Phase 2:
   parity harness extends the Phase 1.5 harness.
 
   Per-domain action counts cross-checked against the web:
-  the live dispatcher merges 77 handler entries (74 unique
-  action names; 3 are duplicates in `accounts/mutations.ts`
-  for `createAccountGroup` / `updateAccountGroup` /
-  `deleteAccountGroup` — these are dead in `accountGroups/`
-  but live in `accounts/`. The web gets the cleanup as a
-  separate PR before Phase 2; the iOS port lands against
-  the cleaned-up web. If the web cleanup hasn't landed by
-  the time the Phase 2 port starts, the port mirrors the
-  bug 1:1 as a fallback).
+  the dispatcher historically merged 77 handler entries (74
+  unique action names; 3 were duplicates in
+  `accounts/mutations.ts` for `createAccountGroup` /
+  `updateAccountGroup` / `deleteAccountGroup`, shadowed by
+  the canonical `accountGroups/` versions). ✅ The web
+  cleanup has landed: the duplicates were deleted, so the
+  dispatcher now merges 74 entries (74 unique action names,
+  no overlap), and the iOS port lands against the
+  cleaned-up web.
 - **Scope**: focused on Phase 2. Phase 1.0 + 1.5 are
   referenced as completed. Phase 3+ are explicitly out of
   scope (§11). The 7 new screens are specced at the same
