@@ -8,6 +8,8 @@ struct ActivityTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var searchQuery: String = ""
     @State private var visibleCount: Int = 50
+    @State private var showingAdd = false
+    @State private var editing: Tx?
 
     var body: some View {
         NavigationStack {
@@ -16,10 +18,31 @@ struct ActivityTab: View {
                     EmptyState(tab: .activity)
                 } else {
                     List {
+                        if pendingCount > 0 {
+                            Section {
+                                Button {
+                                    try? store.apply(.confirmAllPending, Args([:]))
+                                } label: {
+                                    Label("Confirm all \(pendingCount) pending", systemImage: "checkmark.circle")
+                                }
+                            }
+                        }
                         ForEach(daySections, id: \.date) { section in
                             Section(section.date) {
                                 ForEach(section.txns) { txn in
-                                    TxRow(txn: txn)
+                                    Button { editing = txn } label: { TxRow(txn: txn) }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) { delete(txn) } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        }
+                                        .swipeActions(edge: .leading) {
+                                            if txn.pending == true {
+                                                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
+                                                    .tint(.green)
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -31,8 +54,25 @@ struct ActivityTab: View {
             }
             .searchable(text: $searchQuery)
             .navigationTitle("Activity")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Transaction")
+                        .disabled(store.accounts.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
+            .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
         }
     }
+
+    private func delete(_ txn: Tx) {
+        try? store.apply(.deleteTransaction, Args(["id": .string(txn.id)]))
+    }
+    private func confirm(_ txn: Tx) {
+        try? store.apply(.confirmTransaction, Args(["id": .string(txn.id)]))
+    }
+    private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
 
     /// Client-side filter mirroring selectTransactions(opts.query):
     /// merchant.lowercased().contains(query). NO FTS5.
@@ -63,7 +103,12 @@ struct TxRow: View {
             Image(systemName: TxnKindIcon.icon(for: txn.kind))
                 .foregroundStyle(txn.amount < 0 ? .red : .green)
             VStack(alignment: .leading, spacing: 2) {
-                Text(txn.merchant)
+                HStack(spacing: 4) {
+                    Text(txn.merchant)
+                    if txn.pending == true {
+                        Image(systemName: "clock").font(.caption2).foregroundStyle(.orange)
+                    }
+                }
                 if let cat = store.categoryName(txn.category) {
                     Text(cat).font(.caption2)
                         .padding(.horizontal, 6).padding(.vertical, 2)

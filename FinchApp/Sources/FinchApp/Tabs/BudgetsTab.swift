@@ -11,18 +11,30 @@ import FinchCore
 /// text and no day countdown.
 struct BudgetsTab: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var showingAdd = false
 
     var body: some View {
         NavigationStack {
             Group {
                 if store.budgets.isEmpty {
-                    EmptyState(tab: .budgets)
+                    ContentUnavailableView {
+                        Label("No budgets yet", systemImage: "chart.pie")
+                    } description: {
+                        Text(store.ledgers.isEmpty
+                             ? "Import a .finch pack from Settings to get started."
+                             : "Tap + to create a budget.")
+                    }
                 } else {
                     List {
                         ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
                             Section(groupName) {
                                 ForEach(store.budgets(in: groupName)) { budget in
                                     BudgetRowView(budget: budget)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) { delete(budget) } label: {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -38,7 +50,19 @@ struct BudgetsTab: View {
                 }
             }
             .navigationTitle("Budgets")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Budget")
+                        .disabled(store.ledgers.isEmpty)
+                }
+            }
+            .sheet(isPresented: $showingAdd) { AddBudgetSheet() }
         }
+    }
+
+    private func delete(_ budget: BudgetRow) {
+        try? store.apply(.removeBudget, Args(["id": .string(budget.id)]))
     }
 }
 

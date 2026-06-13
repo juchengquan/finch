@@ -3,7 +3,7 @@ import SwiftUI
 /// Per-tab "no pack loaded yet" placeholder (Phase 1.0 ships read-only; the
 /// first thing a user does is import a `.finch` from Settings).
 struct EmptyState: View {
-    enum Tab { case accounts, activity, budgets }
+    enum Tab { case accounts, activity, budgets, scheduled }
     let tab: Tab
     var body: some View {
         ContentUnavailableView {
@@ -17,6 +17,7 @@ struct EmptyState: View {
         case .accounts: "No accounts yet"
         case .activity: "No activity yet"
         case .budgets:  "No budgets yet"
+        case .scheduled: "No scheduled items yet"
         }
     }
     private var symbol: String {
@@ -24,6 +25,7 @@ struct EmptyState: View {
         case .accounts: "wallet.pass"
         case .activity: "list.bullet"
         case .budgets:  "chart.pie"
+        case .scheduled: "calendar"
         }
     }
 }

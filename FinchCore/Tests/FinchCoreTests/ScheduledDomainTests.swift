@@ -53,6 +53,33 @@ final class ScheduledDomainTests: XCTestCase {
         }
     }
 
+    /// The scheduledTemplates projection maps columns → ScheduledTemplate and
+    /// joins the confirmed-installment count (installmentPaid).
+    func test_scheduledProjection() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Phone','expense',0,datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: q, action: "createScheduled", args: Args([
+            "id": .string("s1"), "ledgerId": .string("l1"), "name": .string("Phone plan"), "type": .string("expense"),
+            "amount": .double(40), "frequency": .string("monthly"), "dayOfMonth": .int(5), "accountId": .string("a1"),
+            "category": .string("c1"), "installmentTotal": .int(12),
+        ]))
+        // Post one installment → installmentPaid should reflect 1.
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args(["templateId": .string("s1")]))
+        let rows = try Projection.scheduledTemplates(dbQueue: q, ledgerId: "l1")
+        XCTAssertEqual(rows.count, 1)
+        let t = try XCTUnwrap(rows.first)
+        XCTAssertEqual(t.name, "Phone plan")
+        XCTAssertEqual(t.type, "expense")
+        XCTAssertEqual(t.amount ?? 0, 40, accuracy: 0.001)
+        XCTAssertEqual(t.frequency, "monthly")
+        XCTAssertEqual(t.dayOfMonth, 5)
+        XCTAssertEqual(t.accountId, "a1")
+        XCTAssertEqual(t.installmentTotal, 12)
+        XCTAssertEqual(t.installmentPaid, 1)
+    }
+
     func test_scheduledSplits() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createScheduled", args: Args(["id": .string("s1"), "ledgerId": .string("l1"), "name": .string("Paycheck"), "type": .string("income"), "amount": .double(5000), "accountId": .string("a1")]))

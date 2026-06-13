@@ -135,6 +135,36 @@ extension Projection {
         }
     }
 
+    /// `scheduled_templates` for a ledger, with the confirmed-installment count
+    /// joined in (mirrors the web listScheduled + INSTALLMENT_PAID_JOIN). Ordered
+    /// by rowid (insertion order), like the web.
+    public static func scheduledTemplates(dbQueue: DatabaseQueue, ledgerId: String) throws -> [ScheduledTemplate] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT t.id, t.name, t.description, t.kind, t.amount, t.frequency,
+                       t.day_of_month, t.day_of_week, t.account_id, t.from_account_id,
+                       t.start_date, t.end_date, t.next_run, t.max_executions,
+                       t.installment_total, COALESCE(p.n, 0) AS installment_paid
+                  FROM scheduled_templates t
+                  LEFT JOIN (
+                    SELECT source_template_id, COUNT(*) AS n FROM entries
+                     WHERE source_template_id IS NOT NULL AND status = 'confirmed'
+                     GROUP BY source_template_id
+                  ) p ON p.source_template_id = t.id
+                 WHERE t.ledger_id = ? ORDER BY t.rowid
+                """, arguments: [ledgerId]).map { r in
+                ScheduledTemplate(
+                    id: r["id"], name: (r["name"] as String?) ?? "", description: r["description"],
+                    type: r["kind"], amount: r["amount"], frequency: r["frequency"],
+                    dayOfMonth: (r["day_of_month"] as Int?) ?? 1, weekDay: r["day_of_week"],
+                    accountId: r["account_id"], fromAccountId: r["from_account_id"],
+                    startDate: r["start_date"], endDate: r["end_date"],
+                    nextRun: (r["next_run"] as String?) ?? "", maxExecutions: r["max_executions"],
+                    installmentTotal: r["installment_total"], installmentPaid: r["installment_paid"])
+            }
+        }
+    }
+
     /// JSON-array text column → `[String]` (empty on null/malformed) — mirrors
     /// the web `parseIds` helper (budgets.ts:16).
     private static func parseIds(_ raw: String?) -> [String] {
