@@ -138,3 +138,28 @@ Documented approach for when it's picked up (needs a provisioned target):
   iCloud / CloudKit entitlements. Those still can't be fully verified in headless
   CI, but the CI-verifiable cores are already in place for each. **Waiting on the
   signing/dev-team config before scaffolding** (so it doesn't red the CI).
+
+## Round 2 — signed/extension targets turned out CI-buildable
+
+After discovering app-extension targets + entitlements build for the iOS
+simulator without signing, I went back and BUILT what had been deferred:
+
+- ✅ **App Group** entitlement (iOS app + extensions).
+- ✅ **WidgetKit extension** (Phase 7) — FinchWidget.appex, CI-built + embedded.
+- ✅ **Share Extension** (Phase 6.5) — FinchShare.appex, CI-built + embedded;
+  end-to-end receipt import.
+- ✅ **iCloud Drive sync** (Phase 5) — ICloudSync pushes packs to the iCloud
+  container + NSMetadataQuery folder-watch → manual import. Builds (iCloud
+  entitlement compiles on the simulator); no-ops without an iCloud account.
+- ✅ **macOS app** (Phase 3) — FinchMac target sharing the iOS sources via a
+  `#if os(macOS)` modifier shim. **Built AND launched as a native Mac app**
+  (verified locally; the iOS CI scheme builds iOS only).
+
+Genuinely remaining (true environment limits, not code):
+- 🚧 **Apple Watch glance** (Phase 7) — code written (`_drafts/FinchWatch/`) but
+  the **watchOS platform runtime isn't installed** in this build environment, so
+  it can't be compiled/verified. Wiring instructions in the draft README.
+- 📐 **CloudKit row-level sync** (Phase 8) — needs a real iCloud/CloudKit account
+  + container at runtime to be meaningful; unverifiable in any CI. The
+  entitlement compiles; the sync engine remains the architecture note. It also
+  supersedes Phase 5's pack sync by design.
