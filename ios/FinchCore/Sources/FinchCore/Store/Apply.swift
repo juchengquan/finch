@@ -16,8 +16,8 @@ public enum Apply {
     /// here as each domain lands (mirrors `mutate.ts`'s spread into `ALL`).
     static var registry: [ActionName: Handler] {
         var all: [ActionName: Handler] = [:]
-        // Domains register here as they are ported (Tasks 3–15):
-        // all.merge(Transactions.handlers) { _, new in new }
+        // Domains fold in their handlers as they are ported (Tasks 3–15):
+        all.merge(Transactions.handlers) { _, new in new }
         return all
     }
 

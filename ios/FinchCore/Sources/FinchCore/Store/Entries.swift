@@ -361,6 +361,20 @@ public enum Entries {
             skipRules: s.skipRules))
     }
 
+    /// Resolve a client Tx id (a posting id) — or an entry id — to its entry +
+    /// primary account-leg posting. Mirrors `resolveEntryRef`.
+    public struct EntryRef: Sendable { public let entryId: String; public let postingId: String?; public let accountId: String? }
+    public static func resolveEntryRef(_ db: Database, _ id: String) throws -> EntryRef? {
+        if let p = try Row.fetchOne(db, sql: "SELECT id, entry_id, account_id FROM postings WHERE id = ?", arguments: [id]) {
+            return EntryRef(entryId: p["entry_id"], postingId: p["id"], accountId: p["account_id"])
+        }
+        if try Int.fetchOne(db, sql: "SELECT 1 FROM entries WHERE id = ?", arguments: [id]) == nil { return nil }
+        let leg = try Row.fetchOne(db, sql:
+            "SELECT id, account_id FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order LIMIT 1",
+            arguments: [id])
+        return EntryRef(entryId: id, postingId: leg?["id"], accountId: leg?["account_id"])
+    }
+
     /// Rebuild a confirmed account's cached balance from its postings.
     public static func recomputeAccountFromPostings(_ db: Database, _ accountId: String) throws {
         let total = try Double.fetchOne(db, sql: """
