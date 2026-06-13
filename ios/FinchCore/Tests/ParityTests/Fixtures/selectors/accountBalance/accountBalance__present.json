@@ -1,0 +1,48 @@
+{
+  "name": "present",
+  "selector": "accountBalance",
+  "input": {
+    "accounts": [
+      {
+        "id": "a1",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 1234.56,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      },
+      {
+        "id": "a2",
+        "ledgerId": "personal",
+        "name": "Checking",
+        "type": "cash",
+        "currency": "USD",
+        "balance": 9,
+        "openingBalance": 0,
+        "openingBalanceBase": 0,
+        "groupId": null,
+        "groupName": null,
+        "includeInNetWorth": 1,
+        "isActive": true,
+        "color": null,
+        "sortOrder": 0,
+        "lastReconciledAt": null,
+        "lastReconciledBalance": null,
+        "archivedAt": null
+      }
+    ],
+    "accountId": "a1"
+  },
+  "expected": 1234.56
+}

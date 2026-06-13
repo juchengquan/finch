@@ -1,0 +1,10 @@
+{
+  "code": "kind-shape",
+  "expected": [
+    {
+      "code": "kind-shape",
+      "entryId": "e1",
+      "detail": "kind=transfer but shape is acct=1 plain=1 eq=[0,0,0]"
+    }
+  ]
+}

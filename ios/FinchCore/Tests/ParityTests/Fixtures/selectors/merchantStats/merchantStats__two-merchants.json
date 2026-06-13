@@ -1,0 +1,61 @@
+{
+  "name": "two-merchants",
+  "selector": "merchantStats",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -4,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -5,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t3",
+        "merchant": "Coffee",
+        "category": "food",
+        "amount": -6,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t4",
+        "merchant": "Gas",
+        "category": "food",
+        "amount": -40,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "ledgerId": "personal"
+  },
+  "expected": {
+    "m:coffee": {
+      "count": 3,
+      "mean": 5,
+      "std": 0.82
+    },
+    "m:gas": {
+      "count": 1,
+      "mean": 40,
+      "std": 0
+    }
+  }
+}

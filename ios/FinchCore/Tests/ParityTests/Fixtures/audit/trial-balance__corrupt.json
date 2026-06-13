@@ -1,0 +1,14 @@
+{
+  "code": "trial-balance",
+  "expected": [
+    {
+      "code": "unbalanced",
+      "entryId": "e1",
+      "detail": "postings sum to -3, not 0"
+    },
+    {
+      "code": "trial-balance",
+      "detail": "ledger l1 trial balance is -3, not 0"
+    }
+  ]
+}

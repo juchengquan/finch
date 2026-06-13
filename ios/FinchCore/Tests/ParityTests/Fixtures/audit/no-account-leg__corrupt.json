@@ -1,0 +1,15 @@
+{
+  "code": "no-account-leg",
+  "expected": [
+    {
+      "code": "no-account-leg",
+      "entryId": "e1",
+      "detail": "2 postings, 0 account legs"
+    },
+    {
+      "code": "kind-shape",
+      "entryId": "e1",
+      "detail": "kind=expense but shape is acct=0 plain=2 eq=[0,0,0]"
+    }
+  ]
+}

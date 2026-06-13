@@ -1,0 +1,44 @@
+{
+  "name": "direction-out",
+  "selector": "selectTransactions",
+  "input": {
+    "txns": [
+      {
+        "id": "t1",
+        "merchant": "m",
+        "category": "food",
+        "amount": -10,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      },
+      {
+        "id": "t2",
+        "merchant": "m",
+        "category": "food",
+        "amount": 50,
+        "account": "a1",
+        "date": "2026-05-01",
+        "pending": false,
+        "ledgerId": "personal"
+      }
+    ],
+    "opts": {
+      "ledgerId": "personal",
+      "direction": "out"
+    }
+  },
+  "expected": [
+    {
+      "id": "t1",
+      "merchant": "m",
+      "category": "food",
+      "amount": -10,
+      "account": "a1",
+      "date": "2026-05-01",
+      "pending": false,
+      "ledgerId": "personal"
+    }
+  ]
+}
