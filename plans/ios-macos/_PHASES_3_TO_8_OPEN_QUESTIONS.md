@@ -3,11 +3,14 @@
 Continuing "all the rest" (3, 4, 5, 6.5, 7, 8). Same rule as the 6.x batch: park
 genuine product/scope questions with the default I chose, reconcile at the end.
 
-Many of these phases have **device-infrastructure** parts that cannot be built or
-verified in the headless simulator CI (extra Xcode targets, App Group / iCloud /
-CloudKit entitlements, notarization, real Watch/Widget hosts). For those I
-implement the **CI-verifiable core** and document the deferred infra here rather
-than risk a red build or claim false completion.
+Many of these phases have **device-infrastructure** parts. UPDATE: it turns out
+**app-extension targets + App Group entitlements DO build for the iOS simulator
+without signing** (`CODE_SIGNING_ALLOWED: NO`) — signing is device/store-only,
+not CI. So the Widget extension (7), Share Extension (6.5), and App Group are now
+**actually built + embedded + CI-verified**, not deferred. The still-genuinely-
+deferred parts are the ones needing a *different platform destination* (macOS,
+watchOS — the iOS CI scheme doesn't build them) or *real iCloud/CloudKit runtime*
+(unverifiable in CI regardless of build).
 
 > Status legend: ⏳ open · ✅ resolved · 🔧 deferred-infra (built code, infra TODO)
 
@@ -65,15 +68,15 @@ actions; the other 4 are documented below for a follow-up increment.
   kind ∈ {image, pdf}; `removeAttachment` is the inverse. Action count is now 75
   (ArgsTests updated). This is the native-only equivalent of the web's
   `POST /api/attachments` route.
-- 🔧 **Share Extension target + App Group container.** A separate Xcode app-
-  extension target + the `group.com.juchengquan.finch` App Group entitlement +
-  the cross-process pending-manifest handoff. NOT headless-CI-buildable (needs a
-  new signed target + entitlement). Deferred infra — the 75th action it depends
-  on is now in place.
-- 🔧 **In-app attachment UI (PhotosPicker on a transaction) + attachment
-  display/projection.** The action exists; the EditTransaction "add receipt"
-  PhotosPicker + an attachments projection on `Tx` are deferred (also need a file
-  store + sha256 helper). Buildable later without new targets.
+- ✅ **Share Extension target + App Group container.** BUILT (FinchShare.appex
+  embedded + verified). Accepts a photo/PDF from any share sheet, sha256s it,
+  stages file + manifest into the App Group; `PendingAttachmentImporter` imports
+  on launch (creates a pending placeholder tx + setEntryAttachment). The App Group
+  entitlement builds on the simulator without signing.
+- ⏳ **In-app attachment UI + attachment display/projection.** The share-in path
+  works; an in-app EditTransaction "add receipt" PhotosPicker + an attachments
+  projection on `Tx` (to show/remove existing receipts) are a refinement. The
+  placeholder tx is created at amount 0 + status pending for the user to fill in.
 
 ## Phase 5 — Pack auto-sync + iCloud
 
@@ -97,11 +100,14 @@ actions; the other 4 are documented below for a follow-up increment.
   spend) + `WidgetSnapshotWriter` that writes `widget_snapshot.json` after each
   backup. This is the read-side the widgets/Watch render. Added `AccountRow`
   public init + `store.baseAmount` for testing.
-- 🔧 **WidgetKit extension + Watch app targets.** Separate Xcode targets +
-  TimelineProvider + the App Group container the widget reads the snapshot from
-  (currently Application Support; App Group is Phase 6.5 deferred infra). New
-  signed targets — not headless-CI-buildable. Deferred; the data they render is in
-  place. Live Activities likewise.
+- ✅ **WidgetKit extension.** BUILT (FinchWidget.appex embedded + verified): a
+  small/medium widget rendering net worth + a budget gauge + this-week spend from
+  the App Group snapshot. `StaticConfiguration` + `TimelineProvider`.
+- 🔧 **Watch app + Live Activities.** A watchOS app is a *different platform
+  destination* — the iOS CI scheme doesn't build it, so it can't be CI-verified
+  here (unlike the widget, which is an iOS extension). The shared data layer
+  (`WidgetSnapshot` in the App Group) is ready for it. Deferred to a watchOS
+  build/target run.
 
 ## Phase 8 — Row-level sync (CloudKit) — ARCHITECTURE ONLY (deferred)
 
