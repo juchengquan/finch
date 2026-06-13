@@ -195,6 +195,13 @@ public enum PackError: Error, Equatable {
     case missingEntry(String)
     case shaMismatch(String)
     case pathTraversal(String)
+    // Import/export pipeline (FinchStore, DESIGN §4). String payloads (not
+    // `Error`) keep PackError Equatable. `auditFailed` carries the gate's
+    // problems so the import UI can surface them / offer the iOS-only override.
+    case auditFailed([Audit.AuditProblem])
+    case migrationFailed(String)
+    case swapFailed(String)
+    case exportFailed(String)
 }
 
 // MARK: - Manifest wire types (NESTED, snake_case via explicit CodingKeys)

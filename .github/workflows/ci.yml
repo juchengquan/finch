@@ -42,3 +42,46 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  ios:
+    name: iOS (FinchCore + ParityTests + FinchApp)
+    # iOS 26 SDK requires Xcode 26.x — use a runner image that ships it. Adjust
+    # the image / Xcode selection here if the hosted images change.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install web deps + generate fixtures (Task 0 oracle)
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun scripts/export-fixtures.ts
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: FinchCore unit tests + ParityTests (swift test)
+        working-directory: ios
+        run: swift test
+
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          NAME=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9][0-9A-Za-z ]*' | head -1 | xargs)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Using simulator: $NAME"
+
+      - name: Build + test FinchApp
+        working-directory: ios
+        run: |
+          xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}"
