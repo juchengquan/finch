@@ -10,13 +10,15 @@
 // Run from frontend/:  bun scripts/export-fixtures.ts
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { CASES, type SelectorCase } from '@/lib/select.fixtures';
 import {
   accountBalance, selectTransactions, categorySpend, budgetProgress,
   cycleWindow, merchantStats, anomalyScore, type MerchantStats,
 } from '@/lib/select';
 import { openDb, execFor, applyPragmaBootstrap } from '@/lib/db/core/driver';
-import { applySchema } from '@/lib/db/core/schema';
+import { applySchema, SCHEMA_VERSION } from '@/lib/db/core/schema';
+import { buildPack } from '@/lib/db/core/pack';
 import { auditLedger, postSimple, ensureSystemCategories } from '@/lib/db/core/entries';
 import { projectState } from '@/lib/db/state';
 import type { Exec } from '@/lib/db/core/repo';
@@ -226,11 +228,87 @@ async function writeProjectionFixture(): Promise<number> {
   return state.transactions.length;
 }
 
+// ───────────────────────── round-trip .finch fixtures ─────────────────────────
+
+// The FinchApp test target reads these (a DIFFERENT dir from the ParityTests
+// OUT): a CLEAN pack `loadPack` accepts, and a DIRTY pack (one unbalanced entry)
+// the audit gate must REFUSE with PackError.auditFailed.
+const APP_FIX = path.join(
+  import.meta.dir, '..', '..', 'ios', 'FinchApp', 'Tests', 'FinchAppTests', 'Fixtures', 'roundtrip',
+);
+
+/** VACUUM a live exec into a temp file and read its bytes (a self-contained DB). */
+async function dbBytesViaVacuum(x: Exec): Promise<Uint8Array> {
+  const tmp = path.join(os.tmpdir(), `finch-rt-${process.pid}-${process.hrtime.bigint()}.sqlite3`);
+  await fs.rm(tmp, { force: true });
+  await x('VACUUM INTO ?', [tmp]);
+  const buf = await fs.readFile(tmp);
+  await fs.rm(tmp, { force: true });
+  return new Uint8Array(buf);
+}
+
+/** Wrap DB bytes into a `.finch` via the REAL web `buildPack`. A FIXED
+ *  `exportedAt` keeps the committed pack bytes deterministic across runs. */
+async function buildFinch(dbBytes: Uint8Array): Promise<Uint8Array> {
+  const { bytes } = await buildPack({
+    dbBytes,
+    attachmentFiles: [],
+    meta: { appVersion: '1.0.0', schemaVersion: SCHEMA_VERSION, exportedAt: '2026-06-14T00:00:00Z', rowCounts: {} },
+  });
+  return bytes;
+}
+
+async function writeRoundtripFixtures(): Promise<void> {
+  await fs.mkdir(APP_FIX, { recursive: true });
+
+  // sample.finch — a CLEAN pack (audit passes; loadPack projects + persists).
+  {
+    const driver = await openDb(':memory:');
+    applyPragmaBootstrap(driver);
+    const x = execFor(driver);
+    await applySchema(x);
+    await addLedger(x, 'l1', 'SGD');
+    await addAccount(x, 'a1', 'l1');
+    await addAccount(x, 'a2', 'l1');
+    await addCategory(x, 'c1', 'l1');
+    await ensureSystemCategories(x, 'l1');
+    await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: -25, date: '2026-05-01', description: 'Coffee', categoryId: 'c1', skipRules: true });
+    await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: -10, date: '2026-05-02', description: 'Lunch', categoryId: 'c1', skipRules: true });
+    await postSimple(x, { ledgerId: 'l1', accountId: 'a1', amount: 100, date: '2026-05-03', description: 'Pay', categoryId: 'c1', skipRules: true });
+    const problems = await auditLedger(x, 'l1', { checkBalances: true });
+    if (problems.length) throw new Error(`sample.finch DB is not clean: ${JSON.stringify(problems)}`);
+    await fs.writeFile(path.join(APP_FIX, 'sample.finch'), await buildFinch(await dbBytesViaVacuum(x)));
+    driver.close();
+  }
+
+  // dirty.finch — one unbalanced sealed entry (legs sum to -5) → audit fails.
+  {
+    const driver = await openDb(':memory:');
+    applyPragmaBootstrap(driver);
+    const x = execFor(driver);
+    await applySchema(x);
+    await addLedger(x, 'l1', 'SGD');
+    await addAccount(x, 'a1', 'l1');
+    await addCategory(x, 'c1', 'l1');
+    await x('DROP TRIGGER tr_entry_seal');          // the seal trigger would reject an unbalanced entry
+    await rawEntry(x, 'e1', 'l1');
+    await rawLeg(x, 'p1', 'e1', 'a1', null, -10, -10, 0);
+    await rawLeg(x, 'p2', 'e1', null, 'c1', 5, 5, 1);  // sum = -5 → unbalanced
+    await seal(x, 'e1');
+    const problems = await auditLedger(x, 'l1', { checkBalances: true });
+    if (!problems.length) throw new Error('dirty.finch DB unexpectedly passed the audit');
+    await fs.writeFile(path.join(APP_FIX, 'dirty.finch'), await buildFinch(await dbBytesViaVacuum(x)));
+    driver.close();
+  }
+}
+
 async function main(): Promise<void> {
   await fs.mkdir(OUT, { recursive: true });
   const sel = await writeSelectorFixtures();
   const aud = await writeAuditFixtures();
   const proj = await writeProjectionFixture();
+  await writeRoundtripFixtures();
+  console.log('  round-trip fixtures: sample.finch + dirty.finch');
   console.log(`  projection fixture: ${proj} txns`);
   const allCodes = ['unsealed', 'unbalanced', 'too-few-legs', 'no-account-leg', 'currency-mismatch',
     'cross-ledger', 'base-identity', 'kind-shape', 'trial-balance', 'balance-drift'];

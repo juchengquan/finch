@@ -173,7 +173,10 @@ public final class FinchStore: ObservableObject {
             // 1. VACUUM INTO a temp clone — through GRDB, not the raw sqlite3 C API.
             let cloneURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("export-\(UUID().uuidString).sqlite3")
-            try await live.read { db in try db.execute(sql: "VACUUM INTO ?", arguments: [cloneURL.path]) }
+            // VACUUM cannot run inside a transaction — writeWithoutTransaction.
+            try await live.writeWithoutTransaction { db in
+                try db.execute(sql: "VACUUM INTO ?", arguments: [cloneURL.path])
+            }
 
             // 2. open the clone, stamp export metadata + checkpoint the WAL.
             let clone = try DatabaseQueue(path: cloneURL.path)
@@ -181,7 +184,9 @@ public final class FinchStore: ObservableObject {
             let exportedAt = ISO8601DateFormatter().string(from: Date())
             let rowCountsJSON = String(
                 data: try JSONSerialization.data(withJSONObject: rowCounts), encoding: .utf8) ?? "{}"
-            try await clone.write { db in
+            // Stamp + checkpoint without a transaction (wal_checkpoint can't run
+            // inside one); each statement auto-commits.
+            try await clone.writeWithoutTransaction { db in
                 try db.execute(sql: """
                     UPDATE db_metadata SET exported_at = ?, exported_from = ?, row_counts = ?, updated_at = ?
                      WHERE id = 1

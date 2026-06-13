@@ -5,12 +5,17 @@ import FinchCore
 /// DESIGN §4 — the import pipeline. Uses CLEAN/dirty web-built `.finch` fixtures
 /// (the round-trip samples; no pre-DE fixture, D1).
 final class FinchStoreTests: XCTestCase {
+    /// Resources are bundled via a folder reference (preserves the
+    /// `Fixtures/roundtrip/` hierarchy); reach them through the test bundle.
+    private func fixture(_ name: String) throws -> URL {
+        try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: name, withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
+    }
+
     @MainActor
     func test_loadPackProjectsAndPersists() async throws {
-        let packURL = try XCTUnwrap(Bundle.module.url(
-            forResource: "Fixtures/roundtrip/sample", withExtension: "finch"))
         let store = FinchStore()
-        try await store.loadPack(from: try Data(contentsOf: packURL))
+        try await store.loadPack(from: try Data(contentsOf: fixture("sample")))
 
         // Projected state is populated...
         XCTAssertFalse(store.txns.isEmpty)
@@ -21,11 +26,9 @@ final class FinchStoreTests: XCTestCase {
 
     @MainActor
     func test_loadPackThrowsAuditFailedOnDirtyPack() async throws {
-        let url = try XCTUnwrap(Bundle.module.url(
-            forResource: "Fixtures/roundtrip/dirty", withExtension: "finch"))
         let store = FinchStore()
         do {
-            try await store.loadPack(from: try Data(contentsOf: url))
+            try await store.loadPack(from: try Data(contentsOf: fixture("dirty")))
             XCTFail("expected auditFailed")
         } catch PackError.auditFailed(let problems) {
             XCTAssertFalse(problems.isEmpty)

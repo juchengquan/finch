@@ -6,8 +6,8 @@ import FinchCore
 final class ExportButtonTests: XCTestCase {
     @MainActor
     func test_buildPackProducesValidBytes() async throws {
-        let packURL = try XCTUnwrap(Bundle.module.url(
-            forResource: "Fixtures/roundtrip/sample", withExtension: "finch"))
+        let packURL = try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: "sample", withExtension: "finch", subdirectory: "Fixtures/roundtrip"))
         let store = FinchStore()
         try await store.loadPack(from: try Data(contentsOf: packURL))
 

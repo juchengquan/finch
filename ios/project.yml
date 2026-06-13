@@ -30,6 +30,15 @@ targets:
     platform: iOS
     sources:
       - path: FinchApp/Tests/FinchAppTests
+        excludes: ["Fixtures"]
+      # Folder reference (blue) — preserves the Fixtures/roundtrip/ hierarchy in
+      # the bundle so Bundle(for:).url(..., subdirectory:) resolves it.
+      - path: FinchApp/Tests/FinchAppTests/Fixtures
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: FinchApp
 schemes:
