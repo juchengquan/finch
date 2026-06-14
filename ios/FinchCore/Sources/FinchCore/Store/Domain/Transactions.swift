@@ -60,7 +60,11 @@ public enum Transactions {
             var usedBase = 0.0
             for (i, sp) in splits.enumerated() {
                 let isLast = i == splits.count - 1
-                let spBase = isLast ? Entries.r2(acctBase + usedBase) : Entries.r2(-abs(sp.amount) * baseRatio * sign)
+                // Last leg absorbs the remainder so the category legs sum to
+                // -acctBase (zero fx residue). It must be -(acctBase + usedBase),
+                // NOT acctBase + usedBase — the latter flips the sign and leaves a
+                // phantom residue (bug shared with the web; fixed in both, 2026-06-14).
+                let spBase = isLast ? Entries.r2(-(acctBase + usedBase)) : Entries.r2(-abs(sp.amount) * baseRatio * sign)
                 if !isLast { usedBase += spBase }
                 legs.append(.category(Entries.CategoryLeg(categoryId: sp.categoryId, amountBase: spBase, memo: sp.description)))
             }

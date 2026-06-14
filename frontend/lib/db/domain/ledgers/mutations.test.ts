@@ -126,18 +126,19 @@ test('changeLedgerBase rewrites transaction_splits.amount_base under the new bas
       { categoryId: 'food', amount: amt / 2 },
     ],
   });
-  // §2: category postings are the splits.
-  const before = await exec(
-    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
-    [txId],
+  // §2: category postings are the splits. Exclude any fx-system residue leg
+  // (independent per-leg reconversion under the new base can add a rounding one).
+  const splitLegs = (id: string) => exec(
+    `SELECT p.amount_base FROM postings p LEFT JOIN categories c ON c.id = p.category_id
+     WHERE p.entry_id = ? AND p.account_id IS NULL AND (c.system IS NULL OR c.system != 'fx')
+     ORDER BY p.sort_order`,
+    [id],
   );
+  const before = await splitLegs(txId);
   // Flip the base to SGD and confirm the split's amount_base rewrote to match
   // the new base's conversion.
   await applyMutation(exec, 'changeLedgerBase', { ledgerId: 'personal', newBase: 'SGD' });
-  const after = await exec(
-    'SELECT amount_base FROM postings WHERE entry_id = ? AND account_id IS NULL ORDER BY sort_order',
-    [txId],
-  );
+  const after = await splitLegs(txId);
   expect(after.length).toBe(before.length);
   for (let i = 0; i < after.length; i++) {
     expect(Number(after[i].amount_base)).not.toBeCloseTo(Number(before[i].amount_base), 4);

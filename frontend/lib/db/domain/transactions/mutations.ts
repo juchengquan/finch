@@ -343,7 +343,12 @@ export const handlers = {
             const sp = splits[i];
             const isLast = i === splits.length - 1;
             const spBase = isLast
-              ? r2(Number(acctLeg.amount_base) + usedBase) // absorb remainder (signed)
+              // Absorb the remainder so category legs sum to -acctBase (zero fx
+              // residue). Must be -(acctBase + usedBase): the previous
+              // `acctBase + usedBase` flipped the last leg's sign and left a
+              // phantom fx residue (a 60/40 split of -100 → +60/-40 + 80 residue).
+              // Fixed 2026-06-14 (mirrored in the iOS port).
+              ? r2(-(Number(acctLeg.amount_base) + usedBase))
               : r2(-Math.abs(sp.amount) * baseRatio * Math.sign(Number(acctLeg.amount_base)));
             if (!isLast) usedBase += spBase;
             legs.push({
