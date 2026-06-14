@@ -2,12 +2,11 @@ import Foundation
 import GRDB
 
 // Transactions domain handlers — port of lib/db/domain/transactions/mutations.ts.
-// First batch: the actions that build on the posting engine + simple SQL.
-// DEFERRED (need rebuildEntry/deleteEntry/postAdjustment or sub-queries):
-// updateTransaction, setTransactionSplits, deleteTransaction, adjustAccountBalance,
-// reconcileAccount, bulkRecategorize, removeAttachment, confirmTransaction,
-// confirmPendingWithMerchant, setTransactionTags. Budget-rollover invalidation
-// (invalidateRollover) and the dedup-message wrapping are also deferred.
+// Full posting-engine coverage: add/update/delete, splits, adjust/reconcile,
+// bulk-recategorize, confirm, tags, attachments — all wired to the engine, with
+// budget-rollover invalidation (Budgets.invalidateForEntry) on the money paths.
+// addTransaction is wrapped in Dedup.wrap so a UNIQUE dedup_hash collision
+// surfaces as a friendly I18nError (web parity: _shared/with-dedup-message.ts).
 public enum Transactions {
 
     /// The handlers this domain currently contributes to the chokepoint registry.
@@ -99,7 +98,9 @@ public enum Transactions {
 
     // MARK: removeAttachment
 
-    /// Drop an attachment row. DEFERRED: the on-disk file unlink (no file store yet).
+    /// Drop an attachment row. The on-disk file unlink is the app's job
+    /// (FinchStore.removeAttachment) — the engine owns only the row, mirroring
+    /// the web split where the route handler deletes the file.
     static func removeAttachment(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
         try db.execute(sql: "DELETE FROM entry_attachments WHERE id = ?", arguments: [try args.to(A.self).id])
@@ -204,6 +205,7 @@ public enum Transactions {
     }
 
     static func addTransaction(_ db: Database, _ args: Args) throws {
+      try Dedup.wrap {
         let a = try args.to(AddInput.self)
         // Cross-ledger counterparty guard: drop a counterparty from another ledger.
         var counterpartyId = a.counterpartyId
@@ -242,6 +244,7 @@ public enum Transactions {
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
         try Budgets.invalidateForEntry(db, eid)
+      }
     }
 
     // MARK: adjustAccountBalance (→ postAdjustment)

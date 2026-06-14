@@ -75,15 +75,18 @@ public enum Budgets {
         let rollover = (args.values["rollover"]?.isTruthy ?? false) ? 1 : 0
         let isRecurring = a.isRecurring.map { Int($0) } ?? (type == "income" ? 0 : 1)
         let startDate = a.startDate ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
-        try db.execute(sql: """
-            INSERT INTO budgets (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
-                frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
-                account_ids, category_ids, warning_pct, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
-            """, arguments: [a.id ?? Entries.newId("bgt"), a.ledgerId ?? "personal", a.groupId, name, type,
-                             a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.endDate, isRecurring,
-                             rollover, a.rolloverLimit, idsToJson(a.accountIds ?? []), idsToJson(a.categoryIds ?? []),
-                             a.warningPct ?? 80])
+        // UNIQUE(ledger_id, name, frequency, start_date) → friendly dup error (web parity).
+        try Dedup.wrap {
+            try db.execute(sql: """
+                INSERT INTO budgets (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
+                    frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
+                    account_ids, category_ids, warning_pct, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+                """, arguments: [a.id ?? Entries.newId("bgt"), a.ledgerId ?? "personal", a.groupId, name, type,
+                                 a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.endDate, isRecurring,
+                                 rollover, a.rolloverLimit, idsToJson(a.accountIds ?? []), idsToJson(a.categoryIds ?? []),
+                                 a.warningPct ?? 80])
+        }
     }
 
     private static let cols: [String: String] = [
