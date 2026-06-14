@@ -3,8 +3,47 @@ import GRDB
 
 /// Budgets domain — port of lib/db/domain/budgets/mutations.ts (the budget
 /// actions; the budget-group actions live in Groups.swift). DEFERRED: the
-/// withDedupMessage wrapping on create + rollover invalidation.
+/// withDedupMessage wrapping on create.
 public enum Budgets {
+
+    /// Reset the cached rollover (last_rolled_period → NULL, carry_forward → 0)
+    /// on budgets whose category/account overlaps an edited transaction in a
+    /// period at-or-before the last rolled one — so budgetProgress (which adds
+    /// carry_forward) recomputes correctly. Port of lib/budgets/rollover.ts.
+    /// Mainly relevant for imported web data: iOS doesn't roll budgets itself,
+    /// so native budgets have a null last_rolled_period and are skipped.
+    static func invalidateRollover(_ db: Database, categoryIds: [String], accountIds: [String], earliestDate: String) throws {
+        guard !earliestDate.isEmpty else { return }
+        for b in try Row.fetchAll(db, sql: "SELECT id, frequency, start_date, last_rolled_period, account_ids, category_ids FROM budgets WHERE last_rolled_period IS NOT NULL") {
+            let lastRolled: String = b["last_rolled_period"]
+            let bCats = parseIds(b["category_ids"]), bAccts = parseIds(b["account_ids"])
+            let catOverlap = bCats.isEmpty || categoryIds.contains(where: bCats.contains)
+            let acctOverlap = bAccts.isEmpty || accountIds.contains(where: bAccts.contains)
+            guard catOverlap, acctOverlap else { continue }
+            let affectedPeriod = Selectors.cycleWindow(b["frequency"], b["start_date"], earliestDate).from   // periodOf
+            if affectedPeriod > lastRolled { continue }
+            try db.execute(sql: "UPDATE budgets SET last_rolled_period = NULL, carry_forward = 0, updated_at = datetime('now') WHERE id = ?", arguments: [b["id"] as String])
+        }
+    }
+
+    /// Compute an entry's touches (web txTouches) → feed invalidateRollover.
+    /// Call BEFORE deleting an entry (it reads the entry's postings).
+    static func invalidateForEntry(_ db: Database, _ entryId: String) throws {
+        guard let date = try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [entryId]) else { return }
+        var accountId: String?; var cats: [String] = []
+        for p in try Row.fetchAll(db, sql: "SELECT account_id, category_id FROM postings WHERE entry_id = ?", arguments: [entryId]) {
+            if let a = p["account_id"] as String?, accountId == nil { accountId = a }
+            if let c = p["category_id"] as String? { cats.append(c) }
+        }
+        guard let acct = accountId else { return }
+        try invalidateRollover(db, categoryIds: cats, accountIds: [acct], earliestDate: date)
+    }
+
+    private static func parseIds(_ raw: String?) -> [String] {
+        guard let raw, let d = raw.data(using: .utf8), let arr = try? JSONDecoder().decode([String].self, from: d) else { return [] }
+        return arr
+    }
+
     public static let handlers: [ActionName: Apply.Handler] = [
         .createBudget: create,
         .updateBudget: update,
