@@ -9,6 +9,8 @@
 
 > **Schema prerequisite:** Phase 8 ADDS two new sync columns — `revision_id` and `device_id` — to `entries` and `postings`. These do **not** exist in the web schema today: the web's idempotency backstop is `dedup_hash` (unique index `idx_entry_dedup`, `entries-schema.ts:72`) plus `postEntry` being replay-idempotent keyed on `entry_id` alone (`entries.ts:258`). The `revisionId` / `deviceId` fields on `MutationEvent` (Task 1) and the CloudKit `Mutation` record map to these Phase-8-added columns, and the `(entry_id, revision_id)` last-writer-wins key depends on them.
 
+> **Provisioning prerequisite — do this FIRST (see DESIGN §5.1):** CloudKit is a **paid-tier** capability. Before any of the live tasks below, join the **Apple Developer Program ($99/yr)** and create the `iCloud.com.juchengquan.finch` CloudKit container; a free Apple ID cannot. The pure mapping/conflict core (`CloudKitSync.swift`) is already built + CI-tested with no account, but the live push/pull/subscription loop can only be **run or verified after provisioning** — building it before then is coding blind. Don't pre-build the untestable live integration; provision, then execute Tasks 2–5 against a real container.
+
 **Architecture:** A new `FinchCore/CloudKit/` module hosts the `CloudKitSyncDaemon` (the writer + the reader). The writer enqueues `Mutation` records to a private CloudKit database; the reader subscribes to `Mutation` records via `CKQuerySubscription` and dispatches each via `FinchStore.apply`. Per Q22, Phase 8 is **committed to building** (not deferred).
 
 **Tech Stack:** Same as Phase 2 + `CloudKit` (`CKContainer`, `CKDatabase`, `CKRecord`, `CKQuerySubscription`).
