@@ -618,7 +618,8 @@
       "pendingAria": "金额变更待生效",
       "pctOfTarget": "已达目标 {pct}%",
       "over": "超出 {amount}",
-      "left": "剩余 {amount}"
+      "left": "剩余 {amount}",
+      "daysLeft": "剩余 {days} 天"
     },
     "groupActionsAria": "分组操作:{name}",
     "groupActions": {
