@@ -534,11 +534,28 @@ unsigned simulator):
   The Phase 5 iCloud-Drive *file* sync stays active (retired only once the
   CloudKit live loop functions; removing it now would lose real sync).
 
-**Gated on the paid program + iCloud account (NOT possible now, and never in CI):**
+**Live loop BUILT BUT UNVERIFIED (2026-06-15)** — built against the
+"provision first" recommendation below, per an explicit "build it anyway"
+decision. It **compiles** against the real SDK (verified locally) and is inert
+without an account, but has **never been run or two-device tested**. Model:
+mutation-log replay (not raw-row sync) — every local `apply` becomes a
+`SyncMutation` (`Sync/SyncMutation.swift`: action + args + per-device seq),
+pushed as a "Mutation" `CKRecord` in the ledger's zone; remote mutations are
+fetched and **replayed through the chokepoint** (`CloudKitSyncCoordinator.applyRemote`
+→ `FinchStore.apply`), so the audit gate + `dedup_hash` cover remote writes too.
+Transport is operation-based (`modifyRecords` / `recordZoneChanges` + persisted
+per-zone `CKServerChangeToken` / `CKDatabaseSubscription`) rather than
+`CKSyncEngine` — a stabler API to get right without a runtime. An echo guard
+(`isReplaying`) stops replayed writes from re-enqueuing. Pure parts (mutation ↔
+record, outbox ordering/dedup/persistence) are unit-tested.
+
+**Still gated on the paid program + iCloud account (and never in CI):**
 - Creating the `iCloud.com.juchengquan.finch` container in the developer portal.
 - Enabling the CloudKit capability for real (device) signing.
-- Any *runtime*: real push/pull, `CKSubscription` push, two-device sync,
-  real-world conflict behavior — i.e. all verification.
+- Any *runtime* trust: real push/pull, `CKSubscription` push wakeups, two-device
+  convergence, real conflict behavior — i.e. **all behavioral verification**, and
+  the one piece deliberately NOT built: the fresh-device **down-sync seed** (a
+  new install re-hydrating from the row-mirror bootstrap records).
 
 **Conclusion / sequencing.** The pure logic (mapping + conflict) was safe to
 write accountless and is done. Writing the rest of the **live** loop (pull,

@@ -122,6 +122,9 @@ public final class FinchStore: ObservableObject {
         WidgetCenter.shared.reloadAllTimelines()
         // Phase 5: debounce an auto-backup pack.
         AutoBackupManager.shared.schedule()
+        // Phase 8: publish this write to the CloudKit mutation log (no-op when
+        // sync is off or while replaying a remote mutation — the echo guard).
+        CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
     }
 
     // MARK: - Projection

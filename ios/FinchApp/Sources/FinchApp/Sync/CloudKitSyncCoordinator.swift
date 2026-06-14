@@ -58,6 +58,9 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     @Published public private(set) var isBootstrapping = false
 
     private let service = CloudKitSyncService.shared
+    /// True while replaying a REMOTE mutation through the chokepoint, so the
+    /// resulting `apply` doesn't re-enqueue it as a local change (echo guard).
+    public private(set) var isReplaying = false
 
     /// Launch hook. Refresh account availability; if sync was left ON, resume the
     /// daemon. No-op without an account.
@@ -82,32 +85,67 @@ public final class CloudKitSyncCoordinator: ObservableObject {
         await bootstrap(store: store)
     }
 
-    /// The chokepoint would call this after each write (the mutation bus). For
-    /// now it just reflects a pending change in the status; the real per-row push
-    /// is PROVISIONING-GATED.
-    public func noteLocalMutation() {
-        guard enabled else { return }
-        status.pendingChanges += 1
-        // PROVISIONING-GATED: enqueue the changed rows and push to CloudKit.
+    /// The chokepoint (`FinchStore.apply`) calls this after every successful local
+    /// write. Records the (action, args) as a mutation in the outbox and pushes.
+    /// Skipped while replaying a remote mutation (echo guard) or when sync is off.
+    public func noteLocalMutation(action: ActionName, args: Args, ledgerId: String) {
+        guard enabled, !isReplaying else { return }
+        SyncOutbox.shared.append(action: action.rawValue, args: args, ledgerId: ledgerId, ts: Self.nowISO())
+        status.pendingChanges = SyncOutbox.shared.pending.count
+        Task { await syncNow() }
     }
 
-    // MARK: - Daemon skeleton (live calls inert without an account)
+    /// Push pending local mutations, then pull + replay remote ones.
+    public func syncNow() async {
+        guard enabled, await service.accountAvailable() else { return }
+        await service.pushPending()
+        await service.pull(ledgerIds: FinchStore.shared.ledgers.map(\.id))
+        status.pendingChanges = SyncOutbox.shared.pending.count
+        status.lastSyncAt = Date()
+    }
+
+    // MARK: - Daemon (live calls inert without an account)
 
     private func resume() async {
         status.accountAvailable = await service.accountAvailable()
-        // PROVISIONING-GATED: register per-ledger CKSubscription(s), start the
-        // pull loop / CKSyncEngine, subscribe to the chokepoint mutation bus.
+        guard status.accountAvailable else { return }
+        // Replay remote mutations through the chokepoint (echo-guarded).
+        service.replay = { [weak self] mutation in self?.applyRemote(mutation) }
+        let ledgerIds = FinchStore.shared.ledgers.map(\.id)
+        await service.ensureZones(ledgerIds: ledgerIds)
+        await service.registerSubscription()
+        status.subscribedLedgers = ledgerIds.count
+        await syncNow()
     }
 
     private func suspend() async {
-        // PROVISIONING-GATED: cancel subscriptions, unsubscribe the mutation bus.
+        // Local DB stays usable; nothing is deleted remotely (design §3.1).
+        service.replay = nil
         status.subscribedLedgers = 0
         status.pendingChanges = 0
     }
 
-    /// One-time bootstrap: gather every syncable row and push it. The extraction
-    /// (`store.syncableRows`) is pure + unit-tested; `service.push` no-ops
-    /// without an account, so this is safe everywhere.
+    /// Replay a fetched remote mutation through the real chokepoint, so the audit
+    /// gate + dedup apply to it exactly as to a local write. The echo guard stops
+    /// the resulting `apply` from re-enqueuing it.
+    private func applyRemote(_ m: SyncMutation) {
+        guard let action = m.actionName, let args = m.args else {
+            status.lastError = "Skipped an unknown remote mutation (\(m.action))"
+            return
+        }
+        isReplaying = true
+        defer { isReplaying = false }
+        do { try FinchStore.shared.apply(action, args) }
+        catch { status.lastError = i18nMessage(error) }   // e.g. a benign dedup rejection
+    }
+
+    /// One-time bootstrap: upload current state as row-mirror records (design §3.1
+    /// keeps Entry/Posting records for late-joining devices). The extraction
+    /// (`store.syncableRows`) is pure + unit-tested.
+    ///
+    /// PROVISIONING-GATED: the reverse — a FRESH device DOWN-syncing these row
+    /// records into an empty DB (chokepoint-bypassing insert + audit re-validate)
+    /// — is the riskiest blind piece and is deliberately not built here.
     private func bootstrap(store: FinchStore) async {
         guard await service.accountAvailable() else {
             status.accountAvailable = false
@@ -117,10 +155,12 @@ public final class CloudKitSyncCoordinator: ObservableObject {
         status.accountAvailable = true
         isBootstrapping = true
         defer { isBootstrapping = false }
+        await service.ensureZones(ledgerIds: store.ledgers.map(\.id))
         for table in CloudKitBootstrap.tables {
             await service.push(table: table, rows: store.syncableRows(table: table))
         }
-        // PROVISIONING-GATED: stamp lastSyncAt + subscribedLedgers from the real
-        // operation's completion instead of leaving them at their defaults.
+        await resume()
     }
+
+    private static func nowISO() -> String { ISO8601DateFormatter().string(from: Date()) }
 }
