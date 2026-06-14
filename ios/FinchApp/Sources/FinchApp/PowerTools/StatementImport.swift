@@ -85,9 +85,7 @@ public enum StatementMatcher {
         }
     }
 
-    private static let fmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
-    }()
+    private static let fmt = AppDate.isoDay
     static func dayDiff(_ a: String, _ b: String) -> Int {
         guard let da = fmt.date(from: String(a.prefix(10))), let db = fmt.date(from: b) else { return .max }
         return Int(abs(da.timeIntervalSince(db)) / 86_400)

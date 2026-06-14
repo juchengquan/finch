@@ -42,6 +42,6 @@ struct BulkRecategorizeSheet: View {
                 "ids": .array(ids.map { .string($0) }), "categoryId": .string(categoryId)]))
             onDone()
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

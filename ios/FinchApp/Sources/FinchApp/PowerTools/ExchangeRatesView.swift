@@ -67,13 +67,12 @@ struct AddExchangeRateSheet: View {
     private func save() {
         errorMessage = nil
         guard let r = Double(rate), r > 0 else { errorMessage = "Enter a rate > 0."; return }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         do {
             try store.apply(.setExchangeRate, Args([
-                "date": .string(f.string(from: date)),
+                "date": .string(AppDate.isoDay.string(from: date)),
                 "currency": .string(currency.trimmingCharacters(in: .whitespaces).uppercased()),
                 "rate": .double(r)]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

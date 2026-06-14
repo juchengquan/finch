@@ -39,7 +39,7 @@ struct CategoryAdminView: View {
     private func delete(_ c: CategoryRow) {
         errorMessage = nil
         do { try store.apply(.deleteCategory, Args(["id": .string(c.id)])) }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -88,6 +88,6 @@ struct CategoryEditSheet: View {
                 try store.apply(.createCategory, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(trimmed), "type": .string(kind)]))
             }
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

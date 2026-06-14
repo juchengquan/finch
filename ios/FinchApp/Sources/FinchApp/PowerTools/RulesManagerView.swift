@@ -47,11 +47,11 @@ struct RulesManagerView: View {
     }
     private func delete(_ r: RuleSummary) {
         do { try store.apply(.deleteRule, Args(["id": .string(r.id)])) }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
     private func backfill(_ r: RuleSummary) {
         do { try store.apply(.backfillRule, Args(["id": .string(r.id)])) }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -131,6 +131,6 @@ struct AddRuleSheet: View {
                 "ledgerId": .string(store.activeLedgerId), "name": .string(name),
                 "condition": condition, "actions": actions]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
