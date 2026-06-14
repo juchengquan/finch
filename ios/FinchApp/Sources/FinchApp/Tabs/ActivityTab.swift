@@ -15,6 +15,13 @@ struct ActivityTab: View {
     @State private var selected: Set<String> = []
     @State private var showingBulkCat = false
     @State private var savedSearches: [SavedSearch] = []
+    // Memoized derived state: recomputed only when txns / query / visibleCount
+    // change (via .onReceive/.onChange), not on every body render — the search
+    // field re-rendered the whole list on each keystroke before.
+    @State private var sections: [DaySection] = []
+    @State private var hasMore = false
+
+    struct DaySection: Identifiable { let id: String; let txns: [Tx] }
 
     var body: some View {
         NavigationStack {
@@ -32,14 +39,14 @@ struct ActivityTab: View {
                                 }
                             }
                         }
-                        ForEach(daySections, id: \.date) { section in
-                            Section(section.date) {
+                        ForEach(sections) { section in
+                            Section(section.id) {
                                 ForEach(section.txns) { txn in
                                     row(txn)
                                 }
                             }
                         }
-                        if filtered.count > visibleCount {
+                        if hasMore {
                             Button("Load more") { visibleCount += 50 }
                         }
                     }
@@ -85,9 +92,26 @@ struct ActivityTab: View {
             .sheet(isPresented: $showingBulkCat) {
                 BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
             }
-            .onAppear(perform: consumeFocus)
+            .onAppear { consumeFocus(); recompute() }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+            .onChange(of: searchQuery) { _, _ in recompute() }
+            .onChange(of: visibleCount) { _, _ in recompute() }
+            .onReceive(store.$txns) { _ in recompute() }
         }
+    }
+
+    /// Recompute the cached day-sections. Cheap to call; runs only on the inputs
+    /// that actually affect the list (txns, query, page size).
+    private func recompute() {
+        let f = filteredTxns()
+        hasMore = f.count > visibleCount
+        var order: [String] = []
+        var byDay: [String: [Tx]] = [:]
+        for txn in f.prefix(visibleCount) {
+            if byDay[txn.date] == nil { order.append(txn.date) }
+            byDay[txn.date, default: []].append(txn)
+        }
+        sections = order.map { DaySection(id: $0, txns: byDay[$0] ?? []) }
     }
 
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
@@ -140,23 +164,12 @@ struct ActivityTab: View {
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
 
     /// Client-side filter mirroring selectTransactions(opts.query):
-    /// merchant.lowercased().contains(query). NO FTS5.
-    private var filtered: [Tx] {
+    /// merchant.lowercased().contains(query). NO FTS5. (store.txns is already
+    /// scoped to the active ledger by the projection.)
+    private func filteredTxns() -> [Tx] {
         guard !searchQuery.isEmpty else { return store.txns }
         let q = searchQuery.lowercased()
         return store.txns.filter { $0.merchant.lowercased().contains(q) }
-    }
-
-    /// First `visibleCount` of the (already date-desc) filtered txns, grouped by
-    /// `date`, preserving order.
-    private var daySections: [(date: String, txns: [Tx])] {
-        var order: [String] = []
-        var byDay: [String: [Tx]] = [:]
-        for txn in filtered.prefix(visibleCount) {
-            if byDay[txn.date] == nil { order.append(txn.date) }
-            byDay[txn.date, default: []].append(txn)
-        }
-        return order.map { ($0, byDay[$0] ?? []) }
     }
 }
 
