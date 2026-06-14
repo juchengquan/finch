@@ -453,6 +453,20 @@ CloudKit path — plus the always-available manual `.finch`
 export as the ultimate escape hatch. We do not need a
 second *automatic* engine for safety.
 
+> **CURRENT STATE (2026-06-15) — retirement is NOT done yet; the two
+> coexist.** The retirement above is the *end state*, after CloudKit is
+> provisioned and two-device verified. As of the live-loop PR, the Phase 5
+> iCloud-Drive file sync (`AutoBackupManager` + `ICloudSync`) is **left fully
+> active and unchanged** — it remains the only working live-sync path. The
+> CloudKit loop is **dormant by default**: the "Sync across devices (iCloud)"
+> switch defaults OFF, so `FinchStore.apply → noteLocalMutation` no-ops; and even
+> with the switch ON, `noteLocalMutation` is guarded on `status.accountAvailable`
+> so an unprovisioned device never enqueues un-pushable mutations. The two paths
+> never interact (CloudKit only touches its own outbox/zones). The split-brain
+> risk only becomes real once CloudKit is live — at which point the file-sync
+> *auto* loop is retired in a **separate, future change** (the manual `.finch`
+> export/import always survives).
+
 ## §4. Settings › Sync section (Phase 8 additions)
 
 The Phase 5 Settings › Sync section is simplified to a
