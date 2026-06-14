@@ -8,6 +8,7 @@ import FinchCore
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingReconcile = false
+    @State private var showingImport = false
 
     var body: some View {
         NavigationStack {
@@ -49,8 +50,13 @@ struct AccountsTab: View {
                     Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
                         .disabled(store.accounts.isEmpty)
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showingImport = true } label: { Label("Import statement (CSV)", systemImage: "doc.badge.plus") }
+                        .disabled(store.accounts.isEmpty)
+                }
             }
             .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
+            .sheet(isPresented: $showingImport) { ImportStatementView() }
         }
     }
 }
