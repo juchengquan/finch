@@ -5,7 +5,7 @@ import Foundation
 
 /// A scheduled template (mirror of lib/store/scheduled/state.ts). Only the
 /// fields the forecast selectors read; extra JSON keys are ignored on decode.
-public struct ScheduledTemplate: Equatable, Sendable, Codable {
+public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     public let id: String
     public let name: String
     public let description: String?
@@ -16,6 +16,7 @@ public struct ScheduledTemplate: Equatable, Sendable, Codable {
     public let weekDay: Int?
     public let accountId: String
     public let fromAccountId: String?
+    public let categoryId: String?
     public let startDate: String?
     public let endDate: String?
     public let nextRun: String
@@ -25,12 +26,13 @@ public struct ScheduledTemplate: Equatable, Sendable, Codable {
 
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
-                accountId: String, fromAccountId: String? = nil, startDate: String? = nil,
-                endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
+                accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
+                startDate: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
                 installmentTotal: Int? = nil, installmentPaid: Int? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
+        self.categoryId = categoryId
         self.startDate = startDate; self.endDate = endDate; self.nextRun = nextRun
         self.maxExecutions = maxExecutions; self.installmentTotal = installmentTotal
         self.installmentPaid = installmentPaid
