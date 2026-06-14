@@ -22,7 +22,7 @@ struct InsightsTab: View {
                     }
                 } else {
                     ScrollView {
-                        VStack(spacing: 16) {
+                        LazyVStack(spacing: 16) {   // lazy: off-screen cards (+ their selectors) don't compute until scrolled
                             Picker("View", selection: $view) {
                                 ForEach(View_.allCases) { Text($0.rawValue).tag($0) }
                             }
