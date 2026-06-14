@@ -547,28 +547,15 @@
           {
             "account_id": null,
             "category_id": "pay",
-            "amount": "-40.000000",
+            "amount": "40.000000",
             "currency": "USD",
-            "amount_base": "-40.000000",
+            "amount_base": "40.000000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
             "cleared": false,
             "sort_order": 2
-          },
-          {
-            "account_id": null,
-            "category_id": "sys-fx",
-            "amount": "80.000000",
-            "currency": "USD",
-            "amount_base": "80.000000",
-            "exchange_rate": "1.000000",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": false,
-            "sort_order": 3
           }
         ]
       },
