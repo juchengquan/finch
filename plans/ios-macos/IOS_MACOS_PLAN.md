@@ -594,7 +594,7 @@ at where the behaviour lives today.
 | 18 | Weekly digest card | Sunday recap (spent/income/net, vs prev & 12-wk avg, top cats) | Card; also a Widget (§7) | 2 | `weekly-digest-card.tsx`, `weeklyDigest` |
 | 19 | Month-forecast card | Stacked projection (MTD + run-rate + scheduled) | Card + Swift Charts | 2 | `monthForecast` |
 | 20 | Income→categories Sankey | Flow chart income→top categories+saved | Custom `Canvas`/`Path` | 2 | `incomeCategoryFlow` |
-| 21 | Category deltas / spending-pattern insights | MoM deltas + descriptive insight cards | Cards | 2 | `topCategoryDeltas`, `lib/insights.ts` |
+| 21 | Category deltas (insight cards skipped) | MoM deltas via `topCategoryDeltas` (selector ported). The `lib/insights.ts` rule-engine cards are **intentionally NOT ported** — decision 2026-06-14, see `_PHASES_3_TO_8_OPEN_QUESTIONS.md` § Deliberate product divergences | Cards | 2 | `topCategoryDeltas` |
 | 22 | Calendar heatmap (daily spend) | 12-week intensity grid | `LazyVGrid`/`Canvas` | 2 | `dailySpending` |
 | 23 | Reports / breakdown (donut + category list + CSV) | Month breakdown + export | Donut chart; share sheet for CSV | 1 | `reports/page.tsx` |
 | 24 | Scheduled: calendar grid + upcoming list, post-now | Month calendar w/ event dots; upcoming list; post-now | Calendar view; context menu | 1 | `scheduled/page.tsx`, `lib/recurrence.ts` |

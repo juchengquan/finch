@@ -221,7 +221,28 @@ Genuinely remaining (true environment limits, not code):
   rel_paths and remove the on-disk files after the chokepoint drops the rows.
   Wired into Activity swipe-delete, EditTransaction delete, and receipt-remove.
 
-All engine deferrals are now closed; the iOS port is at full functional parity
-with the web. Remaining items are infra-only (Mac distribution signing, live
-iCloud/CloudKit) or new engine actions diverging from web parity (per-account
-base / merge).
+All engine deferrals are now closed; the iOS port matches the web's
+functionality except for the deliberate product divergences below. Remaining
+non-divergence items are infra-only (Mac distribution signing, live
+iCloud/CloudKit) or new engine actions (per-account base / merge).
+
+## Deliberate product divergences (decisions, not bugs or TODOs)
+
+- ⛔ **Spending-pattern insight cards (`lib/insights.ts` `generateInsights`, 11
+  rules) — intentionally NOT ported (decision 2026-06-14).** On the web, the
+  Insights screen surfaces up to 6 auto-written sentence cards (spending
+  up/down vs last month, over budget, top category, busiest weekday,
+  weekend-vs-weekday, end-of-month bump, quietest day, goal progress, net-worth
+  trend, …). Decision: skip these on iOS. They are predefined threshold rules
+  that mostly restate what the Insights charts already show; the few actionable
+  ones (over-budget, pending, goal progress) duplicate dedicated screens
+  (Budgets, Activity, goals). Parity-for-parity is not a goal — a weak feature
+  on the web is not a reason to build it on iOS. If insights are ever revisited,
+  the better forms are timely notification *nudges* (the notification infra
+  already exists) or generative summaries, not more static rules. Note: the
+  underlying selectors (`topCategoryDeltas`, `weeklyDigest`, `incomeCategoryFlow`)
+  ARE ported and available in `FinchCore/Selectors`; only the rule-engine card
+  list is skipped. (Arguably a hint the web should reconsider them too.)
+- 🔧 **Per-account base-currency override + category/tag merge.** No chokepoint
+  action exists for these — genuinely unsupported by the engine (would be new
+  actions diverging from web parity), not just unbuilt. See Phase 4 above.
