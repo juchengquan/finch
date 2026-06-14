@@ -60,6 +60,9 @@ struct FinchApp: App {
                 default: break
                 }
             }
+            #if os(macOS)
+            .frame(minWidth: 720, minHeight: 480)   // keep the split view usable
+            #endif
             // When the biometric lock engages, dismiss the global sheets so they
             // can't sit on top of the lock cover (the cover is a ZStack sibling).
             .onChange(of: gate.isLocked) { _, locked in
@@ -73,7 +76,16 @@ struct FinchApp: App {
                 AddTransactionSheet().environmentObject(store).environmentObject(router)
             }
         }
-        .commands { FinchCommands() }
+        #if os(macOS)
+        .defaultSize(width: 1100, height: 720)
+        .windowResizability(.contentMinSize)
+        #endif
+        .commands {
+            FinchCommands()
+            #if os(macOS)
+            SidebarCommands()   // ⌃⌘S toggle sidebar + a View menu entry
+            #endif
+        }
     }
 }
 

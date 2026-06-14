@@ -18,6 +18,12 @@ struct FinchCommands: Commands {
             Button("Command Palette…") { router.showCommandPalette = true }
                 .keyboardShortcut("k", modifiers: .command)
         }
+        // ⌘, — Settings (the standard Mac slot). finch keeps Settings as a tab,
+        // so this focuses it rather than opening a separate Preferences window.
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { router.selectedTab = .settings }
+                .keyboardShortcut(",", modifiers: .command)
+        }
         // A "Go" menu: ⌘1–6 to switch tabs.
         CommandMenu("Go") {
             ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
