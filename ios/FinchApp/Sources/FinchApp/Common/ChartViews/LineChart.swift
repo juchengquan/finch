@@ -18,6 +18,8 @@ struct LineChart: View {
             LineMark(x: .value(xLabel, point.x), y: .value(yLabel, point.y))
                 .foregroundStyle(.blue)
                 .interpolationMethod(.monotone)
+                .accessibilityLabel(Text(point.x))
+                .accessibilityValue(Text(String(format: "%.0f", point.y)))
         }
         .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisGridLine(); AxisValueLabel() } }
     }

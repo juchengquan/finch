@@ -23,11 +23,14 @@ public enum NotificationPrefs {
 /// buttons / taps through `DeepLinkRouter`. Thin shell over `NotificationPlanner`
 /// (the tested decision logic). All notifications are LOCAL (no push).
 @MainActor
-public final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
+public final class NotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     public static let shared = NotificationService()
     private let center = UNUserNotificationCenter.current()
     private weak var store: FinchStore?
     private weak var router: DeepLinkRouter?
+    /// True when the user denied notification permission — surfaced in Settings
+    /// so the otherwise-silently-dropped alerts have an explanation + a fix.
+    @Published public private(set) var authorizationDenied = false
 
     public func configure(store: FinchStore, router: DeepLinkRouter) {
         self.store = store; self.router = router
@@ -40,12 +43,16 @@ public final class NotificationService: NSObject, UNUserNotificationCenterDelega
         if settings.authorizationStatus == .notDetermined {
             _ = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
         }
+        authorizationDenied = await center.notificationSettings().authorizationStatus == .denied
     }
 
     /// Re-plan from current state and schedule anything not already pending or
     /// delivered (stable ids → no duplicate fires). Called on launch + writes.
     public func refresh() async {
         guard let store else { return }
+        let status = await center.notificationSettings().authorizationStatus
+        authorizationDenied = (status == .denied)
+        if status == .denied { return }   // nothing to schedule; the system drops them
         let planned = NotificationPlanner.plan(
             budgets: store.budgets, txns: store.txns, scheduled: store.scheduled,
             categories: store.categoryNodes, today: store.today, ledgerId: store.activeLedgerId,
