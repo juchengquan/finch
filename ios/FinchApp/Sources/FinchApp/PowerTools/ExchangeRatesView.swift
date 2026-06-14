@@ -66,7 +66,7 @@ struct AddExchangeRateSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let r = Double(rate), r > 0 else { errorMessage = "Enter a rate > 0."; return }
+        guard let r = DecimalInput.parse(rate), r > 0 else { errorMessage = "Enter a rate > 0."; return }
         do {
             try store.apply(.setExchangeRate, Args([
                 "date": .string(AppDate.isoDay.string(from: date)),

@@ -139,7 +139,7 @@ struct ContributeSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let v = Double(amount), v != 0 else { errorMessage = "Enter an amount."; return }
+        guard let v = DecimalInput.parse(amount), v != 0 else { errorMessage = "Enter an amount."; return }
         do { try store.apply(.contributeBudget, Args(["id": .string(budgetId), "amount": .double(v)])); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }
@@ -188,7 +188,7 @@ struct ChangeCycleSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let v = Double(amount), v > 0 else { errorMessage = "Enter an amount."; return }
+        guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount."; return }
         let patch: [String: JSONValue] = [
             "frequency": .string(frequency),
             "startDate": .string(AppDate.isoDay.string(from: startDate)),

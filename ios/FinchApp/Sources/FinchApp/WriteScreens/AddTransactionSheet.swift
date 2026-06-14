@@ -167,7 +167,7 @@ struct AddTransactionSheet: View {
         if kind != .transfer, !categories.contains(where: { $0.id == categoryId }) {
             categoryId = categories.first?.id ?? ""
         }
-        guard let value = Double(amount), value != 0 else { errorMessage = "Enter an amount."; return }
+        guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = "Enter an amount."; return }
         let ymd = Self.day(date)
         let hm = Self.time(date)
         // Soft duplicate nudge (expense/income only) — show once, before posting.
@@ -186,7 +186,7 @@ struct AddTransactionSheet: View {
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
                 if transferIsCrossCurrency {
-                    guard let recv = Double(received), recv > 0 else {
+                    guard let recv = DecimalInput.parse(received), recv > 0 else {
                         errorMessage = "Enter the received amount."; return
                     }
                     args["toAmount"] = .double(recv)

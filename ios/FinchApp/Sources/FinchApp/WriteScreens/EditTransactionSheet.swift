@@ -179,7 +179,7 @@ struct EditTransactionSheet: View {
             "time": .string(Self.time(date)),
         ]
         // Amount edit (keep the original sign; the field is the magnitude).
-        if let parsed = Double(amountText), parsed > 0 {
+        if let parsed = DecimalInput.parse(amountText), parsed > 0 {
             let signed = (originalNative < 0 ? -1.0 : 1.0) * parsed
             if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
         }
