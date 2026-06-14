@@ -24,6 +24,10 @@ public struct DuplicateDraft: Equatable, Sendable, Codable {
     public let accountId: String
     public let date: String
     public let excludeId: String?
+    public init(merchant: String, amount: Double, accountId: String, date: String, excludeId: String?) {
+        self.merchant = merchant; self.amount = amount; self.accountId = accountId
+        self.date = date; self.excludeId = excludeId
+    }
 }
 
 public struct CategorySuggestion: Equatable, Sendable, Codable {

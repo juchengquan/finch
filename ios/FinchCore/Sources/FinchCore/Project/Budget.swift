@@ -9,7 +9,7 @@ import Foundation
 /// selector parity fixtures (`budgetOf` in `select.fixtures.ts`) decode straight
 /// into this. Optional fields (`String?`/`Double?`) tolerate either a present
 /// `null` or an absent key.
-public struct BudgetRow: Identifiable, Equatable, Sendable, Codable {
+public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let id: String
     public let ledgerId: String
     public let groupId: String?

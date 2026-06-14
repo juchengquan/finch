@@ -53,7 +53,7 @@ public struct TxSplit: Codable, Equatable, Sendable {
     public var description: String?
 }
 
-public struct AccountRow: Identifiable, Codable, Equatable, Sendable {
+public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var id: String
     public var balance: Double
     public var ledgerId: String?

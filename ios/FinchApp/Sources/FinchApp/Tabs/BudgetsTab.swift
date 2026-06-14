@@ -11,9 +11,11 @@ import FinchCore
 /// text and no day countdown.
 struct BudgetsTab: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var editing: BudgetRow?
+    @State private var focused: BudgetRow?            // deep-link drill-in
     @State private var errorMessage: String?
 
     var body: some View {
@@ -74,7 +76,17 @@ struct BudgetsTab: View {
             .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
+            .navigationDestination(item: $focused) { BudgetDetailView(budgetId: $0.id) }
+            .onAppear(perform: consumeFocus)
+            .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         }
+    }
+
+    /// A deep link stashed a budget id + switched to this tab — open it.
+    private func consumeFocus() {
+        guard let id = router.focusedId, let b = store.budgets.first(where: { $0.id == id }) else { return }
+        focused = b
+        router.focusedId = nil
     }
 
     private func delete(_ budget: BudgetRow) {

@@ -28,6 +28,8 @@ struct AddTransactionSheet: View {
     @State private var note = ""
     @State private var currencyCode = ""
     @State private var errorMessage: String?
+    @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
+    @State private var dupConfirmed = false
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -83,6 +85,22 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
             }
             .onAppear(perform: seedDefaults)
+            // Auto-categorize from the merchant's history (the user can still override).
+            .onChange(of: merchant) { _, m in
+                guard kind != .transfer, !m.isEmpty else { return }
+                if let s = Selectors.suggestCategory(store.txns, store.activeLedgerId, m),
+                   categories.contains(where: { $0.id == s.categoryId }) {
+                    categoryId = s.categoryId
+                }
+            }
+            .confirmationDialog("Possible duplicate", isPresented: Binding(
+                get: { pendingDuplicate != nil }, set: { if !$0 { pendingDuplicate = nil } }),
+                presenting: pendingDuplicate) { _ in
+                Button("Add anyway") { dupConfirmed = true; pendingDuplicate = nil; save() }
+                Button("Cancel", role: .cancel) { pendingDuplicate = nil }
+            } message: { m in
+                Text("Looks like “\(m.merchant)” on \(m.date) already exists.")
+            }
         }
     }
 
@@ -152,6 +170,13 @@ struct AddTransactionSheet: View {
         guard let value = Double(amount), value != 0 else { errorMessage = "Enter an amount."; return }
         let ymd = Self.day(date)
         let hm = Self.time(date)
+        // Soft duplicate nudge (expense/income only) — show once, before posting.
+        if kind != .transfer, !dupConfirmed,
+           let m = Selectors.findDuplicate(store.txns, store.activeLedgerId,
+               DuplicateDraft(merchant: merchant, amount: abs(value), accountId: accountId, date: ymd, excludeId: nil)) {
+            pendingDuplicate = m
+            return
+        }
         do {
             if kind == .transfer {
                 guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
