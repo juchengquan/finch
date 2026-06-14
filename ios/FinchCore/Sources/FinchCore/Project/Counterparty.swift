@@ -7,8 +7,9 @@ public struct Counterparty: Identifiable, Equatable, Sendable, Codable {
     public let id: String
     public let ledgerId: String
     public let name: String
+    public let isVerified: Bool
 
-    public init(id: String, ledgerId: String, name: String) {
-        self.id = id; self.ledgerId = ledgerId; self.name = name
+    public init(id: String, ledgerId: String, name: String, isVerified: Bool = false) {
+        self.id = id; self.ledgerId = ledgerId; self.name = name; self.isVerified = isVerified
     }
 }

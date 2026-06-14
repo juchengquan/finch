@@ -56,6 +56,7 @@ struct SettingsTab: View {
                     NavigationLink("Rules") { RulesManagerView() }
                     NavigationLink("Categories") { CategoryAdminView() }
                     NavigationLink("Tags") { TagAdminView() }
+                    NavigationLink("Merchants") { CounterpartyAdminView() }
                     NavigationLink("Exchange rates") { ExchangeRatesView() }
                 }
 
