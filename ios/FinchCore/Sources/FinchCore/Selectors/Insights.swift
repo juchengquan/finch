@@ -109,10 +109,12 @@ extension Selectors {
         let byCat = categorySpend(txns, ledgerId, month)
         let lookup = Dictionary(uniqueKeysWithValues:
             categories.map { ($0.id, (name: $0.name, color: $0.color ?? fallbackCatColor)) })
-        let ranked = byCat.map { id, spent in
+        let mapped: [IncomeFlowCategory] = byCat.map { id, spent in
             IncomeFlowCategory(id: id, name: lookup[id]?.name ?? id, spent: spent,
                                color: lookup[id]?.color ?? fallbackCatColor)
-        }.filter { $0.spent > 0 }.sorted { $0.spent > $1.spent }
+        }.filter { $0.spent > 0 }
+        // tie-break: deterministic order (byCat is a Dictionary).
+        let ranked = mapped.sorted { a, b in a.spent != b.spent ? a.spent > b.spent : a.id < b.id }
         var top = Array(ranked.prefix(topN))
         let restSpent = ranked.dropFirst(topN).reduce(0.0) { $0 + $1.spent }
         if restSpent > 0 {
@@ -263,9 +265,11 @@ extension Selectors {
         let prev: Double? = prevHasAny ? r2(prevSpent) : nil
         let avgWeeks = weeksWithData.count
         let avg = avgWeeks > 0 ? r2(avgSum / Double(avgWeeks)) : 0
+        // Deterministic: `byCat` is a Dictionary, so tie-break equal amounts by
+        // categoryId to avoid run-to-run reordering.
         let topCategories = Array(byCat
             .map { WeeklyTopCategory(categoryId: $0.key, amount: r2($0.value)) }
-            .sorted { $0.amount > $1.amount }
+            .sorted { $0.amount != $1.amount ? $0.amount > $1.amount : $0.categoryId < $1.categoryId }
             .prefix(5))
 
         return WeeklyDigest(

@@ -146,7 +146,9 @@ extension Selectors {
         }
         return Array(deltas
             .filter { $0.a > 0 || $0.b > 0 }
-            .sorted { abs($0.b - $0.a) > abs($1.b - $1.a) }
+            // Deterministic: `seen` is a Set, so tie-break equal deltas by name
+            // to avoid run-to-run reordering.
+            .sorted { abs($0.b - $0.a) != abs($1.b - $1.a) ? abs($0.b - $0.a) > abs($1.b - $1.a) : $0.name < $1.name }
             .prefix(count))
     }
 }
