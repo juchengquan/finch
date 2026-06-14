@@ -238,58 +238,93 @@ git commit -m "feat(ios): implement CloudKit subscription + remote-notification 
 
 ---
 
-## Task 4: Add the opt-in flow (Settings › Sync › Row-level sync)
+## Task 4: Add the sync switch (Settings › Sync)
 
-- [ ] **Step 1: Build the row-level sync opt-in view**
+Per the §1 design decision: ONE switch, "Sync across devices (iCloud)",
+CloudKit-backed. No mode picker, no "switch back to pack-based". Turning it on
+runs a one-time bootstrap then subscribes; turning it off unsubscribes. The
+`.finch` Export/Import (Phase 5) stays as a separate Backup section, unchanged.
 
-`frontend/ios/FinchApp/Sources/FinchApp/Settings/RowLevelSyncSettingsView.swift`:
+Daemon API this view relies on (extend the `CloudKitSyncDaemon` from Tasks 2–3):
+`bootstrap(ledgerId:)` (one-time full upload, Task 2), `subscribeToMutations(ledgerId:)`
+/ `unsubscribe()` (Task 3), `resync(ledgerId:)` (forced re-upload + re-pull), and
+the published status props `statusText` / `lastSyncText` / `pendingCount` /
+`lastError`.
+
+- [ ] **Step 1: Build the Sync settings view**
+
+`frontend/ios/FinchApp/Sources/FinchApp/Settings/SyncSettingsView.swift`:
 
 ```swift
 import SwiftUI
 import FinchCore
 
-struct RowLevelSyncSettingsView: View {
-    @State private var rowLevelSyncEnabled = false
+struct SyncSettingsView: View {
+    @EnvironmentObject private var store: FinchStore
+    @StateObject private var sync = CloudKitSyncDaemon.shared
+    @State private var enabled = AppState.syncEnabled   // persisted in app_state
+    @State private var bootstrapping = false
 
     var body: some View {
         Form {
             Section {
-                Toggle("Row-level sync (beta)", isOn: $rowLevelSyncEnabled)
+                Toggle("Sync across devices (iCloud)", isOn: $enabled)
             } footer: {
-                Text("Sub-second sync via CloudKit. Last-writer-wins on conflict; the audit gate is the safety net.")
+                Text("Your data syncs through your iCloud account. Per-change merge across devices; the audit gate is the safety net.")
             }
-            if rowLevelSyncEnabled {
-                Section("Conflict resolution") {
-                    Text("When two devices edit the same row, the most recent write wins.")
+            if enabled {
+                Section("Status") {
+                    LabeledContent("State", value: sync.statusText)        // "Subscribed to N ledgers" / "Setting up…"
+                    LabeledContent("Last sync", value: sync.lastSyncText)
+                    LabeledContent("Pending changes", value: "\(sync.pendingCount)")
+                    if let err = sync.lastError { LabeledContent("Last error", value: err) }
+                    Button("Resync ledger") { Task { await sync.resync(ledgerId: store.activeLedgerId) } }
+                        .disabled(bootstrapping)
                 }
             }
+            // NOTE: the Backup (Export/Import .finch) section is the existing
+            // Phase 5 UI — it is NOT a sync mode and is left exactly as-is.
         }
-        .navigationTitle("Row-level sync")
-        .onChange(of: rowLevelSyncEnabled) { _, enabled in
-            if enabled {
-                Task { await CloudKitSyncDaemon.shared.subscribeToMutations(ledgerId: FinchStore.shared.activeLedgerId) }
+        .navigationTitle("Sync")
+        .overlay { if bootstrapping { ProgressView("Setting up iCloud sync…") } }
+        .onChange(of: enabled) { _, on in
+            AppState.syncEnabled = on
+            Task {
+                if on {
+                    bootstrapping = true
+                    await sync.bootstrap(ledgerId: store.activeLedgerId)          // one-time full upload (Task 2)
+                    await sync.subscribeToMutations(ledgerId: store.activeLedgerId) // Task 3
+                    bootstrapping = false
+                } else {
+                    await sync.unsubscribe()
+                }
             }
         }
     }
 }
 ```
 
-- [ ] **Step 2: Wire into `SettingsTab`**
+- [ ] **Step 2: Wire into `SettingsTab`** (single row, replacing any Phase 5
+  "iCloud sync" auto-pack row — that automatic path is retired per §3.2):
 
 ```swift
 NavigationLink {
-    RowLevelSyncSettingsView()
+    SyncSettingsView()
 } label: {
-    Label("Row-level sync", systemImage: "arrow.triangle.2.circlepath")
+    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Retire the Phase 5 auto-pack folder-watch** — disable the
+  `AutoBackupManager`/`ICloudSync` *automatic* iCloud-Drive loop (the manual
+  Export/Import stays). Leave a one-line note so it isn't re-enabled.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/ios/FinchApp/Sources/FinchApp/Settings/RowLevelSyncSettingsView.swift
+git add frontend/ios/FinchApp/Sources/FinchApp/Settings/SyncSettingsView.swift
 git add frontend/ios/FinchApp/Sources/FinchApp/Tabs/SettingsTab.swift
-git commit -m "feat(ios): add Row-level sync opt-in flow (Settings › Sync)"
+git commit -m "feat(ios): single iCloud sync switch (CloudKit); retire auto-pack live sync"
 ```
 
 ---
@@ -316,8 +351,8 @@ Open the project; target → Signing & Capabilities → "+ Capability" → Cloud
 - [ ] **Step 3: Test on 2 real iCloud devices**
 
 Build + run on 2 iPhones signed into the same iCloud account.
-Enable row-level sync on both. Write a transaction on device 1;
-it should appear on device 2 within ~1 second.
+Turn on "Sync across devices (iCloud)" on both. Write a transaction
+on device 1; it should appear on device 2 within ~1 second.
 
 - [ ] **Step 4: Commit**
 

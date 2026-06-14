@@ -67,6 +67,27 @@ latency across devices. The plan's §4.3-C sketches this
 option: "CloudKit or server sync atop the UUID-ready,
 single-choke-point mutation layer."
 
+> **DECISION (2026-06-14) — sync UX is a single switch, CloudKit replaces
+> file sync; no user-facing engine toggle.** The app exposes ONE control —
+> "Sync across devices (iCloud)" on/off — backed by CloudKit. We do **not**
+> offer the user a choice of sync *engine* (the earlier "Pack-based vs
+> Row-level" mode picker is dropped). Reasons: the engine difference is
+> invisible/technical and not a choice a user can meaningfully make; two live
+> sync paths double the maintenance + bug surface and create split-brain
+> hazards; and the two are not peers — CloudKit is simply better at multi-device
+> sync (per-row merge, no whole-file clobber that can lose a transaction).
+> Consequences, reflected throughout this doc:
+> - **CloudKit is THE live-sync engine.** The Phase 5 iCloud-Drive *file* sync
+>   was the **interim** live-sync; once CloudKit ships it is **superseded and
+>   removed as a live path** — NOT kept as a parallel fallback mode.
+> - **Portability/backup is the `.finch` export/import** (the existing pack), a
+>   separate manual Settings action — not a sync mode. Users still get a tangible
+>   portable file; it just isn't a competing live-sync engine.
+> - **Migration is one-way** (enable → one-time bootstrap upload). There is no
+>   "switch back to pack-based" button; turning sync OFF stops syncing, and the
+>   user can still export a `.finch` at any time.
+> §3, §4, and §6 below are written to this decision.
+
 The two viable implementations:
 
 - **CloudKit** (the proposal) — Apple's free, serverless
@@ -147,8 +168,8 @@ not detailed.
 **Estimated scope**: ~1,500-2,500 lines Swift
 (the CloudKit subscription + the mutation event bus + the
 sync daemon) + ~500 lines SwiftUI (the Settings › Sync
-section additions for "row-level sync" vs. "pack-based
-sync") + ~1,000 lines tests (the CloudKit mock + the
+additions: a single iCloud sync switch + status, replacing
+the Phase 5 auto-pack row) + ~1,000 lines tests (the CloudKit mock + the
 mutation round-trip tests). **2-4 months of full-time
 work** for a small team. This is a **large phase** if
 ever pursued.
@@ -375,82 +396,92 @@ In practice, conflicts are rare:
   edit that would change the balance in an unexpected
   way)
 
-## §3. The migration from pack-based to row-level sync
+## §3. The migration from file sync to row-level sync
 
-If Phase 8 is ever pursued, the transition is a **one-way
-migration**: the user opts in to row-level sync; the
-iCloud pack engine (Phase 5) is still available as a
-fallback (the user can switch back if row-level sync has
-issues).
+Per the §1 decision, CloudKit **replaces** the Phase 5
+iCloud-Drive file sync as the live-sync engine — it is not
+a second mode running alongside it. The transition is a
+**one-way migration**: the user turns on "Sync across
+devices (iCloud)"; the app bootstraps the ledger into
+CloudKit once and runs row-level sync thereafter. The
+`.finch` export/import remains as the manual
+backup/portability path (§4), independent of live sync.
 
-### 3.1 — The opt-in flow
+### 3.1 — The enable flow
 
-Settings › Sync gets a new section: **Sync mode** with
-two options: "Pack-based (default)" and "Row-level
-(beta)". The user picks one; the choice is stored in
-`app_state`.
+Settings › Sync has a single switch: **"Sync across
+devices (iCloud)"** (on/off; the state is stored in
+`app_state`). There is no engine/mode picker.
 
-When the user switches to row-level sync:
-1. The CloudKit sync daemon is initialized
-2. The first sync run: every Entry + Posting in the
-   local DB is uploaded to CloudKit (as a Mutation with
-   `action: 'bootstrapLedger'`)
+When the user turns sync ON:
+1. The CloudKit sync daemon is initialized.
+2. **Bootstrap (one-time):** every Entry + Posting in the
+   local DB is uploaded to CloudKit (a Mutation with
+   `action: 'bootstrapLedger'`). A "Setting up iCloud
+   sync…" spinner covers the upload.
 3. Future writes are published to the Mutation bus and
-   pushed to CloudKit in real-time
-4. The iCloud pack engine continues to run as a fallback
-   (every 30 minutes, a pack is built and uploaded to
-   iCloud Drive)
+   pushed to CloudKit in real-time; other devices pull
+   deltas via their subscription and dispatch them through
+   the chokepoint.
 
-When the user switches back to pack-based:
-1. The CloudKit subscriptions are cancelled
-2. The Mutation bus is unsubscribed
-3. The iCloud pack engine continues as the primary sync
-   path
+When the user turns sync OFF:
+1. The CloudKit subscriptions are cancelled and the
+   Mutation bus is unsubscribed.
+2. The local DB remains fully usable offline. No data is
+   deleted from CloudKit (re-enabling resumes from the
+   existing records); the user can also export a `.finch`
+   at any time.
 
-### 3.2 — Backward compatibility
+There is **no "switch back to file sync"** — file sync is
+removed as a live path once CloudKit ships (see §3.2).
 
-The pack model in Phase 5 is the **fallback**. If row-
-level sync has a bug (e.g., a record corruption, a missed
-subscription), the pack model kicks in: the user edits
-on iPhone, the pack is built and uploaded to iCloud, the
-iPad downloads the pack via the Phase 5 folder-watcher,
-the iPad's CloudKit daemon is reset from the pack's
-contents.
+### 3.2 — Replacing Phase 5 (not coexisting)
 
-The two models coexist. The row-level model is the
-primary (sub-second latency); the pack model is the
-fallback (sub-minute latency). The user can switch at
-any time.
+Phase 5's iCloud-Drive pack auto-sync was the **interim**
+live-sync before CloudKit existed. When Phase 8 ships,
+that automatic folder-watch + pack-upload loop is
+**retired** — running both live paths at once invites
+split-brain data (a device importing a whole pack while
+also applying row deltas) for no benefit. The pack
+*format* and its **manual** export/import survive, but as
+a backup/portability feature, not an automatic sync.
+
+Robustness without a fallback mode: if row-level sync ever
+gets into a bad state, the recovery is **"Resync ledger"**
+(§4) — a forced full re-upload/re-pull through the same
+CloudKit path — plus the always-available manual `.finch`
+export as the ultimate escape hatch. We do not need a
+second *automatic* engine for safety.
 
 ## §4. Settings › Sync section (Phase 8 additions)
 
-The Phase 5 Settings › Sync section gets a new
-**Sync mode** row:
+The Phase 5 Settings › Sync section is simplified to a
+single live-sync switch plus status, with the existing
+pack export kept as a separate Backup action:
 
 ```
 ┌─────────────────────────────────────┐
-│  Sync                               │
+│  Sync                                │
 ├─────────────────────────────────────┤
-│  Mode                               │
-│  (•) Pack-based (default)          │
-│  ( ) Row-level (beta)              │
+│  Sync across devices (iCloud)   [ON]│   ← the only sync control
 │                                      │
-│  ...                                │
+│  Status: ✓ Subscribed to 3 ledgers  │
+│  Last sync: 12 seconds ago           │
+│  Pending changes: 0                  │
+│  Last error: —                       │
 │                                      │
-│  Row-level sync                     │
-│  Status: ✓ Subscribed to 3 ledgers │
-│  Last sync: 12 seconds ago          │
-│  Pending mutations: 0               │
-│  Last error: —                      │
-│                                      │
-│  [Resync ledger]                    │
-│  [Switch back to pack-based]        │
+│  [Resync ledger]                     │
+├─────────────────────────────────────┤
+│  Backup                              │
+│  [Export .finch…]   [Import .finch…] │   ← portability, NOT a sync mode
 └─────────────────────────────────────┘
 ```
 
-The "Resync ledger" button forces a full re-upload of the
-ledger (useful if the user suspects a corruption). The
-"Switch back to pack-based" button is a one-tap rollback.
+The "Resync ledger" button forces a full re-upload + re-
+pull of the ledger (the recovery path if the user suspects
+a corruption). There is no mode picker and no "switch back
+to pack-based" button — turning the switch OFF stops
+syncing; Export/Import covers portability and backup.
 
 ## §5. CI changes
 
@@ -466,9 +497,10 @@ extends with:
 - A **conflict test**: device A and device B both write
   the same `entry_id` with different `revisionId`s →
   chokepoint's last-writer-wins → audit gate clean
-- A **migration test**: switch from pack-based to row-
-  level sync → first sync run uploads all entries →
-  switch back → verify the pack matches the local DB
+- A **bootstrap test**: enable sync → the first run uploads
+  every Entry + Posting to (mock) CloudKit → a fresh device
+  pulls them, dispatches through the chokepoint, audit gate
+  clean. (One-way: there is no "switch back" path to test.)
 
 ## §6. Open questions
 
@@ -506,11 +538,11 @@ The plan's §14.1 still-open questions mostly land in Phase
 
 **Specifically for the migration**:
 
-- **Pack + row-level coexistence**: the proposal has both
-  sync paths running in parallel. This is more complex
-  than running one or the other. The "one-way migration"
-  (switch from pack to row-level, never switch back) is
-  simpler but less forgiving of bugs.
+- **Pack + row-level coexistence** — ✅ **RESOLVED (2026-06-14): no
+  coexistence.** CloudKit replaces file sync as the single live-sync engine
+  (§1 decision, §3). The earlier "both paths in parallel" proposal is dropped;
+  migration is one-way, recovery is "Resync ledger" + the manual `.finch`
+  export. This removes the split-brain hazard and the dual-maintenance cost.
 - **Cold-start bootstrap**: when the user first enables
   row-level sync, the daemon uploads every Entry +
   Posting in the local DB to CloudKit. For a 10,000-
@@ -544,9 +576,11 @@ These are explicitly NOT in Phase 8:
 - **No changes to the chokepoint's invariants** — the
   audit gate + the balance triggers + the schema
   triggers are unchanged.
-- **No changes to the pack engine** — the pack engine
-  (Phase 1.0) and the iCloud sync (Phase 5) continue to
-  exist as a fallback. Phase 8 complements them.
+- **Pack format kept for backup, not live sync** — the pack
+  builder (Phase 1.0) and the manual `.finch` Export/Import
+  survive as the backup/portability path. The Phase 5
+  *automatic* iCloud-Drive sync is retired/superseded (§3.2),
+  not kept as a fallback mode.
 - **Custom-server path** — sketched but not detailed; if
   pursued, it would be a separate spec.
 - **Multi-user / shared ledgers** — single-user iCloud
@@ -585,10 +619,10 @@ point**. A future team would:
    types are a starting point)
 3. Implement the `Mutation` event bus + the CloudKit
    sync daemon
-4. Migrate existing users from pack-based to row-level
-   (the opt-in flow in §3.1)
-5. Add the Settings › Sync UI (§4) — the user picks
-   "Pack-based (default)" or "Row-level (beta)"
+4. Migrate existing users one-way (enable → one-time
+   bootstrap upload; the flow in §3.1)
+5. Add the Settings › Sync UI (§4) — a single "Sync across
+   devices (iCloud)" switch; retire the Phase 5 auto-pack loop
 
 The estimated scope (2-4 months full-time) is comparable
 to Phase 4 (power features) and Phase 5 (iCloud sync).
@@ -608,9 +642,10 @@ spec.)
   `device_id` columns Phase 8 ADDS (the web today is
   idempotent on `entry_id` + `dedup_hash`); the chokepoint's
   audit gate catches the rare cases that idempotency doesn't
-  handle. §3.1's migration uses the
-  Phase 5 iCloud pack engine as a fallback. §4's Settings
-  UI extends the Phase 5 Settings › Sync section.
+  handle. §3.1's migration is one-way and retires the Phase 5
+  auto-pack loop (no fallback mode); the manual `.finch` export
+  remains for backup. §4's Settings UI replaces the Phase 5
+  auto-sync row with a single switch.
 - **Scope**: focused on Phase 8 IF it's ever pursued.
   Phases 1.0-7 are referenced as completed. Phase 6 is
   explicitly out of scope (the App Intents dispatch through
@@ -620,8 +655,8 @@ spec.)
 - **Ambiguity**: §2.1's `MutationEvent` struct is concrete
   (the field set, the codability). §2.2's CloudKit schema
   is concrete (the 3 record types, the field sets). §3.1's
-  opt-in flow is concrete (the user picks "Row-level
-  (beta)"; the daemon initializes). §6 enumerates the
+  enable flow is concrete (one "Sync across devices (iCloud)"
+  switch → bootstrap → subscribe). §6 enumerates the
   open questions with proposed answers.
 - **Framing**: this spec captures the Phase 8 design
   (committed to building per Q22, future roadmap item
