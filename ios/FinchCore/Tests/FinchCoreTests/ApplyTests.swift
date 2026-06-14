@@ -18,17 +18,16 @@ final class ApplyTests: XCTestCase {
         }
     }
 
-    /// All 74 web actions now route to a handler (none throw error.notImplemented).
+    /// Every action routes to a registered handler — asserted directly against
+    /// the merged registry (no execution, no swallowed errors). The count match
+    /// catches a handler added to the enum but not wired into a domain map.
     func test_allActionsRegistered() throws {
-        let q = try freshDB()
+        let registry = Apply.registry
         for action in ActionName.allCases {
-            // An unregistered action would throw error.notImplemented; a registered
-            // one fails differently (bad args / FK / etc.) or succeeds. Either way,
-            // never notImplemented.
-            do { try Apply.apply(dbQueue: q, action: action.rawValue, args: Args([:])) }
-            catch let e as I18nError { XCTAssertNotEqual(e.code, "error.notImplemented", "\(action.rawValue) unregistered") }
-            catch { /* any other error is fine — the action is registered */ }
+            XCTAssertNotNil(registry[action], "\(action.rawValue) has no registered handler")
         }
+        XCTAssertEqual(registry.count, ActionName.allCases.count,
+                       "registry size must equal the action enum (75)")
     }
 
     /// End-to-end: addTransaction through the chokepoint posts a balanced entry

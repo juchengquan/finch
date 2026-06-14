@@ -177,6 +177,10 @@ extension Selectors {
                 fromName: fromId.flatMap { nameById[$0] }, toName: toId.flatMap { nameById[$0] },
                 note: rows.compactMap { $0.note }.first))
         }
-        return out.sorted { $0.date > $1.date }
+        // Stable: equal-date transfers keep input order (web returns 0 for ties).
+        return out.enumerated().sorted { a, b in
+            if a.element.date != b.element.date { return a.element.date > b.element.date }
+            return a.offset < b.offset
+        }.map { $0.element }
     }
 }

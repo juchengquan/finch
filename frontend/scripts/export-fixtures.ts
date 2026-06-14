@@ -413,8 +413,10 @@ const SEED_SQL: string[] = [
   `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-fx','personal',NULL,'FX gain/loss','equity',9002,'fx',${N},${N})`,
   `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('food','personal',NULL,'Food','expense',0,${N},${N})`,
   `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('pay','personal',NULL,'Salary','income',1,${N},${N})`,
+  `INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('fun','personal',NULL,'Fun','expense',2,${N},${N})`,
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,${N},${N})`,
   `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,${N},${N})`,
+  `INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,${N},${N})`,
 ];
 
 /** A deterministic write-action sequence over the seeded fixed ids. Every entity
@@ -459,17 +461,41 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -30, merchant: 'ClearMe', categoryId: 'food', date: '2026-05-09', skipRules: true } },
   { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
   { action: 'reconcileAccount', args: { accountId: 'a2', statementBalance: 500, statementDate: '2026-05-31', postAdjustment: true } },
+
+  // Holdings on an investment account — exercises create/setPrice/update (these
+  // tables were previously never seeded by the oracle).
+  { action: 'createHolding', args: { id: 'h1', ledgerId: 'personal', accountId: 'a3', symbol: 'vti', shares: 10, costBasis: 2000 } },
+  { action: 'setHoldingPrice', args: { id: 'h1', price: 250, date: '2026-05-10' } },
+  { action: 'updateHolding', args: { id: 'h1', patch: { shares: 12 } } },
+
+  // More action coverage.
+  { action: 'verifyCounterparty', args: { id: 'cp1' } },
+
+  // bulkRecategorize on a CLEARED transaction — byte-verifies that the rebuild
+  // preserves cleared_at (the leg-metadata fix), then tag it.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -40, merchant: 'Recat', categoryId: 'food', date: '2026-05-11', time: '10:00', skipRules: true } },
+  { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
+  { action: 'bulkRecategorize', args: { ids: ['$lastAccountPosting'], categoryId: 'fun' } },
+  { action: 'setTransactionTags', args: { id: '$lastAccountPosting', tagIds: ['tg1'] } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the
  *  same logical row on web + Swift), so the declarative sequence can chain. */
 async function resolveArgs(x: Exec, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  let cached: string | undefined;
+  const lastPosting = async () => {
+    if (cached === undefined) {
+      const r = await x('SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1', []);
+      cached = String(r[0].id);
+    }
+    return cached;
+  };
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(args)) {
-    if (v === '$lastAccountPosting') {
-      const r = await x('SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1', []);
-      out[k] = String(r[0].id);
-    } else out[k] = v;
+    if (v === '$lastAccountPosting') out[k] = await lastPosting();
+    // Resolve the placeholder inside arrays too (e.g. bulkRecategorize.ids).
+    else if (Array.isArray(v)) out[k] = await Promise.all(v.map(async (e) => (e === '$lastAccountPosting' ? await lastPosting() : e)));
+    else out[k] = v;
   }
   return out;
 }

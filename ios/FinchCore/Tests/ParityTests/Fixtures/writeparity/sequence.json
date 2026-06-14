@@ -6,8 +6,10 @@
     "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,system,created_at,updated_at) VALUES ('sys-fx','personal',NULL,'FX gain/loss','equity',9002,'fx',datetime('now'),datetime('now'))",
     "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('food','personal',NULL,'Food','expense',0,datetime('now'),datetime('now'))",
     "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('pay','personal',NULL,'Salary','income',1,datetime('now'),datetime('now'))",
+    "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('fun','personal',NULL,'Fun','expense',2,datetime('now'),datetime('now'))",
     "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','personal','Checking','cash','USD',0,0,1,1,datetime('now'),datetime('now'))",
-    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))"
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a2','personal','Savings','savings','USD',0,1,1,1,datetime('now'),datetime('now'))",
+    "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a3','personal','Brokerage','investment','USD',0,2,1,1,datetime('now'),datetime('now'))"
   ],
   "sequence": [
     {
@@ -252,6 +254,78 @@
         "statementBalance": 500,
         "statementDate": "2026-05-31",
         "postAdjustment": true
+      }
+    },
+    {
+      "action": "createHolding",
+      "args": {
+        "id": "h1",
+        "ledgerId": "personal",
+        "accountId": "a3",
+        "symbol": "vti",
+        "shares": 10,
+        "costBasis": 2000
+      }
+    },
+    {
+      "action": "setHoldingPrice",
+      "args": {
+        "id": "h1",
+        "price": 250,
+        "date": "2026-05-10"
+      }
+    },
+    {
+      "action": "updateHolding",
+      "args": {
+        "id": "h1",
+        "patch": {
+          "shares": 12
+        }
+      }
+    },
+    {
+      "action": "verifyCounterparty",
+      "args": {
+        "id": "cp1"
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": -40,
+        "merchant": "Recat",
+        "categoryId": "food",
+        "date": "2026-05-11",
+        "time": "10:00",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "setCleared",
+      "args": {
+        "id": "$lastAccountPosting",
+        "cleared": true
+      }
+    },
+    {
+      "action": "bulkRecategorize",
+      "args": {
+        "ids": [
+          "$lastAccountPosting"
+        ],
+        "categoryId": "fun"
+      }
+    },
+    {
+      "action": "setTransactionTags",
+      "args": {
+        "id": "$lastAccountPosting",
+        "tagIds": [
+          "tg1"
+        ]
       }
     }
   ],
@@ -672,6 +746,49 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-11",
+        "time": "10:00",
+        "description": "Recat",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-40.000000",
+            "currency": "USD",
+            "amount_base": "-40.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": true,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "fun",
+            "amount": "40.000000",
+            "currency": "USD",
+            "amount_base": "40.000000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-31",
         "time": null,
         "description": "Reconciliation adjustment",
@@ -733,7 +850,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "1342.170000",
+        "current_balance": "1302.170000",
         "sort_order": 0,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -751,6 +868,19 @@
         "include_in_net_worth": 1,
         "is_active": 1,
         "archived": false
+      },
+      {
+        "id": "a3",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Brokerage",
+        "type": "investment",
+        "currency": "USD",
+        "current_balance": "0.000000",
+        "sort_order": 2,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false
       }
     ],
     "categories": [
@@ -762,6 +892,15 @@
         "kind": "expense",
         "system": null,
         "sort_order": 0
+      },
+      {
+        "id": "fun",
+        "ledger_id": "personal",
+        "parent_id": null,
+        "name": "Fun",
+        "kind": "expense",
+        "system": null,
+        "sort_order": 2
       },
       {
         "id": "pay",
@@ -805,7 +944,7 @@
         "id": "cp1",
         "ledger_id": "personal",
         "name": "Starbucks",
-        "is_verified": 0
+        "is_verified": 1
       }
     ],
     "tags": [
@@ -844,7 +983,17 @@
         "sort_order": 0
       }
     ],
-    "holdings": [],
+    "holdings": [
+      {
+        "id": "h1",
+        "account_id": "a3",
+        "symbol": "VTI",
+        "shares": "12.000000",
+        "cost_basis": "2000.000000",
+        "currency": "USD",
+        "last_price": "250.000000"
+      }
+    ],
     "exchange_rates": [
       {
         "date": "2026-05-01",

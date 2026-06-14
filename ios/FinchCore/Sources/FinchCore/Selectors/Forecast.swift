@@ -208,7 +208,7 @@ extension Selectors {
                                             description: t.description ?? t.name, templateId: t.id))
             }
         }
-        events.sort { $0.date < $1.date }
+        events.sort { $0.date != $1.date ? $0.date < $1.date : $0.templateId < $1.templateId }   // tie-break: deterministic across templates
 
         var eventsByDate: [String: Double] = [:]
         for e in events { eventsByDate[e.date, default: 0] += e.amount }
