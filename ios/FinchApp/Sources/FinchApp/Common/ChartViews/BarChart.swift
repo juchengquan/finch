@@ -18,6 +18,8 @@ struct BarChart: View {
         Chart(data) { point in
             BarMark(x: .value(xLabel, point.label), y: .value(yLabel, point.value))
                 .foregroundStyle(point.color)
+                .accessibilityLabel(Text(point.label))
+                .accessibilityValue(Text(String(format: "%.0f", point.value)))
         }
     }
 }

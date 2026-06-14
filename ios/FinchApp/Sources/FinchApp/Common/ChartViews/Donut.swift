@@ -18,6 +18,8 @@ struct Donut: View {
             SectorMark(angle: .value("Value", point.value), innerRadius: .ratio(0.6), angularInset: 1)
                 .foregroundStyle(point.color)
                 .cornerRadius(4)
+                .accessibilityLabel(Text(point.label))
+                .accessibilityValue(Text(String(format: "%.0f", point.value)))
         }
         .chartBackground { _ in
             Text(centerLabel).font(.caption).foregroundStyle(.secondary)
