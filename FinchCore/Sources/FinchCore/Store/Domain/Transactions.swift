@@ -40,11 +40,12 @@ public enum Transactions {
         let splits = a.splits ?? []
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
         let entryId = ref.entryId
-        guard let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) else { return }
+        guard let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) else { return }
         let acctBase: Double = acct["amount_base"]
         var legs: [Entries.Leg] = [.account(Entries.AccountLeg(
             accountId: acct["account_id"], amount: acct["amount"], amountBase: acctBase,
-            exchangeRate: (acct["exchange_rate"] as Double?) ?? 1, memo: acct["memo"], id: acct["id"]))]
+            exchangeRate: (acct["exchange_rate"] as Double?) ?? 1, memo: acct["memo"], id: acct["id"],
+            origAmount: acct["orig_amount"], origCurrency: acct["orig_currency"], clearedAt: acct["cleared_at"]))]
         if splits.isEmpty {
             legs.append(.category(Entries.CategoryLeg(categoryId: nil, amountBase: -acctBase)))
         } else {
@@ -415,9 +416,9 @@ public enum Transactions {
     // MARK: bulkRecategorize (→ rebuildEntry with [acctLeg, new category leg])
 
     /// Single-category entries only; splits (≥2 category legs) are skipped, like
-    /// the web. NOTE: the account leg is forwarded verbatim, but my simplified
-    /// ResolvedLeg/insertPostings drop cleared_at/orig_* — so a cleared or FX leg
-    /// would lose that metadata on rebuild (DEFERRED, fine for plain entries).
+    /// the web. The account leg is forwarded with its reconcile mark + foreign-
+    /// entry display fields preserved (web mutations.ts:200,215), so re-categorizing
+    /// a cleared or FX transaction keeps cleared_at / orig_amount / orig_currency.
     static func bulkRecategorize(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let ids: [String]; let categoryId: String? }
         let a = try args.to(A.self)
@@ -428,14 +429,15 @@ public enum Transactions {
             let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
             if catCount >= 2 { continue }
             guard let acct = try Row.fetchOne(db, sql:
-                "SELECT id, account_id, amount, amount_base, exchange_rate, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
+                "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1",
                 arguments: [entryId]) else { continue }
             let amountBase: Double = acct["amount_base"]
             var ep = Entries.EntryPatch()
             ep.legs = .set([
                 .account(Entries.AccountLeg(accountId: acct["account_id"], amount: acct["amount"],
                     amountBase: acct["amount_base"], exchangeRate: (acct["exchange_rate"] as Double?) ?? 1,
-                    memo: acct["memo"], id: acct["id"])),
+                    memo: acct["memo"], id: acct["id"],
+                    origAmount: acct["orig_amount"], origCurrency: acct["orig_currency"], clearedAt: acct["cleared_at"])),
                 .category(Entries.CategoryLeg(categoryId: a.categoryId, amountBase: -amountBase)),
             ])
             try Entries.rebuildEntry(db, entryId, ep)

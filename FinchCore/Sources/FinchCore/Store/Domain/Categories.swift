@@ -1,10 +1,9 @@
 import Foundation
 import GRDB
 
-/// Categories domain — port of lib/db/domain/categories/mutations.ts.
-/// DEFERRED: the ≤3-level depth validation (`assertCanBeParent` /
-/// `assertSubtreeFitsUnder` / descendant checks) — only the self-parent guard
-/// is enforced here; flat-category fixtures don't exercise the rest.
+/// Categories domain — port of lib/db/domain/categories/mutations.ts, including
+/// the reparenting guards from _depth.ts: self-parent, move-under-own-descendant
+/// (cycle prevention), and the ≤3-level depth cap.
 public enum Categories {
     public static let handlers: [ActionName: Apply.Handler] = [
         .createCategory: create,
@@ -19,6 +18,7 @@ public enum Categories {
         if name.isEmpty { throw I18nError("error.required.categoryName", [:], "Category name is required") }
         let ledgerId = a.ledgerId ?? "personal"
         let type = a.type ?? "expense"
+        if let pid = a.parentId { try assertCanBeParent(db, pid) }
         let sortOrder = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE ledger_id = ?", arguments: [ledgerId]) ?? 0
         try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))",
                        arguments: [a.id ?? Entries.newId("cat"), ledgerId, a.parentId, name, type, a.icon, a.color, sortOrder])
@@ -32,8 +32,12 @@ public enum Categories {
         if let nameV = patch["name"], !nameV.isNonEmptyTrimmedString {
             throw I18nError("error.required.categoryName", [:], "Category name is required")
         }
-        if case .string(let pid)? = patch["parentId"], pid == id {
-            throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent")
+        if case .string(let pid)? = patch["parentId"] {
+            if pid == id { throw I18nError("error.category.selfParent", [:], "A category cannot be its own parent") }
+            if try isInSubtreeOf(db, pid, id) {
+                throw I18nError("error.category.underDescendant", [:], "A category cannot be moved under its own descendant")
+            }
+            try assertSubtreeFitsUnder(db, id, pid)
         }
         var sets: [String] = []
         var bind: [DatabaseValueConvertible?] = []
@@ -50,5 +54,61 @@ public enum Categories {
     static func delete(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
         try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [try args.to(A.self).id])
+    }
+
+    // MARK: depth / cycle guards (port of lib/db/domain/categories/_depth.ts)
+
+    /// Hops from `id` up to the root; the 10-hop bound is the web's cycle backstop.
+    private static func categoryDepth(_ db: Database, _ id: String) throws -> Int {
+        var cur: String? = id, depth = 0
+        for _ in 0..<10 {
+            guard let c = cur else { break }
+            guard let row = try Row.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [c]) else {
+                throw I18nError("error.notFound.category", [:], "Category does not exist")
+            }
+            depth += 1
+            cur = row["parent_id"] as String?
+        }
+        return depth
+    }
+
+    /// Levels in the subtree rooted at `id` (1 = leaf).
+    private static func subtreeDepth(_ db: Database, _ id: String) throws -> Int {
+        var frontier = [id], depth = 1
+        for _ in 0..<10 {
+            if frontier.isEmpty { break }
+            let placeholders = frontier.map { _ in "?" }.joined(separator: ",")
+            let rows = try String.fetchAll(db, sql: "SELECT id FROM categories WHERE parent_id IN (\(placeholders))",
+                                           arguments: StatementArguments(frontier))
+            if rows.isEmpty { break }
+            depth += 1
+            frontier = rows
+        }
+        return depth
+    }
+
+    /// True if `candidateId` is `ancestorId` or any of its descendants — the
+    /// move-under-own-descendant cycle guard.
+    private static func isInSubtreeOf(_ db: Database, _ candidateId: String, _ ancestorId: String) throws -> Bool {
+        var cur: String? = candidateId
+        for _ in 0..<10 {
+            guard let c = cur else { break }
+            if c == ancestorId { return true }
+            guard let row = try Row.fetchOne(db, sql: "SELECT parent_id FROM categories WHERE id = ?", arguments: [c]) else { return false }
+            cur = row["parent_id"] as String?
+        }
+        return false
+    }
+
+    private static func assertCanBeParent(_ db: Database, _ parentId: String) throws {
+        if try categoryDepth(db, parentId) >= 3 {
+            throw I18nError("error.category.depthCap", [:], "Categories nest at most three levels deep")
+        }
+    }
+
+    private static func assertSubtreeFitsUnder(_ db: Database, _ movingId: String, _ newParentId: String) throws {
+        if try categoryDepth(db, newParentId) + subtreeDepth(db, movingId) > 3 {
+            throw I18nError("error.category.depthCap", [:], "Categories nest at most three levels deep")
+        }
     }
 }
