@@ -28,6 +28,10 @@ struct FinchApp: App {
                 if gate.isLocked {   // Phase 6.3: biometric cover
                     LockView().environmentObject(gate)
                 }
+                if store.isImporting {
+                    ProgressView("Importing…")
+                        .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
             }
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {

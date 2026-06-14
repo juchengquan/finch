@@ -9,6 +9,7 @@ struct SettingsTab: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
     @StateObject private var notifications = NotificationService.shared
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -43,7 +44,10 @@ struct SettingsTab: View {
                     if icloud.newerRemotePack != nil {
                         Button("Import newer version from iCloud") {
                             if let data = icloud.dataForImport() {
-                                Task { try? await store.loadPack(from: data); icloud.clearPendingImport() }
+                                Task {
+                                    do { try await store.loadPack(from: data); icloud.clearPendingImport() }
+                                    catch { importError = i18nMessage(error) }
+                                }
                             }
                         }
                     }
@@ -150,6 +154,9 @@ struct SettingsTab: View {
                 }
             }
             .navigationTitle("Settings")
+            .alert("Import failed", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+                Button("OK") { importError = nil }
+            } message: { Text(importError ?? "") }
         }
     }
 }

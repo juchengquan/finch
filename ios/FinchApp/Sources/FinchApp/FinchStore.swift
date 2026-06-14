@@ -15,6 +15,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var txns: [Tx] = []
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
+    @Published public private(set) var isImporting = false   // drives the import spinner
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public private(set) var ledgers: [Ledger] = []
@@ -122,6 +123,8 @@ public final class FinchStore: ObservableObject {
     /// Import pipeline. Throws `PackError` on any failure; on `auditFailed` the
     /// live DB is UNTOUCHED (the gate is pre-swap).
     public func loadPack(from data: Data) async throws {
+        isImporting = true
+        defer { isImporting = false }
         // 1. parse + 2. extract to a staging dir.
         let parsed = try Pack.parse(data)
         let staging = FileManager.default.temporaryDirectory
