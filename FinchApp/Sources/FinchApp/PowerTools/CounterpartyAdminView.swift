@@ -55,9 +55,7 @@ struct CounterpartyAdminView: View {
         }
         .sheet(isPresented: $showingAdd) { CounterpartyNameSheet(counterparty: nil) }
         .sheet(item: $editing) { CounterpartyNameSheet(counterparty: $0) }
-        .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+        .errorAlert($errorMessage)
     }
 
     private func toggleVerify(_ cp: Counterparty) {

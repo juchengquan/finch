@@ -15,6 +15,7 @@ struct ActivityTab: View {
     @State private var selected: Set<String> = []
     @State private var showingBulkCat = false
     @State private var savedSearches: [SavedSearch] = []
+    @State private var errorMessage: String?
     // Memoized derived state: recomputed only when txns / query / visibleCount
     // change (via .onReceive/.onChange), not on every body render — the search
     // field re-rendered the whole list on each keystroke before.
@@ -33,7 +34,7 @@ struct ActivityTab: View {
                         if pendingCount > 0 {
                             Section {
                                 Button {
-                                    try? store.apply(.confirmAllPending, Args([:]))
+                                    run { try store.apply(.confirmAllPending, Args([:])) }
                                 } label: {
                                     Label("Confirm all \(pendingCount) pending", systemImage: "checkmark.circle")
                                 }
@@ -54,6 +55,7 @@ struct ActivityTab: View {
             }
             .searchable(text: $searchQuery)
             .navigationTitle("Activity")
+            .errorAlert($errorMessage)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
@@ -156,10 +158,15 @@ struct ActivityTab: View {
     }
 
     private func delete(_ txn: Tx) {
-        try? store.deleteTransaction(txn.id)   // also unlinks receipt files
+        run { try store.deleteTransaction(txn.id) }   // also unlinks receipt files
     }
     private func confirm(_ txn: Tx) {
-        try? store.apply(.confirmTransaction, Args(["id": .string(txn.id)]))
+        run { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
+    }
+    /// Run a mutation, surfacing a rejection as a localized error alert instead
+    /// of silently no-op'ing (was `try?`).
+    private func run(_ work: () throws -> Void) {
+        do { try work() } catch { errorMessage = i18nMessage(error) }
     }
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
 
