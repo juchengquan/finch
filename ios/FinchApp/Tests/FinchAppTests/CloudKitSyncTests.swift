@@ -1,5 +1,6 @@
 import XCTest
 import CloudKit
+import FinchCore
 @testable import FinchApp
 
 /// Phase 8 — the CI-verifiable core of row-level CloudKit sync: the row↔CKRecord
@@ -62,5 +63,53 @@ final class CloudKitSyncTests: XCTestCase {
         XCTAssertTrue(SyncPreferences.enabled)
         SyncPreferences.enabled = false
         XCTAssertFalse(SyncPreferences.enabled)
+    }
+
+    // MARK: - Mutation log (Phase 8 live-loop content model — pure parts)
+
+    /// A SyncMutation round-trips through its CKRecord mapping, including the
+    /// Args payload (decoded back to the same bag) and the ledger-zone.
+    func test_mutationRecordRoundTrip() {
+        let args = Args(["id": .string("e1"), "amount": .double(-12.5), "merchant": .string("Coffee")])
+        let m = SyncMutation(id: "mut-1", seq: 7, deviceId: "devA", ledgerId: "personal",
+                             action: "addTransaction", argsJSON: SyncMutation.encode(args), ts: "2026-06-15T00:00:00Z")
+        let rec = SyncMutationRecord.record(m)
+        XCTAssertEqual(rec.recordType, "Mutation")
+        XCTAssertEqual(rec.recordID.zoneID.zoneName, "personal")
+        let back = SyncMutationRecord.mutation(from: rec)
+        XCTAssertEqual(back, m)
+        XCTAssertEqual(back?.actionName, .addTransaction)
+        XCTAssertEqual(back?.args, args)   // Args is Equatable
+    }
+
+    /// A non-Mutation record maps to nil (forward-compat / wrong type guard).
+    func test_mutationRecordRejectsWrongType() {
+        let other = CloudKitRecordMapper.record(table: "entries", row: ["id": "e1"])
+        XCTAssertNil(SyncMutationRecord.mutation(from: other))
+    }
+
+    /// The outbox assigns monotonic seqs, drops acked ids, and de-dups applied
+    /// remote ids. Uses an isolated temp file so it doesn't touch app state.
+    @MainActor func test_outboxOrderingAndDedup() {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("outbox-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let box = SyncOutbox(fileURL: tmp)
+
+        let m1 = box.append(action: "createBudget", args: Args([:]), ledgerId: "personal", ts: "t1")
+        let m2 = box.append(action: "removeBudget", args: Args([:]), ledgerId: "personal", ts: "t2")
+        XCTAssertEqual(box.pending.map(\.seq), [1, 2])
+        XCTAssertLessThan(m1.seq, m2.seq)
+
+        box.remove(ids: [m1.id])
+        XCTAssertEqual(box.pending.map(\.id), [m2.id])
+
+        XCTAssertTrue(box.markApplied(id: "remote-1"))   // first time → applied
+        XCTAssertFalse(box.markApplied(id: "remote-1"))  // second time → skip (idempotent)
+        XCTAssertTrue(box.hasApplied(id: "remote-1"))
+
+        // Persistence: a fresh outbox over the same file keeps the pending + seq.
+        let reopened = SyncOutbox(fileURL: tmp)
+        XCTAssertEqual(reopened.pending.map(\.id), [m2.id])
+        XCTAssertEqual(reopened.append(action: "x", args: Args([:]), ledgerId: "personal", ts: "t3").seq, 3)
     }
 }
