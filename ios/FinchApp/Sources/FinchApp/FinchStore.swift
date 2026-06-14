@@ -343,6 +343,15 @@ public final class FinchStore: ObservableObject {
         try apply(.deleteTransaction, Args(["id": .string(txId)]))
         unlink(relPaths: files)
     }
+    /// Human-readable transactions CSV for the active ledger, optionally scoped
+    /// to one `YYYY-MM` month (Insights → Breakdown export). Mirrors the web's
+    /// `/api/export/transactions?ledger=…&month=…`.
+    public func transactionsCsv(month: String?) throws -> String {
+        guard let q = dbQueue else { return "" }
+        let lid = activeLedgerId
+        return try q.read { db in try TxExport.csv(db, ledgerId: lid, month: month) }
+    }
+
     /// ledger base → display.
     public func displayMoneyBase(_ baseAmount: Double) -> String {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount

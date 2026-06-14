@@ -5,6 +5,10 @@ import FinchCore
 /// projected store. All money goes through `Money` / the store helpers.
 struct InsightsTab: View {
     @EnvironmentObject private var store: FinchStore
+    /// Trends (charts) vs Breakdown (the former Reports page: per-category
+    /// monthly spend + CSV export). Mirrors the web Insights view toggle.
+    private enum View_: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
+    @State private var view: View_ = .trends
 
     var body: some View {
         NavigationStack {
@@ -18,12 +22,20 @@ struct InsightsTab: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 16) {
-                            MonthlySpendingCard()
-                            NetWorthCard()
-                            CategoryBreakdownCard()
-                            RecentExpensesCard()
-                            ForecastCard()
-                            if !store.holdings.isEmpty { HoldingsCard() }
+                            Picker("View", selection: $view) {
+                                ForEach(View_.allCases) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            if view == .trends {
+                                MonthlySpendingCard()
+                                NetWorthCard()
+                                CategoryBreakdownCard()
+                                RecentExpensesCard()
+                                ForecastCard()
+                                if !store.holdings.isEmpty { HoldingsCard() }
+                            } else {
+                                BreakdownView()
+                            }
                         }
                         .padding()
                     }
@@ -139,6 +151,89 @@ private struct ForecastCard: View {
         }
     }
 }
+
+private let monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+private func monthLabel(_ ym: String) -> String {
+    guard ym.count >= 7, let mi = Int(ym.suffix(2)), (1...12).contains(mi) else { return ym }
+    return "\(monthNames[mi - 1]) \(ym.prefix(4))"
+}
+
+/// The former Reports page, ported as the Insights "Breakdown" view: a month
+/// picker (months with data, newest first), the per-category spend list for
+/// that month, and a transactions-CSV export scoped to the month.
+private struct BreakdownView: View {
+    @EnvironmentObject private var store: FinchStore
+    @State private var pickedMonth = ""
+    @State private var exported: ExportedCsv?
+
+    private func monthsWithData() -> [String] {
+        var set = Set<String>()
+        for t in store.txns where (t.ledgerId ?? "personal") == store.activeLedgerId { set.insert(String(t.date.prefix(7))) }
+        return set.sorted(by: >)
+    }
+
+    var body: some View {
+        let months = monthsWithData()
+        // The pick is the source of truth; if it falls out of range, show the latest.
+        let month = months.contains(pickedMonth) ? pickedMonth : (months.first ?? "")
+        let spend = Selectors.categorySpend(store.txns, store.activeLedgerId, month)
+        let cats = spend
+            .map { (id: $0.key, name: store.categoryName($0.key) ?? $0.key, spent: $0.value) }
+            .filter { $0.spent > 0 }
+            .sorted { $0.spent > $1.spent }
+        let total = cats.reduce(0) { $0 + $1.spent }
+
+        Card(title: "Breakdown") {
+            if months.isEmpty {
+                Text("No transactions yet").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Picker("Month", selection: Binding(get: { month }, set: { pickedMonth = $0 })) {
+                    ForEach(months, id: \.self) { Text(monthLabel($0)).tag($0) }
+                }
+                .pickerStyle(.menu)
+                LabeledContent("Total", value: store.displayMoneyBase(total))
+                    .font(.subheadline).fontWeight(.medium)
+                if cats.isEmpty {
+                    Text("No spending in \(monthLabel(month))").font(.caption).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(cats.enumerated()), id: \.element.id) { i, c in
+                            HStack(spacing: 12) {
+                                Circle().fill(cardPalette[i % cardPalette.count]).frame(width: 10, height: 10)
+                                Text(c.name).font(.subheadline).lineLimit(1)
+                                Spacer()
+                                Text("\(total > 0 ? Int((c.spent / total * 100).rounded()) : 0)%")
+                                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                                Text(store.displayMoneyBase(c.spent)).font(.subheadline)
+                            }
+                            .padding(.vertical, 8)
+                            if i < cats.count - 1 { Divider() }
+                        }
+                    }
+                }
+                Button {
+                    exportCsv(month: month)
+                } label: {
+                    Label(month.isEmpty ? "Export CSV" : "Export \(monthLabel(month)) CSV", systemImage: "square.and.arrow.up")
+                }
+                .padding(.top, 4)
+            }
+        }
+        .sheet(item: $exported) { f in ShareLink(item: f.url, preview: SharePreview("Transactions CSV")) }
+    }
+
+    private func exportCsv(month: String) {
+        guard let csv = try? store.transactionsCsv(month: month.isEmpty ? nil : month) else { return }
+        let suffix = [store.activeLedgerId, month].filter { !$0.isEmpty }.joined(separator: "-")
+        let name = suffix.isEmpty ? "finch-transactions.csv" : "finch-transactions-\(suffix).csv"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        guard (try? csv.data(using: .utf8)?.write(to: url)) != nil else { return }
+        exported = ExportedCsv(url: url)
+    }
+}
+
+private struct ExportedCsv: Identifiable { let id = UUID(); let url: URL }
 
 private struct HoldingsCard: View {
     @EnvironmentObject private var store: FinchStore
