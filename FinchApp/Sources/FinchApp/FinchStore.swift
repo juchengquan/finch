@@ -34,6 +34,7 @@ public final class FinchStore: ObservableObject {
     private var budgetGroupNames: [String: String] = [:]
     private var rateMap: [String: Double] = [:]
     private var displayCurrencyByLedger: [String: String] = [:]
+    private var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
@@ -191,6 +192,7 @@ public final class FinchStore: ObservableObject {
         self.tags = (try? Projection.tags(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.rateMap = Money.latestRateMap(exchangeRates)
         self.displayCurrencyByLedger = (try? Projection.displayCurrencyByLedger(dbQueue: q)) ?? [:]
+        self.merchantStatsCache = nil   // recompute on next access
     }
 
     /// close live; rename live → finch.sqlite3.bak.<unix-ts>; move stagedDB →
@@ -329,7 +331,7 @@ public final class FinchStore: ObservableObject {
         return categories.first { $0.id == id }?.name
     }
 
-    private func toBase(_ amount: Double, from currency: String?) -> Double {
+    public func toBase(_ amount: Double, from currency: String?) -> Double {
         Money.convert(amount, from: currency ?? baseCurrency, to: baseCurrency, rates: rateMap) ?? amount
     }
     /// account-currency → ledger base (public, for the Phase 7 widget snapshot).
@@ -378,6 +380,13 @@ public final class FinchStore: ObservableObject {
     /// account currency → base → display.
     public func displayMoney(_ amount: Double, from currency: String?) -> String {
         displayMoneyBase(toBase(amount, from: currency))
+    }
+
+    /// Whether a transaction is an unusual-spend anomaly (per-merchant z-score).
+    /// merchantStats is computed once per projection and cached.
+    public func isAnomaly(_ tx: Tx) -> Bool {
+        if merchantStatsCache == nil { merchantStatsCache = Selectors.merchantStats(txns, activeLedgerId) }
+        return Selectors.anomalyScore(tx, merchantStatsCache ?? [:])?.isAnomaly ?? false
     }
 
     // ---- Accounts grouping ----
