@@ -192,12 +192,8 @@ struct AddTransactionSheet: View {
     }
 
     // MARK: date/time formatting (local wall clock → stored columns)
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
-    }()
-    private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "HH:mm"; return f
-    }()
+    private static let dayFmt = AppDate.isoDay
+    private static let timeFmt = AppDate.isoTime
     private static func day(_ d: Date) -> String { dayFmt.string(from: d) }
     private static func time(_ d: Date) -> String { timeFmt.string(from: d) }
 }

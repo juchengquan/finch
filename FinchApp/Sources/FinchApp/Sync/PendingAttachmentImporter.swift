@@ -62,8 +62,5 @@ public enum PendingAttachmentImporter {
         return imported
     }
 
-    private static func today() -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
-    }
+    private static func today() -> String { AppDate.today() }
 }

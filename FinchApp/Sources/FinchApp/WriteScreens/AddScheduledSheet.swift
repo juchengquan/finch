@@ -121,11 +121,9 @@ struct AddScheduledSheet: View {
         do {
             try store.apply(.createScheduled, Args(args))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
-    }()
+    private static let dayFmt = AppDate.isoDay
     private static func day(_ d: Date) -> String { dayFmt.string(from: d) }
 }

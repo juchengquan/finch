@@ -92,6 +92,6 @@ struct AddBudgetSheet: View {
         do {
             try store.apply(.createBudget, Args(args))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

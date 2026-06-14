@@ -98,7 +98,7 @@ struct EditTransactionSheet: View {
             .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
                     do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
-                    catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+                    catch { errorMessage = i18nMessage(error) }
                 }
             }
             .onAppear { attachments = store.attachments(for: txn.id) }
@@ -126,14 +126,14 @@ struct EditTransactionSheet: View {
                 "mimeType": .string("image/jpeg"), "byteSize": .double(Double(data.count)), "sha256": .string(sha)]))
             attachments = store.attachments(for: txn.id)
             pickedPhoto = nil
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     private func removeAttachment(_ att: AttachmentRow) {
         do {
             try store.removeAttachment(id: att.id, relPath: att.relPath)   // also unlinks the file
             attachments = store.attachments(for: txn.id)
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     private func save() {
@@ -154,25 +154,19 @@ struct EditTransactionSheet: View {
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).
     private func run(_ action: ActionName, _ args: [String: JSONValue]) {
         do { try store.apply(action, Args(args)); dismiss() }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     // MARK: date/time helpers
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
-    }()
-    private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "HH:mm"; return f
-    }()
-    private static let dtFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd HH:mm"; return f
-    }()
+    private static let dayFmt = AppDate.isoDay
+    private static let timeFmt = AppDate.isoTime
+    private static let dtFmt = AppDate.isoDateTime
     private static func day(_ d: Date) -> String { dayFmt.string(from: d) }
     private static func time(_ d: Date) -> String { timeFmt.string(from: d) }
     private static func parse(_ ymd: String, _ hm: String?) -> Date? {

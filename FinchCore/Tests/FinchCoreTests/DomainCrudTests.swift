@@ -5,12 +5,8 @@ import GRDB
 /// Through-the-chokepoint tests for the simpler CRUD domains + tag/recategorize.
 final class DomainCrudTests: XCTestCase {
     private func seeded() throws -> DatabaseQueue {
-        let q = try DatabaseQueue()
-        try Migrations.runAll(on: q)
+        let q = try TestSeed.base()   // l1 / a1 / c1 (Food)
         try q.write { db in
-            try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','USD',1,datetime('now'),datetime('now'))")
-            try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','l1','Cash','cash','USD',0,0,1,1,datetime('now'),datetime('now'))")
-            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c1','l1',NULL,'Food','expense',0,datetime('now'),datetime('now'))")
             try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c2','l1',NULL,'Transport','expense',0,datetime('now'),datetime('now'))")
         }
         return q
