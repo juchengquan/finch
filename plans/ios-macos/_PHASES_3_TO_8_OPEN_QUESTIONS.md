@@ -191,3 +191,17 @@ Genuinely remaining (true environment limits, not code):
   Verified: unit tests (JPY→USD orig fields; EUR static-fallback write-through) +
   the write-parity oracle (added a JPY step — byte-for-byte vs the web). Also
   fixed a pre-existing write-parity fixture date-drift (pinned the budget startDate).
+
+
+## Post-roadmap: transaction amount editing + cleared_at preservation (ported)
+
+- ✅ **updateTransaction money edits.** Un-deferred amount/currency/account edits
+  (was `notImplemented.txMoneyEdit`): the legs are rebuilt with re-locked
+  conversion (incl. the §5.2 foreign-currency two-step), a verbatim port of the
+  web's qUpdateTransaction. Category edits also flow through it now.
+- ✅ **cleared_at preservation on rebuild.** Plumbed `clearedAt` through
+  AccountLeg → ResolvedLeg → insertPostings (was hardcoded NULL on insert), so a
+  reconcile mark survives an edit. Same for orig_*.
+- EditTransaction's amount field is now editable. Tests: amount edit (balance
+  follows, entry balances), cleared_at survives an amount edit; the old
+  'money-edit throws' test now asserts success. swift test 105 green.
