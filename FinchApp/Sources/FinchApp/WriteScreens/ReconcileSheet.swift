@@ -6,10 +6,13 @@ import FinchCore
 struct ReconcileSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
+    let preselect: String?
     @State private var accountId = ""
     @State private var statementBalance = ""
     @State private var date = Date()
     @State private var errorMessage: String?
+
+    init(preselect: String? = nil) { self.preselect = preselect }
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
 
@@ -35,7 +38,7 @@ struct ReconcileSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Reconcile", action: reconcile).bold() }
             }
-            .onAppear { if accountId.isEmpty { accountId = store.accounts.first?.id ?? "" } }
+            .onAppear { if accountId.isEmpty { accountId = preselect ?? store.accounts.first?.id ?? "" } }
         }
     }
 

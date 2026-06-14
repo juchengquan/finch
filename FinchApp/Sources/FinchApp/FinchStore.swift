@@ -13,6 +13,7 @@ public final class FinchStore: ObservableObject {
 
     @Published public private(set) var txns: [Tx] = []
     @Published public private(set) var accounts: [AccountRow] = []
+    @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var ledgers: [Ledger] = []
     @Published public private(set) var holdings: [Holding] = []
@@ -175,6 +176,7 @@ public final class FinchStore: ObservableObject {
         guard let q = dbQueue else { return }
         self.txns     = (try? Projection.run(dbQueue: q)) ?? []   // all ledgers; views filter
         self.accounts = (try? Projection.accounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
+        self.accountGroups = (try? Projection.accountGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.budgets  = (try? Projection.budgets(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.categories = (try? Projection.categories(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.counterparties = (try? Projection.counterparties(dbQueue: q, ledgerId: activeLedgerId)) ?? []
@@ -283,7 +285,7 @@ public final class FinchStore: ObservableObject {
 
     // MARK: - View helpers (one definition; all money via Money + the rate map)
 
-    private var baseCurrency: String {
+    public var baseCurrency: String {
         ledgers.first { $0.id == activeLedgerId }?.base ?? Money.hubCurrency
     }
     /// Per-ledger display currency — Phase 1.0 defaults to the active ledger base.
@@ -370,6 +372,15 @@ public final class FinchStore: ObservableObject {
     }
     public func accounts(in group: String) -> [AccountRow] {
         accounts.filter { ($0.groupName ?? "Ungrouped") == group }
+    }
+    /// Archived (is_active = 0) accounts for the active ledger — the unarchive view.
+    public func archivedAccounts() -> [AccountRow] {
+        guard let q = dbQueue else { return [] }
+        return (try? Projection.archivedAccounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
+    }
+    /// This account's transactions (active ledger), newest first.
+    public func transactions(for accountId: String) -> [Tx] {
+        Selectors.selectTransactions(txns, ListOptions(ledgerId: activeLedgerId, accountId: accountId))
     }
     public func subtotalDisplay(for group: String) -> String {
         displayMoneyBase(accounts(in: group).reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
