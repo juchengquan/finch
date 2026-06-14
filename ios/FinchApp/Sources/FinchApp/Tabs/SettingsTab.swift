@@ -8,6 +8,7 @@ struct SettingsTab: View {
     @EnvironmentObject private var gate: BiometricGate
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
+    @StateObject private var notifications = NotificationService.shared
 
     var body: some View {
         NavigationStack {
@@ -95,6 +96,19 @@ struct SettingsTab: View {
                 }
 
                 Section("Notifications") {
+                    if notifications.authorizationDenied {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Notifications are turned off", systemImage: "bell.slash")
+                                .foregroundStyle(.orange)
+                            Text("Enable them in iOS Settings to receive budget and scheduled alerts.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            #if os(iOS)
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                Link("Open Settings", destination: url)
+                            }
+                            #endif
+                        }
+                    }
                     ForEach(NotificationKind.allCases, id: \.rawValue) { kind in
                         Toggle(kind.title, isOn: Binding(
                             get: { NotificationPrefs.isOn(kind) },
