@@ -56,6 +56,11 @@ struct FinchApp: App {
                 default: break
                 }
             }
+            // When the biometric lock engages, dismiss the global sheets so they
+            // can't sit on top of the lock cover (the cover is a ZStack sibling).
+            .onChange(of: gate.isLocked) { _, locked in
+                if locked { router.showCommandPalette = false; router.showAddTransaction = false }
+            }
             // Phase 3 (Mac/⌘K): global palette + new-transaction presentation.
             .sheet(isPresented: $router.showCommandPalette) {
                 CommandPalette().environmentObject(router)

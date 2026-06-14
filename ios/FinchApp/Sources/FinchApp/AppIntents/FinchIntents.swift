@@ -7,6 +7,18 @@ import FinchCore
 
 private func today() -> String { AppDate.today() }
 
+/// Biometric gate for Siri/Shortcuts: refuse data actions when the app is locked
+/// so Siri can't read balances or post writes past the lock. Re-evaluates (a
+/// fresh intent process hasn't unlocked), and is a no-op when no lock is set.
+@MainActor enum FinchIntentLock {
+    static var unlocked: Bool {
+        let gate = BiometricGate.shared
+        if gate.settings.policy == .off { return true }
+        gate.start()
+        return !gate.isLocked
+    }
+}
+
 /// "Add a $6 coffee to finch" → addTransaction (defaults to an expense).
 public struct AddTransactionIntent: AppIntent {
     public static var title: LocalizedStringResource = "Add Transaction"
@@ -23,6 +35,7 @@ public struct AddTransactionIntent: AppIntent {
     @MainActor public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
         store.bootstrap()
+        guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         guard let accountId = account?.id ?? store.accounts.first?.id else {
             return .result(dialog: "Add an account in finch first.")
         }
@@ -49,6 +62,7 @@ public struct CheckBalanceIntent: AppIntent {
     @MainActor public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
         store.bootstrap()
+        guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         guard let a = store.accounts.first(where: { $0.id == account.id }) else {
             return .result(dialog: "I couldn't find that account.")
         }
@@ -66,6 +80,7 @@ public struct MarkClearedIntent: AppIntent {
     @MainActor public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
         store.bootstrap()
+        guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         let ids = store.txns.prefix(max(1, count)).map(\.id)
         for id in ids { try? store.apply(.setCleared, Args(["id": .string(id), "cleared": .bool(true)])) }
         return .result(dialog: "Marked \(ids.count) transaction\(ids.count == 1 ? "" : "s") as cleared.")
@@ -85,6 +100,7 @@ public struct CreateBudgetIntent: AppIntent {
     @MainActor public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
         store.bootstrap()
+        guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         var args: [String: JSONValue] = [
             "ledgerId": .string(store.activeLedgerId), "name": .string(name),
             "type": .string("expense"), "amount": .double(abs(amount)), "frequency": .string("monthly"),
@@ -108,6 +124,7 @@ public struct SwitchLedgerIntent: AppIntent {
     @MainActor public func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = FinchStore.shared
         store.bootstrap()
+        guard FinchIntentLock.unlocked else { return .result(dialog: "Unlock finch first to do that.") }
         do { try store.apply(.setDefaultLedger, Args(["id": .string(ledger.id)])) }
         catch let e as I18nError { return .result(dialog: "Couldn't switch: \(e.message)") }
         store.activeLedgerId = ledger.id
