@@ -28,6 +28,10 @@ struct FinchApp: App {
                 if gate.isLocked {   // Phase 6.3: biometric cover
                     LockView().environmentObject(gate)
                 }
+                if store.isImporting {
+                    ProgressView("Importing…")
+                        .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
             }
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
@@ -55,6 +59,11 @@ struct FinchApp: App {
                 case .active: gate.didBecomeActive()
                 default: break
                 }
+            }
+            // When the biometric lock engages, dismiss the global sheets so they
+            // can't sit on top of the lock cover (the cover is a ZStack sibling).
+            .onChange(of: gate.isLocked) { _, locked in
+                if locked { router.showCommandPalette = false; router.showAddTransaction = false }
             }
             // Phase 3 (Mac/⌘K): global palette + new-transaction presentation.
             .sheet(isPresented: $router.showCommandPalette) {

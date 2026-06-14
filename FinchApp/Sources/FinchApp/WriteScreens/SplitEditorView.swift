@@ -14,7 +14,7 @@ struct SplitEditorView: View {
     @State private var errorMessage: String?
 
     private var total: Double { abs(txn.nativeAmount ?? txn.amount) }
-    private var allocated: Double { rows.reduce(0) { $0 + (Double($1.amount) ?? 0) } }
+    private var allocated: Double { rows.reduce(0) { $0 + (DecimalInput.parse($1.amount) ?? 0) } }
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { txn.amount > 0 ? $0.kind == "income" : $0.kind != "income" }
     }
@@ -76,7 +76,7 @@ struct SplitEditorView: View {
     private func save() {
         errorMessage = nil
         let parsed = rows.compactMap { r -> (String, Double)? in
-            guard let a = Double(r.amount), a > 0 else { return nil }
+            guard let a = DecimalInput.parse(r.amount), a > 0 else { return nil }
             return (r.categoryId, a)
         }
         guard parsed.count >= 2 else { errorMessage = "Add at least two splits with amounts."; return }

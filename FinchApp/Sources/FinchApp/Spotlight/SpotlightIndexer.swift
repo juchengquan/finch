@@ -13,11 +13,14 @@ public final class SpotlightIndexer {
     public static let shared = SpotlightIndexer()
     private let index = CSSearchableIndex.default()
 
-    /// Full re-index of the active ledger's projected state. Called on launch
-    /// and after every successful write (fire-and-forget; the in-memory store is
-    /// the UI's source of truth regardless of Spotlight state).
+    /// Authoritative re-index of the active ledger's projected state: drop
+    /// everything finch indexed, then index the current entities. Called on
+    /// launch, after every write, and after import. Clearing first means deleted
+    /// rows (and a swapped-in pack's old entities) don't linger in the system
+    /// index (the additive-only version left stale results — audit 2026-06-14).
     public func indexAll(store: FinchStore) async {
         let items = SpotlightEntity.all(from: store).map { $0.searchableItem }
+        try? await index.deleteAllSearchableItems()
         try? await index.indexSearchableItems(items)
     }
 

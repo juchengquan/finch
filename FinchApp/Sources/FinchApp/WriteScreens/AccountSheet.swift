@@ -128,7 +128,7 @@ struct AccountSheet: View {
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if !colorHex.isEmpty { args["color"] = .string(colorHex) }
-            if let ob = Double(openingBalance), ob != 0 { args["openingBalance"] = .double(ob) }
+            if let ob = DecimalInput.parse(openingBalance), ob != 0 { args["openingBalance"] = .double(ob) }
             do { try store.apply(.createAccount, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
         }

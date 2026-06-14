@@ -20,6 +20,8 @@ struct AreaChart: View {
                     colors: [.blue.opacity(0.4), .blue.opacity(0.1)],
                     startPoint: .top, endPoint: .bottom))
                 .interpolationMethod(.monotone)
+                .accessibilityLabel(Text(point.x))
+                .accessibilityValue(Text(String(format: "%.0f", point.y)))
         }
     }
 }

@@ -112,13 +112,13 @@ struct AddHoldingSheet: View {
     private func save() {
         errorMessage = nil
         guard !symbol.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a symbol."; return }
-        guard let sh = Double(shares), sh > 0 else { errorMessage = "Enter share count."; return }
-        guard let cb = Double(costBasis), cb >= 0 else { errorMessage = "Enter the cost basis."; return }
+        guard let sh = DecimalInput.parse(shares), sh > 0 else { errorMessage = "Enter share count."; return }
+        guard let cb = DecimalInput.parse(costBasis), cb >= 0 else { errorMessage = "Enter the cost basis."; return }
         var args: [String: JSONValue] = [
             "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
             "symbol": .string(symbol), "shares": .double(sh), "costBasis": .double(cb),
         ]
-        if let p = Double(lastPrice), p >= 0 { args["lastPrice"] = .double(p) }
+        if let p = DecimalInput.parse(lastPrice), p >= 0 { args["lastPrice"] = .double(p) }
         do {
             try store.apply(.createHolding, Args(args))
             dismiss()
@@ -157,7 +157,7 @@ struct SetHoldingPriceSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let p = Double(price), p >= 0 else { errorMessage = "Enter a price."; return }
+        guard let p = DecimalInput.parse(price), p >= 0 else { errorMessage = "Enter a price."; return }
         do {
             try store.apply(.setHoldingPrice, Args([
                 "id": .string(holding.id), "price": .double(p), "date": .string(Self.today()),

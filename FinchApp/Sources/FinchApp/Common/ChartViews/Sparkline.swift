@@ -15,5 +15,8 @@ struct Sparkline: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
+        .accessibilityElement()
+        .accessibilityLabel("Trend")
+        .accessibilityValue(up ? "trending up" : "trending down")
     }
 }

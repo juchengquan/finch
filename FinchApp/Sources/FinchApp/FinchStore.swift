@@ -1,6 +1,7 @@
 import Foundation
 import FinchCore
 import GRDB
+import WidgetKit
 
 /// The in-memory working model behind the 4 tabs. Holds the projected state for
 /// the active ledger and owns the import/export pipeline (DESIGN §4):
@@ -14,6 +15,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var txns: [Tx] = []
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
+    @Published public private(set) var isImporting = false   // drives the import spinner
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public private(set) var ledgers: [Ledger] = []
@@ -108,6 +110,10 @@ public final class FinchStore: ObservableObject {
         Task { await SpotlightIndexer.shared.indexAll(store: self) }
         // Phase 6.2: re-plan notifications from the new state.
         Task { await NotificationService.shared.refresh() }
+        // Tier 2/3: refresh the home-screen + Watch widget on every write (was
+        // only on backup, so the widget could show stale figures for up to an hour).
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
         // Phase 5: debounce an auto-backup pack.
         AutoBackupManager.shared.schedule()
     }
@@ -117,6 +123,8 @@ public final class FinchStore: ObservableObject {
     /// Import pipeline. Throws `PackError` on any failure; on `auditFailed` the
     /// live DB is UNTOUCHED (the gate is pre-swap).
     public func loadPack(from data: Data) async throws {
+        isImporting = true
+        defer { isImporting = false }
         // 1. parse + 2. extract to a staging dir.
         let parsed = try Pack.parse(data)
         let staging = FileManager.default.temporaryDirectory
@@ -173,6 +181,11 @@ public final class FinchStore: ObservableObject {
         let first = ledgers.first?.id ?? ""
         if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
         self.dbInfo = makeDBInfo()
+        // Refresh OS surfaces for the new dataset: authoritative Spotlight
+        // re-index (drops the old pack's entities) + widget snapshot.
+        Task { await SpotlightIndexer.shared.indexAll(store: self) }
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func reprojectActiveLedger() {

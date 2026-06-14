@@ -140,7 +140,7 @@ struct ScheduledSheet: View {
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
-        guard let value = Double(amount), value > 0 else { errorMessage = "Enter an amount."; return }
+        guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
 
         if let template {
             var patch: [String: JSONValue] = [

@@ -8,6 +8,8 @@ struct SettingsTab: View {
     @EnvironmentObject private var gate: BiometricGate
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
+    @StateObject private var notifications = NotificationService.shared
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -42,7 +44,10 @@ struct SettingsTab: View {
                     if icloud.newerRemotePack != nil {
                         Button("Import newer version from iCloud") {
                             if let data = icloud.dataForImport() {
-                                Task { try? await store.loadPack(from: data); icloud.clearPendingImport() }
+                                Task {
+                                    do { try await store.loadPack(from: data); icloud.clearPendingImport() }
+                                    catch { importError = i18nMessage(error) }
+                                }
                             }
                         }
                     }
@@ -95,6 +100,19 @@ struct SettingsTab: View {
                 }
 
                 Section("Notifications") {
+                    if notifications.authorizationDenied {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Notifications are turned off", systemImage: "bell.slash")
+                                .foregroundStyle(.orange)
+                            Text("Enable them in iOS Settings to receive budget and scheduled alerts.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            #if os(iOS)
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                Link("Open Settings", destination: url)
+                            }
+                            #endif
+                        }
+                    }
                     ForEach(NotificationKind.allCases, id: \.rawValue) { kind in
                         Toggle(kind.title, isOn: Binding(
                             get: { NotificationPrefs.isOn(kind) },
@@ -136,6 +154,9 @@ struct SettingsTab: View {
                 }
             }
             .navigationTitle("Settings")
+            .alert("Import failed", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+                Button("OK") { importError = nil }
+            } message: { Text(importError ?? "") }
         }
     }
 }
