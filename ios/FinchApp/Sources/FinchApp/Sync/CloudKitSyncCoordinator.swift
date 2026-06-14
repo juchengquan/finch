@@ -87,9 +87,12 @@ public final class CloudKitSyncCoordinator: ObservableObject {
 
     /// The chokepoint (`FinchStore.apply`) calls this after every successful local
     /// write. Records the (action, args) as a mutation in the outbox and pushes.
-    /// Skipped while replaying a remote mutation (echo guard) or when sync is off.
+    /// Skipped while replaying a remote mutation (echo guard), when sync is off,
+    /// or when there's no iCloud account — the last guard stops the outbox from
+    /// accumulating un-pushable mutations if the switch is on but unprovisioned.
+    /// (`status.accountAvailable` is refreshed by start/resume/syncNow.)
     public func noteLocalMutation(action: ActionName, args: Args, ledgerId: String) {
-        guard enabled, !isReplaying else { return }
+        guard enabled, !isReplaying, status.accountAvailable else { return }
         SyncOutbox.shared.append(action: action.rawValue, args: args, ledgerId: ledgerId, ts: Self.nowISO())
         status.pendingChanges = SyncOutbox.shared.pending.count
         Task { await syncNow() }
