@@ -316,6 +316,16 @@ public final class FinchStore: ObservableObject {
     }
     /// account-currency → ledger base (public, for the Phase 7 widget snapshot).
     public func baseAmount(_ amount: Double, from currency: String?) -> Double { toBase(amount, from: currency) }
+
+    /// Attachments for a transaction (in-app receipt display).
+    public func attachments(for txId: String) -> [AttachmentRow] {
+        guard let q = dbQueue else { return [] }
+        return (try? Projection.attachments(dbQueue: q, txId: txId)) ?? []
+    }
+    /// The live attachments directory (next to the DB); the pack reads from here.
+    public var attachmentsRoot: URL {
+        liveDBURL.deletingLastPathComponent().appendingPathComponent("attachments", isDirectory: true)
+    }
     /// ledger base → display.
     public func displayMoneyBase(_ baseAmount: Double) -> String {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
