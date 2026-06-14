@@ -190,7 +190,12 @@ public final class FinchStore: ObservableObject {
 
     private func reprojectActiveLedger() {
         guard let q = dbQueue else { return }
-        self.txns     = (try? Projection.run(dbQueue: q)) ?? []   // all ledgers; views filter
+        // Active ledger only: every mutation targets the active ledger, so we
+        // re-project just its transactions (not every ledger's). Selectors all
+        // pass activeLedgerId, so an active-only list is identical for them; the
+        // Activity list — which read store.txns unfiltered — now correctly shows
+        // only the active ledger (web parity: activity/page.tsx filters by ledger).
+        self.txns     = (try? Projection.run(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.accounts = (try? Projection.accounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.accountGroups = (try? Projection.accountGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.budgets  = (try? Projection.budgets(dbQueue: q, ledgerId: activeLedgerId)) ?? []

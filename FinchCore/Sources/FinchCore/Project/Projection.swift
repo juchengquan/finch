@@ -4,10 +4,13 @@ import GRDB
 /// Mirror of the web's `lib/db/state.ts::projectState` (the `Tx[]` projection).
 /// One Tx per account-leg posting (opening excluded), enriched with category /
 /// splits / tags from the other legs, then the counterparty-name override.
-/// Projects ALL ledgers (no ledger filter — matches the web; the selectors
-/// filter by the active ledger client-side).
+/// With `ledgerId == nil` projects ALL ledgers (matches the web full
+/// projection — the selectors then filter client-side). The app passes the
+/// active ledger so a single write only re-projects that ledger's transactions
+/// (every mutation targets the active ledger), not every ledger's.
 public enum Projection {
-    static let baseSelect = """
+    private static func selectSQL(scopedToLedger: Bool) -> String {
+        """
         SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
                p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
                e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
@@ -15,12 +18,16 @@ public enum Projection {
                e.created_at AS e_created_at
           FROM postings p JOIN entries e ON e.id = p.entry_id
          WHERE p.account_id IS NOT NULL AND e.kind != 'opening'
+         \(scopedToLedger ? "AND e.ledger_id = ?" : "")
          ORDER BY e.date DESC, e.time DESC, e.created_at DESC, p.sort_order
         """
+    }
 
-    public static func run(dbQueue: DatabaseQueue) throws -> [Tx] {
+    public static func run(dbQueue: DatabaseQueue, ledgerId: String? = nil) throws -> [Tx] {
         try dbQueue.read { db in
-            let rows = try Row.fetchAll(db, sql: baseSelect)
+            let sql = selectSQL(scopedToLedger: ledgerId != nil)
+            let args: StatementArguments = ledgerId.map { [$0] } ?? []
+            let rows = try Row.fetchAll(db, sql: sql, arguments: args)
             var txns = rows.map(mapRow)
             let entryIds: [String] = rows.map { $0["eid"] }
             try enrichLegTxs(db, &txns, entryIds)
