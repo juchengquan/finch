@@ -102,8 +102,9 @@ anything else; without it the app isn't a usable finance app.
     `zh-manual.json`. `CFBundleLocalizations`/`knownRegions` declare `zh-Hans`;
     both `FinchApp` and `FinchMac` build & emit `zh-Hans.lproj`. **Back-port
     note:** the hand-authored zh copy is net-new and could feed the web later.
-    *(Deferred: App Intents / Siri phrases (`AppShortcuts.strings`) and
-    `InfoPlist` display strings remain en-only — a small follow-up.)*
+    App Intents / Siri phrases are localized too (`AppShortcuts.xcstrings`).
+    *(Deferred: only the marginal `InfoPlist` display strings — document-type
+    name "finch data pack", extension bundle names — remain en-only.)*
 19. **Locale decimal parsing.** Replace `Double(string)` with a `NumberFormatter`(locale-aware) for all 11 numeric fields; round-trip the prefill formatting to match.
 20. **Chart accessibility.** Add `.accessibilityLabel/Value` (or `AXChartDescriptor`) to the five chart views; add a non-color cue to Sparkline trend + Donut slices (render the `label`).
 21. **Projection cost.** Make `reprojectActiveLedger` incremental or debounced (don't rebuild all ledgers' transactions on every write); memoize `ActivityTab`'s per-keystroke `filtered`/`daySections`.
