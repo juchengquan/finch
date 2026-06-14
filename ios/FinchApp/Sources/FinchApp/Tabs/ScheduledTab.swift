@@ -53,9 +53,7 @@ struct ScheduledTab: View {
             }
             .sheet(isPresented: $showingAdd) { ScheduledSheet() }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
-            .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-                Button("OK") { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
+            .errorAlert($errorMessage)
         }
     }
 

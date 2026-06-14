@@ -3,10 +3,15 @@ import FinchCore
 import GRDB
 import WidgetKit
 
-/// The in-memory working model behind the 4 tabs. Holds the projected state for
-/// the active ledger and owns the import/export pipeline (DESIGN §4):
-/// extract → migrate → **audit gate** → atomic swap into Application Support →
-/// re-open → project. One GRDB connection type throughout: `DatabaseQueue`.
+/// The in-memory working model behind the tabs. Holds the projected state for the
+/// active ledger and owns the mutation chokepoint + (in `FinchStore+ImportExport`)
+/// the import/export pipeline. One GRDB connection type throughout: `DatabaseQueue`.
+///
+/// Split across files: this file is the core (state + bootstrap + `apply` +
+/// reprojection); `FinchStore+ImportExport.swift` is the pack pipeline;
+/// `FinchStore+ViewHelpers.swift` is the read/format surface the views call.
+/// Members shared across those extensions are `internal` (not `private`) by
+/// necessity — the encapsulation boundary is the module.
 @MainActor
 public final class FinchStore: ObservableObject {
     public static let shared = FinchStore()
@@ -15,10 +20,10 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var txns: [Tx] = []
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
-    @Published public private(set) var isImporting = false   // drives the import spinner
+    @Published public internal(set) var isImporting = false   // drives the import spinner (set by ImportExport)
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
-    @Published public private(set) var ledgers: [Ledger] = []
+    @Published public internal(set) var ledgers: [Ledger] = []   // set by core + ImportExport
     @Published public private(set) var holdings: [Holding] = []
     @Published public private(set) var scheduled: [ScheduledTemplate] = []
     @Published public private(set) var exchangeRates: [ExchangeRate] = []   // Phase 4 FX editor
@@ -27,25 +32,26 @@ public final class FinchStore: ObservableObject {
     @Published public var activeLedgerId: String = "" {
         didSet { if oldValue != activeLedgerId { reprojectActiveLedger() } }  // switch → re-project
     }
-    @Published public private(set) var auditProblems: [Audit.AuditProblem] = []
-    @Published public private(set) var dbInfo: DatabaseInfo = .empty
+    @Published public internal(set) var auditProblems: [Audit.AuditProblem] = []   // set by core + ImportExport
+    @Published public internal(set) var dbInfo: DatabaseInfo = .empty               // set by core + ImportExport
 
-    private var dbQueue: DatabaseQueue?
-    private var categories: [CategoryRow] = []
-    private var counterparties: [Counterparty] = []
-    private var budgetGroupNames: [String: String] = [:]
-    private var rateMap: [String: Double] = [:]
-    private var displayCurrencyByLedger: [String: String] = [:]
-    private var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
+    // Shared with the ImportExport / ViewHelpers extensions (hence internal).
+    var dbQueue: DatabaseQueue?
+    var categories: [CategoryRow] = []
+    var counterparties: [Counterparty] = []
+    var budgetGroupNames: [String: String] = [:]
+    var rateMap: [String: Double] = [:]
+    var displayCurrencyByLedger: [String: String] = [:]
+    var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
-    private struct PendingRejected {
+    struct PendingRejected {
         let stagedDB: URL
         let stagedAttachments: URL?
         let problems: [Audit.AuditProblem]
     }
-    private var pendingRejected: PendingRejected?
+    var pendingRejected: PendingRejected?
 
     /// The persistent live DB location (survives relaunch).
     public var liveDBURL: URL {
@@ -118,83 +124,13 @@ public final class FinchStore: ObservableObject {
         AutoBackupManager.shared.schedule()
     }
 
-    // MARK: - Import (DESIGN §4)
+    // MARK: - Projection
 
-    /// Import pipeline. Throws `PackError` on any failure; on `auditFailed` the
-    /// live DB is UNTOUCHED (the gate is pre-swap).
-    public func loadPack(from data: Data) async throws {
-        isImporting = true
-        defer { isImporting = false }
-        // 1. parse + 2. extract to a staging dir.
-        let parsed = try Pack.parse(data)
-        let staging = FileManager.default.temporaryDirectory
-            .appendingPathComponent("import-staging/\(UUID().uuidString)")
-        let extracted = try Pack.extract(parsed, to: staging)
-
-        // 3. open staged DB + migrate.
-        let stagedQueue: DatabaseQueue
-        do {
-            stagedQueue = try DatabaseQueue(path: extracted.dbPath.path)
-            try Migrations.runAll(on: stagedQueue)
-        } catch {
-            throw PackError.migrationFailed("open+migrate: \(error)")
-        }
-
-        // 4. AUDIT GATE — throw BEFORE the swap, but RETAIN the staged DB so
-        //    forceImportCurrentPack (D7) can swap THAT in later.
-        let problems = try Audit.run(on: stagedQueue)
-        guard problems.isEmpty else {
-            self.pendingRejected = PendingRejected(
-                stagedDB: extracted.dbPath,
-                stagedAttachments: extracted.attachmentsDir,
-                problems: problems)
-            throw PackError.auditFailed(problems)
-        }
-
-        // 5. atomic swap → re-open → project.
-        self.pendingRejected = nil
-        try swapInAndProject(stagedDB: extracted.dbPath,
-                             stagedAttachments: extracted.attachmentsDir,
-                             problems: problems)
-    }
-
-    /// D7 — iOS-only override: swap the RETAINED rejected pack's staged DB into
-    /// the live location (a real import path that skips ONLY the audit gate).
-    /// The rejected pack's problems are surfaced (not gated on). No-op if none.
-    public func forceImportCurrentPack() {
-        guard let pending = pendingRejected else { return }
-        self.pendingRejected = nil
-        try? swapInAndProject(stagedDB: pending.stagedDB,
-                              stagedAttachments: pending.stagedAttachments,
-                              problems: pending.problems)
-    }
-
-    /// Shared tail of both import paths: atomic-swap → re-open → project.
-    private func swapInAndProject(stagedDB: URL, stagedAttachments: URL?,
-                                  problems: [Audit.AuditProblem]) throws {
-        try atomicSwap(stagedDB: stagedDB, stagedAttachments: stagedAttachments)
-        let live = try DatabaseQueue(path: liveDBURL.path)
-        self.dbQueue = live
-        self.auditProblems = problems
-        self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
-        // didSet on activeLedgerId re-projects accounts/txns/budgets.
-        let first = ledgers.first?.id ?? ""
-        if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
-        self.dbInfo = makeDBInfo()
-        // Refresh OS surfaces for the new dataset: authoritative Spotlight
-        // re-index (drops the old pack's entities) + widget snapshot.
-        Task { await SpotlightIndexer.shared.indexAll(store: self) }
-        WidgetSnapshotWriter.write(from: self)
-        WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    private func reprojectActiveLedger() {
+    /// Rebuild the published state for the active ledger. Transactions are scoped
+    /// to the active ledger (a mutation only ever touches the active ledger);
+    /// `Projection.run(ledgerId:)` keeps it from rebuilding every ledger's txns.
+    func reprojectActiveLedger() {
         guard let q = dbQueue else { return }
-        // Active ledger only: every mutation targets the active ledger, so we
-        // re-project just its transactions (not every ledger's). Selectors all
-        // pass activeLedgerId, so an active-only list is identical for them; the
-        // Activity list — which read store.txns unfiltered — now correctly shows
-        // only the active ledger (web parity: activity/page.tsx filters by ledger).
         self.txns     = (try? Projection.run(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.accounts = (try? Projection.accounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.accountGroups = (try? Projection.accountGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
@@ -213,41 +149,7 @@ public final class FinchStore: ObservableObject {
         self.merchantStatsCache = nil   // recompute on next access
     }
 
-    /// close live; rename live → finch.sqlite3.bak.<unix-ts>; move stagedDB →
-    /// live; move staged attachments → Application Support/attachments/; on
-    /// failure roll back from .bak and throw `PackError.swapFailed`.
-    private func atomicSwap(stagedDB: URL, stagedAttachments: URL?) throws {
-        let fm = FileManager.default
-        let live = liveDBURL
-        try? fm.createDirectory(at: live.deletingLastPathComponent(),
-                                withIntermediateDirectories: true)
-        self.dbQueue = nil   // close the live connection before swapping the file
-        // Drop stale WAL/SHM sidecars so the swapped-in DB isn't shadowed.
-        for sfx in ["-wal", "-shm"] { try? fm.removeItem(at: URL(fileURLWithPath: live.path + sfx)) }
-
-        var backup: URL?
-        if fm.fileExists(atPath: live.path) {
-            let bak = live.deletingLastPathComponent()
-                .appendingPathComponent("finch.sqlite3.bak")
-            try? fm.removeItem(at: bak)
-            do { try fm.moveItem(at: live, to: bak); backup = bak }
-            catch { throw PackError.swapFailed("backup live DB: \(error)") }
-        }
-        do {
-            try fm.moveItem(at: stagedDB, to: live)
-        } catch {
-            if let b = backup { try? fm.moveItem(at: b, to: live) }   // roll back
-            throw PackError.swapFailed("move staged DB: \(error)")
-        }
-        // Move attachments (best-effort; overwrite on id collision).
-        if let src = stagedAttachments, fm.fileExists(atPath: src.path) {
-            let dst = live.deletingLastPathComponent().appendingPathComponent("attachments")
-            try? fm.removeItem(at: dst)
-            try? fm.moveItem(at: src, to: dst)
-        }
-    }
-
-    private func makeDBInfo() -> DatabaseInfo {
+    func makeDBInfo() -> DatabaseInfo {
         guard let q = dbQueue else { return .empty }
         let size = (try? FileManager.default.attributesOfItem(atPath: liveDBURL.path)[.size] as? Int) ?? 0
         let counts = (try? Projection.rowCounts(dbQueue: q)) ?? [:]
@@ -260,236 +162,5 @@ public final class FinchStore: ObservableObject {
             filename: liveDBURL.lastPathComponent, sizeBytes: size ?? 0,
             schemaVersion: meta?.schema ?? Schema.version,
             lastImportedAt: lastImported, rowCounts: counts)
-    }
-
-    // MARK: - Export (DESIGN §4; mirrors server.ts exportPackBytes → pack.ts buildPack)
-
-    public func buildPack() async throws -> Data {
-        guard let live = dbQueue else { throw PackError.exportFailed("no pack loaded") }
-        do {
-            // 1. VACUUM INTO a temp clone — through GRDB, not the raw sqlite3 C API.
-            let cloneURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("export-\(UUID().uuidString).sqlite3")
-            // VACUUM cannot run inside a transaction — writeWithoutTransaction.
-            try await live.writeWithoutTransaction { db in
-                try db.execute(sql: "VACUUM INTO ?", arguments: [cloneURL.path])
-            }
-
-            // 2. open the clone, stamp export metadata + checkpoint the WAL.
-            let clone = try DatabaseQueue(path: cloneURL.path)
-            let rowCounts = try Projection.rowCounts(dbQueue: clone)   // 15 canonical tables
-            let exportedAt = ISO8601DateFormatter().string(from: Date())
-            let rowCountsJSON = String(
-                data: try JSONSerialization.data(withJSONObject: rowCounts), encoding: .utf8) ?? "{}"
-            // Stamp + checkpoint without a transaction (wal_checkpoint can't run
-            // inside one); each statement auto-commits.
-            try await clone.writeWithoutTransaction { db in
-                try db.execute(sql: """
-                    UPDATE db_metadata SET exported_at = ?, exported_from = ?, row_counts = ?, updated_at = ?
-                     WHERE id = 1
-                    """, arguments: [exportedAt, "ios", rowCountsJSON, exportedAt])
-                try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")  // self-contained single file
-            }
-            // 3. manifest db.sha256 = sha256 of the now-self-contained clone bytes.
-            let dbBytes = try Data(contentsOf: cloneURL)
-            return try Pack.build(Pack.BuildInput(
-                dbBytes: dbBytes,
-                attachmentFiles: [],   // Phase 1.0: no attachments
-                meta: Pack.BuildInput.Meta(
-                    appVersion: FinchCore.version, schemaVersion: Schema.version,
-                    exportedAt: exportedAt,
-                    exportedFrom: PackManifest.ExportedFrom(device: "ios", deviceId: nil, deviceName: nil),
-                    rowCounts: rowCounts))).bytes
-        } catch let e as PackError {
-            throw e
-        } catch {
-            throw PackError.exportFailed("\(error)")
-        }
-    }
-
-    // MARK: - View helpers (one definition; all money via Money + the rate map)
-
-    public var baseCurrency: String {
-        ledgers.first { $0.id == activeLedgerId }?.base ?? Money.hubCurrency
-    }
-    /// Per-ledger display currency (DB-backed via app_state.displayCurrencyByLedger);
-    /// defaults to the active ledger's base until the user picks one.
-    public var displayCurrency: String { displayCurrencyByLedger[activeLedgerId] ?? baseCurrency }
-
-    /// Currencies offerable as a display currency: the ledger base + any currency
-    /// with an exchange rate (so the conversion actually resolves).
-    public var availableDisplayCurrencies: [String] {
-        [baseCurrency] + Set(exchangeRates.map(\.currency)).subtracting([baseCurrency]).sorted()
-    }
-
-    /// Set the active ledger's display currency (per-ledger).
-    public func setDisplayCurrency(_ currency: String) {
-        try? apply(.setDisplayCurrency, Args(["ledgerId": .string(activeLedgerId), "currency": .string(currency)]))
-    }
-
-    /// `today` for budget windows = the max confirmed-tx date (the web anchors
-    /// the window on the data, so the oracle's budgetProgress lines up); falls
-    /// back to the wall clock only when there are no transactions.
-    public var today: String { txns.map(\.date).max() ?? Self.isoDay(Date()) }
-
-    public var categoryNodes: [CategoryNode] {
-        categories.map { CategoryNode(id: $0.id, parentId: $0.parentId) }
-    }
-    /// Non-system categories for the active ledger (write-screen pickers), in
-    /// projection order. System equity categories (opening/adjustment/fx) are
-    /// excluded — they're booked by the engine, never picked by the user.
-    public var pickableCategories: [CategoryRow] {
-        categories.filter { ($0.kind ?? "") != "equity" }
-    }
-    /// Counterparties ("merchants") for the active ledger — read surface for
-    /// Spotlight indexing and merchant pickers.
-    public var merchants: [Counterparty] { counterparties }
-    public func categoryName(_ id: String?) -> String? {
-        guard let id else { return nil }
-        return categories.first { $0.id == id }?.name
-    }
-
-    public func toBase(_ amount: Double, from currency: String?) -> Double {
-        Money.convert(amount, from: currency ?? baseCurrency, to: baseCurrency, rates: rateMap) ?? amount
-    }
-    /// account-currency → ledger base (public, for the Phase 7 widget snapshot).
-    public func baseAmount(_ amount: Double, from currency: String?) -> Double { toBase(amount, from: currency) }
-
-    /// Attachments for a transaction (in-app receipt display).
-    public func attachments(for txId: String) -> [AttachmentRow] {
-        guard let q = dbQueue else { return [] }
-        return (try? Projection.attachments(dbQueue: q, txId: txId)) ?? []
-    }
-    /// The live attachments directory (next to the DB); the pack reads from here.
-    public var attachmentsRoot: URL {
-        liveDBURL.deletingLastPathComponent().appendingPathComponent("attachments", isDirectory: true)
-    }
-    private func unlink(relPaths: [String]) {
-        let root = attachmentsRoot.deletingLastPathComponent()   // Application Support (relPath includes 'attachments/…')
-        for rel in relPaths { try? FileManager.default.removeItem(at: root.appendingPathComponent(rel)) }
-    }
-    /// Remove an attachment row AND unlink its on-disk file (the engine is
-    /// filesystem-agnostic, so file cleanup is app-side).
-    public func removeAttachment(id: String, relPath: String) throws {
-        try apply(.removeAttachment, Args(["id": .string(id)]))
-        unlink(relPaths: [relPath])
-    }
-    /// Delete a transaction AND unlink its receipts' files (captured before the
-    /// cascade delete drops the rows).
-    public func deleteTransaction(_ txId: String) throws {
-        let files = attachments(for: txId).map { $0.relPath }
-        try apply(.deleteTransaction, Args(["id": .string(txId)]))
-        unlink(relPaths: files)
-    }
-    /// Human-readable transactions CSV for the active ledger, optionally scoped
-    /// to one `YYYY-MM` month (Insights → Breakdown export). Mirrors the web's
-    /// `/api/export/transactions?ledger=…&month=…`.
-    public func transactionsCsv(month: String?) throws -> String {
-        guard let q = dbQueue else { return "" }
-        let lid = activeLedgerId
-        return try q.read { db in try TxExport.csv(db, ledgerId: lid, month: month) }
-    }
-
-    /// ledger base → display.
-    public func displayMoneyBase(_ baseAmount: Double) -> String {
-        let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
-        return Money.format(v, currency: displayCurrency)
-    }
-    /// account currency → base → display.
-    public func displayMoney(_ amount: Double, from currency: String?) -> String {
-        displayMoneyBase(toBase(amount, from: currency))
-    }
-
-    /// Whether a transaction is an unusual-spend anomaly (per-merchant z-score).
-    /// merchantStats is computed once per projection and cached.
-    public func isAnomaly(_ tx: Tx) -> Bool {
-        if merchantStatsCache == nil { merchantStatsCache = Selectors.merchantStats(txns, activeLedgerId) }
-        return Selectors.anomalyScore(tx, merchantStatsCache ?? [:])?.isAnomaly ?? false
-    }
-
-    // ---- Accounts grouping ----
-    public var accountGroupsOrdered: [String] {
-        var seen = Set<String>(); var out: [String] = []
-        for a in accounts { let g = a.groupName ?? "Ungrouped"; if seen.insert(g).inserted { out.append(g) } }
-        return out
-    }
-    public func accounts(in group: String) -> [AccountRow] {
-        accounts.filter { ($0.groupName ?? "Ungrouped") == group }
-    }
-    /// Archived (is_active = 0) accounts for the active ledger — the unarchive view.
-    public func archivedAccounts() -> [AccountRow] {
-        guard let q = dbQueue else { return [] }
-        return (try? Projection.archivedAccounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-    }
-    /// This account's transactions (active ledger), newest first.
-    public func transactions(for accountId: String) -> [Tx] {
-        Selectors.selectTransactions(txns, ListOptions(ledgerId: activeLedgerId, accountId: accountId))
-    }
-    public func subtotalDisplay(for group: String) -> String {
-        displayMoneyBase(accounts(in: group).reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
-    }
-    public var netWorthDisplay: String {
-        displayMoneyBase(accounts.filter { ($0.includeInNetWorth ?? 1) == 1 }
-            .reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
-    }
-
-    // ---- Budgets grouping ----
-    public var budgetGroupsOrdered: [String] {
-        var seen = Set<String>(); var out: [String] = []
-        for b in budgets {
-            let g = b.groupId.flatMap { budgetGroupNames[$0] } ?? "Ungrouped"
-            if seen.insert(g).inserted { out.append(g) }
-        }
-        return out
-    }
-    public func budgets(in group: String) -> [BudgetRow] {
-        budgets.filter { (($0.groupId.flatMap { budgetGroupNames[$0] }) ?? "Ungrouped") == group }
-    }
-    public var budgetTotalsDisplay: (used: String, base: String) {
-        var used = 0.0, base = 0.0
-        for b in budgets {
-            let p = Selectors.budgetProgress(b, txns, today, categoryNodes)
-            used += p.used; base += p.base
-        }
-        return (displayMoneyBase(used), displayMoneyBase(base))
-    }
-
-    /// Whole days from `today` to `ymd` (UTC), floored at 0.
-    public func daysLeft(until ymd: String) -> Int {
-        guard let to = Self.parseDay(ymd), let now = Self.parseDay(today) else { return 0 }
-        return max(0, Int((to.timeIntervalSince(now) / 86_400).rounded(.up)))
-    }
-
-    // MARK: - UTC day helpers
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-    private static func isoDay(_ d: Date) -> String { dayFormatter.string(from: d) }
-    private static func parseDay(_ s: String) -> Date? { dayFormatter.date(from: String(s.prefix(10))) }
-}
-
-/// Settings › Database info. Amounts/dates formatted for the rows.
-public struct DatabaseInfo: Equatable, Sendable {
-    public let filename: String
-    public let sizeBytes: Int
-    public let schemaVersion: String
-    public let lastImportedAt: Date?
-    public let rowCounts: [String: Int]
-    public static let empty = DatabaseInfo(
-        filename: "—", sizeBytes: 0, schemaVersion: "—", lastImportedAt: nil, rowCounts: [:])
-    public var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: Int64(sizeBytes), countStyle: .file)
-    }
-    public var lastImportedAtDisplay: String {
-        guard let d = lastImportedAt else { return "—" }
-        return d.formatted(date: .abbreviated, time: .shortened)
-    }
-    public var rowCountsOrdered: [(String, Int)] {
-        rowCounts.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
     }
 }

@@ -6,6 +6,7 @@ import FinchCore
 struct ExchangeRatesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
+    @State private var errorMessage: String?
 
     var body: some View {
         List {
@@ -31,10 +32,12 @@ struct ExchangeRatesView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddExchangeRateSheet() }
+        .errorAlert($errorMessage)
     }
 
     private func delete(_ r: ExchangeRate) {
-        try? store.apply(.deleteExchangeRate, Args(["date": .string(r.date), "currency": .string(r.currency)]))
+        do { try store.apply(.deleteExchangeRate, Args(["date": .string(r.date), "currency": .string(r.currency)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 

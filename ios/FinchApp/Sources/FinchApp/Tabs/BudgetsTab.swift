@@ -73,9 +73,7 @@ struct BudgetsTab: View {
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
-            .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-                Button("OK") { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
+            .errorAlert($errorMessage)
             .navigationDestination(item: $focused) { BudgetDetailView(budgetId: $0.id) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }

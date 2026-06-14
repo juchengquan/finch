@@ -43,7 +43,8 @@ struct RulesManagerView: View {
     }
 
     private func setActive(_ r: RuleSummary, _ on: Bool) {
-        try? store.apply(.updateRule, Args(["id": .string(r.id), "patch": .object(["isActive": .bool(on)])]))
+        do { try store.apply(.updateRule, Args(["id": .string(r.id), "patch": .object(["isActive": .bool(on)])])) }
+        catch { errorMessage = i18nMessage(error) }
     }
     private func delete(_ r: RuleSummary) {
         do { try store.apply(.deleteRule, Args(["id": .string(r.id)])) }

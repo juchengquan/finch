@@ -9,6 +9,7 @@ struct HoldingsView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
     @State private var pricing: Holding?
+    @State private var errorMessage: String?
 
     private var investmentAccounts: [AccountRow] {
         store.accounts.filter { $0.type == "investment" }
@@ -46,9 +47,13 @@ struct HoldingsView: View {
         }
         .sheet(isPresented: $showingAdd) { AddHoldingSheet(accounts: investmentAccounts) }
         .sheet(item: $pricing) { SetHoldingPriceSheet(holding: $0) }
+        .errorAlert($errorMessage)
     }
 
-    private func delete(_ h: Holding) { try? store.apply(.deleteHolding, Args(["id": .string(h.id)])) }
+    private func delete(_ h: Holding) {
+        do { try store.apply(.deleteHolding, Args(["id": .string(h.id)])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
 }
 
 struct HoldingRow: View {
