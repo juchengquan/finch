@@ -32,6 +32,8 @@ public final class DeepLinkRouter: ObservableObject {
 
     @Published public var selectedTab: AppTab = .accounts
     @Published public var focusedId: String? = nil
+    @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
+    @Published public var showAddTransaction = false    // ⌘N
 
     public init() {}
 

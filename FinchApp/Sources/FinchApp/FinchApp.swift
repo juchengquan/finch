@@ -48,7 +48,15 @@ struct FinchApp: App {
                 default: break
                 }
             }
+            // Phase 3 (Mac/⌘K): global palette + new-transaction presentation.
+            .sheet(isPresented: $router.showCommandPalette) {
+                CommandPalette().environmentObject(router)
+            }
+            .sheet(isPresented: $router.showAddTransaction) {
+                AddTransactionSheet().environmentObject(store).environmentObject(router)
+            }
         }
+        .commands { FinchCommands() }
     }
 }
 
