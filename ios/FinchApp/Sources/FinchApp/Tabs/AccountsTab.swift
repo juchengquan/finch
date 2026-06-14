@@ -79,9 +79,7 @@ struct AccountsTab: View {
             .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
-            .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-                Button("OK") { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
+            .errorAlert($errorMessage)
             .navigationDestination(item: $focused) { AccountDetailView(accountId: $0.id) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }

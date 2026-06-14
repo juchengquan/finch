@@ -154,9 +154,7 @@ struct SettingsTab: View {
                 }
             }
             .navigationTitle("Settings")
-            .alert("Import failed", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
-                Button("OK") { importError = nil }
-            } message: { Text(importError ?? "") }
+            .errorAlert($importError, title: "Import failed")
         }
     }
 }
