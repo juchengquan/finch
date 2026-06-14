@@ -1,9 +1,9 @@
 import Foundation
 
-/// Chinese (zh) translations for I18nError codes, ported from the web's
-/// messages/zh-CN.json. i18nMessage uses these when the device language is zh;
-/// codes without an entry fall back to the English `I18nError.message`. UI-string
-/// localization (Text literals) is the remaining incremental piece.
+/// Chinese (zh) translations for I18nError codes (runtime-data path). i18nMessage
+/// uses these when the device language is zh; codes without an entry fall back to
+/// the English `I18nError.message`. Covers all 79 engine codes. Static UI strings
+/// are localized separately by the String Catalog (Resources/Localizable.xcstrings).
 enum ErrorL10n {
     static let zh: [String: String] = [
         "error.account.splitFreqUnknown": "未知频率 \"{freq}\"",
@@ -61,5 +61,31 @@ enum ErrorL10n {
         "error.transfer.sameAccount": "请选择两个不同的账户",
         "error.transfer.sameCurrencyMismatch": "同币种转账金额必须相等",
         "error.unknownAction": "未知操作: {action}",
+        // Remaining engine codes (the structural/double-entry guards) — completes
+        // coverage of all 79 I18nError codes.
+        "error.account.differentLedger": "账户属于其他账本",
+        "error.account.hasTransactions": "账户有交易 —— 请改为归档",
+        "error.attachment.kind": "附件类型必须是图片或 PDF",
+        "error.category.differentLedger": "类别属于其他账本",
+        "error.duplicate.txn": "该交易似乎已存在",
+        "error.duplicate.budget": "同名预算已存在",
+        "error.entry.equityShape": "{kind}条目应为一个账户分录对应权益类别",
+        "error.entry.minPostings": "一笔记账至少需要两条分录（含一条账户分录）",
+        "error.entry.needCategory": "{kind}条目需要一条类别分录",
+        "error.entry.noDirectEquity": "权益类别不能直接记账",
+        "error.entry.oneAccountLeg": "{kind}条目应正好有一条账户分录",
+        "error.invalidArgs": "参数无效",
+        "error.ledger.lastLedger": "无法删除最后一个账本",
+        "error.notFound.budget": "未找到预算",
+        "error.notFound.entry": "未找到该条目",
+        "error.notImplemented": "操作尚未实现",
+        "error.refund.positive": "退款金额必须为正",
+        "error.scheduled.installmentTotal": "分期总数必须为正整数",
+        "error.split.minTwo": "拆分至少需要两行",
+        "error.split.sumMismatch": "拆分金额之和必须等于交易总额",
+        "error.transfer.fxOnly": "只有汇率残差可用于平衡转账",
+        "error.transfer.noCategory": "转账没有类别分录",
+        "error.transfer.twoLegs": "转账正好有两条账户分录",
+        "error.tx.transferLegEdit": "请在「转账」页面编辑转账",
     ]
 }
