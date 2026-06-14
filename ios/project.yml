@@ -31,6 +31,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: FinchApp/FinchApp.entitlements
         CODE_SIGNING_ALLOWED: "NO"
+        # Let the compiler extract LocalizedStringKey literals so the String
+        # Catalog (Resources/Localizable.xcstrings) drives en/zh-Hans.
+        SWIFT_EMIT_LOC_STRINGS: "YES"
 
   # Phase 7 — WidgetKit extension. Builds for the simulator without signing
   # (CODE_SIGNING_ALLOWED: NO); reads the WidgetSnapshot from the App Group.
@@ -94,6 +97,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: FinchApp/FinchMac.entitlements
         CODE_SIGNING_ALLOWED: "NO"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        SWIFT_EMIT_LOC_STRINGS: "YES"
 
   # Phase 7 — the Apple Watch glance (self-contained watchOS app; reads the
   # WidgetSnapshot from the App Group). Built for the watchOS simulator.

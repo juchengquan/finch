@@ -91,7 +91,19 @@ anything else; without it the app isn't a usable finance app.
 
 ## Tier 4 — non-functional (cross-cutting; do alongside)
 
-18. **Localization layer.** Add `Localizable.xcstrings` (or `.strings`) for `en` + `zh-CN`, reusing the web's `frontend/messages/*.json`; map the 77 `I18nError` codes → localized strings in `i18nMessage`; convert UI string literals to `LocalizedStringKey`. (This is also the first real **iOS-leads** opportunity if we improve on the web's copy — back-port the strings.)
+18. ✅ **Localization layer (done).** Added `Resources/Localizable.xcstrings`
+    (en source + zh-Hans) driven by the Swift compiler's string extraction
+    (`SWIFT_EMIT_LOC_STRINGS`), so all 325 `LocalizedStringKey` literals localize
+    with **zero view-file edits**. Translations: 104 zipped from the web
+    `messages/*.json`, 207 hand-authored (terminology kept consistent with web),
+    14 intentional English fallbacks (numbers/separators/format-only/brand). All
+    79 `I18nError` codes now mapped in `ErrorL10n` (the runtime-data path).
+    Reproducible via `ios/scripts/{xliff-keys,build-xcstrings}.ts` +
+    `zh-manual.json`. `CFBundleLocalizations`/`knownRegions` declare `zh-Hans`;
+    both `FinchApp` and `FinchMac` build & emit `zh-Hans.lproj`. **Back-port
+    note:** the hand-authored zh copy is net-new and could feed the web later.
+    *(Deferred: App Intents / Siri phrases (`AppShortcuts.strings`) and
+    `InfoPlist` display strings remain en-only — a small follow-up.)*
 19. **Locale decimal parsing.** Replace `Double(string)` with a `NumberFormatter`(locale-aware) for all 11 numeric fields; round-trip the prefill formatting to match.
 20. **Chart accessibility.** Add `.accessibilityLabel/Value` (or `AXChartDescriptor`) to the five chart views; add a non-color cue to Sparkline trend + Donut slices (render the `label`).
 21. **Projection cost.** Make `reprojectActiveLedger` incremental or debounced (don't rebuild all ledgers' transactions on every write); memoize `ActivityTab`'s per-keystroke `filtered`/`daySections`.
