@@ -122,6 +122,13 @@ struct ActivityTab: View {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
             }
         }
+        .contextMenu {   // right-click parity on Mac/iPad (swipe is touch-only)
+            Button { editing = txn } label: { Label("Edit", systemImage: "pencil") }
+            if txn.pending == true {
+                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
+            }
+            Button(role: .destructive) { delete(txn) } label: { Label("Delete", systemImage: "trash") }
+        }
     }
 
     private func delete(_ txn: Tx) {
