@@ -8,6 +8,8 @@ import FinchCore
 struct ScheduledTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
+    @State private var editing: ScheduledTemplate?
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -23,14 +25,17 @@ struct ScheduledTab: View {
                 } else {
                     List {
                         ForEach(store.scheduled, id: \.id) { t in
-                            ScheduledRow(template: t)
+                            Button { editing = t } label: { ScheduledRow(template: t) }
+                                .buttonStyle(.plain)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
+                                    Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
                                 }
                                 .swipeActions(edge: .leading) {
                                     Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
                                 }
                                 .contextMenu {
+                                    Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
                                     Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
                                     Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
                                 }
@@ -46,12 +51,20 @@ struct ScheduledTab: View {
                         .disabled(store.accounts.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingAdd) { AddScheduledSheet() }
+            .sheet(isPresented: $showingAdd) { ScheduledSheet() }
+            .sheet(item: $editing) { ScheduledSheet(template: $0) }
+            .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+                Button("OK") { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
         }
     }
 
-    private func postNow(_ t: ScheduledTemplate) { try? store.apply(.postScheduled, Args(["templateId": .string(t.id)])) }
-    private func delete(_ t: ScheduledTemplate) { try? store.apply(.deleteScheduled, Args(["id": .string(t.id)])) }
+    private func postNow(_ t: ScheduledTemplate) {
+        do { try store.apply(.postScheduled, Args(["templateId": .string(t.id)])) } catch { errorMessage = i18nMessage(error) }
+    }
+    private func delete(_ t: ScheduledTemplate) {
+        do { try store.apply(.deleteScheduled, Args(["id": .string(t.id)])) } catch { errorMessage = i18nMessage(error) }
+    }
 }
 
 struct ScheduledRow: View {
