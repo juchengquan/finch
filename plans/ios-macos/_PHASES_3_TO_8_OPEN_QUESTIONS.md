@@ -177,3 +177,17 @@ Genuinely remaining (true environment limits, not code):
   entitlement, but no-ops without a signed-in iCloud account, so the actual
   sync I/O + full CKSyncEngine state loop can't be runtime-verified in CI. It
   supersedes Phase 5's pack sync by design.
+
+
+## Post-roadmap: cross-currency FX (ported)
+
+- ✅ **Foreign-currency transactions + full rateToHub.** Un-deferred the engine's
+  cross-currency path (was `notImplemented.foreignCurrency`): `addTransaction`
+  with a currency ≠ the account's now converts native → account → base, carrying
+  `orig_amount`/`orig_currency` (plumbed through AccountLeg/ResolvedLeg/
+  insertPostings). `rateToHub` now does the full web logic — on-or-before →
+  on-or-after → static FALLBACK_USD_PER_UNIT, with write-through of the resolved
+  rate as a 'derived' row. AddTransaction sheet gains a currency picker.
+  Verified: unit tests (JPY→USD orig fields; EUR static-fallback write-through) +
+  the write-parity oracle (added a JPY step — byte-for-byte vs the web). Also
+  fixed a pre-existing write-parity fixture date-drift (pinned the budget startDate).

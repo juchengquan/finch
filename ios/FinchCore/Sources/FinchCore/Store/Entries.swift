@@ -61,10 +61,14 @@ public enum Entries {
         public var exchangeRate: Double?
         public var memo: String?
         public var id: String?             // preserve the posting id across a rebuild
+        public var origAmount: Double?     // foreign-currency entry: amount as entered
+        public var origCurrency: String?   // …and the currency it was entered in
         public init(accountId: String, amount: Double, amountBase: Double? = nil,
-                    exchangeRate: Double? = nil, memo: String? = nil, id: String? = nil) {
+                    exchangeRate: Double? = nil, memo: String? = nil, id: String? = nil,
+                    origAmount: Double? = nil, origCurrency: String? = nil) {
             self.accountId = accountId; self.amount = amount; self.amountBase = amountBase
             self.exchangeRate = exchangeRate; self.memo = memo; self.id = id
+            self.origAmount = origAmount; self.origCurrency = origCurrency
         }
     }
     public struct CategoryLeg: Sendable {
@@ -87,6 +91,8 @@ public enum Entries {
         var amountBase: Double
         var exchangeRate: Double
         var memo: String?
+        var origAmount: Double? = nil
+        var origCurrency: String? = nil
     }
 
     /// `autoBalanceCategoryId`: `.none` = don't add; `.category(id?)` = append one
@@ -140,9 +146,10 @@ public enum Entries {
         return b
     }
 
-    /// USD-hub FX (HUB_CURRENCY = "USD"). DEFERRED: the derived-rate INSERT side
-    /// effect and the static units-per-USD fallback — unrated cross-currency
-    /// falls back to 1. Single-currency (currency == base) returns identity.
+    /// USD-hub FX (HUB_CURRENCY = "USD"). Verbatim port of the web's
+    /// queries/rates.ts: cross-rate via the hub, with `rateToHub` doing the
+    /// on-or-before → on-or-after → static-fallback lookup + write-through of the
+    /// resolved rate. Single-currency (currency == base) returns identity.
     static func convertToBase(_ db: Database, _ native: Double, _ currency: String,
                               _ base: String, _ date: String) throws -> (amountBase: Double, rate: Double) {
         if currency == base { return (native, 1) }
@@ -151,17 +158,37 @@ public enum Entries {
         let rate = rb != 0 ? rc / rb : 1
         return (r2(native * rate), (rate * 1e6).rounded() / 1e6)
     }
+
+    /// Static last-resort USD-per-1-unit map (web FALLBACK_USD_PER_UNIT) — used
+    /// only when the rates table has no row for a currency, so a fresh/empty DB
+    /// still produces a value.
+    private static let fallbackUsdPerUnit: [String: Double] = [
+        "USD": 1, "EUR": 1.087, "GBP": 1.266, "JPY": 0.0064, "SGD": 0.741, "CNY": 0.138,
+    ]
+
+    /// USD-per-1-unit of `currency` at `date`: exact/on-or-before → on-or-after →
+    /// static fallback. When no exact-date row exists, the resolved rate is
+    /// pinned under `date` (source 'derived', INSERT OR IGNORE so a user-set rate
+    /// is never clobbered) — making every locked conversion reproducible.
     private static func rateToHub(_ db: Database, _ currency: String, _ date: String) throws -> Double {
         if currency == "USD" { return 1 }
-        if let row = try Row.fetchOne(db, sql:
+        let before = try Row.fetchOne(db, sql:
             "SELECT date AS d, rate AS r FROM exchange_rates WHERE currency = ? AND date <= ? ORDER BY date DESC LIMIT 1",
-            arguments: [currency, date]) {
-            return row["r"]
-        }
-        if let after = try Double.fetchOne(db, sql:
+            arguments: [currency, date])
+        if let before, (before["d"] as String) == date { return before["r"] }   // exact → no write-through
+        let rate: Double
+        if let before {
+            rate = before["r"]
+        } else if let after = try Double.fetchOne(db, sql:
             "SELECT rate FROM exchange_rates WHERE currency = ? AND date >= ? ORDER BY date ASC LIMIT 1",
-            arguments: [currency, date]) { return after }
-        return 1   // DEFERRED: staticFallback
+            arguments: [currency, date]) {
+            rate = after
+        } else {
+            rate = fallbackUsdPerUnit[currency] ?? 1
+        }
+        try db.execute(sql: "INSERT OR IGNORE INTO exchange_rates (date, currency, rate, source) VALUES (?, ?, ?, 'derived')",
+                       arguments: [date, currency, rate])
+        return rate
     }
 
     static func resolveCounterpartyIdByName(_ db: Database, _ ledgerId: String, _ name: String) throws -> String? {
@@ -191,7 +218,8 @@ public enum Entries {
                 }
                 legs.append(ResolvedLeg(id: a.id ?? newId("p"), accountId: a.accountId, categoryId: nil,
                     amount: r2(a.amount), currency: currency, amountBase: r2(amountBase!),
-                    exchangeRate: rate!, memo: a.memo))
+                    exchangeRate: rate!, memo: a.memo,
+                    origAmount: a.origAmount.map(r2), origCurrency: a.origCurrency))
             case .category(let c):
                 if let cid = c.categoryId {
                     guard let catLedger = try String.fetchOne(db, sql:
@@ -274,9 +302,9 @@ public enum Entries {
         for (i, l) in legs.enumerated() {
             try db.execute(sql: """
                 INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,orig_amount,orig_currency,memo,cleared_at,sort_order)
-                VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,NULL,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?)
                 """, arguments: [l.id, entryId, l.accountId, l.categoryId, l.amount, l.currency,
-                                 l.amountBase, l.exchangeRate, l.memo, i])
+                                 l.amountBase, l.exchangeRate, l.origAmount, l.origCurrency, l.memo, i])
         }
     }
 

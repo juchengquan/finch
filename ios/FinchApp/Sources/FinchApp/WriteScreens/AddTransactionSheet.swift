@@ -26,9 +26,20 @@ struct AddTransactionSheet: View {
     @State private var received = ""
     @State private var date = Date()
     @State private var note = ""
+    @State private var currencyCode = ""
     @State private var errorMessage: String?
 
     private var accounts: [AccountRow] { store.accounts }
+
+    /// The account currency + any currency with a known rate — the choices for a
+    /// foreign-currency entry. (When the picked currency ≠ the account's, the
+    /// engine carries orig_amount/orig_currency and converts.)
+    private var currencyOptions: [String] {
+        var set = Set(accounts.compactMap { $0.currency })
+        set.formUnion(store.exchangeRates.map { $0.currency })
+        set.insert(currency(of: accountId))
+        return set.sorted()
+    }
 
     /// Expense → expense categories; income → income categories.
     private var categories: [CategoryRow] {
@@ -85,6 +96,11 @@ struct AddTransactionSheet: View {
             Picker("Account", selection: $accountId) {
                 ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
             }
+            if currencyOptions.count > 1 {
+                Picker("Currency", selection: $currencyCode) {
+                    ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+                }
+            }
         }
     }
 
@@ -124,6 +140,7 @@ struct AddTransactionSheet: View {
         }
         if fromAccountId.isEmpty { fromAccountId = accounts.first?.id ?? "" }
         if toAccountId.isEmpty { toAccountId = accounts.dropFirst().first?.id ?? accounts.first?.id ?? "" }
+        if currencyCode.isEmpty { currencyCode = currency(of: accountId) }
     }
 
     private func save() {
@@ -159,6 +176,11 @@ struct AddTransactionSheet: View {
                     "categoryId": .string(categoryId), "date": .string(ymd), "time": .string(hm),
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
+                // Foreign-currency entry: pass the chosen currency so the engine
+                // carries orig_* + converts to the account/base currency.
+                if !currencyCode.isEmpty, currencyCode != currency(of: accountId) {
+                    args["currency"] = .string(currencyCode)
+                }
                 try store.apply(.addTransaction, Args(args))
             }
             dismiss()
