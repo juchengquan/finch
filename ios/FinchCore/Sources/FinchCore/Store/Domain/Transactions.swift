@@ -222,7 +222,7 @@ public enum Transactions {
             let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [a.ledgerId]) ?? acctCcy
             let toAcct = try Entries.convertToBase(db, a.amount, inputCcy, acctCcy, a.date)
             let toBase = try Entries.convertToBase(db, toAcct.amountBase, acctCcy, base, a.date)
-            try Entries.postEntry(db, Entries.NewEntry(
+            let eid = try Entries.postEntry(db, Entries.NewEntry(
                 ledgerId: a.ledgerId, date: a.date, time: a.time, description: a.merchant, kind: kind,
                 status: a.status.flatMap(Entries.Status.init(rawValue:)),
                 legs: [.account(Entries.AccountLeg(accountId: a.accountId, amount: toAcct.amountBase,
@@ -231,15 +231,17 @@ public enum Transactions {
                 autoBalance: .category(a.categoryId),
                 notes: (a.note?.isEmpty ?? true) ? nil : a.note,
                 counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+            try Budgets.invalidateForEntry(db, eid)
             return
         }
 
-        try Entries.postSimple(db, .init(
+        let eid = try Entries.postSimple(db, .init(
             ledgerId: a.ledgerId, accountId: a.accountId, amount: a.amount, date: a.date,
             description: a.merchant, categoryId: a.categoryId, kind: kind, time: a.time,
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+        try Budgets.invalidateForEntry(db, eid)
     }
 
     // MARK: adjustAccountBalance (→ postAdjustment)
@@ -265,8 +267,10 @@ public enum Transactions {
     static func deleteTransaction(_ db: Database, _ args: Args) throws {
         let a = try args.to(IdArg.self)
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
+        try Budgets.invalidateForEntry(db, ref.entryId)   // touches read before the cascade delete
         try Entries.deleteEntry(db, ref.entryId)
-        // DEFERRED: attachment-file cleanup + budget-rollover invalidation.
+        // Attachment on-disk file cleanup is handled app-side (the engine is
+        // filesystem-agnostic): FinchStore unlinks files for deleted entries.
     }
 
     // MARK: updateTransaction (header-only path → rebuildEntry)
@@ -283,6 +287,7 @@ public enum Transactions {
         guard case .object(let patch)? = args.values["patch"] else { return }
         guard let ref = try Entries.resolveEntryRef(db, id) else { return }
         let entryId = ref.entryId
+        defer { try? Budgets.invalidateForEntry(db, entryId) }   // rollover cache, any path
         func strOrNil(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s }; return nil }
         func has(_ k: String) -> Bool { patch.keys.contains(k) }
 
@@ -431,8 +436,8 @@ public enum Transactions {
                 .category(Entries.CategoryLeg(categoryId: a.categoryId, amountBase: -amountBase)),
             ])
             try Entries.rebuildEntry(db, entryId, ep)
+            try Budgets.invalidateForEntry(db, entryId)
         }
-        // DEFERRED: invalidateRollover.
     }
 
     // MARK: confirmAllPending

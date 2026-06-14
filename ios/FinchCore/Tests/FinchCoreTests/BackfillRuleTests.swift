@@ -56,6 +56,30 @@ final class BackfillRuleTests: XCTestCase {
         }
     }
 
+    /// A transaction edit invalidates a rolled budget's cached rollover
+    /// (last_rolled_period → NULL, carry_forward → 0) when it overlaps the
+    /// budget's category in a period at/before the last roll — mainly for
+    /// imported web data.
+    func test_invalidateRolloverOnEdit() throws {
+        let q = try seeded()
+        // A budget rolled forward (cached carry_forward) — as an imported web pack would be.
+        try q.write { db in
+            try db.execute(sql: """
+                INSERT INTO budgets (id,ledger_id,name,kind,amount,saved,carry_forward,frequency,start_date,
+                    is_recurring,rollover,last_rolled_period,category_ids,account_ids,warning_pct,created_at,updated_at)
+                VALUES ('b1','l1','Food','expense',100,0,40,'monthly','2026-01-01',1,1,'2026-05-01','["c1"]',NULL,80,datetime('now'),datetime('now'))
+                """)
+        }
+        // Add a May expense in category c1 → overlaps b1 in a period ≤ last_rolled_period.
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-10),
+            "merchant": .string("X"), "categoryId": .string("c1"), "date": .string("2026-05-10"), "skipRules": .bool(true)]))
+        try q.read { db in
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT last_rolled_period FROM budgets WHERE id='b1'") ?? nil)   // reset
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT carry_forward FROM budgets WHERE id='b1'") ?? -1, 0, accuracy: 0.001)
+        }
+    }
+
     /// The Phase 4 rules projection lists name/priority/active.
     func test_rulesProjection() throws {
         let q = try seeded()

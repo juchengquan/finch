@@ -96,7 +96,10 @@ struct EditTransactionSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
             }
             .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) { run(.deleteTransaction, ["id": .string(txn.id)]) }
+                Button("Delete", role: .destructive) {
+                    do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
+                    catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+                }
             }
             .onAppear { attachments = store.attachments(for: txn.id) }
             .onChange(of: pickedPhoto) { _, item in
@@ -128,7 +131,7 @@ struct EditTransactionSheet: View {
 
     private func removeAttachment(_ att: AttachmentRow) {
         do {
-            try store.apply(.removeAttachment, Args(["id": .string(att.id)]))
+            try store.removeAttachment(id: att.id, relPath: att.relPath)   // also unlinks the file
             attachments = store.attachments(for: txn.id)
         } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
     }
