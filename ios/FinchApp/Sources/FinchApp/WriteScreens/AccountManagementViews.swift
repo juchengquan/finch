@@ -41,79 +41,15 @@ struct ArchivedAccountsView: View {
     }
 }
 
-/// Create / rename / delete account groups.
+/// Create / rename / delete account groups (via the shared GroupAdminView).
 struct AccountGroupsView: View {
     @EnvironmentObject private var store: FinchStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var newName = ""
-    @State private var errorMessage: String?
-
     var body: some View {
-        Form {
-            Section("Add group") {
-                HStack {
-                    TextField("Group name", text: $newName)
-                    Button("Add", action: add)
-                        .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            Section("Groups") {
-                if store.accountGroups.isEmpty {
-                    Text("No groups yet").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.accountGroups) { g in
-                        GroupRowEditor(group: g, onError: { errorMessage = $0 })
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) { delete(g) } label: { Label("Delete", systemImage: "trash") }
-                            }
-                    }
-                }
-            }
-            if let errorMessage {
-                Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-            }
-        }
-        .navigationTitle("Account Groups")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-    }
-
-    private func add() {
-        let name = newName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        do {
-            try store.apply(.createAccountGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(name)]))
-            newName = ""
-        } catch { errorMessage = i18nMessage(error) }
-    }
-
-    private func delete(_ g: AccountGroupRow) {
-        do { try store.apply(.deleteAccountGroup, Args(["id": .string(g.id)])) }
-        catch { errorMessage = i18nMessage(error) }
-    }
-}
-
-/// One group row: rename in place (commits on submit).
-private struct GroupRowEditor: View {
-    @EnvironmentObject private var store: FinchStore
-    let group: AccountGroupRow
-    let onError: (String) -> Void
-    @State private var name: String
-
-    init(group: AccountGroupRow, onError: @escaping (String) -> Void) {
-        self.group = group; self.onError = onError
-        _name = State(initialValue: group.name)
-    }
-
-    var body: some View {
-        TextField("Name", text: $name)
-            .onSubmit(rename)
-    }
-
-    private func rename() {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, trimmed != group.name else { name = group.name; return }
-        do { try store.apply(.updateAccountGroup, Args(["id": .string(group.id), "patch": .object(["name": .string(trimmed)])])) }
-        catch { onError(i18nMessage(error)); name = group.name }
+        GroupAdminView(
+            title: "Account Groups",
+            groups: store.accountGroups,
+            onCreate: { try store.apply(.createAccountGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string($0)])) },
+            onRename: { try store.apply(.updateAccountGroup, Args(["id": .string($0), "patch": .object(["name": .string($1)])])) },
+            onDelete: { try store.apply(.deleteAccountGroup, Args(["id": .string($0)])) })
     }
 }

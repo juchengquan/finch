@@ -215,4 +215,25 @@ public enum Selectors {
         let over = budget.type == "expense" && used > base
         return BudgetProgress(from: win.from, to: win.to, base: base, used: used, remaining: remaining, pct: pct, over: over)
     }
+
+    /// The transactions `budgetProgress` counts for the current cycle (same
+    /// predicate), newest first — for the budget detail screen. Empty for a
+    /// one-shot income goal (tracked via `saved`, not transactions).
+    public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
+                                                 _ categories: [CategoryNode] = []) -> [Tx] {
+        if budget.type == "income" && budget.isRecurring == 0 { return [] }
+        let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
+        let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
+        let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
+        var out: [Tx] = []
+        for t in txns {
+            if ledgerOf(t) != budget.ledgerId { continue }
+            if (t.pending ?? false) || kindOf(t) == "transfer" || kindOf(t) == "adjustment" { continue }
+            if t.date < win.from || t.date > win.to { continue }
+            if let accountSet, !accountSet.contains(t.account) { continue }
+            let amt = matchedAmount(t, matchSet)
+            if budget.type == "expense" ? (amt < 0) : (amt > 0) { out.append(t) }
+        }
+        return out.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
+    }
 }

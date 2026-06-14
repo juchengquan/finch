@@ -12,6 +12,9 @@ import FinchCore
 struct BudgetsTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
+    @State private var showingGroups = false
+    @State private var editing: BudgetRow?
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -29,12 +32,17 @@ struct BudgetsTab: View {
                         ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
                             Section(groupName) {
                                 ForEach(store.budgets(in: groupName)) { budget in
-                                    BudgetRowView(budget: budget)
-                                        .swipeActions(edge: .trailing) {
-                                            Button(role: .destructive) { delete(budget) } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
+                                    NavigationLink { BudgetDetailView(budgetId: budget.id) } label: {
+                                        BudgetRowView(budget: budget)
+                                    }
+                                    .swipeActions(edge: .trailing) {
+                                        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
+                                        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+                                    }
+                                    .contextMenu {
+                                        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }
+                                        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
+                                    }
                                 }
                             }
                         }
@@ -52,17 +60,26 @@ struct BudgetsTab: View {
             .navigationTitle("Budgets")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add Budget")
+                    Menu {
+                        Button { showingAdd = true } label: { Label("Add Budget", systemImage: "plus") }
+                        Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+                    } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add or manage budgets")
                         .disabled(store.ledgers.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingAdd) { AddBudgetSheet() }
+            .sheet(isPresented: $showingAdd) { BudgetSheet() }
+            .sheet(item: $editing) { BudgetSheet(budget: $0) }
+            .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
+            .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+                Button("OK") { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
         }
     }
 
     private func delete(_ budget: BudgetRow) {
-        try? store.apply(.removeBudget, Args(["id": .string(budget.id)]))
+        do { try store.apply(.removeBudget, Args(["id": .string(budget.id)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 
