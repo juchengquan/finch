@@ -63,12 +63,13 @@ public enum Entries {
         public var id: String?             // preserve the posting id across a rebuild
         public var origAmount: Double?     // foreign-currency entry: amount as entered
         public var origCurrency: String?   // …and the currency it was entered in
+        public var clearedAt: String?      // reconcile mark — preserved across rebuilds
         public init(accountId: String, amount: Double, amountBase: Double? = nil,
                     exchangeRate: Double? = nil, memo: String? = nil, id: String? = nil,
-                    origAmount: Double? = nil, origCurrency: String? = nil) {
+                    origAmount: Double? = nil, origCurrency: String? = nil, clearedAt: String? = nil) {
             self.accountId = accountId; self.amount = amount; self.amountBase = amountBase
             self.exchangeRate = exchangeRate; self.memo = memo; self.id = id
-            self.origAmount = origAmount; self.origCurrency = origCurrency
+            self.origAmount = origAmount; self.origCurrency = origCurrency; self.clearedAt = clearedAt
         }
     }
     public struct CategoryLeg: Sendable {
@@ -93,6 +94,7 @@ public enum Entries {
         var memo: String?
         var origAmount: Double? = nil
         var origCurrency: String? = nil
+        var clearedAt: String? = nil
     }
 
     /// `autoBalanceCategoryId`: `.none` = don't add; `.category(id?)` = append one
@@ -219,7 +221,7 @@ public enum Entries {
                 legs.append(ResolvedLeg(id: a.id ?? newId("p"), accountId: a.accountId, categoryId: nil,
                     amount: r2(a.amount), currency: currency, amountBase: r2(amountBase!),
                     exchangeRate: rate!, memo: a.memo,
-                    origAmount: a.origAmount.map(r2), origCurrency: a.origCurrency))
+                    origAmount: a.origAmount.map(r2), origCurrency: a.origCurrency, clearedAt: a.clearedAt))
             case .category(let c):
                 if let cid = c.categoryId {
                     guard let catLedger = try String.fetchOne(db, sql:
@@ -302,9 +304,9 @@ public enum Entries {
         for (i, l) in legs.enumerated() {
             try db.execute(sql: """
                 INSERT INTO postings (id,entry_id,account_id,category_id,amount,currency,amount_base,exchange_rate,orig_amount,orig_currency,memo,cleared_at,sort_order)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, arguments: [l.id, entryId, l.accountId, l.categoryId, l.amount, l.currency,
-                                 l.amountBase, l.exchangeRate, l.origAmount, l.origCurrency, l.memo, i])
+                                 l.amountBase, l.exchangeRate, l.origAmount, l.origCurrency, l.memo, l.clearedAt, i])
         }
     }
 
