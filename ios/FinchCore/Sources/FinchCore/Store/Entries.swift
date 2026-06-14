@@ -6,9 +6,9 @@ import GRDB
 // (counterparty) → FX residue → validate shape → insert + seal in a SAVEPOINT.
 //
 // SCOPE: the full posting path including the rules-engine branch (applyRules) on
-// income/expense/refund insert. DEFERRED: the cross-currency `rateToHub`
-// derived-rate insert / static fallback — single-currency entries (currency ==
-// base) take the identity FX path. The deferral is marked inline.
+// income/expense/refund insert, and the cross-currency `rateToHub` lookup
+// (on-or-before → on-or-after → static fallback) with write-through of the
+// resolved derived rate. Single-currency entries take the identity FX path.
 
 public enum Entries {
     public enum Kind: String, Sendable { case opening, income, expense, transfer, adjustment, refund }
@@ -516,8 +516,8 @@ public enum Entries {
 
     /// The opening-balance entry (`open-<accountId>`), one account leg against
     /// the `opening` equity category. Idempotent; zero amount → no entry (nil).
-    /// NOTE: the web marks the opening leg cleared (reconcile anchor); my
-    /// simplified leg drops cleared_at (DEFERRED) — the balance is unaffected.
+    /// The opening leg is pre-cleared (cleared_at = ts) — it IS the reconcile
+    /// anchor (web entries.ts:481).
     @discardableResult
     public static func postOpening(_ db: Database, ledgerId: String, accountId: String, amount: Double,
                                    date: String, timestamp: String? = nil) throws -> String? {
@@ -528,7 +528,7 @@ public enum Entries {
         let ts = timestamp ?? ISO8601DateFormatter().string(from: Date())
         return try postEntry(db, NewEntry(
             id: id, ledgerId: ledgerId, date: date, description: "Opening balance", kind: .opening,
-            legs: [.account(AccountLeg(accountId: accountId, amount: r2(amount)))],
+            legs: [.account(AccountLeg(accountId: accountId, amount: r2(amount), clearedAt: ts))],
             autoBalance: .category(sys.opening), timestamp: ts, skipRules: true))
     }
 

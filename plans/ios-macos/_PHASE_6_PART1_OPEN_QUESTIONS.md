@@ -32,10 +32,10 @@ with the default I chose, to reconcile at the end.
   change-base.** `confirmSensitive()` now gates both **Export** and
   **changeLedgerBase** (the ledger editor) when sensitive-actions is on. A future
   delete-all should call it too.
-- ⏳ **`onIdle` precision.** Implemented as "now − lastActivity > timeout",
-  re-evaluated on foreground/interaction rather than via a live idle timer (no
-  background timer firing while truly idle). Adequate for a lock-on-return model;
-  a true idle timer is a refinement.
+- ✅ **`onIdle` precision.** "now − lastActivity > timeout", where lastActivity
+  is reset by a root tap gesture (`noteActivity`) and a 30 s foreground timer
+  (`tick`) re-evaluates the lock while the app stays open (#173). A finer-grained
+  idle clock (every interaction kind, sub-30 s) remains a possible refinement.
 
 ## 6.4 — App Intents
 
