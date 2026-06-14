@@ -52,6 +52,20 @@ function BudgetCard({
   const p = budgetProgress(budget, txns, today, categories);
   const isIncome = budget.type === 'income';
   const barPct = Math.min(p.pct, 100);
+  // Ported from iOS: 3-color banding for expense budgets (green < 70, amber
+  // 70–90, red > 90 / over) instead of the 2-state primary/destructive bar.
+  const barColor = isIncome
+    ? 'bg-success'
+    : p.over || p.pct > 90
+      ? 'bg-destructive'
+      : p.pct >= 70
+        ? 'bg-warning'
+        : 'bg-primary';
+  // Ported from iOS: whole days left in the cycle (UTC, floored at 0).
+  const daysLeft = Math.max(
+    0,
+    Math.ceil((Date.parse(`${p.to}T00:00:00Z`) - Date.parse(`${today.slice(0, 10)}T00:00:00Z`)) / 86_400_000),
+  );
   return (
     <Link href={`/budgets/${budget.id}`} className="mb-2 block">
       <div className="bg-card border-border rounded-xl border p-3.5">
@@ -70,13 +84,10 @@ function BudgetCard({
           </div>
         </div>
         <div className="text-muted-foreground mt-0.5 text-[10px] capitalize">
-          {budget.frequency} · {p.from.slice(5)}–{p.to.slice(5)}
+          {budget.frequency} · {p.from.slice(5)}–{p.to.slice(5)} · {t('daysLeft', { days: daysLeft })}
         </div>
         <div className="bg-secondary relative mt-2 h-[3px] overflow-hidden rounded-sm">
-          <div
-            className={cn('h-full', p.over ? 'bg-destructive' : isIncome ? 'bg-success' : 'bg-primary')}
-            style={{ width: `${barPct}%` }}
-          />
+          <div className={cn('h-full', barColor)} style={{ width: `${barPct}%` }} />
         </div>
         <div className={cn('mt-1 text-[11px]', p.over ? 'text-destructive' : 'text-muted-foreground')}>
           {isIncome

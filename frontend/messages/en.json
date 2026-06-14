@@ -617,7 +617,8 @@
       "pendingAria": "Amount change pending",
       "pctOfTarget": "{pct}% of target",
       "over": "{amount} over",
-      "left": "{amount} left"
+      "left": "{amount} left",
+      "daysLeft": "{days, plural, one {# day left} other {# days left}}"
     },
     "groupActionsAria": "Group actions: {name}",
     "groupActions": {
