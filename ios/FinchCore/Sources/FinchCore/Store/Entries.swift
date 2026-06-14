@@ -564,7 +564,8 @@ public enum Entries {
     private static func rowToResolved(_ r: Row) -> ResolvedLeg {
         ResolvedLeg(id: r["id"], accountId: r["account_id"], categoryId: r["category_id"],
                     amount: r["amount"], currency: r["currency"], amountBase: r["amount_base"],
-                    exchangeRate: (r["exchange_rate"] as Double?) ?? 1, memo: r["memo"])
+                    exchangeRate: (r["exchange_rate"] as Double?) ?? 1, memo: r["memo"],
+                    origAmount: r["orig_amount"], origCurrency: r["orig_currency"], clearedAt: r["cleared_at"])
     }
 
     /// Unseal → patch header → (maybe) rewrite legs → reseal → recompute touched
@@ -622,7 +623,10 @@ public enum Entries {
                         let catId: String? = r["category_id"]
                         if catId != nil && catId == fxId { return nil }
                         if let acctId: String = r["account_id"] {
-                            return .account(AccountLeg(accountId: acctId, amount: r["amount"], memo: r["memo"], id: r["id"]))
+                            // Preserve the foreign-entry display fields + reconcile mark across a
+                            // date-only re-lock (amount_base/rate are recomputed; these are not).
+                            return .account(AccountLeg(accountId: acctId, amount: r["amount"], memo: r["memo"], id: r["id"],
+                                origAmount: r["orig_amount"], origCurrency: r["orig_currency"], clearedAt: r["cleared_at"]))
                         }
                         return .category(CategoryLeg(categoryId: catId, amountBase: r["amount_base"], memo: r["memo"], id: r["id"]))
                     }

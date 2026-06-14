@@ -27,6 +27,10 @@ public enum PendingAttachmentImporter {
             do {
                 // 1. placeholder pending transaction (user fills in the amount later).
                 let merchant = m.originalFilename.map { ($0 as NSString).deletingPathExtension } ?? "Receipt"
+                // Snapshot existing ids so we can identify the new row by set-diff —
+                // matching on merchant name attaches to the wrong tx when two
+                // receipts derive the same name (e.g. two "Receipt.jpg").
+                let before = Set(store.txns.map { $0.id })
                 try store.apply(.addTransaction, Args([
                     "ledgerId": .string(store.activeLedgerId), "accountId": .string(account.id),
                     "amount": .double(0), "merchant": .string(merchant),
@@ -34,7 +38,7 @@ public enum PendingAttachmentImporter {
                     "date": .string(Self.today()), "status": .string("pending"), "skipRules": .bool(true)]))
                 // The new tx id (an account-posting id); setEntryAttachment resolves
                 // it to the entry. Use it for the attachment path too.
-                guard let txId = store.txns.first(where: { $0.merchant == merchant })?.id else { continue }
+                guard let txId = store.txns.first(where: { !before.contains($0.id) })?.id else { continue }
 
                 // 2. move the staged file into attachments/<txId>/<id>.<ext>.
                 let ext = (m.relPath as NSString).pathExtension

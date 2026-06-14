@@ -10,15 +10,15 @@ public enum Transfers {
     ]
 
     /// Re-amount a transfer's two account legs (ratio-scaling the other side when
-    /// only one is given), preserving pinned rates, then rebuild. NOTE: my
-    /// simplified leg drops cleared_at (DEFERRED) — a cleared transfer leg loses
-    /// that flag on rebuild.
+    /// only one is given), preserving pinned rates, then rebuild. Each leg's
+    /// reconcile mark (cleared_at) is carried through, so editing a cleared
+    /// transfer keeps both legs cleared.
     static func update(_ db: Database, _ args: Args) throws {
         guard let id = args.idString else { throw I18nError("error.invalidArgs", [:], "updateTransfer requires an id") }
         let patch = args.patchObject
         guard let ref = try Entries.resolveEntryRef(db, id) else { return }
         let entryId = ref.entryId
-        let legs = try Row.fetchAll(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, currency, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order", arguments: [entryId])
+        let legs = try Row.fetchAll(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, currency, memo, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL ORDER BY sort_order", arguments: [entryId])
         if legs.count < 2 { return }
         let fromLeg = legs.first { ($0["amount"] as Double) < 0 } ?? legs[0]
         let toLeg = legs.first { ($0["amount"] as Double) > 0 } ?? legs[legs.count - 1]
@@ -47,8 +47,8 @@ public enum Transfers {
 
         var ep = Entries.EntryPatch()
         ep.legs = .set([
-            .account(Entries.AccountLeg(accountId: fromLeg["account_id"], amount: -newFromNative, amountBase: -newFromBase, exchangeRate: newFromRate, memo: fromLeg["memo"], id: fromLeg["id"])),
-            .account(Entries.AccountLeg(accountId: toLeg["account_id"], amount: newToNative, amountBase: newToBase, exchangeRate: newToRate, memo: toLeg["memo"], id: toLeg["id"])),
+            .account(Entries.AccountLeg(accountId: fromLeg["account_id"], amount: -newFromNative, amountBase: -newFromBase, exchangeRate: newFromRate, memo: fromLeg["memo"], id: fromLeg["id"], clearedAt: fromLeg["cleared_at"])),
+            .account(Entries.AccountLeg(accountId: toLeg["account_id"], amount: newToNative, amountBase: newToBase, exchangeRate: newToRate, memo: toLeg["memo"], id: toLeg["id"], clearedAt: toLeg["cleared_at"])),
         ])
         if let d = patch["date"]?.asString { ep.date = .set(d) }
         if patch.keys.contains("time") { ep.time = .set(patch["time"]?.asString) }

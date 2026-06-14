@@ -10,6 +10,9 @@ struct FinchApp: App {
     @StateObject private var router = DeepLinkRouter.shared
     @StateObject private var gate = BiometricGate.shared
     @Environment(\.scenePhase) private var scenePhase
+    // Foreground idle timer so an `.onIdle` lock timeout fires while the app
+    // stays open; tick() is a no-op for the other policies.
+    private let idleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some Scene {
         WindowGroup {
@@ -18,10 +21,15 @@ struct FinchApp: App {
                     .environmentObject(store)
                     .environmentObject(router)
                     .environmentObject(gate)
+                    // Note any tap to reset the idle clock. simultaneousGesture +
+                    // TapGesture recognizes alongside child controls without
+                    // consuming taps or blocking scrolls.
+                    .simultaneousGesture(TapGesture().onEnded { gate.noteActivity() })
                 if gate.isLocked {   // Phase 6.3: biometric cover
                     LockView().environmentObject(gate)
                 }
             }
+            .onReceive(idleTimer) { _ in gate.tick() }
             .task {
                 store.bootstrap()   // re-open the persisted live DB on launch
                 gate.start()        // Phase 6.3: evaluate lock state

@@ -97,11 +97,12 @@ public enum Rules {
 
             if case .set(let catId) = patch.categoryId {
                 let catCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE entry_id = ? AND category_id IS NOT NULL", arguments: [entryId]) ?? 0
-                if catCount < 2, let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) {
+                if catCount < 2, let acct = try Row.fetchOne(db, sql: "SELECT id, account_id, amount, amount_base, exchange_rate, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? AND account_id IS NOT NULL LIMIT 1", arguments: [entryId]) {
                     let acctBase: Double = acct["amount_base"]
                     var ep = Entries.EntryPatch()
                     ep.legs = .set([
-                        .account(Entries.AccountLeg(accountId: acct["account_id"], amount: acct["amount"], amountBase: acctBase, exchangeRate: (acct["exchange_rate"] as Double?) ?? 1, memo: acct["memo"], id: acct["id"])),
+                        .account(Entries.AccountLeg(accountId: acct["account_id"], amount: acct["amount"], amountBase: acctBase, exchangeRate: (acct["exchange_rate"] as Double?) ?? 1, memo: acct["memo"], id: acct["id"],
+                            origAmount: acct["orig_amount"], origCurrency: acct["orig_currency"], clearedAt: acct["cleared_at"])),
                         .category(Entries.CategoryLeg(categoryId: catId, amountBase: -acctBase)),
                     ])
                     try Entries.rebuildEntry(db, entryId, ep)
