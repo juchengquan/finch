@@ -54,6 +54,15 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const p = budgetProgress(budget, ledgerTxns, today, allCategories);
   const isIncome = budget.type === 'income';
   const oneShot = isIncome && budget.isRecurring === 0;
+  // Ported from iOS: 3-color banding for expense budgets (matches the budgets
+  // list card) — green < 70, amber 70–90, red > 90 / over. Income stays success.
+  const ringColor = isIncome
+    ? 'var(--success)'
+    : p.over || p.pct > 90
+      ? 'var(--destructive)'
+      : p.pct >= 70
+        ? 'var(--warning)'
+        : 'var(--primary)';
 
   const accountSet = new Set(budget.accountIds);
   const categorySet = new Set(budget.categoryIds);
@@ -98,7 +107,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
             max={p.base}
             size={104}
             stroke={10}
-            color={p.over ? 'var(--destructive)' : isIncome ? 'var(--success)' : 'var(--primary)'}
+            color={ringColor}
             track="var(--secondary)"
           >
             <div className="text-center">
