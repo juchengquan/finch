@@ -2,6 +2,19 @@
 
 > _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
 
+> **⚠️ CURRENT STATUS (2026-06-14):** the **engine** is complete + parity-tested,
+> but a feature audit found the **UI is a read-mostly shell** — whole domains
+> (accounts, budget edit, counterparties, display-currency, splits/tags) have no
+> UI yet. Read first: **`IOS_MACOS_UI_GAP_AUDIT.md`** (what's missing) +
+> **`IOS_MACOS_UI_REMEDIATION_PLAN.md`** (the build-out). The earlier "full
+> parity" framing described the engine, not the app.
+>
+> **Docs are no longer parity-only:** iOS/macOS may now add features ahead of the
+> web and feed them back to `frontend/`. Track net-new native work in the
+> remediation plan and flag it for back-port.
+>
+> - `plans/ios-macos/IOS_MACOS_UI_GAP_AUDIT.md` — **authoritative capability/gap matrix (read first)**
+> - `plans/ios-macos/IOS_MACOS_UI_REMEDIATION_PLAN.md` — **the prioritized UI build-out**
 > - `plans/ios-macos/IOS_MACOS_PLAN.md` — the direction brief (§1-§16)
 > - `plans/ios-macos/IOS_MACOS_ROADMAP.md` — the 8-phase arc sketch
 > - `plans/ios-macos/IOS_MACOS_WIRE_FORMAT.md` — the wire-format annex (reference)

@@ -1,0 +1,123 @@
+# iOS / macOS — UI build-out remediation plan (2026-06-14)
+
+> Closes the gaps in `IOS_MACOS_UI_GAP_AUDIT.md`. Prioritized; Tier 1 first.
+
+## Framing
+
+- **The docs are no longer parity-only.** iOS/macOS may add features ahead of
+  web; anything net-new should be flagged here for **back-port to `frontend/`**.
+  Most items below, though, are wiring up engine actions the web already has.
+- **Most Tier-1/2 work is pure UI over already-tested engine actions** —
+  `Apply.swift` already dispatches all 75 actions byte-parity-verified. So these
+  are mostly new SwiftUI screens calling `store.apply(...)`: **low engine risk,
+  CI-buildable on the simulator** (no account/signing needed). Items that need a
+  new engine action, a new chart primitive, a device, or a paid account are
+  flagged ⚙️/📈/📱/💳.
+- **Verification:** new screens should ship with the same patterns we already
+  use — engine actions are covered by `FinchCore` tests; add `ActionCoverage`-style
+  tests for any new action, and extend the write-parity oracle when a new action
+  path is exercised. UI builds verified by `xcodebuild build/test` (sim).
+
+---
+
+## Tier 1 — make the app usable (blocking)
+
+These are the "a user literally cannot do this" gaps. Do this tier before
+anything else; without it the app isn't a usable finance app.
+
+1. **Account CRUD + groups.** Add screens: Add/Edit Account sheet (name, type,
+   currency, group, opening balance, color), archive/unarchive + delete with
+   confirm; Account-group create/rename/reorder/delete. Wire `createAccount` /
+   `updateAccount` / `archiveAccount` / `unarchiveAccount` / `deleteAccount` /
+   `*AccountGroup`. Entry points: a `+` in `AccountsTab` toolbar + row
+   swipe/context actions. *(All actions exist + tested.)*
+2. **Account detail screen** (foundational — Tier 2 drill-in depends on it).
+   Tap an account → balance + sparkline, its transactions (filtered), holdings,
+   per-account reconcile, edit/archive. Make `AccountsTab` rows `NavigationLink`s.
+3. **Budget edit + contribute + cycle + groups.** Edit sheet (`updateBudget`),
+   a "Contribute" action for income/goal budgets (`contributeBudget`), cycle
+   controls (`updateBudgetCycle` / `clearPendingAmount`), budget-group CRUD.
+   Make `BudgetsTab` rows tappable → Budget detail (progress ring + matched
+   transactions for the cycle).
+4. **Display-currency picker.** Replace the read-only `LabeledContent` in
+   Settings › Ledger with a picker calling `setDisplayCurrency`; make
+   `FinchStore.displayCurrency` read the store value (it currently `return
+   baseCurrency`) — see `displayCurrencyByLedger` (the web's per-ledger model).
+   ⚙️ small store change, no new engine action.
+5. **Transaction splits + tags in Edit.** Add a splits editor (`setTransactionSplits`)
+   and a tag picker (`setTransactionTags`) to `EditTransactionSheet`.
+6. **Counterparty / merchant admin screen.** List + search + rename + delete +
+   verify/unverify (`*Counterparty`); reachable from Settings or the Ledger
+   group. Wire `confirmPendingWithMerchant` into the pending flow.
+7. **Scheduled edit (+ splits).** Edit sheet (`updateScheduled`) and split
+   editing (`addScheduledSplit` / `removeScheduledSplit` / `updateScheduledSplit`);
+   make `ScheduledTab` rows tappable.
+8. **Surface quick-action failures.** The swipe/menu/toggle quick actions use
+   `try?` and silently no-op on rejection (`ScheduledTab`, `BudgetsTab`,
+   `ActivityTab`, `RulesManagerView`). Route them through a shared error toast
+   (reuse `i18nMessage`).
+
+---
+
+## Tier 2 — drill-in + the "smart" features (high value, data already exists)
+
+9. **Consume `focusedId`.** Make Spotlight/notification/deep-link taps actually
+   reach the entity: each tab observes `router.focusedId` and scrolls-to /
+   selects / opens the detail. (Unblocks the OS-integration last mile too.)
+10. **Wire suggestCategory + findDuplicate into entry.** `AddTransactionSheet`:
+    show the suggested category (`suggestCategory`) as a default/chip, and a
+    soft "looks like a duplicate" nudge (`findDuplicate`) before save.
+11. **Anomaly badge in Activity.** Flag rows with a high `anomalyScore` /
+    `merchantStats` z-score (already computed for notifications).
+12. **Forecast with scheduled.** Pass the real scheduled templates (not `[]`) to
+    `monthForecast`; add the per-account `accountForecast` + low-balance trough
+    to Account detail.
+13. **Insights parity cards.** Add the missing cards using existing selectors:
+    weekly-digest (`weeklyDigest`), category deltas (`topCategoryDeltas`),
+    net-worth-by-type; the cashflow metric + 3M/6M/1Y range switcher. 📈 Two new
+    chart primitives needed for the last two: **Sankey** (`incomeCategoryFlow`)
+    and **CalendarHeatmap** (`dailySpending`).
+
+---
+
+## Tier 3 — OS-integration last mile (mostly small, high perceived quality)
+
+14. **Widget freshness.** Call `WidgetSnapshotWriter.write` + `WidgetCenter.shared.reloadAllTimelines()` from `FinchStore.apply` (after each mutation), not only on backup.
+15. **Spotlight on import/delete.** Call `SpotlightIndexer.clearAll()` + reindex in the pack-import path (`swapInAndProject`); `deindex` on row delete.
+16. **Biometric coverage.** Have Siri/App Intents consult `BiometricGate.isLocked` for sensitive reads/writes; ensure the lock cover sits above presented sheets; consider redacting the lock-screen widget. 📱 verify on device.
+17. **Notification-permission denial.** Detect `.denied` and surface a "notifications are off → Settings" hint instead of silently dropping every alert.
+
+---
+
+## Tier 4 — non-functional (cross-cutting; do alongside)
+
+18. **Localization layer.** Add `Localizable.xcstrings` (or `.strings`) for `en` + `zh-CN`, reusing the web's `frontend/messages/*.json`; map the 77 `I18nError` codes → localized strings in `i18nMessage`; convert UI string literals to `LocalizedStringKey`. (This is also the first real **iOS-leads** opportunity if we improve on the web's copy — back-port the strings.)
+19. **Locale decimal parsing.** Replace `Double(string)` with a `NumberFormatter`(locale-aware) for all 11 numeric fields; round-trip the prefill formatting to match.
+20. **Chart accessibility.** Add `.accessibilityLabel/Value` (or `AXChartDescriptor`) to the five chart views; add a non-color cue to Sparkline trend + Donut slices (render the `label`).
+21. **Projection cost.** Make `reprojectActiveLedger` incremental or debounced (don't rebuild all ledgers' transactions on every write); memoize `ActivityTab`'s per-keystroke `filtered`/`daySections`.
+22. **Loading/sync state.** Add an `isHydrating`/`isSyncing` flag + spinners; stop swallowing iCloud import failures.
+
+---
+
+## macOS / iPad — make it more than "iPhone stretched" (after Tier 1–2 detail screens exist)
+
+23. **Real detail pane** — 3-column `NavigationSplitView` on regular width: sidebar (sections) → list → detail; the Tier-2 detail screens render in the detail column instead of pushing.
+24. **Menu bar** — add `SidebarCommands()`, a Settings (⌘,) scene, per-screen actions (Reconcile, Import, Add Scheduled, Recategorize…) as menu items + shortcuts; `.defaultSize`/`minWidth`/`windowResizability`.
+25. **Context menus + keyboard** — add `.contextMenu` row actions everywhere (mirror the swipe actions), arrow-key list navigation + row shortcuts; fix the `.bottomBar` placement on Mac.
+
+---
+
+## Suggested sequencing (PR slices)
+
+1. **Account CRUD + Account detail** (Tier 1 #1–2) — unblocks usability + Tier-2 drill-in.
+2. **Budget edit/contribute + Budget detail** (#3).
+3. **Display currency + splits/tags + scheduled edit + counterparty admin** (#4–7) + quick-action error toast (#8).
+4. **Drill-in/focusedId + smart features** (#9–12).
+5. **Insights cards + 2 chart primitives** (#13).
+6. **OS last-mile** (#14–17).
+7. **Localization + decimal + a11y + perf + loading** (#18–22), can interleave.
+8. **macOS/iPad polish** (#23–25).
+
+Each slice is its own green-CI PR. Tiers 1–3 + most of 4 are sim-buildable and
+unit-testable with no account/signing; only the biometric/device-feel checks
+(#16) and any CloudKit work need provisioning.
