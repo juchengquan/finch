@@ -1,0 +1,96 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add a transaction to ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中记一笔交易"
+          }
+        }
+      }
+    },
+    "Check my balance in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中查看余额"
+          }
+        }
+      }
+    },
+    "Create a budget in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中创建预算"
+          }
+        }
+      }
+    },
+    "Log an expense in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中记一笔支出"
+          }
+        }
+      }
+    },
+    "Mark my transactions cleared in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中将交易标记为已清算"
+          }
+        }
+      }
+    },
+    "Open a screen in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中打开一个页面"
+          }
+        }
+      }
+    },
+    "Show my insights in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中显示我的洞察"
+          }
+        }
+      }
+    },
+    "Switch ledger in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中切换账本"
+          }
+        }
+      }
+    },
+    "What's my balance in ${applicationName}" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 ${applicationName} 中我的余额是多少"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
