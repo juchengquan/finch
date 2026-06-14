@@ -4,10 +4,11 @@ import CryptoKit
 import FinchCore
 
 /// Edit Transaction (port of the web edit-transaction-form). Editable: merchant,
-/// note, date/time, amount, category, and receipt attachments. (Account change is
-/// supported by the engine but not surfaced in this sheet.) Also exposes the
-/// lifecycle actions: confirm a pending entry, toggle reviewed, and delete. All
-/// writes go through FinchStore.apply.
+/// note, date/time, amount, category, tags, receipt attachments, and splitting
+/// across categories (a split tx hides amount/category since its legs own them).
+/// (Account change is supported by the engine but not surfaced here.) Also
+/// exposes confirm / toggle-reviewed / delete. All writes go through
+/// FinchStore.apply.
 struct EditTransactionSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +20,8 @@ struct EditTransactionSheet: View {
     @State private var date: Date
     @State private var categoryId: String
     @State private var amountText: String
+    @State private var selectedTags: Set<String>
+    @State private var showingSplit = false
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
@@ -26,6 +29,8 @@ struct EditTransactionSheet: View {
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
+    /// A split transaction owns its categories via legs — hide amount/category here.
+    private var isSplit: Bool { (txn.splits?.count ?? 0) >= 2 }
 
     init(txn: Tx) {
         self.txn = txn
@@ -34,6 +39,7 @@ struct EditTransactionSheet: View {
         _date = State(initialValue: Self.parse(txn.date, txn.time) ?? Date())
         _categoryId = State(initialValue: txn.category ?? "")
         _amountText = State(initialValue: String(format: "%g", abs(txn.nativeAmount ?? txn.amount)))
+        _selectedTags = State(initialValue: Set(txn.tags ?? []))
     }
 
     private var categories: [CategoryRow] {
@@ -48,14 +54,41 @@ struct EditTransactionSheet: View {
                     TextField("Note (optional)", text: $note, axis: .vertical)
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 }
-                Section("Amount & category") {
-                    HStack {
-                        Text("Amount")
-                        Spacer()
-                        TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                if isSplit {
+                    Section("Split") {
+                        Button { showingSplit = true } label: {
+                            HStack {
+                                Text("Split across \(txn.splits?.count ?? 0) categories")
+                                Spacer()
+                                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                            }
+                        }
                     }
-                    Picker("Category", selection: $categoryId) {
-                        ForEach(categories) { Text($0.name).tag($0.id) }
+                } else {
+                    Section("Amount & category") {
+                        HStack {
+                            Text("Amount")
+                            Spacer()
+                            TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        }
+                        Picker("Category", selection: $categoryId) {
+                            ForEach(categories) { Text($0.name).tag($0.id) }
+                        }
+                        Button("Split across categories…") { showingSplit = true }
+                    }
+                }
+
+                if !store.tags.isEmpty {
+                    Section("Tags") {
+                        ForEach(store.tags) { tag in
+                            Button { toggleTag(tag.id) } label: {
+                                HStack {
+                                    Text(tag.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -101,6 +134,7 @@ struct EditTransactionSheet: View {
                     catch { errorMessage = i18nMessage(error) }
                 }
             }
+            .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
             .onAppear { attachments = store.attachments(for: txn.id) }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
@@ -150,11 +184,21 @@ struct EditTransactionSheet: View {
             if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
         }
         // Category edit — updateTransaction now rebuilds the category leg too.
-        if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
+        // (Skip amount/category on a split tx — its legs are owned by the split.)
+        if isSplit { patch["amount"] = nil }
+        if !isSplit, !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
+            if selectedTags != Set(txn.tags ?? []) {
+                try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
+                    "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
+            }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func toggleTag(_ id: String) {
+        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).
