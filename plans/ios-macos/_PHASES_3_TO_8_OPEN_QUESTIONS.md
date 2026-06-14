@@ -30,8 +30,11 @@ watchOS — the iOS CI scheme doesn't build them) or *real iCloud/CloudKit runti
   `FinchStore` a singleton with a single shared `activeLedgerId` (no per-window
   ledger) — multi-window would require de-singletoning the store, a large change.
   Revisit if per-window ledgers are wanted.
-- ⏳ **⌘K command palette / full keyboard-shortcut set.** The full Mac ⌘K
-  palette + menu commands are deferred with the Mac target.
+- ✅ **⌘K command palette + menu bar + keyboard shortcuts.** FinchCommands adds
+  a menu bar (Go menu ⌘1–6 tabs, New Transaction ⌘N, Command Palette ⌘K) driving
+  the shared router; CommandPalette is a ⌘K searchable list (pure filter, tested).
+  Cross-platform (iPad hardware keyboard too); verified by local Mac build + the
+  iOS scheme. Only the two Mac *distribution* pipelines remain.
 
 ## Phase 4 — Power features (7 in the design; this pass ships 3)
 
