@@ -46,11 +46,14 @@ public enum Selectors {
         if let t = opts.to { out = out.filter { $0.date <= t } }
         if let lo = opts.minAmount { out = out.filter { abs($0.amount) >= lo } }
         if let hi = opts.maxAmount { out = out.filter { abs($0.amount) <= hi } }
-        out.sort { a, b in
-            if a.date != b.date { return a.date > b.date }      // date DESC
-            let at = a.time ?? "", bt = b.time ?? ""
-            return at > bt                                       // time DESC
-        }
+        // Stable sort: equal (date,time) rows keep input order, matching the
+        // web's stable Array.sort (its comparator returns 0 for ties).
+        out = out.enumerated().sorted { a, b in
+            if a.element.date != b.element.date { return a.element.date > b.element.date }  // date DESC
+            let at = a.element.time ?? "", bt = b.element.time ?? ""
+            if at != bt { return at > bt }                                                 // time DESC
+            return a.offset < b.offset
+        }.map { $0.element }
         if let limit = opts.limit {
             let off = opts.offset ?? 0
             out = Array(out.dropFirst(off).prefix(limit))

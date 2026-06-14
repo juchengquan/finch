@@ -21,12 +21,15 @@ final class WriteParityTests: XCTestCase {
         try q.write { db in for sql in fx.seedSql { try db.execute(sql: sql) } }
         for step in fx.sequence {
             guard case .object(var o) = step.args else { continue }
-            // Resolve $lastAccountPosting to the most-recent account-leg posting id.
-            for (k, v) in o where v == .string("$lastAccountPosting") {
-                if let pid = try q.read({ db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1") }) {
-                    o[k] = .string(pid)
-                }
+            // Resolve $lastAccountPosting to the most-recent account-leg posting id,
+            // including inside arrays (e.g. bulkRecategorize.ids).
+            let pid = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id IS NOT NULL ORDER BY rowid DESC LIMIT 1") }
+            func resolve(_ v: JSONValue) -> JSONValue {
+                if v == .string("$lastAccountPosting"), let pid { return .string(pid) }
+                if case .array(let arr) = v { return .array(arr.map(resolve)) }
+                return v
             }
+            for (k, v) in o { o[k] = resolve(v) }
             try Apply.apply(dbQueue: q, action: step.action, args: Args(o))
         }
 
