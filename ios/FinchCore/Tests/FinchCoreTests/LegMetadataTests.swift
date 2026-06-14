@@ -71,4 +71,20 @@ final class LegMetadataTests: XCTestCase {
         try Apply.apply(dbQueue: q, action: "changeLedgerBase", args: Args(["ledgerId": .string("l1"), "newBase": .string("EUR")]))
         XCTAssertNotNil(try clearedAt(q, pid), "changing the ledger base must not un-reconcile every leg")
     }
+
+    /// The opening-balance leg is the reconcile anchor — pre-cleared (web parity).
+    func test_openingLeg_isPreCleared() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createAccount", args: Args([
+            "id": .string("a2"), "ledgerId": .string("l1"), "name": .string("Savings"),
+            "type": .string("savings"), "currency": .string("USD"), "openingBalance": .double(1000),
+        ]))
+        try q.read { db in
+            let cleared = try String.fetchOne(db, sql: """
+                SELECT p.cleared_at FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE e.kind = 'opening' AND p.account_id = 'a2'
+                """)
+            XCTAssertNotNil(cleared, "the opening account leg must be pre-cleared")
+        }
+    }
 }

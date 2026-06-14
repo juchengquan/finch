@@ -3,11 +3,11 @@ import PhotosUI
 import CryptoKit
 import FinchCore
 
-/// Edit Transaction (port of the web edit-transaction-form, scoped to what the
-/// iOS engine supports). Editable: merchant, note, date/time. Amount/category/
-/// account edits are DEFERRED in the chokepoint (notImplemented.txMoneyEdit), so
-/// they're shown read-only. Also exposes the lifecycle actions: confirm a pending
-/// entry, toggle reviewed, and delete. All writes go through FinchStore.apply.
+/// Edit Transaction (port of the web edit-transaction-form). Editable: merchant,
+/// note, date/time, amount, category, and receipt attachments. (Account change is
+/// supported by the engine but not surfaced in this sheet.) Also exposes the
+/// lifecycle actions: confirm a pending entry, toggle reviewed, and delete. All
+/// writes go through FinchStore.apply.
 struct EditTransactionSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss

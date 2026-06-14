@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Per-tab "no pack loaded yet" placeholder (Phase 1.0 ships read-only; the
-/// first thing a user does is import a `.finch` from Settings).
+/// Per-tab "no data yet" placeholder, shown before a ledger has any data — a new
+/// user adds accounts/transactions directly or imports a `.finch` from Settings.
 struct EmptyState: View {
     enum Tab { case accounts, activity, budgets, scheduled }
     let tab: Tab

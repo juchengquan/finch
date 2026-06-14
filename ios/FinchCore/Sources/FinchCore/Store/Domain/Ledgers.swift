@@ -12,11 +12,12 @@ public enum Ledgers {
     ]
 
     /// Re-derive every entry's amount_base at the new base: account legs re-lock
-    /// (omit amountBase), category legs reconvert old→new base at the entry date,
-    /// fx residue legs are dropped (rebuildEntry re-derives them).
+    /// (omit amountBase) via the full rateToHub path, category legs reconvert
+    /// old→new base at the entry date, fx residue legs are dropped (rebuildEntry
+    /// re-derives them); the foreign-entry display fields + reconcile marks are
+    /// preserved per leg.
     /// DEFERRED: the final auditLedger safety check (Audit needs a DatabaseQueue;
-    /// the seal trigger + per-entry recompute already enforce balance) — and the
-    /// FX path is the simplified rateToHub (no derived-rate insert / static map).
+    /// the seal trigger + per-entry recompute already enforce balance).
     static func changeBase(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let ledgerId: String; let newBase: String }
         let a = try args.to(A.self)

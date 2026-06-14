@@ -54,15 +54,16 @@ actions; the other 4 are documented below for a follow-up increment.
   (StatementCSV, header/positional, $/comma/date formats) → match against existing
   txns (StatementMatcher, amount ±1¢ within ±3 days) → Apply (matched → setCleared,
   unmatched → addTransaction). Parser + matcher are pure + unit-tested.
-- 🔧 **Transfers CRUD edit/delete UI.** `createTransfer` is wired (Add screen);
-  a dedicated edit/delete transfers manager is deferred.
+- 🔧 **Transfers CRUD edit/delete UI.** The engine actions `updateTransfer` /
+  `deleteTransfer` exist and are tested; only a dedicated edit/delete transfers
+  manager screen is unbuilt (`createTransfer` is wired via the Add screen).
 - ✅ **Bulk recategorize + in-place category edit.** *(Correction: was NOT
   actually blocked — the engine already ships a working `bulkRecategorize` action
   that rebuilds the category leg.)* Per the user decision to un-defer category
   editing: EditTransaction's category is now an editable picker (applies via
   `bulkRecategorize` on save), and Activity has a Select mode → multi-select →
-  Recategorize sheet. `updateTransaction` still defers *amount* edits only.
-  Tested (single + bulk).
+  Recategorize sheet. `updateTransaction` now rebuilds amount / currency /
+  account edits too (#167). Tested (single + bulk).
 - ✅ **Tag admin** (create/rename/delete) + **Saved searches** (UserDefaults,
   Activity toolbar menu; pure upsert tested). Phase 4 is now 6 of 7 features.
 - 🔧 **Per-account base override + category/tag merge.** No chokepoint action

@@ -2,8 +2,8 @@ import Foundation
 import GRDB
 
 /// Budgets domain — port of lib/db/domain/budgets/mutations.ts (the budget
-/// actions; the budget-group actions live in Groups.swift). DEFERRED: the
-/// withDedupMessage wrapping on create.
+/// actions; the budget-group actions live in Groups.swift). create() wraps its
+/// INSERT in Dedup.wrap for a friendly duplicate-name error.
 public enum Budgets {
 
     /// Reset the cached rollover (last_rolled_period → NULL, carry_forward → 0)
