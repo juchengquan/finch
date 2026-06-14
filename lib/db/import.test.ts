@@ -75,21 +75,27 @@ test('importDbBytes rejects a tampered file (checksum mismatch)', async () => {
   await getServerDb();
   const { bytes } = await exportDbBytes();
   const { openDb, execFor } = await import('./core/driver');
-  const tamperPath = path.join(os.tmpdir(), `finch-tamper-${Date.now()}.sqlite3`);
+  // Scratch file lives in the per-test tmpDir (not shared os.tmpdir()) so it +
+  // its -wal/-shm sidecars are swept by afterEach's `fs.rm(tmpDir)` even when
+  // the assertion below throws — no manual unlinks, no cross-test leakage.
+  const tamperPath = path.join(tmpDir, 'tamper.sqlite3');
   await fs.writeFile(tamperPath, Buffer.from(bytes));
   const driver = await openDb(tamperPath);
   try {
     const exec = execFor(driver);
     await exec("UPDATE accounts SET name = 'tampered' WHERE id = 'chk'");
     driver.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    // Precondition: the tamper must actually have changed a row. If the seed
+    // ever produced a DB without account 'chk', the file would be byte-identical
+    // and the import would (correctly) pass its checksum — turning this test's
+    // intent into a silent false-negative. Assert loudly instead.
+    const [row] = await exec("SELECT name FROM accounts WHERE id = 'chk'");
+    expect(row?.name).toBe('tampered');
   } finally {
     driver.close();
   }
   const tampered = new Uint8Array(await fs.readFile(tamperPath));
   await expect(importDbBytes(tampered)).rejects.toThrow(/checksum|corrupted|tamper/i);
-  await fs.unlink(tamperPath).catch(() => {});
-  await fs.unlink(`${tamperPath}-wal`).catch(() => {});
-  await fs.unlink(`${tamperPath}-shm`).catch(() => {});
 });
 
 test('importDbBytes runs autoBackup before swapping', async () => {
