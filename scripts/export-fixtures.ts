@@ -453,6 +453,12 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // byte against the oracle.
   { action: 'setExchangeRate', args: { date: '2026-05-08', currency: 'JPY', rate: 0.0065 } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -3820, currency: 'JPY', merchant: 'Yodobashi', categoryId: 'food', date: '2026-05-08', skipRules: true } },
+  // Clear the income tx, then reconcile a2 to a statement balance — exercises
+  // setCleared + reconcileAccount (posts a cleared 'reconcile' adjustment for the
+  // gap) byte-for-byte against the oracle.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -30, merchant: 'ClearMe', categoryId: 'food', date: '2026-05-09', skipRules: true } },
+  { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
+  { action: 'reconcileAccount', args: { accountId: 'a2', statementBalance: 500, statementDate: '2026-05-31', postAdjustment: true } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the
