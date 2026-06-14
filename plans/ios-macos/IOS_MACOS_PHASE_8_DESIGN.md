@@ -510,6 +510,7 @@ doable now (no account) and work that is gated on the **Apple Developer Program
 ($99/yr) + a real iCloud login**. Investigation of the current tree:
 
 **Already buildable + CI-verified today, with no account** (`Sync/CloudKitSync.swift`,
+`Sync/CloudKitSyncCoordinator.swift`, `FinchStore+Sync.swift`,
 `Tests/FinchAppTests/CloudKitSyncTests.swift`, run by `xcodebuild test` on the
 unsigned simulator):
 - `CloudKitRecordMapper` — row ↔ `CKRecord` mapping (recordType = table,
@@ -519,6 +520,19 @@ unsigned simulator):
   `CKContainer`, calls `privateCloudDatabase.modifyRecords`) with the
   iCloud/CloudKit entitlements present and **no provisioning profile** — every
   method just no-ops via an `accountAvailable()` guard.
+- **Scaffold added 2026-06-14** (this pass): `SyncPreferences` (the single
+  on/off switch, per-device UserDefaults), `SyncStatus` + `CloudKitSyncCoordinator`
+  (the daemon lifecycle + the status the Settings UI renders; enable/disable/
+  resync/start entry points, all inert without an account), `CloudKitBootstrap.tables`
+  (canonical tables minus app_state), and `FinchStore.syncableRows(table:)` (pure
+  row extraction → string dicts → `CKRecord`). The **Settings › Sync** section
+  (single switch + status + Resync, design §4) is built. Tests cover the bootstrap
+  table set, the row extraction + mapper round-trip, and switch persistence. The
+  live network loop (pull, `CKSubscription`, `CKSyncEngine` state, the
+  chokepoint→CloudKit mutation bus) is left as `PROVISIONING-GATED` stubs — per
+  the conclusion below, building it before provisioning would be coding blind.
+  The Phase 5 iCloud-Drive *file* sync stays active (retired only once the
+  CloudKit live loop functions; removing it now would lose real sync).
 
 **Gated on the paid program + iCloud account (NOT possible now, and never in CI):**
 - Creating the `iCloud.com.juchengquan.finch` container in the developer portal.

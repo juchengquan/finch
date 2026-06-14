@@ -9,6 +9,7 @@ struct SettingsTab: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
     @StateObject private var notifications = NotificationService.shared
+    @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
     @State private var importError: String?
 
     var body: some View {
@@ -31,6 +32,31 @@ struct SettingsTab: View {
                         ForEach(store.availableDisplayCurrencies, id: \.self) { Text($0).tag($0) }
                     }
                     NavigationLink("Manage ledgers") { LedgerManagementView() }
+                }
+
+                Section {
+                    Toggle("Sync across devices (iCloud)", isOn: Binding(
+                        get: { cloudSync.enabled },
+                        set: { on in Task { await cloudSync.setEnabled(on, store: store) } }))
+                    if cloudSync.isBootstrapping {
+                        HStack { ProgressView(); Text("Setting up iCloud sync…").foregroundStyle(.secondary) }
+                    }
+                    if cloudSync.enabled {
+                        LabeledContent("Status", value: cloudSync.status.accountAvailable
+                                       ? "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers"
+                                       : "iCloud account required")
+                        LabeledContent("Pending changes", value: "\(cloudSync.status.pendingChanges)")
+                        LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(date: .abbreviated, time: .shortened) ?? "—")
+                        if let err = cloudSync.status.lastError {
+                            Text(err).foregroundStyle(.red).font(.caption)
+                        }
+                        Button("Resync ledger") { Task { await cloudSync.resync(store: store) } }
+                            .disabled(!cloudSync.status.accountAvailable)
+                    }
+                } header: {
+                    Text("Sync")
+                } footer: {
+                    Text("Row-level live sync over iCloud (CloudKit). Scaffold — the network layer activates once the CloudKit container is provisioned; without an iCloud account it stays inactive. Your data is always exportable as a .finch file below.")
                 }
 
                 Section {
