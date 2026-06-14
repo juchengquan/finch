@@ -44,6 +44,7 @@ struct FinchApp: App {
                 await NotificationService.shared.refresh()
                 AutoBackupManager.shared.configure(store: store)   // Phase 5
                 ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
+                await CloudKitSyncCoordinator.shared.start()        // Phase 8: row-level sync (scaffold; inert without an iCloud account)
                 PendingAttachmentImporter.importPending(into: store)   // Phase 6.5: import shared receipts
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
