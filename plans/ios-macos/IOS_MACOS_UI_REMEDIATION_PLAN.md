@@ -107,7 +107,17 @@ anything else; without it the app isn't a usable finance app.
     name "finch data pack", extension bundle names — remain en-only.)*
 19. **Locale decimal parsing.** Replace `Double(string)` with a `NumberFormatter`(locale-aware) for all 11 numeric fields; round-trip the prefill formatting to match.
 20. **Chart accessibility.** Add `.accessibilityLabel/Value` (or `AXChartDescriptor`) to the five chart views; add a non-color cue to Sparkline trend + Donut slices (render the `label`).
-21. **Projection cost.** Make `reprojectActiveLedger` incremental or debounced (don't rebuild all ledgers' transactions on every write); memoize `ActivityTab`'s per-keystroke `filtered`/`daySections`.
+21. ✅ **Projection cost (done).** `Projection.run` gained an optional `ledgerId`
+    scope; `reprojectActiveLedger` now re-projects only the **active** ledger's
+    transactions (every mutation targets the active ledger), not all ledgers'.
+    `ledgerId == nil` still projects everything, so the parity oracle + FinchCore
+    tests are unchanged (148 green). As a free bonus this fixed a parity bug:
+    `ActivityTab` read `store.txns` unfiltered and so showed *all* ledgers'
+    transactions; it now shows only the active ledger, matching the web
+    (`activity/page.tsx` filters by ledger). `ActivityTab`'s `filtered`/
+    `daySections` were computed every render (twice, per keystroke) — now memoized
+    into `@State` recomputed only on `txns`/query/page-size changes via
+    `onReceive`/`onChange`.
 22. **Loading/sync state.** Add an `isHydrating`/`isSyncing` flag + spinners; stop swallowing iCloud import failures.
 
 ---
