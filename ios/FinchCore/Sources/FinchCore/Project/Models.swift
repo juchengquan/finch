@@ -94,6 +94,15 @@ public struct ListOptions: Codable, Equatable, Sendable {
     public var maxAmount: Double?
     public var limit: Int?
     public var offset: Int?
+    public init(ledgerId: String, direction: String? = nil, query: String? = nil,
+                accountId: String? = nil, categoryId: String? = nil, status: String? = nil,
+                from: String? = nil, to: String? = nil, minAmount: Double? = nil,
+                maxAmount: Double? = nil, limit: Int? = nil, offset: Int? = nil) {
+        self.ledgerId = ledgerId; self.direction = direction; self.query = query
+        self.accountId = accountId; self.categoryId = categoryId; self.status = status
+        self.from = from; self.to = to; self.minAmount = minAmount; self.maxAmount = maxAmount
+        self.limit = limit; self.offset = offset
+    }
 }
 
 /// A `{ id, parentId }` node — the recursive-budget category-matching input.
@@ -133,4 +142,11 @@ public struct BudgetProgress: Codable, Equatable, Sendable {
     public var remaining: Double
     public var pct: Int
     public var over: Bool
+}
+
+/// A named account group (id + name) — for the group picker + group admin UI.
+public struct AccountGroupRow: Identifiable, Codable, Equatable, Sendable {
+    public var id: String
+    public var name: String
+    public init(id: String, name: String) { self.id = id; self.name = name }
 }

@@ -26,6 +26,15 @@ extension Projection {
     /// `accounts` — `balance` is the stored `current_balance` (kept in sync by
     /// the posting triggers); `groupName` from the LEFT JOIN. Active only.
     public static func accounts(dbQueue: DatabaseQueue, ledgerId: String) throws -> [AccountRow] {
+        try accountRows(dbQueue: dbQueue, ledgerId: ledgerId, active: true)
+    }
+
+    /// Archived (is_active = 0) accounts — for the unarchive view.
+    public static func archivedAccounts(dbQueue: DatabaseQueue, ledgerId: String) throws -> [AccountRow] {
+        try accountRows(dbQueue: dbQueue, ledgerId: ledgerId, active: false)
+    }
+
+    private static func accountRows(dbQueue: DatabaseQueue, ledgerId: String, active: Bool) throws -> [AccountRow] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency,
@@ -34,9 +43,9 @@ extension Projection {
                        a.include_in_net_worth AS inw, a.is_active AS isActive
                   FROM accounts a
                   LEFT JOIN account_groups g ON a.group_id = g.id
-                 WHERE a.ledger_id = ? AND a.is_active = 1
+                 WHERE a.ledger_id = ? AND a.is_active = ?
                  ORDER BY g.sort_order, a.sort_order, a.name
-                """, arguments: [ledgerId]).map { r in
+                """, arguments: [ledgerId, active ? 1 : 0]).map { r in
                 AccountRow(
                     id: r["id"], balance: r["balance"], ledgerId: r["ledgerId"],
                     currency: r["currency"], includeInNetWorth: r["inw"],
@@ -44,6 +53,15 @@ extension Projection {
                     type: r["type"], groupId: r["groupId"], groupName: r["groupName"],
                     sortOrder: r["sortOrder"])
             }
+        }
+    }
+
+    /// Account groups (id + name), ordered — for the group picker + group admin.
+    public static func accountGroups(dbQueue: DatabaseQueue, ledgerId: String) throws -> [AccountGroupRow] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT id, name FROM account_groups WHERE ledger_id = ? ORDER BY sort_order, name
+                """, arguments: [ledgerId]).map { AccountGroupRow(id: $0["id"], name: $0["name"]) }
         }
     }
 
