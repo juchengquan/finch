@@ -23,7 +23,17 @@ public final class BiometricGate: ObservableObject {
     /// Call once at launch.
     public func start() { reevaluate() }
 
+    /// Record a user interaction — resets the `.onIdle` clock. Called from the
+    /// shell's root tap gesture.
     public func noteActivity() { lastActivityAt = Date() }
+
+    /// Re-check the lock state. Called by the foreground idle timer so an
+    /// `.onIdle` timeout actually fires while the app stays open (the lifecycle
+    /// hooks alone never re-evaluate a still-foregrounded app).
+    public func tick() {
+        guard settings.policy == .onIdle, hasUnlockedThisSession else { return }
+        reevaluate()
+    }
 
     public func didEnterBackground() { backgroundedAt = Date() }
 

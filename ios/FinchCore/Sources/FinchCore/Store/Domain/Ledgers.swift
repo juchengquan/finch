@@ -35,9 +35,12 @@ public enum Ledgers {
         for e in try Row.fetchAll(db, sql: "SELECT id, date FROM entries WHERE ledger_id = ? ORDER BY date, id", arguments: [ledgerId]) {
             let entryId: String = e["id"], entryDate: String = e["date"]
             var legs: [Entries.Leg] = []
-            for p in try Row.fetchAll(db, sql: "SELECT id, account_id, category_id, amount, amount_base, memo FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId]) {
+            for p in try Row.fetchAll(db, sql: "SELECT id, account_id, category_id, amount, amount_base, memo, orig_amount, orig_currency, cleared_at FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId]) {
                 if let acctId = p["account_id"] as String? {
-                    legs.append(.account(Entries.AccountLeg(accountId: acctId, amount: p["amount"], memo: p["memo"], id: p["id"])))   // omit amountBase → re-lock
+                    // omit amountBase → re-lock at the new base; preserve the foreign-entry
+                    // display fields + reconcile mark (web queries/ledgers.ts:230-238).
+                    legs.append(.account(Entries.AccountLeg(accountId: acctId, amount: p["amount"], memo: p["memo"], id: p["id"],
+                        origAmount: p["orig_amount"], origCurrency: p["orig_currency"], clearedAt: p["cleared_at"])))
                 } else {
                     let catId = p["category_id"] as String?
                     if let fx = fxCatId, catId == fx { continue }   // drop fx residue

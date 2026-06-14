@@ -38,7 +38,7 @@ public final class AutoBackupManager: ObservableObject {
         self.store = store
         lastBackupAt = (try? FileManager.default.contentsOfDirectory(atPath: backupsDir.path))?
             .filter { $0.hasSuffix(".finch") }.max()
-            .flatMap { _ in (try? FileManager.default.attributesOfItem(atPath: backupsDir.path)[.modificationDate]) as? Date }
+            .flatMap { name in (try? FileManager.default.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)[.modificationDate]) as? Date }
     }
 
     /// Coalesce a burst of writes into one pack a short interval later.
