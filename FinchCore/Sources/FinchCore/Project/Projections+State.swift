@@ -66,6 +66,16 @@ extension Projection {
         try groupRows(dbQueue: dbQueue, ledgerId: ledgerId, table: "budget_groups")
     }
 
+    /// The per-ledger display-currency map (`app_state.displayCurrencyByLedger`).
+    public static func displayCurrencyByLedger(dbQueue: DatabaseQueue) throws -> [String: String] {
+        try dbQueue.read { db in
+            guard let raw = try String.fetchOne(db, sql: "SELECT value FROM app_state WHERE key = 'displayCurrencyByLedger'"),
+                  let data = raw.data(using: .utf8),
+                  let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+            return map
+        }
+    }
+
     private static func groupRows(dbQueue: DatabaseQueue, ledgerId: String, table: String) throws -> [GroupRow] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT id, name FROM \(table) WHERE ledger_id = ? ORDER BY sort_order, name",
