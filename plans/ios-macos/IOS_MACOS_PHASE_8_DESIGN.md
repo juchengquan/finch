@@ -550,8 +550,11 @@ unsigned simulator):
 
 **Live loop BUILT BUT UNVERIFIED (2026-06-15)** — built against the
 "provision first" recommendation below, per an explicit "build it anyway"
-decision. It **compiles** against the real SDK (verified locally) and is inert
-without an account, but has **never been run or two-device tested**. Model:
+decision. **To make it real, follow the runbook:
+`IOS_MACOS_PHASE_8_CLOUDKIT_SETUP.md`** (container, signing, schema, the
+remaining `PROVISIONING-GATED` code, two-device testing). It **compiles** against
+the real SDK (verified locally) and is inert without an account, but has **never
+been run or two-device tested**. Model:
 mutation-log replay (not raw-row sync) — every local `apply` becomes a
 `SyncMutation` (`Sync/SyncMutation.swift`: action + args + per-device seq),
 pushed as a "Mutation" `CKRecord` in the ledger's zone; remote mutations are
