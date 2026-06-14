@@ -155,6 +155,10 @@ struct TxRow: View {
                     if txn.pending == true {
                         Image(systemName: "clock").font(.caption2).foregroundStyle(.orange)
                     }
+                    if store.isAnomaly(txn) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
+                            .accessibilityLabel("Unusual amount")
+                    }
                 }
                 if let cat = store.categoryName(txn.category) {
                     Text(cat).font(.caption2)
