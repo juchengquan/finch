@@ -101,9 +101,22 @@ anything else; without it the app isn't a usable finance app.
 
 ## macOS / iPad — make it more than "iPhone stretched" (after Tier 1–2 detail screens exist)
 
-23. **Real detail pane** — 3-column `NavigationSplitView` on regular width: sidebar (sections) → list → detail; the Tier-2 detail screens render in the detail column instead of pushing.
-24. **Menu bar** — add `SidebarCommands()`, a Settings (⌘,) scene, per-screen actions (Reconcile, Import, Add Scheduled, Recategorize…) as menu items + shortcuts; `.defaultSize`/`minWidth`/`windowResizability`.
-25. **Context menus + keyboard** — add `.contextMenu` row actions everywhere (mirror the swipe actions), arrow-key list navigation + row shortcuts; fix the `.bottomBar` placement on Mac.
+23. ⏳ **Real detail pane (DEFERRED)** — a true 3-column `NavigationSplitView`
+    (sidebar → list → detail) requires restructuring all six tabs into list+detail
+    pairs — a large rewrite. The current 2-column shell (sidebar of tabs + the
+    tab's own `NavigationStack`, which now drills into the Tier-1/2 detail screens)
+    is functional, so this is deferred as a sizable follow-up rather than risked
+    now. (Same judgment as the Tier-4 projection refactor.)
+24. ✅ **Menu bar + windowing (done)** — `SidebarCommands()` (sidebar toggle +
+    View menu), ⌘, → Settings (focuses the Settings tab; finch keeps Settings
+    in-app, not a separate Preferences window), `.defaultSize` / min content size
+    / `.windowResizability`. (Per-screen action shortcuts beyond ⌘N/⌘K/⌘1-6/⌘,
+    can be added incrementally.)
+25. ✅/⏳ **Context menus + keyboard** — `.contextMenu` row actions now on every
+    list (Activity added; Accounts/Budgets/Scheduled/groups already had them).
+    Arrow-key list navigation + per-row shortcuts remain a follow-up (SwiftUI
+    `List` focus management is non-trivial). The `.bottomBar` mapping on Mac is
+    acceptable (PlatformCompat → `.automatic`).
 
 ---
 
