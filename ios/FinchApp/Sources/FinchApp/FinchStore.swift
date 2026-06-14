@@ -1,6 +1,7 @@
 import Foundation
 import FinchCore
 import GRDB
+import WidgetKit
 
 /// The in-memory working model behind the 4 tabs. Holds the projected state for
 /// the active ledger and owns the import/export pipeline (DESIGN §4):
@@ -108,6 +109,10 @@ public final class FinchStore: ObservableObject {
         Task { await SpotlightIndexer.shared.indexAll(store: self) }
         // Phase 6.2: re-plan notifications from the new state.
         Task { await NotificationService.shared.refresh() }
+        // Tier 2/3: refresh the home-screen + Watch widget on every write (was
+        // only on backup, so the widget could show stale figures for up to an hour).
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
         // Phase 5: debounce an auto-backup pack.
         AutoBackupManager.shared.schedule()
     }
@@ -173,6 +178,11 @@ public final class FinchStore: ObservableObject {
         let first = ledgers.first?.id ?? ""
         if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
         self.dbInfo = makeDBInfo()
+        // Refresh OS surfaces for the new dataset: authoritative Spotlight
+        // re-index (drops the old pack's entities) + widget snapshot.
+        Task { await SpotlightIndexer.shared.indexAll(store: self) }
+        WidgetSnapshotWriter.write(from: self)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func reprojectActiveLedger() {
