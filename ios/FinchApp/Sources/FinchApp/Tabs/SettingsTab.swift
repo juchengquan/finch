@@ -23,7 +23,11 @@ struct SettingsTab: View {
                             Text(ledger.name).tag(ledger.id)
                         }
                     }
-                    LabeledContent("Display currency", value: store.displayCurrency)
+                    Picker("Display currency", selection: Binding(
+                        get: { store.displayCurrency },
+                        set: { store.setDisplayCurrency($0) })) {
+                        ForEach(store.availableDisplayCurrencies, id: \.self) { Text($0).tag($0) }
+                    }
                     NavigationLink("Manage ledgers") { LedgerManagementView() }
                 }
 

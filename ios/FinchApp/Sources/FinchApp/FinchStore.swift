@@ -33,6 +33,7 @@ public final class FinchStore: ObservableObject {
     private var counterparties: [Counterparty] = []
     private var budgetGroupNames: [String: String] = [:]
     private var rateMap: [String: Double] = [:]
+    private var displayCurrencyByLedger: [String: String] = [:]
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
@@ -189,6 +190,7 @@ public final class FinchStore: ObservableObject {
         self.rules = (try? Projection.rules(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.tags = (try? Projection.tags(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.rateMap = Money.latestRateMap(exchangeRates)
+        self.displayCurrencyByLedger = (try? Projection.displayCurrencyByLedger(dbQueue: q)) ?? [:]
     }
 
     /// close live; rename live → finch.sqlite3.bak.<unix-ts>; move stagedDB →
@@ -290,8 +292,20 @@ public final class FinchStore: ObservableObject {
     public var baseCurrency: String {
         ledgers.first { $0.id == activeLedgerId }?.base ?? Money.hubCurrency
     }
-    /// Per-ledger display currency — Phase 1.0 defaults to the active ledger base.
-    public var displayCurrency: String { baseCurrency }
+    /// Per-ledger display currency (DB-backed via app_state.displayCurrencyByLedger);
+    /// defaults to the active ledger's base until the user picks one.
+    public var displayCurrency: String { displayCurrencyByLedger[activeLedgerId] ?? baseCurrency }
+
+    /// Currencies offerable as a display currency: the ledger base + any currency
+    /// with an exchange rate (so the conversion actually resolves).
+    public var availableDisplayCurrencies: [String] {
+        [baseCurrency] + Set(exchangeRates.map(\.currency)).subtracting([baseCurrency]).sorted()
+    }
+
+    /// Set the active ledger's display currency (per-ledger).
+    public func setDisplayCurrency(_ currency: String) {
+        try? apply(.setDisplayCurrency, Args(["ledgerId": .string(activeLedgerId), "currency": .string(currency)]))
+    }
 
     /// `today` for budget windows = the max confirmed-tx date (the web anchors
     /// the window on the data, so the oracle's budgetProgress lines up); falls
