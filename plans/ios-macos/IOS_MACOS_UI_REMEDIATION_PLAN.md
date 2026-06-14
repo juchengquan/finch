@@ -130,12 +130,19 @@ anything else; without it the app isn't a usable finance app.
 
 ## macOS / iPad — make it more than "iPhone stretched" (after Tier 1–2 detail screens exist)
 
-23. ⏳ **Real detail pane (DEFERRED)** — a true 3-column `NavigationSplitView`
-    (sidebar → list → detail) requires restructuring all six tabs into list+detail
-    pairs — a large rewrite. The current 2-column shell (sidebar of tabs + the
-    tab's own `NavigationStack`, which now drills into the Tier-1/2 detail screens)
-    is functional, so this is deferred as a sizable follow-up rather than risked
-    now. (Same judgment as the Tier-4 projection refactor.)
+23. ✅ **Real detail pane (done)** — true three-column `NavigationSplitView`
+    (sidebar │ list │ detail) on regular width for the two tabs that actually
+    have a list→detail relationship: **Accounts** and **Budgets**. Selecting a
+    row now shows its detail beside the list instead of replacing it. The
+    dashboard / sheet-based tabs (**Insights, Settings, Activity, Scheduled**)
+    deliberately keep two columns (sidebar │ full-width content) — Activity and
+    Scheduled edit via sheets (no detail screen), and a dashboard squeezed into a
+    narrow middle column would be worse. The **compact (iPhone) shell is
+    untouched** — it still uses `AccountsTab`/`BudgetsTab` (NavigationStack +
+    push), so there's no iPhone risk. New code: `Shell/MasterDetailShell.swift`
+    (`SectionSidebar`, `ThreeColumnShell`, `AccountsListColumn`,
+    `BudgetsListColumn`); `SplitViewShell` branches by tab. Per-tab selection
+    persists across section switches and resets on a ledger switch.
 24. ✅ **Menu bar + windowing (done)** — `SidebarCommands()` (sidebar toggle +
     View menu), ⌘, → Settings (focuses the Settings tab; finch keeps Settings
     in-app, not a separate Preferences window), `.defaultSize` / min content size

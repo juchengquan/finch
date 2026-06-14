@@ -31,24 +31,55 @@ struct TabBarShell: View {
     }
 }
 
-/// The iPad/Mac shell — a sidebar of the 6 tabs + a detail column rendering the
-/// selected tab. Detail-screen drill-in (Transaction/Account Detail) lands with
-/// Phase 4's detail views; until then the detail column shows the tab itself.
+/// The iPad/Mac shell. Accounts and Budgets get a true three-column
+/// master–detail (sidebar │ list │ detail — see MasterDetailShell); the
+/// dashboard / sheet-based tabs (Insights, Settings, Activity, Scheduled) keep
+/// two columns (sidebar │ full-width content), which suits their wide layouts.
+/// Selection persists per tab across section switches.
 struct SplitViewShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var store: FinchStore
+    @State private var accountSelection: String?
+    @State private var budgetSelection: String?
+
     var body: some View {
-        NavigationSplitView {
-            List(AppTab.allCases, selection: Binding<AppTab?>(
-                get: { router.selectedTab },
-                set: { if let t = $0 { router.selectedTab = t } })) { tab in
-                Label(tab.title, systemImage: tab.icon)
+        Group {
+            switch router.selectedTab {
+            case .accounts:
+                ThreeColumnShell {
+                    AccountsListColumn(selection: $accountSelection)
+                } detail: {
+                    // Guard against a stale selection (e.g. after a ledger switch).
+                    if let id = accountSelection, store.accounts.contains(where: { $0.id == id }) {
+                        NavigationStack { AccountDetailView(accountId: id) }
+                    } else {
+                        DetailPlaceholder(systemImage: "creditcard", label: "Select an account")
+                    }
+                }
+            case .budgets:
+                ThreeColumnShell {
+                    BudgetsListColumn(selection: $budgetSelection)
+                } detail: {
+                    if let id = budgetSelection, store.budgets.contains(where: { $0.id == id }) {
+                        NavigationStack { BudgetDetailView(budgetId: id) }
+                    } else {
+                        DetailPlaceholder(systemImage: "chart.pie", label: "Select a budget")
+                    }
+                }
+            default:
+                NavigationSplitView {
+                    SectionSidebar()
+                } detail: {
+                    tabContent(router.selectedTab)
+                }
+                .navigationSplitViewStyle(.balanced)
             }
-            .navigationTitle("finch")
-            .listStyle(.sidebar)
-        } detail: {
-            tabContent(router.selectedTab)
         }
-        .navigationSplitViewStyle(.balanced)
+        // A ledger switch invalidates the per-tab selections.
+        .onChange(of: store.activeLedgerId) { _, _ in
+            accountSelection = nil
+            budgetSelection = nil
+        }
     }
 }
 
