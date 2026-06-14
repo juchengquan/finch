@@ -71,7 +71,8 @@
         "amount": 300,
         "categoryIds": [
           "food"
-        ]
+        ],
+        "startDate": "2026-01-01"
       }
     },
     {
@@ -202,6 +203,27 @@
         "merchant": "Morning Coffee",
         "categoryId": "pay",
         "date": "2026-05-07"
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-05-08",
+        "currency": "JPY",
+        "rate": 0.0065
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": -3820,
+        "currency": "JPY",
+        "merchant": "Yodobashi",
+        "categoryId": "food",
+        "date": "2026-05-08",
+        "skipRules": true
       }
     }
   ],
@@ -533,6 +555,49 @@
             "sort_order": 1
           }
         ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-08",
+        "time": null,
+        "description": "Yodobashi",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-24.830000",
+            "currency": "USD",
+            "amount_base": "-24.830000",
+            "exchange_rate": "1.000000",
+            "orig_amount": "-3820.000000",
+            "orig_currency": "JPY",
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "24.830000",
+            "currency": "USD",
+            "amount_base": "24.830000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
       }
     ],
     "ledgers": [
@@ -554,7 +619,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "1367.000000",
+        "current_balance": "1342.170000",
         "sort_order": 0,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -647,7 +712,7 @@
         "amount": "300.000000",
         "saved": "50.000000",
         "frequency": "monthly",
-        "start_date": "2026-06-13",
+        "start_date": "2026-01-01",
         "end_date": null,
         "is_recurring": 1,
         "rollover": 0,
@@ -671,6 +736,12 @@
         "date": "2026-05-01",
         "currency": "EUR",
         "rate": "1.100000",
+        "source": null
+      },
+      {
+        "date": "2026-05-08",
+        "currency": "JPY",
+        "rate": "0.006500",
         "source": null
       }
     ],
