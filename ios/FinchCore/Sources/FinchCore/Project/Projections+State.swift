@@ -135,6 +135,20 @@ extension Projection {
         }
     }
 
+    /// Attachments for a transaction. `txId` may be a client Tx id (account
+    /// posting id) or an entry id — resolved to the entry like the chokepoint does.
+    public static func attachments(dbQueue: DatabaseQueue, txId: String) throws -> [AttachmentRow] {
+        try dbQueue.read { db in
+            let entryId = (try String.fetchOne(db, sql: "SELECT entry_id FROM postings WHERE id = ?", arguments: [txId])) ?? txId
+            return try Row.fetchAll(db, sql: """
+                SELECT id, kind, rel_path, original_filename FROM entry_attachments
+                 WHERE entry_id = ? ORDER BY created_at
+                """, arguments: [entryId]).map {
+                AttachmentRow(id: $0["id"], kind: $0["kind"], relPath: $0["rel_path"], originalFilename: $0["original_filename"])
+            }
+        }
+    }
+
     /// Tags for a ledger (Phase 4 tag admin), name-ordered.
     public static func tags(dbQueue: DatabaseQueue, ledgerId: String) throws -> [TagRow] {
         try dbQueue.read { db in
