@@ -18,10 +18,14 @@ struct EditTransactionSheet: View {
     @State private var note: String
     @State private var date: Date
     @State private var categoryId: String
+    @State private var amountText: String
     @State private var errorMessage: String?
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
     @State private var pickedPhoto: PhotosPickerItem?
+
+    /// The original native (account-currency) amount, the basis for the edit.
+    private var originalNative: Double { txn.nativeAmount ?? txn.amount }
 
     init(txn: Tx) {
         self.txn = txn
@@ -29,6 +33,7 @@ struct EditTransactionSheet: View {
         _note = State(initialValue: txn.note ?? "")
         _date = State(initialValue: Self.parse(txn.date, txn.time) ?? Date())
         _categoryId = State(initialValue: txn.category ?? "")
+        _amountText = State(initialValue: String(format: "%g", abs(txn.nativeAmount ?? txn.amount)))
     }
 
     private var categories: [CategoryRow] {
@@ -43,15 +48,15 @@ struct EditTransactionSheet: View {
                     TextField("Note (optional)", text: $note, axis: .vertical)
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 }
-                Section {
-                    LabeledContent("Amount", value: store.displayMoneyBase(txn.amount))
+                Section("Amount & category") {
+                    HStack {
+                        Text("Amount")
+                        Spacer()
+                        TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    }
                     Picker("Category", selection: $categoryId) {
                         ForEach(categories) { Text($0.name).tag($0.id) }
                     }
-                } header: {
-                    Text("Amount & category")
-                } footer: {
-                    Text("Amount can't be edited — delete and re-add to change it.")
                 }
 
                 Section("Receipts") {
@@ -130,18 +135,21 @@ struct EditTransactionSheet: View {
 
     private func save() {
         errorMessage = nil
-        let patch: [String: JSONValue] = [
+        var patch: [String: JSONValue] = [
             "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
             "note": note.isEmpty ? .null : .string(note),
             "date": .string(Self.day(date)),
             "time": .string(Self.time(date)),
         ]
+        // Amount edit (keep the original sign; the field is the magnitude).
+        if let parsed = Double(amountText), parsed > 0 {
+            let signed = (originalNative < 0 ? -1.0 : 1.0) * parsed
+            if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
+        }
+        // Category edit — updateTransaction now rebuilds the category leg too.
+        if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
-            // Category edits go through bulkRecategorize (rebuilds the category leg).
-            if !categoryId.isEmpty, categoryId != txn.category {
-                try store.apply(.bulkRecategorize, Args(["ids": .array([.string(txn.id)]), "categoryId": .string(categoryId)]))
-            }
             dismiss()
         } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
     }

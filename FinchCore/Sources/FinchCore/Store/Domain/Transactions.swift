@@ -272,36 +272,87 @@ public enum Transactions {
     // MARK: updateTransaction (header-only path → rebuildEntry)
 
     /// Reads the patch via JSONValue to honor key-presence (present-null = clear,
-    /// absent = keep) — which plain Decodable optionals can't distinguish.
-    /// DEFERRED: money edits (amount/category/account/currency) need the
-    /// legs-rebuild re-lock path; they throw notImplemented here.
+    /// absent = keep). Header-only edits go straight to rebuildEntry; money edits
+    /// (amount/currency/account/category) reconstruct the legs with re-locked
+    /// conversion (incl. the §5.2 foreign-currency two-step), preserving orig_*,
+    /// cleared_at and memo — a verbatim port of the web's qUpdateTransaction.
     static func updateTransaction(_ db: Database, _ args: Args) throws {
         guard case .string(let id)? = args.values["id"] else {
             throw I18nError("error.invalidArgs", [:], "updateTransaction requires an id")
         }
         guard case .object(let patch)? = args.values["patch"] else { return }
-        if patch.keys.contains(where: { ["amount", "category", "account", "currency"].contains($0) }) {
-            throw I18nError("error.notImplemented.txMoneyEdit", [:],
-                            "Editing a transaction's amount/category/account isn't supported on iOS yet")
-        }
         guard let ref = try Entries.resolveEntryRef(db, id) else { return }
         let entryId = ref.entryId
-
         func strOrNil(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s }; return nil }
+        func has(_ k: String) -> Bool { patch.keys.contains(k) }
 
+        let oldLegs = try Row.fetchAll(db, sql: "SELECT * FROM postings WHERE entry_id = ? ORDER BY sort_order", arguments: [entryId])
+        let acctLegs = oldLegs.filter { ($0["account_id"] as String?) != nil }
+        let touchesMoney = has("amount") || has("category") || has("account") || has("currency") || has("kind")
+        // Transfers (>1 account leg) only take header-only patches.
+        if acctLegs.count > 1 && touchesMoney {
+            throw I18nError("error.tx.transferLegEdit", [:], "Edit transfers from the Transfers screen")
+        }
+        let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+
+        // Header fields (shared by both paths).
         var ep = Entries.EntryPatch()
         if case .string(let s)? = patch["date"] { ep.date = .set(s) }
-        if patch.keys.contains("time") { ep.time = .set(strOrNil(patch["time"])) }
+        if has("time") { ep.time = .set(strOrNil(patch["time"])) }
         if case .string(let s)? = patch["merchant"] {
             ep.description = .set(s)
-            let ledgerId = try String.fetchOne(db, sql: "SELECT ledger_id FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
             ep.counterpartyId = .set(ledgerId.isEmpty ? nil : (try Entries.resolveCounterpartyIdByName(db, ledgerId, s)))
         }
-        if patch.keys.contains("note") { ep.notes = .set(strOrNil(patch["note"])) }
+        if has("note") { ep.notes = .set(strOrNil(patch["note"])) }
         if case .string(let s)? = patch["kind"], let k = Entries.Kind(rawValue: s) { ep.kind = .set(k) }
-        if patch.keys.contains("refundedTransactionId") { ep.refundedEntryId = .set(strOrNil(patch["refundedTransactionId"])) }
+        if has("refundedTransactionId") { ep.refundedEntryId = .set(strOrNil(patch["refundedTransactionId"])) }
         if case .string(let s)? = patch["status"], let st = Entries.Status(rawValue: s) { ep.status = .set(st) }
 
+        let rebuildLegs = has("amount") || has("currency") || has("account") || has("category")
+        guard rebuildLegs, let oldAcct = acctLegs.first else {
+            try Entries.rebuildEntry(db, entryId, ep); return
+        }
+
+        // --- Legs rebuild with re-locked conversion (web §5.2). ---
+        let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [ledgerId]) ?? "USD"
+        let oldAcctCcy: String = oldAcct["currency"]
+        let newAccountId = strOrNil(patch["account"]) ?? (oldAcct["account_id"] as String)
+        let newAcctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [newAccountId]) ?? oldAcctCcy
+        let curDate = try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [entryId]) ?? ""
+        let nativeTyped: Double = patch["amount"]?.asDouble ?? (oldAcct["amount"] as Double)
+        let patchCcy = strOrNil(patch["currency"]) ?? (has("account") ? newAcctCcy : oldAcctCcy)
+        let willRelock = has("amount") || has("currency") || has("date") || has("account")
+        let effectiveDate = strOrNil(patch["date"]) ?? curDate
+
+        var nativeAmount: Double, amountBase: Double, rate: Double
+        var origAmount: Double?, origCurrency: String?
+        if willRelock && patchCcy != newAcctCcy {
+            let toAcct = try Entries.convertToBase(db, nativeTyped, patchCcy, newAcctCcy, effectiveDate)
+            let toBase = try Entries.convertToBase(db, toAcct.amountBase, newAcctCcy, base, effectiveDate)
+            nativeAmount = toAcct.amountBase; amountBase = toBase.amountBase; rate = toBase.rate
+            origAmount = nativeTyped; origCurrency = patchCcy
+        } else if willRelock {
+            let conv = try Entries.convertToBase(db, nativeTyped, patchCcy, base, effectiveDate)
+            nativeAmount = nativeTyped; amountBase = conv.amountBase; rate = conv.rate
+            origAmount = oldAcct["orig_amount"]; origCurrency = oldAcct["orig_currency"]
+        } else {
+            nativeAmount = nativeTyped; amountBase = oldAcct["amount_base"]; rate = oldAcct["exchange_rate"]
+            origAmount = oldAcct["orig_amount"]; origCurrency = oldAcct["orig_currency"]
+        }
+
+        let plainCatLegs = oldLegs.filter { ($0["account_id"] as String?) == nil }
+        // Category patch on a split entry (≥2 category legs) is a header-only no-op.
+        if plainCatLegs.count >= 2 && has("category") { try Entries.rebuildEntry(db, entryId, ep); return }
+        let existingCat = plainCatLegs.first
+        let newCategoryId: String? = has("category") ? strOrNil(patch["category"]) : (existingCat?["category_id"] as String?)
+
+        ep.legs = .set([
+            .account(Entries.AccountLeg(accountId: newAccountId, amount: nativeAmount, amountBase: amountBase,
+                exchangeRate: rate, memo: oldAcct["memo"], id: oldAcct["id"],
+                origAmount: origAmount, origCurrency: origCurrency, clearedAt: oldAcct["cleared_at"])),
+            .category(Entries.CategoryLeg(categoryId: newCategoryId, amountBase: Entries.r2(-amountBase),
+                memo: existingCat?["memo"], id: existingCat?["id"])),
+        ])
         try Entries.rebuildEntry(db, entryId, ep)
     }
 

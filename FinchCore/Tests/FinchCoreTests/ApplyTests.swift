@@ -91,11 +91,15 @@ final class ApplyTests: XCTestCase {
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT notes FROM entries"), "morning")
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, -25, accuracy: 0.001)
         }
-        // A money edit is deferred → notImplemented.
-        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+        // A money edit now rebuilds the legs: amount -25 → -99, balance follows,
+        // entry stays balanced.
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
             "id": .string(txId), "patch": .object(["amount": .double(-99)]),
-        ]))) { err in
-            XCTAssertEqual((err as? I18nError)?.code, "error.notImplemented.txMoneyEdit")
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount FROM postings WHERE account_id = 'a1'") ?? 0, -99, accuracy: 0.001)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? 0, -99, accuracy: 0.001)
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT ROUND(SUM(amount_base),2) FROM postings p JOIN entries e ON e.id=p.entry_id WHERE e.kind='expense'") ?? -1, 0, accuracy: 0.001)
         }
     }
 
@@ -129,6 +133,27 @@ final class ApplyTests: XCTestCase {
         let attId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM entry_attachments LIMIT 1")! }
         try Apply.apply(dbQueue: q, action: "removeAttachment", args: Args(["id": .string(attId)]))
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry_attachments") }, 0)
+    }
+
+    /// An amount edit preserves the reconcile mark (cleared_at) on the account
+    /// leg across the legs rebuild — the correctness win of carrying cleared_at.
+    func test_updateTransactionPreservesClearedOnAmountEdit() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "amount": .double(-25),
+            "merchant": .string("Coffee"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true),
+        ]))
+        let txId = try q.read { db in try String.fetchOne(db, sql: "SELECT id FROM postings WHERE account_id = 'a1'")! }
+        try Apply.apply(dbQueue: q, action: "setCleared", args: Args(["id": .string(txId), "cleared": .bool(true)]))
+        XCTAssertNotNil(try q.read { db in try String.fetchOne(db, sql: "SELECT cleared_at FROM postings WHERE account_id='a1'") ?? nil })
+        try Apply.apply(dbQueue: q, action: "updateTransaction", args: Args([
+            "id": .string(txId), "patch": .object(["amount": .double(-40)]),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT amount FROM postings WHERE account_id='a1'") ?? 0, -40, accuracy: 0.001)
+            XCTAssertNotNil(try String.fetchOne(db, sql: "SELECT cleared_at FROM postings WHERE account_id='a1'") ?? nil)  // preserved
+        }
     }
 
     /// deleteTransaction (by the Tx id = account-posting id) removes the entry + recomputes.
