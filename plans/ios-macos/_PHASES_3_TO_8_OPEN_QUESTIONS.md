@@ -205,3 +205,22 @@ Genuinely remaining (true environment limits, not code):
 - EditTransaction's amount field is now editable. Tests: amount edit (balance
   follows, entry balances), cleared_at survives an amount edit; the old
   'money-edit throws' test now asserts success. swift test 105 green.
+
+
+## Post-roadmap: engine hygiene (last deferrals closed)
+
+- ✅ **Budget rollover invalidation.** Ported lib/budgets/rollover.ts
+  invalidateRollover (+ txTouches), wired into addTransaction / updateTransaction
+  / bulkRecategorize / deleteTransaction. Resets a rolled budget's cached
+  carry_forward/last_rolled_period when an edit overlaps it — mainly for imported
+  web data (iOS doesn't roll budgets itself). Uses the existing cycleWindow for
+  periodOf. Tested.
+- ✅ **Attachment file cleanup.** The engine is filesystem-agnostic, so the app
+  unlinks files: FinchStore.deleteTransaction + removeAttachment capture the
+  rel_paths and remove the on-disk files after the chokepoint drops the rows.
+  Wired into Activity swipe-delete, EditTransaction delete, and receipt-remove.
+
+All engine deferrals are now closed; the iOS port is at full functional parity
+with the web. Remaining items are infra-only (Mac distribution signing, live
+iCloud/CloudKit) or new engine actions diverging from web parity (per-account
+base / merge).

@@ -114,7 +114,7 @@ struct ActivityTab: View {
     }
 
     private func delete(_ txn: Tx) {
-        try? store.apply(.deleteTransaction, Args(["id": .string(txn.id)]))
+        try? store.deleteTransaction(txn.id)   // also unlinks receipt files
     }
     private func confirm(_ txn: Tx) {
         try? store.apply(.confirmTransaction, Args(["id": .string(txn.id)]))

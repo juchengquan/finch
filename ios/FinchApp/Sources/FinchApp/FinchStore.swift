@@ -326,6 +326,23 @@ public final class FinchStore: ObservableObject {
     public var attachmentsRoot: URL {
         liveDBURL.deletingLastPathComponent().appendingPathComponent("attachments", isDirectory: true)
     }
+    private func unlink(relPaths: [String]) {
+        let root = attachmentsRoot.deletingLastPathComponent()   // Application Support (relPath includes 'attachments/…')
+        for rel in relPaths { try? FileManager.default.removeItem(at: root.appendingPathComponent(rel)) }
+    }
+    /// Remove an attachment row AND unlink its on-disk file (the engine is
+    /// filesystem-agnostic, so file cleanup is app-side).
+    public func removeAttachment(id: String, relPath: String) throws {
+        try apply(.removeAttachment, Args(["id": .string(id)]))
+        unlink(relPaths: [relPath])
+    }
+    /// Delete a transaction AND unlink its receipts' files (captured before the
+    /// cascade delete drops the rows).
+    public func deleteTransaction(_ txId: String) throws {
+        let files = attachments(for: txId).map { $0.relPath }
+        try apply(.deleteTransaction, Args(["id": .string(txId)]))
+        unlink(relPaths: files)
+    }
     /// ledger base → display.
     public func displayMoneyBase(_ baseAmount: Double) -> String {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
