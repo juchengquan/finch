@@ -221,10 +221,20 @@ Genuinely remaining (true environment limits, not code):
   rel_paths and remove the on-disk files after the chokepoint drops the rows.
   Wired into Activity swipe-delete, EditTransaction delete, and receipt-remove.
 
-All engine deferrals are now closed; the iOS port matches the web's
-functionality except for the deliberate product divergences below. Remaining
-non-divergence items are infra-only (Mac distribution signing, live
-iCloud/CloudKit) or new engine actions (per-account base / merge).
+All **engine** deferrals are now closed. **The ENGINE is at parity; the UI is
+NOT.** ⚠️ A 2026-06-14 feature audit found the app is a *read-mostly shell over a
+complete engine* — whole domains (accounts, budgets-edit, counterparties,
+display-currency, splits/tags) have no UI to invoke the actions the engine
+supports, there are no detail screens, and several OS integrations have broken
+last-mile behavior. The earlier "full functional parity" wording here was
+**wrong** (it described the engine, not the app). See
+**`IOS_MACOS_UI_GAP_AUDIT.md`** for the capability matrix and
+**`IOS_MACOS_UI_REMEDIATION_PLAN.md`** for the build-out.
+
+Remaining work is therefore: (1) the **UI build-out** in the remediation plan
+(the bulk), plus the previously-known (2) infra-only items (Mac distribution
+signing, live iCloud/CloudKit) and (3) engine-divergence features (per-account
+base / category-tag merge).
 
 ## Deliberate product divergences (decisions, not bugs or TODOs)
 
