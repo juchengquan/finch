@@ -84,7 +84,13 @@ anything else; without it the app isn't a usable finance app.
 
 14. **Widget freshness.** Call `WidgetSnapshotWriter.write` + `WidgetCenter.shared.reloadAllTimelines()` from `FinchStore.apply` (after each mutation), not only on backup.
 15. **Spotlight on import/delete.** Call `SpotlightIndexer.clearAll()` + reindex in the pack-import path (`swapInAndProject`); `deindex` on row delete.
-16. **Biometric coverage.** Have Siri/App Intents consult `BiometricGate.isLocked` for sensitive reads/writes; ensure the lock cover sits above presented sheets; consider redacting the lock-screen widget. 📱 verify on device.
+16. ✅/⏳ **Biometric coverage.** Done: the 5 data Siri/App Intents refuse when
+    locked (`FinchIntentLock.unlocked`); the entity queries
+    (`Account`/`Category`/`Ledger`) now also return `[]` while locked, so the
+    Shortcuts/Siri parameter pickers can't enumerate names past the lock; the
+    lock cover dismisses the global sheets so it always sits on top
+    (`onChange(of: gate.isLocked)`). *(Deferred: lock-screen **widget**
+    redaction — 📱 needs a device to verify.)*
 17. **Notification-permission denial.** Detect `.denied` and surface a "notifications are off → Settings" hint instead of silently dropping every alert.
 
 ---
