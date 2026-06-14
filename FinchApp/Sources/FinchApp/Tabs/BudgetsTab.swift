@@ -9,56 +9,23 @@ import FinchCore
 /// (green < 70, yellow 70–90, red > 90) and the "N days left" caption. The web
 /// budget bar is 2-state (over ? destructive : primary) with remaining-amount
 /// text and no day countdown.
+/// One view, two layouts: with `selection == nil` (compact) budget rows push
+/// `BudgetDetailView`; with a `selection` binding (the iPad/Mac three-column
+/// shell) rows are selectable and drive the shell's detail column.
 struct BudgetsTab: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
+    /// Non-nil → three-column selection mode (drives the shell's detail column).
+    var selection: Binding<String?>? = nil
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var editing: BudgetRow?
-    @State private var focused: BudgetRow?            // deep-link drill-in
+    @State private var focused: BudgetRow?            // deep-link drill-in (push mode)
     @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if store.budgets.isEmpty {
-                    ContentUnavailableView {
-                        Label("No budgets yet", systemImage: "chart.pie")
-                    } description: {
-                        Text(store.ledgers.isEmpty
-                             ? "Import a .finch pack from Settings to get started."
-                             : "Tap + to create a budget.")
-                    }
-                } else {
-                    List {
-                        ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
-                            Section(groupName) {
-                                ForEach(store.budgets(in: groupName)) { budget in
-                                    NavigationLink { BudgetDetailView(budgetId: budget.id) } label: {
-                                        BudgetRowView(budget: budget)
-                                    }
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
-                                        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-                                    }
-                                    .contextMenu {
-                                        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }
-                                        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
-                                    }
-                                }
-                            }
-                        }
-                        Section {
-                            let t = store.budgetTotalsDisplay
-                            HStack {
-                                Text("Total").fontWeight(.semibold)
-                                Spacer()
-                                Text("\(t.used) / \(t.base)")
-                            }
-                        }
-                    }
-                }
-            }
+            listContent
             .navigationTitle("Budgets")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -80,16 +47,73 @@ struct BudgetsTab: View {
         }
     }
 
+    @ViewBuilder private var listContent: some View {
+        if store.budgets.isEmpty {
+            ContentUnavailableView {
+                Label("No budgets yet", systemImage: "chart.pie")
+            } description: {
+                Text(store.ledgers.isEmpty
+                     ? "Import a .finch pack from Settings to get started."
+                     : "Tap + to create a budget.")
+            }
+        } else if let selection {
+            List(selection: selection) {
+                groupedSections { budget in
+                    BudgetRowView(budget: budget)
+                        .tag(budget.id)
+                        .swipeActions(edge: .trailing) { rowActions(budget) }
+                        .contextMenu { rowActions(budget) }
+                }
+            }
+        } else {
+            List {
+                groupedSections { budget in
+                    NavigationLink { BudgetDetailView(budgetId: budget.id) } label: {
+                        BudgetRowView(budget: budget)
+                    }
+                    .swipeActions(edge: .trailing) { rowActions(budget) }
+                    .contextMenu { rowActions(budget) }
+                }
+            }
+        }
+    }
+
+    /// Grouped budget sections + totals footer, shared by both layouts.
+    @ViewBuilder private func groupedSections<Row: View>(
+        @ViewBuilder row: @escaping (BudgetRow) -> Row) -> some View {
+        ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
+            Section(groupName) {
+                ForEach(store.budgets(in: groupName)) { budget in row(budget) }
+            }
+        }
+        Section {
+            let t = store.budgetTotalsDisplay
+            HStack {
+                Text("Total").fontWeight(.semibold)
+                Spacer()
+                Text("\(t.used) / \(t.base)")
+            }
+        }
+    }
+
+    @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
+        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
+    }
+
     /// A deep link stashed a budget id + switched to this tab — open it.
     private func consumeFocus() {
-        guard let id = router.focusedId, let b = store.budgets.first(where: { $0.id == id }) else { return }
-        focused = b
+        guard let id = router.focusedId, store.budgets.contains(where: { $0.id == id }) else { return }
+        if let selection { selection.wrappedValue = id }
+        else { focused = store.budgets.first { $0.id == id } }
         router.focusedId = nil
     }
 
     private func delete(_ budget: BudgetRow) {
-        do { try store.apply(.removeBudget, Args(["id": .string(budget.id)])) }
-        catch { errorMessage = i18nMessage(error) }
+        do {
+            try store.apply(.removeBudget, Args(["id": .string(budget.id)]))
+            if selection?.wrappedValue == budget.id { selection?.wrappedValue = nil }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
 

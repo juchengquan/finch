@@ -3,54 +3,32 @@ import FinchCore
 
 /// Accounts grouped by account group, each section with a subtotal, plus a
 /// net-worth footer (includeInNetWorth == 1). All amounts convert
-/// account-currency → base → display via Money. Rows drill into
-/// AccountDetailView; the toolbar `+` menu covers add / manage groups /
-/// archived; swipe + context menus cover edit / archive / delete.
+/// account-currency → base → display via Money. The toolbar `+` menu covers add
+/// / manage groups / archived; swipe + context menus cover edit / archive /
+/// delete.
+///
+/// One view, two layouts: with `selection == nil` (compact / iPhone) rows are
+/// `NavigationLink`s that push `AccountDetailView`; with a `selection` binding
+/// (the iPad/Mac three-column shell) rows are selectable and drive the shell's
+/// detail column. The toolbar / sheets / actions / focus handling are written
+/// once.
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
+    /// Non-nil → three-column selection mode (drives the shell's detail column).
+    var selection: Binding<String?>? = nil
     @State private var showingReconcile = false
     @State private var showingImport = false
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
-    @State private var focused: AccountRow?            // deep-link / Spotlight drill-in
+    @State private var focused: AccountRow?            // deep-link / Spotlight drill-in (push mode)
     @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if store.accounts.isEmpty {
-                    EmptyState(tab: .accounts)
-                } else {
-                    List {
-                        ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
-                            Section {
-                                ForEach(store.accounts(in: groupName)) { account in
-                                    AccountListRow(account: account,
-                                                   onEdit: { editing = account },
-                                                   onArchive: { archive(account) },
-                                                   onDelete: { delete(account) })
-                                }
-                            } header: {
-                                HStack {
-                                    Text(groupName)
-                                    Spacer()
-                                    Text(store.subtotalDisplay(for: groupName))
-                                }
-                            }
-                        }
-                        Section {
-                            HStack {
-                                Text("Net worth").fontWeight(.semibold)
-                                Spacer()
-                                Text(store.netWorthDisplay).fontWeight(.semibold)
-                            }
-                        }
-                    }
-                }
-            }
+            listContent
             .navigationTitle("Accounts")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -86,10 +64,67 @@ struct AccountsTab: View {
         }
     }
 
-    /// A deep link / Spotlight tap stashed an id + switched to this tab — open it.
+    @ViewBuilder private var listContent: some View {
+        if store.accounts.isEmpty {
+            EmptyState(tab: .accounts)
+        } else if let selection {
+            List(selection: selection) {
+                groupedSections { account in
+                    AccountRowView(account: account)
+                        .tag(account.id)
+                        .swipeActions(edge: .trailing) { rowActions(account) }
+                        .contextMenu { rowActions(account) }
+                }
+            }
+        } else {
+            List {
+                groupedSections { account in
+                    NavigationLink { AccountDetailView(accountId: account.id) } label: {
+                        AccountRowView(account: account)
+                    }
+                    .swipeActions(edge: .trailing) { rowActions(account) }
+                    .contextMenu { rowActions(account) }
+                }
+            }
+        }
+    }
+
+    /// The grouped account sections + net-worth footer, shared by both layouts —
+    /// only the per-row view differs (push link vs. selectable row).
+    @ViewBuilder private func groupedSections<Row: View>(
+        @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
+        ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
+            Section {
+                ForEach(store.accounts(in: groupName)) { account in row(account) }
+            } header: {
+                HStack {
+                    Text(groupName)
+                    Spacer()
+                    Text(store.subtotalDisplay(for: groupName))
+                }
+            }
+        }
+        Section {
+            HStack {
+                Text("Net worth").fontWeight(.semibold)
+                Spacer()
+                Text(store.netWorthDisplay).fontWeight(.semibold)
+            }
+        }
+    }
+
+    @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
+        Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+        Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }.tint(.orange)
+        Button(role: .destructive) { delete(account) } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// A deep link / Spotlight tap stashed an id + switched to this tab — open it
+    /// (select in three-column mode, push in compact mode).
     private func consumeFocus() {
-        guard let id = router.focusedId, let acct = store.accounts.first(where: { $0.id == id }) else { return }
-        focused = acct
+        guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
+        if let selection { selection.wrappedValue = id }
+        else { focused = store.accounts.first { $0.id == id } }
         router.focusedId = nil
     }
 
@@ -98,8 +133,10 @@ struct AccountsTab: View {
         catch { errorMessage = i18nMessage(error) }
     }
     private func delete(_ a: AccountRow) {
-        do { try store.apply(.deleteAccount, Args(["id": .string(a.id)])) }
-        catch { errorMessage = i18nMessage(error) }   // engine rejects accounts with transactions
+        do {
+            try store.apply(.deleteAccount, Args(["id": .string(a.id)]))
+            if selection?.wrappedValue == a.id { selection?.wrappedValue = nil }
+        } catch { errorMessage = i18nMessage(error) }   // engine rejects accounts with transactions
     }
 }
 
@@ -114,31 +151,6 @@ struct AccountRowView: View {
             Spacer()
             Text(store.displayMoney(account.balance, from: account.currency))
                 .fontWeight(.semibold)
-        }
-    }
-}
-
-/// A tappable account row (→ detail) with edit / archive / delete via swipe +
-/// context menu. Extracted so AccountsTab's body stays type-checkable.
-private struct AccountListRow: View {
-    let account: AccountRow
-    let onEdit: () -> Void
-    let onArchive: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        NavigationLink { AccountDetailView(accountId: account.id) } label: {
-            AccountRowView(account: account)
-        }
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
-            Button(action: onEdit) { Label("Edit", systemImage: "pencil") }.tint(.blue)
-            Button(action: onArchive) { Label("Archive", systemImage: "archivebox") }.tint(.orange)
-        }
-        .contextMenu {
-            Button(action: onEdit) { Label("Edit", systemImage: "pencil") }
-            Button(action: onArchive) { Label("Archive", systemImage: "archivebox") }
-            Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
         }
     }
 }

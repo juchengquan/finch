@@ -47,7 +47,7 @@ struct SplitViewShell: View {
             switch router.selectedTab {
             case .accounts:
                 ThreeColumnShell {
-                    AccountsListColumn(selection: $accountSelection)
+                    AccountsTab(selection: $accountSelection)
                 } detail: {
                     // Guard against a stale selection (e.g. after a ledger switch).
                     if let id = accountSelection, store.accounts.contains(where: { $0.id == id }) {
@@ -58,7 +58,7 @@ struct SplitViewShell: View {
                 }
             case .budgets:
                 ThreeColumnShell {
-                    BudgetsListColumn(selection: $budgetSelection)
+                    BudgetsTab(selection: $budgetSelection)
                 } detail: {
                     if let id = budgetSelection, store.budgets.contains(where: { $0.id == id }) {
                         NavigationStack { BudgetDetailView(budgetId: id) }
