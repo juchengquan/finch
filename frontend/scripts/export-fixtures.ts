@@ -427,7 +427,7 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -25, merchant: 'Coffee', categoryId: 'food', date: '2026-05-01', skipRules: true } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: 2000, merchant: 'Pay', categoryId: 'pay', date: '2026-05-02', kind: 'income', skipRules: true } },
   { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 500, date: '2026-05-03' } },
-  { action: 'createBudget', args: { id: 'b1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 300, categoryIds: ['food'] } },
+  { action: 'createBudget', args: { id: 'b1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 300, categoryIds: ['food'], startDate: '2026-01-01' } },
   { action: 'createBudgetGroup', args: { id: 'bg1', ledgerId: 'personal', name: 'Essentials' } },
   { action: 'contributeBudget', args: { id: 'b1', amount: 50 } },
   { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'EUR', rate: 1.1 } },
@@ -446,6 +446,13 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // the postEntry hook fires — categoryId 'pay' is re-pointed to 'food' and
   // applied_rule_ids stamps 'r1'. Verified byte-for-byte against the oracle.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -8, merchant: 'Morning Coffee', categoryId: 'pay', date: '2026-05-07' } },
+  // Cross-currency: a JPY purchase on a USD account. Exercises the foreign-
+  // currency path — orig_amount/orig_currency carried, native+base derived via
+  // rateToHub (a JPY rate is set first so the conversion is deterministic), plus
+  // the FX residue + the write-through 'derived' USD-rate row. Verified byte-for-
+  // byte against the oracle.
+  { action: 'setExchangeRate', args: { date: '2026-05-08', currency: 'JPY', rate: 0.0065 } },
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -3820, currency: 'JPY', merchant: 'Yodobashi', categoryId: 'food', date: '2026-05-08', skipRules: true } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the

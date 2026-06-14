@@ -216,8 +216,22 @@ public enum Transactions {
         let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [a.accountId]) ?? "USD"
         let inputCcy = a.currency ?? acctCcy
         if inputCcy != acctCcy {
-            // DEFERRED: the foreign-currency path (orig_* fields + double conversion).
-            throw I18nError("error.notImplemented.foreignCurrency", [:], "Foreign-currency entries are not supported on iOS yet")
+            // Foreign-currency entry (web qAddTransaction §5.2): convert the
+            // entered amount native → account currency → ledger base, carrying
+            // orig_amount/orig_currency for display. One account leg + auto-balance.
+            let base = try String.fetchOne(db, sql: "SELECT base_currency FROM ledgers WHERE id = ?", arguments: [a.ledgerId]) ?? acctCcy
+            let toAcct = try Entries.convertToBase(db, a.amount, inputCcy, acctCcy, a.date)
+            let toBase = try Entries.convertToBase(db, toAcct.amountBase, acctCcy, base, a.date)
+            try Entries.postEntry(db, Entries.NewEntry(
+                ledgerId: a.ledgerId, date: a.date, time: a.time, description: a.merchant, kind: kind,
+                status: a.status.flatMap(Entries.Status.init(rawValue:)),
+                legs: [.account(Entries.AccountLeg(accountId: a.accountId, amount: toAcct.amountBase,
+                    amountBase: toBase.amountBase, exchangeRate: toBase.rate,
+                    origAmount: a.amount, origCurrency: inputCcy))],
+                autoBalance: .category(a.categoryId),
+                notes: (a.note?.isEmpty ?? true) ? nil : a.note,
+                counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+            return
         }
 
         try Entries.postSimple(db, .init(
