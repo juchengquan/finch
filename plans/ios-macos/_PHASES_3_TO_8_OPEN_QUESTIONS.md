@@ -49,9 +49,11 @@ actions; the other 4 are documented below for a follow-up increment.
   (create/update/deleteCategory). *Merge* is not a chokepoint action — deferred.
 - ✅ **FX rate editor.** View / add / delete exchange rates
   (set/deleteExchangeRate). Exposed `store.exchangeRates`.
-- ✅ **Reconcile UI.** ReconcileSheet (account → statement balance → posts the
-  adjustment via reconcileAccount). Reached from the Accounts toolbar. CSV
-  statement import remains a refinement.
+- ✅ **Reconcile UI + CSV statement import.** ReconcileSheet (statement balance
+  → adjustment) AND ImportStatementView (Accounts toolbar): pick a CSV → parse
+  (StatementCSV, header/positional, $/comma/date formats) → match against existing
+  txns (StatementMatcher, amount ±1¢ within ±3 days) → Apply (matched → setCleared,
+  unmatched → addTransaction). Parser + matcher are pure + unit-tested.
 - 🔧 **Transfers CRUD edit/delete UI.** `createTransfer` is wired (Add screen);
   a dedicated edit/delete transfers manager is deferred.
 - ✅ **Bulk recategorize + in-place category edit.** *(Correction: was NOT
