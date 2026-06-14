@@ -126,10 +126,11 @@ extension Projection {
     public static func counterparties(dbQueue: DatabaseQueue, ledgerId: String) throws -> [Counterparty] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT id, ledger_id AS ledgerId, name
+                SELECT id, ledger_id AS ledgerId, name, is_verified AS isVerified
                   FROM counterparties WHERE ledger_id = ? ORDER BY name
                 """, arguments: [ledgerId]).map { r in
-                Counterparty(id: r["id"], ledgerId: r["ledgerId"], name: r["name"])
+                Counterparty(id: r["id"], ledgerId: r["ledgerId"], name: r["name"],
+                             isVerified: (r["isVerified"] as Int? ?? 0) != 0)
             }
         }
     }
