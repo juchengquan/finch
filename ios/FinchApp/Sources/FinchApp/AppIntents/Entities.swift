@@ -4,6 +4,10 @@ import FinchCore
 /// Phase 6.4 — App Intent entities wrapping finch reference data for Siri
 /// parameter resolution. Each query reads the active ledger's projected state
 /// from `FinchStore.shared`.
+///
+/// All queries are gated on `FinchIntentLock.unlocked`: while the app is locked
+/// they return `[]`, so the Shortcuts/Siri parameter pickers can't enumerate
+/// account / category / ledger NAMES past the biometric lock (#16).
 
 public struct AccountEntity: AppEntity {
     public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Account"
@@ -17,11 +21,13 @@ public struct AccountEntity: AppEntity {
 public struct AccountQuery: EntityQuery {
     public init() {}
     @MainActor public func entities(for identifiers: [String]) async throws -> [AccountEntity] {
-        FinchStore.shared.accounts.filter { identifiers.contains($0.id) }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.accounts.filter { identifiers.contains($0.id) }
             .map { AccountEntity(id: $0.id, name: $0.name ?? "Account") }
     }
     @MainActor public func suggestedEntities() async throws -> [AccountEntity] {
-        FinchStore.shared.accounts.map { AccountEntity(id: $0.id, name: $0.name ?? "Account") }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.accounts.map { AccountEntity(id: $0.id, name: $0.name ?? "Account") }
     }
 }
 
@@ -37,11 +43,13 @@ public struct CategoryEntity: AppEntity {
 public struct CategoryQuery: EntityQuery {
     public init() {}
     @MainActor public func entities(for identifiers: [String]) async throws -> [CategoryEntity] {
-        FinchStore.shared.pickableCategories.filter { identifiers.contains($0.id) }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.pickableCategories.filter { identifiers.contains($0.id) }
             .map { CategoryEntity(id: $0.id, name: $0.name) }
     }
     @MainActor public func suggestedEntities() async throws -> [CategoryEntity] {
-        FinchStore.shared.pickableCategories.map { CategoryEntity(id: $0.id, name: $0.name) }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.pickableCategories.map { CategoryEntity(id: $0.id, name: $0.name) }
     }
 }
 
@@ -57,10 +65,12 @@ public struct LedgerEntity: AppEntity {
 public struct LedgerQuery: EntityQuery {
     public init() {}
     @MainActor public func entities(for identifiers: [String]) async throws -> [LedgerEntity] {
-        FinchStore.shared.ledgers.filter { identifiers.contains($0.id) }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.ledgers.filter { identifiers.contains($0.id) }
             .map { LedgerEntity(id: $0.id, name: $0.name) }
     }
     @MainActor public func suggestedEntities() async throws -> [LedgerEntity] {
-        FinchStore.shared.ledgers.map { LedgerEntity(id: $0.id, name: $0.name) }
+        guard FinchIntentLock.unlocked else { return [] }
+        return FinchStore.shared.ledgers.map { LedgerEntity(id: $0.id, name: $0.name) }
     }
 }
