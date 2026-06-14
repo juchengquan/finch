@@ -502,6 +502,40 @@ extends with:
   pulls them, dispatches through the chokepoint, audit gate
   clean. (One-way: there is no "switch back" path to test.)
 
+### §5.1 — Provisioning gate & the accountless build boundary (2026-06-14)
+
+CloudKit is a **paid-tier capability**: a free Apple ID can't create a CloudKit
+container or enable the capability. So Phase 8 splits cleanly into work that is
+doable now (no account) and work that is gated on the **Apple Developer Program
+($99/yr) + a real iCloud login**. Investigation of the current tree:
+
+**Already buildable + CI-verified today, with no account** (`Sync/CloudKitSync.swift`,
+`Tests/FinchAppTests/CloudKitSyncTests.swift`, run by `xcodebuild test` on the
+unsigned simulator):
+- `CloudKitRecordMapper` — row ↔ `CKRecord` mapping (recordType = table,
+  recordName = row id). Round-trip tested.
+- `CloudKitConflict` — last-writer-wins on `updated_at`. Tested.
+- The live `CloudKitSyncService` **compiles** (it `import CloudKit`, builds a
+  `CKContainer`, calls `privateCloudDatabase.modifyRecords`) with the
+  iCloud/CloudKit entitlements present and **no provisioning profile** — every
+  method just no-ops via an `accountAvailable()` guard.
+
+**Gated on the paid program + iCloud account (NOT possible now, and never in CI):**
+- Creating the `iCloud.com.juchengquan.finch` container in the developer portal.
+- Enabling the CloudKit capability for real (device) signing.
+- Any *runtime*: real push/pull, `CKSubscription` push, two-device sync,
+  real-world conflict behavior — i.e. all verification.
+
+**Conclusion / sequencing.** The pure logic (mapping + conflict) was safe to
+write accountless and is done. Writing the rest of the **live** loop (pull,
+`CKSyncEngine` state serialization, subscriptions, the Mutation bus) *before*
+provisioning would be **coding blind** — it would compile but couldn't be run
+or trusted, and would likely need rework once real CloudKit behavior is
+observed. **Recommended order: provision first** (join the Developer Program +
+create the container), **then** build the live loop against something testable.
+The sensible pre-payment stopping point is the current state: testable core
+built, this plan written. Do not pre-build the untestable live integration.
+
 ## §6. Open questions
 
 The plan's §14.1 still-open questions mostly land in Phase
