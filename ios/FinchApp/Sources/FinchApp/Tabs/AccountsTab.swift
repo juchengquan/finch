@@ -8,12 +8,14 @@ import FinchCore
 /// archived; swipe + context menus cover edit / archive / delete.
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
     @State private var showingReconcile = false
     @State private var showingImport = false
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
+    @State private var focused: AccountRow?            // deep-link / Spotlight drill-in
     @State private var errorMessage: String?
 
     var body: some View {
@@ -80,7 +82,17 @@ struct AccountsTab: View {
             .alert("Couldn't complete that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
+            .navigationDestination(item: $focused) { AccountDetailView(accountId: $0.id) }
+            .onAppear(perform: consumeFocus)
+            .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         }
+    }
+
+    /// A deep link / Spotlight tap stashed an id + switched to this tab — open it.
+    private func consumeFocus() {
+        guard let id = router.focusedId, let acct = store.accounts.first(where: { $0.id == id }) else { return }
+        focused = acct
+        router.focusedId = nil
     }
 
     private func archive(_ a: AccountRow) {

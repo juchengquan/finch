@@ -6,6 +6,7 @@ import FinchCore
 /// selectTransactions(opts.query); NO FTS5). Detail view deferred (D4).
 struct ActivityTab: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
     @State private var searchQuery: String = ""
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
@@ -84,7 +85,17 @@ struct ActivityTab: View {
             .sheet(isPresented: $showingBulkCat) {
                 BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
             }
+            .onAppear(perform: consumeFocus)
+            .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         }
+    }
+
+    /// A deep link / Spotlight / notification tap stashed a tx id + switched to
+    /// this tab — open that transaction.
+    private func consumeFocus() {
+        guard let id = router.focusedId, let tx = store.txns.first(where: { $0.id == id }) else { return }
+        editing = tx
+        router.focusedId = nil
     }
 
     private func toggle(_ txn: Tx) {
