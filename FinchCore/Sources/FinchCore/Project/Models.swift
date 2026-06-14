@@ -144,9 +144,10 @@ public struct BudgetProgress: Codable, Equatable, Sendable {
     public var over: Bool
 }
 
-/// A named account group (id + name) — for the group picker + group admin UI.
-public struct AccountGroupRow: Identifiable, Codable, Equatable, Sendable {
+/// A named group (id + name) — for group pickers + group admin UI (accounts + budgets).
+public struct GroupRow: Identifiable, Codable, Equatable, Sendable {
     public var id: String
     public var name: String
     public init(id: String, name: String) { self.id = id; self.name = name }
 }
+public typealias AccountGroupRow = GroupRow

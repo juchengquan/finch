@@ -15,6 +15,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public private(set) var budgets: [BudgetRow] = []
+    @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public private(set) var ledgers: [Ledger] = []
     @Published public private(set) var holdings: [Holding] = []
     @Published public private(set) var scheduled: [ScheduledTemplate] = []
@@ -181,6 +182,7 @@ public final class FinchStore: ObservableObject {
         self.categories = (try? Projection.categories(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.counterparties = (try? Projection.counterparties(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.budgetGroupNames = (try? Projection.budgetGroupNames(dbQueue: q, ledgerId: activeLedgerId)) ?? [:]
+        self.budgetGroups = (try? Projection.budgetGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.holdings = (try? Projection.holdings(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.scheduled = (try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId)) ?? []
         self.exchangeRates = (try? Projection.exchangeRates(dbQueue: q)) ?? []
