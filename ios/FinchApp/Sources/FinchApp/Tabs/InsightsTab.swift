@@ -136,12 +136,14 @@ private struct ForecastCard: View {
     @EnvironmentObject private var store: FinchStore
     var body: some View {
         let month = String(store.today.prefix(7))
-        // scheduled = [] — scheduled-template projection is deferred; this is the
-        // month-to-date + run-rate forecast.
+        // MTD + run-rate + remaining scheduled (the upcoming-bills term).
         Card(title: "This month's forecast") {
-            if let f = Selectors.monthForecast(store.txns, [], store.activeLedgerId, month, store.today) {
+            if let f = Selectors.monthForecast(store.txns, store.scheduled, store.activeLedgerId, month, store.today) {
                 VStack(alignment: .leading, spacing: 4) {
                     LabeledContent("Spent so far", value: store.displayMoneyBase(f.mtdSpent))
+                    if f.scheduledRest > 0 {
+                        LabeledContent("Upcoming scheduled", value: store.displayMoneyBase(f.scheduledRest))
+                    }
                     LabeledContent("Projected", value: store.displayMoneyBase(f.projected))
                     Text("\(f.daysRemaining) days left").font(.caption).foregroundStyle(.secondary)
                 }
