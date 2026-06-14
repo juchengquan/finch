@@ -9,6 +9,7 @@ struct InsightsTab: View {
     /// monthly spend + CSV export). Mirrors the web Insights view toggle.
     private enum View_: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
     @State private var view: View_ = .trends
+    @State private var rangeMonths = 6   // 3M / 6M / 1Y range switcher
 
     var body: some View {
         NavigationStack {
@@ -27,8 +28,18 @@ struct InsightsTab: View {
                             }
                             .pickerStyle(.segmented)
                             if view == .trends {
-                                MonthlySpendingCard()
-                                NetWorthCard()
+                                Picker("Range", selection: $rangeMonths) {
+                                    Text("3M").tag(3); Text("6M").tag(6); Text("1Y").tag(12)
+                                }
+                                .pickerStyle(.segmented)
+                                MonthlySpendingCard(months: rangeMonths)
+                                NetWorthCard(months: rangeMonths)
+                                CashflowCard(months: rangeMonths)
+                                CategoryDeltasCard()
+                                WeeklyDigestCard()
+                                IncomeSankeyCard()
+                                SpendingHeatmapCard()
+                                NetWorthByTypeCard()
                                 CategoryBreakdownCard()
                                 RecentExpensesCard()
                                 ForecastCard()
@@ -65,9 +76,10 @@ private let cardPalette: [Color] = [.blue, .green, .orange, .purple, .pink, .tea
 
 private struct MonthlySpendingCard: View {
     @EnvironmentObject private var store: FinchStore
+    var months = 6
     var body: some View {
         let endMonth = String(store.today.prefix(7))
-        let pts = Selectors.monthlySpending(store.txns, store.activeLedgerId, endMonth, 6)
+        let pts = Selectors.monthlySpending(store.txns, store.activeLedgerId, endMonth, months)
         Card(title: "Monthly spending") {
             BarChart(data: pts.map { BarChart.DataPoint(label: $0.m, value: $0.v, color: .blue) },
                      xLabel: "Month", yLabel: "Spent")
@@ -78,9 +90,10 @@ private struct MonthlySpendingCard: View {
 
 private struct NetWorthCard: View {
     @EnvironmentObject private var store: FinchStore
+    var months = 6
     var body: some View {
         let endMonth = String(store.today.prefix(7))
-        let pts = Selectors.netWorthByMonth(store.txns, store.accounts, store.activeLedgerId, endMonth, 6)
+        let pts = Selectors.netWorthByMonth(store.txns, store.accounts, store.activeLedgerId, endMonth, months)
         Card(title: "Net worth") {
             LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.v) },
                       xLabel: "Month", yLabel: "Net worth")
@@ -248,6 +261,139 @@ private struct HoldingsCard: View {
                         Spacer()
                         Text(Selectors.holdingValue(h).map { Money.format($0, currency: h.currency) } ?? "—")
                             .fontWeight(.medium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Tier 2 parity cards
+
+/// Monthly income vs expense (net cashflow line), range-aware.
+private struct CashflowCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var months = 6
+    var body: some View {
+        let pts = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, String(store.today.prefix(7)), months)
+        Card(title: "Cashflow (net)") {
+            if pts.isEmpty {
+                Text("No data").font(.caption).foregroundStyle(.secondary)
+            } else {
+                LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.inc - $0.exp) },
+                          xLabel: "Month", yLabel: "Net")
+                    .frame(height: 160)
+            }
+        }
+    }
+}
+
+/// Biggest month-over-month category movers.
+private struct CategoryDeltasCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let refs = store.pickableCategories.map { CategoryRef(id: $0.id, name: $0.name) }
+        let deltas = Selectors.topCategoryDeltas(store.txns, store.activeLedgerId, String(store.today.prefix(7)), refs, 5)
+        Card(title: "Month-over-month") {
+            if deltas.isEmpty {
+                Text("Not enough history").font(.caption).foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(Array(deltas.enumerated()), id: \.offset) { _, d in
+                        HStack {
+                            Text(d.name).lineLimit(1)
+                            Spacer()
+                            Text(store.displayMoneyBase(d.b)).font(.caption).foregroundStyle(.secondary)
+                            Text("\(d.d > 0 ? "+" : "")\(d.d)%")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(d.d > 0 ? .red : .green)
+                                .frame(width: 56, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// This week's recap: spent / income / net vs prior + 12-week average.
+private struct WeeklyDigestCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        Card(title: "This week") {
+            if let d = Selectors.weeklyDigest(store.txns, store.activeLedgerId, store.today) {
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent("Spent", value: store.displayMoneyBase(d.spent))
+                    LabeledContent("Income", value: store.displayMoneyBase(d.income))
+                    LabeledContent("Net", value: store.displayMoneyBase(d.net))
+                    if let vs = d.vsAvgPct {
+                        Text("\(vs > 0 ? "+" : "")\(Int(vs))% vs \(d.avgWeeks)-week average")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Text("No activity this week").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Income → categories proportional flow (simplified Sankey).
+private struct IncomeSankeyCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let cats = store.pickableCategories.map { ColoredCategory(id: $0.id, name: $0.name, color: nil) }
+        let flow = Selectors.incomeCategoryFlow(store.txns, cats, store.activeLedgerId, String(store.today.prefix(7)))
+        Card(title: "Where income goes") {
+            if flow.income <= 0 {
+                Text("No income this month").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Sankey(total: flow.income, segments: segments(flow))
+            }
+        }
+    }
+
+    private func segments(_ flow: IncomeFlow) -> [Sankey.Segment] {
+        var segs = flow.categories.enumerated().map { i, c in
+            Sankey.Segment(id: c.id, label: c.name, value: c.spent, color: cardPalette[i % cardPalette.count])
+        }
+        if flow.saved > 0 { segs.append(Sankey.Segment(id: "__saved", label: "Saved", value: flow.saved, color: .gray)) }
+        return segs
+    }
+}
+
+/// 12-week daily-spend intensity grid.
+private struct SpendingHeatmapCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let days = Selectors.dailySpending(store.txns, store.activeLedgerId, store.today, 12 * 7)
+        Card(title: "Daily spending (12 weeks)") {
+            if days.allSatisfy({ $0.value == 0 }) {
+                Text("No spending").font(.caption).foregroundStyle(.secondary)
+            } else {
+                CalendarHeatmap(values: days.map { ($0.date, $0.value) })
+            }
+        }
+    }
+}
+
+/// Net worth split by account type.
+private struct NetWorthByTypeCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let rows = Selectors.netWorthByAccountType(store.accounts, store.activeLedgerId) { store.toBase($0, from: $1) }
+            .filter { $0.balance != 0 }
+        Card(title: "Net worth by type") {
+            if rows.isEmpty {
+                Text("No accounts").font(.caption).foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+                        HStack {
+                            Text(AccountSheetTypeLabel.label(r.type))
+                            Spacer()
+                            Text(store.displayMoneyBase(r.balance)).fontWeight(.medium)
+                        }
                     }
                 }
             }
