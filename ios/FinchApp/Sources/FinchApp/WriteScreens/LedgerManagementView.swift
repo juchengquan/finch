@@ -49,7 +49,7 @@ struct LedgerManagementView: View {
     private func delete(_ ledger: Ledger) {
         errorMessage = nil
         do { try store.apply(.deleteLedger, Args(["id": .string(ledger.id)])) }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -89,7 +89,7 @@ struct AddLedgerSheet: View {
                 "base": .string(base.trimmingCharacters(in: .whitespaces).uppercased()),
             ]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -159,12 +159,12 @@ struct EditLedgerSheet: View {
                 ]))
             }
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     private func run(_ action: ActionName, _ args: [String: JSONValue], then: () -> Void) {
         errorMessage = nil
         do { try store.apply(action, Args(args)); then(); dismiss() }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 }

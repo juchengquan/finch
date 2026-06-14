@@ -42,12 +42,11 @@ struct ReconcileSheet: View {
     private func reconcile() {
         errorMessage = nil
         guard let bal = Double(statementBalance) else { errorMessage = "Enter the statement balance."; return }
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         do {
             try store.apply(.reconcileAccount, Args([
                 "accountId": .string(accountId), "statementBalance": .double(bal),
-                "statementDate": .string(f.string(from: date)), "postAdjustment": .bool(true)]))
+                "statementDate": .string(AppDate.isoDay.string(from: date)), "postAdjustment": .bool(true)]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

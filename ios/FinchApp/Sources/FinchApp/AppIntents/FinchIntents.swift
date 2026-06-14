@@ -5,10 +5,7 @@ import FinchCore
 // Phase 6.4 — the 7 Siri intents. Every write dispatches the Phase 2 chokepoint
 // (FinchStore.apply) — the only write path. Reads use the projected store.
 
-private let isoDay: DateFormatter = {
-    let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
-}()
-private func today() -> String { isoDay.string(from: Date()) }
+private func today() -> String { AppDate.today() }
 
 /// "Add a $6 coffee to finch" → addTransaction (defaults to an expense).
 public struct AddTransactionIntent: AppIntent {
@@ -147,15 +144,12 @@ public struct OpenScreenIntent: AppIntent {
 public enum ScreenAppEnum: String, AppEnum {
     case accounts, activity, budgets, insights, scheduled, settings
     public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Screen"
+    // AppIntents requires caseDisplayRepresentations to be a literal dictionary
+    // (the metadata extractor parses it at compile time), so it stays spelled out.
     public static var caseDisplayRepresentations: [ScreenAppEnum: DisplayRepresentation] = [
         .accounts: "Accounts", .activity: "Activity", .budgets: "Budgets",
         .insights: "Insights", .scheduled: "Scheduled", .settings: "Settings",
     ]
-    var tab: AppTab {
-        switch self {
-        case .accounts: return .accounts; case .activity: return .activity
-        case .budgets: return .budgets; case .insights: return .insights
-        case .scheduled: return .scheduled; case .settings: return .settings
-        }
-    }
+    // Cases share rawValues with AppTab → derive the tab instead of a switch.
+    var tab: AppTab { AppTab(rawValue: rawValue) ?? .accounts }
 }

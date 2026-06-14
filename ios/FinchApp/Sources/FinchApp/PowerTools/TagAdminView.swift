@@ -36,7 +36,7 @@ struct TagAdminView: View {
 
     private func delete(_ t: TagRow) {
         do { try store.apply(.deleteTag, Args(["id": .string(t.id)])) }
-        catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -75,6 +75,6 @@ struct TagEditSheet: View {
                 try store.apply(.createTag, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(trimmed)]))
             }
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

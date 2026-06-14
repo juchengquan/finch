@@ -122,7 +122,7 @@ struct AddHoldingSheet: View {
         do {
             try store.apply(.createHolding, Args(args))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
 
@@ -163,11 +163,8 @@ struct SetHoldingPriceSheet: View {
                 "id": .string(holding.id), "price": .double(p), "date": .string(Self.today()),
             ]))
             dismiss()
-        } catch let e as I18nError { errorMessage = e.message } catch { errorMessage = "\(error)" }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
-    private static func today() -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
-    }
+    private static func today() -> String { AppDate.today() }
 }

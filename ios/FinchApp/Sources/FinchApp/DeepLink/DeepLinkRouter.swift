@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The 6 shipped tabs, in display order (the canonical list reconciled in #160).
-public enum AppTab: Hashable, CaseIterable, Identifiable {
+public enum AppTab: String, Hashable, CaseIterable, Identifiable {
     case accounts, activity, budgets, insights, scheduled, settings
     public var id: Self { self }
     public var title: String {
