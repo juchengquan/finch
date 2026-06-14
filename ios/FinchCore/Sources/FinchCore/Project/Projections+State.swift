@@ -57,11 +57,19 @@ extension Projection {
     }
 
     /// Account groups (id + name), ordered — for the group picker + group admin.
-    public static func accountGroups(dbQueue: DatabaseQueue, ledgerId: String) throws -> [AccountGroupRow] {
+    public static func accountGroups(dbQueue: DatabaseQueue, ledgerId: String) throws -> [GroupRow] {
+        try groupRows(dbQueue: dbQueue, ledgerId: ledgerId, table: "account_groups")
+    }
+
+    /// Budget groups (id + name), ordered — for the group picker + group admin.
+    public static func budgetGroups(dbQueue: DatabaseQueue, ledgerId: String) throws -> [GroupRow] {
+        try groupRows(dbQueue: dbQueue, ledgerId: ledgerId, table: "budget_groups")
+    }
+
+    private static func groupRows(dbQueue: DatabaseQueue, ledgerId: String, table: String) throws -> [GroupRow] {
         try dbQueue.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT id, name FROM account_groups WHERE ledger_id = ? ORDER BY sort_order, name
-                """, arguments: [ledgerId]).map { AccountGroupRow(id: $0["id"], name: $0["name"]) }
+            try Row.fetchAll(db, sql: "SELECT id, name FROM \(table) WHERE ledger_id = ? ORDER BY sort_order, name",
+                             arguments: [ledgerId]).map { GroupRow(id: $0["id"], name: $0["name"]) }
         }
     }
 
