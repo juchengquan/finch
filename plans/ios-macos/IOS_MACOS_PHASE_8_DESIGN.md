@@ -570,9 +570,17 @@ record, outbox ordering/dedup/persistence) are unit-tested.
 - Creating the `iCloud.com.juchengquan.finch` container in the developer portal.
 - Enabling the CloudKit capability for real (device) signing.
 - Any *runtime* trust: real push/pull, `CKSubscription` push wakeups, two-device
-  convergence, real conflict behavior — i.e. **all behavioral verification**, and
-  the one piece deliberately NOT built: the fresh-device **down-sync seed** (a
-  new install re-hydrating from the row-mirror bootstrap records).
+  convergence, real conflict behavior — i.e. **all behavioral verification**.
+
+**Fresh-device down-sync seed — BUILT + TESTED (2026-06-20).** Previously the one
+deliberately-unbuilt piece; now `FinchCore.DownSync` (`ingest`/`extract`)
+re-hydrates an empty DB from the row-mirror records — FK-ordered inserts, the
+entries' two-phase **sealed** write (insert `sealed=0` → postings →
+`UPDATE sealed=1` re-fires `tr_entry_seal`), accounts seeded at balance 0 so
+`tr_post_balance` rebuilds the authoritative balance, then the audit gate. Pure
+DB I/O, so it's unit-tested (incl. a live→extract→ingest **round-trip**: row
+counts match, balances rebuilt, audit clean) with **no CloudKit account**. The
+only still-gated bit is the CloudKit *fetch* that feeds it `[table: rows]`.
 
 **Conclusion / sequencing.** The pure logic (mapping + conflict) was safe to
 write accountless and is done. Writing the rest of the **live** loop (pull,
