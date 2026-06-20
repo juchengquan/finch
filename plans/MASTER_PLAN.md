@@ -361,6 +361,24 @@ below; what's still open is summarized here.
    `SCHEMA_VERSION = '2026-06-14T00:00:00Z'` after the DE cutover
    (PRs #114 + #116). Native can now adopt the schema verbatim and build
    against a complete reference. **L (the build); the brief itself is done.**
+
+   **STATUS (2026-06-20): the native iOS/macOS app is built** — Phases 1–8 plus
+   the full UI remediation (Tiers 1–4, macOS/iPad 3-column), localization
+   (en/zh-Hans), the engine parity-oracle expansion, and a cleanup pass all
+   shipped (see `plans/ios-macos/`). **Everything that can be built and verified
+   without Apple hardware/account is done.** The only remaining work is
+   **hardware/account-gated** and cannot be progressed in CI:
+   - **CloudKit runtime (Phase 8).** The live mutation-log sync loop + the
+     down-sync seed (`FinchCore.DownSync`) are built + unit-tested but **never
+     run** — they're inert without a provisioned container. Remaining: join the
+     Apple Developer Program, create `iCloud.com.juchengquan.finch` (runbook:
+     `plans/ios-macos/IOS_MACOS_PHASE_8_CLOUDKIT_SETUP.md`), wire the CloudKit
+     fetch → `DownSync.ingest` → reproject, then verify two-device convergence +
+     conflicts on real devices. Until then the Phase 5 iCloud-Drive **file sync
+     stays the live path** (CloudKit switch is off by default).
+   - **Lock-screen widget redaction (remediation #16).** App Intents + entity
+     queries already refuse while locked; redacting the home/lock-screen widget
+     when the app is locked needs a **physical device** to verify.
 2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
    30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
    change. **M.**
