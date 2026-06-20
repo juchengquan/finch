@@ -111,8 +111,13 @@ anything else; without it the app isn't a usable finance app.
     App Intents / Siri phrases are localized too (`AppShortcuts.xcstrings`).
     *(Deferred: only the marginal `InfoPlist` display strings — document-type
     name "finch data pack", extension bundle names — remain en-only.)*
-19. **Locale decimal parsing.** Replace `Double(string)` with a `NumberFormatter`(locale-aware) for all 11 numeric fields; round-trip the prefill formatting to match.
-20. **Chart accessibility.** Add `.accessibilityLabel/Value` (or `AXChartDescriptor`) to the five chart views; add a non-color cue to Sparkline trend + Donut slices (render the `label`).
+19. ✅ **Locale decimal parsing (done).** All numeric input fields parse via the
+    locale-aware `DecimalInput.parse` (`NumberFormatter`); the last straggler
+    (`RulesManagerView` rule-amount) is migrated off raw `Double(string)`.
+20. ✅ **Chart accessibility (done).** All chart views carry `.accessibilityLabel/
+    Value`; non-color cues added: Sparkline gets an up/down direction glyph, Donut
+    gets a text legend (label + swatch) so slices read without relying on colour.
+
 21. ✅ **Projection cost (done).** `Projection.run` gained an optional `ledgerId`
     scope; `reprojectActiveLedger` now re-projects only the **active** ledger's
     transactions (every mutation targets the active ledger), not all ledgers'.
@@ -124,7 +129,10 @@ anything else; without it the app isn't a usable finance app.
     `daySections` were computed every render (twice, per keystroke) — now memoized
     into `@State` recomputed only on `txns`/query/page-size changes via
     `onReceive`/`onChange`.
-22. **Loading/sync state.** Add an `isHydrating`/`isSyncing` flag + spinners; stop swallowing iCloud import failures.
+22. ✅ **Loading/sync state (done).** `FinchStore.isHydrating` drives a launch
+    spinner around `bootstrap` + the initial Spotlight index; `CloudKitSyncCoordinator.isSyncing`
+    drives a "Syncing…" row in Settings during an active push/pull (alongside the
+    existing import spinner + the iCloud-import error alert from the earlier pass).
 
 ---
 

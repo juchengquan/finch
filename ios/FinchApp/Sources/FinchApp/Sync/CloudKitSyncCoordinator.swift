@@ -56,6 +56,7 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     @Published public private(set) var enabled = SyncPreferences.enabled
     @Published public private(set) var status = SyncStatus.idle
     @Published public private(set) var isBootstrapping = false
+    @Published public private(set) var isSyncing = false   // an active push/pull is in flight
 
     private let service = CloudKitSyncService.shared
     /// True while replaying a REMOTE mutation through the chokepoint, so the
@@ -101,6 +102,8 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     /// Push pending local mutations, then pull + replay remote ones.
     public func syncNow() async {
         guard enabled, await service.accountAvailable() else { return }
+        isSyncing = true
+        defer { isSyncing = false }
         await service.pushPending()
         await service.pull(ledgerIds: FinchStore.shared.ledgers.map(\.id))
         status.pendingChanges = SyncOutbox.shared.pending.count
