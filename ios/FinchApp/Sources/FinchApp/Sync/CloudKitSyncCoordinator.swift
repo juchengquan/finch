@@ -146,9 +146,10 @@ public final class CloudKitSyncCoordinator: ObservableObject {
     /// keeps Entry/Posting records for late-joining devices). The extraction
     /// (`store.syncableRows`) is pure + unit-tested.
     ///
-    /// PROVISIONING-GATED: the reverse — a FRESH device DOWN-syncing these row
-    /// records into an empty DB (chokepoint-bypassing insert + audit re-validate)
-    /// — is the riskiest blind piece and is deliberately not built here.
+    /// The reverse — a FRESH device re-hydrating an empty DB from those records —
+    /// is now built + tested as `FinchCore.DownSync.ingest` (two-phase seal +
+    /// trigger-rebuilt balances + audit gate). Only the CloudKit *fetch* that
+    /// feeds it `[table: rows]` is still PROVISIONING-GATED (needs an account).
     private func bootstrap(store: FinchStore) async {
         guard await service.accountAvailable() else {
             status.accountAvailable = false
