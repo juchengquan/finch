@@ -477,6 +477,33 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'setCleared', args: { id: '$lastAccountPosting', cleared: true } },
   { action: 'bulkRecategorize', args: { ids: ['$lastAccountPosting'], categoryId: 'fun' } },
   { action: 'setTransactionTags', args: { id: '$lastAccountPosting', tagIds: ['tg1'] } },
+
+  // --- Parity expansion: high-risk actions the oracle didn't cover (2026-06-20) ---
+  // createAccount with an opening balance → posts an opening-equity entry.
+  { action: 'createAccount', args: { id: 'a4', ledgerId: 'personal', name: 'Wallet', type: 'cash', currency: 'USD', openingBalance: 250 } },
+  // updateCategory reparenting: food > fun > pay — exercises the cycle + depth-cap
+  // math (pay lands at depth 3, the limit). No kind enforcement on reparent.
+  { action: 'updateCategory', args: { id: 'fun', patch: { parentId: 'food' } } },
+  { action: 'updateCategory', args: { id: 'pay', patch: { parentId: 'fun' } } },
+  // updateTransaction foreign-currency re-lock: edit a JPY entry's amount + date,
+  // re-deriving amount_base via an FX lookup at the new date.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
+  { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
+  // scheduled split CRUD (add/update/remove → leaves one split on s1). postScheduled
+  // itself is excluded: it stamps `new Date()`, so it can't be reproduced offline.
+  { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
+  { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
+  { action: 'updateScheduledSplit', args: { templateId: 's1', index: 0, pct: 30 } },
+  { action: 'removeScheduledSplit', args: { templateId: 's1', index: 1 } },
+  // generateDueScheduled with an explicit `today` (deterministic): posts s1's
+  // Jan–Apr monthly occurrences, exercising the date-dedup + occurrence math.
+  { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
+  // changeLedgerBase — the highest-risk action: re-derive EVERY entry's amount_base
+  // from USD to EUR (mass FX conversion + rounding + FX-residue drop/recompute).
+  // Needs an EUR rate on/before every entry date (the earliest are the Jan
+  // generateDue occurrences) — seed one at 2026-01-01.
+  { action: 'setExchangeRate', args: { date: '2026-01-01', currency: 'EUR', rate: 1.08 } },
+  { action: 'changeLedgerBase', args: { ledgerId: 'personal', newBase: 'EUR' } },
 ];
 
 /** Resolve `$lastAccountPosting` to the most-recent account-leg posting id (the
