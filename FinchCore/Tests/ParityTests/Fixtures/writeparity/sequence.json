@@ -327,6 +327,110 @@
           "tg1"
         ]
       }
+    },
+    {
+      "action": "createAccount",
+      "args": {
+        "id": "a4",
+        "ledgerId": "personal",
+        "name": "Wallet",
+        "type": "cash",
+        "currency": "USD",
+        "openingBalance": 250
+      }
+    },
+    {
+      "action": "updateCategory",
+      "args": {
+        "id": "fun",
+        "patch": {
+          "parentId": "food"
+        }
+      }
+    },
+    {
+      "action": "updateCategory",
+      "args": {
+        "id": "pay",
+        "patch": {
+          "parentId": "fun"
+        }
+      }
+    },
+    {
+      "action": "addTransaction",
+      "args": {
+        "ledgerId": "personal",
+        "accountId": "a1",
+        "amount": -2000,
+        "currency": "JPY",
+        "merchant": "Relock",
+        "categoryId": "food",
+        "date": "2026-05-12",
+        "skipRules": true
+      }
+    },
+    {
+      "action": "updateTransaction",
+      "args": {
+        "id": "$lastAccountPosting",
+        "patch": {
+          "amount": -5000,
+          "date": "2026-05-13"
+        }
+      }
+    },
+    {
+      "action": "addScheduledSplit",
+      "args": {
+        "templateId": "s1",
+        "accountId": "a2",
+        "pct": 40
+      }
+    },
+    {
+      "action": "addScheduledSplit",
+      "args": {
+        "templateId": "s1",
+        "accountId": "a3",
+        "pct": 25
+      }
+    },
+    {
+      "action": "updateScheduledSplit",
+      "args": {
+        "templateId": "s1",
+        "index": 0,
+        "pct": 30
+      }
+    },
+    {
+      "action": "removeScheduledSplit",
+      "args": {
+        "templateId": "s1",
+        "index": 1
+      }
+    },
+    {
+      "action": "generateDueScheduled",
+      "args": {
+        "today": "2026-04-15"
+      }
+    },
+    {
+      "action": "setExchangeRate",
+      "args": {
+        "date": "2026-01-01",
+        "currency": "EUR",
+        "rate": 1.08
+      }
+    },
+    {
+      "action": "changeLedgerBase",
+      "args": {
+        "ledgerId": "personal",
+        "newBase": "EUR"
+      }
     }
   ],
   "expected": {
@@ -351,8 +455,8 @@
             "category_id": null,
             "amount": "-25.000000",
             "currency": "USD",
-            "amount_base": "-25.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-22.730000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -362,9 +466,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "25.000000",
-            "currency": "USD",
-            "amount_base": "25.000000",
+            "amount": "22.730000",
+            "currency": "EUR",
+            "amount_base": "22.730000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -394,8 +498,8 @@
             "category_id": null,
             "amount": "2000.000000",
             "currency": "USD",
-            "amount_base": "2000.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "1818.180000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -405,9 +509,9 @@
           {
             "account_id": null,
             "category_id": "pay",
-            "amount": "-2000.000000",
-            "currency": "USD",
-            "amount_base": "-2000.000000",
+            "amount": "-1818.180000",
+            "currency": "EUR",
+            "amount_base": "-1818.180000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -437,8 +541,8 @@
             "category_id": null,
             "amount": "-500.000000",
             "currency": "USD",
-            "amount_base": "-500.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-454.550000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": "Transfer to Savings",
@@ -450,8 +554,8 @@
             "category_id": null,
             "amount": "500.000000",
             "currency": "USD",
-            "amount_base": "500.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "454.550000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": "Transfer from Checking",
@@ -480,8 +584,8 @@
             "category_id": null,
             "amount": "100.000000",
             "currency": "USD",
-            "amount_base": "100.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "90.910000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -491,9 +595,9 @@
           {
             "account_id": null,
             "category_id": "sys-adj",
-            "amount": "-100.000000",
-            "currency": "USD",
-            "amount_base": "-100.000000",
+            "amount": "-90.910000",
+            "currency": "EUR",
+            "amount_base": "-90.910000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -523,8 +627,8 @@
             "category_id": null,
             "amount": "-100.000000",
             "currency": "USD",
-            "amount_base": "-100.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-90.910000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -534,9 +638,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "60.000000",
-            "currency": "USD",
-            "amount_base": "60.000000",
+            "amount": "54.550000",
+            "currency": "EUR",
+            "amount_base": "54.550000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -547,9 +651,9 @@
           {
             "account_id": null,
             "category_id": "pay",
-            "amount": "40.000000",
-            "currency": "USD",
-            "amount_base": "40.000000",
+            "amount": "36.360000",
+            "currency": "EUR",
+            "amount_base": "36.360000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -579,8 +683,8 @@
             "category_id": null,
             "amount": "-7.000000",
             "currency": "USD",
-            "amount_base": "-7.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-6.360000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -590,9 +694,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "7.000000",
-            "currency": "USD",
-            "amount_base": "7.000000",
+            "amount": "6.360000",
+            "currency": "EUR",
+            "amount_base": "6.360000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -622,8 +726,8 @@
             "category_id": null,
             "amount": "-8.000000",
             "currency": "USD",
-            "amount_base": "-8.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-7.270000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -633,9 +737,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "8.000000",
-            "currency": "USD",
-            "amount_base": "8.000000",
+            "amount": "7.270000",
+            "currency": "EUR",
+            "amount_base": "7.270000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -665,8 +769,8 @@
             "category_id": null,
             "amount": "-24.830000",
             "currency": "USD",
-            "amount_base": "-24.830000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-22.570000",
+            "exchange_rate": "0.909091",
             "orig_amount": "-3820.000000",
             "orig_currency": "JPY",
             "memo": null,
@@ -676,9 +780,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "24.830000",
-            "currency": "USD",
-            "amount_base": "24.830000",
+            "amount": "22.570000",
+            "currency": "EUR",
+            "amount_base": "22.570000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -708,8 +812,8 @@
             "category_id": null,
             "amount": "-30.000000",
             "currency": "USD",
-            "amount_base": "-30.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-27.270000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -719,9 +823,9 @@
           {
             "account_id": null,
             "category_id": "food",
-            "amount": "30.000000",
-            "currency": "USD",
-            "amount_base": "30.000000",
+            "amount": "27.270000",
+            "currency": "EUR",
+            "amount_base": "27.270000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -751,8 +855,8 @@
             "category_id": null,
             "amount": "-40.000000",
             "currency": "USD",
-            "amount_base": "-40.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "-36.360000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -762,9 +866,52 @@
           {
             "account_id": null,
             "category_id": "fun",
-            "amount": "40.000000",
+            "amount": "36.360000",
+            "currency": "EUR",
+            "amount_base": "36.360000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-13",
+        "time": null,
+        "description": "Relock",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a1",
+            "category_id": null,
+            "amount": "-5000.000000",
             "currency": "USD",
-            "amount_base": "40.000000",
+            "amount_base": "-4545.450000",
+            "exchange_rate": "0.909091",
+            "orig_amount": "-2000.000000",
+            "orig_currency": "JPY",
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "food",
+            "amount": "4545.450000",
+            "currency": "EUR",
+            "amount_base": "4545.450000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -794,8 +941,8 @@
             "category_id": null,
             "amount": "530.000000",
             "currency": "USD",
-            "amount_base": "530.000000",
-            "exchange_rate": "1.000000",
+            "amount_base": "481.820000",
+            "exchange_rate": "0.909091",
             "orig_amount": null,
             "orig_currency": null,
             "memo": null,
@@ -805,9 +952,52 @@
           {
             "account_id": null,
             "category_id": "sys-adj",
-            "amount": "-530.000000",
+            "amount": "-481.820000",
+            "currency": "EUR",
+            "amount_base": "-481.820000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-06-20",
+        "time": null,
+        "description": "Opening balance",
+        "kind": "opening",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": null,
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a4",
+            "category_id": null,
+            "amount": "250.000000",
             "currency": "USD",
-            "amount_base": "-530.000000",
+            "amount_base": "227.270000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": true,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": "sys-open",
+            "amount": "-227.270000",
+            "currency": "EUR",
+            "amount_base": "-227.270000",
             "exchange_rate": "1.000000",
             "orig_amount": null,
             "orig_currency": null,
@@ -822,7 +1012,7 @@
       {
         "id": "personal",
         "name": "Personal",
-        "base": "USD",
+        "base": "EUR",
         "is_default": 1,
         "color": null,
         "tagline": null
@@ -837,7 +1027,7 @@
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
-        "current_balance": "1302.170000",
+        "current_balance": "-3697.830000",
         "sort_order": 0,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -868,6 +1058,19 @@
         "include_in_net_worth": 1,
         "is_active": 1,
         "archived": false
+      },
+      {
+        "id": "a4",
+        "ledger_id": "personal",
+        "group_id": null,
+        "name": "Wallet",
+        "type": "cash",
+        "currency": "USD",
+        "current_balance": "250.000000",
+        "sort_order": 3,
+        "include_in_net_worth": 1,
+        "is_active": 1,
+        "archived": false
       }
     ],
     "categories": [
@@ -883,7 +1086,7 @@
       {
         "id": "fun",
         "ledger_id": "personal",
-        "parent_id": null,
+        "parent_id": "food",
         "name": "Fun",
         "kind": "expense",
         "system": null,
@@ -892,7 +1095,7 @@
       {
         "id": "pay",
         "ledger_id": "personal",
-        "parent_id": null,
+        "parent_id": "fun",
         "name": "Salary",
         "kind": "income",
         "system": null,
@@ -983,16 +1186,100 @@
     ],
     "exchange_rates": [
       {
+        "date": "2026-01-01",
+        "currency": "EUR",
+        "rate": "1.080000",
+        "source": null
+      },
+      {
         "date": "2026-05-01",
         "currency": "EUR",
         "rate": "1.100000",
         "source": null
       },
       {
+        "date": "2026-05-02",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-03",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-04",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-05",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-06",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-07",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-08",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
         "date": "2026-05-08",
         "currency": "JPY",
         "rate": "0.006500",
         "source": null
+      },
+      {
+        "date": "2026-05-09",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-11",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-12",
+        "currency": "JPY",
+        "rate": "0.006500",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-13",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-31",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-06-20",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
       }
     ],
     "scheduled_templates": [
@@ -1008,7 +1295,7 @@
         "from_account_id": null,
         "start_date": "2026-01-01",
         "is_active": 1,
-        "splits_enabled": 0
+        "splits_enabled": 1
       }
     ],
     "rules": [
