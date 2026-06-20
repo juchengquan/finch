@@ -28,16 +28,18 @@ struct FinchApp: App {
                 if gate.isLocked {   // Phase 6.3: biometric cover
                     LockView().environmentObject(gate)
                 }
-                if store.isImporting {
-                    ProgressView("Importing…")
+                if store.isImporting || store.isHydrating {
+                    ProgressView(store.isImporting ? "Importing…" : "Loading…")
                         .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
+                store.isHydrating = true
                 store.bootstrap()   // re-open the persisted live DB on launch
                 gate.start()        // Phase 6.3: evaluate lock state
-                await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1
+                await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1 (can be slow on large data)
+                store.isHydrating = false
                 // Phase 6.2: notifications
                 NotificationService.shared.configure(store: store, router: router)
                 await NotificationService.shared.requestPermissionIfNeeded()

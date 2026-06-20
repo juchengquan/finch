@@ -15,6 +15,14 @@ struct Sparkline: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
+        // Non-color cue: a direction glyph so up/down reads without relying on
+        // green/red (colour-vision accessibility).
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(up ? .green : .red)
+                .accessibilityHidden(true)
+        }
         .accessibilityElement()
         .accessibilityLabel("Trend")
         .accessibilityValue(up ? "trending up" : "trending down")

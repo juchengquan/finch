@@ -21,6 +21,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var accounts: [AccountRow] = []
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public internal(set) var isImporting = false   // drives the import spinner (set by ImportExport)
+    @Published public internal(set) var isHydrating = false   // drives the launch spinner (set by FinchApp.task)
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public internal(set) var ledgers: [Ledger] = []   // set by core + ImportExport

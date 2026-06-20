@@ -40,6 +40,8 @@ struct SettingsTab: View {
                         set: { on in Task { await cloudSync.setEnabled(on, store: store) } }))
                     if cloudSync.isBootstrapping {
                         HStack { ProgressView(); Text("Setting up iCloud sync…").foregroundStyle(.secondary) }
+                    } else if cloudSync.isSyncing {
+                        HStack { ProgressView(); Text("Syncing…").foregroundStyle(.secondary) }
                     }
                     if cloudSync.enabled {
                         LabeledContent("Status", value: cloudSync.status.accountAvailable

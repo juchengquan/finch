@@ -117,7 +117,7 @@ struct AddRuleSheet: View {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
         guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value."; return }
 
-        let condValue: JSONValue = field == .amount ? .double(Double(value) ?? 0) : .string(value)
+        let condValue: JSONValue = field == .amount ? .double(DecimalInput.parse(value) ?? 0) : .string(value)
         let condition: JSONValue = .object(["field": .string(field.rawValue), "op": .string(op), "value": condValue])
         let actions: JSONValue
         switch action {
