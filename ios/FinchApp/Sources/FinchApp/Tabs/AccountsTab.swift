@@ -144,8 +144,9 @@ struct AccountsTab: View {
             List {
                 allTransactionsLink
                 groupedSections { account in
-                    // A Button push (not NavigationLink) so there's no trailing
-                    // disclosure chevron; still opens the detail via `path`.
+                    // Plain Button (navigates via the path) instead of NavigationLink
+                    // so there's no trailing disclosure chevron; contentShape keeps
+                    // the whole row tappable.
                     Button { path.append(account.id) } label: {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
