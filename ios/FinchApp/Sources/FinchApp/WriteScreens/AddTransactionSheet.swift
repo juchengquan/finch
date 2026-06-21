@@ -92,7 +92,10 @@ struct AddTransactionSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
                 // Transaction type sits in the title slot as an icon segmented control.
                 ToolbarItem(placement: .principal) {
                     Picker("Type", selection: $kind) {
@@ -103,9 +106,17 @@ struct AddTransactionSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .fixedSize()
+                    // .principal sizes to the item's intrinsic width, so maxWidth:
+                    // .infinity collapses back to content size. An explicit width is
+                    // the only lever that sets the segment size. ~190pt keeps each of
+                    // the four segments near-square (~44pt) so the selected highlight
+                    // reads as a rounded pill rather than a wide rectangle.
+                    .frame(width: 190)
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: save) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Save").bold()
+                }
             }
             .onAppear(perform: seedDefaults)
             // Auto-categorize from the merchant's history (the user can still override).

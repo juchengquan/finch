@@ -27,8 +27,14 @@ struct BulkRecategorizeSheet: View {
             .navigationTitle("Recategorize")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Apply", action: apply).bold() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: apply) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Apply").bold()
+                }
             }
             .onAppear { if categoryId.isEmpty { categoryId = store.pickableCategories.first?.id ?? "" } }
         }

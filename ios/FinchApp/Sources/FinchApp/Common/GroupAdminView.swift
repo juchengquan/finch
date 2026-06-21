@@ -44,7 +44,10 @@ struct GroupAdminView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Image(systemName: "checkmark") }
+                    .accessibilityLabel("Done")
+            }
             #if os(iOS)
             if onReorder != nil && groups.count > 1 { ToolbarItem(placement: .primaryAction) { EditButton() } }
             #endif
