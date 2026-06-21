@@ -21,7 +21,12 @@ struct MoreTabRoot: View {
             }
             .navigationTitle("More")
             .navigationDestination(for: AppTab.self) { tab in
+                // Set the title here on the destination: the screens' own
+                // `.navigationTitle` (deep inside `MoreTabNavigationStack`'s
+                // conditional content) doesn't surface through
+                // `navigationDestination`, so the pushed bar showed no title.
                 destination(for: tab)
+                    .navigationTitle(tab.title)
             }
         }
     }
