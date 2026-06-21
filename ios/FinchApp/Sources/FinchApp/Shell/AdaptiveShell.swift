@@ -46,6 +46,10 @@ struct TabBarShell: View {
                 .tag(CompactTab.more)
         }
         .onAppear { syncFromRouter(router.selectedTab) }
+        // `selectedTab` is @Published, so this only fires on a value *change*: a
+        // repeat selection of the already-current tab (e.g. a second Scheduled
+        // notification while already on More→Scheduled) won't re-push or pop.
+        // Matches the prior system-More behavior; acceptable.
         .onChange(of: router.selectedTab) { _, tab in syncFromRouter(tab) }
         .onChange(of: selected) { _, sel in
             if let tab = CompactTabRouting.routerTab(forSelected: sel, current: router.selectedTab) {

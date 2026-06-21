@@ -1,5 +1,3 @@
-import Foundation
-
 /// The five slots in the iPhone bottom tab bar. The first four mirror `AppTab`;
 /// `.more` is the custom overflow tab hosting Scheduled & Settings — replacing
 /// SwiftUI's system "More" tab (which dropped titles / doubled the back button).
