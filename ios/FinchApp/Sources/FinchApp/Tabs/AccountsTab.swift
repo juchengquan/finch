@@ -137,6 +137,8 @@ struct AccountsTab: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
+                .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
 
                 if !collapsedGroups.contains(groupName) {
                     ForEach(store.accounts(in: groupName)) { account in row(account) }

@@ -51,7 +51,11 @@ via `store.accountGroupsOrdered: [String]` and `store.accounts(in:)`).
 
 - Add view state seeded once on appear:
   `@State private var collapsedGroups: Set<String>` ← `AccountGroupCollapse.collapsed()`.
-- Each group `Section`'s header becomes a tappable control:
+- The group title is a tappable **`Button` row** at the top of each section (NOT a
+  section header): `Button`/tap gestures don't fire in a `List` section header, and
+  `Section(isExpanded:)`'s native chevron only renders in `.sidebar` style. The row
+  is `.buttonStyle(.plain)` with `.contentShape(Rectangle())` so the whole width
+  toggles, and carries:
   - leading **chevron** — `chevron.down` when expanded, `chevron.right` when collapsed,
   - the group name, a `Spacer()`, and the subtotal (`store.subtotalDisplay(for:)`).
   - Tapping toggles the group: mutate `collapsedGroups` and call
