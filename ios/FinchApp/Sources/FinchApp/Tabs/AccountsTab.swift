@@ -245,7 +245,10 @@ struct AccountsTab: View {
         .environment(\.editMode, .constant(.active))
     }
 
-    /// Persist the reordered state (only rows whose group/order changed).
+    /// Persist the reordered state (only rows whose group/order changed). Writes
+    /// go through the per-call `store.apply` chokepoint (like `moveAccounts`), so
+    /// it isn't atomic — a mid-loop failure leaves some rows at stale sort_order,
+    /// which is cosmetic and self-heals on the next reorder.
     private func persistReorder() {
         guard !reorderRows.isEmpty else { return }   // nothing to persist (never entered reorder)
         let plan = AccountReorder.persistencePlan(reorderRows)
