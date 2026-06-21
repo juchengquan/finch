@@ -407,6 +407,33 @@
       }
     },
     {
+      "action": "createAccountGroup",
+      "args": {
+        "id": "ag1",
+        "ledgerId": "personal",
+        "name": "Cash Group"
+      }
+    },
+    {
+      "action": "updateAccountGroup",
+      "args": {
+        "id": "ag1",
+        "patch": {
+          "sortOrder": 5
+        }
+      }
+    },
+    {
+      "action": "updateAccount",
+      "args": {
+        "id": "a1",
+        "patch": {
+          "groupId": "ag1",
+          "sortOrder": 3
+        }
+      }
+    },
+    {
       "action": "setExchangeRate",
       "args": {
         "date": "2026-01-01",
@@ -964,17 +991,24 @@
         "tagline": null
       }
     ],
-    "account_groups": [],
+    "account_groups": [
+      {
+        "id": "ag1",
+        "ledger_id": "personal",
+        "name": "Cash Group",
+        "sort_order": 5
+      }
+    ],
     "accounts": [
       {
         "id": "a1",
         "ledger_id": "personal",
-        "group_id": null,
+        "group_id": "ag1",
         "name": "Checking",
         "type": "cash",
         "currency": "USD",
         "current_balance": "-3697.830000",
-        "sort_order": 0,
+        "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
         "archived": false

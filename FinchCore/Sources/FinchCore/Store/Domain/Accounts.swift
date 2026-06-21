@@ -44,7 +44,7 @@ public enum Accounts {
         }
     }
 
-    private static let cols: [String: String] = ["name": "name", "type": "type", "color": "color", "groupId": "group_id", "includeInNetWorth": "include_in_net_worth"]
+    private static let cols: [String: String] = ["name": "name", "type": "type", "color": "color", "groupId": "group_id", "includeInNetWorth": "include_in_net_worth", "sortOrder": "sort_order"]
 
     static func update(_ db: Database, _ args: Args) throws {
         guard let id = args.idString else { throw I18nError("error.invalidArgs", [:], "updateAccount requires an id") }
@@ -55,7 +55,7 @@ public enum Accounts {
         }
         var sets: [String] = []
         var bind: [DatabaseValueConvertible?] = []
-        for key in ["name", "type", "color", "groupId", "includeInNetWorth"] where patch.keys.contains(key) {
+        for key in ["name", "type", "color", "groupId", "includeInNetWorth", "sortOrder"] where patch.keys.contains(key) {
             sets.append("\(cols[key]!) = ?"); bind.append(patch[key]!.sqlBind)   // currency is intentionally non-patchable
         }
         if sets.isEmpty { return }
