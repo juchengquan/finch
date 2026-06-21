@@ -35,6 +35,9 @@ public final class FinchStore: ObservableObject {
     }
     @Published public internal(set) var auditProblems: [Audit.AuditProblem] = []   // set by core + ImportExport
     @Published public internal(set) var dbInfo: DatabaseInfo = .empty               // set by core + ImportExport
+    /// A non-recoverable load/migration/projection failure, surfaced to the user
+    /// instead of silently degrading on a broken DB. Nil when healthy.
+    @Published public internal(set) var dataError: String?
 
     // Shared with the ImportExport / ViewHelpers extensions (hence internal).
     var dbQueue: DatabaseQueue?
@@ -71,8 +74,18 @@ public final class FinchStore: ObservableObject {
         guard dbQueue == nil else { return }
         try? FileManager.default.createDirectory(
             at: liveDBURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard let live = try? DatabaseQueue(path: liveDBURL.path) else { return }
-        try? Migrations.runAll(on: live)
+        guard let live = try? DatabaseQueue(path: liveDBURL.path) else {
+            dataError = "Couldn't open the finch database."
+            return
+        }
+        do {
+            try Migrations.runAll(on: live)
+        } catch {
+            // A failed migration leaves the schema in an unknown state — don't
+            // operate on it. Surface the error instead of silently degrading.
+            dataError = "Database migration failed: \(error.localizedDescription). Restore a backup or reinstall."
+            return
+        }
         self.dbQueue = live
         if (try? Projection.ledgers(dbQueue: live))?.isEmpty ?? true {
             try? seedMinimalStarter(live)
@@ -135,22 +148,37 @@ public final class FinchStore: ObservableObject {
     /// `Projection.run(ledgerId:)` keeps it from rebuilding every ledger's txns.
     func reprojectActiveLedger() {
         guard let q = dbQueue else { return }
-        self.txns     = (try? Projection.run(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.accounts = (try? Projection.accounts(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.accountGroups = (try? Projection.accountGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.budgets  = (try? Projection.budgets(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.categories = (try? Projection.categories(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.counterparties = (try? Projection.counterparties(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.budgetGroupNames = (try? Projection.budgetGroupNames(dbQueue: q, ledgerId: activeLedgerId)) ?? [:]
-        self.budgetGroups = (try? Projection.budgetGroups(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.holdings = (try? Projection.holdings(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.scheduled = (try? Projection.scheduledTemplates(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.exchangeRates = (try? Projection.exchangeRates(dbQueue: q)) ?? []
-        self.rules = (try? Projection.rules(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.tags = (try? Projection.tags(dbQueue: q, ledgerId: activeLedgerId)) ?? []
-        self.rateMap = Money.latestRateMap(exchangeRates)
-        self.displayCurrencyByLedger = (try? Projection.displayCurrencyByLedger(dbQueue: q)) ?? [:]
-        self.merchantStatsCache = nil   // recompute on next access
+        // All-or-nothing: compute every slice first, then publish a consistent
+        // snapshot. On any query failure, keep the last-good state and surface
+        // the error rather than silently publishing stale-or-empty data.
+        do {
+            let id = activeLedgerId
+            let txns     = try Projection.run(dbQueue: q, ledgerId: id)
+            let accounts = try Projection.accounts(dbQueue: q, ledgerId: id)
+            let accountGroups = try Projection.accountGroups(dbQueue: q, ledgerId: id)
+            let budgets  = try Projection.budgets(dbQueue: q, ledgerId: id)
+            let categories = try Projection.categories(dbQueue: q, ledgerId: id)
+            let counterparties = try Projection.counterparties(dbQueue: q, ledgerId: id)
+            let budgetGroupNames = try Projection.budgetGroupNames(dbQueue: q, ledgerId: id)
+            let budgetGroups = try Projection.budgetGroups(dbQueue: q, ledgerId: id)
+            let holdings = try Projection.holdings(dbQueue: q, ledgerId: id)
+            let scheduled = try Projection.scheduledTemplates(dbQueue: q, ledgerId: id)
+            let exchangeRates = try Projection.exchangeRates(dbQueue: q)
+            let rules = try Projection.rules(dbQueue: q, ledgerId: id)
+            let tags = try Projection.tags(dbQueue: q, ledgerId: id)
+            let displayCurrencyByLedger = try Projection.displayCurrencyByLedger(dbQueue: q)
+
+            self.txns = txns; self.accounts = accounts; self.accountGroups = accountGroups
+            self.budgets = budgets; self.categories = categories; self.counterparties = counterparties
+            self.budgetGroupNames = budgetGroupNames; self.budgetGroups = budgetGroups
+            self.holdings = holdings; self.scheduled = scheduled; self.exchangeRates = exchangeRates
+            self.rules = rules; self.tags = tags; self.displayCurrencyByLedger = displayCurrencyByLedger
+            self.rateMap = Money.latestRateMap(exchangeRates)
+            self.merchantStatsCache = nil   // recompute on next access
+            self.dataError = nil
+        } catch {
+            self.dataError = "Couldn't load your data: \(error.localizedDescription)"
+        }
     }
 
     func makeDBInfo() -> DatabaseInfo {

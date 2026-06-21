@@ -39,7 +39,12 @@ struct FinchApp: App {
                 store.isHydrating = true
                 store.bootstrap()   // re-open the persisted live DB on launch
                 gate.start()        // Phase 6.3: evaluate lock state
-                await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1 (can be slow on large data)
+                // Don't expose financial data in system-wide Spotlight while the
+                // app is locked — index only when unlocked (the lock-transition
+                // handler below clears on lock and re-indexes on unlock).
+                if !gate.isLocked {
+                    await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1 (can be slow on large data)
+                }
                 store.isHydrating = false
                 // Phase 6.2: notifications
                 NotificationService.shared.configure(store: store, router: router)
@@ -71,6 +76,19 @@ struct FinchApp: App {
             // can't sit on top of the lock cover (the cover is a ZStack sibling).
             .onChange(of: gate.isLocked) { _, locked in
                 if locked { router.showCommandPalette = false; router.showAddTransaction = false }
+                // Privacy: drop the Spotlight index while locked; rebuild it on unlock.
+                Task {
+                    if locked { await SpotlightIndexer.shared.clearAll() }
+                    else { await SpotlightIndexer.shared.indexAll(store: store) }
+                }
+            }
+            // Surface a non-recoverable load/migration/projection failure.
+            .alert("Data problem", isPresented: Binding(
+                get: { store.dataError != nil },
+                set: { if !$0 { store.dataError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(store.dataError ?? "")
             }
             // Phase 3 (Mac/⌘K): global palette + new-transaction presentation.
             .sheet(isPresented: $router.showCommandPalette) {
