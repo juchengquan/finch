@@ -25,6 +25,7 @@ struct AccountsTab: View {
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
+    @State private var collapsedGroups: Set<String> = AccountGroupCollapse.collapsed()
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; toggled from the ⋯ menu
     #endif
@@ -117,14 +118,25 @@ struct AccountsTab: View {
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
         ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
             Section {
-                ForEach(store.accounts(in: groupName)) { account in row(account) }
-                    .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
-            } header: {
-                HStack {
-                    Text(groupName)
-                    Spacer()
-                    Text(store.subtotalDisplay(for: groupName))
+                if !collapsedGroups.contains(groupName) {
+                    ForEach(store.accounts(in: groupName)) { account in row(account) }
+                        .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
                 }
+            } header: {
+                Button {
+                    toggleGroup(groupName)
+                } label: {
+                    HStack {
+                        Image(systemName: collapsedGroups.contains(groupName) ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(groupName)
+                        Spacer()
+                        Text(store.subtotalDisplay(for: groupName))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         Section {
@@ -134,6 +146,15 @@ struct AccountsTab: View {
                 Text(store.netWorthDisplay).fontWeight(.semibold)
             }
         }
+    }
+
+    /// Toggle a group's collapsed state and persist it.
+    private func toggleGroup(_ group: String) {
+        let nowCollapsed = !collapsedGroups.contains(group)
+        withAnimation {
+            if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
+        }
+        AccountGroupCollapse.setCollapsed(group, nowCollapsed)
     }
 
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
