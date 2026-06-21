@@ -247,6 +247,7 @@ struct AccountsTab: View {
 
     /// Persist the reordered state (only rows whose group/order changed).
     private func persistReorder() {
+        guard !reorderRows.isEmpty else { return }   // nothing to persist (never entered reorder)
         let plan = AccountReorder.persistencePlan(reorderRows)
         let curGroupOrder = Dictionary(uniqueKeysWithValues: store.accountGroups.enumerated().map { ($1.id, $0) })
         let curAcct = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, ($0.groupId, $0.sortOrder ?? 0)) })
