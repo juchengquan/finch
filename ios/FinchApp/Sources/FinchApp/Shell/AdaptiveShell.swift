@@ -31,13 +31,13 @@ struct TabBarShell: View {
 
     var body: some View {
         TabView(selection: $selected) {
-            tabContent(.accounts)
+            tabContent(.accounts).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
-            tabContent(.budgets)
+            tabContent(.budgets).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.budgets.title, systemImage: AppTab.budgets.icon) }
                 .tag(CompactTab.budgets)
-            tabContent(.insights)
+            tabContent(.insights).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
                 .tag(CompactTab.insights)
             MoreTabRoot(path: $morePath)
@@ -84,6 +84,34 @@ struct TabBarShell: View {
                 }
             }
         )
+    }
+}
+
+/// A floating "add transaction" button for the compact primary tabs — quick
+/// capture from anywhere (it replaces the prominent `+` the removed Activity tab
+/// used to provide). Triggers the same app-root sheet as ⌘N / the command
+/// palette. Hidden until at least one account exists (you can't post without one).
+/// The overlay sits inside the tab's content area, so it floats just above the
+/// bottom bar automatically.
+private struct AddTransactionFAB: ViewModifier {
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var store: FinchStore
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottomTrailing) {
+            if !store.accounts.isEmpty {
+                Button { router.showAddTransaction = true } label: {
+                    Image(systemName: "plus")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Color.accentColor, in: Circle())
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+                }
+                .accessibilityLabel("Add Transaction")
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
+            }
+        }
     }
 }
 
