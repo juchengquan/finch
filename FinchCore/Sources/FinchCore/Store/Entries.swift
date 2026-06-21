@@ -427,14 +427,16 @@ public enum Entries {
         public var skipRules: Bool
         public var id: String?
         public var sourceTemplateId: String?
+        public var refundedEntryId: String?
         public init(ledgerId: String, accountId: String, amount: Double, date: String, description: String,
                     categoryId: String? = nil, kind: Kind? = nil, time: String? = nil, notes: String? = nil,
                     status: Status? = nil, counterpartyId: String? = nil, skipRules: Bool = false, id: String? = nil,
-                    sourceTemplateId: String? = nil) {
+                    sourceTemplateId: String? = nil, refundedEntryId: String? = nil) {
             self.ledgerId = ledgerId; self.accountId = accountId; self.amount = amount; self.date = date
             self.description = description; self.categoryId = categoryId; self.kind = kind; self.time = time
             self.notes = notes; self.status = status; self.counterpartyId = counterpartyId
             self.skipRules = skipRules; self.id = id; self.sourceTemplateId = sourceTemplateId
+            self.refundedEntryId = refundedEntryId
         }
     }
 
@@ -447,7 +449,7 @@ public enum Entries {
             id: s.id, ledgerId: s.ledgerId, date: s.date, time: s.time, description: s.description,
             kind: kind, status: s.status, legs: [.account(AccountLeg(accountId: s.accountId, amount: s.amount))],
             autoBalance: .category(s.categoryId), notes: s.notes, counterpartyId: s.counterpartyId,
-            sourceTemplateId: s.sourceTemplateId, skipRules: s.skipRules))
+            refundedEntryId: s.refundedEntryId, sourceTemplateId: s.sourceTemplateId, skipRules: s.skipRules))
     }
 
     /// Resolve a client Tx id (a posting id) — or an entry id — to its entry +

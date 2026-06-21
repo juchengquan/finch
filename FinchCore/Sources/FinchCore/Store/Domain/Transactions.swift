@@ -237,7 +237,8 @@ public enum Transactions {
                     origAmount: a.amount, origCurrency: inputCcy))],
                 autoBalance: .category(a.categoryId),
                 notes: (a.note?.isEmpty ?? true) ? nil : a.note,
-                counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+                counterpartyId: counterpartyId, refundedEntryId: a.refundedTransactionId,
+                skipRules: a.skipRules ?? false))
             try Budgets.invalidateForEntry(db, eid)
             return
         }
@@ -247,7 +248,8 @@ public enum Transactions {
             description: a.merchant, categoryId: a.categoryId, kind: kind, time: a.time,
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
-            counterpartyId: counterpartyId, skipRules: a.skipRules ?? false))
+            counterpartyId: counterpartyId, skipRules: a.skipRules ?? false,
+            refundedEntryId: a.refundedTransactionId))
         try Budgets.invalidateForEntry(db, eid)
       }
     }

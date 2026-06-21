@@ -7,6 +7,7 @@ import FinchCore
 /// setDefaultLedger / updateLedger / deleteLedger.
 struct LedgerManagementView: View {
     @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
     @State private var showingAdd = false
     @State private var editing: Ledger?
     @State private var errorMessage: String?
@@ -48,8 +49,13 @@ struct LedgerManagementView: View {
 
     private func delete(_ ledger: Ledger) {
         errorMessage = nil
-        do { try store.apply(.deleteLedger, Args(["id": .string(ledger.id)])) }
-        catch { errorMessage = i18nMessage(error) }
+        // Deleting a ledger destroys all its data — gate it like the other
+        // sensitive actions (export, base-currency change).
+        Task {
+            guard await gate.confirmSensitive() else { return }
+            do { try store.apply(.deleteLedger, Args(["id": .string(ledger.id)])) }
+            catch { errorMessage = i18nMessage(error) }
+        }
     }
 }
 

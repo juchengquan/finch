@@ -51,12 +51,15 @@ extension FinchStore {
     /// D7 — iOS-only override: swap the RETAINED rejected pack's staged DB into
     /// the live location (a real import path that skips ONLY the audit gate).
     /// The rejected pack's problems are surfaced (not gated on). No-op if none.
-    public func forceImportCurrentPack() {
+    public func forceImportCurrentPack() throws {
         guard let pending = pendingRejected else { return }
         self.pendingRejected = nil
-        try? swapInAndProject(stagedDB: pending.stagedDB,
-                              stagedAttachments: pending.stagedAttachments,
-                              problems: pending.problems)
+        // Propagate swap/reopen failures: a failed swap closes the live DB
+        // (dbQueue = nil), so a swallowed error would leave the app broken with
+        // no signal. The caller surfaces this and gates it behind Face ID.
+        try swapInAndProject(stagedDB: pending.stagedDB,
+                             stagedAttachments: pending.stagedAttachments,
+                             problems: pending.problems)
     }
 
     /// Shared tail of both import paths: atomic-swap → re-open → project.
