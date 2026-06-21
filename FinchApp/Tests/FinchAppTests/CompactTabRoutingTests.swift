@@ -5,6 +5,7 @@ final class CompactTabRoutingTests: XCTestCase {
     func test_primaryTabsMapToOwnSlot() {
         XCTAssertEqual(CompactTabRouting.compactTab(for: .accounts), .accounts)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .budgets), .budgets)
+        XCTAssertEqual(CompactTabRouting.compactTab(for: .scheduled), .scheduled)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .insights), .insights)
     }
 
@@ -13,19 +14,19 @@ final class CompactTabRoutingTests: XCTestCase {
     }
 
     func test_overflowTabsMapToMore() {
-        XCTAssertEqual(CompactTabRouting.compactTab(for: .scheduled), .more)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .settings), .more)
     }
 
     func test_appTabForSlot() {
         XCTAssertEqual(CompactTabRouting.appTab(for: .accounts), .accounts)
+        XCTAssertEqual(CompactTabRouting.appTab(for: .scheduled), .scheduled)
         XCTAssertEqual(CompactTabRouting.appTab(for: .insights), .insights)
         XCTAssertNil(CompactTabRouting.appTab(for: .more))
     }
 
     func test_overflowTab() {
         XCTAssertEqual(CompactTabRouting.overflowTab(for: .settings), .settings)
-        XCTAssertEqual(CompactTabRouting.overflowTab(for: .scheduled), .scheduled)
+        XCTAssertNil(CompactTabRouting.overflowTab(for: .scheduled))   // now a primary tab
         XCTAssertNil(CompactTabRouting.overflowTab(for: .accounts))
     }
 
@@ -47,10 +48,12 @@ final class CompactTabRoutingTests: XCTestCase {
         XCTAssertEqual(r.path, [.settings])
     }
 
-    func test_sync_switchesBetweenOverflowScreens() {
+    func test_sync_primaryFromOverflowClearsPath() {
+        // Scheduled is now a primary slot: switching to it from the More tab
+        // selects its own slot and clears the overflow push path.
         let r = CompactTabRouting.sync(routerTab: .scheduled, currentPath: [.settings])
-        XCTAssertEqual(r.selected, .more)
-        XCTAssertEqual(r.path, [.scheduled])
+        XCTAssertEqual(r.selected, .scheduled)
+        XCTAssertEqual(r.path, [])
     }
 
     func test_routerTab_primaryWhenChanged() {

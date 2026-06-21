@@ -1,35 +1,37 @@
-/// The four slots in the iPhone bottom tab bar. The first three mirror `AppTab`;
-/// `.more` is the custom overflow tab hosting Scheduled & Settings — replacing
-/// SwiftUI's system "More" tab (which dropped titles / doubled the back button).
+/// The five slots in the iPhone bottom tab bar. The first four mirror `AppTab`;
+/// `.more` is the custom overflow tab hosting Settings — replacing SwiftUI's
+/// system "More" tab (which dropped titles / doubled the back button).
 /// (Activity is no longer a bottom-bar tab — its feed lives inside Accounts.)
 /// See plans/ios-macos/2026-06-21-compact-more-tab-design.md.
 enum CompactTab: Hashable {
-    case accounts, budgets, insights, more
+    case accounts, budgets, scheduled, insights, more
 }
 
 /// Pure bridge logic between `DeepLinkRouter.selectedTab` (an `AppTab`) and the
 /// compact bottom bar's `CompactTab` selection + the More tab's push path. Kept
 /// free of SwiftUI so it is unit-testable (mirrors `LockDecision`).
 enum CompactTabRouting {
-    /// The bottom-bar slot to highlight for a given app tab. Scheduled & Settings
-    /// live under `.more`.
+    /// The bottom-bar slot to highlight for a given app tab. Settings lives
+    /// under `.more`.
     static func compactTab(for tab: AppTab) -> CompactTab {
         switch tab {
         case .accounts: return .accounts
         case .activity: return .accounts   // Activity feed now opens inside Accounts
         case .budgets:  return .budgets
+        case .scheduled: return .scheduled
         case .insights: return .insights
-        case .scheduled, .settings: return .more
+        case .settings: return .more
         }
     }
 
     /// The app tab a primary slot maps to, or `nil` for `.more` (no single tab).
     static func appTab(for compact: CompactTab) -> AppTab? {
         switch compact {
-        case .accounts: return .accounts
-        case .budgets:  return .budgets
-        case .insights: return .insights
-        case .more:     return nil
+        case .accounts:  return .accounts
+        case .budgets:   return .budgets
+        case .scheduled: return .scheduled
+        case .insights:  return .insights
+        case .more:      return nil
         }
     }
 
@@ -37,7 +39,7 @@ enum CompactTabRouting {
     /// if it isn't an overflow screen.
     static func overflowTab(for tab: AppTab) -> AppTab? {
         switch tab {
-        case .scheduled, .settings: return tab
+        case .settings: return tab
         default: return nil
         }
     }
