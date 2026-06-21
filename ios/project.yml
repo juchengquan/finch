@@ -95,7 +95,14 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_ENTITLEMENTS: FinchApp/FinchMac.entitlements
-        CODE_SIGNING_ALLOWED: "NO"
+        # Ad-hoc "Sign to Run Locally" — no Development Team needed, so ⌘R / a
+        # local build produces a runnable signed app (Apple Silicon requires at
+        # least an ad-hoc signature to launch). App Sandbox signs fine ad-hoc; the
+        # team-only App Group was dropped from FinchMac.entitlements. CI doesn't
+        # build FinchMac, so this is local-only. For real distribution, set a
+        # Development Team + restore the App Group.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         SWIFT_EMIT_LOC_STRINGS: "YES"
 
