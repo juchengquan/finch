@@ -1,6 +1,9 @@
 import Foundation
 import CloudKit
 import FinchCore
+#if os(macOS)
+import Security   // SecTask* — reading our own entitlements is macOS-SDK only
+#endif
 
 // Phase 8 — row-level CloudKit sync.
 //
@@ -90,25 +93,43 @@ public final class CloudKitSyncService {
 
     static let containerID = "iCloud.com.juchengquan.finch"
 
-    /// nil when iCloud isn't usable by this build — most importantly the unsigned
+    /// nil when this build can't use CloudKit — most importantly the unsigned
     /// simulator / CI build (`CODE_SIGNING_ALLOWED=NO`, no team), whose binary
-    /// carries no iCloud entitlement. Crucially, `CKContainer(identifier:)` does NOT
-    /// throw when its id is absent from the embedded
-    /// `com.apple.developer.icloud-container-identifiers` entitlement — it TRAPS
-    /// (`_os_crash` → `EXC_BREAKPOINT`), which crashed the app at launch. There's no
-    /// public iOS API to read your own entitlements, but `ubiquityIdentityToken` is
-    /// documented to be nil whenever iCloud is unavailable to the app "for any
-    /// reason — for example … the app's entitlements are not configured for iCloud."
-    /// So a nil token reliably covers the no-entitlement case; gating on it means we
-    /// only construct the container on a provisioned build with an active iCloud
-    /// account (the only case CloudKit could work anyway) and stay genuinely inert
-    /// otherwise. Every method already guards on `accountAvailable()`, which returns
-    /// false when `container` is nil.
-    private let container: CKContainer? = {
-        guard FileManager.default.ubiquityIdentityToken != nil else { return nil }
-        return CKContainer(identifier: CloudKitSyncService.containerID)
-    }()
+    /// carries no iCloud entitlement. CloudKit does NOT throw in that case — it TRAPS
+    /// (`_os_crash` → `EXC_BREAKPOINT`): `CKContainer(identifier:)` traps when the id
+    /// isn't in `com.apple.developer.icloud-container-identifiers`, and the first
+    /// container *use* traps when `com.apple.developer.icloud-services` lacks
+    /// "CloudKit". Both crashed the app at launch. So we must detect the missing
+    /// entitlement up front and skip construction; there's nothing to catch.
+    /// `accountAvailable()` returns false when this is nil, so every method no-ops.
+    private let container: CKContainer? = CloudKitSyncService.hasCloudKitEntitlement
+        ? CKContainer(identifier: CloudKitSyncService.containerID) : nil
     private var db: CKDatabase? { container?.privateCloudDatabase }
+
+    /// Whether the running binary may talk to CloudKit at all.
+    ///
+    /// macOS: read the `com.apple.developer.icloud-services` entitlement directly via
+    /// `SecTask` (macOS-SDK only). This is exact — false on the unsigned build, and
+    /// it does NOT confuse the *user's* iCloud login (which on macOS is visible even
+    /// to an unentitled app) with the *app's* entitlement.
+    ///
+    /// iOS: there's no public API to read your own entitlements, so fall back to
+    /// `ubiquityIdentityToken`, which is documented to be nil whenever iCloud is
+    /// unavailable to the app — including when its entitlements aren't configured for
+    /// iCloud, and on the account-less simulator. (Reliable on iOS precisely because,
+    /// unlike macOS, the token is gated on the app entitlement.)
+    private static var hasCloudKitEntitlement: Bool {
+        #if os(macOS)
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(
+                  task, "com.apple.developer.icloud-services" as CFString, nil),
+              let services = value as? [String]
+        else { return false }
+        return services.contains("CloudKit") || services.contains("CloudKit-Anonymous")
+        #else
+        return FileManager.default.ubiquityIdentityToken != nil
+        #endif
+    }
 
     /// Set by the coordinator: replay a fetched remote mutation through the
     /// chokepoint. Not called for our own device's echoes.
