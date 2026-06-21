@@ -2,9 +2,9 @@ name: FinchApp
 options:
   bundleIdPrefix: com.juchengquan
   deploymentTarget:
-    iOS: "26.0"
-    macOS: "26.0"
-    watchOS: "26.0"
+    iOS: "17.0"
+    macOS: "14.0"
+    watchOS: "10.0"
 packages:
   FinchCore:
     path: .                      # the local SwiftPM package (Package.swift)
