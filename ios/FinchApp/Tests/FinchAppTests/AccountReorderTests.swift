@@ -57,4 +57,16 @@ final class AccountReorderTests: XCTestCase {
         let moved = AccountReorder.applyMove(rows, from: IndexSet(integer: 5), to: 0) // ungrouped header
         XCTAssertEqual(moved.map(\.id), rows.map(\.id))
     }
+
+    func test_realGroupMove_belowUngrouped_clampsBeforeIt() {
+        // Drag g1's header (idx 0) past the Ungrouped header to the very end.
+        var rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        rows = AccountReorder.applyMove(rows, from: IndexSet(integer: 0), to: rows.count)
+        // g1 stays the LAST real group, still before Ungrouped (which is pinned last).
+        XCTAssertEqual(rows.map(\.id), [
+            "g:g2:Cards", "a:a3", "g:g1:Bank", "a:a1", "a:a2", "g:ungrouped:Ungrouped", "a:a4"
+        ])
+        let plan = AccountReorder.persistencePlan(rows)
+        XCTAssertEqual(plan.groups.map { "\($0.id):\($0.order)" }, ["g2:0", "g1:1"])
+    }
 }
