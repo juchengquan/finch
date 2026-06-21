@@ -25,6 +25,7 @@ struct AccountsTab: View {
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
+    @State private var collapsedGroups: Set<String> = AccountGroupCollapse.collapsed()
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; toggled from the ⋯ menu
     #endif
@@ -129,14 +130,32 @@ struct AccountsTab: View {
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
         ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
+            // The group title is a tappable Button *row* (not a section header):
+            // Buttons/tap gestures don't fire in List section headers, and the
+            // native Section(isExpanded:) chevron only shows in .sidebar style.
+            // A Button row is reliably tappable and keeps the default list look.
             Section {
-                ForEach(store.accounts(in: groupName)) { account in row(account) }
-                    .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
-            } header: {
-                HStack {
-                    Text(groupName)
-                    Spacer()
-                    Text(store.subtotalDisplay(for: groupName))
+                Button {
+                    toggleGroup(groupName)
+                } label: {
+                    HStack {
+                        Image(systemName: collapsedGroups.contains(groupName) ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12)
+                        Text(groupName).fontWeight(.semibold)
+                        Spacer()
+                        Text(store.subtotalDisplay(for: groupName)).foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
+                .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+
+                if !collapsedGroups.contains(groupName) {
+                    ForEach(store.accounts(in: groupName)) { account in row(account) }
+                        .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
                 }
             }
         }
@@ -147,6 +166,15 @@ struct AccountsTab: View {
                 Text(store.netWorthDisplay).fontWeight(.semibold)
             }
         }
+    }
+
+    /// Toggle a group's collapsed state and persist it.
+    private func toggleGroup(_ group: String) {
+        let nowCollapsed = !collapsedGroups.contains(group)
+        withAnimation {
+            if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
+        }
+        AccountGroupCollapse.setCollapsed(group, nowCollapsed)
     }
 
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
