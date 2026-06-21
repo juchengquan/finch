@@ -178,15 +178,18 @@ struct EditTransactionSheet: View {
             "date": .string(Self.day(date)),
             "time": .string(Self.time(date)),
         ]
-        // Amount edit (keep the original sign; the field is the magnitude).
-        if let parsed = DecimalInput.parse(amountText), parsed > 0 {
+        // Amount + category edit (keep the original sign; the field is the magnitude).
+        // Skip both on a split tx — its legs are owned by the split.
+        // A non-split must have a valid amount; web blocks an empty/≤0 amount rather
+        // than silently keeping the old value, so match that instead of skipping.
+        if !isSplit {
+            guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
+                errorMessage = "Enter an amount greater than 0."; return
+            }
             let signed = (originalNative < 0 ? -1.0 : 1.0) * parsed
             if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
+            if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
         }
-        // Category edit — updateTransaction now rebuilds the category leg too.
-        // (Skip amount/category on a split tx — its legs are owned by the split.)
-        if isSplit { patch["amount"] = nil }
-        if !isSplit, !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
             if selectedTags != Set(txn.tags ?? []) {
