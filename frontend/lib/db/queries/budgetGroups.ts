@@ -33,8 +33,14 @@ export async function createBudgetGroup(exec: Exec, g: NewBudgetGroup): Promise<
 }
 
 export async function updateBudgetGroup(exec: Exec, id: string, patch: BudgetGroupPatch): Promise<void> {
-  if (patch.name === undefined) return;
-  await exec("UPDATE budget_groups SET name = ?, updated_at = datetime('now') WHERE id = ?", [patch.name, id]);
+  const sets: string[] = [];
+  const bind: (string | number)[] = [];
+  if (patch.name !== undefined) { sets.push('name = ?'); bind.push(patch.name); }
+  if (patch.sortOrder !== undefined) { sets.push('sort_order = ?'); bind.push(patch.sortOrder); }
+  if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
+  bind.push(id);
+  await exec(`UPDATE budget_groups SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
 /** Hard-delete a group; its budgets get group_id = NULL via the schema FK. */

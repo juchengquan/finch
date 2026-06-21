@@ -18,4 +18,6 @@ export interface NewBudgetGroup {
 
 export interface BudgetGroupPatch {
   name?: string;
+  /** Position among the ledger's budget groups — written by drag-to-reorder. */
+  sortOrder?: number;
 }
