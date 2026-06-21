@@ -13,17 +13,32 @@ import FinchCore
 // render the compact push layout when given no binding. See those files.
 
 /// The shared sections sidebar (column 1), driven by the router so deep links /
-/// intents / ⌘1–6 keep selecting tabs.
+/// intents / ⌘1–6 keep selecting tabs. Two clusters: the primary work surfaces,
+/// then a "More" group for the secondary ones (Activity — which has no compact
+/// tab — plus Scheduled & Settings, mirroring the iPhone More tab).
 struct SectionSidebar: View {
     @EnvironmentObject private var router: DeepLinkRouter
+
+    private let primary: [AppTab] = [.accounts, .budgets, .insights]
+    private let more: [AppTab] = [.activity, .scheduled, .settings]
+
     var body: some View {
-        List(AppTab.allCases, selection: Binding<AppTab?>(
+        List(selection: Binding<AppTab?>(
             get: { router.selectedTab },
-            set: { if let t = $0 { router.selectedTab = t } })) { tab in
-            Label(tab.title, systemImage: tab.icon)
+            set: { if let t = $0 { router.selectedTab = t } })) {
+            Section {
+                ForEach(primary) { row($0) }
+            }
+            Section("More") {
+                ForEach(more) { row($0) }
+            }
         }
         .navigationTitle("finch")
         .listStyle(.sidebar)
+    }
+
+    private func row(_ tab: AppTab) -> some View {
+        Label(tab.title, systemImage: tab.icon).tag(tab)
     }
 }
 
