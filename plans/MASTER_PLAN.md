@@ -370,7 +370,10 @@ below; what's still open is summarized here.
    **hardware/account-gated** and cannot be progressed in CI:
    - **CloudKit runtime (Phase 8).** The live mutation-log sync loop + the
      down-sync seed (`FinchCore.DownSync`) are built + unit-tested but **never
-     run** — they're inert without a provisioned container. Remaining: join the
+     run** — they're inert without a provisioned container. (Inert is now genuinely
+     crash-safe: the service gates `CKContainer` construction on the iCloud
+     entitlement, since `CKContainer` *traps* rather than throwing when it's absent —
+     this previously crashed the unsigned simulator app at launch.) Remaining: join the
      Apple Developer Program, create `iCloud.com.juchengquan.finch` (runbook:
      `plans/ios-macos/IOS_MACOS_PHASE_8_CLOUDKIT_SETUP.md`), wire the CloudKit
      fetch → `DownSync.ingest` → reproject, then verify two-device convergence +
