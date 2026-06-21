@@ -106,7 +106,12 @@ struct AddTransactionSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .fixedSize()
+                    // .principal sizes to the item's intrinsic width, so maxWidth:
+                    // .infinity collapses back to content size. An explicit width is
+                    // the only lever that sets the segment size. ~190pt keeps each of
+                    // the four segments near-square (~44pt) so the selected highlight
+                    // reads as a rounded pill rather than a wide rectangle.
+                    .frame(width: 190)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
