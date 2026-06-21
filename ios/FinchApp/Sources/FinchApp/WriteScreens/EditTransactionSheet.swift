@@ -50,8 +50,14 @@ struct EditTransactionSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Merchant", text: $merchant)
-                    TextField("Note (optional)", text: $note, axis: .vertical)
+                    HStack {
+                        Text("Merchant"); Spacer()
+                        TextField("", text: $merchant).multilineTextAlignment(.trailing)
+                    }
+                    HStack {
+                        Text("Note"); Spacer()
+                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                    }
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                         .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
                 }
