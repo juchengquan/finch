@@ -25,6 +25,9 @@ struct AccountsTab: View {
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
+    #if os(iOS)
+    @State private var editMode: EditMode = .inactive  // drives reorder; toggled from the ⋯ menu
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -32,8 +35,16 @@ struct AccountsTab: View {
             .navigationTitle("Accounts")
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) {
-                    if !store.accounts.isEmpty { EditButton() }   // enter reorder mode (drag within a group)
+                // Reorder lives in the ⋯ overflow menu (was a top-left Edit button).
+                ToolbarItem(placement: .secondaryAction) {
+                    if !store.accounts.isEmpty {
+                        Button {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        } label: {
+                            Label(editMode.isEditing ? "Done Reordering" : "Reorder Accounts",
+                                  systemImage: "arrow.up.arrow.down")
+                        }
+                    }
                 }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
@@ -66,6 +77,9 @@ struct AccountsTab: View {
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+            #if os(iOS)
+            .environment(\.editMode, $editMode)
+            #endif
         }
     }
 
