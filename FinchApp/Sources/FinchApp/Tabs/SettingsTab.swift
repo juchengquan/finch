@@ -49,7 +49,7 @@ struct SettingsTab: View {
                                        ? "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers"
                                        : "iCloud account required")
                         LabeledContent("Pending changes", value: "\(cloudSync.status.pendingChanges)")
-                        LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(date: .abbreviated, time: .shortened) ?? "—")
+                        LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
                         if let err = cloudSync.status.lastError {
                             Text(err).foregroundStyle(.red).font(.caption)
                         }
@@ -63,7 +63,7 @@ struct SettingsTab: View {
                 }
 
                 Section {
-                    LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(date: .abbreviated, time: .shortened) ?? "—")
+                    LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
                     Button("Back up now") { Task { await backups.flush() } }
                         .disabled(store.ledgers.isEmpty)
                     if let err = backups.lastError {

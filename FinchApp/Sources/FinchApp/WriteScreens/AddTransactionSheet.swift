@@ -75,6 +75,7 @@ struct AddTransactionSheet: View {
 
                 Section {
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
                     TextField("Note (optional)", text: $note, axis: .vertical)
                 }
 
