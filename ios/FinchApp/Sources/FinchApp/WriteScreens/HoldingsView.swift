@@ -123,7 +123,12 @@ struct AddHoldingSheet: View {
             "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
             "symbol": .string(symbol), "shares": .double(sh), "costBasis": .double(cb),
         ]
-        if let p = DecimalInput.parse(lastPrice), p >= 0 { args["lastPrice"] = .double(p) }
+        // Last price is optional, but a non-empty entry must be valid (web rejects
+        // a negative/garbage price rather than silently dropping it).
+        if !lastPrice.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard let p = DecimalInput.parse(lastPrice), p >= 0 else { errorMessage = "Enter a valid price (0 or greater)."; return }
+            args["lastPrice"] = .double(p)
+        }
         do {
             try store.apply(.createHolding, Args(args))
             dismiss()
@@ -149,6 +154,7 @@ struct SetHoldingPriceSheet: View {
             Form {
                 LabeledContent("Symbol", value: holding.symbol)
                 HStack { Text("Price"); Spacer(); TextField("0.00", text: $price).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                Text("Leave empty to clear the stored price.").font(.caption).foregroundStyle(.secondary)
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("Set Price")
@@ -162,11 +168,17 @@ struct SetHoldingPriceSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let p = DecimalInput.parse(price), p >= 0 else { errorMessage = "Enter a price."; return }
+        let trimmed = price.trimmingCharacters(in: .whitespaces)
         do {
-            try store.apply(.setHoldingPrice, Args([
-                "id": .string(holding.id), "price": .double(p), "date": .string(Self.today()),
-            ]))
+            if trimmed.isEmpty {
+                // Empty clears the stored price (matches web: setHoldingPrice null).
+                try store.apply(.setHoldingPrice, Args(["id": .string(holding.id), "price": .null]))
+            } else {
+                guard let p = DecimalInput.parse(trimmed), p >= 0 else { errorMessage = "Enter a valid price (0 or greater)."; return }
+                try store.apply(.setHoldingPrice, Args([
+                    "id": .string(holding.id), "price": .double(p), "date": .string(Self.today()),
+                ]))
+            }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
     }
