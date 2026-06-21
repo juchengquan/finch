@@ -1,4 +1,5 @@
 import SwiftUI
+import FinchCore
 
 /// Phase 3 — one code base, three platforms. The chrome switches by horizontal
 /// size class: iPhone (and iPad Slide Over / 1-3 split) keep the bottom tab bar;
@@ -24,6 +25,7 @@ struct AdaptiveShell: View {
 /// intents / notifications / ⌘K still land on the right screen.
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var store: FinchStore
     @State private var selected: CompactTab = .accounts
     @State private var morePath: [AppTab] = []
 
@@ -32,9 +34,6 @@ struct TabBarShell: View {
             tabContent(.accounts)
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
-            tabContent(.activity)
-                .tabItem { Label(AppTab.activity.title, systemImage: AppTab.activity.icon) }
-                .tag(CompactTab.activity)
             tabContent(.budgets)
                 .tabItem { Label(AppTab.budgets.title, systemImage: AppTab.budgets.icon) }
                 .tag(CompactTab.budgets)
@@ -45,6 +44,10 @@ struct TabBarShell: View {
                 .tabItem { Label("More", systemImage: "ellipsis") }
                 .tag(CompactTab.more)
         }
+        // Activity is no longer a bottom-bar tab, but tx deep links / notifications
+        // / Spotlight still route to `.activity` with a focused tx id — open that
+        // transaction here (the bar lands on Accounts via CompactTabRouting).
+        .sheet(item: focusedTx) { EditTransactionSheet(txn: $0) }
         .onAppear { syncFromRouter(router.selectedTab) }
         // `selectedTab` is @Published, so this only fires on a value *change*: a
         // repeat selection of the already-current tab (e.g. a second Scheduled
@@ -63,6 +66,24 @@ struct TabBarShell: View {
         let result = CompactTabRouting.sync(routerTab: tab, currentPath: morePath)
         if selected != result.selected { selected = result.selected }
         if morePath != result.path { morePath = result.path }
+    }
+
+    /// A transaction targeted by a deep link / notification / Spotlight tap
+    /// (router `.activity` + a focused tx id). Presenting clears the focus and
+    /// settles the router on Accounts so the bar state stays consistent.
+    private var focusedTx: Binding<Tx?> {
+        Binding(
+            get: {
+                guard router.selectedTab == .activity, let id = router.focusedId else { return nil }
+                return store.txns.first { $0.id == id }
+            },
+            set: { newValue in
+                if newValue == nil {
+                    router.focusedId = nil
+                    if router.selectedTab == .activity { router.selectedTab = .accounts }
+                }
+            }
+        )
     }
 }
 

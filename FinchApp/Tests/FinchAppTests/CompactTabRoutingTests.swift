@@ -4,9 +4,12 @@ import XCTest
 final class CompactTabRoutingTests: XCTestCase {
     func test_primaryTabsMapToOwnSlot() {
         XCTAssertEqual(CompactTabRouting.compactTab(for: .accounts), .accounts)
-        XCTAssertEqual(CompactTabRouting.compactTab(for: .activity), .activity)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .budgets), .budgets)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .insights), .insights)
+    }
+
+    func test_activityMapsToAccounts() {   // Activity feed now lives inside Accounts
+        XCTAssertEqual(CompactTabRouting.compactTab(for: .activity), .accounts)
     }
 
     func test_overflowTabsMapToMore() {
@@ -51,7 +54,7 @@ final class CompactTabRoutingTests: XCTestCase {
     }
 
     func test_routerTab_primaryWhenChanged() {
-        XCTAssertEqual(CompactTabRouting.routerTab(forSelected: .activity, current: .accounts), .activity)
+        XCTAssertEqual(CompactTabRouting.routerTab(forSelected: .budgets, current: .accounts), .budgets)
     }
 
     func test_routerTab_nilWhenUnchanged() {
