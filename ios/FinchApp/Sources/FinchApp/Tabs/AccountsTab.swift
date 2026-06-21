@@ -117,12 +117,11 @@ struct AccountsTab: View {
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
         ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
+            // The group title is a tappable Button *row* (not a section header):
+            // Buttons/tap gestures don't fire in List section headers, and the
+            // native Section(isExpanded:) chevron only shows in .sidebar style.
+            // A Button row is reliably tappable and keeps the default list look.
             Section {
-                if !collapsedGroups.contains(groupName) {
-                    ForEach(store.accounts(in: groupName)) { account in row(account) }
-                        .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
-                }
-            } header: {
                 Button {
                     toggleGroup(groupName)
                 } label: {
@@ -130,13 +129,19 @@ struct AccountsTab: View {
                         Image(systemName: collapsedGroups.contains(groupName) ? "chevron.right" : "chevron.down")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(groupName)
+                            .frame(width: 12)
+                        Text(groupName).fontWeight(.semibold)
                         Spacer()
-                        Text(store.subtotalDisplay(for: groupName))
+                        Text(store.subtotalDisplay(for: groupName)).foregroundStyle(.secondary)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                if !collapsedGroups.contains(groupName) {
+                    ForEach(store.accounts(in: groupName)) { account in row(account) }
+                        .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
+                }
             }
         }
         Section {
