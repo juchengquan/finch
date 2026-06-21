@@ -139,7 +139,7 @@ struct ContributeSheet: View {
 
     private func save() {
         errorMessage = nil
-        guard let v = DecimalInput.parse(amount), v != 0 else { errorMessage = "Enter an amount."; return }
+        guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount greater than 0."; return }   // web guards amt > 0
         do { try store.apply(.contributeBudget, Args(["id": .string(budgetId), "amount": .double(v)])); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }

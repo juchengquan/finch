@@ -117,7 +117,15 @@ struct AddRuleSheet: View {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
         guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value."; return }
 
-        let condValue: JSONValue = field == .amount ? .double(DecimalInput.parse(value) ?? 0) : .string(value)
+        // For amount conditions, require a real number — a non-numeric entry would
+        // otherwise silently become 0 and match everything ≤ / ≥ 0.
+        let condValue: JSONValue
+        if field == .amount {
+            guard let parsed = DecimalInput.parse(value) else { errorMessage = "Enter a numeric amount."; return }
+            condValue = .double(parsed)
+        } else {
+            condValue = .string(value)
+        }
         let condition: JSONValue = .object(["field": .string(field.rawValue), "op": .string(op), "value": condValue])
         let actions: JSONValue
         switch action {
