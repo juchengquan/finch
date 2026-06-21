@@ -7,8 +7,8 @@ struct InsightsTab: View {
     @EnvironmentObject private var store: FinchStore
     /// Trends (charts) vs Breakdown (the former Reports page: per-category
     /// monthly spend + CSV export). Mirrors the web Insights view toggle.
-    private enum View_: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
-    @State private var view: View_ = .trends
+    private enum InsightsMode: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
+    @State private var view: InsightsMode = .trends
     @State private var rangeMonths = 6   // 3M / 6M / 1Y range switcher
 
     var body: some View {
@@ -24,7 +24,7 @@ struct InsightsTab: View {
                     ScrollView {
                         LazyVStack(spacing: 16) {   // lazy: off-screen cards (+ their selectors) don't compute until scrolled
                             Picker("View", selection: $view) {
-                                ForEach(View_.allCases) { Text($0.rawValue).tag($0) }
+                                ForEach(InsightsMode.allCases) { Text($0.rawValue).tag($0) }
                             }
                             .pickerStyle(.segmented)
                             if view == .trends {
@@ -135,8 +135,9 @@ private struct RecentExpensesCard: View {
                         HStack {
                             Text(r.merchant)
                             Spacer()
-                            // amount is a positive magnitude → render as a spend.
-                            Text(Money.format(-r.amount, currency: r.currency)).fontWeight(.medium)
+                            // recentExpenses returns a positive magnitude; render
+                            // as a spend. `-abs` is robust to the sign convention.
+                            Text(Money.format(-abs(r.amount), currency: r.currency)).fontWeight(.medium)
                         }
                     }
                 }

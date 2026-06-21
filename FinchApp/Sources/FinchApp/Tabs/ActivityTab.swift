@@ -66,6 +66,9 @@ struct ActivityFeedView: View {
         .searchable(text: $searchQuery)
         .navigationTitle("Activity")
         .errorAlert($errorMessage)
+        // Leave selection mode behind when the feed is popped/dismissed so the
+        // selection toolbar doesn't linger stale on return.
+        .onDisappear { isSelecting = false; selected.removeAll() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }

@@ -77,13 +77,21 @@ private struct GroupRowEditor: View {
     let onRename: (String, String) throws -> Void
     let onError: (String) -> Void
     @State private var name: String
+    @FocusState private var focused: Bool
 
     init(group: GroupRow, onRename: @escaping (String, String) throws -> Void, onError: @escaping (String) -> Void) {
         self.group = group; self.onRename = onRename; self.onError = onError
         _name = State(initialValue: group.name)
     }
 
-    var body: some View { TextField("Name", text: $name).onSubmit(rename) }
+    // Commit on Return AND on focus loss (tap-out) so an edit isn't silently
+    // discarded when the user taps elsewhere without pressing Return.
+    var body: some View {
+        TextField("Name", text: $name)
+            .focused($focused)
+            .onSubmit(rename)
+            .onChange(of: focused) { _, isFocused in if !isFocused { rename() } }
+    }
 
     private func rename() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
