@@ -31,6 +31,11 @@ struct AccountsTab: View {
             listContent
             .navigationTitle("Accounts")
             .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) {
+                    if !store.accounts.isEmpty { EditButton() }   // enter reorder mode (drag within a group)
+                }
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button { showingAdd = true } label: { Label("Add Account", systemImage: "plus") }
@@ -96,6 +101,7 @@ struct AccountsTab: View {
         ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
             Section {
                 ForEach(store.accounts(in: groupName)) { account in row(account) }
+                    .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
             } header: {
                 HStack {
                     Text(groupName)
@@ -126,6 +132,19 @@ struct AccountsTab: View {
         if let selection { selection.wrappedValue = id }
         else { path = [id] }
         router.focusedId = nil
+    }
+
+    /// Persist a within-group reorder: renumber the group's accounts' sort_order
+    /// to the post-drag order (drag across groups isn't offered — use Edit to
+    /// change an account's group).
+    private func moveAccounts(in group: String, from source: IndexSet, to dest: Int) {
+        var ordered = store.accounts(in: group)
+        ordered.move(fromOffsets: source, toOffset: dest)
+        do {
+            for (i, acct) in ordered.enumerated() {
+                try store.apply(.updateAccount, Args(["id": .string(acct.id), "patch": .object(["sortOrder": .int(i)])]))
+            }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     private func archive(_ a: AccountRow) {

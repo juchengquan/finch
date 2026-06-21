@@ -135,6 +135,7 @@ const PATCH_COLUMNS: Record<keyof AccountPatch, string> = {
   color: 'color',
   groupId: 'group_id',
   includeInNetWorth: 'include_in_net_worth',
+  sortOrder: 'sort_order',
 };
 
 /** Update an account's editable fields on the real table (replaces the old shim). */

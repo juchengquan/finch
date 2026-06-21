@@ -18,4 +18,6 @@ export interface NewAccountGroup {
 
 export interface AccountGroupPatch {
   name?: string;
+  /** Position among the ledger's groups — written by drag-to-reorder. */
+  sortOrder?: number;
 }

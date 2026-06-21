@@ -35,11 +35,20 @@ enum Groups {
 
     static func update(_ db: Database, _ args: Args, table: String) throws {
         guard case .string(let id)? = args.values["id"] else { throw I18nError("error.invalidArgs", [:], "update requires an id") }
-        guard case .object(let patch)? = args.values["patch"], let nameV = patch["name"] else { return }   // name-only
-        guard nameV.isNonEmptyTrimmedString, let name = nameV.asString else {
-            throw I18nError("error.required.groupName", [:], "Group name is required")
+        guard case .object(let patch)? = args.values["patch"] else { return }
+        var sets: [String] = []
+        var bind: [DatabaseValueConvertible?] = []
+        if let nameV = patch["name"] {
+            guard nameV.isNonEmptyTrimmedString, let name = nameV.asString else {
+                throw I18nError("error.required.groupName", [:], "Group name is required")
+            }
+            sets.append("name = ?"); bind.append(name)
         }
-        try db.execute(sql: "UPDATE \(table) SET name = ?, updated_at = datetime('now') WHERE id = ?", arguments: [name, id])
+        if let sortV = patch["sortOrder"] { sets.append("sort_order = ?"); bind.append(sortV.sqlBind) }
+        if sets.isEmpty { return }
+        sets.append("updated_at = datetime('now')")
+        bind.append(id)
+        try db.execute(sql: "UPDATE \(table) SET \(sets.joined(separator: ", ")) WHERE id = ?", arguments: StatementArguments(bind))
     }
 
     static func delete(_ db: Database, _ args: Args, table: String) throws {

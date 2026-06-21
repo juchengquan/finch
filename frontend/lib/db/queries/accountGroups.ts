@@ -34,11 +34,14 @@ export async function createAccountGroup(exec: Exec, g: NewAccountGroup): Promis
 }
 
 export async function updateAccountGroup(exec: Exec, id: string, patch: AccountGroupPatch): Promise<void> {
-  if (patch.name === undefined) return;
-  await exec(
-    "UPDATE account_groups SET name = ?, updated_at = datetime('now') WHERE id = ?",
-    [patch.name, id],
-  );
+  const sets: string[] = [];
+  const bind: (string | number)[] = [];
+  if (patch.name !== undefined) { sets.push('name = ?'); bind.push(patch.name); }
+  if (patch.sortOrder !== undefined) { sets.push('sort_order = ?'); bind.push(patch.sortOrder); }
+  if (!sets.length) return;
+  sets.push("updated_at = datetime('now')");
+  bind.push(id);
+  await exec(`UPDATE account_groups SET ${sets.join(', ')} WHERE id = ?`, bind);
 }
 
 /** Hard-delete a group; accounts in it get group_id = NULL via the schema FK. */
