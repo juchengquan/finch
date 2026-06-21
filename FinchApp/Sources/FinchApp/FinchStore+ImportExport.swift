@@ -107,11 +107,20 @@ extension FinchStore {
             if let b = backup { try? fm.moveItem(at: b, to: live) }   // roll back
             throw PackError.swapFailed("move staged DB: \(error)")
         }
-        // Move attachments (best-effort; overwrite on id collision).
+        // Replace the attachments dir with the imported pack's (the new DB owns
+        // its own attachment set). Back the live dir up first and restore it if
+        // the move fails, so a failed swap never just destroys existing receipts.
         if let src = stagedAttachments, fm.fileExists(atPath: src.path) {
             let dst = live.deletingLastPathComponent().appendingPathComponent("attachments")
-            try? fm.removeItem(at: dst)
-            try? fm.moveItem(at: src, to: dst)
+            let attBak = live.deletingLastPathComponent().appendingPathComponent("attachments.bak")
+            try? fm.removeItem(at: attBak)
+            if fm.fileExists(atPath: dst.path) { try? fm.moveItem(at: dst, to: attBak) }
+            do {
+                try fm.moveItem(at: src, to: dst)
+                try? fm.removeItem(at: attBak)   // success → drop the backup
+            } catch {
+                if fm.fileExists(atPath: attBak.path) { try? fm.moveItem(at: attBak, to: dst) }   // restore
+            }
         }
     }
 
@@ -147,7 +156,7 @@ extension FinchStore {
             let dbBytes = try Data(contentsOf: cloneURL)
             return try Pack.build(Pack.BuildInput(
                 dbBytes: dbBytes,
-                attachmentFiles: [],   // Phase 1.0: no attachments
+                attachmentFiles: liveAttachmentFiles(),   // bundle receipts so the pack is self-contained
                 meta: Pack.BuildInput.Meta(
                     appVersion: FinchCore.version, schemaVersion: Schema.version,
                     exportedAt: exportedAt,
@@ -157,6 +166,26 @@ extension FinchStore {
             throw e
         } catch {
             throw PackError.exportFailed("\(error)")
+        }
+    }
+
+    /// Every stored receipt as a `Pack.BuildInput.AttachmentFile`, so `buildPack` can bundle
+    /// them and the exported `.finch` is self-contained. `rel_path` already
+    /// includes the `attachments/` prefix; the on-disk file is at
+    /// `<db dir>/<rel_path>`. Files missing on disk are skipped (best-effort)
+    /// rather than failing the whole export.
+    private func liveAttachmentFiles() throws -> [Pack.BuildInput.AttachmentFile] {
+        guard let q = dbQueue else { return [] }
+        let dir = liveDBURL.deletingLastPathComponent()
+        let fm = FileManager.default
+        let rows = try q.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, rel_path FROM entry_attachments ORDER BY rel_path")
+        }
+        return rows.compactMap { r in
+            guard let id = r["id"] as String?, let rel = r["rel_path"] as String? else { return nil }
+            let abs = rel.split(separator: "/").reduce(dir) { $0.appendingPathComponent(String($1)) }
+            guard fm.fileExists(atPath: abs.path) else { return nil }
+            return Pack.BuildInput.AttachmentFile(id: id, relPath: rel, absPath: abs)
         }
     }
 }
