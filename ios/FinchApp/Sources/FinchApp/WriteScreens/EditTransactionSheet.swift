@@ -78,9 +78,8 @@ struct EditTransactionSheet: View {
                             Spacer()
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
-                        Picker("Category", selection: $categoryId) {
-                            ForEach(categories) { Text($0.name).tag($0.id) }
-                        }
+                        SearchablePickerRow(title: "Category",
+                            options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
                         Button("Split across categories…") { showingSplit = true }
                     }
                 }

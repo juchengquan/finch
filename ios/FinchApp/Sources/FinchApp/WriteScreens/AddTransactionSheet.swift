@@ -134,12 +134,10 @@ struct AddTransactionSheet: View {
                 Text(kind == .income ? "Source" : "Merchant"); Spacer()
                 TextField("", text: $merchant).multilineTextAlignment(.trailing)
             }
-            Picker("Category", selection: $categoryId) {
-                ForEach(categories) { Text($0.name).tag($0.id) }
-            }
-            Picker("Account", selection: $accountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
+            SearchablePickerRow(title: "Category",
+                options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             if currencyOptions.count > 1 {
                 Picker("Currency", selection: $currencyCode) {
                     ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
@@ -151,12 +149,10 @@ struct AddTransactionSheet: View {
     @ViewBuilder private var transferFields: some View {
         Section {
             amountField
-            Picker("From", selection: $fromAccountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
-            Picker("To", selection: $toAccountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
+            SearchablePickerRow(title: "From",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
+            SearchablePickerRow(title: "To",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $toAccountId)
             if transferIsCrossCurrency {
                 HStack {
                     Text("Received (\(currency(of: toAccountId)))")
@@ -177,9 +173,8 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private var adjustFields: some View {
         Section {
-            Picker("Account", selection: $accountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             HStack {
                 Text("New balance"); Spacer()
                 // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
