@@ -20,11 +20,11 @@ struct BudgetsTab: View {
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var editing: BudgetRow?
-    @State private var focused: BudgetRow?            // deep-link drill-in (push mode)
+    @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             listContent
             .navigationTitle("Budgets")
             .toolbar {
@@ -41,7 +41,7 @@ struct BudgetsTab: View {
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
             .errorAlert($errorMessage)
-            .navigationDestination(item: $focused) { BudgetDetailView(budgetId: $0.id) }
+            .navigationDestination(for: String.self) { BudgetDetailView(budgetId: $0) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         }
@@ -68,7 +68,7 @@ struct BudgetsTab: View {
         } else {
             List {
                 groupedSections { budget in
-                    NavigationLink { BudgetDetailView(budgetId: budget.id) } label: {
+                    NavigationLink(value: budget.id) {
                         BudgetRowView(budget: budget)
                     }
                     .swipeActions(edge: .trailing) { rowActions(budget) }
@@ -105,7 +105,7 @@ struct BudgetsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.budgets.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { focused = store.budgets.first { $0.id == id } }
+        else { path = [id] }
         router.focusedId = nil
     }
 

@@ -23,11 +23,11 @@ struct AccountsTab: View {
     @State private var showingGroups = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
-    @State private var focused: AccountRow?            // deep-link / Spotlight drill-in (push mode)
+    @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             listContent
             .navigationTitle("Accounts")
             .toolbar {
@@ -58,7 +58,7 @@ struct AccountsTab: View {
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
-            .navigationDestination(item: $focused) { AccountDetailView(accountId: $0.id) }
+            .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         }
@@ -79,7 +79,7 @@ struct AccountsTab: View {
         } else {
             List {
                 groupedSections { account in
-                    NavigationLink { AccountDetailView(accountId: account.id) } label: {
+                    NavigationLink(value: account.id) {
                         AccountRowView(account: account)
                     }
                     .swipeActions(edge: .trailing) { rowActions(account) }
@@ -124,7 +124,7 @@ struct AccountsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { focused = store.accounts.first { $0.id == id } }
+        else { path = [id] }
         router.focusedId = nil
     }
 
