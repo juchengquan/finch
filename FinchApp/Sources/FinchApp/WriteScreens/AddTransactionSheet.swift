@@ -10,6 +10,10 @@ struct AddTransactionSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
 
+    /// Optionally pre-select the account (e.g. when added from an account's
+    /// detail screen). Falls back to the first account when nil.
+    var defaultAccountId: String? = nil
+
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer
         var id: String { rawValue }
@@ -152,7 +156,10 @@ struct AddTransactionSheet: View {
     /// Default the pickers to the first valid option (and the first two distinct
     /// accounts for a transfer) once the projected store is available.
     private func seedDefaults() {
-        if accountId.isEmpty { accountId = accounts.first?.id ?? "" }
+        if accountId.isEmpty {
+            let preferred = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
+            accountId = preferred ?? accounts.first?.id ?? ""
+        }
         if categoryId.isEmpty || !categories.contains(where: { $0.id == categoryId }) {
             categoryId = categories.first?.id ?? ""
         }
