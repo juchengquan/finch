@@ -15,12 +15,12 @@ import FinchCore
 /// The shared sections sidebar (column 1), driven by the router so deep links /
 /// intents / ⌘1–6 keep selecting tabs. Two clusters: the primary work surfaces,
 /// then a "More" group for the secondary ones (Activity — which has no compact
-/// tab — plus Scheduled & Settings, mirroring the iPhone More tab).
+/// tab — plus Settings, mirroring the iPhone More tab).
 struct SectionSidebar: View {
     @EnvironmentObject private var router: DeepLinkRouter
 
-    private let primary: [AppTab] = [.accounts, .budgets, .insights]
-    private let more: [AppTab] = [.activity, .scheduled, .settings]
+    private let primary: [AppTab] = [.accounts, .budgets, .scheduled, .insights]
+    private let more: [AppTab] = [.activity, .settings]
 
     var body: some View {
         List(selection: Binding<AppTab?>(

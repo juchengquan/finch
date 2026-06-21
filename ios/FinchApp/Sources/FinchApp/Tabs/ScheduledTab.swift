@@ -1,10 +1,11 @@
 import SwiftUI
 import FinchCore
 
-/// Scheduled templates (recurring + installment plans) — the 6th tab, now
-/// writable (Phase 2 Task 19). Lists each template with its cadence, next run,
-/// amount, and installment progress. Add via the '+' toolbar; per-row context
-/// menu / swipe to Post-now or Delete. All writes go through FinchStore.apply.
+/// Scheduled templates (recurring + installment plans) — a primary bottom-bar
+/// tab (after Budgets), now writable (Phase 2 Task 19). Lists each template with
+/// its cadence, next run, amount, and installment progress. Add via the '+'
+/// toolbar; per-row context menu / swipe to Post-now or Delete. All writes go
+/// through FinchStore.apply.
 struct ScheduledTab: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
@@ -12,7 +13,10 @@ struct ScheduledTab: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        MoreTabNavigationStack {
+        // A primary tab supplies its own NavigationStack (like Accounts/Insights);
+        // it no longer lands in the system More overflow, so MoreTabNavigationStack
+        // (a no-op in compact width) would leave it with no nav bar or title.
+        NavigationStack {
             Group {
                 if store.scheduled.isEmpty {
                     ContentUnavailableView {
