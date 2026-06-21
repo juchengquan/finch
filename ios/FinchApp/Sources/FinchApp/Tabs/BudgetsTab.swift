@@ -29,12 +29,13 @@ struct BudgetsTab: View {
             .navigationTitle("Budgets")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button { showingAdd = true } label: { Label("Add Budget", systemImage: "plus") }
-                        Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
-                    } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add or manage budgets")
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Budget")
                         .disabled(store.ledgers.isEmpty)
+                }
+                // Group management moved off the + into the ⋯ overflow menu (matches Accounts).
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
                 }
             }
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
