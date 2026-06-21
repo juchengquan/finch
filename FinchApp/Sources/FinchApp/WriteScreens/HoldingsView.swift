@@ -28,7 +28,7 @@ struct HoldingsView: View {
             } else {
                 List {
                     ForEach(store.holdings, id: \.id) { h in
-                        Button { pricing = h } label: { HoldingRow(holding: h) }
+                        Button { pricing = h } label: { HoldingRow(holding: h).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(h) } label: { Label("Delete", systemImage: "trash") }
