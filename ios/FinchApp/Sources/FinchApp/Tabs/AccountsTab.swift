@@ -31,6 +31,7 @@ struct AccountsTab: View {
     @State private var groupPendingDelete: AccountGroupRow?
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
+    @State private var reorderRows: [ReorderRow] = []
     #endif
 
     var body: some View {
@@ -101,6 +102,13 @@ struct AccountsTab: View {
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             #if os(iOS)
             .environment(\.editMode, $editMode)
+            .onChange(of: editMode) { _, mode in
+                if mode.isEditing {
+                    reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
+                } else {
+                    persistReorder()
+                }
+            }
             #endif
         }
     }
@@ -108,7 +116,21 @@ struct AccountsTab: View {
     @ViewBuilder private var listContent: some View {
         if store.accounts.isEmpty {
             EmptyState(tab: .accounts)
-        } else if let selection {
+        } else {
+            #if os(iOS)
+            if editMode.isEditing {
+                reorderList
+            } else {
+                contentList
+            }
+            #else
+            contentList
+            #endif
+        }
+    }
+
+    @ViewBuilder private var contentList: some View {
+        if let selection {
             List(selection: selection) {
                 allTransactionsLink
                 groupedSections { account in
@@ -176,21 +198,12 @@ struct AccountsTab: View {
                 .contextMenu {
                     #if os(iOS)
                     Button { withAnimation { editMode = .active } } label: {
-                        Label("Reorder Accounts", systemImage: "arrow.up.arrow.down")
+                        Label("Reorder", systemImage: "arrow.up.arrow.down")
                     }
                     #endif
-                    // Groups live in List sections (not drag-reorderable in place),
-                    // so this opens Manage Groups, which supports dragging groups.
-                    Button { showingGroups = true } label: {
-                        Label("Reorder Groups", systemImage: "folder")
-                    }
                     if let g = store.accountGroups.first(where: { $0.name == groupName }) {
-                        Button { renamingGroupId = g.id; renameText = g.name } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) { groupPendingDelete = g } label: {
-                            Label("Delete Group", systemImage: "trash")
-                        }
+                        Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
+                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
                     }
                 }
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
@@ -211,6 +224,48 @@ struct AccountsTab: View {
             }
         }
     }
+
+    #if os(iOS)
+    /// Flat, fully-draggable list used only while reordering: accounts move
+    /// across groups, group headers move their whole block.
+    private var reorderList: some View {
+        List {
+            ForEach(reorderRows) { row in
+                switch row {
+                case .group(_, let name):
+                    Text(name).fontWeight(.semibold).foregroundStyle(.secondary)
+                case .account(let a):
+                    AccountRowView(account: a)
+                }
+            }
+            .onMove { from, to in
+                reorderRows = AccountReorder.applyMove(reorderRows, from: from, to: to)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+    }
+
+    /// Persist the reordered state (only rows whose group/order changed).
+    private func persistReorder() {
+        let plan = AccountReorder.persistencePlan(reorderRows)
+        let curGroupOrder = Dictionary(uniqueKeysWithValues: store.accountGroups.enumerated().map { ($1.id, $0) })
+        let curAcct = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, ($0.groupId, $0.sortOrder ?? 0)) })
+        do {
+            for g in plan.groups where curGroupOrder[g.id] != g.order {
+                try store.apply(.updateAccountGroup, Args(["id": .string(g.id), "patch": .object(["sortOrder": .int(g.order)])]))
+            }
+            for a in plan.accounts {
+                let cur = curAcct[a.id]
+                if cur?.0 != a.groupId || cur?.1 != a.order {
+                    var patch: [String: JSONValue] = ["sortOrder": .int(a.order)]
+                    patch["groupId"] = a.groupId.map(JSONValue.string) ?? .null
+                    try store.apply(.updateAccount, Args(["id": .string(a.id), "patch": .object(patch)]))
+                }
+            }
+        } catch { errorMessage = i18nMessage(error) }
+        reorderRows = []
+    }
+    #endif
 
     /// Toggle a group's collapsed state and persist it.
     private func toggleGroup(_ group: String) {
