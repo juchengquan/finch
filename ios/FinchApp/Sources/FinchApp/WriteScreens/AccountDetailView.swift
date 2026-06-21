@@ -13,6 +13,7 @@ struct AccountDetailView: View {
 
     @State private var showingEdit = false
     @State private var showingReconcile = false
+    @State private var showingAddTx = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
@@ -38,6 +39,10 @@ struct AccountDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
+                        Button { showingAddTx = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add Transaction")
+                    }
+                    ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
                             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
@@ -50,6 +55,7 @@ struct AccountDetailView: View {
                     AccountSheet(account: account, defaultCurrency: store.baseCurrency)
                 }
                 .sheet(isPresented: $showingReconcile) { ReconcileSheet(preselect: account.id) }
+                .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(account) }
                 } message: {

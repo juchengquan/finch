@@ -1,10 +1,22 @@
 import SwiftUI
 import FinchCore
 
+/// The Activity tab — the global transaction feed in its own navigation stack.
+/// A thin wrapper around `ActivityFeedView`; the feed itself is reusable and is
+/// also pushed from the Accounts tab's "All Transactions" row (which already
+/// supplies a navigation stack), so the feed must NOT wrap one itself.
+struct ActivityTab: View {
+    var body: some View {
+        NavigationStack { ActivityFeedView() }
+    }
+}
+
 /// Transactions date-descending, grouped into day sections, paginated 50 rows
 /// at a time. Search is client-side `merchant.contains` (mirrors
-/// selectTransactions(opts.query); NO FTS5). Detail view deferred (D4).
-struct ActivityTab: View {
+/// selectTransactions(opts.query); NO FTS5). Provides its own toolbar (add /
+/// select / bulk-recategorize) but NOT a NavigationStack, so it can be hosted
+/// either as the Activity tab or pushed inside another stack.
+struct ActivityFeedView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
     @State private var searchQuery: String = ""
@@ -24,66 +36,64 @@ struct ActivityTab: View {
     struct DaySection: Identifiable { let id: String; let txns: [Tx] }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if store.txns.isEmpty {
-                    EmptyState(tab: .activity)
-                } else {
-                    List {
-                        if pendingCount > 0 {
-                            Section {
-                                Button {
-                                    run { try store.apply(.confirmAllPending, Args([:])) }
-                                } label: {
-                                    Label("Confirm all \(pendingCount) pending", systemImage: "checkmark.circle")
-                                }
+        Group {
+            if store.txns.isEmpty {
+                EmptyState(tab: .activity)
+            } else {
+                List {
+                    if pendingCount > 0 {
+                        Section {
+                            Button {
+                                run { try store.apply(.confirmAllPending, Args([:])) }
+                            } label: {
+                                Label("Confirm all \(pendingCount) pending", systemImage: "checkmark.circle")
                             }
                         }
-                        ForEach(sections) { section in
-                            Section(section.id) {
-                                ForEach(section.txns) { txn in
-                                    row(txn)
-                                }
+                    }
+                    ForEach(sections) { section in
+                        Section(section.id) {
+                            ForEach(section.txns) { txn in
+                                row(txn)
                             }
                         }
-                        if hasMore {
-                            Button("Load more") { visibleCount += 50 }
-                        }
+                    }
+                    if hasMore {
+                        Button("Load more") { visibleCount += 50 }
                     }
                 }
             }
-            .searchable(text: $searchQuery)
-            .navigationTitle("Activity")
-            .errorAlert($errorMessage)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add Transaction")
-                        .disabled(store.accounts.isEmpty)
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(isSelecting ? "Done" : "Select") {
-                        isSelecting.toggle(); selected.removeAll()
-                    }.disabled(store.txns.isEmpty)
-                }
-                if isSelecting {
-                    ToolbarItem(placement: .bottomBar) {
-                        Button("Recategorize \(selected.count)") { showingBulkCat = true }
-                            .disabled(selected.isEmpty)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
-            .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
-            .sheet(isPresented: $showingBulkCat) {
-                BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
-            }
-            .onAppear { consumeFocus(); recompute() }
-            .onChange(of: router.focusedId) { _, _ in consumeFocus() }
-            .onChange(of: searchQuery) { _, _ in recompute() }
-            .onChange(of: visibleCount) { _, _ in recompute() }
-            .onReceive(store.$txns) { _ in recompute() }
         }
+        .searchable(text: $searchQuery)
+        .navigationTitle("Activity")
+        .errorAlert($errorMessage)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingAdd = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add Transaction")
+                    .disabled(store.accounts.isEmpty)
+            }
+            ToolbarItem(placement: .topBarLeading) {
+                Button(isSelecting ? "Done" : "Select") {
+                    isSelecting.toggle(); selected.removeAll()
+                }.disabled(store.txns.isEmpty)
+            }
+            if isSelecting {
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Recategorize \(selected.count)") { showingBulkCat = true }
+                        .disabled(selected.isEmpty)
+                }
+            }
+        }
+        .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
+        .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+        .sheet(isPresented: $showingBulkCat) {
+            BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
+        }
+        .onAppear { consumeFocus(); recompute() }
+        .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+        .onChange(of: searchQuery) { _, _ in recompute() }
+        .onChange(of: visibleCount) { _, _ in recompute() }
+        .onReceive(store.$txns) { _ in recompute() }
     }
 
     /// Recompute the cached day-sections. Cheap to call; runs only on the inputs
