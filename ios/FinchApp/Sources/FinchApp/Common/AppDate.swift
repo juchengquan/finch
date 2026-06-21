@@ -9,6 +9,16 @@ enum AppDate {
     static let isoTime = make("HH:mm")
     static let isoDateTime = make("yyyy-MM-dd HH:mm")
 
+    /// The current locale forced to a 24-hour clock — region/date format are
+    /// otherwise unchanged. Use to render times as 24h regardless of the device's
+    /// 12/24-hour setting: `.locale(AppDate.h24Locale)` on a `Date.FormatStyle`,
+    /// or `.environment(\.locale, AppDate.h24Locale)` on a `DatePicker`.
+    static let h24Locale: Locale = {
+        var c = Locale.Components(locale: .current)
+        c.hourCycle = .zeroToTwentyThree
+        return Locale(components: c)
+    }()
+
     /// Today as `yyyy-MM-dd`.
     static func today() -> String { isoDay.string(from: Date()) }
 

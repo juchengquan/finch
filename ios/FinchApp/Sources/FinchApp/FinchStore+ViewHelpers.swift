@@ -191,7 +191,7 @@ public struct DatabaseInfo: Equatable, Sendable {
     }
     public var lastImportedAtDisplay: String {
         guard let d = lastImportedAt else { return "—" }
-        return d.formatted(date: .abbreviated, time: .shortened)
+        return d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale))
     }
     public var rowCountsOrdered: [(String, Int)] {
         rowCounts.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
