@@ -18,9 +18,9 @@ struct AdaptiveShell: View {
 }
 
 /// The iPhone/compact shell — a five-slot bottom bar: four primary tabs plus a
-/// custom More tab (`MoreTabRoot`) that hosts Scheduled & Settings. This avoids
-/// SwiftUI's system "More" overflow (which dropped titles / doubled the back
-/// button on those screens). `CompactTabRouting` bridges the bar selection and
+/// custom More tab (`MoreTabRoot`) that hosts Settings. This avoids SwiftUI's
+/// system "More" overflow (which dropped titles / doubled the back button on
+/// those screens). `CompactTabRouting` bridges the bar selection and
 /// the More tab's push path to the shared `DeepLinkRouter`, so deep links /
 /// intents / notifications / ⌘K still land on the right screen.
 struct TabBarShell: View {
@@ -37,6 +37,9 @@ struct TabBarShell: View {
             tabContent(.budgets).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.budgets.title, systemImage: AppTab.budgets.icon) }
                 .tag(CompactTab.budgets)
+            tabContent(.scheduled).modifier(AddTransactionFAB())
+                .tabItem { Label(AppTab.scheduled.title, systemImage: AppTab.scheduled.icon) }
+                .tag(CompactTab.scheduled)
             tabContent(.insights).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
                 .tag(CompactTab.insights)
