@@ -1,9 +1,10 @@
-/// The five slots in the iPhone bottom tab bar. The first four mirror `AppTab`;
+/// The four slots in the iPhone bottom tab bar. The first three mirror `AppTab`;
 /// `.more` is the custom overflow tab hosting Scheduled & Settings — replacing
 /// SwiftUI's system "More" tab (which dropped titles / doubled the back button).
+/// (Activity is no longer a bottom-bar tab — its feed lives inside Accounts.)
 /// See plans/ios-macos/2026-06-21-compact-more-tab-design.md.
 enum CompactTab: Hashable {
-    case accounts, activity, budgets, insights, more
+    case accounts, budgets, insights, more
 }
 
 /// Pure bridge logic between `DeepLinkRouter.selectedTab` (an `AppTab`) and the
@@ -15,7 +16,7 @@ enum CompactTabRouting {
     static func compactTab(for tab: AppTab) -> CompactTab {
         switch tab {
         case .accounts: return .accounts
-        case .activity: return .activity
+        case .activity: return .accounts   // Activity feed now opens inside Accounts
         case .budgets:  return .budgets
         case .insights: return .insights
         case .scheduled, .settings: return .more
@@ -26,7 +27,6 @@ enum CompactTabRouting {
     static func appTab(for compact: CompactTab) -> AppTab? {
         switch compact {
         case .accounts: return .accounts
-        case .activity: return .activity
         case .budgets:  return .budgets
         case .insights: return .insights
         case .more:     return nil
