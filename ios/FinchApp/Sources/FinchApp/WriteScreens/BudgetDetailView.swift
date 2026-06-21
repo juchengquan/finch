@@ -208,6 +208,11 @@ struct BudgetGroupsView: View {
             groups: store.budgetGroups,
             onCreate: { try store.apply(.createBudgetGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string($0)])) },
             onRename: { try store.apply(.updateBudgetGroup, Args(["id": .string($0), "patch": .object(["name": .string($1)])])) },
-            onDelete: { try store.apply(.deleteBudgetGroup, Args(["id": .string($0)])) })
+            onDelete: { try store.apply(.deleteBudgetGroup, Args(["id": .string($0)])) },
+            onReorder: { ids in
+                for (i, id) in ids.enumerated() {
+                    try store.apply(.updateBudgetGroup, Args(["id": .string(id), "patch": .object(["sortOrder": .int(i)])]))
+                }
+            })
     }
 }

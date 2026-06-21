@@ -434,6 +434,15 @@
       }
     },
     {
+      "action": "updateBudgetGroup",
+      "args": {
+        "id": "bg1",
+        "patch": {
+          "sortOrder": 4
+        }
+      }
+    },
+    {
       "action": "setExchangeRate",
       "args": {
         "date": "2026-01-01",
@@ -1137,7 +1146,7 @@
         "id": "bg1",
         "ledger_id": "personal",
         "name": "Essentials",
-        "sort_order": 0
+        "sort_order": 4
       }
     ],
     "holdings": [
