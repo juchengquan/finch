@@ -48,12 +48,15 @@ struct AccountsTab: View {
                 }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button { showingAdd = true } label: { Label("Add Account", systemImage: "plus") }
-                        Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
-                        Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
-                    } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add or manage accounts")
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Account")
+                }
+                // Group + archive management moved off the + into the ⋯ overflow menu.
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
                 }
                 ToolbarItem(placement: .secondaryAction) {
                     NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
