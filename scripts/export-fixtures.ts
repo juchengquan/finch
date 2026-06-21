@@ -500,6 +500,11 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // generateDueScheduled with an explicit `today` (deterministic): posts s1's
   // Jan–Apr monthly occurrences, exercising the date-dedup + occurrence math.
   { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
+  // Reorder support (drag-to-reorder): the new sortOrder patch fields on
+  // updateAccount + updateAccountGroup (and createAccountGroup, prior uncovered).
+  { action: 'createAccountGroup', args: { id: 'ag1', ledgerId: 'personal', name: 'Cash Group' } },
+  { action: 'updateAccountGroup', args: { id: 'ag1', patch: { sortOrder: 5 } } },
+  { action: 'updateAccount', args: { id: 'a1', patch: { groupId: 'ag1', sortOrder: 3 } } },
   // changeLedgerBase — the highest-risk action: re-derive EVERY entry's amount_base
   // from USD to EUR (mass FX conversion + rounding + FX-residue drop/recompute).
   // Needs an EUR rate on/before every entry date (the earliest are the Jan
