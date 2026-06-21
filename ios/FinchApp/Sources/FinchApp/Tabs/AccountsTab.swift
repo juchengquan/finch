@@ -45,6 +45,7 @@ struct AccountsTab: View {
                             Label(editMode.isEditing ? "Done Reordering" : "Reorder Accounts",
                                   systemImage: "arrow.up.arrow.down")
                         }
+                        .accessibilityValue(editMode.isEditing ? "On" : "Off")
                     }
                 }
                 #endif
