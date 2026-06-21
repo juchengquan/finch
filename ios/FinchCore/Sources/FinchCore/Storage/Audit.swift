@@ -36,7 +36,14 @@ public enum Audit {
     /// Run all 10 checks (optionally scoped to one ledger). Empty array = clean.
     public static func run(on dbQueue: DatabaseQueue, ledgerId: String? = nil,
                            checkBalances: Bool = true) throws -> [AuditProblem] {
-        try dbQueue.read { db in
+        try dbQueue.read { db in try run(on: db, ledgerId: ledgerId, checkBalances: checkBalances) }
+    }
+
+    /// The same checks against an open `Database` — callable inside a write
+    /// transaction (e.g. the post-`changeLedgerBase` sweep, which must run before
+    /// commit so a failed recompute rolls back).
+    public static func run(on db: Database, ledgerId: String? = nil,
+                           checkBalances: Bool = true) throws -> [AuditProblem] {
             var problems: [AuditProblem] = []
             // `${scope}` in the web: an `AND e.ledger_id = ?` tail when scoped.
             let scope = ledgerId != nil ? "AND e.ledger_id = ?" : ""
@@ -154,7 +161,6 @@ public enum Audit {
                 }
             }
             return problems
-        }
     }
 }
 

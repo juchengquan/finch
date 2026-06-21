@@ -15,9 +15,10 @@ public enum Ledgers {
     /// (omit amountBase) via the full rateToHub path, category legs reconvert
     /// old→new base at the entry date, fx residue legs are dropped (rebuildEntry
     /// re-derives them); the foreign-entry display fields + reconcile marks are
-    /// preserved per leg.
-    /// DEFERRED: the final auditLedger safety check (Audit needs a DatabaseQueue;
-    /// the seal trigger + per-entry recompute already enforce balance).
+    /// preserved per leg. After the rebuild it runs the auditLedger safety sweep
+    /// (scoped to this ledger) and throws on any problem — web parity
+    /// (queries/ledgers.ts:259); the sweep runs on `db` inside the write txn so a
+    /// failure rolls the whole base change back.
     static func changeBase(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let ledgerId: String; let newBase: String }
         let a = try args.to(A.self)
@@ -52,6 +53,14 @@ public enum Ledgers {
             var ep = Entries.EntryPatch()
             ep.legs = .set(legs)
             try Entries.rebuildEntry(db, entryId, ep)
+        }
+
+        // Safety sweep after the recompute (web parity): any audit problem means
+        // the rebuild produced an inconsistent ledger — throw to roll it back.
+        let problems = try Audit.run(on: db, ledgerId: ledgerId, checkBalances: true)
+        if let first = problems.first {
+            throw I18nError("error.ledger.recomputeFailed", ["count": String(problems.count)],
+                "recomputeAmountBases audit failed: \(first.code.rawValue) \(first.detail)")
         }
     }
 
