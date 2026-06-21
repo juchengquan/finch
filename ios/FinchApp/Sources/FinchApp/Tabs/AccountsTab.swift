@@ -105,9 +105,13 @@ struct AccountsTab: View {
             List {
                 allTransactionsLink
                 groupedSections { account in
-                    NavigationLink(value: account.id) {
-                        AccountRowView(account: account)
+                    // Plain Button (navigates via the path) instead of NavigationLink
+                    // so there's no trailing disclosure chevron; contentShape keeps
+                    // the whole row tappable.
+                    Button { path.append(account.id) } label: {
+                        AccountRowView(account: account).contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) { rowActions(account) }
                     .contextMenu { rowActions(account) }
                 }
