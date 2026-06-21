@@ -132,6 +132,15 @@ If you prefer it in `project.yml`, add `DEVELOPMENT_TEAM` under the FinchApp /
 FinchMac `settings.base` and flip `CODE_SIGNING_ALLOWED` to `YES` **only on a
 local branch** — do not merge it, or CI's unsigned simulator build breaks.
 
+**FinchMac already signs ad-hoc for local runs.** So ⌘R works with no team,
+`FinchMac` uses `CODE_SIGN_STYLE: Manual` + `CODE_SIGN_IDENTITY: "-"` ("Sign to
+Run Locally") and its `application-groups` entitlement was dropped (App Sandbox
+stays; `AppGroup.containerURL` falls back to Application Support). CI doesn't
+build FinchMac, so this is committed safely. **For real CloudKit on the Mac**,
+set a `DEVELOPMENT_TEAM`, switch FinchMac to automatic signing, and **restore the
+App Group + add the iCloud capability** to `FinchMac.entitlements` (it has none
+today — mirror `FinchApp.entitlements`).
+
 ---
 
 ## Step 5 — Finish the code (the `PROVISIONING-GATED` pieces)
