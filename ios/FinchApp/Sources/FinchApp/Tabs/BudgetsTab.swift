@@ -22,6 +22,7 @@ struct BudgetsTab: View {
     @State private var editing: BudgetRow?
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
+    @State private var collapsedGroups: Set<String> = BudgetGroupCollapse.collapsed()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -83,8 +84,29 @@ struct BudgetsTab: View {
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (BudgetRow) -> Row) -> some View {
         ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
-            Section(groupName) {
-                ForEach(store.budgets(in: groupName)) { budget in row(budget) }
+            // Tappable Button row (not a section header) so the chevron toggle
+            // fires reliably and keeps the default list look — mirrors AccountsTab (#223).
+            Section {
+                Button {
+                    toggleGroup(groupName)
+                } label: {
+                    HStack {
+                        Image(systemName: collapsedGroups.contains(groupName) ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12)
+                        Text(groupName).fontWeight(.semibold)
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
+                .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+
+                if !collapsedGroups.contains(groupName) {
+                    ForEach(store.budgets(in: groupName)) { budget in row(budget) }
+                }
             }
         }
         Section {
@@ -95,6 +117,15 @@ struct BudgetsTab: View {
                 Text("\(t.used) / \(t.base)")
             }
         }
+    }
+
+    /// Toggle a group's collapsed state and persist it.
+    private func toggleGroup(_ group: String) {
+        let nowCollapsed = !collapsedGroups.contains(group)
+        withAnimation {
+            if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
+        }
+        BudgetGroupCollapse.setCollapsed(group, nowCollapsed)
     }
 
     @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
