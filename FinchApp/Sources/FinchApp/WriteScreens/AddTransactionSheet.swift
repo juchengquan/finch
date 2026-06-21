@@ -62,11 +62,6 @@ struct AddTransactionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Type", selection: $kind) {
-                    ForEach(Kind.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-
                 if kind == .transfer {
                     transferFields
                 } else {
@@ -76,17 +71,31 @@ struct AddTransactionSheet: View {
                 Section {
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                         .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
-                    TextField("Note (optional)", text: $note, axis: .vertical)
+                    HStack {
+                        Text("Note"); Spacer()
+                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                    }
                 }
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 }
             }
-            .navigationTitle("Add Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                // Transaction type sits in the title slot as an icon segmented control.
+                ToolbarItem(placement: .principal) {
+                    Picker("Type", selection: $kind) {
+                        ForEach(Kind.allCases) { kind in
+                            Image(systemName: TxnKindIcon.icon(for: kind.rawValue))
+                                .accessibilityLabel(kind.label)
+                                .tag(kind)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
             }
             .onAppear(perform: seedDefaults)
@@ -112,7 +121,10 @@ struct AddTransactionSheet: View {
     @ViewBuilder private var expenseIncomeFields: some View {
         Section {
             amountField
-            TextField(kind == .income ? "Source" : "Merchant", text: $merchant)
+            HStack {
+                Text(kind == .income ? "Source" : "Merchant"); Spacer()
+                TextField("", text: $merchant).multilineTextAlignment(.trailing)
+            }
             Picker("Category", selection: $categoryId) {
                 ForEach(categories) { Text($0.name).tag($0.id) }
             }
