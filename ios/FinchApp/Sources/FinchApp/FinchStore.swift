@@ -163,7 +163,7 @@ public final class FinchStore: ObservableObject {
         }
         let lastImported: Date? = meta?.exportedAt.flatMap { ISO8601DateFormatter().date(from: $0) }
         return DatabaseInfo(
-            filename: liveDBURL.lastPathComponent, sizeBytes: size ?? 0,
+            filename: liveDBURL.lastPathComponent, sizeBytes: size,
             schemaVersion: meta?.schema ?? Schema.version,
             lastImportedAt: lastImported, rowCounts: counts)
     }
