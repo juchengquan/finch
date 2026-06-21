@@ -14,7 +14,9 @@ public enum Apply {
 
     /// The merged handler registry. Per-domain `handlers` maps are folded in
     /// here as each domain lands (mirrors `mutate.ts`'s spread into `ALL`).
-    static var registry: [ActionName: Handler] {
+    /// Built once (was a computed `var` that rebuilt the whole map on every
+    /// write — e.g. each step of a confirm-all loop).
+    static let registry: [ActionName: Handler] = {
         var all: [ActionName: Handler] = [:]
         // Domains fold in their handlers as they are ported (Tasks 3–15):
         all.merge(Transactions.handlers) { _, new in new }
@@ -32,7 +34,7 @@ public enum Apply {
         all.merge(Scheduled.handlers) { _, new in new }
         all.merge(Rules.handlers) { _, new in new }
         return all
-    }
+    }()
 
     /// Apply a single action to the database. Mirrors the web's
     /// `applyMutation(exec, action, args)`.
