@@ -87,15 +87,36 @@ public enum SyncMutationRecord {
 @MainActor
 public final class CloudKitSyncService {
     public static let shared = CloudKitSyncService()
-    private let container = CKContainer(identifier: "iCloud.com.juchengquan.finch")
-    private var db: CKDatabase { container.privateCloudDatabase }
+
+    static let containerID = "iCloud.com.juchengquan.finch"
+
+    /// nil when iCloud isn't usable by this build — most importantly the unsigned
+    /// simulator / CI build (`CODE_SIGNING_ALLOWED=NO`, no team), whose binary
+    /// carries no iCloud entitlement. Crucially, `CKContainer(identifier:)` does NOT
+    /// throw when its id is absent from the embedded
+    /// `com.apple.developer.icloud-container-identifiers` entitlement — it TRAPS
+    /// (`_os_crash` → `EXC_BREAKPOINT`), which crashed the app at launch. There's no
+    /// public iOS API to read your own entitlements, but `ubiquityIdentityToken` is
+    /// documented to be nil whenever iCloud is unavailable to the app "for any
+    /// reason — for example … the app's entitlements are not configured for iCloud."
+    /// So a nil token reliably covers the no-entitlement case; gating on it means we
+    /// only construct the container on a provisioned build with an active iCloud
+    /// account (the only case CloudKit could work anyway) and stay genuinely inert
+    /// otherwise. Every method already guards on `accountAvailable()`, which returns
+    /// false when `container` is nil.
+    private let container: CKContainer? = {
+        guard FileManager.default.ubiquityIdentityToken != nil else { return nil }
+        return CKContainer(identifier: CloudKitSyncService.containerID)
+    }()
+    private var db: CKDatabase? { container?.privateCloudDatabase }
 
     /// Set by the coordinator: replay a fetched remote mutation through the
     /// chokepoint. Not called for our own device's echoes.
     public var replay: ((SyncMutation) -> Void)?
 
     public func accountAvailable() async -> Bool {
-        (try? await container.accountStatus()) == .available
+        guard let container else { return false }
+        return (try? await container.accountStatus()) == .available
     }
 
     // MARK: - Zones + subscription
@@ -104,7 +125,7 @@ public final class CloudKitSyncService {
     public func ensureZones(ledgerIds: [String]) async {
         guard await accountAvailable(), !ledgerIds.isEmpty else { return }
         let zones = ledgerIds.map { CKRecordZone(zoneID: SyncMutationRecord.zoneID(ledgerId: $0)) }
-        _ = try? await db.modifyRecordZones(saving: zones, deleting: [])
+        _ = try? await db?.modifyRecordZones(saving: zones, deleting: [])
     }
 
     /// Register a database subscription so other devices' pushes wake this one.
@@ -116,7 +137,7 @@ public final class CloudKitSyncService {
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true   // silent push → background pull
         sub.notificationInfo = info
-        _ = try? await db.save(sub)
+        _ = try? await db?.save(sub)
     }
 
     // MARK: - Push
@@ -128,7 +149,7 @@ public final class CloudKitSyncService {
         guard !pending.isEmpty else { return }
         await ensureZones(ledgerIds: Array(Set(pending.map(\.ledgerId))))
         let records = pending.map(SyncMutationRecord.record)
-        guard let results = try? await db.modifyRecords(saving: records, deleting: []) else { return }
+        guard let db, let results = try? await db.modifyRecords(saving: records, deleting: []) else { return }
         var acked = Set<String>()
         for (id, result) in results.saveResults {
             if case .success = result { acked.insert(id.recordName) }
@@ -143,7 +164,7 @@ public final class CloudKitSyncService {
     public func push(table: String, rows: [[String: String]]) async {
         guard await accountAvailable(), !rows.isEmpty else { return }
         let records = rows.map { CloudKitRecordMapper.record(table: table, row: $0) }
-        _ = try? await db.modifyRecords(saving: records, deleting: [])
+        _ = try? await db?.modifyRecords(saving: records, deleting: [])
     }
 
     // MARK: - Pull
@@ -155,7 +176,7 @@ public final class CloudKitSyncService {
         guard await accountAvailable() else { return }
         for ledgerId in ledgerIds {
             let zoneID = SyncMutationRecord.zoneID(ledgerId: ledgerId)
-            guard let result = try? await db.recordZoneChanges(inZoneWith: zoneID, since: loadToken(zoneID)) else { continue }
+            guard let db, let result = try? await db.recordZoneChanges(inZoneWith: zoneID, since: loadToken(zoneID)) else { continue }
             // Replay foreign mutations in seq order; skip our own + already-applied.
             let mutations = result.modificationResultsByID.values
                 .compactMap { try? $0.get().record }
