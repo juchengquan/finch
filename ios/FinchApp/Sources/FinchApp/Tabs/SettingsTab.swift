@@ -11,6 +11,7 @@ struct SettingsTab: View {
     @StateObject private var notifications = NotificationService.shared
     @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
     @State private var importError: String?
+    @State private var showForceImportConfirm = false
 
     var body: some View {
         MoreTabNavigationStack {
@@ -170,8 +171,8 @@ struct SettingsTab: View {
                         // The web has NO audit-skip path; only the native app
                         // offers this override. It re-projects WITHOUT gating on
                         // the audit (the rejected pack's staged DB is swapped in).
-                        Button("Force import (skip audit — iOS only)") {
-                            store.forceImportCurrentPack()
+                        Button("Force import (skip audit — iOS only)", role: .destructive) {
+                            showForceImportConfirm = true
                         }
                     }
                 }
@@ -183,6 +184,18 @@ struct SettingsTab: View {
             }
             .navigationTitle("Settings")
             .errorAlert($importError, title: "Import failed")
+            .alert("Force import?", isPresented: $showForceImportConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Replace data", role: .destructive) {
+                    Task {
+                        guard await gate.confirmSensitive() else { return }
+                        do { try store.forceImportCurrentPack() }
+                        catch { importError = i18nMessage(error) }
+                    }
+                }
+            } message: {
+                Text("This replaces your live database with the audit-rejected pack and cannot be undone.")
+            }
         }
     }
 }
