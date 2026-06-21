@@ -135,6 +135,7 @@ struct ActivityFeedView: View {
                 }
                 TxRow(txn: txn)
             }
+            .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
