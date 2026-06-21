@@ -34,6 +34,7 @@ public final class DeepLinkRouter: ObservableObject {
     @Published public var focusedId: String? = nil
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
+    @Published public var showSettings = false          // top-left gear (compact, prototype)
 
     public init() {}
 

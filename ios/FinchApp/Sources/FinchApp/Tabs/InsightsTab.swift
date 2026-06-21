@@ -53,6 +53,11 @@ struct InsightsTab: View {
                 }
             }
             .navigationTitle("Insights")
+            #if os(iOS)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+            }
+            #endif
         }
     }
 }

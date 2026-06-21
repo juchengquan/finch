@@ -17,17 +17,16 @@ struct AdaptiveShell: View {
     }
 }
 
-/// The iPhone/compact shell — a five-slot bottom bar: four primary tabs plus a
-/// custom More tab (`MoreTabRoot`) that hosts Settings. This avoids SwiftUI's
-/// system "More" overflow (which dropped titles / doubled the back button on
-/// those screens). `CompactTabRouting` bridges the bar selection and
-/// the More tab's push path to the shared `DeepLinkRouter`, so deep links /
-/// intents / notifications / ⌘K still land on the right screen.
+/// The iPhone/compact shell — a four-slot bottom bar (Accounts, Budgets,
+/// Scheduled, Insights). PROTOTYPE: the "More" tab is gone; Settings is reached
+/// from a top-leading gear on every page (`SettingsBarButton`) that presents the
+/// Settings screen as a sheet. `CompactTabRouting` still bridges the bar
+/// selection to the shared `DeepLinkRouter`; a `.settings` router target (deep
+/// link / ⌘K / intent) now presents the sheet instead of selecting a tab.
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
     @State private var selected: CompactTab = .accounts
-    @State private var morePath: [AppTab] = []
 
     var body: some View {
         TabView(selection: $selected) {
@@ -43,19 +42,27 @@ struct TabBarShell: View {
             tabContent(.insights).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
                 .tag(CompactTab.insights)
-            MoreTabRoot(path: $morePath)
-                .tabItem { Label("More", systemImage: "ellipsis") }
-                .tag(CompactTab.more)
         }
         // Activity is no longer a bottom-bar tab, but tx deep links / notifications
         // / Spotlight still route to `.activity` with a focused tx id — open that
         // transaction here (the bar lands on Accounts via CompactTabRouting).
         .sheet(item: focusedTx) { EditTransactionSheet(txn: $0) }
+        // PROTOTYPE: Settings as a modal, opened by the top-left gear or a
+        // `.settings` router target (deep link / ⌘K / intent).
+        .sheet(isPresented: settingsSheet) {
+            NavigationStack {
+                SettingsTab()
+                    #if os(iOS)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { settingsSheet.wrappedValue = false } label: { Image(systemName: "xmark") }
+                                .accessibilityLabel("Close")
+                        }
+                    }
+                    #endif
+            }
+        }
         .onAppear { syncFromRouter(router.selectedTab) }
-        // `selectedTab` is @Published, so this only fires on a value *change*: a
-        // repeat selection of the already-current tab (e.g. a second Scheduled
-        // notification while already on More→Scheduled) won't re-push or pop.
-        // Matches the prior system-More behavior; acceptable.
         .onChange(of: router.selectedTab) { _, tab in syncFromRouter(tab) }
         .onChange(of: selected) { _, sel in
             if let tab = CompactTabRouting.routerTab(forSelected: sel, current: router.selectedTab) {
@@ -64,11 +71,29 @@ struct TabBarShell: View {
         }
     }
 
-    /// Mirror a (possibly programmatic) router selection onto the bar + More path.
+    /// Mirror a (possibly programmatic) router selection onto the bar. A
+    /// `.settings` target is handled by `settingsSheet` (it has no bottom slot),
+    /// so skip it here and leave the bar on its current primary tab.
     private func syncFromRouter(_ tab: AppTab) {
-        let result = CompactTabRouting.sync(routerTab: tab, currentPath: morePath)
-        if selected != result.selected { selected = result.selected }
-        if morePath != result.path { morePath = result.path }
+        guard tab != .settings else { return }
+        let result = CompactTabRouting.sync(routerTab: tab, currentPath: [])
+        if result.selected != .more, selected != result.selected { selected = result.selected }
+    }
+
+    /// Presents the Settings sheet for the top-left gear (`showSettings`) or a
+    /// `.settings` router target; dismissing resets both so re-triggering works.
+    private var settingsSheet: Binding<Bool> {
+        Binding(
+            get: { router.showSettings || router.selectedTab == .settings },
+            set: { presented in
+                if !presented {
+                    router.showSettings = false
+                    if router.selectedTab == .settings {
+                        router.selectedTab = CompactTabRouting.appTab(for: selected) ?? .accounts
+                    }
+                }
+            }
+        )
     }
 
     /// A transaction targeted by a deep link / notification / Spotlight tap
@@ -114,6 +139,22 @@ private struct AddTransactionFAB: ViewModifier {
                 .padding(.trailing, 20)
                 .padding(.bottom, 20)
             }
+        }
+    }
+}
+
+/// PROTOTYPE: the top-leading gear shown on every compact primary tab. Replaces
+/// the removed "More" tab — tapping it presents Settings as a sheet (handled by
+/// `TabBarShell`). Compact-only, so the iPad/Mac sidebar (which lists Settings
+/// itself) doesn't get a redundant button. Drop one in each tab's `.toolbar`:
+/// `ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }`.
+struct SettingsBarButton: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @EnvironmentObject private var router: DeepLinkRouter
+    var body: some View {
+        if sizeClass == .compact {
+            Button { router.showSettings = true } label: { Image(systemName: "gearshape") }
+                .accessibilityLabel("Settings")
         }
     }
 }

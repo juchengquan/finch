@@ -39,6 +39,9 @@ struct AccountsTab: View {
             listContent
             .navigationTitle("Accounts")
             .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     #if os(iOS)
                     // While reordering (entered from a group's long-press menu),
