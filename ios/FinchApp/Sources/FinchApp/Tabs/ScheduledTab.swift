@@ -93,6 +93,8 @@ struct ScheduledRow: View {
             Spacer()
             if let amount = template.amount {
                 Text(store.displayMoney(amount, from: accountCurrency)).fontWeight(.semibold)
+            } else {
+                Text("Variable").font(.caption).foregroundStyle(.secondary)
             }
         }
     }

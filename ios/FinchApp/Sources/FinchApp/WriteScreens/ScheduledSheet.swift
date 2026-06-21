@@ -69,6 +69,10 @@ struct ScheduledSheet: View {
                         Text("Amount"); Spacer()
                         TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                     }
+                    if !installmentEnabled {
+                        Text("Leave empty for a variable amount (entered when posting).")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -140,21 +144,34 @@ struct ScheduledSheet: View {
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
-        guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
+
+        // Amount is optional: an empty field means a variable-amount template (the
+        // amount is supplied when posting). A non-empty entry must be > 0. Mirrors
+        // web, where amount == null is a variable template.
+        let amountValue: Double?
+        if amount.trimmingCharacters(in: .whitespaces).isEmpty {
+            amountValue = nil
+        } else {
+            guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount greater than 0."; return }
+            amountValue = v
+        }
 
         // Installments: when enabled, the count must be a whole number > 0. iOS used
         // to silently drop a fractional/≤0 entry (creating no plan); web blocks it.
+        // A plan also needs a fixed amount to divide, so disallow variable + plan.
         var installmentN: Int?
         if installmentEnabled {
             guard let n = Int(installmentTotal.trimmingCharacters(in: .whitespaces)), n > 0 else {
                 errorMessage = "Enter a whole number of payments greater than 0."; return
             }
+            guard amountValue != nil else { errorMessage = "Installment plans need a fixed amount."; return }
             installmentN = n
         }
 
         if let template {
             var patch: [String: JSONValue] = [
-                "name": .string(name), "amount": .double(value), "frequency": .string(frequency),
+                "name": .string(name), "amount": amountValue.map { JSONValue.double($0) } ?? .null,
+                "frequency": .string(frequency),
             ]
             if frequency == "monthly" { patch["dayOfMonth"] = .int(dayOfMonth) }
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
@@ -167,7 +184,7 @@ struct ScheduledSheet: View {
         if kind == .transfer, fromAccountId == accountId { errorMessage = "Pick two different accounts."; return }
         var args: [String: JSONValue] = [
             "ledgerId": .string(store.activeLedgerId), "name": .string(name),
-            "type": .string(kind.rawValue), "amount": .double(value),
+            "type": .string(kind.rawValue), "amount": amountValue.map { JSONValue.double($0) } ?? .null,
             "accountId": .string(accountId), "frequency": .string(frequency),
             "startDate": .string(AppDate.isoDay.string(from: startDate)),
         ]
