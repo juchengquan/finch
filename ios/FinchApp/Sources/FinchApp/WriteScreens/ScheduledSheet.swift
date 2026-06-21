@@ -95,7 +95,7 @@ struct ScheduledSheet: View {
                         ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
                     }
                     if frequency == "monthly" {
-                        Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...28)
+                        Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
                     }
                     if isEdit {
                         LabeledContent("Start", value: template?.startDate ?? "—")

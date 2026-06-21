@@ -259,7 +259,7 @@ private struct HoldingsCard: View {
                     HStack {
                         Text(h.symbol)
                         Spacer()
-                        Text(Selectors.holdingValue(h).map { Money.format($0, currency: h.currency) } ?? "—")
+                        Text(Selectors.holdingValue(h).map { store.displayMoney($0, from: h.currency) } ?? "—")
                             .fontWeight(.medium)
                     }
                 }
