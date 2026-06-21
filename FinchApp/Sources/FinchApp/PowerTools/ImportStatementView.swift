@@ -50,9 +50,13 @@ struct ImportStatementView: View {
             .navigationTitle("Import statement")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply", action: apply).bold().disabled(results.isEmpty)
+                    Button(action: apply) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Apply").bold().disabled(results.isEmpty)
                 }
             }
             .onAppear { if accountId.isEmpty { accountId = store.accounts.first?.id ?? "" } }

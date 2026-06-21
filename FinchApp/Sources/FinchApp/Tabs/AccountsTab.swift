@@ -44,8 +44,9 @@ struct AccountsTab: View {
                     // While reordering (entered from a group's long-press menu),
                     // the + turns into the standard "Done" button.
                     if editMode.isEditing {
-                        Button("Done") { withAnimation { editMode = .inactive } }
-                            .fontWeight(.semibold)
+                        Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
+                                .accessibilityLabel("Done")
+                                .fontWeight(.semibold)
                     } else {
                         Button { showingAdd = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("Add Account")

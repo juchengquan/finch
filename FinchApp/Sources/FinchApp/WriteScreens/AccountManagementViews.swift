@@ -32,7 +32,12 @@ struct ArchivedAccountsView: View {
         }
         .navigationTitle("Archived Accounts")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Image(systemName: "checkmark") }
+                    .accessibilityLabel("Done")
+            }
+        }
     }
 
     private func unarchive(_ a: AccountRow) {

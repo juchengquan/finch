@@ -35,8 +35,14 @@ struct ReconcileSheet: View {
             .navigationTitle("Reconcile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Reconcile", action: reconcile).bold() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: reconcile) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Reconcile").bold()
+                }
             }
             .onAppear { if accountId.isEmpty { accountId = preselect ?? store.accounts.first?.id ?? "" } }
         }
