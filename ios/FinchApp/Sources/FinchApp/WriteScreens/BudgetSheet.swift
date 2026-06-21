@@ -93,8 +93,14 @@ struct BudgetSheet: View {
             .navigationTitle(isEdit ? "Edit Budget" : "Add Budget")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: save) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Save").bold()
+                }
             }
         }
     }

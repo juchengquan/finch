@@ -92,7 +92,10 @@ struct AddTransactionSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
                 // Transaction type sits in the title slot as an icon segmented control.
                 ToolbarItem(placement: .principal) {
                     Picker("Type", selection: $kind) {
@@ -105,7 +108,10 @@ struct AddTransactionSheet: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: save) { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Save").bold()
+                }
             }
             .onAppear(perform: seedDefaults)
             // Auto-categorize from the merchant's history (the user can still override).
