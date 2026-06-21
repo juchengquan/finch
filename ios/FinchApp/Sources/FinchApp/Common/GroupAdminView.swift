@@ -10,6 +10,7 @@ struct GroupAdminView: View {
     let onCreate: (String) throws -> Void
     let onRename: (String, String) throws -> Void   // (id, newName)
     let onDelete: (String) throws -> Void
+    var onReorder: (([String]) throws -> Void)? = nil   // new id order; nil → reordering off
 
     @State private var newName = ""
     @State private var errorMessage: String?
@@ -33,6 +34,7 @@ struct GroupAdminView: View {
                                 Button(role: .destructive) { delete(g) } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
+                    .onMove(perform: onReorder == nil ? nil : move)
                 }
             }
             if let errorMessage {
@@ -41,7 +43,20 @@ struct GroupAdminView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+            #if os(iOS)
+            if onReorder != nil && groups.count > 1 { ToolbarItem(placement: .primaryAction) { EditButton() } }
+            #endif
+        }
+    }
+
+    /// Persist a group reorder: hand the new id order to the owner.
+    private func move(from source: IndexSet, to dest: Int) {
+        guard let onReorder else { return }
+        var ids = groups.map(\.id)
+        ids.move(fromOffsets: source, toOffset: dest)
+        do { try onReorder(ids) } catch { errorMessage = i18nMessage(error) }
     }
 
     private func add() {
