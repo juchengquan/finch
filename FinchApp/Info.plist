@@ -73,5 +73,9 @@
             </array>
         </dict>
     </array>
+    <!-- .finch packs are imported by copying (atomic swap of the live DB), not
+         edited in place, so declare in-place opening as unsupported. -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <false/>
 </dict>
 </plist>

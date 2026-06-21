@@ -65,6 +65,20 @@ final class CloudKitSyncTests: XCTestCase {
         XCTAssertFalse(SyncPreferences.enabled)
     }
 
+    /// Regression: on a build WITHOUT the embedded iCloud entitlement (the unsigned
+    /// simulator / CI build), constructing the sync singletons must NOT trap.
+    /// `CKContainer(identifier:)` traps — it does not throw — when the container id
+    /// isn't in the entitlement, which previously crashed the app at launch the
+    /// instant `CloudKitSyncCoordinator.shared.start()` force-initialized the service.
+    /// Touching `.shared` here would itself crash before this assertion ran if the
+    /// container were constructed eagerly; reaching the assertion proves it's inert.
+    @MainActor func test_serviceInertWithoutEntitlement() async {
+        let available = await CloudKitSyncService.shared.accountAvailable()
+        XCTAssertFalse(available, "no iCloud entitlement embedded → no account, no trap")
+        await CloudKitSyncCoordinator.shared.start()   // must not trap
+        XCTAssertFalse(CloudKitSyncCoordinator.shared.status.accountAvailable)
+    }
+
     // MARK: - Mutation log (Phase 8 live-loop content model — pure parts)
 
     /// A SyncMutation round-trips through its CKRecord mapping, including the
