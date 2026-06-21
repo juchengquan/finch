@@ -111,6 +111,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let info = response.notification.request.content.userInfo
         let action = response.actionIdentifier
         let focusId = info["focusId"] as? String
+        let tabName = info["tab"] as? String   // extract before the @Sendable hop (info isn't Sendable)
         await MainActor.run {
             switch action {
             case "confirmNow":
@@ -121,7 +122,7 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
                 if let id = focusId { router?.route(to: "tx:\(id)") } else { router?.open(.activity) }
             case "snooze1h": break   // dismiss; re-plan will re-surface if still due
             default:                  // tap (UNNotificationDefaultActionIdentifier)
-                if let tab = info["tab"] as? String, let t = Self.tab(from: tab) { router?.open(t) }
+                if let tabName, let t = Self.tab(from: tabName) { router?.open(t) }
             }
         }
     }

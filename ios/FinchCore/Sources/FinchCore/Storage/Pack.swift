@@ -42,7 +42,8 @@ public enum Pack {
     /// (pack.ts:99): DB DEFLATE, attachments STORE (sorted by rel_path), manifest
     /// DEFLATE last.
     public static func build(_ input: BuildInput) throws -> BuiltPack {
-        guard let archive = Archive(accessMode: .create) else { throw PackError.archiveCreateFailed }
+        let archive: Archive
+        do { archive = try Archive(accessMode: .create) } catch { throw PackError.archiveCreateFailed }
         let dbSha = sha256Hex(input.dbBytes)
         try addEntry(archive, name: dbFilename, data: input.dbBytes, method: .deflate)
 
@@ -84,7 +85,8 @@ public enum Pack {
     /// Open a pack and read + sanity-check the manifest (NOT per-file sha256 —
     /// that's `extract`'s job). Mirrors `parsePack` (pack.ts:179).
     public static func parse(_ bytes: Data) throws -> ParsedPack {
-        guard let archive = Archive(data: bytes, accessMode: .read) else { throw PackError.notAZip }
+        let archive: Archive
+        do { archive = try Archive(data: bytes, accessMode: .read) } catch { throw PackError.notAZip }
         guard archive[manifestFilename] != nil else { throw PackError.missingManifest }
         let manifestData = try entryData(archive, manifestFilename)
         let manifest: PackManifest

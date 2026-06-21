@@ -21,10 +21,11 @@ struct FinchApp: App {
                     .environmentObject(store)
                     .environmentObject(router)
                     .environmentObject(gate)
-                    // Note any tap to reset the idle clock. simultaneousGesture +
-                    // TapGesture recognizes alongside child controls without
-                    // consuming taps or blocking scrolls.
-                    .simultaneousGesture(TapGesture().onEnded { gate.noteActivity() })
+                // Reset the idle clock on interaction. Uses a platform-level
+                // passive observer (ActivityMonitor) instead of a SwiftUI
+                // `.simultaneousGesture(TapGesture())`, which swallowed taps on
+                // List rows / NavigationLinks and broke drill-in navigation.
+                ActivityMonitor()
                 if gate.isLocked {   // Phase 6.3: biometric cover
                     LockView().environmentObject(gate)
                 }

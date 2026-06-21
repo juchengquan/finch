@@ -3,9 +3,12 @@
 > How to provision `iCloud.com.juchengquan.finch` and turn the **unverified**
 > live-sync loop into a real, testable feature. Companion to
 > `IOS_MACOS_PHASE_8_DESIGN.md` (the design + the §5.1 provisioning gate). Until
-> these steps are done the CloudKit code is inert: every call guards on
-> `accountAvailable()`, the "Sync across devices (iCloud)" switch defaults OFF,
-> and the Phase 5 iCloud-Drive **file sync stays the only working live path**.
+> these steps are done the CloudKit code is inert: the sync service only builds a
+> `CKContainer` when the running binary actually carries the iCloud entitlement
+> (so the unsigned simulator / CI build skips it — see Gotchas), every network call
+> additionally guards on `accountAvailable()`, the "Sync across devices (iCloud)"
+> switch defaults OFF, and the Phase 5 iCloud-Drive **file sync stays the only
+> working live path**.
 
 ## What's already in the repo (don't redo these)
 
@@ -16,6 +19,10 @@
 - **Code** (`ios/FinchApp/Sources/FinchApp/Sync/`): `CloudKitSyncService`
   (push/pull/zones/subscription), `CloudKitSyncCoordinator` (switch + replay),
   `SyncMutation`/`SyncOutbox` (mutation log), wired into `FinchStore.apply`.
+  `CloudKitSyncService` only constructs its `CKContainer` when the build has the
+  iCloud entitlement (`CloudKitSyncService.hasCloudKitEntitlement`) — otherwise the
+  container is nil and `accountAvailable()` returns false. This is what keeps the
+  unsigned simulator / CI build from trapping at launch (see Gotchas).
 - **Settings › Sync** UI (the switch + status + Resync).
 
 ## What's missing (this runbook) + still-to-code (Step 5)
@@ -125,6 +132,15 @@ If you prefer it in `project.yml`, add `DEVELOPMENT_TEAM` under the FinchApp /
 FinchMac `settings.base` and flip `CODE_SIGNING_ALLOWED` to `YES` **only on a
 local branch** — do not merge it, or CI's unsigned simulator build breaks.
 
+**FinchMac already signs ad-hoc for local runs.** So ⌘R works with no team,
+`FinchMac` uses `CODE_SIGN_STYLE: Manual` + `CODE_SIGN_IDENTITY: "-"` ("Sign to
+Run Locally") and its `application-groups` entitlement was dropped (App Sandbox
+stays; `AppGroup.containerURL` falls back to Application Support). CI doesn't
+build FinchMac, so this is committed safely. **For real CloudKit on the Mac**,
+set a `DEVELOPMENT_TEAM`, switch FinchMac to automatic signing, and **restore the
+App Group + add the iCloud capability** to `FinchMac.entitlements` (it has none
+today — mirror `FinchApp.entitlements`).
+
 ---
 
 ## Step 5 — Finish the code (the `PROVISIONING-GATED` pieces)
@@ -187,6 +203,20 @@ iCloud).
 ## Gotchas
 
 - Entitlement container string must match **exactly** (`iCloud.com.juchengquan.finch`).
+- **`CKContainer` traps — it does not throw — without the entitlement.** On a build
+  whose binary lacks the iCloud entitlement (the unsigned simulator / CI build, or
+  any target missing the keys), `CKContainer(identifier:)` and the first container
+  *use* both `EXC_BREAKPOINT` rather than returning an error — so an
+  `accountAvailable()` guard alone can't save you; the crash is in the constructor.
+  `CloudKitSyncService` therefore gates container construction on
+  `hasCloudKitEntitlement`, which reads the embedded entitlement before touching
+  CloudKit: on **macOS** via `SecTask` (`com.apple.developer.icloud-services`
+  includes "CloudKit"); on **iOS** via `FileManager.ubiquityIdentityToken` (no
+  public iOS API reads entitlements, and the token is nil when the app isn't iCloud-
+  entitled). Note the iOS proxy doesn't work on macOS — there the user's iCloud
+  login makes the token non-nil even for an unentitled app, which is exactly why the
+  two platforms use different checks. Regression: `CloudKitSyncTests
+  .test_serviceInertWithoutEntitlement`.
 - The simulator has **no iCloud account** by default — sign it in, or test on
   device. Without an account everything no-ops (by design).
 - `recordZoneChanges` tokens are persisted per-zone in `UserDefaults`
