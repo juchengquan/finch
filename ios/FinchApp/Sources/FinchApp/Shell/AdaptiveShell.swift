@@ -16,18 +16,49 @@ struct AdaptiveShell: View {
     }
 }
 
-/// The iPhone/compact shell — the existing bottom tab bar (Phase 1.0/1.5/2),
-/// driven by the shared `DeepLinkRouter` so deep links / intents select tabs.
+/// The iPhone/compact shell — a five-slot bottom bar: four primary tabs plus a
+/// custom More tab (`MoreTabRoot`) that hosts Scheduled & Settings. This avoids
+/// SwiftUI's system "More" overflow (which dropped titles / doubled the back
+/// button on those screens). `CompactTabRouting` bridges the bar selection and
+/// the More tab's push path to the shared `DeepLinkRouter`, so deep links /
+/// intents / notifications / ⌘K still land on the right screen.
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
+    @State private var selected: CompactTab = .accounts
+    @State private var morePath: [AppTab] = []
+
     var body: some View {
-        TabView(selection: Binding(get: { router.selectedTab }, set: { router.selectedTab = $0 })) {
-            ForEach(AppTab.allCases) { tab in
-                tabContent(tab)
-                    .tabItem { Label(tab.title, systemImage: tab.icon) }
-                    .tag(tab)
+        TabView(selection: $selected) {
+            tabContent(.accounts)
+                .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
+                .tag(CompactTab.accounts)
+            tabContent(.activity)
+                .tabItem { Label(AppTab.activity.title, systemImage: AppTab.activity.icon) }
+                .tag(CompactTab.activity)
+            tabContent(.budgets)
+                .tabItem { Label(AppTab.budgets.title, systemImage: AppTab.budgets.icon) }
+                .tag(CompactTab.budgets)
+            tabContent(.insights)
+                .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
+                .tag(CompactTab.insights)
+            MoreTabRoot(path: $morePath)
+                .tabItem { Label("More", systemImage: "ellipsis") }
+                .tag(CompactTab.more)
+        }
+        .onAppear { syncFromRouter(router.selectedTab) }
+        .onChange(of: router.selectedTab) { _, tab in syncFromRouter(tab) }
+        .onChange(of: selected) { _, sel in
+            if let tab = CompactTabRouting.routerTab(forSelected: sel, current: router.selectedTab) {
+                router.selectedTab = tab
             }
         }
+    }
+
+    /// Mirror a (possibly programmatic) router selection onto the bar + More path.
+    private func syncFromRouter(_ tab: AppTab) {
+        let result = CompactTabRouting.sync(routerTab: tab, currentPath: morePath)
+        if selected != result.selected { selected = result.selected }
+        if morePath != result.path { morePath = result.path }
     }
 }
 
