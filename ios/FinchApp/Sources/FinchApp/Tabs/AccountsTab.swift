@@ -26,8 +26,12 @@ struct AccountsTab: View {
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = AccountGroupCollapse.collapsed()
+    @State private var renamingGroupId: String?        // group long-press → Edit (rename)
+    @State private var renameText = ""
+    @State private var groupPendingDelete: AccountGroupRow?
     #if os(iOS)
-    @State private var editMode: EditMode = .inactive  // drives reorder; toggled from the ⋯ menu
+    @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
+    @State private var reorderRows: [ReorderRow] = []
     #endif
 
     var body: some View {
@@ -35,23 +39,21 @@ struct AccountsTab: View {
             listContent
             .navigationTitle("Accounts")
             .toolbar {
-                #if os(iOS)
-                // Reorder lives in the ⋯ overflow menu (was a top-left Edit button).
-                ToolbarItem(placement: .secondaryAction) {
-                    if !store.accounts.isEmpty {
-                        Button {
-                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-                        } label: {
-                            Label(editMode.isEditing ? "Done Reordering" : "Reorder Accounts",
-                                  systemImage: "arrow.up.arrow.down")
-                        }
-                        .accessibilityValue(editMode.isEditing ? "On" : "Off")
-                    }
-                }
-                #endif
                 ToolbarItem(placement: .primaryAction) {
+                    #if os(iOS)
+                    // While reordering (entered from a group's long-press menu),
+                    // the + turns into the standard "Done" button.
+                    if editMode.isEditing {
+                        Button("Done") { withAnimation { editMode = .inactive } }
+                            .fontWeight(.semibold)
+                    } else {
+                        Button { showingAdd = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add Account")
+                    }
+                    #else
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Account")
+                    #endif
                 }
                 // Group + archive management moved off the + into the ⋯ overflow menu.
                 ToolbarItem(placement: .secondaryAction) {
@@ -79,11 +81,34 @@ struct AccountsTab: View {
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
+            .alert("Rename group", isPresented: Binding(
+                get: { renamingGroupId != nil },
+                set: { if !$0 { renamingGroupId = nil } })) {
+                TextField("Name", text: $renameText)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { renameGroup() }
+            }
+            .confirmationDialog("Delete group?", isPresented: Binding(
+                get: { groupPendingDelete != nil },
+                set: { if !$0 { groupPendingDelete = nil } }),
+                presenting: groupPendingDelete) { g in
+                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Accounts in this group become ungrouped.")
+            }
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             #if os(iOS)
             .environment(\.editMode, $editMode)
+            .onChange(of: editMode) { _, mode in
+                if mode.isEditing {
+                    reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
+                } else {
+                    persistReorder()
+                }
+            }
             #endif
         }
     }
@@ -91,7 +116,21 @@ struct AccountsTab: View {
     @ViewBuilder private var listContent: some View {
         if store.accounts.isEmpty {
             EmptyState(tab: .accounts)
-        } else if let selection {
+        } else {
+            #if os(iOS)
+            if editMode.isEditing {
+                reorderList
+            } else {
+                contentList
+            }
+            #else
+            contentList
+            #endif
+        }
+    }
+
+    @ViewBuilder private var contentList: some View {
+        if let selection {
             List(selection: selection) {
                 allTransactionsLink
                 groupedSections { account in
@@ -155,8 +194,22 @@ struct AccountsTab: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Long-press a group → Reorder / Edit / Delete. (Reorder is
+                // iOS-only; Edit/Delete only for real groups, not "Ungrouped".)
+                .contextMenu {
+                    #if os(iOS)
+                    Button { withAnimation { editMode = .active } } label: {
+                        Label("Reorder", systemImage: "arrow.up.arrow.down")
+                    }
+                    #endif
+                    if let g = store.accountGroups.first(where: { $0.name == groupName }) {
+                        Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
+                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
+                    }
+                }
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
-                .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                .accessibilityHint((collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                                   + ". Long press for group options.")
 
                 if !collapsedGroups.contains(groupName) {
                     ForEach(store.accounts(in: groupName)) { account in row(account) }
@@ -173,6 +226,52 @@ struct AccountsTab: View {
         }
     }
 
+    #if os(iOS)
+    /// Flat, fully-draggable list used only while reordering: accounts move
+    /// across groups, group headers move their whole block.
+    private var reorderList: some View {
+        List {
+            ForEach(reorderRows) { row in
+                switch row {
+                case .group(_, let name):
+                    Text(name).fontWeight(.semibold).foregroundStyle(.secondary)
+                case .account(let a):
+                    AccountRowView(account: a)
+                }
+            }
+            .onMove { from, to in
+                reorderRows = AccountReorder.applyMove(reorderRows, from: from, to: to)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+    }
+
+    /// Persist the reordered state (only rows whose group/order changed). Writes
+    /// go through the per-call `store.apply` chokepoint (like `moveAccounts`), so
+    /// it isn't atomic — a mid-loop failure leaves some rows at stale sort_order,
+    /// which is cosmetic and self-heals on the next reorder.
+    private func persistReorder() {
+        guard !reorderRows.isEmpty else { return }   // nothing to persist (never entered reorder)
+        let plan = AccountReorder.persistencePlan(reorderRows)
+        let curGroupOrder = Dictionary(uniqueKeysWithValues: store.accountGroups.enumerated().map { ($1.id, $0) })
+        let curAcct = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, ($0.groupId, $0.sortOrder ?? 0)) })
+        do {
+            for g in plan.groups where curGroupOrder[g.id] != g.order {
+                try store.apply(.updateAccountGroup, Args(["id": .string(g.id), "patch": .object(["sortOrder": .int(g.order)])]))
+            }
+            for a in plan.accounts {
+                let cur = curAcct[a.id]
+                if cur?.0 != a.groupId || cur?.1 != a.order {
+                    var patch: [String: JSONValue] = ["sortOrder": .int(a.order)]
+                    patch["groupId"] = a.groupId.map(JSONValue.string) ?? .null
+                    try store.apply(.updateAccount, Args(["id": .string(a.id), "patch": .object(patch)]))
+                }
+            }
+        } catch { errorMessage = i18nMessage(error) }
+        reorderRows = []
+    }
+    #endif
+
     /// Toggle a group's collapsed state and persist it.
     private func toggleGroup(_ group: String) {
         let nowCollapsed = !collapsedGroups.contains(group)
@@ -180,6 +279,22 @@ struct AccountsTab: View {
             if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
         }
         AccountGroupCollapse.setCollapsed(group, nowCollapsed)
+    }
+
+    /// Rename a group (from the long-press → Edit menu).
+    private func renameGroup() {
+        guard let id = renamingGroupId else { return }
+        let name = renameText.trimmingCharacters(in: .whitespaces)
+        renamingGroupId = nil
+        guard !name.isEmpty else { return }
+        do { try store.apply(.updateAccountGroup, Args(["id": .string(id), "patch": .object(["name": .string(name)])])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Delete a group (accounts fall back to ungrouped via ON DELETE SET NULL).
+    private func deleteGroup(_ g: AccountGroupRow) {
+        do { try store.apply(.deleteAccountGroup, Args(["id": .string(g.id)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
