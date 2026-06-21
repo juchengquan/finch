@@ -12,7 +12,7 @@ struct ScheduledTab: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
+        MoreTabNavigationStack {
             Group {
                 if store.scheduled.isEmpty {
                     ContentUnavailableView {
