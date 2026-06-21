@@ -142,14 +142,23 @@ struct ScheduledSheet: View {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
         guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
 
+        // Installments: when enabled, the count must be a whole number > 0. iOS used
+        // to silently drop a fractional/≤0 entry (creating no plan); web blocks it.
+        var installmentN: Int?
+        if installmentEnabled {
+            guard let n = Int(installmentTotal.trimmingCharacters(in: .whitespaces)), n > 0 else {
+                errorMessage = "Enter a whole number of payments greater than 0."; return
+            }
+            installmentN = n
+        }
+
         if let template {
             var patch: [String: JSONValue] = [
                 "name": .string(name), "amount": .double(value), "frequency": .string(frequency),
             ]
             if frequency == "monthly" { patch["dayOfMonth"] = .int(dayOfMonth) }
             if kind != .transfer { patch["category"] = categoryId.isEmpty ? .null : .string(categoryId) }
-            patch["installmentTotal"] = (installmentEnabled ? Int(installmentTotal) : nil)
-                .flatMap { $0 > 0 ? JSONValue.int($0) : nil } ?? .null
+            patch["installmentTotal"] = installmentN.map { JSONValue.int($0) } ?? .null
             do { try store.apply(.updateScheduled, Args(["id": .string(template.id), "patch": .object(patch)])); dismiss() }
             catch { errorMessage = i18nMessage(error) }
             return
@@ -165,7 +174,7 @@ struct ScheduledSheet: View {
         if frequency == "monthly" { args["dayOfMonth"] = .double(Double(dayOfMonth)) }
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
-        if installmentEnabled, let n = Int(installmentTotal), n > 0 { args["installmentTotal"] = .double(Double(n)) }
+        if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }
         do { try store.apply(.createScheduled, Args(args)); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }
