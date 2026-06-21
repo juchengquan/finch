@@ -13,7 +13,7 @@ struct SettingsTab: View {
     @State private var importError: String?
 
     var body: some View {
-        NavigationStack {
+        MoreTabNavigationStack {
             List {
                 Section {
                     ImportButton()
