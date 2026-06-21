@@ -329,17 +329,6 @@
       }
     },
     {
-      "action": "createAccount",
-      "args": {
-        "id": "a4",
-        "ledgerId": "personal",
-        "name": "Wallet",
-        "type": "cash",
-        "currency": "USD",
-        "openingBalance": 250
-      }
-    },
-    {
       "action": "updateCategory",
       "args": {
         "id": "fun",
@@ -963,49 +952,6 @@
             "sort_order": 1
           }
         ]
-      },
-      {
-        "ledger_id": "personal",
-        "date": "2026-06-20",
-        "time": null,
-        "description": "Opening balance",
-        "kind": "opening",
-        "status": "confirmed",
-        "counterparty_id": null,
-        "refunded_entry_id": null,
-        "source_template_id": null,
-        "notes": null,
-        "applied_rule_ids": null,
-        "reviewed": false,
-        "sealed": 1,
-        "postings": [
-          {
-            "account_id": "a4",
-            "category_id": null,
-            "amount": "250.000000",
-            "currency": "USD",
-            "amount_base": "227.270000",
-            "exchange_rate": "0.909091",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": true,
-            "sort_order": 0
-          },
-          {
-            "account_id": null,
-            "category_id": "sys-open",
-            "amount": "-227.270000",
-            "currency": "EUR",
-            "amount_base": "-227.270000",
-            "exchange_rate": "1.000000",
-            "orig_amount": null,
-            "orig_currency": null,
-            "memo": null,
-            "cleared": false,
-            "sort_order": 1
-          }
-        ]
       }
     ],
     "ledgers": [
@@ -1055,19 +1001,6 @@
         "currency": "USD",
         "current_balance": "0.000000",
         "sort_order": 2,
-        "include_in_net_worth": 1,
-        "is_active": 1,
-        "archived": false
-      },
-      {
-        "id": "a4",
-        "ledger_id": "personal",
-        "group_id": null,
-        "name": "Wallet",
-        "type": "cash",
-        "currency": "USD",
-        "current_balance": "250.000000",
-        "sort_order": 3,
         "include_in_net_worth": 1,
         "is_active": 1,
         "archived": false
@@ -1271,12 +1204,6 @@
       },
       {
         "date": "2026-05-31",
-        "currency": "EUR",
-        "rate": "1.100000",
-        "source": "derived"
-      },
-      {
-        "date": "2026-06-20",
         "currency": "EUR",
         "rate": "1.100000",
         "source": "derived"

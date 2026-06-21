@@ -479,8 +479,10 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'setTransactionTags', args: { id: '$lastAccountPosting', tagIds: ['tg1'] } },
 
   // --- Parity expansion: high-risk actions the oracle didn't cover (2026-06-20) ---
-  // createAccount with an opening balance → posts an opening-equity entry.
-  { action: 'createAccount', args: { id: 'a4', ledgerId: 'personal', name: 'Wallet', type: 'cash', currency: 'USD', openingBalance: 250 } },
+  // NOTE: createAccount-with-openingBalance is intentionally NOT here — its
+  // opening-equity entry is stamped with the wall-clock date (no date arg), so it
+  // makes the fixture non-reproducible across days (like postScheduled). Pinning
+  // it would need an engine change (an opening-date arg).
   // updateCategory reparenting: food > fun > pay — exercises the cycle + depth-cap
   // math (pay lands at depth 3, the limit). No kind enforcement on reparent.
   { action: 'updateCategory', args: { id: 'fun', patch: { parentId: 'food' } } },
