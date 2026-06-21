@@ -45,6 +45,8 @@ export interface AccountPatch {
   groupId?: string | null;
   /** Per-account net-worth flag. Defaulted from `type` on create; flippable. */
   includeInNetWorth?: number;
+  /** Position within its group — written by drag-to-reorder. */
+  sortOrder?: number;
 }
 
 export interface NewAccount {
