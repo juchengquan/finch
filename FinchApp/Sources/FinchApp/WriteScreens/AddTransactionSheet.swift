@@ -216,10 +216,8 @@ struct AddTransactionSheet: View {
                 try store.apply(.addTransaction, Args(args))
             }
             dismiss()
-        } catch let e as I18nError {
-            errorMessage = e.message
         } catch {
-            errorMessage = "\(error)"
+            errorMessage = i18nMessage(error)   // localizes I18nError (incl. zh), like every other write screen
         }
     }
 

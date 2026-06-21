@@ -15,7 +15,6 @@ struct RulesManagerView: View {
             if store.rules.isEmpty {
                 Text("No rules yet. Rules auto-apply to new income/expense entries.").foregroundStyle(.secondary)
             }
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             ForEach(store.rules) { rule in
                 HStack {
                     Toggle(isOn: Binding(get: { rule.isActive }, set: { setActive(rule, $0) })) {
@@ -34,6 +33,7 @@ struct RulesManagerView: View {
             }
         }
         .navigationTitle("Rules")
+        .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add rule")

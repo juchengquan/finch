@@ -11,7 +11,6 @@ struct TagAdminView: View {
     var body: some View {
         List {
             if store.tags.isEmpty { Text("No tags yet.").foregroundStyle(.secondary) }
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             ForEach(store.tags) { tag in
                 Button { renaming = tag } label: {
                     HStack {
@@ -25,6 +24,7 @@ struct TagAdminView: View {
             }
         }
         .navigationTitle("Tags")
+        .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add tag")

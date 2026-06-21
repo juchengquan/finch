@@ -31,10 +31,8 @@ struct AccountDetailView: View {
                     forecastSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
-                    if let errorMessage {
-                        Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-                    }
                 }
+                .errorAlert($errorMessage)
                 .navigationTitle(account.name ?? "Account")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -124,8 +122,7 @@ struct AccountDetailView: View {
                             Text(t.date).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(store.displayMoneyBase(t.amount))
-                            .foregroundStyle(t.amount < 0 ? Color.primary : Color.green)
+                        Text(store.displayMoneyBase(t.amount)).fontWeight(.medium)
                     }
                 }
             }
