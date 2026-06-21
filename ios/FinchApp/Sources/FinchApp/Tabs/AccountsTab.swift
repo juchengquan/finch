@@ -91,6 +91,7 @@ struct AccountsTab: View {
             EmptyState(tab: .accounts)
         } else if let selection {
             List(selection: selection) {
+                allTransactionsLink
                 groupedSections { account in
                     AccountRowView(account: account)
                         .tag(account.id)
@@ -100,6 +101,7 @@ struct AccountsTab: View {
             }
         } else {
             List {
+                allTransactionsLink
                 groupedSections { account in
                     NavigationLink(value: account.id) {
                         AccountRowView(account: account)
@@ -107,6 +109,17 @@ struct AccountsTab: View {
                     .swipeActions(edge: .trailing) { rowActions(account) }
                     .contextMenu { rowActions(account) }
                 }
+            }
+        }
+    }
+
+    /// Pinned entry to the global transaction feed (Activity lives here now,
+    /// rather than in its own bottom-bar tab). Pushes the reusable feed onto the
+    /// Accounts navigation stack.
+    @ViewBuilder private var allTransactionsLink: some View {
+        Section {
+            NavigationLink { ActivityFeedView() } label: {
+                Label("All Transactions", systemImage: "list.bullet")
             }
         }
     }
