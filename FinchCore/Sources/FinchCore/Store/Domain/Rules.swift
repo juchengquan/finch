@@ -40,6 +40,7 @@ public enum Rules {
             "account": .string(r["account_id"]), "date": .string(r["date"]),
             "ledgerId": .string(r["ledger_id"]), "pending": .bool(false),
         ]
+        if let tm = r["time"] as String? { o["time"] = .string(tm) }   // web parity (mutations.ts:72)
         if let c = r["category_id"] as String? { o["category"] = .string(c) }
         if let cur = r["currency"] as String? { o["currency"] = .string(cur) }
         if let k = r["kind"] as String? { o["kind"] = .string(k) }
