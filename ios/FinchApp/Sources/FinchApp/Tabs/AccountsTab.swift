@@ -26,8 +26,11 @@ struct AccountsTab: View {
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = AccountGroupCollapse.collapsed()
+    @State private var renamingGroupId: String?        // group long-press → Edit (rename)
+    @State private var renameText = ""
+    @State private var groupPendingDelete: AccountGroupRow?
     #if os(iOS)
-    @State private var editMode: EditMode = .inactive  // drives reorder; toggled from the ⋯ menu
+    @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
     #endif
 
     var body: some View {
@@ -35,23 +38,21 @@ struct AccountsTab: View {
             listContent
             .navigationTitle("Accounts")
             .toolbar {
-                #if os(iOS)
-                // Reorder lives in the ⋯ overflow menu (was a top-left Edit button).
-                ToolbarItem(placement: .secondaryAction) {
-                    if !store.accounts.isEmpty {
-                        Button {
-                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-                        } label: {
-                            Label(editMode.isEditing ? "Done Reordering" : "Reorder Accounts",
-                                  systemImage: "arrow.up.arrow.down")
-                        }
-                        .accessibilityValue(editMode.isEditing ? "On" : "Off")
-                    }
-                }
-                #endif
                 ToolbarItem(placement: .primaryAction) {
+                    #if os(iOS)
+                    // While reordering (entered from a group's long-press menu),
+                    // the + turns into the standard "Done" button.
+                    if editMode.isEditing {
+                        Button("Done") { withAnimation { editMode = .inactive } }
+                            .fontWeight(.semibold)
+                    } else {
+                        Button { showingAdd = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add Account")
+                    }
+                    #else
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Account")
+                    #endif
                 }
                 // Group + archive management moved off the + into the ⋯ overflow menu.
                 ToolbarItem(placement: .secondaryAction) {
@@ -79,6 +80,22 @@ struct AccountsTab: View {
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
+            .alert("Rename group", isPresented: Binding(
+                get: { renamingGroupId != nil },
+                set: { if !$0 { renamingGroupId = nil } })) {
+                TextField("Name", text: $renameText)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { renameGroup() }
+            }
+            .confirmationDialog("Delete group?", isPresented: Binding(
+                get: { groupPendingDelete != nil },
+                set: { if !$0 { groupPendingDelete = nil } }),
+                presenting: groupPendingDelete) { g in
+                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Accounts in this group become ungrouped.")
+            }
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear(perform: consumeFocus)
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -105,9 +122,12 @@ struct AccountsTab: View {
             List {
                 allTransactionsLink
                 groupedSections { account in
-                    NavigationLink(value: account.id) {
-                        AccountRowView(account: account)
+                    // A Button push (not NavigationLink) so there's no trailing
+                    // disclosure chevron; still opens the detail via `path`.
+                    Button { path.append(account.id) } label: {
+                        AccountRowView(account: account).contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) { rowActions(account) }
                     .contextMenu { rowActions(account) }
                 }
@@ -151,8 +171,31 @@ struct AccountsTab: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Long-press a group → Reorder / Edit / Delete. (Reorder is
+                // iOS-only; Edit/Delete only for real groups, not "Ungrouped".)
+                .contextMenu {
+                    #if os(iOS)
+                    Button { withAnimation { editMode = .active } } label: {
+                        Label("Reorder Accounts", systemImage: "arrow.up.arrow.down")
+                    }
+                    #endif
+                    // Groups live in List sections (not drag-reorderable in place),
+                    // so this opens Manage Groups, which supports dragging groups.
+                    Button { showingGroups = true } label: {
+                        Label("Reorder Groups", systemImage: "folder")
+                    }
+                    if let g = store.accountGroups.first(where: { $0.name == groupName }) {
+                        Button { renamingGroupId = g.id; renameText = g.name } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) { groupPendingDelete = g } label: {
+                            Label("Delete Group", systemImage: "trash")
+                        }
+                    }
+                }
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
-                .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                .accessibilityHint((collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                                   + ". Long press for group options.")
 
                 if !collapsedGroups.contains(groupName) {
                     ForEach(store.accounts(in: groupName)) { account in row(account) }
@@ -176,6 +219,22 @@ struct AccountsTab: View {
             if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
         }
         AccountGroupCollapse.setCollapsed(group, nowCollapsed)
+    }
+
+    /// Rename a group (from the long-press → Edit menu).
+    private func renameGroup() {
+        guard let id = renamingGroupId else { return }
+        let name = renameText.trimmingCharacters(in: .whitespaces)
+        renamingGroupId = nil
+        guard !name.isEmpty else { return }
+        do { try store.apply(.updateAccountGroup, Args(["id": .string(id), "patch": .object(["name": .string(name)])])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Delete a group (accounts fall back to ungrouped via ON DELETE SET NULL).
+    private func deleteGroup(_ g: AccountGroupRow) {
+        do { try store.apply(.deleteAccountGroup, Args(["id": .string(g.id)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
