@@ -15,9 +15,11 @@ struct AddTransactionSheet: View {
     var defaultAccountId: String? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
-        case expense, income, transfer
+        case expense, income, transfer, adjust
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
+        /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).
+        var iconName: String { TxnKindIcon.icon(for: self == .adjust ? "adjustment" : rawValue) }
     }
 
     @State private var kind: Kind = .expense
@@ -28,6 +30,7 @@ struct AddTransactionSheet: View {
     @State private var fromAccountId = ""
     @State private var toAccountId = ""
     @State private var received = ""
+    @State private var targetBalance = ""   // adjust-balance: the account's new balance
     @State private var date = Date()
     @State private var note = ""
     @State private var currencyCode = ""
@@ -62,8 +65,14 @@ struct AddTransactionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Text(kind.label)   // names the icon-only type control above
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
                 if kind == .transfer {
                     transferFields
+                } else if kind == .adjust {
+                    adjustFields
                 } else {
                     expenseIncomeFields
                 }
@@ -88,7 +97,7 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .principal) {
                     Picker("Type", selection: $kind) {
                         ForEach(Kind.allCases) { kind in
-                            Image(systemName: TxnKindIcon.icon(for: kind.rawValue))
+                            Image(systemName: kind.iconName)
                                 .accessibilityLabel(kind.label)
                                 .tag(kind)
                         }
@@ -125,12 +134,10 @@ struct AddTransactionSheet: View {
                 Text(kind == .income ? "Source" : "Merchant"); Spacer()
                 TextField("", text: $merchant).multilineTextAlignment(.trailing)
             }
-            Picker("Category", selection: $categoryId) {
-                ForEach(categories) { Text($0.name).tag($0.id) }
-            }
-            Picker("Account", selection: $accountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
+            SearchablePickerRow(title: "Category",
+                options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             if currencyOptions.count > 1 {
                 Picker("Currency", selection: $currencyCode) {
                     ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
@@ -142,12 +149,10 @@ struct AddTransactionSheet: View {
     @ViewBuilder private var transferFields: some View {
         Section {
             amountField
-            Picker("From", selection: $fromAccountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
-            Picker("To", selection: $toAccountId) {
-                ForEach(accounts) { Text($0.name ?? "—").tag($0.id) }
-            }
+            SearchablePickerRow(title: "From",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
+            SearchablePickerRow(title: "To",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $toAccountId)
             if transferIsCrossCurrency {
                 HStack {
                     Text("Received (\(currency(of: toAccountId)))")
@@ -163,6 +168,20 @@ struct AddTransactionSheet: View {
             Text("Amount")
             Spacer()
             TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+        }
+    }
+
+    @ViewBuilder private var adjustFields: some View {
+        Section {
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+            HStack {
+                Text("New balance"); Spacer()
+                // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
+                TextField("0.00", text: $targetBalance).keyboardType(.numbersAndPunctuation).multilineTextAlignment(.trailing)
+            }
+        } footer: {
+            Text("Posts an adjustment for the difference from the account's current balance.")
         }
     }
 
@@ -183,6 +202,18 @@ struct AddTransactionSheet: View {
 
     private func save() {
         errorMessage = nil
+        if kind == .adjust {
+            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
+            do {
+                var args: [String: JSONValue] = [
+                    "accountId": .string(accountId), "targetBalance": .double(target), "date": .string(Self.day(date)),
+                ]
+                if !note.isEmpty { args["note"] = .string(note) }
+                try store.apply(.adjustAccountBalance, Args(args))
+                dismiss()
+            } catch { errorMessage = i18nMessage(error) }
+            return
+        }
         // Keep category valid when the type toggles between expense/income.
         if kind != .transfer, !categories.contains(where: { $0.id == categoryId }) {
             categoryId = categories.first?.id ?? ""
