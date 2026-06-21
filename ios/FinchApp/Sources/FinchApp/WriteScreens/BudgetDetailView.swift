@@ -37,10 +37,8 @@ struct BudgetDetailView: View {
                         }
                     }
                     transactionsSection(budget)
-                    if let errorMessage {
-                        Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-                    }
                 }
+                .errorAlert($errorMessage)
                 .navigationTitle(budget.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

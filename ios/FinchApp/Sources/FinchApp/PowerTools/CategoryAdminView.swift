@@ -12,7 +12,6 @@ struct CategoryAdminView: View {
 
     var body: some View {
         List {
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             ForEach(store.pickableCategories) { cat in
                 Button { renaming = cat } label: {
                     HStack {
@@ -27,6 +26,7 @@ struct CategoryAdminView: View {
             }
         }
         .navigationTitle("Categories")
+        .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add category")

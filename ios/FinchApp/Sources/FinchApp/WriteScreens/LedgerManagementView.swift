@@ -14,9 +14,6 @@ struct LedgerManagementView: View {
 
     var body: some View {
         List {
-            if let errorMessage {
-                Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-            }
             ForEach(store.ledgers) { ledger in
                 Button { editing = ledger } label: {
                     HStack {
@@ -37,6 +34,7 @@ struct LedgerManagementView: View {
             }
         }
         .navigationTitle("Ledgers")
+        .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }
