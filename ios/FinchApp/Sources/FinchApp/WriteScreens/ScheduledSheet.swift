@@ -188,7 +188,7 @@ struct ScheduledSheet: View {
             "accountId": .string(accountId), "frequency": .string(frequency),
             "startDate": .string(AppDate.isoDay.string(from: startDate)),
         ]
-        if frequency == "monthly" { args["dayOfMonth"] = .double(Double(dayOfMonth)) }
+        if frequency == "monthly" { args["dayOfMonth"] = .int(dayOfMonth) }   // integer field; matches the edit path
         if kind == .transfer { args["fromAccountId"] = .string(fromAccountId) }
         else if !categoryId.isEmpty { args["category"] = .string(categoryId) }
         if let n = installmentN { args["installmentTotal"] = .double(Double(n)) }
