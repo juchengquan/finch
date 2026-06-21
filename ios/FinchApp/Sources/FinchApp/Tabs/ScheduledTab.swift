@@ -25,7 +25,7 @@ struct ScheduledTab: View {
                 } else {
                     List {
                         ForEach(store.scheduled, id: \.id) { t in
-                            Button { editing = t } label: { ScheduledRow(template: t) }
+                            Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                 .buttonStyle(.plain)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
