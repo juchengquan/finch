@@ -24,10 +24,6 @@ struct AccountDetailView: View {
             if let account {
                 List {
                     Section { header(account) }
-                    let series = Selectors.balanceSeries(store.txns, account.id, account.balance)
-                    if series.count > 1 {
-                        Section("Balance") { Sparkline(values: series).frame(height: 64) }
-                    }
                     forecastSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
