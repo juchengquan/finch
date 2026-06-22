@@ -155,21 +155,10 @@ struct EditTransactionSheet: View {
         }
     }
 
-    /// Save a picked photo into the live attachments tree + record it via the
-    /// chokepoint (the in-app counterpart to the Share Extension flow).
     private func addReceipt(_ item: PhotosPickerItem) async {
         errorMessage = nil
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-        let attId = "att-\(UUID().uuidString.prefix(8).lowercased())"
-        let dir = store.attachmentsRoot.appendingPathComponent(txn.id, isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let rel = "attachments/\(txn.id)/\(attId).jpg"
-        try? data.write(to: store.attachmentsRoot.deletingLastPathComponent().appendingPathComponent(rel))
-        let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         do {
-            try store.apply(.setEntryAttachment, Args([
-                "entryId": .string(txn.id), "kind": .string("image"), "relPath": .string(rel),
-                "mimeType": .string("image/jpeg"), "byteSize": .double(Double(data.count)), "sha256": .string(sha)]))
+            try await AttachmentWriter.write(item: item, entryId: txn.id, store: store)
             attachments = store.attachments(for: txn.id)
             pickedPhoto = nil
         } catch { errorMessage = i18nMessage(error) }
