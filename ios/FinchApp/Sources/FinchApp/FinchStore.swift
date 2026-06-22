@@ -30,8 +30,17 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var exchangeRates: [ExchangeRate] = []   // Phase 4 FX editor
     @Published public private(set) var rules: [RuleSummary] = []            // Phase 4 rules manager
     @Published public private(set) var tags: [TagRow] = []                  // Phase 4 tag admin
+    /// UserDefaults key for the last-active ledger — a per-device viewing
+    /// preference (not ledger data), restored in `bootstrap()`.
+    static let activeLedgerKey = "finch.activeLedgerId"
     @Published public var activeLedgerId: String = "" {
-        didSet { if oldValue != activeLedgerId { reprojectActiveLedger() } }  // switch → re-project
+        didSet {
+            guard oldValue != activeLedgerId else { return }
+            reprojectActiveLedger()                                    // switch → re-project
+            if !activeLedgerId.isEmpty {                               // remember across launches
+                UserDefaults.standard.set(activeLedgerId, forKey: Self.activeLedgerKey)
+            }
+        }
     }
     @Published public internal(set) var auditProblems: [Audit.AuditProblem] = []   // set by core + ImportExport
     @Published public internal(set) var dbInfo: DatabaseInfo = .empty               // set by core + ImportExport
@@ -93,7 +102,10 @@ public final class FinchStore: ObservableObject {
         self.auditProblems = (try? Audit.run(on: live)) ?? []
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
         let first = ledgers.first?.id ?? ""
-        if activeLedgerId == first { reprojectActiveLedger() } else { activeLedgerId = first }
+        // Restore the last-active ledger if it still exists; else the default (first).
+        let saved = UserDefaults.standard.string(forKey: Self.activeLedgerKey)
+        let target = (saved.map { s in ledgers.contains { $0.id == s } } ?? false) ? saved! : first
+        if activeLedgerId == target { reprojectActiveLedger() } else { activeLedgerId = target }
         self.dbInfo = makeDBInfo()
     }
 

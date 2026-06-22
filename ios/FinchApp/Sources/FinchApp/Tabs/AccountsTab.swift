@@ -25,7 +25,7 @@ struct AccountsTab: View {
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
-    @State private var collapsedGroups: Set<String> = AccountGroupCollapse.collapsed()
+    @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
     @State private var renamingGroupId: String?        // group long-press → Edit (rename)
     @State private var renameText = ""
     @State private var groupPendingDelete: AccountGroupRow?
@@ -103,8 +103,9 @@ struct AccountsTab: View {
                 Text("Accounts in this group become ungrouped.")
             }
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
-            .onAppear(perform: consumeFocus)
+            .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+            .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
             #if os(iOS)
             .environment(\.editMode, $editMode)
             .onChange(of: editMode) { _, mode in
@@ -283,7 +284,7 @@ struct AccountsTab: View {
         withAnimation {
             if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
         }
-        AccountGroupCollapse.setCollapsed(group, nowCollapsed)
+        AccountGroupCollapse.setCollapsed(group, nowCollapsed, ledger: store.activeLedgerId)
     }
 
     /// Rename a group (from the long-press → Edit menu).
