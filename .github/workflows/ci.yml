@@ -44,7 +44,7 @@ jobs:
         run: bun run build
 
   ios:
-    name: iOS (FinchCore + ParityTests + FinchApp)
+    name: iOS + macOS (FinchCore + ParityTests + FinchApp + FinchMac)
     # iOS 26 SDK requires Xcode 26.x — use a runner image that ships it. Adjust
     # the image / Xcode selection here if the hosted images change.
     runs-on: macos-26
@@ -85,3 +85,12 @@ jobs:
         run: |
           xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
             -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}"
+
+      # Compile the native macOS app too — the iOS app build won't catch
+      # macOS-only breaks (e.g. .topBarTrailing is unavailable on macOS).
+      # Build-only (no signing needed) — this is a compile gate, not a release.
+      - name: Build FinchMac (macOS)
+        working-directory: ios
+        run: |
+          xcodebuild build -project FinchApp.xcodeproj -scheme FinchMac \
+            -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
