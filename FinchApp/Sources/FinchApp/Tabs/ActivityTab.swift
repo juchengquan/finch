@@ -19,6 +19,7 @@ struct ActivityTab: View {
 struct ActivityFeedView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
+    @Environment(\.horizontalSizeClass) private var sizeClass
     /// Optional header shown above the feed (the Ledger tab's summary) + a
     /// configurable nav title — so the feed can be a tab, not only a pushed view.
     var navTitle: String = "Activity"
@@ -78,15 +79,21 @@ struct ActivityFeedView: View {
         // selection toolbar doesn't linger stale on return.
         .onDisappear { isSelecting = false; selected.removeAll() }
         .toolbar {
+            // Trailing: Select (multi-select for bulk-recategorize). The add `+`
+            // only appears on regular width — compact has the floating FAB, so a
+            // nav-bar `+` would be redundant. This also frees the leading slot for
+            // the gear (Ledger tab) / back button.
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add Transaction")
-                    .disabled(store.accounts.isEmpty)
-            }
-            ToolbarItem(placement: .topBarLeading) {
                 Button(isSelecting ? "Done" : "Select") {
                     isSelecting.toggle(); selected.removeAll()
                 }.disabled(store.txns.isEmpty)
+            }
+            if sizeClass != .compact {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Transaction")
+                        .disabled(store.accounts.isEmpty)
+                }
             }
             if isSelecting {
                 ToolbarItem(placement: .bottomBar) {
