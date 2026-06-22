@@ -17,12 +17,12 @@ struct AdaptiveShell: View {
     }
 }
 
-/// The iPhone/compact shell — a four-slot bottom bar (Accounts, Budgets,
-/// Scheduled, Insights). PROTOTYPE: the "More" tab is gone; Settings is reached
-/// from a top-leading gear on every page (`SettingsBarButton`) that presents the
-/// Settings screen as a sheet. `CompactTabRouting` still bridges the bar
-/// selection to the shared `DeepLinkRouter`; a `.settings` router target (deep
-/// link / ⌘K / intent) now presents the sheet instead of selecting a tab.
+/// The iPhone/compact shell — a five-slot bottom bar (Ledger, Accounts, Budgets,
+/// Scheduled, Insights). Settings is reached from a top-right gear on every page
+/// (`SettingsBarButton`) that pushes the Settings screen onto the current tab.
+/// `CompactTabRouting` still bridges the bar selection to the shared
+/// `DeepLinkRouter`; a `.settings` router target (deep link / ⌘K / intent) is
+/// converted to that push instead of selecting a tab.
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
@@ -72,7 +72,7 @@ struct TabBarShell: View {
         if result.selected != .more, selected != result.selected { selected = result.selected }
     }
 
-/// A transaction targeted by a deep link / notification / Spotlight tap
+    /// A transaction targeted by a deep link / notification / Spotlight tap
     /// (router `.activity` + a focused tx id). Presenting clears the focus and
     /// settles the router on Accounts so the bar state stays consistent.
     private var focusedTx: Binding<Tx?> {
@@ -119,11 +119,12 @@ private struct AddTransactionFAB: ViewModifier {
     }
 }
 
-/// PROTOTYPE: the top-leading gear shown on every compact primary tab. Replaces
-/// the removed "More" tab — tapping it presents Settings as a sheet (handled by
-/// `TabBarShell`). Compact-only, so the iPad/Mac sidebar (which lists Settings
-/// itself) doesn't get a redundant button. Drop one in each tab's `.toolbar`:
-/// `ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }`.
+/// The top-right gear shown on every compact primary tab. Replaces the removed
+/// "More" tab — tapping it pushes Settings onto the current tab (via the
+/// `.settingsPush()` modifier on each tab's NavigationStack). Compact-only, so
+/// the iPad/Mac sidebar (which lists Settings itself) doesn't get a redundant
+/// button. Drop one in each tab's `.toolbar`:
+/// `ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }`.
 struct SettingsBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: DeepLinkRouter

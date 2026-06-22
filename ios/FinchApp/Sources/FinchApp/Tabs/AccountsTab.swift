@@ -41,7 +41,7 @@ struct AccountsTab: View {
             .settingsPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     #if os(iOS)

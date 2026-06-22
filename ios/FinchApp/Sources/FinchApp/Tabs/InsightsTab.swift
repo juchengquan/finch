@@ -56,7 +56,7 @@ struct InsightsTab: View {
             .settingsPush()
             #if os(iOS)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
             }
             #endif
         }

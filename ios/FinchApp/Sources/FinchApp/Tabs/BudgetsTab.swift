@@ -31,7 +31,7 @@ struct BudgetsTab: View {
             .settingsPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
