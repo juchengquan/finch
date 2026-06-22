@@ -22,7 +22,7 @@ struct BudgetsTab: View {
     @State private var editing: BudgetRow?
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
-    @State private var collapsedGroups: Set<String> = BudgetGroupCollapse.collapsed()
+    @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -48,8 +48,9 @@ struct BudgetsTab: View {
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
             .errorAlert($errorMessage)
             .navigationDestination(for: String.self) { BudgetDetailView(budgetId: $0) }
-            .onAppear(perform: consumeFocus)
+            .onAppear { consumeFocus(); collapsedGroups = BudgetGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+            .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = BudgetGroupCollapse.collapsed(ledger: lid) }
         }
     }
 
@@ -129,7 +130,7 @@ struct BudgetsTab: View {
         withAnimation {
             if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
         }
-        BudgetGroupCollapse.setCollapsed(group, nowCollapsed)
+        BudgetGroupCollapse.setCollapsed(group, nowCollapsed, ledger: store.activeLedgerId)
     }
 
     @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
