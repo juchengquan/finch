@@ -2,23 +2,13 @@ import SwiftUI
 import FinchCore
 
 /// Settings home — a short menu of drill-in categories (Import/Export, Sync &
-/// Backup, Power Tools, Notifications, Security, Advanced) plus the inline
-/// display-currency picker and an About footer. Ledger switching + Manage
-/// ledgers live in the Ledger tab now, so they're not duplicated here.
+/// Backup, Power Tools, Notifications, Security, Advanced) plus an About footer.
+/// Ledger switching, Manage ledgers, and display currency live in the Ledger tab
+/// now, so they're not duplicated here.
 struct SettingsTab: View {
-    @EnvironmentObject private var store: FinchStore
-
     var body: some View {
         MoreTabNavigationStack {
             List {
-                Section {
-                    Picker("Display currency", selection: Binding(
-                        get: { store.displayCurrency },
-                        set: { store.setDisplayCurrency($0) })) {
-                        ForEach(store.availableDisplayCurrencies, id: \.self) { Text($0).tag($0) }
-                    }
-                }
-
                 Section {
                     NavigationLink { SettingsImportExportView() } label: { Label("Import & Export", systemImage: "square.and.arrow.up.on.square") }
                     NavigationLink { SettingsSyncBackupView() } label: { Label("Sync & Backup", systemImage: "arrow.triangle.2.circlepath") }

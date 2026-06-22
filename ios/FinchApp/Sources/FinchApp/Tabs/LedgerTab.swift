@@ -65,6 +65,11 @@ private struct LedgerHeaderSection: View {
                 if trend.count > 1 {
                     Sparkline(values: trend).frame(height: 40)
                 }
+                Picker("Display currency", selection: Binding(
+                    get: { store.displayCurrency },
+                    set: { store.setDisplayCurrency($0) })) {
+                    ForEach(store.availableDisplayCurrencies, id: \.self) { Text($0).tag($0) }
+                }
                 NavigationLink {
                     LedgerManagementView()
                 } label: {
