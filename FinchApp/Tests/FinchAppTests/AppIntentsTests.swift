@@ -7,18 +7,19 @@ import XCTest
 final class AppIntentsTests: XCTestCase {
     func test_screenEnumMapsEveryTab() {
         let pairs: [(ScreenAppEnum, AppTab)] = [
+            (.ledger, .ledger),
             (.accounts, .accounts), (.activity, .activity), (.budgets, .budgets),
             (.insights, .insights), (.scheduled, .scheduled), (.settings, .settings),
         ]
         for (screen, tab) in pairs { XCTAssertEqual(screen.tab, tab) }
         // Every enum case is covered + distinct.
-        XCTAssertEqual(ScreenAppEnum.allCasesCount, 6)
-        XCTAssertEqual(Set(pairs.map { $0.1 }).count, 6)
+        XCTAssertEqual(ScreenAppEnum.allCasesCount, 7)
+        XCTAssertEqual(Set(pairs.map { $0.1 }).count, 7)
     }
 }
 
 private extension ScreenAppEnum {
     static var allCasesCount: Int {
-        [ScreenAppEnum.accounts, .activity, .budgets, .insights, .scheduled, .settings].count
+        [ScreenAppEnum.ledger, .accounts, .activity, .budgets, .insights, .scheduled, .settings].count
     }
 }
