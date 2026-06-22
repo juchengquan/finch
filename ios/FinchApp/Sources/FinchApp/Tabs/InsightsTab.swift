@@ -56,7 +56,9 @@ struct InsightsTab: View {
             .settingsPush()
             #if os(iOS)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
+                #if os(iOS)
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // .topBarTrailing is iOS-only; gear is compact-only (macOS uses the sidebar)
+                #endif
             }
             #endif
         }

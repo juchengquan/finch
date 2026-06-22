@@ -10,7 +10,9 @@ struct LedgerTab: View {
         NavigationStack {
             ActivityFeedView(navTitle: "Ledger", headerSection: AnyView(LedgerHeaderSection()))
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
+                    #if os(iOS)
+                    ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // .topBarTrailing is iOS-only; gear is compact-only anyway (macOS uses the sidebar)
+                    #endif
                 }
                 .settingsPush()
         }
