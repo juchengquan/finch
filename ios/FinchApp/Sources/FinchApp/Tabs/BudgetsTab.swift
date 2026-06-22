@@ -28,9 +28,10 @@ struct BudgetsTab: View {
         NavigationStack(path: $path) {
             listContent
             .navigationTitle("Budgets")
+            .settingsPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // PROTOTYPE
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }

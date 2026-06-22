@@ -38,9 +38,10 @@ struct AccountsTab: View {
         NavigationStack(path: $path) {
             listContent
             .navigationTitle("Accounts")
+            .settingsPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }   // PROTOTYPE
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     #if os(iOS)

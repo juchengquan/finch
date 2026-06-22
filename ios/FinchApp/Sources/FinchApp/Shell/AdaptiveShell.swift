@@ -50,56 +50,29 @@ struct TabBarShell: View {
         // / Spotlight still route to `.activity` with a focused tx id — open that
         // transaction here (the bar lands on Accounts via CompactTabRouting).
         .sheet(item: focusedTx) { EditTransactionSheet(txn: $0) }
-        // PROTOTYPE: Settings as a modal, opened by the top-left gear or a
-        // `.settings` router target (deep link / ⌘K / intent).
-        .sheet(isPresented: settingsSheet) {
-            NavigationStack {
-                SettingsTab()
-                    #if os(iOS)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button { settingsSheet.wrappedValue = false } label: { Image(systemName: "xmark") }
-                                .accessibilityLabel("Close")
-                        }
-                    }
-                    #endif
-            }
-        }
         .onAppear { syncFromRouter(router.selectedTab) }
         .onChange(of: router.selectedTab) { _, tab in syncFromRouter(tab) }
         .onChange(of: selected) { _, sel in
+            router.showSettings = false
             if let tab = CompactTabRouting.routerTab(forSelected: sel, current: router.selectedTab) {
                 router.selectedTab = tab
             }
         }
     }
 
-    /// Mirror a (possibly programmatic) router selection onto the bar. A
-    /// `.settings` target is handled by `settingsSheet` (it has no bottom slot),
-    /// so skip it here and leave the bar on its current primary tab.
     private func syncFromRouter(_ tab: AppTab) {
-        guard tab != .settings else { return }
+        // A `.settings` route (deep link / ⌘K / intent) → push Settings on the
+        // active tab; settle the bar back on a real primary tab.
+        if tab == .settings {
+            router.showSettings = true
+            router.selectedTab = CompactTabRouting.appTab(for: selected) ?? .accounts
+            return
+        }
         let result = CompactTabRouting.sync(routerTab: tab, currentPath: [])
         if result.selected != .more, selected != result.selected { selected = result.selected }
     }
 
-    /// Presents the Settings sheet for the top-left gear (`showSettings`) or a
-    /// `.settings` router target; dismissing resets both so re-triggering works.
-    private var settingsSheet: Binding<Bool> {
-        Binding(
-            get: { router.showSettings || router.selectedTab == .settings },
-            set: { presented in
-                if !presented {
-                    router.showSettings = false
-                    if router.selectedTab == .settings {
-                        router.selectedTab = CompactTabRouting.appTab(for: selected) ?? .accounts
-                    }
-                }
-            }
-        )
-    }
-
-    /// A transaction targeted by a deep link / notification / Spotlight tap
+/// A transaction targeted by a deep link / notification / Spotlight tap
     /// (router `.activity` + a focused tx id). Presenting clears the focus and
     /// settles the router on Accounts so the bar state stays consistent.
     private var focusedTx: Binding<Tx?> {
@@ -160,6 +133,33 @@ struct SettingsBarButton: View {
                 .accessibilityLabel("Settings")
         }
     }
+}
+
+/// Pushes Settings onto the enclosing NavigationStack when `router.showSettings`
+/// is set (by the gear or a `.settings` route). Compact-only — iPad/Mac reach
+/// Settings via the sidebar. `.navigationTitle` is set here because SettingsTab's
+/// own title (inside MoreTabNavigationStack's conditional) doesn't surface
+/// through `navigationDestination`.
+private struct SettingsPush: ViewModifier {
+    @EnvironmentObject private var router: DeepLinkRouter
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content.navigationDestination(isPresented: Binding(
+            get: { sizeClass == .compact && router.showSettings },
+            set: { if !$0 { router.showSettings = false } })) {
+            SettingsTab().navigationTitle("Settings")
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+extension View {
+    /// Apply inside a compact tab's NavigationStack so the top-right gear (and a
+    /// `.settings` route) pushes Settings there.
+    func settingsPush() -> some View { modifier(SettingsPush()) }
 }
 
 /// The iPad/Mac shell. Accounts and Budgets get a true three-column
