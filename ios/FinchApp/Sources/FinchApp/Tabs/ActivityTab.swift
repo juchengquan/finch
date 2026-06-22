@@ -19,6 +19,10 @@ struct ActivityTab: View {
 struct ActivityFeedView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
+    /// Optional header shown above the feed (the Ledger tab's summary) + a
+    /// configurable nav title — so the feed can be a tab, not only a pushed view.
+    var navTitle: String = "Activity"
+    var headerSection: AnyView? = nil
     @State private var searchQuery: String = ""
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
@@ -37,10 +41,14 @@ struct ActivityFeedView: View {
 
     var body: some View {
         Group {
-            if store.txns.isEmpty {
+            if store.txns.isEmpty && headerSection == nil {
                 EmptyState(tab: .activity)
             } else {
                 List {
+                    if let headerSection { headerSection }
+                    if store.txns.isEmpty {
+                        Section { Text("No transactions in this ledger yet.").foregroundStyle(.secondary) }
+                    }
                     if pendingCount > 0 {
                         Section {
                             Button {
@@ -64,7 +72,7 @@ struct ActivityFeedView: View {
             }
         }
         .searchable(text: $searchQuery)
-        .navigationTitle("Activity")
+        .navigationTitle(navTitle)
         .errorAlert($errorMessage)
         // Leave selection mode behind when the feed is popped/dismissed so the
         // selection toolbar doesn't linger stale on return.

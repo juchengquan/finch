@@ -2,10 +2,11 @@ import SwiftUI
 
 /// The 6 shipped tabs, in display order (the canonical list reconciled in #160).
 public enum AppTab: String, Hashable, CaseIterable, Identifiable, Sendable {
-    case accounts, activity, budgets, insights, scheduled, settings
+    case ledger, accounts, activity, budgets, insights, scheduled, settings
     public var id: Self { self }
     public var title: String {
         switch self {
+        case .ledger: return "Ledger"
         case .accounts: return "Accounts"; case .activity: return "Activity"
         case .budgets: return "Budgets"; case .insights: return "Insights"
         case .scheduled: return "Scheduled"; case .settings: return "Settings"
@@ -13,6 +14,7 @@ public enum AppTab: String, Hashable, CaseIterable, Identifiable, Sendable {
     }
     public var icon: String {
         switch self {
+        case .ledger: return "books.vertical"
         case .accounts: return "wallet.pass"; case .activity: return "list.bullet"
         case .budgets: return "chart.pie"; case .insights: return "chart.line.uptrend.xyaxis"
         case .scheduled: return "calendar"; case .settings: return "gear"
@@ -30,7 +32,7 @@ public final class DeepLinkRouter: ObservableObject {
     /// SwiftUI tree) drive the same router the UI observes.
     public static let shared = DeepLinkRouter()
 
-    @Published public var selectedTab: AppTab = .accounts
+    @Published public var selectedTab: AppTab = .ledger   // Ledger is the home/first tab
     @Published public var focusedId: String? = nil
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N

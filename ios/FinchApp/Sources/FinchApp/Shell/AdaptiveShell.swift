@@ -26,10 +26,13 @@ struct AdaptiveShell: View {
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
-    @State private var selected: CompactTab = .accounts
+    @State private var selected: CompactTab = .ledger
 
     var body: some View {
         TabView(selection: $selected) {
+            tabContent(.ledger).modifier(AddTransactionFAB())
+                .tabItem { Label(AppTab.ledger.title, systemImage: AppTab.ledger.icon) }
+                .tag(CompactTab.ledger)
             tabContent(.accounts).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
@@ -108,7 +111,7 @@ struct TabBarShell: View {
             set: { newValue in
                 if newValue == nil {
                     router.focusedId = nil
-                    if router.selectedTab == .activity { router.selectedTab = .accounts }
+                    if router.selectedTab == .activity { router.selectedTab = .ledger }
                 }
             }
         )
@@ -215,6 +218,7 @@ struct SplitViewShell: View {
 @ViewBuilder
 func tabContent(_ tab: AppTab) -> some View {
     switch tab {
+    case .ledger: LedgerTab()
     case .accounts: AccountsTab()
     case .activity: ActivityTab()
     case .budgets: BudgetsTab()

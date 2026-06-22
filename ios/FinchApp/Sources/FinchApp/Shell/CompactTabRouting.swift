@@ -4,7 +4,7 @@
 /// (Activity is no longer a bottom-bar tab — its feed lives inside Accounts.)
 /// See plans/ios-macos/2026-06-21-compact-more-tab-design.md.
 enum CompactTab: Hashable {
-    case accounts, budgets, scheduled, insights, more
+    case ledger, accounts, budgets, scheduled, insights, more
 }
 
 /// Pure bridge logic between `DeepLinkRouter.selectedTab` (an `AppTab`) and the
@@ -15,8 +15,9 @@ enum CompactTabRouting {
     /// under `.more`.
     static func compactTab(for tab: AppTab) -> CompactTab {
         switch tab {
+        case .ledger:   return .ledger
         case .accounts: return .accounts
-        case .activity: return .accounts   // Activity feed now opens inside Accounts
+        case .activity: return .ledger   // the activity feed lives in the Ledger tab now
         case .budgets:  return .budgets
         case .scheduled: return .scheduled
         case .insights: return .insights
@@ -27,6 +28,7 @@ enum CompactTabRouting {
     /// The app tab a primary slot maps to, or `nil` for `.more` (no single tab).
     static func appTab(for compact: CompactTab) -> AppTab? {
         switch compact {
+        case .ledger:    return .ledger
         case .accounts:  return .accounts
         case .budgets:   return .budgets
         case .scheduled: return .scheduled
