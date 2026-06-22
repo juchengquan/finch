@@ -53,9 +53,10 @@ struct InsightsTab: View {
                 }
             }
             .navigationTitle("Insights")
+            .settingsPush()
             #if os(iOS)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+                ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }
             }
             #endif
         }
