@@ -49,6 +49,9 @@ struct ScheduledTab: View {
             }
             .navigationTitle("Scheduled")
             .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // PROTOTYPE
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Scheduled")
