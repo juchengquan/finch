@@ -19,7 +19,7 @@ import FinchCore
 struct SectionSidebar: View {
     @EnvironmentObject private var router: DeepLinkRouter
 
-    private let primary: [AppTab] = [.accounts, .budgets, .scheduled, .insights]
+    private let primary: [AppTab] = [.ledger, .accounts, .budgets, .scheduled, .insights]
     private let more: [AppTab] = [.activity, .settings]
 
     var body: some View {

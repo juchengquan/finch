@@ -3,14 +3,15 @@ import XCTest
 
 final class CompactTabRoutingTests: XCTestCase {
     func test_primaryTabsMapToOwnSlot() {
+        XCTAssertEqual(CompactTabRouting.compactTab(for: .ledger), .ledger)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .accounts), .accounts)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .budgets), .budgets)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .scheduled), .scheduled)
         XCTAssertEqual(CompactTabRouting.compactTab(for: .insights), .insights)
     }
 
-    func test_activityMapsToAccounts() {   // Activity feed now lives inside Accounts
-        XCTAssertEqual(CompactTabRouting.compactTab(for: .activity), .accounts)
+    func test_activityMapsToLedger() {   // the activity feed lives in the Ledger tab now
+        XCTAssertEqual(CompactTabRouting.compactTab(for: .activity), .ledger)
     }
 
     func test_overflowTabsMapToMore() {
@@ -18,6 +19,7 @@ final class CompactTabRoutingTests: XCTestCase {
     }
 
     func test_appTabForSlot() {
+        XCTAssertEqual(CompactTabRouting.appTab(for: .ledger), .ledger)
         XCTAssertEqual(CompactTabRouting.appTab(for: .accounts), .accounts)
         XCTAssertEqual(CompactTabRouting.appTab(for: .scheduled), .scheduled)
         XCTAssertEqual(CompactTabRouting.appTab(for: .insights), .insights)

@@ -159,11 +159,12 @@ public struct OpenScreenIntent: AppIntent {
 
 /// The 6 shipped tabs as a Siri-pickable enum (a future Reports joins this list).
 public enum ScreenAppEnum: String, AppEnum {
-    case accounts, activity, budgets, insights, scheduled, settings
+    case ledger, accounts, activity, budgets, insights, scheduled, settings
     public static var typeDisplayRepresentation: TypeDisplayRepresentation = "Screen"
     // AppIntents requires caseDisplayRepresentations to be a literal dictionary
     // (the metadata extractor parses it at compile time), so it stays spelled out.
     public static var caseDisplayRepresentations: [ScreenAppEnum: DisplayRepresentation] = [
+        .ledger: "Ledger",
         .accounts: "Accounts", .activity: "Activity", .budgets: "Budgets",
         .insights: "Insights", .scheduled: "Scheduled", .settings: "Settings",
     ]

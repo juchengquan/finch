@@ -5,8 +5,8 @@ import XCTest
 final class CommandPaletteTests: XCTestCase {
     func test_catalogueCoversTabsPlusActions() {
         let titles = paletteCommands().map(\.title)
-        // 6 "Go to <tab>" + New Transaction.
-        XCTAssertEqual(titles.filter { $0.hasPrefix("Go to ") }.count, 6)
+        // 7 "Go to <tab>" (incl. Ledger) + New Transaction.
+        XCTAssertEqual(titles.filter { $0.hasPrefix("Go to ") }.count, 7)
         XCTAssertTrue(titles.contains("New Transaction"))
     }
 
