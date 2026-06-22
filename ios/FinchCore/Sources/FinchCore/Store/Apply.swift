@@ -39,6 +39,12 @@ public enum Apply {
     /// Apply a single action to the database. Mirrors the web's
     /// `applyMutation(exec, action, args)`.
     public static func apply(dbQueue: DatabaseQueue, action: String, args: Args) throws {
+        _ = try applyReturningId(dbQueue: dbQueue, action: action, args: args)
+    }
+
+    /// Like `apply`, but returns the new entry id for `addTransaction` (nil for
+    /// every other action) so callers can attach a receipt to the fresh entry.
+    public static func applyReturningId(dbQueue: DatabaseQueue, action: String, args: Args) throws -> String? {
         guard let name = ActionName(rawValue: action) else {
             throw I18nError("error.unknownAction", ["action": action], "Unknown action \"\(action)\"")
         }
@@ -46,6 +52,12 @@ public enum Apply {
             throw I18nError("error.notImplemented", ["action": action],
                             "Action \"\(action)\" is not implemented on iOS yet")
         }
-        try dbQueue.write { db in try handler(db, args) }
+        return try dbQueue.write { db in
+            if name == .addTransaction {
+                return try Transactions.addTransactionReturningId(db, args)
+            }
+            try handler(db, args)
+            return nil
+        }
     }
 }

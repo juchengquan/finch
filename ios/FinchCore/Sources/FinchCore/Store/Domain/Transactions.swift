@@ -207,9 +207,17 @@ public enum Transactions {
         let refundedTransactionId: String?
         let counterpartyId: String?
         let skipRules: Bool?
+        let tagIds: [String]?
     }
 
     static func addTransaction(_ db: Database, _ args: Args) throws {
+        _ = try addTransactionReturningId(db, args)
+    }
+
+    /// Like `addTransaction` but returns the new entry id (so callers can attach
+    /// a receipt). Tags in `tagIds` are written in the same transaction.
+    @discardableResult
+    static func addTransactionReturningId(_ db: Database, _ args: Args) throws -> String {
       try Dedup.wrap {
         let a = try args.to(AddInput.self)
         // Cross-ledger counterparty guard: drop a counterparty from another ledger.
@@ -240,7 +248,8 @@ public enum Transactions {
                 counterpartyId: counterpartyId, refundedEntryId: a.refundedTransactionId,
                 skipRules: a.skipRules ?? false))
             try Budgets.invalidateForEntry(db, eid)
-            return
+            try insertTags(db, entryId: eid, tagIds: a.tagIds)
+            return eid
         }
 
         let eid = try Entries.postSimple(db, .init(
@@ -251,7 +260,15 @@ public enum Transactions {
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false,
             refundedEntryId: a.refundedTransactionId))
         try Budgets.invalidateForEntry(db, eid)
+        try insertTags(db, entryId: eid, tagIds: a.tagIds)
+        return eid
       }
+    }
+
+    private static func insertTags(_ db: Database, entryId: String, tagIds: [String]?) throws {
+        for tagId in (tagIds ?? []) {
+            try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [entryId, tagId])
+        }
     }
 
     // MARK: adjustAccountBalance (→ postAdjustment)
