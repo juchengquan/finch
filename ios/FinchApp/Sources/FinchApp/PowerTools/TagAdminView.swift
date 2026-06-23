@@ -1,7 +1,8 @@
 import SwiftUI
 import FinchCore
 
-/// Phase 4 — tag admin: add / rename / delete tags (create/update/deleteTag).
+/// Phase 4 — tag admin: add / rename / delete tags + per-tag color
+/// (create/update/deleteTag). Color uses the shared web tag palette.
 struct TagAdminView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
@@ -14,7 +15,8 @@ struct TagAdminView: View {
             ForEach(store.tags) { tag in
                 Button { renaming = tag } label: {
                     HStack {
-                        Image(systemName: "tag").foregroundStyle(.secondary)
+                        Circle().fill(Color(hex: tag.color ?? "") ?? .secondary)
+                            .frame(width: 12, height: 12)
                         Text(tag.name).foregroundStyle(.primary)
                     }
                 }
@@ -45,17 +47,33 @@ struct TagEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let tag: TagRow?
     @State private var name: String
+    @State private var color: String     // "" = none
     @State private var errorMessage: String?
 
-    init(tag: TagRow?) { self.tag = tag; _name = State(initialValue: tag?.name ?? "") }
+    init(tag: TagRow?) {
+        self.tag = tag
+        _name = State(initialValue: tag?.name ?? "")
+        _color = State(initialValue: tag?.color ?? "")
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
+                Section("Color") {
+                    HStack(spacing: 10) {
+                        ForEach(TagPalette.hexes, id: \.self) { hex in
+                            Circle().fill(Color(hex: hex) ?? .gray).frame(width: 26, height: 26)
+                                .overlay(Circle().stroke(Color.primary, lineWidth: color == hex ? 2.5 : 0))
+                                .contentShape(Circle())
+                                .onTapGesture { color = (color == hex ? "" : hex) }
+                                .accessibilityLabel("Color \(hex)")
+                        }
+                    }
+                }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
-            .navigationTitle(tag == nil ? "New Tag" : "Rename Tag")
+            .navigationTitle(tag == nil ? "New Tag" : "Edit Tag")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -76,9 +94,17 @@ struct TagEditSheet: View {
         guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
         do {
             if let t = tag {
-                try store.apply(.updateTag, Args(["id": .string(t.id), "patch": .object(["name": .string(trimmed)])]))
+                let patch: [String: JSONValue] = [
+                    "name": .string(trimmed),
+                    "color": color.isEmpty ? .null : .string(color),
+                ]
+                try store.apply(.updateTag, Args(["id": .string(t.id), "patch": .object(patch)]))
             } else {
-                try store.apply(.createTag, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(trimmed)]))
+                var args: [String: JSONValue] = [
+                    "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
+                ]
+                if !color.isEmpty { args["color"] = .string(color) }
+                try store.apply(.createTag, Args(args))
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
