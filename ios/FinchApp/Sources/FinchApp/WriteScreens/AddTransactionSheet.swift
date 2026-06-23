@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import FinchCore
 
 /// Add Transaction — the flagship write screen (port of the web add-expense-form).
@@ -37,6 +38,9 @@ struct AddTransactionSheet: View {
     @State private var errorMessage: String?
     @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
     @State private var dupConfirmed = false
+    @State private var status: Entries.Status = .confirmed
+    @State private var selectedTags: Set<String> = []
+    @State private var pickedPhoto: PhotosPickerItem?
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -83,6 +87,33 @@ struct AddTransactionSheet: View {
                     HStack {
                         Text("Note"); Spacer()
                         TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                    }
+                }
+
+                if kind == .expense || kind == .income {
+                    Section {
+                        Picker("Status", selection: $status) {
+                            Text("Confirmed").tag(Entries.Status.confirmed)
+                            Text("Pending").tag(Entries.Status.pending)
+                        }
+                    }
+                    if !store.tags.isEmpty {
+                        Section("Tags") {
+                            ForEach(store.tags) { tag in
+                                Button { toggleTag(tag.id) } label: {
+                                    HStack {
+                                        Text(tag.name).foregroundStyle(.primary)
+                                        Spacer()
+                                        if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Section("Receipt") {
+                        PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                            Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
+                        }
                     }
                 }
 
@@ -196,6 +227,10 @@ struct AddTransactionSheet: View {
         }
     }
 
+    private func toggleTag(_ id: String) {
+        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
+    }
+
     /// Default the pickers to the first valid option (and the first two distinct
     /// accounts for a transfer) once the projected store is available.
     private func seedDefaults() {
@@ -268,7 +303,12 @@ struct AddTransactionSheet: View {
                 if !currencyCode.isEmpty, currencyCode != currency(of: accountId) {
                     args["currency"] = .string(currencyCode)
                 }
-                try store.apply(.addTransaction, Args(args))
+                args["status"] = .string(status.rawValue)
+                if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
+                let eid = try store.applyReturningId(.addTransaction, Args(args))
+                if let eid, let photo = pickedPhoto {
+                    Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
+                }
             }
             dismiss()
         } catch {

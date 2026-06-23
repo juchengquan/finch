@@ -132,8 +132,14 @@ public final class FinchStore: ObservableObject {
     /// ledger so the published state reflects the change. Throws `I18nError` on a
     /// rejected mutation (forms surface `.message`). Every write screen calls this.
     public func apply(_ action: ActionName, _ args: Args) throws {
+        _ = try applyReturningId(action, args)
+    }
+
+    /// Like `apply`, returning the new entry id for `addTransaction` (nil otherwise).
+    @discardableResult
+    public func applyReturningId(_ action: ActionName, _ args: Args) throws -> String? {
         guard let q = dbQueue else { throw I18nError("error.noDatabase", [:], "No database is open") }
-        try Apply.apply(dbQueue: q, action: action.rawValue, args: args)
+        let newId = try Apply.applyReturningId(dbQueue: q, action: action.rawValue, args: args)
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
         reprojectActiveLedger()
         self.dbInfo = makeDBInfo()
@@ -151,6 +157,7 @@ public final class FinchStore: ObservableObject {
         // Phase 8: publish this write to the CloudKit mutation log (no-op when
         // sync is off or while replaying a remote mutation — the echo guard).
         CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
+        return newId
     }
 
     // MARK: - Projection
