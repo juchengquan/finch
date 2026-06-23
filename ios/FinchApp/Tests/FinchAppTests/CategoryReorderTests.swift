@@ -40,4 +40,60 @@ final class CategoryReorderTests: XCTestCase {
     func test_reparent_onto_self_is_noop() {
         XCTAssertNil(CategoryReorder.reparent("food", under: "food", in: [cat("food")]))
     }
+
+    // MARK: reorder (CP2 Step 2)
+
+    func test_reorder_within_parent_move_down() {
+        // food children a(0), b(1), c(2); move a to AFTER c → [b, c, a] renumbered 0,1,2
+        let rows = [cat("food"), cat("a", parent: "food", sortOrder: 0),
+                    cat("b", parent: "food", sortOrder: 1), cat("c", parent: "food", sortOrder: 2)]
+        XCTAssertEqual(CategoryReorder.reorder("a", .after, of: "c", in: rows), [
+            CategoryMove(id: "b", parentId: "food", sortOrder: 0),
+            CategoryMove(id: "c", parentId: "food", sortOrder: 1),
+            CategoryMove(id: "a", parentId: "food", sortOrder: 2),
+        ])
+    }
+
+    func test_reorder_within_parent_move_up() {
+        // move c to BEFORE a → [c, a, b]
+        let rows = [cat("food"), cat("a", parent: "food", sortOrder: 0),
+                    cat("b", parent: "food", sortOrder: 1), cat("c", parent: "food", sortOrder: 2)]
+        XCTAssertEqual(CategoryReorder.reorder("c", .before, of: "a", in: rows), [
+            CategoryMove(id: "c", parentId: "food", sortOrder: 0),
+            CategoryMove(id: "a", parentId: "food", sortOrder: 1),
+            CategoryMove(id: "b", parentId: "food", sortOrder: 2),
+        ])
+    }
+
+    func test_reorder_cross_parent_inserts_and_reparents() {
+        // x lives under "other"; drop x BEFORE b (under food) → food group [a, x, b]
+        let rows = [cat("food"), cat("a", parent: "food", sortOrder: 0), cat("b", parent: "food", sortOrder: 1),
+                    cat("other"), cat("x", parent: "other", sortOrder: 0)]
+        XCTAssertEqual(CategoryReorder.reorder("x", .before, of: "b", in: rows), [
+            CategoryMove(id: "a", parentId: "food", sortOrder: 0),
+            CategoryMove(id: "x", parentId: "food", sortOrder: 1),
+            CategoryMove(id: "b", parentId: "food", sortOrder: 2),
+        ])
+    }
+
+    func test_reorder_to_top_level_group() {
+        // top level [food, other]; move "other" BEFORE "food" → [other, food]
+        let rows = [cat("food", sortOrder: 0), cat("other", sortOrder: 1)]
+        XCTAssertEqual(CategoryReorder.reorder("other", .before, of: "food", in: rows), [
+            CategoryMove(id: "other", parentId: nil, sortOrder: 0),
+            CategoryMove(id: "food", parentId: nil, sortOrder: 1),
+        ])
+    }
+
+    func test_reorder_in_place_is_noop() {
+        // dropping a BEFORE b when order is already [a, b, c] → no change
+        let rows = [cat("food"), cat("a", parent: "food", sortOrder: 0),
+                    cat("b", parent: "food", sortOrder: 1), cat("c", parent: "food", sortOrder: 2)]
+        XCTAssertEqual(CategoryReorder.reorder("a", .before, of: "b", in: rows), [])
+    }
+
+    func test_reorder_self_is_noop() {
+        let rows = [cat("a", parent: "food", sortOrder: 0)]
+        XCTAssertEqual(CategoryReorder.reorder("a", .before, of: "a", in: rows), [])
+    }
 }
