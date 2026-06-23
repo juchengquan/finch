@@ -13,10 +13,11 @@ public struct CategoryRow: Identifiable, Equatable, Sendable, Codable {
     public let kind: String?
     public let icon: String?
     public let color: String?
+    public let sortOrder: Int
 
     public init(id: String, ledgerId: String, name: String, parentId: String?, kind: String?,
-                icon: String? = nil, color: String? = nil) {
+                icon: String? = nil, color: String? = nil, sortOrder: Int = 0) {
         self.id = id; self.ledgerId = ledgerId; self.name = name; self.parentId = parentId
-        self.kind = kind; self.icon = icon; self.color = color
+        self.kind = kind; self.icon = icon; self.color = color; self.sortOrder = sortOrder
     }
 }
