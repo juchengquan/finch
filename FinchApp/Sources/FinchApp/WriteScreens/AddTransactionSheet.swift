@@ -42,6 +42,8 @@ struct AddTransactionSheet: View {
     @State private var selectedTags: Set<String> = []
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
+    @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
+    @State private var showingSplit = false
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -160,6 +162,15 @@ struct AddTransactionSheet: View {
                     categoryId = s.categoryId
                 }
             }
+            .onChange(of: amount) { _, _ in pendingSplits = nil }
+            .sheet(isPresented: $showingSplit) {
+                SplitEditorView(
+                    total: abs(DecimalInput.parse(amount) ?? 0),
+                    isIncome: kind == .income,
+                    currency: currencyCode.isEmpty ? currency(of: accountId) : currencyCode,
+                    initialSplits: pendingSplits ?? (categoryId.isEmpty ? nil : [(categoryId: categoryId, amount: abs(DecimalInput.parse(amount) ?? 0))]),
+                    target: .draft(onSave: { pendingSplits = $0 }))
+            }
             .confirmationDialog("Possible duplicate", isPresented: Binding(
                 get: { pendingDuplicate != nil }, set: { if !$0 { pendingDuplicate = nil } }),
                 presenting: pendingDuplicate) { _ in
@@ -179,8 +190,21 @@ struct AddTransactionSheet: View {
                 TextField("", text: $merchant).multilineTextAlignment(.trailing)
             }
             merchantSuggestionRows
-            SearchablePickerRow(title: "Category",
-                options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+            if pendingSplits == nil {
+                SearchablePickerRow(title: "Category",
+                    options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+            }
+            if DecimalInput.parse(amount) ?? 0 != 0 {
+                Button {
+                    showingSplit = true
+                } label: {
+                    HStack {
+                        Text(pendingSplits == nil ? "Split…" : "Split across \(pendingSplits!.count) categories")
+                        Spacer()
+                        if pendingSplits != nil { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+            }
             SearchablePickerRow(title: "Account",
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             if currencyOptions.count > 1 {
@@ -353,6 +377,11 @@ struct AddTransactionSheet: View {
                     }
                 }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
+                if let eid, let splits = pendingSplits {
+                    let payload: [JSONValue] = splits.map { .object([
+                        "categoryId": $0.categoryId.map(JSONValue.string) ?? .null, "amount": .double($0.amount)]) }
+                    try store.apply(.setTransactionSplits, Args(["id": .string(eid), "splits": .array(payload)]))
+                }
                 if let eid, let photo = pickedPhoto {
                     Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
                 }
