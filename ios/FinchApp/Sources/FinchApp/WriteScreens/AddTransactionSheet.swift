@@ -41,6 +41,7 @@ struct AddTransactionSheet: View {
     @State private var status: Entries.Status = .confirmed
     @State private var selectedTags: Set<String> = []
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -152,6 +153,7 @@ struct AddTransactionSheet: View {
             .onAppear(perform: seedDefaults)
             // Auto-categorize from the merchant's history (the user can still override).
             .onChange(of: merchant) { _, m in
+                createCounterpartyOnSave = false
                 guard kind != .transfer, !m.isEmpty else { return }
                 if let s = Selectors.suggestCategory(store.txns, store.activeLedgerId, m),
                    categories.contains(where: { $0.id == s.categoryId }) {
@@ -176,6 +178,7 @@ struct AddTransactionSheet: View {
                 Text(kind == .income ? "Source" : "Merchant"); Spacer()
                 TextField("", text: $merchant).multilineTextAlignment(.trailing)
             }
+            merchantSuggestionRows
             SearchablePickerRow(title: "Category",
                 options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
             SearchablePickerRow(title: "Account",
@@ -186,6 +189,42 @@ struct AddTransactionSheet: View {
                 }
             }
         }
+    }
+
+    /// Existing counterparties (active ledger) whose name contains the typed
+    /// merchant text, minus an exact match (nothing to suggest there). Capped at 5.
+    private var matchingCounterparties: [Counterparty] {
+        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return [] }
+        return Array(store.counterparties
+            .filter { $0.name.localizedCaseInsensitiveContains(t)
+                   && $0.name.caseInsensitiveCompare(t) != .orderedSame }
+            .prefix(5))
+    }
+
+    /// Suggestion rows shown beneath the Merchant field: matching counterparties
+    /// to pick (the engine links them by name on save), plus a "Create <name>" row
+    /// for a brand-new name (flagged to create on save). Empty for non-expense/income
+    /// or an empty/exact-match field.
+    @ViewBuilder private var merchantSuggestionRows: some View {
+        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (kind == .expense || kind == .income), !t.isEmpty {
+            ForEach(matchingCounterparties) { cp in
+                Button { pickCounterparty(cp.name) } label: {
+                    Label(cp.name, systemImage: "building.2").font(.callout)
+                }
+            }
+            if !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(t) == .orderedSame }) {
+                Button { createCounterpartyOnSave = true } label: {
+                    Label("Create “\(t)”", systemImage: "plus.circle").font(.callout)
+                }
+            }
+        }
+    }
+
+    private func pickCounterparty(_ name: String) {
+        merchant = name
+        createCounterpartyOnSave = false
     }
 
     @ViewBuilder private var transferFields: some View {
@@ -305,6 +344,14 @@ struct AddTransactionSheet: View {
                 }
                 args["status"] = .string(status.rawValue)
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
+                if createCounterpartyOnSave {
+                    let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !cpName.isEmpty,
+                       !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
+                        try store.apply(.createCounterparty, Args([
+                            "ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
+                    }
+                }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 if let eid, let photo = pickedPhoto {
                     Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
