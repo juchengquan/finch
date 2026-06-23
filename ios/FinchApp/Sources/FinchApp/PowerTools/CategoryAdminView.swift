@@ -2,9 +2,10 @@ import SwiftUI
 import FinchCore
 
 /// Categories admin — a 3-level tree (inline expand/collapse) with per-category
-/// icon + color, search, create-child, edit, and delete (children promote up a
-/// level). create / update / deleteCategory through the chokepoint. Reparenting
-/// (drag-to-move) is checkpoint 2.
+/// icon + color, search, create-child, edit, delete (children promote up a
+/// level), and **drag-to-reparent** (drop a row onto another to nest it; onto
+/// "Top level" to un-nest). create / update / deleteCategory through the
+/// chokepoint. Sibling reorder (between-rows) is CP2 Step 2.
 struct CategoryAdminView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var expanded: Set<String> = []
@@ -13,6 +14,8 @@ struct CategoryAdminView: View {
     @State private var creatingTop = false
     @State private var creatingUnder: CategoryRow?
     @State private var deleting: CategoryRow?
+    @State private var dropTargetId: String?      // row currently targeted by a drag
+    @State private var topLevelTargeted = false
     @State private var errorMessage: String?
 
     private var rows: [CategoryRow] { store.pickableCategories }
@@ -23,6 +26,7 @@ struct CategoryAdminView: View {
 
     var body: some View {
         List {
+            topLevelDropZone
             ForEach(visible) { item in row(item) }
         }
         .modifier(SearchableModifier(text: $search))
@@ -45,6 +49,21 @@ struct CategoryAdminView: View {
         } message: { _ in
             Text("Its subcategories move up a level — they won't be deleted.")
         }
+    }
+
+    /// Drop here to move a category to the top level (un-nest).
+    private var topLevelDropZone: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.to.line").font(.caption).foregroundStyle(.secondary).frame(width: 16)
+            Text("Top level").font(.subheadline).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .dropDestination(for: String.self) { items, _ in
+            guard let src = items.first, let m = CategoryReorder.reparent(src, under: nil, in: rows) else { return false }
+            applyMove(m); return true
+        } isTargeted: { topLevelTargeted = $0 }
+        .listRowBackground(topLevelTargeted ? Color.accentColor.opacity(0.15) : nil)
     }
 
     @ViewBuilder private func row(_ item: FlatCategory) -> some View {
@@ -85,9 +104,29 @@ struct CategoryAdminView: View {
             }
         }
         .padding(.leading, CGFloat(item.depth) * 16)
+        .contentShape(Rectangle())
+        .draggable(c.id)
+        .dropDestination(for: String.self) { items, _ in
+            guard let src = items.first, let m = CategoryReorder.reparent(src, under: c.id, in: rows) else { return false }
+            applyMove(m); return true
+        } isTargeted: { isTargeted in
+            if isTargeted { dropTargetId = c.id }
+            else if dropTargetId == c.id { dropTargetId = nil }
+        }
+        .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
         }
+    }
+
+    /// Apply a reparent move (parentId + sortOrder) through the chokepoint; the
+    /// engine rejects self/descendant/depth>3 with a localized error.
+    private func applyMove(_ m: CategoryMove) {
+        errorMessage = nil
+        var patch: [String: JSONValue] = ["sortOrder": .int(m.sortOrder)]
+        patch["parentId"] = m.parentId.map(JSONValue.string) ?? .null
+        do { try store.apply(.updateCategory, Args(["id": .string(m.id), "patch": .object(patch)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     private func delete(_ c: CategoryRow) {
