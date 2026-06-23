@@ -3,9 +3,10 @@ import FinchCore
 
 /// Categories admin — a 3-level tree (inline expand/collapse) with per-category
 /// icon + color, search, create-child, edit, delete (children promote up a
-/// level), and **drag-to-reparent** (drop a row onto another to nest it; onto
-/// "Top level" to un-nest). create / update / deleteCategory through the
-/// chokepoint. Sibling reorder (between-rows) is CP2 Step 2.
+/// level), and **drag to reparent + reorder**: drop on a row's middle to nest
+/// under it, its top quarter to place the dragged category before it, its bottom
+/// quarter to place it after it; the "Top level" zone un-nests. All through the
+/// chokepoint (create / update / deleteCategory).
 struct CategoryAdminView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var expanded: Set<String> = []
@@ -16,6 +17,7 @@ struct CategoryAdminView: View {
     @State private var deleting: CategoryRow?
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
+    @State private var rowHeights: [String: CGFloat] = [:]   // per-row height for drop-position thirds
     @State private var errorMessage: String?
 
     private var rows: [CategoryRow] { store.pickableCategories }
@@ -61,7 +63,7 @@ struct CategoryAdminView: View {
         .contentShape(Rectangle())
         .dropDestination(for: String.self) { items, _ in
             guard let src = items.first, let m = CategoryReorder.reparent(src, under: nil, in: rows) else { return false }
-            applyMove(m); return true
+            applyMoves([m]); return true
         } isTargeted: { topLevelTargeted = $0 }
         .listRowBackground(topLevelTargeted ? Color.accentColor.opacity(0.15) : nil)
     }
@@ -105,10 +107,28 @@ struct CategoryAdminView: View {
         }
         .padding(.leading, CGFloat(item.depth) * 16)
         .contentShape(Rectangle())
+        // Capture the row's height (background GeometryReader doesn't affect layout
+        // or block taps) so the drop handler can map location.y → top/mid/bottom.
+        .background(GeometryReader { proxy in
+            Color.clear
+                .onAppear { rowHeights[c.id] = proxy.size.height }
+                .onChange(of: proxy.size.height) { _, h in rowHeights[c.id] = h }
+        })
         .draggable(c.id)
-        .dropDestination(for: String.self) { items, _ in
-            guard let src = items.first, let m = CategoryReorder.reparent(src, under: c.id, in: rows) else { return false }
-            applyMove(m); return true
+        .dropDestination(for: String.self) { items, location in
+            guard let src = items.first else { return false }
+            let h = rowHeights[c.id] ?? 44
+            let frac = h > 0 ? location.y / h : 0.5
+            let moves: [CategoryMove]
+            if frac < 0.25 {
+                moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
+            } else if frac > 0.75 {
+                moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
+            } else {
+                moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
+            }
+            guard !moves.isEmpty else { return false }
+            applyMoves(moves); return true
         } isTargeted: { isTargeted in
             if isTargeted { dropTargetId = c.id }
             else if dropTargetId == c.id { dropTargetId = nil }
@@ -119,14 +139,22 @@ struct CategoryAdminView: View {
         }
     }
 
-    /// Apply a reparent move (parentId + sortOrder) through the chokepoint; the
-    /// engine rejects self/descendant/depth>3 with a localized error.
-    private func applyMove(_ m: CategoryMove) {
+    /// Apply one or more category moves (parentId + sortOrder) through the
+    /// chokepoint, in order. The engine rejects self/descendant/depth>3 with a
+    /// localized error; on the first throw we stop and surface it.
+    private func applyMoves(_ moves: [CategoryMove]) {
         errorMessage = nil
+        do {
+            for m in moves {
+                try store.apply(.updateCategory, Args(["id": .string(m.id), "patch": .object(movePatch(m))]))
+            }
+        } catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func movePatch(_ m: CategoryMove) -> [String: JSONValue] {
         var patch: [String: JSONValue] = ["sortOrder": .int(m.sortOrder)]
         patch["parentId"] = m.parentId.map(JSONValue.string) ?? .null
-        do { try store.apply(.updateCategory, Args(["id": .string(m.id), "patch": .object(patch)])) }
-        catch { errorMessage = i18nMessage(error) }
+        return patch
     }
 
     private func delete(_ c: CategoryRow) {
