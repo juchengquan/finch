@@ -24,7 +24,10 @@ public enum Categories {
                        arguments: [a.id ?? Entries.newId("cat"), ledgerId, a.parentId, name, type, a.icon, a.color, sortOrder])
     }
 
-    private static let cols: [String: String] = ["name": "name", "type": "kind", "icon": "icon", "color": "color", "parentId": "parent_id"]
+    // NOTE: `sortOrder` is an iOS-only addition — the web's updateCategory patch
+    // does NOT accept it (no category reorder on web). Deliberate divergence
+    // (cf. the D7 "Force import" iOS-only override). Web still respects sort_order.
+    private static let cols: [String: String] = ["name": "name", "type": "kind", "icon": "icon", "color": "color", "parentId": "parent_id", "sortOrder": "sort_order"]
 
     static func update(_ db: Database, _ args: Args) throws {
         guard case .string(let id)? = args.values["id"] else { throw I18nError("error.invalidArgs", [:], "updateCategory requires an id") }
@@ -41,7 +44,7 @@ public enum Categories {
         }
         var sets: [String] = []
         var bind: [DatabaseValueConvertible?] = []
-        for key in ["name", "type", "icon", "color", "parentId"] where patch.keys.contains(key) {
+        for key in ["name", "type", "icon", "color", "parentId", "sortOrder"] where patch.keys.contains(key) {
             sets.append("\(cols[key]!) = ?")
             bind.append(patch[key]!.sqlBind)
         }

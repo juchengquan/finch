@@ -113,12 +113,13 @@ extension Projection {
     public static func categories(dbQueue: DatabaseQueue, ledgerId: String) throws -> [CategoryRow] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT id, ledger_id AS ledgerId, name, parent_id AS parentId, kind, icon, color
+                SELECT id, ledger_id AS ledgerId, name, parent_id AS parentId, kind, icon, color,
+                       sort_order AS sortOrder
                   FROM categories WHERE ledger_id = ? AND kind != 'equity' ORDER BY sort_order
                 """, arguments: [ledgerId]).map { r in
                 CategoryRow(id: r["id"], ledgerId: r["ledgerId"], name: r["name"],
                             parentId: r["parentId"], kind: r["kind"],
-                            icon: r["icon"], color: r["color"])
+                            icon: r["icon"], color: r["color"], sortOrder: r["sortOrder"])
             }
         }
     }
