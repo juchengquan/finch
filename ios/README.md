@@ -3,6 +3,9 @@
 The native port of finch. Design arc: `plans/ios-macos/IOS_MACOS_INDEX.md`;
 Phase 1.0 plan: `plans/ios-macos/IOS_MACOS_PHASE_1_0_PLAN.md`.
 
+**UI convention:** SwiftUI-first — see [`swiftui-vs-uikit.md`](swiftui-vs-uikit.md) for
+when (not) to reach for UIKit/AppKit.
+
 ## Layout
 
 - `FinchCore/` — the SwiftPM package: the read-side core (schema, projection,
