@@ -220,6 +220,7 @@ public enum Transactions {
     static func addTransactionReturningId(_ db: Database, _ args: Args) throws -> String {
       try Dedup.wrap {
         let a = try args.to(AddInput.self)
+        let refundedEntryId = try a.refundedTransactionId.flatMap { try Entries.resolveEntryRef(db, $0)?.entryId }
         // Cross-ledger counterparty guard: drop a counterparty from another ledger.
         var counterpartyId = a.counterpartyId
         if let cp = counterpartyId {
@@ -245,7 +246,7 @@ public enum Transactions {
                     origAmount: a.amount, origCurrency: inputCcy))],
                 autoBalance: .category(a.categoryId),
                 notes: (a.note?.isEmpty ?? true) ? nil : a.note,
-                counterpartyId: counterpartyId, refundedEntryId: a.refundedTransactionId,
+                counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
                 skipRules: a.skipRules ?? false))
             try Budgets.invalidateForEntry(db, eid)
             try insertTags(db, entryId: eid, tagIds: a.tagIds)
@@ -258,7 +259,7 @@ public enum Transactions {
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false,
-            refundedEntryId: a.refundedTransactionId))
+            refundedEntryId: refundedEntryId))
         try Budgets.invalidateForEntry(db, eid)
         try insertTags(db, entryId: eid, tagIds: a.tagIds)
         return eid

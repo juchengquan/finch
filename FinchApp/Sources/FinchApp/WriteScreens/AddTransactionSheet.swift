@@ -16,7 +16,7 @@ struct AddTransactionSheet: View {
     var defaultAccountId: String? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
-        case expense, income, transfer, adjust
+        case expense, income, transfer, adjust, refund
         var id: String { rawValue }
         var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
         /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).
@@ -44,8 +44,19 @@ struct AddTransactionSheet: View {
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
     @State private var showingSplit = false
+    @State private var refundedTxId: String? = nil
+    @State private var showingRefundPicker = false
 
     private var accounts: [AccountRow] { store.accounts }
+
+    /// Expense / income / refund all post a single account leg + category — they
+    /// share the line-item field set and the status/tags/receipt/merchant extras.
+    private var isLineItem: Bool { kind == .expense || kind == .income || kind == .refund }
+
+    private var refundedSummary: String {
+        guard let id = refundedTxId, let tx = store.txns.first(where: { $0.id == id }) else { return "Optional" }
+        return tx.merchant.isEmpty ? tx.date : tx.merchant
+    }
 
     /// The account currency + any currency with a known rate — the choices for a
     /// foreign-currency entry. (When the picked currency ≠ the account's, the
@@ -93,7 +104,7 @@ struct AddTransactionSheet: View {
                     }
                 }
 
-                if kind == .expense || kind == .income {
+                if isLineItem {
                     Section {
                         Picker("Status", selection: $status) {
                             Text("Confirmed").tag(Entries.Status.confirmed)
@@ -171,6 +182,10 @@ struct AddTransactionSheet: View {
                     initialSplits: pendingSplits ?? (categoryId.isEmpty ? nil : [(categoryId: categoryId, amount: abs(DecimalInput.parse(amount) ?? 0))]),
                     target: .draft(onSave: { pendingSplits = $0 }))
             }
+            .sheet(isPresented: $showingRefundPicker) {
+                RefundSourcePickerView { refundedTxId = $0 }
+            }
+            .onChange(of: kind) { _, k in if k != .refund { refundedTxId = nil } }
             .confirmationDialog("Possible duplicate", isPresented: Binding(
                 get: { pendingDuplicate != nil }, set: { if !$0 { pendingDuplicate = nil } }),
                 presenting: pendingDuplicate) { _ in
@@ -194,7 +209,7 @@ struct AddTransactionSheet: View {
                 SearchablePickerRow(title: "Category",
                     options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
             }
-            if DecimalInput.parse(amount) ?? 0 != 0 {
+            if kind != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
                 Button {
                     showingSplit = true
                 } label: {
@@ -210,6 +225,15 @@ struct AddTransactionSheet: View {
             if currencyOptions.count > 1 {
                 Picker("Currency", selection: $currencyCode) {
                     ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+                }
+            }
+            if kind == .refund {
+                Button { showingRefundPicker = true } label: {
+                    HStack {
+                        Text("Refunds")
+                        Spacer()
+                        Text(refundedSummary).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -232,7 +256,7 @@ struct AddTransactionSheet: View {
     /// or an empty/exact-match field.
     @ViewBuilder private var merchantSuggestionRows: some View {
         let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        if (kind == .expense || kind == .income), !t.isEmpty {
+        if isLineItem, !t.isEmpty {
             ForEach(matchingCounterparties) { cp in
                 Button { pickCounterparty(cp.name) } label: {
                     Label(cp.name, systemImage: "building.2").font(.callout)
@@ -353,8 +377,8 @@ struct AddTransactionSheet: View {
                 }
                 try store.apply(.createTransfer, Args(args))
             } else {
-                let signed = kind == .income ? abs(value) : -abs(value)
-                let fallback = kind == .income ? "Income" : "Untitled"
+                let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
+                let fallback = kind == .income ? "Income" : (kind == .refund ? "Refund" : "Untitled")
                 var args: [String: JSONValue] = [
                     "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
                     "amount": .double(signed), "merchant": .string(merchant.isEmpty ? fallback : merchant),
@@ -375,6 +399,10 @@ struct AddTransactionSheet: View {
                         try store.apply(.createCounterparty, Args([
                             "ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
                     }
+                }
+                if kind == .refund {
+                    args["kind"] = .string("refund")
+                    if let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
                 }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 if let eid, let splits = pendingSplits {
