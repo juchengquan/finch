@@ -64,6 +64,22 @@ jobs:
 
       - name: Install XcodeGen
         run: brew install xcodegen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+      # Cache the SwiftPM build (GRDB et al.) so `swift test` doesn't recompile
+      # dependencies from scratch each run. Keyed on the resolved dependency
+      # graph; our own sources still rebuild incrementally.
+      - name: Cache SwiftPM build (swift test)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
 
       - name: FinchCore unit tests + ParityTests (swift test)
         working-directory: ios
@@ -80,17 +96,36 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "Using simulator: $NAME"
 
+      # Cache Xcode's resolved SwiftPM checkouts so the FinchApp/FinchMac builds
+      # don't re-clone/re-resolve GRDB et al. (Build products live elsewhere in
+      # DerivedData and are intentionally NOT cached — that's the flakier win,
+      # deferred.) Both xcodebuild steps share one -derivedDataPath (/tmp/dd).
+      - name: Cache Xcode SwiftPM checkouts
+        uses: actions/cache@v4
+        with:
+          path: /tmp/dd/SourcePackages
+          key: xcspm-${{ runner.os }}-${{ hashFiles('ios/Package.resolved') }}
+          restore-keys: |
+            xcspm-${{ runner.os }}-
+
       - name: Build + test FinchApp
         working-directory: ios
         run: |
           xcodebuild test -project FinchApp.xcodeproj -scheme FinchApp \
-            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}"
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -derivedDataPath /tmp/dd \
+            -skipPackagePluginValidation -skipMacroValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
       # Compile the native macOS app too — the iOS app build won't catch
       # macOS-only breaks (e.g. .topBarTrailing is unavailable on macOS).
       # Build-only (no signing needed) — this is a compile gate, not a release.
+      # Shares /tmp/dd so it reuses the resolved package checkouts above.
       - name: Build FinchMac (macOS)
         working-directory: ios
         run: |
           xcodebuild build -project FinchApp.xcodeproj -scheme FinchMac \
-            -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+            -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath /tmp/dd \
+            -skipPackagePluginValidation -skipMacroValidation -quiet \
+            COMPILER_INDEX_STORE_ENABLE=NO
