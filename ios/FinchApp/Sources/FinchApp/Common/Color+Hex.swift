@@ -24,3 +24,11 @@ enum CategoryPalette {
                         "#00a6ae", "#00a0c5", "#8085dc", "#b273c0"]
     static let defaultHex = "#00a0c5"
 }
+
+/// The shared 8-swatch tag palette (parity with web `lib/colors.ts` `tagHex`,
+/// chroma 0.18 — distinct from `CategoryPalette`).
+enum TagPalette {
+    static let hexes = ["#e75572", "#e65f2a", "#ba8600", "#00af67",
+                        "#00adba", "#00a5da", "#7d7df9", "#be64d2"]
+    static let defaultHex = "#00a5da"
+}
