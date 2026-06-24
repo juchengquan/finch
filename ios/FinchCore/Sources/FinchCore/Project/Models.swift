@@ -94,14 +94,16 @@ public struct ListOptions: Codable, Equatable, Sendable {
     public var maxAmount: Double?
     public var limit: Int?
     public var offset: Int?
+    public var tagId: String?
     public init(ledgerId: String, direction: String? = nil, query: String? = nil,
                 accountId: String? = nil, categoryId: String? = nil, status: String? = nil,
                 from: String? = nil, to: String? = nil, minAmount: Double? = nil,
-                maxAmount: Double? = nil, limit: Int? = nil, offset: Int? = nil) {
+                maxAmount: Double? = nil, limit: Int? = nil, offset: Int? = nil,
+                tagId: String? = nil) {
         self.ledgerId = ledgerId; self.direction = direction; self.query = query
         self.accountId = accountId; self.categoryId = categoryId; self.status = status
         self.from = from; self.to = to; self.minAmount = minAmount; self.maxAmount = maxAmount
-        self.limit = limit; self.offset = offset
+        self.limit = limit; self.offset = offset; self.tagId = tagId
     }
 }
 
