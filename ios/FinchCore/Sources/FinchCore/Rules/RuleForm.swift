@@ -42,7 +42,7 @@ public enum RuleParse {
     }
 
     /// Numeric → display string without %g scientific/lossy output.
-    static func numStr(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
+    public static func numStr(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
 
     static func opsAllowed(_ field: LeafForm.Field) -> Set<String> {
         switch field {
