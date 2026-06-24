@@ -196,16 +196,20 @@ extension Projection {
         }
     }
 
-    /// Lightweight rule rows for the Phase 4 rules manager (name/priority/active).
+    /// Rule rows for the Phase 4 rules manager — name/priority/active plus the raw
+    /// condition/actions JSON + runOnEdit (so the manager can edit, not just toggle).
     public static func rules(dbQueue: DatabaseQueue, ledgerId: String) throws -> [RuleSummary] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT id, name, priority, is_active FROM rules
+                SELECT id, name, priority, is_active, condition, actions, run_on_edit FROM rules
                  WHERE ledger_id = ? ORDER BY priority, created_at
                 """, arguments: [ledgerId]).map { r in
                 RuleSummary(id: r["id"], name: (r["name"] as String?) ?? "Rule",
                             priority: (r["priority"] as Int?) ?? 100,
-                            isActive: ((r["is_active"] as Int?) ?? 0) != 0)
+                            isActive: ((r["is_active"] as Int?) ?? 0) != 0,
+                            conditionJSON: (r["condition"] as String?) ?? "",
+                            actionsJSON: (r["actions"] as String?) ?? "[]",
+                            runOnEdit: ((r["run_on_edit"] as Int?) ?? 0) != 0)
             }
         }
     }
