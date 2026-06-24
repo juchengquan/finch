@@ -296,4 +296,14 @@ public enum Selectors {
         }
         return out.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
     }
+
+    /// Per-rule applied count: txns in `ledgerId` whose appliedRuleIds contains the
+    /// rule id. Keyed by rule id; absent for rules that never fired.
+    public static func ruleMatchCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for t in txns where ledgerOf(t) == ledgerId {
+            for id in (t.appliedRuleIds ?? []) { out[id, default: 0] += 1 }
+        }
+        return out
+    }
 }
