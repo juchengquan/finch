@@ -26,11 +26,19 @@ struct EditTransactionSheet: View {
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var status: Entries.Status
+    @State private var accountId: String
+    @State private var refundedTxId: String?
+    @State private var showingRefundPicker = false
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
     /// A split transaction owns its categories via legs — hide amount/category here.
     private var isSplit: Bool { (txn.splits?.count ?? 0) >= 2 }
+    private var refundedSummary: String {
+        guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
+        return t.merchant.isEmpty ? t.date : t.merchant
+    }
 
     init(txn: Tx) {
         self.txn = txn
@@ -40,6 +48,9 @@ struct EditTransactionSheet: View {
         _categoryId = State(initialValue: txn.category ?? "")
         _amountText = State(initialValue: String(format: "%g", abs(txn.nativeAmount ?? txn.amount)))
         _selectedTags = State(initialValue: Set(txn.tags ?? []))
+        _status = State(initialValue: txn.pending == true ? .pending : .confirmed)
+        _accountId = State(initialValue: txn.account)
+        _refundedTxId = State(initialValue: txn.refundedTransactionId)
     }
 
     private var categories: [CategoryRow] {
@@ -84,6 +95,23 @@ struct EditTransactionSheet: View {
                     }
                 }
 
+                if txn.kind != "transfer" {
+                    Section("Account") {
+                        SearchablePickerRow(title: "Account",
+                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                    }
+                }
+                if txn.kind == "refund" {
+                    Section("Refund") {
+                        Button { showingRefundPicker = true } label: {
+                            HStack {
+                                Text("Refunds"); Spacer()
+                                Text(refundedSummary).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 if !store.tags.isEmpty {
                     Section("Tags") {
                         ForEach(store.tags) { tag in
@@ -115,9 +143,12 @@ struct EditTransactionSheet: View {
                 }
 
                 Section {
-                    if txn.pending == true {
-                        Button("Confirm transaction") { run(.confirmTransaction, ["id": .string(txn.id)]) }
+                    Picker("Status", selection: $status) {
+                        Text("Confirmed").tag(Entries.Status.confirmed)
+                        Text("Pending").tag(Entries.Status.pending)
                     }
+                }
+                Section {
                     Button(txn.reviewedAt == nil ? "Mark reviewed" : "Unmark reviewed") {
                         run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
                     }
@@ -147,6 +178,7 @@ struct EditTransactionSheet: View {
                 }
             }
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
+            .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
             .onAppear { attachments = store.attachments(for: txn.id) }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
@@ -190,6 +222,11 @@ struct EditTransactionSheet: View {
             let signed = (originalNative < 0 ? -1.0 : 1.0) * parsed
             if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
             if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
+        }
+        if status != (txn.pending == true ? .pending : .confirmed) { patch["status"] = .string(status.rawValue) }
+        if txn.kind != "transfer", !accountId.isEmpty, accountId != txn.account { patch["account"] = .string(accountId) }
+        if txn.kind == "refund", refundedTxId != txn.refundedTransactionId {
+            patch["refundedTransactionId"] = refundedTxId.map(JSONValue.string) ?? .null
         }
         do {
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))

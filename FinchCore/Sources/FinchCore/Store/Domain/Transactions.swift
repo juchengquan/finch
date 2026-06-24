@@ -338,7 +338,9 @@ public enum Transactions {
         }
         if has("note") { ep.notes = .set(strOrNil(patch["note"])) }
         if case .string(let s)? = patch["kind"], let k = Entries.Kind(rawValue: s) { ep.kind = .set(k) }
-        if has("refundedTransactionId") { ep.refundedEntryId = .set(strOrNil(patch["refundedTransactionId"])) }
+        if has("refundedTransactionId") {
+            ep.refundedEntryId = .set(try strOrNil(patch["refundedTransactionId"]).flatMap { try Entries.resolveEntryRef(db, $0)?.entryId })
+        }
         if case .string(let s)? = patch["status"], let st = Entries.Status(rawValue: s) { ep.status = .set(st) }
 
         let rebuildLegs = has("amount") || has("currency") || has("account") || has("category")
