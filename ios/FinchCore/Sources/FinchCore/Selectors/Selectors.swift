@@ -46,6 +46,7 @@ public enum Selectors {
         if let t = opts.to { out = out.filter { $0.date <= t } }
         if let lo = opts.minAmount { out = out.filter { abs($0.amount) >= lo } }
         if let hi = opts.maxAmount { out = out.filter { abs($0.amount) <= hi } }
+        if let tag = opts.tagId { out = out.filter { ($0.tags ?? []).contains(tag) } }
         // Stable sort: equal (date,time) rows keep input order, matching the
         // web's stable Array.sort (its comparator returns 0 for ties).
         out = out.enumerated().sorted { a, b in
