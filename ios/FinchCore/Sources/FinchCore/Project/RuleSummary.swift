@@ -2,7 +2,7 @@ import Foundation
 
 /// Phase 4 — a projection of a `rules` row for the rules-manager list
 /// (name / priority / active) plus the raw `condition`/`actions` JSON and
-/// `runOnEdit`, so the manager can edit a rule (parsed via `SimpleRule`) and
+/// `runOnEdit`, so the manager can edit a rule (parsed via `RuleParse`) and
 /// show its match count — not just toggle it.
 public struct RuleSummary: Identifiable, Equatable, Sendable, Codable {
     public let id: String
