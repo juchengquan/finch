@@ -114,6 +114,34 @@ public enum Selectors {
                             isAnomaly: z >= threshold && s.count >= minCount)
     }
 
+    // MARK: counterpartyTxCounts
+
+    /// Per-counterparty usage count: non-pending txns in `ledgerId` attributed to a
+    /// counterparty by `counterpartyId` (when set & known) else by normalized name.
+    /// Keyed by counterparty id; absent for unused merchants. Counts all kinds.
+    public static func counterpartyTxCounts(_ txns: [Tx], _ counterparties: [Counterparty], _ ledgerId: String) -> [String: Int] {
+        let idSet = Set(counterparties.map(\.id))
+        var byName: [String: String] = [:]   // normalized name → counterparty id (first wins)
+        for c in counterparties {
+            let n = c.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !n.isEmpty, byName[n] == nil { byName[n] = c.id }
+        }
+        var out: [String: Int] = [:]
+        for t in txns {
+            if ledgerOf(t) != ledgerId { continue }
+            if (t.pending ?? false) { continue }
+            let cpId: String?
+            if let cid = t.counterpartyId, idSet.contains(cid) {
+                cpId = cid
+            } else {
+                let n = t.merchant.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                cpId = n.isEmpty ? nil : byName[n]
+            }
+            if let id = cpId { out[id, default: 0] += 1 }
+        }
+        return out
+    }
+
     // MARK: cycleWindow + date helpers
 
     // internal (not private) so the TimeSeries.swift extension can share them.

@@ -1,8 +1,8 @@
 import SwiftUI
 import FinchCore
 
-/// Merchants / counterparties admin — list, search, add, rename, verify/unverify,
-/// delete. The whole domain previously had no iOS UI. Routes FinchStore.apply.
+/// Merchants / counterparties admin — list (with usage counts), search, add,
+/// rename, verify/unverify, delete. Routes FinchStore.apply.
 struct CounterpartyAdminView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var search = ""
@@ -16,7 +16,9 @@ struct CounterpartyAdminView: View {
     }
 
     var body: some View {
-        Group {
+        // Computed once per render, not per row.
+        let counts = Selectors.counterpartyTxCounts(store.txns, store.merchants, store.activeLedgerId)
+        return Group {
             if store.merchants.isEmpty {
                 ContentUnavailableView("No merchants", systemImage: "person.crop.circle",
                                        description: Text("Merchants appear as you add transactions, or add one with +."))
@@ -28,6 +30,10 @@ struct CounterpartyAdminView: View {
                             if cp.isVerified {
                                 Image(systemName: "checkmark.seal.fill").foregroundStyle(.tint)
                                     .accessibilityLabel("Verified")
+                            }
+                            if let n = counts[cp.id], n > 0 {
+                                Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                    .accessibilityLabel("\(n) transactions")
                             }
                             Spacer()
                             Button(cp.isVerified ? "Unverify" : "Verify") { toggleVerify(cp) }
