@@ -142,6 +142,38 @@ public enum Selectors {
         return out
     }
 
+    /// Per-tag usage count: non-pending txns in `ledgerId` tagged with the tag.
+    /// Keyed by tag id (`tx.tags` holds tag ids); absent for unused tags.
+    public static func tagTxCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for t in txns {
+            if ledgerOf(t) != ledgerId { continue }
+            if (t.pending ?? false) { continue }
+            for tagId in (t.tags ?? []) { out[tagId, default: 0] += 1 }
+        }
+        return out
+    }
+
+    /// Per-category usage count (DIRECT, no descendant rollup): non-pending txns in
+    /// `ledgerId` whose category leg(s) reference the category. A split txn is
+    /// attributed to its split legs' categoryIds; otherwise to `tx.category`. Each
+    /// txn counts once per distinct category. Keyed by category id; absent for unused.
+    public static func categoryTxCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for t in txns {
+            if ledgerOf(t) != ledgerId { continue }
+            if (t.pending ?? false) { continue }
+            var cats = Set<String>()
+            if let splits = t.splits, !splits.isEmpty {
+                for s in splits { if let c = s.categoryId { cats.insert(c) } }
+            } else if let c = t.category {
+                cats.insert(c)
+            }
+            for c in cats { out[c, default: 0] += 1 }
+        }
+        return out
+    }
+
     // MARK: cycleWindow + date helpers
 
     // internal (not private) so the TimeSeries.swift extension can share them.

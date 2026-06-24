@@ -10,7 +10,8 @@ struct TagAdminView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        List {
+        let counts = Selectors.tagTxCounts(store.txns, store.activeLedgerId)
+        return List {
             if store.tags.isEmpty { Text("No tags yet.").foregroundStyle(.secondary) }
             ForEach(store.tags) { tag in
                 Button { renaming = tag } label: {
@@ -18,6 +19,10 @@ struct TagAdminView: View {
                         Circle().fill(Color(hex: tag.color ?? "") ?? .secondary)
                             .frame(width: 12, height: 12)
                         Text(tag.name).foregroundStyle(.primary)
+                        if let n = counts[tag.id], n > 0 {
+                            Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .accessibilityLabel("\(n) transactions")
+                        }
                     }
                 }
                 .swipeActions(edge: .trailing) {

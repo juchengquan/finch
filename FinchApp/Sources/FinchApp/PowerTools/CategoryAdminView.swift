@@ -27,9 +27,10 @@ struct CategoryAdminView: View {
     }
 
     var body: some View {
-        List {
+        let counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
+        return List {
             topLevelDropZone
-            ForEach(visible) { item in row(item) }
+            ForEach(visible) { item in row(item, counts) }
         }
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
@@ -68,7 +69,7 @@ struct CategoryAdminView: View {
         .listRowBackground(topLevelTargeted ? Color.accentColor.opacity(0.15) : nil)
     }
 
-    @ViewBuilder private func row(_ item: FlatCategory) -> some View {
+    @ViewBuilder private func row(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         HStack(spacing: 8) {
             if item.hasChildren {
@@ -96,6 +97,11 @@ struct CategoryAdminView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            if let n = counts[c.id], n > 0 {
+                Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    .accessibilityLabel("\(n) transactions")
+            }
 
             if item.depth < 2 {   // engine caps nesting at 3 levels
                 Button { creatingUnder = c } label: {
