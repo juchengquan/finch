@@ -104,7 +104,7 @@ struct AddTransactionSheet: View {
                     }
                 }
 
-                if isLineItem {
+                if kind != .adjust {
                     Section {
                         Picker("Status", selection: $status) {
                             Text("Confirmed").tag(Entries.Status.confirmed)
@@ -124,6 +124,8 @@ struct AddTransactionSheet: View {
                             }
                         }
                     }
+                }
+                if isLineItem {
                     Section("Receipt") {
                         PhotosPicker(selection: $pickedPhoto, matching: .images) {
                             Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
@@ -375,6 +377,8 @@ struct AddTransactionSheet: View {
                     }
                     args["toAmount"] = .double(recv)
                 }
+                args["status"] = .string(status.rawValue)
+                if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
                 try store.apply(.createTransfer, Args(args))
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)

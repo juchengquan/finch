@@ -60,11 +60,15 @@ public enum Transfers {
         struct A: Decodable {
             let fromAccountId: String; let toAccountId: String; let fromAmount: Double
             let toAmount: Double?; let date: String; let time: String?; let note: String?; let sourceTemplateId: String?
+            // iOS-ahead-of-web divergence: transfers can carry tags/status (the web
+            // Transfer model has neither). Optional → web parity sequence is unaffected.
+            let status: String?; let tagIds: [String]?
         }
         let a = try args.to(A.self)
         try Entries.postTransfer(db, fromAccountId: a.fromAccountId, toAccountId: a.toAccountId,
                                  fromAmount: a.fromAmount, toAmount: a.toAmount, date: a.date,
-                                 time: a.time, note: a.note, sourceTemplateId: a.sourceTemplateId)
+                                 time: a.time, note: a.note, sourceTemplateId: a.sourceTemplateId,
+                                 status: a.status.flatMap(Entries.Status.init(rawValue:)), tagIds: a.tagIds)
     }
 
     static func delete(_ db: Database, _ args: Args) throws {

@@ -473,7 +473,8 @@ public enum Entries {
                                     toAccountId: String, fromAmount: Double, toAmount: Double? = nil,
                                     date: String, time: String? = nil, note: String? = nil,
                                     sourceTemplateId: String? = nil, id: String? = nil,
-                                    timestamp: String? = nil) throws -> String {
+                                    timestamp: String? = nil,
+                                    status: Status? = nil, tagIds: [String]? = nil) throws -> String {
         let fromAmt = abs(fromAmount)
         if fromAmt == 0 { throw I18nError("error.transfer.amountGt0", [:], "Transfer amount must be greater than 0") }
         if fromAccountId == toAccountId { throw I18nError("error.transfer.sameAccount", [:], "Pick two different accounts") }
@@ -494,11 +495,16 @@ public enum Entries {
             toAmt = try convertToBase(db, fromAmt, fromCcy, toCcy, date).amountBase
         }
         let fromName: String = from["name"], toName: String = to["name"]
-        return try postEntry(db, NewEntry(
+        let eid = try postEntry(db, NewEntry(
             id: id, ledgerId: lid, date: date, time: time, description: "Transfer", kind: .transfer,
+            status: status,
             legs: [.account(AccountLeg(accountId: fromAccountId, amount: -fromAmt, memo: "Transfer to \(toName)")),
                    .account(AccountLeg(accountId: toAccountId, amount: toAmt, memo: "Transfer from \(fromName)"))],
             notes: note, sourceTemplateId: sourceTemplateId, timestamp: timestamp, skipRules: true))
+        for tagId in (tagIds ?? []) {
+            try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [eid, tagId])
+        }
+        return eid
     }
 
     /// One account leg against the `adjustment` equity category — the manual
