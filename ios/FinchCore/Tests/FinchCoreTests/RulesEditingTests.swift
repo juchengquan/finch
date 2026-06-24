@@ -54,6 +54,13 @@ final class RulesEditingTests: XCTestCase {
         XCTAssertEqual(f?.action, .markReviewed)
     }
 
+    func test_simple_large_amount_not_scientific() {
+        // a large threshold must stay a plain number (regression: %g → "1.5e+06" was lossy/unparseable)
+        let cond = #"{"field":"amount","op":"gt","value":1500000.0}"#
+        let acts = #"[{"type":"set_category","categoryId":"c"}]"#
+        XCTAssertEqual(SimpleRule.parse(conditionJSON: cond, actionsJSON: acts)?.value, "1500000")
+    }
+
     func test_simple_accepts_legacy_set_reviewed() {
         let cond = #"{"field":"merchant","op":"is","value":"x"}"#
         let acts = #"[{"type":"set_reviewed"}]"#

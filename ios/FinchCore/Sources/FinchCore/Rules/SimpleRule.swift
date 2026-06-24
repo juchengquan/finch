@@ -28,7 +28,9 @@ public enum SimpleRule {
         let valueStr: String
         switch leaf.value {
         case .string(let s)?: valueStr = s
-        case .double(let d)?: valueStr = String(format: "%g", d)
+        // Avoid %g: it goes scientific / 6-sig-fig-lossy for large thresholds.
+        // Integral → plain integer; otherwise Double's own description.
+        case .double(let d)?: valueStr = d == d.rounded() ? String(Int(d)) : String(d)
         case .int(let i)?: valueStr = String(i)
         default: return nil
         }
