@@ -3,7 +3,16 @@ name: CI
 on:
   push:
     branches: [main, feat/frontend]
+    # Skip CI for docs-only pushes (specs/plans/markdown). A mixed commit that
+    # also touches code still runs (paths-ignore only skips when ALL changed
+    # files match). Safe here: neither branch has required status checks.
+    paths-ignore:
+      - "**/*.md"
+      - "plans/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "plans/**"
 
 # Cancel superseded runs on the same ref
 concurrency:
