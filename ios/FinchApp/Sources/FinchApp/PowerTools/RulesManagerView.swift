@@ -1,14 +1,14 @@
 import SwiftUI
 import FinchCore
 
-/// Phase 4 — rules manager: list (with match counts + active toggle), create,
-/// edit (simple single-condition/action rules), delete, backfill. Complex rules
-/// open read-only. create/update/delete/backfillRule through the chokepoint.
+/// Phase 4 — rules manager: list (match counts + active toggle), create, edit
+/// (multi-condition all/any + multi-action, CP1 fields), delete, backfill.
+/// Rules using CP2 fields / nested groups / not / split open read-only.
 struct RulesManagerView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var creating = false
-    @State private var editing: RuleSummary?    // simple rule → editor
-    @State private var viewing: RuleSummary?    // complex rule → read-only detail
+    @State private var editing: RuleSummary?
+    @State private var viewing: RuleSummary?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -56,7 +56,7 @@ struct RulesManagerView: View {
     }
 
     private func open(_ r: RuleSummary) {
-        if SimpleRule.parse(conditionJSON: r.conditionJSON, actionsJSON: r.actionsJSON) != nil { editing = r }
+        if RuleParse.parse(conditionJSON: r.conditionJSON, actionsJSON: r.actionsJSON) != nil { editing = r }
         else { viewing = r }
     }
     private func setActive(_ r: RuleSummary, _ on: Bool) {
@@ -71,22 +71,42 @@ struct RulesManagerView: View {
     }
 }
 
-/// Create (rule == nil) or edit a simple single-condition/single-action rule.
+// CP1 kind values a user can target.
+private let kindValues = ["expense", "income", "transfer", "refund", "adjustment"]
+
+private func opsFor(_ f: LeafForm.Field) -> [String] {
+    switch f {
+    case .merchant: return ["is", "contains", "startsWith"]
+    case .note:     return ["contains"]
+    case .amount:   return ["gt", "gte", "lt", "lte", "eq", "between"]
+    case .kind:     return ["is"]
+    }
+}
+private func opLabel(_ o: String) -> String {
+    switch o {
+    case "is": return "is"; case "contains": return "contains"; case "startsWith": return "starts with"
+    case "gt": return "greater than"; case "gte": return "≥"; case "lt": return "less than"; case "lte": return "≤"
+    case "eq": return "equals"; case "between": return "between"; default: return o
+    }
+}
+
+/// Create (rule == nil) or edit a multi-condition / multi-action rule.
 struct RuleSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     let rule: RuleSummary?
 
-    enum Field: String, CaseIterable, Identifiable { case merchant, amount; var id: String { rawValue } }
-    enum ActionKind: String, CaseIterable, Identifiable { case setCategory, markReviewed; var id: String { rawValue }
-        var label: String { self == .setCategory ? "Set category" : "Mark reviewed" } }
+    // Editable rows (flattened mutable mirror of RuleForm).
+    struct CondRow: Identifiable { let id = UUID(); var field: LeafForm.Field = .merchant; var op = "contains"; var value = ""; var value2 = "" }
+    enum ActType: String, CaseIterable, Identifiable { case setCategory, setNote, setMerchant, setKind, markReviewed
+        var id: String { rawValue }
+        var label: String { switch self { case .setCategory: "Set category"; case .setNote: "Set note"; case .setMerchant: "Set merchant"; case .setKind: "Set kind"; case .markReviewed: "Mark reviewed" } } }
+    struct ActRow: Identifiable { let id = UUID(); var type: ActType = .setCategory; var categoryId = ""; var text = ""; var kind = "expense" }
 
     @State private var name: String
-    @State private var field: Field
-    @State private var op: String
-    @State private var value: String
-    @State private var action: ActionKind
-    @State private var categoryId: String
+    @State private var combinator: RuleForm.Combinator
+    @State private var conditions: [CondRow]
+    @State private var actions: [ActRow]
     @State private var priority: Int
     @State private var isActive: Bool
     @State private var runOnEdit: Bool
@@ -94,22 +114,28 @@ struct RuleSheet: View {
 
     init(rule: RuleSummary?) {
         self.rule = rule
-        let form = rule.flatMap { SimpleRule.parse(conditionJSON: $0.conditionJSON, actionsJSON: $0.actionsJSON) }
+        let form = rule.flatMap { RuleParse.parse(conditionJSON: $0.conditionJSON, actionsJSON: $0.actionsJSON) }
         _name = State(initialValue: rule?.name ?? "")
-        _field = State(initialValue: form.flatMap { Field(rawValue: $0.field.rawValue) } ?? .merchant)
-        _op = State(initialValue: form?.op ?? "contains")
-        _value = State(initialValue: form?.value ?? "")
-        switch form?.action {
-        case .setCategory(let cid): _action = State(initialValue: .setCategory); _categoryId = State(initialValue: cid)
-        case .markReviewed: _action = State(initialValue: .markReviewed); _categoryId = State(initialValue: "")
-        case nil: _action = State(initialValue: .setCategory); _categoryId = State(initialValue: "")
-        }
+        _combinator = State(initialValue: form?.combinator ?? .all)
+        _conditions = State(initialValue: form.map { $0.conditions.map { lf in
+            CondRow(field: lf.field, op: lf.op, value: lf.value, value2: lf.value2)
+        } } ?? [CondRow()])
+        _actions = State(initialValue: form.map { $0.actions.map(Self.actRow(from:)) } ?? [ActRow()])
         _priority = State(initialValue: rule?.priority ?? 100)
         _isActive = State(initialValue: rule?.isActive ?? true)
         _runOnEdit = State(initialValue: rule?.runOnEdit ?? false)
     }
 
-    private var ops: [String] { field == .merchant ? ["contains", "equals"] : ["gt", "lt", "equals"] }
+    private static func actRow(from a: ActionForm) -> ActRow {
+        switch a.kind {
+        case .setCategory(let id): return ActRow(type: .setCategory, categoryId: id)
+        case .setNote(let s):      return ActRow(type: .setNote, text: s)
+        case .setMerchant(let s):  return ActRow(type: .setMerchant, text: s)
+        case .setKind(let k):      return ActRow(type: .setKind, kind: k)
+        case .markReviewed:        return ActRow(type: .markReviewed)
+        }
+    }
+
     private var isEdit: Bool { rule != nil }
 
     var body: some View {
@@ -120,19 +146,19 @@ struct RuleSheet: View {
                     Stepper("Priority \(priority)", value: $priority, in: 0...1000)
                 }
                 Section("When") {
-                    Picker("Field", selection: $field) { ForEach(Field.allCases) { Text($0.rawValue.capitalized).tag($0) } }
-                        .onChange(of: field) { _, _ in if !ops.contains(op) { op = ops[0] } }
-                    Picker("Is", selection: $op) { ForEach(ops, id: \.self) { Text(opLabel($0)).tag($0) } }
-                    TextField(field == .merchant ? "Text" : "Amount", text: $value)
-                        .keyboardType(field == .merchant ? .default : .decimalPad)
+                    if conditions.count > 1 {
+                        Picker("Match", selection: $combinator) {
+                            Text("all of").tag(RuleForm.Combinator.all); Text("any of").tag(RuleForm.Combinator.any)
+                        }.pickerStyle(.segmented)
+                    }
+                    ForEach($conditions) { $c in condRow($c) }
+                        .onDelete { conditions.remove(atOffsets: $0) }
+                    Button { conditions.append(CondRow()) } label: { Label("Add condition", systemImage: "plus") }
                 }
                 Section("Then") {
-                    Picker("Action", selection: $action) { ForEach(ActionKind.allCases) { Text($0.label).tag($0) } }
-                    if action == .setCategory {
-                        Picker("Category", selection: $categoryId) {
-                            ForEach(store.pickableCategories) { Text($0.name).tag($0.id) }
-                        }
-                    }
+                    ForEach($actions) { $a in actRow($a) }
+                        .onDelete { actions.remove(atOffsets: $0) }
+                    Button { actions.append(ActRow()) } label: { Label("Add action", systemImage: "plus") }
                 }
                 Section {
                     Toggle("Run on edit", isOn: $runOnEdit)
@@ -150,46 +176,101 @@ struct RuleSheet: View {
                     Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").bold()
                 }
             }
-            .onAppear { if categoryId.isEmpty { categoryId = store.pickableCategories.first?.id ?? "" } }
         }
     }
 
-    private func opLabel(_ o: String) -> String {
-        switch o { case "contains": return "contains"; case "equals": return "equals"
-        case "gt": return "greater than"; case "lt": return "less than"; default: return o }
+    @ViewBuilder private func condRow(_ c: Binding<CondRow>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Field", selection: c.field) {
+                ForEach(LeafForm.Field.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            .onChange(of: c.wrappedValue.field) { _, f in if !opsFor(f).contains(c.wrappedValue.op) { c.wrappedValue.op = opsFor(f)[0] } }
+            Picker("Is", selection: c.op) { ForEach(opsFor(c.wrappedValue.field), id: \.self) { Text(opLabel($0)).tag($0) } }
+            switch c.wrappedValue.field {
+            case .merchant, .note:
+                TextField("Text", text: c.value)
+            case .amount:
+                TextField("Amount", text: c.value).keyboardType(.decimalPad)
+                if c.wrappedValue.op == "between" { TextField("and", text: c.value2).keyboardType(.decimalPad) }
+            case .kind:
+                Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+            }
+        }
+    }
+
+    @ViewBuilder private func actRow(_ a: Binding<ActRow>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Action", selection: a.type) { ForEach(ActType.allCases) { Text($0.label).tag($0) } }
+            switch a.wrappedValue.type {
+            case .setCategory:
+                Picker("Category", selection: a.categoryId) { ForEach(store.pickableCategories) { Text($0.name).tag($0.id) } }
+            case .setNote:     TextField("Note", text: a.text)
+            case .setMerchant: TextField("Merchant", text: a.text)
+            case .setKind:     Picker("Kind", selection: a.kind) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+            case .markReviewed: EmptyView()
+            }
+        }
     }
 
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
-        guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value."; return }
-        let condValue: JSONValue
-        if field == .amount {
-            guard let parsed = DecimalInput.parse(value) else { errorMessage = "Enter a numeric amount."; return }
-            condValue = .double(parsed)
-        } else {
-            condValue = .string(value)
+        guard !conditions.isEmpty else { errorMessage = "Add at least one condition."; return }
+        guard !actions.isEmpty else { errorMessage = "Add at least one action."; return }
+
+        // Build condition forms, validating/normalizing amounts to plain decimal.
+        var condForms: [LeafForm] = []
+        for c in conditions {
+            var value = c.value, value2 = c.value2
+            switch c.field {
+            case .merchant, .note:
+                guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value for every condition."; return }
+            case .kind:
+                if value.isEmpty { value = kindValues[0] }
+            case .amount:
+                guard let d = DecimalInput.parse(value) else { errorMessage = "Enter a numeric amount."; return }
+                value = RuleParse.numStr(d)
+                if c.op == "between" {
+                    guard let hi = DecimalInput.parse(value2) else { errorMessage = "Enter both amounts for 'between'."; return }
+                    value2 = RuleParse.numStr(hi)
+                }
+            }
+            condForms.append(LeafForm(field: c.field, op: c.op, value: value, value2: value2))
         }
-        let condition: JSONValue = .object(["field": .string(field.rawValue), "op": .string(op), "value": condValue])
-        let actions: JSONValue
-        switch action {
-        case .setCategory:
-            guard !categoryId.isEmpty else { errorMessage = "Pick a category."; return }
-            actions = .array([.object(["type": .string("set_category"), "categoryId": .string(categoryId)])])
-        case .markReviewed:
-            actions = .array([.object(["type": .string("mark_reviewed")])])   // fix: engine expects mark_reviewed
+
+        // Build action forms.
+        var actForms: [ActionForm] = []
+        for a in actions {
+            switch a.type {
+            case .setCategory:
+                let cid = a.categoryId.isEmpty ? (store.pickableCategories.first?.id ?? "") : a.categoryId
+                guard !cid.isEmpty else { errorMessage = "Pick a category."; return }
+                actForms.append(ActionForm(kind: .setCategory(cid)))
+            case .setNote:
+                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter the note text."; return }
+                actForms.append(ActionForm(kind: .setNote(a.text)))
+            case .setMerchant:
+                guard !a.text.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter the merchant."; return }
+                actForms.append(ActionForm(kind: .setMerchant(a.text)))
+            case .setKind:
+                actForms.append(ActionForm(kind: .setKind(a.kind.isEmpty ? kindValues[0] : a.kind)))
+            case .markReviewed:
+                actForms.append(ActionForm(kind: .markReviewed))
+            }
         }
+
+        let (condition, actionsJSON) = RuleParse.build(RuleForm(combinator: combinator, conditions: condForms, actions: actForms))
         do {
             if let rule {
                 try store.apply(.updateRule, Args(["id": .string(rule.id), "patch": .object([
                     "name": .string(name), "priority": .int(priority),
-                    "condition": condition, "actions": actions,
+                    "condition": condition, "actions": actionsJSON,
                     "isActive": .bool(isActive), "runOnEdit": .bool(runOnEdit),
                 ])]))
             } else {
                 try store.apply(.createRule, Args([
                     "ledgerId": .string(store.activeLedgerId), "name": .string(name),
-                    "condition": condition, "actions": actions,
+                    "condition": condition, "actions": actionsJSON,
                     "priority": .int(priority), "runOnEdit": .bool(runOnEdit),
                 ]))
             }
@@ -198,7 +279,7 @@ struct RuleSheet: View {
     }
 }
 
-/// Read-only detail for a complex rule the simple builder can't represent.
+/// Read-only detail for a rule the CP1 builder can't represent.
 struct RuleDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let rule: RuleSummary
@@ -226,7 +307,7 @@ struct RuleDetailView: View {
     }
 
     private var conditionSummary: String {
-        guard let v = SimpleRule.jsonValue(rule.conditionJSON), let cond = RuleCondition.parse(v) else { return "—" }
+        guard let v = RuleParse.jsonValue(rule.conditionJSON), let cond = RuleCondition.parse(v) else { return "—" }
         switch cond {
         case .all(let cs): return "all of \(cs.count) conditions"
         case .any(let cs): return "any of \(cs.count) conditions"
@@ -235,7 +316,7 @@ struct RuleDetailView: View {
         }
     }
     private var actionsSummary: String {
-        guard let v = SimpleRule.jsonValue(rule.actionsJSON), case .array(let arr) = v else { return "—" }
+        guard let v = RuleParse.jsonValue(rule.actionsJSON), case .array(let arr) = v else { return "—" }
         let types = arr.compactMap { RuleAction.parse($0)?.type }
         return types.isEmpty ? "—" : "\(types.count) action(s): " + types.joined(separator: ", ")
     }
