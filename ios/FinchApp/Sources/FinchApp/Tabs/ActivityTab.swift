@@ -25,6 +25,8 @@ struct ActivityFeedView: View {
     var navTitle: String = "Activity"
     var headerSection: AnyView? = nil
     @State private var searchQuery: String = ""
+    @State private var filter = TxFilter()
+    @State private var showingFilter = false
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
     @State private var editing: Tx?
@@ -88,6 +90,12 @@ struct ActivityFeedView: View {
                     isSelecting.toggle(); selected.removeAll()
                 }.disabled(store.txns.isEmpty)
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingFilter = true } label: {
+                    Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filter")
+            }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
@@ -103,6 +111,7 @@ struct ActivityFeedView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
+        .sheet(isPresented: $showingFilter) { TransactionFilterSheet(filter: $filter) }
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
@@ -110,6 +119,7 @@ struct ActivityFeedView: View {
         .onAppear { consumeFocus(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         .onChange(of: searchQuery) { _, _ in recompute() }
+        .onChange(of: filter) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
         .onReceive(store.$txns) { _ in recompute() }
     }
@@ -183,13 +193,23 @@ struct ActivityFeedView: View {
     }
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
 
-    /// Client-side filter mirroring selectTransactions(opts.query):
-    /// merchant.lowercased().contains(query). NO FTS5. (store.txns is already
-    /// scoped to the active ledger by the projection.)
+    /// Build a `ListOptions` from the filter sheet + search box and route through
+    /// the engine's `selectTransactions` (which scopes to the active ledger and
+    /// applies the stable date-desc sort).
     private func filteredTxns() -> [Tx] {
-        guard !searchQuery.isEmpty else { return store.txns }
-        let q = searchQuery.lowercased()
-        return store.txns.filter { $0.merchant.lowercased().contains(q) }
+        let opts = ListOptions(
+            ledgerId: store.activeLedgerId,
+            direction: filter.direction,
+            query: searchQuery.isEmpty ? nil : searchQuery,
+            accountId: filter.accountId,
+            categoryId: filter.categoryId,
+            status: filter.status,
+            from: filter.fromYMD,
+            to: filter.toYMD,
+            minAmount: filter.minAmount,
+            maxAmount: filter.maxAmount,
+            tagId: filter.tagId)
+        return Selectors.selectTransactions(store.txns, opts)
     }
 }
 
