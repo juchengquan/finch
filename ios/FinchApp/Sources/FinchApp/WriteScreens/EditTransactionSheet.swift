@@ -32,6 +32,7 @@ struct EditTransactionSheet: View {
     @State private var accountId: String
     @State private var refundedTxId: String?
     @State private var showingRefundPicker = false
+    @State private var currencyCode: String
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
@@ -40,6 +41,15 @@ struct EditTransactionSheet: View {
     private var refundedSummary: String {
         guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
         return t.merchant.isEmpty ? t.date : t.merchant
+    }
+    private var accountCurrency: String {
+        store.accounts.first { $0.id == accountId }?.currency ?? store.displayCurrency
+    }
+    private var currencyOptions: [String] {
+        var set = Set(store.accounts.compactMap { $0.currency })
+        set.formUnion(store.exchangeRates.map { $0.currency })
+        set.insert(accountCurrency)
+        return set.sorted()
     }
 
     init(txn: Tx) {
@@ -53,6 +63,7 @@ struct EditTransactionSheet: View {
         _status = State(initialValue: txn.pending == true ? .pending : .confirmed)
         _accountId = State(initialValue: txn.account)
         _refundedTxId = State(initialValue: txn.refundedTransactionId)
+        _currencyCode = State(initialValue: txn.currency ?? "")
     }
 
     private var categories: [CategoryRow] {
@@ -90,6 +101,11 @@ struct EditTransactionSheet: View {
                             Text("Amount")
                             Spacer()
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        }
+                        if txn.kind != "transfer", currencyOptions.count > 1 {
+                            Picker("Currency", selection: $currencyCode) {
+                                ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+                            }
                         }
                         SearchablePickerRow(title: "Category",
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
@@ -188,7 +204,10 @@ struct EditTransactionSheet: View {
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
             .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
-            .onAppear { attachments = store.attachments(for: txn.id) }
+            .onAppear {
+                attachments = store.attachments(for: txn.id)
+                if currencyCode.isEmpty { currencyCode = accountCurrency }
+            }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
                 Task { await addReceipt(item) }
@@ -234,6 +253,9 @@ struct EditTransactionSheet: View {
         }
         if status != (txn.pending == true ? .pending : .confirmed) { patch["status"] = .string(status.rawValue) }
         if txn.kind != "transfer", !accountId.isEmpty, accountId != txn.account { patch["account"] = .string(accountId) }
+        if txn.kind != "transfer", !currencyCode.isEmpty, currencyCode != (txn.currency ?? accountCurrency) {
+            patch["currency"] = .string(currencyCode)
+        }
         if txn.kind == "refund", refundedTxId != txn.refundedTransactionId {
             patch["refundedTransactionId"] = refundedTxId.map(JSONValue.string) ?? .null
         }
