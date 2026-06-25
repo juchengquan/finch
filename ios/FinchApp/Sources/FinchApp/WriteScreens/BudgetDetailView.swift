@@ -70,10 +70,15 @@ struct BudgetDetailView: View {
                 Spacer()
                 if p.over { Text("Over").font(.caption).foregroundStyle(.red) }
             }
+            if b.carryForward > 0 {
+                Text("+\(store.displayMoneyBase(b.carryForward)) carried over")
+                    .font(.caption).foregroundStyle(.green)
+            }
             ProgressView(value: min(Double(p.pct) / 100, 1.0))
                 .tint(p.over ? .red : (p.pct >= 70 ? .yellow : .green))
             HStack {
                 Text("\(store.displayMoneyBase(p.remaining)) left").font(.caption).foregroundStyle(.secondary)
+                if b.rollover != 0 { Text("· Rolls over").font(.caption2).foregroundStyle(.secondary) }
                 Spacer()
                 Text("\(p.from) – \(p.to)").font(.caption2).foregroundStyle(.secondary)
             }
