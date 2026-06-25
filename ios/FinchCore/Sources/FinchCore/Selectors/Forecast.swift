@@ -23,12 +23,13 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
     public let maxExecutions: Int?
     public let installmentTotal: Int?
     public let installmentPaid: Int?
+    public let color: String?
 
     public init(id: String, name: String, description: String? = nil, type: String,
                 amount: Double? = nil, frequency: String, dayOfMonth: Int, weekDay: Int? = nil,
                 accountId: String, fromAccountId: String? = nil, categoryId: String? = nil,
                 startDate: String? = nil, endDate: String? = nil, nextRun: String, maxExecutions: Int? = nil,
-                installmentTotal: Int? = nil, installmentPaid: Int? = nil) {
+                installmentTotal: Int? = nil, installmentPaid: Int? = nil, color: String? = nil) {
         self.id = id; self.name = name; self.description = description; self.type = type
         self.amount = amount; self.frequency = frequency; self.dayOfMonth = dayOfMonth
         self.weekDay = weekDay; self.accountId = accountId; self.fromAccountId = fromAccountId
@@ -36,6 +37,7 @@ public struct ScheduledTemplate: Identifiable, Equatable, Sendable, Codable {
         self.startDate = startDate; self.endDate = endDate; self.nextRun = nextRun
         self.maxExecutions = maxExecutions; self.installmentTotal = installmentTotal
         self.installmentPaid = installmentPaid
+        self.color = color
     }
 }
 
@@ -230,5 +232,24 @@ extension Selectors {
             startingBalance: r2(start), endingBalance: r2(balance),
             trough: ForecastTrough(date: troughDate, balance: r2(troughBalance)),
             events: events, series: series)
+    }
+
+    /// All occurrences of `templates` within [from, through] inclusive, each paired
+    /// with its template, sorted by date. Reuses `occurrencesUpTo`.
+    public static func occurrencesInRange(_ templates: [ScheduledTemplate], from: String, through: String)
+        -> [(date: String, template: ScheduledTemplate)] {
+        var out: [(date: String, template: ScheduledTemplate)] = []
+        for t in templates {
+            for d in occurrencesUpTo(t, through) where d >= from { out.append((d, t)) }
+        }
+        return out.sorted { $0.date < $1.date }
+    }
+
+    /// "templateId|date" → isPending, for every posted occurrence (txns whose
+    /// sourceTemplateId is set). Absent key ⇒ upcoming; true ⇒ pending; false ⇒ done.
+    public static func scheduledPostedMap(_ txns: [Tx]) -> [String: Bool] {
+        var out: [String: Bool] = [:]
+        for t in txns { if let s = t.sourceTemplateId { out["\(s)|\(t.date)"] = (t.pending ?? false) } }
+        return out
     }
 }
