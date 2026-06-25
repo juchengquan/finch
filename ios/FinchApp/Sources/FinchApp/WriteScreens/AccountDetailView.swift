@@ -23,7 +23,10 @@ struct AccountDetailView: View {
         Group {
             if let account {
                 List {
-                    Section { header(account) }
+                    Section {
+                        header(account)
+                        reconcileBadge(account)
+                    }
                     forecastSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
@@ -74,6 +77,28 @@ struct AccountDetailView: View {
         }
     }
 
+    @ViewBuilder private func reconcileBadge(_ a: AccountRow) -> some View {
+        let status = Selectors.reconcileStatus(a.lastReconciledAt, store.today)
+        let bal = Money.format(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
+        HStack(spacing: 6) {
+            switch status {
+            case .never:
+                Image(systemName: "checkmark.seal").foregroundStyle(.secondary)
+                Text("Never reconciled").foregroundStyle(.secondary)
+            case .fresh(let d):
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.green)
+            case .stale(let d):
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.orange)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+    }
+
+    private func agoLabel(_ d: Int) -> String { d == 0 ? "today" : d == 1 ? "1 day ago" : "\(d) days ago" }
+
     @ViewBuilder private func holdingsSection(_ a: AccountRow) -> some View {
         let holdings = Selectors.holdingsForAccount(store.holdings, a.id)
         if !holdings.isEmpty {
@@ -107,21 +132,30 @@ struct AccountDetailView: View {
 
     @ViewBuilder private func transactionsSection(_ a: AccountRow) -> some View {
         let txns = store.transactions(for: a.id)
+        let pending = txns.filter { $0.pending == true }
+        let confirmed = txns.filter { $0.pending != true }
+        if !pending.isEmpty {
+            Section("To confirm (\(pending.count))") {
+                ForEach(pending, id: \.id) { t in txRow(t) }
+            }
+        }
         Section("Transactions") {
-            if txns.isEmpty {
+            if confirmed.isEmpty {
                 Text("No transactions").font(.caption).foregroundStyle(.secondary)
             } else {
-                ForEach(txns, id: \.id) { t in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(t.merchant).lineLimit(1)
-                            Text(t.date).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(store.displayMoneyBase(t.amount)).fontWeight(.medium)
-                    }
-                }
+                ForEach(confirmed, id: \.id) { t in txRow(t) }
             }
+        }
+    }
+
+    @ViewBuilder private func txRow(_ t: Tx) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t.merchant).lineLimit(1)
+                Text(t.date).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(store.displayMoneyBase(t.amount)).fontWeight(.medium)
         }
     }
 
