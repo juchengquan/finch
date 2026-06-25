@@ -22,6 +22,16 @@ struct CounterpartyDetailView: View {
                 }
             }
             if !txns.isEmpty {
+                Section {
+                    Button {
+                        DeepLinkRouter.shared.pendingFilter = TxFilter(counterpartyId: counterparty.id)
+                        DeepLinkRouter.shared.selectedTab = .activity
+                    } label: {
+                        Label("See in Activity feed", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+            if !txns.isEmpty {
                 Section("Transactions") {
                     ForEach(txns) { tx in
                         Button { editing = tx } label: { TxRow(txn: tx).contentShape(Rectangle()) }
