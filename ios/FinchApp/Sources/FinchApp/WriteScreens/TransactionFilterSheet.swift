@@ -7,7 +7,8 @@ struct TxFilter: Equatable {
     var direction: String? = nil       // nil = all, "in", "out"
     var accountId: String? = nil
     var categoryId: String? = nil
-    var tagId: String? = nil
+    var tagIds: Set<String> = []
+    var tagsMatchAll: Bool = false
     var counterpartyId: String? = nil
     var status: String? = nil          // nil = all, "pending", "confirmed"
     var from: Date? = nil
@@ -16,7 +17,7 @@ struct TxFilter: Equatable {
     var maxAmount: Double? = nil
 
     var isActive: Bool {
-        direction != nil || accountId != nil || categoryId != nil || tagId != nil
+        direction != nil || accountId != nil || categoryId != nil || !tagIds.isEmpty
             || counterpartyId != nil
             || status != nil || from != nil || to != nil || minAmount != nil || maxAmount != nil
     }
@@ -74,9 +75,23 @@ struct TransactionFilterSheet: View {
                         ForEach(store.pickableCategories) { Text($0.name).tag(String?.some($0.id)) }
                     }
                     if !store.tags.isEmpty {
-                        Picker("Tag", selection: $draft.tagId) {
-                            Text("Any").tag(String?.none)
-                            ForEach(store.tags) { Text($0.name).tag(String?.some($0.id)) }
+                        ForEach(store.tags) { tag in
+                            Button {
+                                if draft.tagIds.contains(tag.id) { draft.tagIds.remove(tag.id) }
+                                else { draft.tagIds.insert(tag.id) }
+                            } label: {
+                                HStack {
+                                    Text(tag.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    if draft.tagIds.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                }
+                            }
+                        }
+                        if draft.tagIds.count >= 2 {
+                            Picker("Match", selection: $draft.tagsMatchAll) {
+                                Text("Any tag").tag(false)
+                                Text("All tags").tag(true)
+                            }
                         }
                     }
                     if !store.merchants.isEmpty {
