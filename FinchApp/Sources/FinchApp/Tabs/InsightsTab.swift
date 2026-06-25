@@ -32,6 +32,7 @@ struct InsightsTab: View {
                                     Text("3M").tag(3); Text("6M").tag(6); Text("1Y").tag(12)
                                 }
                                 .pickerStyle(.segmented)
+                                InsightsCard()
                                 MonthlySpendingCard(months: rangeMonths)
                                 NetWorthCard(months: rangeMonths)
                                 CashflowCard(months: rangeMonths)
@@ -77,6 +78,53 @@ private struct Card<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct InsightsCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let ctx = InsightContext(
+            txns: store.txns, accounts: store.accounts, budgets: store.budgets,
+            categories: store.pickableCategories, ledgerId: store.activeLedgerId,
+            month: String(store.today.prefix(7)), today: store.today)
+        let insights = Selectors.generateInsights(ctx, fmt: store.displayMoneyBase)
+        return Card(title: "Insights") {
+            if insights.isEmpty {
+                Text("Add a few transactions to see insights.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(Array(insights.enumerated()), id: \.offset) { _, ins in row(ins) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ ins: Insight) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol(ins.icon))
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(color(ins.tone).opacity(0.15), in: Circle())
+                .foregroundStyle(color(ins.tone))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ins.title).font(.subheadline.weight(.medium))
+                Text(ins.body).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func color(_ t: Insight.Tone) -> Color {
+        switch t { case .pos: return .green; case .warn: return .orange; case .neut: return .blue }
+    }
+    private func symbol(_ icon: String) -> String {
+        switch icon {
+        case "arrowUp": return "arrow.up"; case "arrowDown": return "arrow.down"
+        case "doc": return "doc.text"; case "fork": return "fork.knife"; case "check": return "checkmark"
+        default: return "sparkles"
+        }
     }
 }
 
