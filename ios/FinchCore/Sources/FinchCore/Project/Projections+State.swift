@@ -40,7 +40,8 @@ extension Projection {
                 SELECT a.id, a.ledger_id AS ledgerId, a.name, a.type, a.currency,
                        a.current_balance AS balance, a.group_id AS groupId,
                        g.name AS groupName, a.sort_order AS sortOrder,
-                       a.include_in_net_worth AS inw, a.is_active AS isActive
+                       a.include_in_net_worth AS inw, a.is_active AS isActive,
+                       a.last_reconciled_at AS lastReconciledAt, a.last_reconciled_balance AS lastReconciledBalance
                   FROM accounts a
                   LEFT JOIN account_groups g ON a.group_id = g.id
                  WHERE a.ledger_id = ? AND a.is_active = ?
@@ -51,7 +52,8 @@ extension Projection {
                     currency: r["currency"], includeInNetWorth: r["inw"],
                     isActive: (r["isActive"] as Int? ?? 0) != 0, name: r["name"],
                     type: r["type"], groupId: r["groupId"], groupName: r["groupName"],
-                    sortOrder: r["sortOrder"])
+                    sortOrder: r["sortOrder"],
+                    lastReconciledAt: r["lastReconciledAt"], lastReconciledBalance: r["lastReconciledBalance"])
             }
         }
     }
