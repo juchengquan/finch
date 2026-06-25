@@ -7,7 +7,7 @@ import FinchCore
 /// supplies a navigation stack), so the feed must NOT wrap one itself.
 struct ActivityTab: View {
     var body: some View {
-        NavigationStack { ActivityFeedView() }
+        NavigationStack { ActivityFeedView(consumesPendingFilter: true) }
     }
 }
 
@@ -24,6 +24,7 @@ struct ActivityFeedView: View {
     /// configurable nav title — so the feed can be a tab, not only a pushed view.
     var navTitle: String = "Activity"
     var headerSection: AnyView? = nil
+    var consumesPendingFilter: Bool = false
     @State private var searchQuery: String = ""
     @State private var filter = TxFilter()
     @State private var showingFilter = false
@@ -143,8 +144,9 @@ struct ActivityFeedView: View {
             Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
             Button("Cancel", role: .cancel) {}
         }
-        .onAppear { consumeFocus(); recompute() }
+        .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+        .onChange(of: router.pendingFilter) { _, _ in consumePendingFilter() }
         .onChange(of: searchQuery) { _, _ in recompute() }
         .onChange(of: filter) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
@@ -172,6 +174,13 @@ struct ActivityFeedView: View {
         guard let id = router.focusedId, let tx = store.txns.first(where: { $0.id == id }) else { return }
         editing = tx
         router.focusedId = nil
+    }
+
+    private func consumePendingFilter() {
+        guard consumesPendingFilter, let pending = router.pendingFilter else { return }
+        searchQuery = ""
+        filter = pending            // existing .onChange(of: filter) → recompute()
+        router.pendingFilter = nil
     }
 
     private func toggle(_ txn: Tx) {
