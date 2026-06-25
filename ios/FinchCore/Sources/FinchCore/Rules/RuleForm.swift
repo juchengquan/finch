@@ -1,19 +1,20 @@
 import Foundation
 
-/// A single condition row, editable in the builder. CP1 + CP2a fields (the
-/// CP2b array/multi-value fields are not yet representable here).
+/// A single condition row, editable in the builder. CP1 + CP2 fields (nested
+/// groups / `not` / `split` are not representable here — those stay read-only).
 public struct LeafForm: Equatable, Sendable {
     public enum Field: String, Sendable, CaseIterable {
         case merchant, note, amount, kind
         case categoryId = "category_id", accountId = "account_id", counterpartyId = "counterparty_id"
-        case currency, tagId = "tag_id", dateDom = "date_dom"
+        case currency, tagId = "tag_id", dateDom = "date_dom", dateDow = "date_dow"
     }
     public var field: Field
     public var op: String
     public var value: String     // text / number (plain decimal) / kind raw
     public var value2: String    // amount `between` upper bound; "" otherwise
-    public init(field: Field, op: String, value: String, value2: String = "") {
-        self.field = field; self.op = op; self.value = value; self.value2 = value2
+    public var values: [String]  // array ops (in/has_any/has_all); weekday indices for date_dow
+    public init(field: Field, op: String, value: String, value2: String = "", values: [String] = []) {
+        self.field = field; self.op = op; self.value = value; self.value2 = value2; self.values = values
     }
 }
 
@@ -55,13 +56,14 @@ public enum RuleParse {
         case .merchant:       return ["is", "contains", "startsWith"]
         case .note:           return ["contains"]
         case .amount:         return ["gt", "gte", "lt", "lte", "eq", "between"]
-        case .kind:           return ["is"]
-        case .categoryId:     return ["is", "is_null"]
-        case .accountId:      return ["is"]
+        case .kind:           return ["is", "in"]
+        case .categoryId:     return ["is", "is_null", "in"]
+        case .accountId:      return ["is", "in"]
         case .counterpartyId: return ["is", "is_null"]
         case .currency:       return ["is"]
-        case .tagId:          return ["has"]
+        case .tagId:          return ["has", "has_any", "has_all"]
         case .dateDom:        return ["eq", "gte", "lte"]
+        case .dateDow:        return ["in"]
         }
     }
 
@@ -71,6 +73,14 @@ public enum RuleParse {
         if op == "equals" { op = field == .amount ? "eq" : "is" }   // self-heal legacy
         guard opsAllowed(field).contains(op) else { return nil }
         if op == "is_null" { return LeafForm(field: field, op: op, value: "") }
+        if op == "in" || op == "has_any" || op == "has_all" {
+            guard case .array(let arr)? = leaf.value, !arr.isEmpty else { return nil }
+            let values: [String] = field == .dateDow
+                ? arr.compactMap { $0.asDouble.map { numStr($0) } }
+                : arr.compactMap { $0.asString }
+            guard values.count == arr.count else { return nil }   // every element parsed
+            return LeafForm(field: field, op: op, value: "", values: values)
+        }
         if field == .amount && op == "between" {
             guard case .array(let arr)? = leaf.value, arr.count == 2,
                   let lo = arr[0].asDouble, let hi = arr[1].asDouble else { return nil }
@@ -125,6 +135,12 @@ public enum RuleParse {
     static func leafJSON(_ f: LeafForm) -> JSONValue {
         if f.op == "is_null" {
             return .object(["field": .string(f.field.rawValue), "op": .string("is_null")])
+        }
+        if f.op == "in" || f.op == "has_any" || f.op == "has_all" {
+            let arr: [JSONValue] = f.field == .dateDow
+                ? f.values.map { .int(Int($0) ?? 0) }
+                : f.values.map { .string($0) }
+            return .object(["field": .string(f.field.rawValue), "op": .string(f.op), "value": .array(arr)])
         }
         let value: JSONValue
         switch f.field {
