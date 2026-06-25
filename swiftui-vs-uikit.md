@@ -58,9 +58,11 @@ solution — not a reason to rethink the architecture:
 
 - **"Scan receipt" with the camera** → `VNDocumentCameraViewController` (VisionKit). No
   SwiftUI equivalent.
-- **In-app preview of an attachment** (tap a receipt image/PDF) → Quick Look
-  (`QLPreviewController`) or `PDFKit`. We currently *list* attachments but don't preview
-  them, so this is the most probable next bridge.
+- **In-app preview of an attachment** (tap a receipt image/PDF) → **no bridge needed.**
+  SwiftUI's `.quickLookPreview($url)` modifier (iOS 14+/macOS 13+) handles in-app receipt
+  preview cross-platform with pure SwiftUI — shipped in the Edit form (tap a receipt row).
+  A `QLPreviewController`/`PDFKit` representable would only be a fallback if that modifier
+  stopped meeting our needs.
 - **Rich-text / formatted notes** → `UITextView` (SwiftUI `TextEditor` is plain text).
 - **Custom numeric keypad / input-accessory "Done" toolbar** for amount entry → a small
   UIKit bridge if `keyboardType` isn't enough.

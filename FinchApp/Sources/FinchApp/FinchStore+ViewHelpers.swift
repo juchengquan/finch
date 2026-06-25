@@ -65,6 +65,10 @@ extension FinchStore {
     public var attachmentsRoot: URL {
         liveDBURL.deletingLastPathComponent().appendingPathComponent("attachments", isDirectory: true)
     }
+    /// Absolute on-disk URL for an attachment (`relPath` already includes "attachments/…").
+    public func attachmentURL(for att: AttachmentRow) -> URL {
+        attachmentsRoot.deletingLastPathComponent().appendingPathComponent(att.relPath)
+    }
     private func unlink(relPaths: [String]) {
         let root = attachmentsRoot.deletingLastPathComponent()   // Application Support (relPath includes 'attachments/…')
         for rel in relPaths { try? FileManager.default.removeItem(at: root.appendingPathComponent(rel)) }
