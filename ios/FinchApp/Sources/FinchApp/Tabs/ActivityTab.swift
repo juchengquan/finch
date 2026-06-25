@@ -267,6 +267,17 @@ struct TxRow: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
                     }
+                    if txn.kind == "refund" {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.uturn.left")
+                            Text("Refund")
+                        }
+                        .font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.green.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.green)
+                        .accessibilityLabel("Refund")
+                    }
                 }
                 if let cat = store.categoryName(txn.category) {
                     Text(cat).font(.caption2)
