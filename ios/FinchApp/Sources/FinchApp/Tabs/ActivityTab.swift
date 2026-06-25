@@ -53,6 +53,7 @@ struct ActivityFeedView: View {
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
     @State private var editing: Tx?
+    @State private var previewURL: URL?
     @State private var isSelecting = false
     @State private var selected: Set<String> = []
     @State private var showingBulkCat = false
@@ -116,6 +117,7 @@ struct ActivityFeedView: View {
         .searchable(text: $searchQuery)
         .navigationTitle(navTitle)
         .errorAlert($errorMessage)
+        .quickLookPreview($previewURL)
         // Leave selection mode behind when the feed is popped/dismissed so the
         // selection toolbar doesn't linger stale on return.
         .onDisappear { isSelecting = false; selected.removeAll() }
@@ -220,6 +222,10 @@ struct ActivityFeedView: View {
         if selected.contains(txn.id) { selected.remove(txn.id) } else { selected.insert(txn.id) }
     }
 
+    private func previewReceipt(_ tx: Tx) {
+        if let first = store.attachments(for: tx.id).first { previewURL = store.attachmentURL(for: first) }
+    }
+
     @ViewBuilder
     private func row(_ txn: Tx) -> some View {
         Button { isSelecting ? toggle(txn) : (editing = txn) } label: {
@@ -228,7 +234,7 @@ struct ActivityFeedView: View {
                     Image(systemName: selected.contains(txn.id) ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 }
-                TxRow(txn: txn)
+                TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) })
             }
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
@@ -243,6 +249,9 @@ struct ActivityFeedView: View {
         }
         .contextMenu {   // right-click parity on Mac/iPad (swipe is touch-only)
             Button { editing = txn } label: { Label("Edit", systemImage: "pencil") }
+            if !store.attachments(for: txn.id).isEmpty {
+                Button { previewReceipt(txn) } label: { Label("Preview receipt", systemImage: "paperclip") }
+            }
             if txn.pending == true {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
@@ -299,11 +308,14 @@ struct ActivityFeedView: View {
 struct TxRow: View {
     @EnvironmentObject private var store: FinchStore
     let txn: Tx
+    var onPreviewReceipt: ((Tx) -> Void)? = nil
 
     private var rowTags: [TagRow] {
         guard let ids = txn.tags, !ids.isEmpty else { return [] }
         return ids.compactMap { id in store.tags.first { $0.id == id } }
     }
+
+    private var receipts: [AttachmentRow] { store.attachments(for: txn.id) }
 
     var body: some View {
         HStack {
@@ -349,6 +361,13 @@ struct TxRow: View {
                 }
             }
             Spacer()
+            if let onPreviewReceipt, !receipts.isEmpty {
+                Button { onPreviewReceipt(txn) } label: {
+                    Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Preview receipt")
+            }
             Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
         }
     }
