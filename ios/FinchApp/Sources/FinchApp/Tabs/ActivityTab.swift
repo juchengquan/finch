@@ -253,6 +253,12 @@ struct ActivityFeedView: View {
 struct TxRow: View {
     @EnvironmentObject private var store: FinchStore
     let txn: Tx
+
+    private var rowTags: [TagRow] {
+        guard let ids = txn.tags, !ids.isEmpty else { return [] }
+        return ids.compactMap { id in store.tags.first { $0.id == id } }
+    }
+
     var body: some View {
         HStack {
             Image(systemName: TxnKindIcon.icon(for: txn.kind))
@@ -279,10 +285,21 @@ struct TxRow: View {
                         .accessibilityLabel("Refund")
                     }
                 }
-                if let cat = store.categoryName(txn.category) {
-                    Text(cat).font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
+                HStack(spacing: 4) {
+                    if let cat = store.categoryName(txn.category) {
+                        Text(cat).font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    ForEach(rowTags.prefix(3)) { tag in
+                        Text(tag.name).font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background((Color(hex: tag.color ?? "") ?? .secondary).opacity(0.2), in: Capsule())
+                            .foregroundStyle(Color(hex: tag.color ?? "") ?? .secondary)
+                    }
+                    if rowTags.count > 3 {
+                        Text("+\(rowTags.count - 3)").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
             }
             Spacer()
