@@ -11,6 +11,9 @@ struct ScheduledTab: View {
     @State private var showingAdd = false
     @State private var editing: ScheduledTemplate?
     @State private var errorMessage: String?
+    @State private var mode: Mode = .list
+    @State private var addPrefill: Date?
+    private enum Mode: String, CaseIterable { case list = "List", calendar = "Calendar" }
 
     var body: some View {
         // A primary tab supplies its own NavigationStack (like Accounts/Insights);
@@ -27,22 +30,33 @@ struct ScheduledTab: View {
                              : "Tap + to add a recurring transaction or installment plan.")
                     }
                 } else {
-                    List {
-                        ForEach(store.scheduled, id: \.id) { t in
-                            Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
-                                .buttonStyle(.plain)
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
-                                    Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+                    VStack(spacing: 0) {
+                        Picker("View", selection: $mode) {
+                            ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
+                        if mode == .list {
+                            List {
+                                ForEach(store.scheduled, id: \.id) { t in
+                                    Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing) {
+                                            Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
+                                            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+                                        }
+                                        .swipeActions(edge: .leading) {
+                                            Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
+                                        }
+                                        .contextMenu {
+                                            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
+                                            Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
+                                            Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
+                                        }
                                 }
-                                .swipeActions(edge: .leading) {
-                                    Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
-                                }
-                                .contextMenu {
-                                    Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
-                                    Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
-                                    Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
-                                }
+                            }
+                        } else {
+                            ScheduledCalendarView(onEdit: { editing = $0 }, onPost: postNow,
+                                                  onAdd: { addPrefill = $0; showingAdd = true })
                         }
                     }
                 }
@@ -59,7 +73,7 @@ struct ScheduledTab: View {
                         .disabled(store.accounts.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingAdd) { ScheduledSheet() }
+            .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) { ScheduledSheet(prefillStart: addPrefill) }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
             .errorAlert($errorMessage)
         }

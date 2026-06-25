@@ -223,7 +223,7 @@ extension Projection {
                 SELECT t.id, t.name, t.description, t.kind, t.amount, t.frequency,
                        t.day_of_month, t.day_of_week, t.account_id, t.from_account_id, t.category_id,
                        t.start_date, t.end_date, t.next_run, t.max_executions,
-                       t.installment_total, COALESCE(p.n, 0) AS installment_paid
+                       t.installment_total, t.color, COALESCE(p.n, 0) AS installment_paid
                   FROM scheduled_templates t
                   LEFT JOIN (
                     SELECT source_template_id, COUNT(*) AS n FROM entries
@@ -240,7 +240,7 @@ extension Projection {
                     categoryId: r["category_id"],
                     startDate: r["start_date"], endDate: r["end_date"],
                     nextRun: (r["next_run"] as String?) ?? "", maxExecutions: r["max_executions"],
-                    installmentTotal: r["installment_total"], installmentPaid: r["installment_paid"])
+                    installmentTotal: r["installment_total"], installmentPaid: r["installment_paid"], color: r["color"])
             }
         }
     }
