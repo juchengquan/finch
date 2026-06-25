@@ -6,8 +6,9 @@ public struct ExchangeRate: Equatable, Hashable, Sendable, Codable {
     public let date: String
     public let currency: String
     public let rate: Double
-    public init(date: String, currency: String, rate: Double) {
-        self.date = date; self.currency = currency; self.rate = rate
+    public let source: String?
+    public init(date: String, currency: String, rate: Double, source: String? = nil) {
+        self.date = date; self.currency = currency; self.rate = rate; self.source = source
     }
 }
 
