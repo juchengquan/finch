@@ -59,10 +59,5 @@ final class RuleParseCP2aTests: XCTestCase {
         XCTAssertEqual(RuleParse.parse(conditionJSON: cond.jsonString, actionsJSON: acts2.jsonString), form)
     }
 
-    func test_cp2b_ops_still_nil() {
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"category_id","op":"in","value":["c1","c2"]}"#, actionsJSON: act))
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"tag_id","op":"has_any","value":["t1"]}"#, actionsJSON: act))
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"date_dow","op":"in","value":[0,6]}"#, actionsJSON: act))
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"kind","op":"in","value":["expense"]}"#, actionsJSON: act))
-    }
+    // test_cp2b_ops_still_nil removed — CP2b ops are now implemented (see RuleParseCP2bTests)
 }
