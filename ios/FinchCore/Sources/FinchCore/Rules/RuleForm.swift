@@ -1,8 +1,13 @@
 import Foundation
 
-/// A single condition row, editable in the builder. CP1 fields only.
+/// A single condition row, editable in the builder. CP1 + CP2a fields (the
+/// CP2b array/multi-value fields are not yet representable here).
 public struct LeafForm: Equatable, Sendable {
-    public enum Field: String, Sendable, CaseIterable { case merchant, note, amount, kind }
+    public enum Field: String, Sendable, CaseIterable {
+        case merchant, note, amount, kind
+        case categoryId = "category_id", accountId = "account_id", counterpartyId = "counterparty_id"
+        case currency, tagId = "tag_id", dateDom = "date_dom"
+    }
     public var field: Field
     public var op: String
     public var value: String     // text / number (plain decimal) / kind raw
@@ -12,10 +17,11 @@ public struct LeafForm: Equatable, Sendable {
     }
 }
 
-/// A single action row. CP1 actions only.
+/// A single action row. CP1 + CP2a actions.
 public struct ActionForm: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case setCategory(String), setNote(String), setMerchant(String), setKind(String), markReviewed
+        case addTag(String), removeTag(String), setCounterparty(String)
     }
     public var kind: Kind
     public init(kind: Kind) { self.kind = kind }
@@ -46,10 +52,16 @@ public enum RuleParse {
 
     static func opsAllowed(_ field: LeafForm.Field) -> Set<String> {
         switch field {
-        case .merchant: return ["is", "contains", "startsWith"]
-        case .note:     return ["contains"]
-        case .amount:   return ["gt", "gte", "lt", "lte", "eq", "between"]
-        case .kind:     return ["is"]
+        case .merchant:       return ["is", "contains", "startsWith"]
+        case .note:           return ["contains"]
+        case .amount:         return ["gt", "gte", "lt", "lte", "eq", "between"]
+        case .kind:           return ["is"]
+        case .categoryId:     return ["is", "is_null"]
+        case .accountId:      return ["is"]
+        case .counterpartyId: return ["is", "is_null"]
+        case .currency:       return ["is"]
+        case .tagId:          return ["has"]
+        case .dateDom:        return ["eq", "gte", "lte"]
         }
     }
 
@@ -58,12 +70,13 @@ public enum RuleParse {
         var op = leaf.op
         if op == "equals" { op = field == .amount ? "eq" : "is" }   // self-heal legacy
         guard opsAllowed(field).contains(op) else { return nil }
+        if op == "is_null" { return LeafForm(field: field, op: op, value: "") }
         if field == .amount && op == "between" {
             guard case .array(let arr)? = leaf.value, arr.count == 2,
                   let lo = arr[0].asDouble, let hi = arr[1].asDouble else { return nil }
             return LeafForm(field: field, op: op, value: numStr(lo), value2: numStr(hi))
         }
-        if field == .amount {
+        if field == .amount || field == .dateDom {
             guard let d = leaf.value?.asDouble else { return nil }
             return LeafForm(field: field, op: op, value: numStr(d))
         }
@@ -78,6 +91,9 @@ public enum RuleParse {
         case "set_merchant": guard case .string(let s)? = a.raw["merchant"] else { return nil }; return ActionForm(kind: .setMerchant(s))
         case "set_kind":     guard case .string(let s)? = a.raw["kind"] else { return nil }; return ActionForm(kind: .setKind(s))
         case "mark_reviewed", "set_reviewed": return ActionForm(kind: .markReviewed)
+        case "add_tag":      guard case .string(let id)? = a.raw["tagId"] else { return nil }; return ActionForm(kind: .addTag(id))
+        case "remove_tag":   guard case .string(let id)? = a.raw["tagId"] else { return nil }; return ActionForm(kind: .removeTag(id))
+        case "set_counterparty": guard case .string(let id)? = a.raw["counterpartyId"] else { return nil }; return ActionForm(kind: .setCounterparty(id))
         default: return nil
         }
     }
@@ -107,12 +123,18 @@ public enum RuleParse {
     }
 
     static func leafJSON(_ f: LeafForm) -> JSONValue {
+        if f.op == "is_null" {
+            return .object(["field": .string(f.field.rawValue), "op": .string("is_null")])
+        }
         let value: JSONValue
-        if f.field == .amount {
+        switch f.field {
+        case .amount:
             value = f.op == "between"
                 ? .array([.double(Double(f.value) ?? 0), .double(Double(f.value2) ?? 0)])
                 : .double(Double(f.value) ?? 0)
-        } else {
+        case .dateDom:
+            value = .int(Int(f.value) ?? 0)
+        default:
             value = .string(f.value)
         }
         return .object(["field": .string(f.field.rawValue), "op": .string(f.op), "value": value])
@@ -125,6 +147,9 @@ public enum RuleParse {
         case .setMerchant(let s):  return .object(["type": .string("set_merchant"), "merchant": .string(s)])
         case .setKind(let s):      return .object(["type": .string("set_kind"), "kind": .string(s)])
         case .markReviewed:        return .object(["type": .string("mark_reviewed")])
+        case .addTag(let id):          return .object(["type": .string("add_tag"), "tagId": .string(id)])
+        case .removeTag(let id):       return .object(["type": .string("remove_tag"), "tagId": .string(id)])
+        case .setCounterparty(let id): return .object(["type": .string("set_counterparty"), "counterpartyId": .string(id)])
         }
     }
 

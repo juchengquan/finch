@@ -76,19 +76,34 @@ private let kindValues = ["expense", "income", "transfer", "refund", "adjustment
 
 private func opsFor(_ f: LeafForm.Field) -> [String] {
     switch f {
-    case .merchant: return ["is", "contains", "startsWith"]
-    case .note:     return ["contains"]
-    case .amount:   return ["gt", "gte", "lt", "lte", "eq", "between"]
-    case .kind:     return ["is"]
+    case .merchant:       return ["is", "contains", "startsWith"]
+    case .note:           return ["contains"]
+    case .amount:         return ["gt", "gte", "lt", "lte", "eq", "between"]
+    case .kind:           return ["is"]
+    case .categoryId:     return ["is", "is_null"]
+    case .accountId:      return ["is"]
+    case .counterpartyId: return ["is", "is_null"]
+    case .currency:       return ["is"]
+    case .tagId:          return ["has"]
+    case .dateDom:        return ["eq", "gte", "lte"]
     }
 }
 private func opLabel(_ o: String) -> String {
     switch o {
     case "is": return "is"; case "contains": return "contains"; case "startsWith": return "starts with"
     case "gt": return "greater than"; case "gte": return "≥"; case "lt": return "less than"; case "lte": return "≤"
-    case "eq": return "equals"; case "between": return "between"; default: return o
+    case "eq": return "equals"; case "between": return "between"
+    case "is_null": return "is not set"; case "has": return "has tag"; default: return o
     }
 }
+private func fieldLabel(_ f: LeafForm.Field) -> String {
+    switch f {
+    case .merchant: return "Merchant"; case .note: return "Note"; case .amount: return "Amount"; case .kind: return "Kind"
+    case .categoryId: return "Category"; case .accountId: return "Account"; case .counterpartyId: return "Counterparty"
+    case .currency: return "Currency"; case .tagId: return "Tag"; case .dateDom: return "Day of month"
+    }
+}
+private struct PickItem: Identifiable { let id: String; let name: String }
 
 /// Create (rule == nil) or edit a multi-condition / multi-action rule.
 struct RuleSheet: View {
@@ -98,10 +113,14 @@ struct RuleSheet: View {
 
     // Editable rows (flattened mutable mirror of RuleForm).
     struct CondRow: Identifiable { let id = UUID(); var field: LeafForm.Field = .merchant; var op = "contains"; var value = ""; var value2 = "" }
-    enum ActType: String, CaseIterable, Identifiable { case setCategory, setNote, setMerchant, setKind, markReviewed
+    enum ActType: String, CaseIterable, Identifiable {
+        case setCategory, setNote, setMerchant, setKind, markReviewed, addTag, removeTag, setCounterparty
         var id: String { rawValue }
-        var label: String { switch self { case .setCategory: "Set category"; case .setNote: "Set note"; case .setMerchant: "Set merchant"; case .setKind: "Set kind"; case .markReviewed: "Mark reviewed" } } }
-    struct ActRow: Identifiable { let id = UUID(); var type: ActType = .setCategory; var categoryId = ""; var text = ""; var kind = "expense" }
+        var label: String { switch self {
+            case .setCategory: "Set category"; case .setNote: "Set note"; case .setMerchant: "Set merchant"
+            case .setKind: "Set kind"; case .markReviewed: "Mark reviewed"
+            case .addTag: "Add tag"; case .removeTag: "Remove tag"; case .setCounterparty: "Set counterparty" } } }
+    struct ActRow: Identifiable { let id = UUID(); var type: ActType = .setCategory; var categoryId = ""; var text = ""; var kind = "expense"; var tagId = ""; var counterpartyId = "" }
 
     @State private var name: String
     @State private var combinator: RuleForm.Combinator
@@ -133,6 +152,9 @@ struct RuleSheet: View {
         case .setMerchant(let s):  return ActRow(type: .setMerchant, text: s)
         case .setKind(let k):      return ActRow(type: .setKind, kind: k)
         case .markReviewed:        return ActRow(type: .markReviewed)
+        case .addTag(let id):      return ActRow(type: .addTag, tagId: id)
+        case .removeTag(let id):   return ActRow(type: .removeTag, tagId: id)
+        case .setCounterparty(let id): return ActRow(type: .setCounterparty, counterpartyId: id)
         }
     }
 
@@ -182,7 +204,7 @@ struct RuleSheet: View {
     @ViewBuilder private func condRow(_ c: Binding<CondRow>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Picker("Field", selection: c.field) {
-                ForEach(LeafForm.Field.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                ForEach(LeafForm.Field.allCases, id: \.self) { Text(fieldLabel($0)).tag($0) }
             }
             .onChange(of: c.wrappedValue.field) { _, f in if !opsFor(f).contains(c.wrappedValue.op) { c.wrappedValue.op = opsFor(f)[0] } }
             Picker("Is", selection: c.op) { ForEach(opsFor(c.wrappedValue.field), id: \.self) { Text(opLabel($0)).tag($0) } }
@@ -194,7 +216,30 @@ struct RuleSheet: View {
                 if c.wrappedValue.op == "between" { TextField("and", text: c.value2).keyboardType(.decimalPad) }
             case .kind:
                 Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+            case .categoryId:
+                if c.wrappedValue.op != "is_null" { entityPicker("Category", c.value, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) }) }
+            case .accountId:
+                entityPicker("Account", c.value, store.accounts.map { PickItem(id: $0.id, name: $0.name ?? $0.id) })
+            case .counterpartyId:
+                if c.wrappedValue.op != "is_null" { entityPicker("Counterparty", c.value, store.counterparties.map { PickItem(id: $0.id, name: $0.name) }) }
+            case .currency:
+                entityPicker("Currency", c.value, store.availableDisplayCurrencies.map { PickItem(id: $0, name: $0) })
+            case .tagId:
+                entityPicker("Tag", c.value, store.tags.map { PickItem(id: $0.id, name: $0.name) })
+            case .dateDom:
+                TextField("Day (1–31)", text: c.value).keyboardType(.numberPad)
             }
+        }
+    }
+
+    /// Inline menu Picker that displays the first item when nothing is chosen yet
+    /// (a fresh row starts empty), so the Picker never shows a blank selection.
+    /// `save()` applies the same first-item fallback, so the two stay in sync.
+    @ViewBuilder private func entityPicker(_ title: String, _ sel: Binding<String>, _ items: [PickItem]) -> some View {
+        Picker(title, selection: Binding(
+            get: { sel.wrappedValue.isEmpty ? (items.first?.id ?? "") : sel.wrappedValue },
+            set: { sel.wrappedValue = $0 })) {
+            ForEach(items) { Text($0.name).tag($0.id) }
         }
     }
 
@@ -203,18 +248,15 @@ struct RuleSheet: View {
             Picker("Action", selection: a.type) { ForEach(ActType.allCases) { Text($0.label).tag($0) } }
             switch a.wrappedValue.type {
             case .setCategory:
-                // Display the first category when none is chosen yet (a fresh row
-                // starts empty), so the Picker never shows a blank selection. save()
-                // applies the same first-category fallback, so the two stay in sync.
-                Picker("Category", selection: Binding(
-                    get: { a.wrappedValue.categoryId.isEmpty ? (store.pickableCategories.first?.id ?? "") : a.wrappedValue.categoryId },
-                    set: { a.wrappedValue.categoryId = $0 })) {
-                    ForEach(store.pickableCategories) { Text($0.name).tag($0.id) }
-                }
+                entityPicker("Category", a.categoryId, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) })
             case .setNote:     TextField("Note", text: a.text)
             case .setMerchant: TextField("Merchant", text: a.text)
             case .setKind:     Picker("Kind", selection: a.kind) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
             case .markReviewed: EmptyView()
+            case .addTag, .removeTag:
+                entityPicker("Tag", a.tagId, store.tags.map { PickItem(id: $0.id, name: $0.name) })
+            case .setCounterparty:
+                entityPicker("Counterparty", a.counterpartyId, store.counterparties.map { PickItem(id: $0.id, name: $0.name) })
             }
         }
     }
@@ -241,6 +283,18 @@ struct RuleSheet: View {
                     guard let hi = DecimalInput.parse(value2) else { errorMessage = "Enter both amounts for 'between'."; return }
                     value2 = RuleParse.numStr(hi)
                 }
+            case .dateDom:
+                guard let n = Int(value), (1...31).contains(n) else { errorMessage = "Enter a day 1–31."; return }
+                value = String(n)
+            case .categoryId, .counterpartyId:
+                if c.op == "is_null" { value = "" }
+                else {
+                    if value.isEmpty { value = firstId(for: c.field) }
+                    guard !value.isEmpty else { errorMessage = "Pick a value for every condition."; return }
+                }
+            case .accountId, .currency, .tagId:
+                if value.isEmpty { value = firstId(for: c.field) }
+                guard !value.isEmpty else { errorMessage = "Pick a value for every condition."; return }
             }
             condForms.append(LeafForm(field: c.field, op: c.op, value: value, value2: value2))
         }
@@ -263,6 +317,14 @@ struct RuleSheet: View {
                 actForms.append(ActionForm(kind: .setKind(a.kind.isEmpty ? kindValues[0] : a.kind)))
             case .markReviewed:
                 actForms.append(ActionForm(kind: .markReviewed))
+            case .addTag, .removeTag:
+                let tid = a.tagId.isEmpty ? (store.tags.first?.id ?? "") : a.tagId
+                guard !tid.isEmpty else { errorMessage = "Pick a tag."; return }
+                actForms.append(ActionForm(kind: a.type == .addTag ? .addTag(tid) : .removeTag(tid)))
+            case .setCounterparty:
+                let cid = a.counterpartyId.isEmpty ? (store.counterparties.first?.id ?? "") : a.counterpartyId
+                guard !cid.isEmpty else { errorMessage = "Pick a counterparty."; return }
+                actForms.append(ActionForm(kind: .setCounterparty(cid)))
             }
         }
 
@@ -283,6 +345,17 @@ struct RuleSheet: View {
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func firstId(for field: LeafForm.Field) -> String {
+        switch field {
+        case .categoryId:     return store.pickableCategories.first?.id ?? ""
+        case .accountId:      return store.accounts.first?.id ?? ""
+        case .counterpartyId: return store.counterparties.first?.id ?? ""
+        case .currency:       return store.availableDisplayCurrencies.first ?? ""
+        case .tagId:          return store.tags.first?.id ?? ""
+        default:              return ""
+        }
     }
 }
 

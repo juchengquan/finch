@@ -56,9 +56,8 @@ final class RuleParseTests: XCTestCase {
         let act = #"[{"type":"mark_reviewed"}]"#
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"not":{"field":"merchant","op":"is","value":"x"}}"#, actionsJSON: act)) // not
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"all":[{"all":[{"field":"merchant","op":"is","value":"x"}]}]}"#, actionsJSON: act)) // nested
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"tag_id","op":"has","value":"t"}"#, actionsJSON: act)) // CP2 field
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"kind","op":"in","value":["expense"]}"#, actionsJSON: act)) // CP2 op
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"merchant","op":"is","value":"x"}"#, actionsJSON: #"[{"type":"add_tag","tagId":"t"}]"#)) // CP2 action
+        // tag_id/has and add_tag promoted to CP2a — no longer nil
+        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"kind","op":"in","value":["expense"]}"#, actionsJSON: act)) // CP2b op
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"merchant","op":"is","value":"x"}"#, actionsJSON: "[]")) // no actions
     }
 
