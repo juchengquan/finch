@@ -34,6 +34,7 @@ public final class DeepLinkRouter: ObservableObject {
 
     @Published public var selectedTab: AppTab = .ledger   // Ledger is the home/first tab
     @Published public var focusedId: String? = nil
+    @Published var pendingFilter: TxFilter?   // one-shot: consumed by the Activity feed
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
     @Published public var showSettings = false          // top-left gear (compact, prototype)
