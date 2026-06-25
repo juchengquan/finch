@@ -23,6 +23,8 @@ struct BudgetSheet: View {
     @State private var frequency: String
     @State private var groupId: String              // "" = none
     @State private var selectedCategories: Set<String>
+    @State private var rollover: Bool
+    @State private var rolloverCap: String
     @State private var errorMessage: String?
 
     private var isEdit: Bool { budget != nil }
@@ -35,6 +37,8 @@ struct BudgetSheet: View {
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
         _groupId = State(initialValue: budget?.groupId ?? "")
         _selectedCategories = State(initialValue: Set(budget?.categoryIds ?? []))
+        _rollover = State(initialValue: (budget?.rollover ?? 0) != 0)
+        _rolloverCap = State(initialValue: budget?.rolloverLimit.map { String(format: "%g", $0) } ?? "")
     }
 
     private var categories: [CategoryRow] {
@@ -79,6 +83,21 @@ struct BudgetSheet: View {
                     Text("Leave empty to track all \(kind.rawValue) categories.")
                 }
 
+                if kind == .expense {
+                    Section {
+                        Toggle("Roll over unused budget", isOn: $rollover)
+                        if rollover {
+                            HStack {
+                                Text("Cap"); Spacer()
+                                TextField("Optional", text: $rolloverCap)
+                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            }
+                        }
+                    } footer: {
+                        Text("Unspent budget carries into the next period. Set a cap to limit how much.")
+                    }
+                }
+
                 if isEdit, budget?.isRecurring == 1 {
                     Section {
                         Text("Changing the amount on a recurring budget applies from the next cycle.")
@@ -115,11 +134,22 @@ struct BudgetSheet: View {
         guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
         let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
 
+        // Rollover is expense-only; cap is optional and validated only when set.
+        let useRollover = kind == .expense && rollover
+        let capValue: JSONValue
+        if useRollover && !rolloverCap.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard let c = DecimalInput.parse(rolloverCap), c >= 0 else { errorMessage = "Enter a valid rollover cap."; return }
+            capValue = .double(c)
+        } else {
+            capValue = .null
+        }
+
         if let budget {
             let patch: [String: JSONValue] = [
                 "name": .string(name), "type": .string(kind.rawValue), "amount": .double(value),
                 "frequency": .string(frequency), "categoryIds": categoryIds,
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
+                "rollover": .bool(useRollover), "rolloverLimit": capValue,
             ]
             do { try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)])); dismiss() }
             catch { errorMessage = i18nMessage(error) }
@@ -127,9 +157,11 @@ struct BudgetSheet: View {
             var args: [String: JSONValue] = [
                 "ledgerId": .string(store.activeLedgerId), "name": .string(name),
                 "type": .string(kind.rawValue), "amount": .double(value), "frequency": .string(frequency),
+                "rollover": .bool(useRollover),
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if !selectedCategories.isEmpty { args["categoryIds"] = categoryIds }
+            if case .double = capValue { args["rolloverLimit"] = capValue }
             do { try store.apply(.createBudget, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
         }
