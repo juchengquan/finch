@@ -79,13 +79,14 @@ private func opsFor(_ f: LeafForm.Field) -> [String] {
     case .merchant:       return ["is", "contains", "startsWith"]
     case .note:           return ["contains"]
     case .amount:         return ["gt", "gte", "lt", "lte", "eq", "between"]
-    case .kind:           return ["is"]
-    case .categoryId:     return ["is", "is_null"]
-    case .accountId:      return ["is"]
+    case .kind:           return ["is", "in"]
+    case .categoryId:     return ["is", "is_null", "in"]
+    case .accountId:      return ["is", "in"]
     case .counterpartyId: return ["is", "is_null"]
     case .currency:       return ["is"]
-    case .tagId:          return ["has"]
+    case .tagId:          return ["has", "has_any", "has_all"]
     case .dateDom:        return ["eq", "gte", "lte"]
+    case .dateDow:        return ["in"]
     }
 }
 private func opLabel(_ o: String) -> String {
@@ -93,17 +94,53 @@ private func opLabel(_ o: String) -> String {
     case "is": return "is"; case "contains": return "contains"; case "startsWith": return "starts with"
     case "gt": return "greater than"; case "gte": return "≥"; case "lt": return "less than"; case "lte": return "≤"
     case "eq": return "equals"; case "between": return "between"
-    case "is_null": return "is not set"; case "has": return "has tag"; default: return o
+    case "is_null": return "is not set"; case "has": return "has tag"
+    case "in": return "in"; case "has_any": return "has any of"; case "has_all": return "has all of"; default: return o
     }
 }
 private func fieldLabel(_ f: LeafForm.Field) -> String {
     switch f {
     case .merchant: return "Merchant"; case .note: return "Note"; case .amount: return "Amount"; case .kind: return "Kind"
     case .categoryId: return "Category"; case .accountId: return "Account"; case .counterpartyId: return "Counterparty"
-    case .currency: return "Currency"; case .tagId: return "Tag"; case .dateDom: return "Day of month"
+    case .currency: return "Currency"; case .tagId: return "Tag"; case .dateDom: return "Day of month"; case .dateDow: return "Day of week"
     }
 }
+// date_dow weekday indices: 0=Sun … 6=Sat (engine dayOfWeek = Calendar(.weekday, UTC) - 1).
+private let weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"]
 private struct PickItem: Identifiable { let id: String; let name: String }
+
+/// A searchable checkmark list that toggles ids in a `[String]` selection.
+private struct MultiSelectList: View {
+    let title: String
+    @Binding var selected: [String]
+    let items: [PickItem]
+    @State private var query = ""
+
+    var body: some View {
+        List {
+            ForEach(filtered) { item in
+                Button {
+                    if let i = selected.firstIndex(of: item.id) { selected.remove(at: i) } else { selected.append(item.id) }
+                } label: {
+                    HStack {
+                        Text(item.name).foregroundStyle(.primary)
+                        Spacer()
+                        if selected.contains(item.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .searchable(text: $query)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    private var filtered: [PickItem] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? items : items.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
+}
 
 /// Create (rule == nil) or edit a multi-condition / multi-action rule.
 struct RuleSheet: View {
@@ -112,7 +149,7 @@ struct RuleSheet: View {
     let rule: RuleSummary?
 
     // Editable rows (flattened mutable mirror of RuleForm).
-    struct CondRow: Identifiable { let id = UUID(); var field: LeafForm.Field = .merchant; var op = "contains"; var value = ""; var value2 = "" }
+    struct CondRow: Identifiable { let id = UUID(); var field: LeafForm.Field = .merchant; var op = "contains"; var value = ""; var value2 = ""; var values: [String] = [] }
     enum ActType: String, CaseIterable, Identifiable {
         case setCategory, setNote, setMerchant, setKind, markReviewed, addTag, removeTag, setCounterparty
         var id: String { rawValue }
@@ -137,7 +174,7 @@ struct RuleSheet: View {
         _name = State(initialValue: rule?.name ?? "")
         _combinator = State(initialValue: form?.combinator ?? .all)
         _conditions = State(initialValue: form.map { $0.conditions.map { lf in
-            CondRow(field: lf.field, op: lf.op, value: lf.value, value2: lf.value2)
+            CondRow(field: lf.field, op: lf.op, value: lf.value, value2: lf.value2, values: lf.values)
         } } ?? [CondRow()])
         _actions = State(initialValue: form.map { $0.actions.map(Self.actRow(from:)) } ?? [ActRow()])
         _priority = State(initialValue: rule?.priority ?? 100)
@@ -215,19 +252,26 @@ struct RuleSheet: View {
                 TextField("Amount", text: c.value).keyboardType(.decimalPad)
                 if c.wrappedValue.op == "between" { TextField("and", text: c.value2).keyboardType(.decimalPad) }
             case .kind:
-                Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
+                if c.wrappedValue.op == "in" { multiSelect("Kinds", c.values, kindValues.map { PickItem(id: $0, name: $0.capitalized) }) }
+                else { Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } } }
             case .categoryId:
-                if c.wrappedValue.op != "is_null" { entityPicker("Category", c.value, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) }) }
+                if c.wrappedValue.op == "is_null" { EmptyView() }
+                else if c.wrappedValue.op == "in" { multiSelect("Categories", c.values, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) }) }
+                else { entityPicker("Category", c.value, store.pickableCategories.map { PickItem(id: $0.id, name: $0.name) }) }
             case .accountId:
-                entityPicker("Account", c.value, store.accounts.map { PickItem(id: $0.id, name: $0.name ?? $0.id) })
+                if c.wrappedValue.op == "in" { multiSelect("Accounts", c.values, store.accounts.map { PickItem(id: $0.id, name: $0.name ?? $0.id) }) }
+                else { entityPicker("Account", c.value, store.accounts.map { PickItem(id: $0.id, name: $0.name ?? $0.id) }) }
             case .counterpartyId:
                 if c.wrappedValue.op != "is_null" { entityPicker("Counterparty", c.value, store.counterparties.map { PickItem(id: $0.id, name: $0.name) }) }
             case .currency:
                 entityPicker("Currency", c.value, store.availableDisplayCurrencies.map { PickItem(id: $0, name: $0) })
             case .tagId:
-                entityPicker("Tag", c.value, store.tags.map { PickItem(id: $0.id, name: $0.name) })
+                if c.wrappedValue.op == "has" { entityPicker("Tag", c.value, store.tags.map { PickItem(id: $0.id, name: $0.name) }) }
+                else { multiSelect("Tags", c.values, store.tags.map { PickItem(id: $0.id, name: $0.name) }) }
             case .dateDom:
                 TextField("Day (1–31)", text: c.value).keyboardType(.numberPad)
+            case .dateDow:
+                weekdayChips(c.values)
             }
         }
     }
@@ -240,6 +284,39 @@ struct RuleSheet: View {
             get: { sel.wrappedValue.isEmpty ? (items.first?.id ?? "") : sel.wrappedValue },
             set: { sel.wrappedValue = $0 })) {
             ForEach(items) { Text($0.name).tag($0.id) }
+        }
+    }
+
+    /// A pushed, searchable multi-select that summarizes the count inline.
+    @ViewBuilder private func multiSelect(_ title: String, _ sel: Binding<[String]>, _ items: [PickItem]) -> some View {
+        NavigationLink {
+            MultiSelectList(title: title, selected: sel, items: items)
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(sel.wrappedValue.isEmpty ? "None" : "\(sel.wrappedValue.count) selected").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Inline Sun–Sat chips toggling weekday indices (0–6) in the selection.
+    @ViewBuilder private func weekdayChips(_ sel: Binding<[String]>) -> some View {
+        HStack(spacing: 4) {
+            ForEach(0..<7, id: \.self) { i in
+                let key = String(i)
+                let on = sel.wrappedValue.contains(key)
+                Text(weekdayLabels[i])
+                    .font(.caption).frame(maxWidth: .infinity, minHeight: 32)
+                    .background(on ? Color.accentColor : Color.secondary.opacity(0.15))
+                    .foregroundStyle(on ? Color.white : Color.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if let idx = sel.wrappedValue.firstIndex(of: key) { sel.wrappedValue.remove(at: idx) }
+                        else { sel.wrappedValue.append(key) }
+                    }
+            }
         }
     }
 
@@ -271,6 +348,12 @@ struct RuleSheet: View {
         var condForms: [LeafForm] = []
         for c in conditions {
             var value = c.value, value2 = c.value2
+            // Array-valued ops (CP2b): require a non-empty selection; value/value2 unused.
+            if c.op == "in" || c.op == "has_any" || c.op == "has_all" {
+                guard !c.values.isEmpty else { errorMessage = "Select at least one value for every condition."; return }
+                condForms.append(LeafForm(field: c.field, op: c.op, value: "", values: c.values))
+                continue
+            }
             switch c.field {
             case .merchant, .note:
                 guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a value for every condition."; return }
@@ -295,6 +378,8 @@ struct RuleSheet: View {
             case .accountId, .currency, .tagId:
                 if value.isEmpty { value = firstId(for: c.field) }
                 guard !value.isEmpty else { errorMessage = "Pick a value for every condition."; return }
+            case .dateDow:
+                break   // date_dow's only op is `in`, handled by the array-op branch above
             }
             condForms.append(LeafForm(field: c.field, op: c.op, value: value, value2: value2))
         }
