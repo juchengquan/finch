@@ -8,6 +8,7 @@ struct TxFilter: Equatable {
     var accountId: String? = nil
     var categoryId: String? = nil
     var tagId: String? = nil
+    var counterpartyId: String? = nil
     var status: String? = nil          // nil = all, "pending", "confirmed"
     var from: Date? = nil
     var to: Date? = nil
@@ -16,6 +17,7 @@ struct TxFilter: Equatable {
 
     var isActive: Bool {
         direction != nil || accountId != nil || categoryId != nil || tagId != nil
+            || counterpartyId != nil
             || status != nil || from != nil || to != nil || minAmount != nil || maxAmount != nil
     }
 
@@ -75,6 +77,12 @@ struct TransactionFilterSheet: View {
                         Picker("Tag", selection: $draft.tagId) {
                             Text("Any").tag(String?.none)
                             ForEach(store.tags) { Text($0.name).tag(String?.some($0.id)) }
+                        }
+                    }
+                    if !store.merchants.isEmpty {
+                        Picker("Merchant", selection: $draft.counterpartyId) {
+                            Text("Any").tag(String?.none)
+                            ForEach(store.merchants) { Text($0.name).tag(String?.some($0.id)) }
                         }
                     }
                     Picker("Status", selection: $draft.status) {

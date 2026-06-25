@@ -234,6 +234,9 @@ struct ActivityFeedView: View {
     /// the engine's `selectTransactions` (which scopes to the active ledger and
     /// applies the stable date-desc sort).
     private func filteredTxns() -> [Tx] {
+        let base = filter.counterpartyId.map {
+            Selectors.merchantTransactions(store.txns, store.merchants, $0, store.activeLedgerId)
+        } ?? store.txns
         let opts = ListOptions(
             ledgerId: store.activeLedgerId,
             direction: filter.direction,
@@ -246,7 +249,7 @@ struct ActivityFeedView: View {
             minAmount: filter.minAmount,
             maxAmount: filter.maxAmount,
             tagId: filter.tagId)
-        return Selectors.selectTransactions(store.txns, opts)
+        return Selectors.selectTransactions(base, opts)
     }
 }
 
