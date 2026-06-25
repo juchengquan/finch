@@ -248,7 +248,8 @@ struct ActivityFeedView: View {
             to: filter.toYMD,
             minAmount: filter.minAmount,
             maxAmount: filter.maxAmount,
-            tagId: filter.tagId)
+            tagIds: filter.tagIds.isEmpty ? nil : Array(filter.tagIds),
+            tagsMatchAll: filter.tagsMatchAll)
         return Selectors.selectTransactions(base, opts)
     }
 }
