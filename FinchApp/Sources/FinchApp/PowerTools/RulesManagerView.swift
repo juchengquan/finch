@@ -203,7 +203,14 @@ struct RuleSheet: View {
             Picker("Action", selection: a.type) { ForEach(ActType.allCases) { Text($0.label).tag($0) } }
             switch a.wrappedValue.type {
             case .setCategory:
-                Picker("Category", selection: a.categoryId) { ForEach(store.pickableCategories) { Text($0.name).tag($0.id) } }
+                // Display the first category when none is chosen yet (a fresh row
+                // starts empty), so the Picker never shows a blank selection. save()
+                // applies the same first-category fallback, so the two stay in sync.
+                Picker("Category", selection: Binding(
+                    get: { a.wrappedValue.categoryId.isEmpty ? (store.pickableCategories.first?.id ?? "") : a.wrappedValue.categoryId },
+                    set: { a.wrappedValue.categoryId = $0 })) {
+                    ForEach(store.pickableCategories) { Text($0.name).tag($0.id) }
+                }
             case .setNote:     TextField("Note", text: a.text)
             case .setMerchant: TextField("Merchant", text: a.text)
             case .setKind:     Picker("Kind", selection: a.kind) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } }
