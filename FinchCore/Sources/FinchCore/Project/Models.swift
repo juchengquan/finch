@@ -81,7 +81,7 @@ public struct AccountRow: Identifiable, Codable, Equatable, Hashable, Sendable {
 // `BudgetRow` lives in Project/Budget.swift (the full web-matching projection
 // row consumed by both `Selectors.budgetProgress` and the Budgets tab).
 
-public struct ListOptions: Codable, Equatable, Sendable {
+public struct ListOptions: Equatable, Sendable {
     public var ledgerId: String
     public var direction: String?
     public var query: String?
@@ -94,16 +94,60 @@ public struct ListOptions: Codable, Equatable, Sendable {
     public var maxAmount: Double?
     public var limit: Int?
     public var offset: Int?
-    public var tagId: String?
+    public var tagIds: [String]?
+    public var tagsMatchAll: Bool
     public init(ledgerId: String, direction: String? = nil, query: String? = nil,
                 accountId: String? = nil, categoryId: String? = nil, status: String? = nil,
                 from: String? = nil, to: String? = nil, minAmount: Double? = nil,
                 maxAmount: Double? = nil, limit: Int? = nil, offset: Int? = nil,
-                tagId: String? = nil) {
+                tagIds: [String]? = nil, tagsMatchAll: Bool = false) {
         self.ledgerId = ledgerId; self.direction = direction; self.query = query
         self.accountId = accountId; self.categoryId = categoryId; self.status = status
         self.from = from; self.to = to; self.minAmount = minAmount; self.maxAmount = maxAmount
-        self.limit = limit; self.offset = offset; self.tagId = tagId
+        self.limit = limit; self.offset = offset; self.tagIds = tagIds; self.tagsMatchAll = tagsMatchAll
+    }
+}
+
+extension ListOptions: Codable {
+    enum CodingKeys: String, CodingKey {
+        case ledgerId, direction, query, accountId, categoryId, status, from, to
+        case minAmount, maxAmount, limit, offset, tagIds, tagsMatchAll
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ledgerId, forKey: .ledgerId)
+        try container.encodeIfPresent(direction, forKey: .direction)
+        try container.encodeIfPresent(query, forKey: .query)
+        try container.encodeIfPresent(accountId, forKey: .accountId)
+        try container.encodeIfPresent(categoryId, forKey: .categoryId)
+        try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(from, forKey: .from)
+        try container.encodeIfPresent(to, forKey: .to)
+        try container.encodeIfPresent(minAmount, forKey: .minAmount)
+        try container.encodeIfPresent(maxAmount, forKey: .maxAmount)
+        try container.encodeIfPresent(limit, forKey: .limit)
+        try container.encodeIfPresent(offset, forKey: .offset)
+        try container.encodeIfPresent(tagIds, forKey: .tagIds)
+        try container.encode(tagsMatchAll, forKey: .tagsMatchAll)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ledgerId = try container.decode(String.self, forKey: .ledgerId)
+        direction = try container.decodeIfPresent(String.self, forKey: .direction)
+        query = try container.decodeIfPresent(String.self, forKey: .query)
+        accountId = try container.decodeIfPresent(String.self, forKey: .accountId)
+        categoryId = try container.decodeIfPresent(String.self, forKey: .categoryId)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        from = try container.decodeIfPresent(String.self, forKey: .from)
+        to = try container.decodeIfPresent(String.self, forKey: .to)
+        minAmount = try container.decodeIfPresent(Double.self, forKey: .minAmount)
+        maxAmount = try container.decodeIfPresent(Double.self, forKey: .maxAmount)
+        limit = try container.decodeIfPresent(Int.self, forKey: .limit)
+        offset = try container.decodeIfPresent(Int.self, forKey: .offset)
+        tagIds = try container.decodeIfPresent([String].self, forKey: .tagIds)
+        tagsMatchAll = try container.decodeIfPresent(Bool.self, forKey: .tagsMatchAll) ?? false
     }
 }
 

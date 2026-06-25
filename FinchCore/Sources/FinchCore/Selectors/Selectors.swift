@@ -46,7 +46,13 @@ public enum Selectors {
         if let t = opts.to { out = out.filter { $0.date <= t } }
         if let lo = opts.minAmount { out = out.filter { abs($0.amount) >= lo } }
         if let hi = opts.maxAmount { out = out.filter { abs($0.amount) <= hi } }
-        if let tag = opts.tagId { out = out.filter { ($0.tags ?? []).contains(tag) } }
+        if let tags = opts.tagIds, !tags.isEmpty {
+            let want = Set(tags)
+            out = out.filter {
+                let have = Set($0.tags ?? [])
+                return opts.tagsMatchAll ? want.isSubset(of: have) : !want.isDisjoint(with: have)
+            }
+        }
         // Stable sort: equal (date,time) rows keep input order, matching the
         // web's stable Array.sort (its comparator returns 0 for ties).
         out = out.enumerated().sorted { a, b in
