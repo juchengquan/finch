@@ -39,7 +39,7 @@ struct ScheduledSheet: View {
     }
     private func accountName(_ id: String) -> String { accounts.first { $0.id == id }?.name ?? "—" }
 
-    init(template: ScheduledTemplate? = nil) {
+    init(template: ScheduledTemplate? = nil, prefillStart: Date? = nil) {
         self.template = template
         _name = State(initialValue: template?.name ?? "")
         _kind = State(initialValue: template.flatMap { Kind(rawValue: $0.type) } ?? .expense)
@@ -49,7 +49,7 @@ struct ScheduledSheet: View {
         _categoryId = State(initialValue: template?.categoryId ?? "")
         _frequency = State(initialValue: template?.frequency ?? "monthly")
         _dayOfMonth = State(initialValue: template?.dayOfMonth ?? 1)
-        _startDate = State(initialValue: template?.startDate.flatMap { AppDate.isoDay.date(from: $0) } ?? Date())
+        _startDate = State(initialValue: template?.startDate.flatMap { AppDate.isoDay.date(from: $0) } ?? prefillStart ?? Date())
         _installmentEnabled = State(initialValue: template?.installmentTotal != nil)
         _installmentTotal = State(initialValue: template?.installmentTotal.map { String($0) } ?? "")
     }
