@@ -151,8 +151,8 @@ extension Projection {
     /// side by `Money.latestRateMap`).
     public static func exchangeRates(dbQueue: DatabaseQueue) throws -> [ExchangeRate] {
         try dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT date, currency, rate FROM exchange_rates").map { r in
-                ExchangeRate(date: r["date"], currency: r["currency"], rate: r["rate"])
+            try Row.fetchAll(db, sql: "SELECT date, currency, rate, source FROM exchange_rates").map { r in
+                ExchangeRate(date: r["date"], currency: r["currency"], rate: r["rate"], source: r["source"])
             }
         }
     }
