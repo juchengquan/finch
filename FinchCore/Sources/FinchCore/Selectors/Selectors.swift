@@ -143,6 +143,31 @@ public enum Selectors {
         return out
     }
 
+    /// A merchant's transactions: linked by counterpartyId, or matched by normalized
+    /// merchant name (mirrors `counterpartyTxCounts`' resolution). Active-ledger,
+    /// newest-first, INCLUDES pending.
+    public static func merchantTransactions(_ txns: [Tx], _ counterparties: [Counterparty],
+                                            _ counterpartyId: String, _ ledgerId: String) -> [Tx] {
+        let idSet = Set(counterparties.map(\.id))
+        var byName: [String: String] = [:]
+        for c in counterparties {
+            let n = c.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !n.isEmpty, byName[n] == nil { byName[n] = c.id }
+        }
+        let matched = txns.filter { t in
+            guard ledgerOf(t) == ledgerId else { return false }
+            let resolved: String?
+            if let cid = t.counterpartyId, idSet.contains(cid) {
+                resolved = cid
+            } else {
+                let n = t.merchant.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                resolved = n.isEmpty ? nil : byName[n]
+            }
+            return resolved == counterpartyId
+        }
+        return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
+    }
+
     /// Per-tag usage count: non-pending txns in `ledgerId` tagged with the tag.
     /// Keyed by tag id (`tx.tags` holds tag ids); absent for unused tags.
     public static func tagTxCounts(_ txns: [Tx], _ ledgerId: String) -> [String: Int] {
