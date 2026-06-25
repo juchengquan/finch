@@ -39,6 +39,8 @@ struct ActivityFeedView: View {
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [DaySection] = []
     @State private var hasMore = false
+    @State private var filteredCount = 0
+    @State private var confirmingBulkDelete = false
 
     struct DaySection: Identifiable { let id: String; let txns: [Tx] }
 
@@ -51,6 +53,20 @@ struct ActivityFeedView: View {
                     if let headerSection { headerSection }
                     if store.txns.isEmpty {
                         Section { Text("No transactions in this ledger yet.").foregroundStyle(.secondary) }
+                    } else {
+                        Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .listRowBackground(Color.clear)
+                    }
+                    if !store.txns.isEmpty, sections.isEmpty {
+                        ContentUnavailableView {
+                            Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
+                        } description: {
+                            Text("Try adjusting your search or filters.")
+                        } actions: {
+                            if hasActiveQuery { Button("Clear filters & search") { searchQuery = ""; filter = TxFilter() } }
+                        }
+                        .listRowBackground(Color.clear)
                     }
                     if pendingCount > 0 {
                         Section {
@@ -104,8 +120,14 @@ struct ActivityFeedView: View {
                 }
             }
             if isSelecting {
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button("Confirm \(selected.count)") { bulkConfirm() }
+                        .disabled(selected.isEmpty)
+                    Spacer()
                     Button("Recategorize \(selected.count)") { showingBulkCat = true }
+                        .disabled(selected.isEmpty)
+                    Spacer()
+                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }
                         .disabled(selected.isEmpty)
                 }
             }
@@ -115,6 +137,11 @@ struct ActivityFeedView: View {
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
+        }
+        .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
+                            isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
+            Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
+            Button("Cancel", role: .cancel) {}
         }
         .onAppear { consumeFocus(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -128,6 +155,7 @@ struct ActivityFeedView: View {
     /// that actually affect the list (txns, query, page size).
     private func recompute() {
         let f = filteredTxns()
+        filteredCount = f.count
         hasMore = f.count > visibleCount
         var order: [String] = []
         var byDay: [String: [Tx]] = [:]
@@ -186,12 +214,21 @@ struct ActivityFeedView: View {
     private func confirm(_ txn: Tx) {
         run { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
     }
+    private func bulkConfirm() {
+        run { for id in selected { try store.apply(.confirmTransaction, Args(["id": .string(id)])) } }
+        isSelecting = false; selected.removeAll()
+    }
+    private func bulkDelete() {
+        run { for id in selected { try store.deleteTransaction(id) } }   // also unlinks receipts
+        isSelecting = false; selected.removeAll()
+    }
     /// Run a mutation, surfacing a rejection as a localized error alert instead
     /// of silently no-op'ing (was `try?`).
     private func run(_ work: () throws -> Void) {
         do { try work() } catch { errorMessage = i18nMessage(error) }
     }
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
+    private var hasActiveQuery: Bool { !searchQuery.isEmpty || filter.isActive }
 
     /// Build a `ListOptions` from the filter sheet + search box and route through
     /// the engine's `selectTransactions` (which scopes to the active ledger and
