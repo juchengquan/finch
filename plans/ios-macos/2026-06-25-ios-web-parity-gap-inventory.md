@@ -81,6 +81,16 @@ since shipped before picking.
 
 **Corrections vs. an earlier informal list:** "Goals" is **not** a gap (goals = income budgets by design — see "Already at parity"); "saved filter presets" is the same item as Tier-2 **Activity: saved searches** above (track it there).
 
+## Known CI flakes (non-blocking)
+
+- **`frontend/lib/db/probe.test.ts:70`** — `probe (bun:sqlite): seedDatabase + a real
+  insertTxRow round-trip works end-to-end` intermittently fails with
+  `SQLiteError: UNIQUE constraint failed: categories.id`. Seen flaking the **Frontend**
+  CI job on an **iOS-only** PR (#327) and clearing on re-run — i.e. not caused by the PR.
+  Likely a non-idempotent seed / leaked test-DB state re-inserting a category id. **If it
+  trips your PR, re-run the failed job;** a real fix is to seed idempotently or isolate
+  the probe's test DB. (Frontend concern — noted here for whoever hits it on an unrelated PR.)
+
 ## Notes
 
 - Parity snapshot: `feat/frontend` @ `9406714` (2026-06-25). The two sections above were
