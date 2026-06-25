@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import CryptoKit
+import QuickLook
 import FinchCore
 
 /// Edit Transaction (port of the web edit-transaction-form). Editable: merchant,
@@ -26,6 +27,7 @@ struct EditTransactionSheet: View {
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var previewURL: URL?
     @State private var status: Entries.Status
     @State private var accountId: String
     @State private var refundedTxId: String?
@@ -128,11 +130,17 @@ struct EditTransactionSheet: View {
 
                 Section("Receipts") {
                     ForEach(attachments) { att in
-                        HStack {
-                            Image(systemName: att.kind == "pdf" ? "doc.richtext" : "photo")
-                                .foregroundStyle(.secondary)
-                            Text(att.originalFilename ?? att.kind.capitalized)
+                        Button { previewURL = store.attachmentURL(for: att) } label: {
+                            HStack {
+                                Image(systemName: att.kind == "pdf" ? "doc.richtext" : "photo")
+                                    .foregroundStyle(.secondary)
+                                Text(att.originalFilename ?? att.kind.capitalized).foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "eye").font(.caption).foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
                         }
@@ -178,6 +186,7 @@ struct EditTransactionSheet: View {
                 }
             }
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
+            .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
             .onAppear { attachments = store.attachments(for: txn.id) }
             .onChange(of: pickedPhoto) { _, item in
