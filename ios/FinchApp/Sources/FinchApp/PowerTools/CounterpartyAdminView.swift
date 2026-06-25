@@ -25,19 +25,20 @@ struct CounterpartyAdminView: View {
             } else {
                 List {
                     ForEach(filtered) { cp in
-                        HStack {
-                            Text(cp.name)
-                            if cp.isVerified {
-                                Image(systemName: "checkmark.seal.fill").foregroundStyle(.tint)
-                                    .accessibilityLabel("Verified")
+                        NavigationLink {
+                            CounterpartyDetailView(counterparty: cp)
+                        } label: {
+                            HStack {
+                                Text(cp.name)
+                                if cp.isVerified {
+                                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.tint)
+                                        .accessibilityLabel("Verified")
+                                }
+                                if let n = counts[cp.id], n > 0 {
+                                    Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                        .accessibilityLabel("\(n) transactions")
+                                }
                             }
-                            if let n = counts[cp.id], n > 0 {
-                                Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                    .accessibilityLabel("\(n) transactions")
-                            }
-                            Spacer()
-                            Button(cp.isVerified ? "Unverify" : "Verify") { toggleVerify(cp) }
-                                .font(.caption).buttonStyle(.bordered)
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) { delete(cp) } label: { Label("Delete", systemImage: "trash") }
