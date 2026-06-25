@@ -1,6 +1,27 @@
 import SwiftUI
 import FinchCore
 
+enum TxSort: String, CaseIterable, Identifiable {
+    case dateDesc, dateAsc, amountDesc, amountAsc
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .dateDesc:   return "Newest first"
+        case .dateAsc:    return "Oldest first"
+        case .amountDesc: return "Largest amount"
+        case .amountAsc:  return "Smallest amount"
+        }
+    }
+    func sorted(_ txns: [Tx]) -> [Tx] {
+        switch self {
+        case .dateDesc:   return txns.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
+        case .dateAsc:    return txns.sorted { $0.date != $1.date ? $0.date < $1.date : ($0.time ?? "") < ($1.time ?? "") }
+        case .amountDesc: return txns.sorted { abs($0.amount) != abs($1.amount) ? abs($0.amount) > abs($1.amount) : $0.date > $1.date }
+        case .amountAsc:  return txns.sorted { abs($0.amount) != abs($1.amount) ? abs($0.amount) < abs($1.amount) : $0.date > $1.date }
+        }
+    }
+}
+
 /// The Activity tab — the global transaction feed in its own navigation stack.
 /// A thin wrapper around `ActivityFeedView`; the feed itself is reusable and is
 /// also pushed from the Accounts tab's "All Transactions" row (which already
@@ -27,6 +48,7 @@ struct ActivityFeedView: View {
     var consumesPendingFilter: Bool = false
     @State private var searchQuery: String = ""
     @State private var filter = TxFilter()
+    @State private var sort: TxSort = .dateDesc
     @State private var showingFilter = false
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
@@ -113,6 +135,16 @@ struct ActivityFeedView: View {
                 }
                 .accessibilityLabel("Filter")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        ForEach(TxSort.allCases) { Text($0.label).tag($0) }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort")
+            }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
@@ -149,6 +181,7 @@ struct ActivityFeedView: View {
         .onChange(of: router.pendingFilter) { _, _ in consumePendingFilter() }
         .onChange(of: searchQuery) { _, _ in recompute() }
         .onChange(of: filter) { _, _ in recompute() }
+        .onChange(of: sort) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
         .onReceive(store.$txns) { _ in recompute() }
     }
@@ -259,7 +292,7 @@ struct ActivityFeedView: View {
             maxAmount: filter.maxAmount,
             tagIds: filter.tagIds.isEmpty ? nil : Array(filter.tagIds),
             tagsMatchAll: filter.tagsMatchAll)
-        return Selectors.selectTransactions(base, opts)
+        return sort.sorted(Selectors.selectTransactions(base, opts))
     }
 }
 
