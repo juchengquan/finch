@@ -16,6 +16,12 @@ struct EditTransactionSheet: View {
 
     let txn: Tx
 
+    enum EditKind: String, CaseIterable, Identifiable {
+        case expense, income, refund
+        var id: String { rawValue }
+        var label: String { rawValue.capitalized }
+    }
+
     @State private var merchant: String
     @State private var note: String
     @State private var date: Date
@@ -34,6 +40,7 @@ struct EditTransactionSheet: View {
     @State private var showingRefundPicker = false
     @State private var currencyCode: String
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
+    @State private var selectedKind: EditKind
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
@@ -95,10 +102,17 @@ struct EditTransactionSheet: View {
         _accountId = State(initialValue: txn.account)
         _refundedTxId = State(initialValue: txn.refundedTransactionId)
         _currencyCode = State(initialValue: txn.currency ?? "")
+        _selectedKind = State(initialValue: EditKind(rawValue: txn.kind ?? "") ?? (txn.amount > 0 ? .income : .expense))
     }
 
+    /// Simple single-account entries can be re-typed expense/income/refund.
+    private var canReclassify: Bool {
+        !isSplit && txn.kind != "transfer" && txn.kind != "adjustment" && txn.kind != "opening"
+    }
+    private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
+
     private var categories: [CategoryRow] {
-        store.pickableCategories.filter { txn.amount > 0 ? $0.kind == "income" : $0.kind != "income" }
+        store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
     }
 
     var body: some View {
@@ -129,6 +143,11 @@ struct EditTransactionSheet: View {
                     }
                 } else {
                     Section("Amount & category") {
+                        if canReclassify {
+                            Picker("Type", selection: $selectedKind) {
+                                ForEach(EditKind.allCases) { Text($0.label).tag($0) }
+                            }
+                        }
                         HStack {
                             Text("Amount")
                             Spacer()
@@ -151,7 +170,7 @@ struct EditTransactionSheet: View {
                             options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                     }
                 }
-                if txn.kind == "refund" {
+                if effectiveKind == "refund" {
                     Section("Refund") {
                         Button { showingRefundPicker = true } label: {
                             HStack {
@@ -272,25 +291,30 @@ struct EditTransactionSheet: View {
             "date": .string(Self.day(date)),
             "time": .string(Self.time(date)),
         ]
-        // Amount + category edit (keep the original sign; the field is the magnitude).
-        // Skip both on a split tx — its legs are owned by the split.
-        // A non-split must have a valid amount; web blocks an empty/≤0 amount rather
-        // than silently keeping the old value, so match that instead of skipping.
+        let kindChanged = canReclassify && selectedKind.rawValue != txn.kind
         if !isSplit {
             guard let parsed = DecimalInput.parse(amountText), parsed > 0 else {
                 errorMessage = "Enter an amount greater than 0."; return
             }
-            let signed = (originalNative < 0 ? -1.0 : 1.0) * parsed
-            if abs(signed - originalNative) > 0.001 { patch["amount"] = .double(signed) }
+            // Sign by the (possibly new) kind: expense negative; income/refund positive.
+            let sign: Double = canReclassify ? (selectedKind == .expense ? -1.0 : 1.0) : (originalNative < 0 ? -1.0 : 1.0)
+            let signed = sign * parsed
+            if abs(signed - originalNative) > 0.001 || kindChanged { patch["amount"] = .double(signed) }
             if !categoryId.isEmpty, categoryId != txn.category { patch["category"] = .string(categoryId) }
         }
+        if kindChanged { patch["kind"] = .string(selectedKind.rawValue) }
         if status != (txn.pending == true ? .pending : .confirmed) { patch["status"] = .string(status.rawValue) }
         if txn.kind != "transfer", !accountId.isEmpty, accountId != txn.account { patch["account"] = .string(accountId) }
         if txn.kind != "transfer", !currencyCode.isEmpty, currencyCode != (txn.currency ?? accountCurrency) {
             patch["currency"] = .string(currencyCode)
         }
-        if txn.kind == "refund", refundedTxId != txn.refundedTransactionId {
-            patch["refundedTransactionId"] = refundedTxId.map(JSONValue.string) ?? .null
+        // Refund link: set/update when (now) a refund; clear when leaving refund.
+        if effectiveKind == "refund" {
+            if refundedTxId != txn.refundedTransactionId || kindChanged {
+                patch["refundedTransactionId"] = refundedTxId.map(JSONValue.string) ?? .null
+            }
+        } else if txn.kind == "refund" {
+            patch["refundedTransactionId"] = .null
         }
         do {
             if createCounterpartyOnSave {
