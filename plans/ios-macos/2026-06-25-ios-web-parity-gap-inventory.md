@@ -48,7 +48,41 @@ These were checked and are present on iOS (some were falsely flagged as gaps by 
 Not in our usual build-direction, but for completeness — iOS has these and web doesn't:
 - CSV statement import (`StatementImport`), attachments in the **add** form (web is edit-only), iCloud + auto-backup + row-level sync, biometric app-lock / security policy, per-kind notifications.
 
+## Shipped since this snapshot (iOS-original; not web→iOS parity)
+
+Landed after `9406714` — mostly iOS-original UX, not parity catch-up:
+- Edit-form parity with Add: **status / account / refund-link** (#283), **currency** (#296), **counterparty suggestions** (#312).
+- Feed: **result count + no-results state** (#293), **filter by merchant** (#308).
+- Rows: **refund badge** (#298), **tag colors** (#301).
+- **In-app receipt preview** (Quick Look, #289); **merchant detail screen** (stats + transactions, #306).
+- Infra: CI ~halved (#276) + docs-only skip (#278); SwiftUI-vs-UIKit policy (`ios/swiftui-vs-uikit.md`).
+
+## iOS-original enhancement backlog (not web parity)
+
+Ideas surfaced while building the above (out-of-scope cuts + product asks). These are
+**not** web→iOS gaps — track separately from the parity tiers. Re-confirm none have
+since shipped before picking.
+
+**Small**
+- Multi-tag filter (AND/OR) — the feed filter is single-tag.
+- Feed sort options (amount / oldest-first) — currently fixed date-desc.
+- Receipt **thumbnails** in the Edit list (vs the generic icon).
+- Preview a receipt **from a transaction row** (in-app preview is Edit-only, #289).
+- Deep-link **merchant detail → pre-filtered feed** ("see in feed"; pairs with #306/#308).
+
+**Medium**
+- **Kind reclassification** in Edit (change a transaction's type; needs leg rebuild).
+- **Receipt scanning** (VisionKit document scanner) — a camera capture path beyond the photo picker.
+- **Insights/analytics expansion** — spend-by-merchant report, net-worth-over-time. *(Overlaps the Tier-1 "Insights advice engine" above.)*
+- **Notifications end-to-end check** — verify the budget/scheduled-alert scaffold actually fires.
+
+**Large**
+- **CloudKit sync maturity** — harden the inert sync scaffold into verified cross-device sync (needs container provisioning + multi-device testing). *(Not a parity gap — iOS-ahead scaffold; see "iOS is ahead".)*
+
+**Corrections vs. an earlier informal list:** "Goals" is **not** a gap (goals = income budgets by design — see "Already at parity"); "saved filter presets" is the same item as Tier-2 **Activity: saved searches** above (track it there).
+
 ## Notes
 
-- This is a snapshot of `feat/frontend` @ `9406714` (2026-06-25). Re-verify before acting — parity work lands frequently.
+- Parity snapshot: `feat/frontend` @ `9406714` (2026-06-25). The two sections above were
+  reconciled in on 2026-06-25 from the session running-list. Re-verify before acting — work lands frequently.
 - Pick order suggestion: **Scheduled calendar** (largest missing experience) and **Budget rollover UI** (best effort-to-value — engine already supports it) are the strongest Tier-1 candidates; **Insights advice engine** makes Insights feel materially smarter.
