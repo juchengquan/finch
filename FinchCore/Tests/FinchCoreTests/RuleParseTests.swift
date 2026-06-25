@@ -56,8 +56,7 @@ final class RuleParseTests: XCTestCase {
         let act = #"[{"type":"mark_reviewed"}]"#
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"not":{"field":"merchant","op":"is","value":"x"}}"#, actionsJSON: act)) // not
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"all":[{"all":[{"field":"merchant","op":"is","value":"x"}]}]}"#, actionsJSON: act)) // nested
-        // tag_id/has and add_tag promoted to CP2a — no longer nil
-        XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"kind","op":"in","value":["expense"]}"#, actionsJSON: act)) // CP2b op
+        // kind/in promoted to CP2b — no longer nil (see RuleParseCP2bTests)
         XCTAssertNil(RuleParse.parse(conditionJSON: #"{"field":"merchant","op":"is","value":"x"}"#, actionsJSON: "[]")) // no actions
     }
 
