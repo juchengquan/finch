@@ -40,6 +40,7 @@ public final class DeepLinkRouter: ObservableObject {
     @Published var pendingFilter: TxFilter?   // one-shot: consumed by the Activity feed
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
+    @Published public var exportRequested = false       // File ▸ Export .finch… (⌘⇧E)
     @Published public var showSettings = false          // top-left gear (compact, prototype)
 
     public init() {}

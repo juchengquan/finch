@@ -20,7 +20,11 @@ struct SectionSidebar: View {
     @EnvironmentObject private var router: DeepLinkRouter
 
     private let primary: [AppTab] = [.ledger, .accounts, .budgets, .scheduled, .insights]
+    #if os(macOS)
+    private let more: [AppTab] = [.activity]            // Settings is a Preferences window (⌘,)
+    #else
     private let more: [AppTab] = [.activity, .settings]
+    #endif
 
     var body: some View {
         List(selection: Binding<AppTab?>(
