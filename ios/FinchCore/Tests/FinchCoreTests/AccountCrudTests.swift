@@ -16,8 +16,8 @@ final class AccountCrudTests: XCTestCase {
         try q.read { db in
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT name FROM accounts WHERE id='a2'"), "Visa")
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT type FROM accounts WHERE id='a2'"), "credit_card")
-            // credit_card defaults to NOT in net worth.
-            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT include_in_net_worth FROM accounts WHERE id='a2'"), 0)
+            // credit_card is included in net worth by default (counts as a liability).
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT include_in_net_worth FROM accounts WHERE id='a2'"), 1)
         }
     }
 

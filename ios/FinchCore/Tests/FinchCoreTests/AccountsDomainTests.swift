@@ -22,10 +22,10 @@ final class AccountsDomainTests: XCTestCase {
         try q.read { db in
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a1'") ?? -1, 500, accuracy: 0.001)
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE id='open-a1' AND kind='opening'"), 1)
-            // credit_card defaults include_in_net_worth=0
+            // credit_card defaults include_in_net_worth=1 (counts toward net worth / liabilities)
         }
         try Apply.apply(dbQueue: q, action: "createAccount", args: Args(["id": .string("cc"), "ledgerId": .string("l1"), "name": .string("Visa"), "type": .string("credit_card")]))
-        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT include_in_net_worth FROM accounts WHERE id='cc'") }, 0)
+        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT include_in_net_worth FROM accounts WHERE id='cc'") }, 1)
         // unknown type rejected
         XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "createAccount", args: Args(["name": .string("X"), "type": .string("checking")]))) {
             XCTAssertEqual(($0 as? I18nError)?.code, "error.account.unknownType")
