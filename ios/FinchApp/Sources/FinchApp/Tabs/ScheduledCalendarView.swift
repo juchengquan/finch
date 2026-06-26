@@ -90,11 +90,17 @@ struct ScheduledCalendarView: View {
             Picker("Month", selection: monthBinding) {
                 ForEach(1...12, id: \.self) { m in Text(monthName(m)).tag(m) }
             }
-            .pickerStyle(.wheel).frame(maxWidth: .infinity)
+            #if os(iOS)
+            .pickerStyle(.wheel)
+            #endif
+            .frame(maxWidth: .infinity)
             Picker("Year", selection: yearBinding) {
                 ForEach(yearRange, id: \.self) { y in Text(verbatim: String(y)).tag(y) }
             }
-            .pickerStyle(.wheel).frame(maxWidth: .infinity)
+            #if os(iOS)
+            .pickerStyle(.wheel)
+            #endif
+            .frame(maxWidth: .infinity)
         }
         .labelsHidden()
         .frame(width: 300, height: 200)
