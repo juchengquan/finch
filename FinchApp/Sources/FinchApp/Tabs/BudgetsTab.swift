@@ -115,6 +115,14 @@ struct BudgetsTab: View {
         return budgets.filter { $0.name.lowercased().contains(q) }
     }
 
+    /// Ungrouped budgets, narrowed by the search query — rendered bare at the top.
+    private var filteredUngroupedBudgets: [BudgetRow] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let buds = store.ungroupedBudgets
+        guard !q.isEmpty else { return buds }
+        return buds.filter { $0.name.lowercased().contains(q) }
+    }
+
     /// Groups to render: all normally; while searching, only those with at least
     /// one matching budget.
     private var groupsToShow: [String] {
@@ -126,8 +134,12 @@ struct BudgetsTab: View {
     /// top summary section; see `summarySection`.)
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (BudgetRow) -> Row) -> some View {
-        if searchActive && groupsToShow.isEmpty {
+        if searchActive && groupsToShow.isEmpty && filteredUngroupedBudgets.isEmpty {
             Section { Text("No matching budgets").foregroundStyle(.secondary) }
+        }
+        // Ungrouped budgets: bare rows pinned to the top, no "Ungrouped" header.
+        if !filteredUngroupedBudgets.isEmpty {
+            Section { ForEach(filteredUngroupedBudgets) { budget in row(budget) } }
         }
         ForEach(groupsToShow, id: \.self) { groupName in
             // Tappable Button row (not a section header) so the chevron toggle
