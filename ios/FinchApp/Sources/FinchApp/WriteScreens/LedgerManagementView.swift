@@ -1,21 +1,19 @@
 import SwiftUI
 import FinchCore
 
-/// Ledger CRUD (Settings › Manage ledgers). List with set-default, delete, and
-/// per-ledger edit (rename + change base currency); a '+' creates a ledger.
-/// All writes route FinchStore.apply. createLedger / changeLedgerBase /
-/// setDefaultLedger / updateLedger / deleteLedger.
-struct LedgerManagementView: View {
+/// Layer 1 of the Ledger tab: every ledger with its base + net worth and an
+/// active marker. Tapping a row drills into `LedgerDetailView`; `+` adds; swipe
+/// deletes (gated). Reuses the AddLedgerSheet/EditLedgerSheet below.
+struct LedgerListView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
     @State private var showingAdd = false
-    @State private var editing: Ledger?
     @State private var errorMessage: String?
 
     var body: some View {
         List {
             ForEach(store.ledgers) { ledger in
-                Button { editing = ledger } label: {
+                NavigationLink(value: ledger.id) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ledger.name).foregroundStyle(.primary)
@@ -25,6 +23,8 @@ struct LedgerManagementView: View {
                         if ledger.id == store.activeLedgerId {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
                         }
+                        Text(store.displayMoney(store.netWorth(forLedger: ledger.id), forLedger: ledger.id))
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
                 .swipeActions(edge: .trailing) {
@@ -42,17 +42,19 @@ struct LedgerManagementView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddLedgerSheet() }
-        .sheet(item: $editing) { EditLedgerSheet(ledger: $0) }
+        .navigationDestination(for: String.self) { LedgerDetailView(ledgerId: $0) }
     }
 
     private func delete(_ ledger: Ledger) {
         errorMessage = nil
-        // Deleting a ledger destroys all its data — gate it like the other
-        // sensitive actions (export, base-currency change).
         Task {
             guard await gate.confirmSensitive() else { return }
-            do { try store.apply(.deleteLedger, Args(["id": .string(ledger.id)])) }
-            catch { errorMessage = i18nMessage(error) }
+            do {
+                try store.apply(.deleteLedger, Args(["id": .string(ledger.id)]))
+                if store.activeLedgerId == ledger.id {   // deleted the active ledger → switch to a remaining one
+                    store.activeLedgerId = store.ledgers.first?.id ?? ""
+                }
+            } catch { errorMessage = i18nMessage(error) }
         }
     }
 }
