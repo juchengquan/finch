@@ -36,11 +36,6 @@ private struct LedgerHeaderSection: View {
     @EnvironmentObject private var store: FinchStore
     private var activeName: String { store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? "Ledger" }
 
-    private var netWorthTrend: [Double] {
-        Selectors.netWorthSeries(store.txns, store.accounts, store.activeLedgerId) { amt, ccy in
-            Money.convert(amt, from: ccy ?? store.baseCurrency, to: store.baseCurrency, rates: store.rateMap) ?? amt
-        }
-    }
     private var thisMonth: (inc: Double, exp: Double) {
         let p = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, String(store.today.prefix(7)), 1).first
         return (p?.inc ?? 0, p?.exp ?? 0)
@@ -70,10 +65,6 @@ private struct LedgerHeaderSection: View {
                         Text("Net worth").font(.caption2).foregroundStyle(.secondary)
                         Text(store.netWorthDisplay).font(.headline)
                     }
-                }
-                let trend = netWorthTrend
-                if trend.count > 1 {
-                    Sparkline(values: trend).frame(height: 40)
                 }
                 Picker("Display currency", selection: Binding(
                     get: { store.displayCurrency },
