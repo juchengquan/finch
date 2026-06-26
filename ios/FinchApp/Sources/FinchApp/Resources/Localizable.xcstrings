@@ -67,7 +67,16 @@
         }
       }
     },
-    "%1$lld transaction%2$@": {},
+    "%1$lld transaction%2$@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 笔交易"
+          }
+        }
+      }
+    },
     "%@": {},
     "%@ left": {
       "localizations": {
@@ -110,7 +119,16 @@
         }
       }
     },
-    "%lld percent": {},
+    "%lld percent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "百分之 %lld"
+          }
+        }
+      }
+    },
     "%lld problems": {
       "localizations": {
         "zh-Hans": {
@@ -121,11 +139,38 @@
         }
       }
     },
-    "%lld selected": {},
-    "%lld transactions": {},
+    "%lld selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 项"
+          }
+        }
+      }
+    },
+    "%lld transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 笔交易"
+          }
+        }
+      }
+    },
     "%lld%%": {},
     "%lld×": {},
-    "+%@ carried over": {},
+    "+%@ carried over": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结转 +%@"
+          }
+        }
+      }
+    },
     "+%lld": {},
     "0.00": {
       "localizations": {
@@ -138,7 +183,16 @@
       }
     },
     "0.0000": {},
-    "1Y": {},
+    "1Y": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1年"
+          }
+        }
+      }
+    },
     "30-day forecast": {
       "localizations": {
         "zh-Hans": {
@@ -149,8 +203,26 @@
         }
       }
     },
-    "3M": {},
-    "6M": {},
+    "3M": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3个月"
+          }
+        }
+      }
+    },
+    "6M": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6个月"
+          }
+        }
+      }
+    },
     "About": {
       "localizations": {
         "zh-Hans": {
@@ -181,7 +253,16 @@
         }
       }
     },
-    "Accounts in this group become ungrouped.": {},
+    "Accounts in this group become ungrouped.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该组中的账户将取消分组。"
+          }
+        }
+      }
+    },
     "Accounts with transactions can't be deleted — archive instead.": {
       "localizations": {
         "zh-Hans": {
@@ -202,7 +283,16 @@
         }
       }
     },
-    "Accounts: %@": {},
+    "Accounts: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账户：%@"
+          }
+        }
+      }
+    },
     "Action": {
       "localizations": {
         "zh-Hans": {
@@ -363,7 +453,16 @@
         }
       }
     },
-    "Add action": {},
+    "Add action": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加操作"
+          }
+        }
+      }
+    },
     "Add an account in finch first.": {
       "localizations": {
         "zh-Hans": {
@@ -404,7 +503,16 @@
         }
       }
     },
-    "Add condition": {},
+    "Add condition": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加条件"
+          }
+        }
+      }
+    },
     "Add group": {
       "localizations": {
         "zh-Hans": {
@@ -465,7 +573,16 @@
         }
       }
     },
-    "Add scheduled on this day": {},
+    "Add scheduled on this day": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这一天添加计划"
+          }
+        }
+      }
+    },
     "Add split": {
       "localizations": {
         "zh-Hans": {
@@ -476,7 +593,16 @@
         }
       }
     },
-    "Add subcategory under %@": {},
+    "Add subcategory under %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 %@ 下添加子类别"
+          }
+        }
+      }
+    },
     "Add tag": {
       "localizations": {
         "zh-Hans": {
@@ -527,8 +653,26 @@
         }
       }
     },
-    "All Transactions": {},
-    "All tags": {},
+    "All Transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部交易"
+          }
+        }
+      }
+    },
+    "All tags": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有标签"
+          }
+        }
+      }
+    },
     "Allocated": {
       "localizations": {
         "zh-Hans": {
@@ -559,9 +703,36 @@
         }
       }
     },
-    "Amount range": {},
-    "Any": {},
-    "Any tag": {},
+    "Amount range": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金额范围"
+          }
+        }
+      }
+    },
+    "Any": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任意"
+          }
+        }
+      }
+    },
+    "Any tag": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任意标签"
+          }
+        }
+      }
+    },
     "App lock": {
       "localizations": {
         "zh-Hans": {
@@ -592,7 +763,16 @@
         }
       }
     },
-    "Appearance & Language": {},
+    "Appearance & Language": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观与语言"
+          }
+        }
+      }
+    },
     "Applies to %1$lld selected transaction%2$@.": {
       "localizations": {
         "zh-Hans": {
@@ -673,7 +853,16 @@
         }
       }
     },
-    "Average": {},
+    "Average": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均"
+          }
+        }
+      }
+    },
     "Back up now": {
       "localizations": {
         "zh-Hans": {
@@ -754,7 +943,16 @@
         }
       }
     },
-    "Cap": {},
+    "Cap": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上限"
+          }
+        }
+      }
+    },
     "Categories": {
       "localizations": {
         "zh-Hans": {
@@ -845,8 +1043,26 @@
         }
       }
     },
-    "Clear all": {},
-    "Clear filters & search": {},
+    "Clear all": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部清除"
+          }
+        }
+      }
+    },
+    "Clear filters & search": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除筛选和搜索"
+          }
+        }
+      }
+    },
     "Clear pending amount": {
       "localizations": {
         "zh-Hans": {
@@ -867,7 +1083,16 @@
         }
       }
     },
-    "Collapsed": {},
+    "Collapsed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已折叠"
+          }
+        }
+      }
+    },
     "Color": {
       "localizations": {
         "zh-Hans": {
@@ -918,7 +1143,16 @@
         }
       }
     },
-    "Confirm %lld": {},
+    "Confirm %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认 %lld 项"
+          }
+        }
+      }
+    },
     "Confirm all %lld pending": {
       "localizations": {
         "zh-Hans": {
@@ -1029,7 +1263,16 @@
         }
       }
     },
-    "Create \"%@\"": {},
+    "Create \"%@\"": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建“%@”"
+          }
+        }
+      }
+    },
     "Create Budget": {
       "localizations": {
         "zh-Hans": {
@@ -1040,7 +1283,16 @@
         }
       }
     },
-    "Create “%@”": {},
+    "Create “%@”": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建“%@”"
+          }
+        }
+      }
+    },
     "Created the %@ budget.": {
       "localizations": {
         "zh-Hans": {
@@ -1091,7 +1343,16 @@
         }
       }
     },
-    "Data problem": {},
+    "Data problem": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据问题"
+          }
+        }
+      }
+    },
     "Database": {
       "localizations": {
         "zh-Hans": {
@@ -1112,8 +1373,26 @@
         }
       }
     },
-    "Date range": {},
-    "Day (1–31)": {},
+    "Date range": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期范围"
+          }
+        }
+      }
+    },
+    "Day (1–31)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期（1–31）"
+          }
+        }
+      }
+    },
     "Day of month: %lld": {
       "localizations": {
         "zh-Hans": {
@@ -1134,11 +1413,56 @@
         }
       }
     },
-    "Delete %1$lld transaction%2$@?": {},
-    "Delete %@": {},
-    "Delete %@?": {},
-    "Delete %lld": {},
-    "Delete Group": {},
+    "Delete %1$lld transaction%2$@?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %1$lld 笔交易？"
+          }
+        }
+      }
+    },
+    "Delete %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %@"
+          }
+        }
+      }
+    },
+    "Delete %@?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %@？"
+          }
+        }
+      }
+    },
+    "Delete %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 项"
+          }
+        }
+      }
+    },
+    "Delete Group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除分组"
+          }
+        }
+      }
+    },
     "Delete group?": {
       "localizations": {
         "zh-Hans": {
@@ -1209,8 +1533,26 @@
         }
       }
     },
-    "Double tap to collapse": {},
-    "Double tap to expand": {},
+    "Double tap to collapse": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击以折叠"
+          }
+        }
+      }
+    },
+    "Double tap to expand": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击以展开"
+          }
+        }
+      }
+    },
     "Edit": {
       "localizations": {
         "zh-Hans": {
@@ -1311,7 +1653,16 @@
         }
       }
     },
-    "Expanded": {},
+    "Expanded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已展开"
+          }
+        }
+      }
+    },
     "Expense": {
       "localizations": {
         "zh-Hans": {
@@ -1362,7 +1713,16 @@
         }
       }
     },
-    "Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first).": {},
+    "Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first).": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将整个账本集导出为独立的 .finch 文件；导入将替换你的数据（导入前会先审核）。"
+          }
+        }
+      }
+    },
     "Field": {
       "localizations": {
         "zh-Hans": {
@@ -1403,7 +1763,16 @@
         }
       }
     },
-    "Force import?": {},
+    "Force import?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制导入？"
+          }
+        }
+      }
+    },
     "Frequency": {
       "localizations": {
         "zh-Hans": {
@@ -1424,7 +1793,16 @@
         }
       }
     },
-    "From date": {},
+    "From date": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始日期"
+          }
+        }
+      }
+    },
     "Go": {
       "localizations": {
         "zh-Hans": {
@@ -1515,8 +1893,26 @@
         }
       }
     },
-    "Icon %@": {},
-    "Import & Export": {},
+    "Icon %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图标 %@"
+          }
+        }
+      }
+    },
+    "Import & Export": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入与导出"
+          }
+        }
+      }
+    },
     "Import .finch": {
       "localizations": {
         "zh-Hans": {
@@ -1677,7 +2073,16 @@
         }
       }
     },
-    "Its subcategories move up a level — they won't be deleted.": {},
+    "Its subcategories move up a level — they won't be deleted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其子类别将上移一级——不会被删除。"
+          }
+        }
+      }
+    },
     "Kind": {
       "localizations": {
         "zh-Hans": {
@@ -1738,8 +2143,26 @@
         }
       }
     },
-    "Leave empty for a variable amount (entered when posting).": {},
-    "Leave empty to clear the stored price.": {},
+    "Leave empty for a variable amount (entered when posting).": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留空表示金额可变（记账时输入）。"
+          }
+        }
+      }
+    },
+    "Leave empty to clear the stored price.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留空以清除已存储的价格。"
+          }
+        }
+      }
+    },
     "Leave empty to track all %@ categories.": {
       "localizations": {
         "zh-Hans": {
@@ -1750,7 +2173,16 @@
         }
       }
     },
-    "Leave empty to track all accounts.": {},
+    "Leave empty to track all accounts.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留空以跟踪所有账户。"
+          }
+        }
+      }
+    },
     "Ledger": {
       "localizations": {
         "zh-Hans": {
@@ -1891,9 +2323,36 @@
         }
       }
     },
-    "Match": {},
-    "Matches": {},
-    "Max": {},
+    "Match": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配"
+          }
+        }
+      }
+    },
+    "Matches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配项"
+          }
+        }
+      }
+    },
+    "Max": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大"
+          }
+        }
+      }
+    },
     "Merchant": {
       "localizations": {
         "zh-Hans": {
@@ -1924,9 +2383,36 @@
         }
       }
     },
-    "Min": {},
-    "Money in": {},
-    "Money out": {},
+    "Min": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最小"
+          }
+        }
+      }
+    },
+    "Money in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流入"
+          }
+        }
+      }
+    },
+    "Money out": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流出"
+          }
+        }
+      }
+    },
     "Month": {
       "localizations": {
         "zh-Hans": {
@@ -1937,7 +2423,16 @@
         }
       }
     },
-    "More": {},
+    "More": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多"
+          }
+        }
+      }
+    },
     "Name": {
       "localizations": {
         "zh-Hans": {
@@ -2028,7 +2523,16 @@
         }
       }
     },
-    "New balance": {},
+    "New balance": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新余额"
+          }
+        }
+      }
+    },
     "Next month": {
       "localizations": {
         "zh-Hans": {
@@ -2239,7 +2743,16 @@
         }
       }
     },
-    "No transactions in this ledger yet.": {},
+    "No transactions in this ledger yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此账本暂无交易。"
+          }
+        }
+      }
+    },
     "No transactions yet": {
       "localizations": {
         "zh-Hans": {
@@ -2250,7 +2763,16 @@
         }
       }
     },
-    "No upcoming items.": {},
+    "No upcoming items.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无即将到期的项目。"
+          }
+        }
+      }
+    },
     "None": {
       "localizations": {
         "zh-Hans": {
@@ -2261,7 +2783,16 @@
         }
       }
     },
-    "None (no link)": {},
+    "None (no link)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无（不关联）"
+          }
+        }
+      }
+    },
     "Not enough history": {
       "localizations": {
         "zh-Hans": {
@@ -2292,7 +2823,16 @@
         }
       }
     },
-    "Nothing scheduled.": {},
+    "Nothing scheduled.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无计划。"
+          }
+        }
+      }
+    },
     "Nothing yet": {
       "localizations": {
         "zh-Hans": {
@@ -2443,7 +2983,16 @@
         }
       }
     },
-    "Pending changes": {},
+    "Pending changes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待同步更改"
+          }
+        }
+      }
+    },
     "Pending next cycle": {
       "localizations": {
         "zh-Hans": {
@@ -2484,8 +3033,26 @@
         }
       }
     },
-    "Posts an adjustment for the difference from the account's current balance.": {},
-    "Power Tools": {},
+    "Posts an adjustment for the difference from the account's current balance.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为与账户当前余额的差额记入一笔调整。"
+          }
+        }
+      }
+    },
+    "Power Tools": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级工具"
+          }
+        }
+      }
+    },
     "Power tools": {
       "localizations": {
         "zh-Hans": {
@@ -2496,7 +3063,16 @@
         }
       }
     },
-    "Preview receipt": {},
+    "Preview receipt": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览收据"
+          }
+        }
+      }
+    },
     "Previous month": {
       "localizations": {
         "zh-Hans": {
@@ -2527,7 +3103,16 @@
         }
       }
     },
-    "Priority %lld": {},
+    "Priority %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "优先级 %lld"
+          }
+        }
+      }
+    },
     "Projected": {
       "localizations": {
         "zh-Hans": {
@@ -2598,7 +3183,16 @@
         }
       }
     },
-    "Receipt photo selected": {},
+    "Receipt photo selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择收据照片"
+          }
+        }
+      }
+    },
     "Receipts": {
       "localizations": {
         "zh-Hans": {
@@ -2629,7 +3223,16 @@
         }
       }
     },
-    "Reconciled to %1$@ · %2$@": {},
+    "Reconciled to %1$@ · %2$@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已对账至 %1$@ · %2$@"
+          }
+        }
+      }
+    },
     "Refund": {
       "localizations": {
         "zh-Hans": {
@@ -2640,7 +3243,16 @@
         }
       }
     },
-    "Refunded transaction": {},
+    "Refunded transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已退款的交易"
+          }
+        }
+      }
+    },
     "Refunds": {
       "localizations": {
         "zh-Hans": {
@@ -2651,7 +3263,16 @@
         }
       }
     },
-    "Relaunch finch to apply the new language.": {},
+    "Relaunch finch to apply the new language.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新启动 finch 以应用新语言。"
+          }
+        }
+      }
+    },
     "Remove split (single category)": {
       "localizations": {
         "zh-Hans": {
@@ -2702,8 +3323,26 @@
         }
       }
     },
-    "Reorder": {},
-    "Replace data": {},
+    "Reorder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新排序"
+          }
+        }
+      }
+    },
+    "Replace data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换数据"
+          }
+        }
+      }
+    },
     "Require Face ID for export & destructive actions": {
       "localizations": {
         "zh-Hans": {
@@ -2714,7 +3353,16 @@
         }
       }
     },
-    "Resync ledger": {},
+    "Resync ledger": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新同步账本"
+          }
+        }
+      }
+    },
     "Roll over unused budget": {
       "localizations": {
         "zh-Hans": {
@@ -2725,7 +3373,16 @@
         }
       }
     },
-    "Row-level live sync over iCloud (CloudKit). Scaffold — the network layer activates once the CloudKit container is provisioned; without an iCloud account it stays inactive. Your data is always exportable as a .finch file.": {},
+    "Row-level live sync over iCloud (CloudKit). Scaffold — the network layer activates once the CloudKit container is provisioned; without an iCloud account it stays inactive. Your data is always exportable as a .finch file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 iCloud（CloudKit）进行行级实时同步。框架——网络层将在 CloudKit 容器配置完成后启用；若未登录 iCloud 账户，则保持未激活。你的数据始终可导出为 .finch 文件。"
+          }
+        }
+      }
+    },
     "Rule": {
       "localizations": {
         "zh-Hans": {
@@ -2746,7 +3403,16 @@
         }
       }
     },
-    "Run on edit": {},
+    "Run on edit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑时运行"
+          }
+        }
+      }
+    },
     "Save": {
       "localizations": {
         "zh-Hans": {
@@ -2767,7 +3433,16 @@
         }
       }
     },
-    "Save the current filters as a named search.": {},
+    "Save the current filters as a named search.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前筛选保存为命名搜索。"
+          }
+        }
+      }
+    },
     "Save “%@”": {
       "localizations": {
         "zh-Hans": {
@@ -2838,7 +3513,16 @@
         }
       }
     },
-    "See in Activity feed": {},
+    "See in Activity feed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在动态中查看"
+          }
+        }
+      }
+    },
     "Select": {
       "localizations": {
         "zh-Hans": {
@@ -2849,8 +3533,26 @@
         }
       }
     },
-    "Select a budget": {},
-    "Select an account": {},
+    "Select a budget": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择预算"
+          }
+        }
+      }
+    },
+    "Select an account": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择账户"
+          }
+        }
+      }
+    },
     "Set Price": {
       "localizations": {
         "zh-Hans": {
@@ -2861,7 +3563,16 @@
         }
       }
     },
-    "Setting up iCloud sync…": {},
+    "Setting up iCloud sync…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在设置 iCloud 同步…"
+          }
+        }
+      }
+    },
     "Settings": {
       "localizations": {
         "zh-Hans": {
@@ -2912,7 +3623,16 @@
         }
       }
     },
-    "Sort": {},
+    "Sort": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序"
+          }
+        }
+      }
+    },
     "Source": {
       "localizations": {
         "zh-Hans": {
@@ -3063,7 +3783,16 @@
         }
       }
     },
-    "Switches the app's language. Takes effect after relaunch.": {},
+    "Switches the app's language. Takes effect after relaunch.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换应用语言。重启后生效。"
+          }
+        }
+      }
+    },
     "Switches your active finch ledger.": {
       "localizations": {
         "zh-Hans": {
@@ -3094,10 +3823,46 @@
         }
       }
     },
-    "Sync": {},
-    "Sync & Backup": {},
-    "Sync across devices (iCloud)": {},
-    "Syncing…": {},
+    "Sync": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步"
+          }
+        }
+      }
+    },
+    "Sync & Backup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步与备份"
+          }
+        }
+      }
+    },
+    "Sync across devices (iCloud)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跨设备同步（iCloud）"
+          }
+        }
+      }
+    },
+    "Syncing…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在同步…"
+          }
+        }
+      }
+    },
     "Tags": {
       "localizations": {
         "zh-Hans": {
@@ -3198,8 +3963,26 @@
         }
       }
     },
-    "This replaces your live database with the audit-rejected pack and cannot be undone.": {},
-    "This rule is too complex to edit on iOS. Open it on the web for full control.": {},
+    "This replaces your live database with the audit-rejected pack and cannot be undone.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这将用审核未通过的数据包替换你的实时数据库，且无法撤销。"
+          }
+        }
+      }
+    },
+    "This rule is too complex to edit on iOS. Open it on the web for full control.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此规则过于复杂，无法在 iOS 上编辑。请在网页端打开以进行完整控制。"
+          }
+        }
+      }
+    },
     "To": {
       "localizations": {
         "zh-Hans": {
@@ -3210,8 +3993,26 @@
         }
       }
     },
-    "To confirm (%lld)": {},
-    "To date": {},
+    "To confirm (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待确认（%lld）"
+          }
+        }
+      }
+    },
+    "To date": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截止日期"
+          }
+        }
+      }
+    },
     "Today": {
       "localizations": {
         "zh-Hans": {
@@ -3222,7 +4023,16 @@
         }
       }
     },
-    "Top level": {},
+    "Top level": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顶级"
+          }
+        }
+      }
+    },
     "Total": {
       "localizations": {
         "zh-Hans": {
@@ -3283,7 +4093,16 @@
         }
       }
     },
-    "Try adjusting your search or filters.": {},
+    "Try adjusting your search or filters.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尝试调整搜索或筛选条件。"
+          }
+        }
+      }
+    },
     "Type": {
       "localizations": {
         "zh-Hans": {
@@ -3354,7 +4173,16 @@
         }
       }
     },
-    "Unspent budget carries into the next period. Set a cap to limit how much.": {},
+    "Unspent budget carries into the next period. Set a cap to limit how much.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未花费的预算将结转到下一周期。设置上限以限制结转金额。"
+          }
+        }
+      }
+    },
     "Unusual amount": {
       "localizations": {
         "zh-Hans": {
@@ -3415,7 +4243,16 @@
         }
       }
     },
-    "Variable": {},
+    "Variable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可变"
+          }
+        }
+      }
+    },
     "Verified": {
       "localizations": {
         "zh-Hans": {
@@ -3456,7 +4293,16 @@
         }
       }
     },
-    "all of": {},
+    "all of": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部满足"
+          }
+        }
+      }
+    },
     "and": {
       "localizations": {
         "zh-Hans": {
@@ -3467,7 +4313,16 @@
         }
       }
     },
-    "any of": {},
+    "any of": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任一满足"
+          }
+        }
+      }
+    },
     "entry: %@": {
       "localizations": {
         "zh-Hans": {
@@ -3529,7 +4384,16 @@
         }
       }
     },
-    "source %@": {},
+    "source %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源 %@"
+          }
+        }
+      }
+    },
     "trending down": {
       "localizations": {
         "zh-Hans": {
@@ -3551,7 +4415,16 @@
       }
     },
     "v": {},
-    "· Rolls over": {},
+    "· Rolls over": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· 结转"
+          }
+        }
+      }
+    },
     "∞": {}
   },
   "version": "1.0"
