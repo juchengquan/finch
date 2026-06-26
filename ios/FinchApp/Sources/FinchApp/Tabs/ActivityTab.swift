@@ -105,12 +105,8 @@ struct ActivityFeedView: View {
                             }
                         }
                     }
-                    ForEach(sections) { section in
-                        Section(section.id) {
-                            ForEach(section.txns) { txn in
-                                row(txn)
-                            }
-                        }
+                    ForEach(sections.flatMap { $0.txns }) { txn in
+                        row(txn)
                     }
                     if hasMore {
                         Button("Load more") { visibleCount += 50 }
