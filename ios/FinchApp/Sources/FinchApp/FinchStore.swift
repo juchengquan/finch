@@ -194,17 +194,35 @@ public final class FinchStore: ObservableObject {
                 "name": .string(c.name), "type": .string(c.kind)])
         }
 
+        // Budget groups.
+        let budgetGroups: [(id: String, name: String)] = [
+            ("bgg-essentials", "Essentials"),
+            ("bgg-lifestyle", "Lifestyle"),
+        ]
+        for g in budgetGroups {
+            try apply("createBudgetGroup", [
+                "id": .string(g.id), "ledgerId": .string("personal"), "name": .string(g.name)])
+        }
+
         // Monthly budgets over a few categories.
-        let budgets: [(name: String, amount: Double, cat: String)] = [
-            ("Groceries", 600, "cat-groceries"), ("Dining", 300, "cat-dining"),
-            ("Shopping", 400, "cat-shopping"), ("Transport", 200, "cat-transport"),
+        let budgets: [(name: String, amount: Double, cat: String, group: String?)] = [
+            ("Rent", 1500, "cat-rent", "bgg-essentials"),
+            ("Groceries", 600, "cat-groceries", "bgg-essentials"),
+            ("Utilities", 150, "cat-utilities", "bgg-essentials"),
+            ("Transport", 200, "cat-transport", "bgg-essentials"),
+            ("Dining", 300, "cat-dining", "bgg-lifestyle"),
+            ("Shopping", 400, "cat-shopping", "bgg-lifestyle"),
+            ("Entertainment", 120, "cat-entertainment", "bgg-lifestyle"),
+            ("Health", 100, "cat-health", nil),
         ]
         for b in budgets {
-            try apply("createBudget", [
+            var args: [String: JSONValue] = [
                 "ledgerId": .string("personal"), "name": .string(b.name), "type": .string("expense"),
                 "amount": .double(b.amount), "frequency": .string("monthly"),
                 "startDate": .string(monthStart(3)),
-                "categoryIds": .array([.string(b.cat)])])
+                "categoryIds": .array([.string(b.cat)])]
+            if let g = b.group { args["groupId"] = .string(g) }
+            try apply("createBudget", args)
         }
 
         // ~3 months of transactions. Expenses negative, income positive.
