@@ -15,6 +15,7 @@ struct AccountDetailView: View {
     @State private var showingReconcile = false
     @State private var showingAddTx = false
     @State private var confirmingDelete = false
+    @State private var pendingTxDelete: Tx?   // single-transaction delete awaiting confirmation
     @State private var errorMessage: String?
     @State private var editing: Tx?
     @State private var previewURL: URL?
@@ -64,6 +65,15 @@ struct AccountDetailView: View {
                     Button("Delete", role: .destructive) { delete(account) }
                 } message: {
                     Text("Accounts with transactions can't be deleted — archive instead.")
+                }
+                .confirmationDialog("Delete transaction?",
+                                    isPresented: Binding(get: { pendingTxDelete != nil },
+                                                         set: { if !$0 { pendingTxDelete = nil } }),
+                                    titleVisibility: .visible, presenting: pendingTxDelete) { t in
+                    Button("Delete", role: .destructive) { deleteTxn(t) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { t in
+                    Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
                 }
             } else {
                 // Archived or deleted while open → pop back.
@@ -163,8 +173,9 @@ struct AccountDetailView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { deleteTxn(t) } label: { Label("Delete", systemImage: "trash") }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Reveal a Delete button; tapping it asks for confirmation first.
+            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
         }
         .swipeActions(edge: .leading) {
             if t.pending == true {
@@ -179,7 +190,7 @@ struct AccountDetailView: View {
             if t.pending == true {
                 Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { deleteTxn(t) } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
