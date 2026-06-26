@@ -93,7 +93,8 @@ struct ActivityFeedView: View {
                         Section { Text("No transactions in this ledger yet.").foregroundStyle(.secondary) }
                     } else {
                         Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
                             .listRowBackground(Color.clear)
                     }
                     if !store.txns.isEmpty, sections.isEmpty {
