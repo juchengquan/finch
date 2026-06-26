@@ -15,7 +15,7 @@ struct BudgetSheet: View {
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
     }
-    let frequencies = ["weekly", "monthly", "quarterly", "yearly"]
+    let frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
 
     @State private var name: String
     @State private var kind: Kind
