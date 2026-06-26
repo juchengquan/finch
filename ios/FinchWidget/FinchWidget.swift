@@ -156,7 +156,60 @@ struct AccountWidget: Widget {
     }
 }
 
+struct BudgetEntry: TimelineEntry {
+    let date: Date
+    let item: BudgetSnapshotItem?
+}
+
+struct BudgetProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> BudgetEntry { BudgetEntry(date: Date(), item: nil) }
+    func snapshot(for configuration: SelectBudgetIntent, in context: Context) async -> BudgetEntry { entry(configuration) }
+    func timeline(for configuration: SelectBudgetIntent, in context: Context) async -> Timeline<BudgetEntry> {
+        Timeline(entries: [entry(configuration)], policy: .after(Date().addingTimeInterval(3600)))
+    }
+    private func entry(_ c: SelectBudgetIntent) -> BudgetEntry {
+        let snap = AppGroup.readWidgetSnapshot()
+        let item = snap?.budgets?.first { $0.id == c.budget?.id } ?? snap?.budgets?.first
+        return BudgetEntry(date: Date(), item: item)
+    }
+}
+
+struct BudgetWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: BudgetEntry
+    var body: some View {
+        if let item = entry.item {
+            switch family {
+            case .accessoryCircular:
+                Gauge(value: Double(item.usedPct), in: 0...100) { Text("Budget") } currentValueLabel: { Text("\(item.usedPct)") }
+                    .gaugeStyle(.accessoryCircular)
+                    .containerBackground(.clear, for: .widget)
+            default:
+                VStack(spacing: 6) {
+                    Text(item.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Gauge(value: Double(item.usedPct), in: 0...100) { Text("Budget") } currentValueLabel: { Text("\(item.usedPct)%") }
+                        .gaugeStyle(.accessoryCircularCapacity)
+                }.padding().containerBackground(.fill.tertiary, for: .widget)
+            }
+        } else {
+            Text("Pick a budget").font(.caption).foregroundStyle(.secondary)
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+    }
+}
+
+struct BudgetWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: "FinchBudget", intent: SelectBudgetIntent.self, provider: BudgetProvider()) { entry in
+            BudgetWidgetView(entry: entry)
+        }
+        .configurationDisplayName("finch budget")
+        .description("A chosen budget's usage.")
+        .supportedFamilies([.systemSmall, .accessoryCircular])
+    }
+}
+
 @main
 struct FinchWidgetBundle: WidgetBundle {
-    var body: some Widget { FinchWidget(); AccountWidget() }
+    var body: some Widget { FinchWidget(); AccountWidget(); BudgetWidget() }
 }
