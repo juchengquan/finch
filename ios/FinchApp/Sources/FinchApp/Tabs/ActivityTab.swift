@@ -46,6 +46,9 @@ struct ActivityFeedView: View {
     var navTitle: String = "Activity"
     var headerSection: AnyView? = nil
     var consumesPendingFilter: Bool = false
+    @StateObject private var savedSearches = SavedSearchStore()
+    @State private var showingSaveSearch = false
+    @State private var newSearchName = ""
     @State private var searchQuery: String = ""
     @State private var filter = TxFilter()
     @State private var sort: TxSort = .dateDesc
@@ -75,6 +78,7 @@ struct ActivityFeedView: View {
             } else {
                 List {
                     if let headerSection { headerSection }
+                    savedSearchRow
                     if store.txns.isEmpty {
                         Section { Text("No transactions in this ledger yet.").foregroundStyle(.secondary) }
                     } else {
@@ -280,6 +284,46 @@ struct ActivityFeedView: View {
     }
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
     private var hasActiveQuery: Bool { !searchQuery.isEmpty || filter.isActive }
+
+    @ViewBuilder private var savedSearchRow: some View {
+        let saved = savedSearches.all(ledgerId: store.activeLedgerId)
+        if !saved.isEmpty || filter.isActive {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(saved) { s in
+                        Button { filter = s.filter } label: { chipLabel(s.name, selected: filter == s.filter) }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) { savedSearches.remove(s.id) } label: { Label("Delete", systemImage: "trash") }
+                            }
+                    }
+                    if filter.isActive, !saved.contains(where: { $0.filter == filter }) {
+                        Button { newSearchName = ""; showingSaveSearch = true } label: { chipLabel("＋ Save", selected: false) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+            .listRowBackground(Color.clear)
+            .alert("Save search", isPresented: $showingSaveSearch) {
+                TextField("Name", text: $newSearchName)
+                Button("Cancel", role: .cancel) { newSearchName = "" }
+                Button("Save") {
+                    savedSearches.save(name: newSearchName, filter: filter, ledgerId: store.activeLedgerId)
+                    newSearchName = ""
+                }
+            } message: { Text("Save the current filters as a named search.") }
+        }
+    }
+
+    private func chipLabel(_ text: String, selected: Bool) -> some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(selected ? Color.accentColor : Color.secondary.opacity(0.15), in: Capsule())
+            .foregroundStyle(selected ? Color.white : Color.primary)
+    }
 
     /// Build a `ListOptions` from the filter sheet + search box and route through
     /// the engine's `selectTransactions` (which scopes to the active ledger and
