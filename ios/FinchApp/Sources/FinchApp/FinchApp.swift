@@ -76,6 +76,7 @@ struct FinchApp: App {
                     router.route(to: id)
                 }
             }
+            .onOpenURL { router.handle($0) }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .background:
