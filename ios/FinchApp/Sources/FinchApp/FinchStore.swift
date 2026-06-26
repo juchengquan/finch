@@ -162,18 +162,30 @@ public final class FinchStore: ObservableObject {
         try apply("createLedger", ["id": .string("personal"), "name": .string("Personal"), "base": .string("USD")])
         try apply("setDefaultLedger", ["id": .string("personal")])
 
-        // Accounts (with opening balances). Types limited to the valid set.
-        let accounts: [(id: String, name: String, type: String, opening: Double)] = [
-            ("cash", "Cash", "cash", 180),
-            ("everyday", "Everyday", "savings", 3_200),
-            ("savings", "Savings", "savings", 15_400),
-            ("brokerage", "Brokerage", "investment", 8_600),
-            ("credit", "Credit Card", "credit_card", 0),
+        // Account groups so the Accounts page shows grouped sections + subtotals.
+        let accountGroups: [(id: String, name: String)] = [
+            ("grp-cash", "Cash & Checking"),
+            ("grp-savings", "Savings & Investments"),
+            ("grp-credit", "Credit Cards"),
+        ]
+        for g in accountGroups {
+            try apply("createAccountGroup", [
+                "id": .string(g.id), "ledgerId": .string("personal"), "name": .string(g.name)])
+        }
+
+        // Accounts (with opening balances + group). Types limited to the valid set.
+        let accounts: [(id: String, name: String, type: String, opening: Double, group: String)] = [
+            ("cash", "Cash", "cash", 180, "grp-cash"),
+            ("everyday", "Everyday", "savings", 3_200, "grp-cash"),
+            ("savings", "Savings", "savings", 15_400, "grp-savings"),
+            ("brokerage", "Brokerage", "investment", 8_600, "grp-savings"),
+            ("credit", "Credit Card", "credit_card", 0, "grp-credit"),
         ]
         for a in accounts {
             try apply("createAccount", [
                 "id": .string(a.id), "ledgerId": .string("personal"), "name": .string(a.name),
-                "type": .string(a.type), "currency": .string("USD"), "openingBalance": .double(a.opening)])
+                "type": .string(a.type), "currency": .string("USD"), "openingBalance": .double(a.opening),
+                "groupId": .string(a.group)])
         }
 
         // Categories (explicit ids so transactions/budgets can reference them).
