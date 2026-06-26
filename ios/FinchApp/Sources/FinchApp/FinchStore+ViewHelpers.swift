@@ -113,6 +113,25 @@ extension FinchStore {
         return Selectors.anomalyScore(tx, merchantStatsCache ?? [:])?.isAnomaly ?? false
     }
 
+    /// The running balance (ledger base) of a transaction's account immediately
+    /// after that transaction — the statement-style figure shown on each row.
+    /// Built once per projection: opening balance (base) + cumulative base amounts
+    /// oldest→newest, per account. `txns` is newest-first (projection order), so we
+    /// walk it reversed. Opening entries are excluded from the feed (Projection), so
+    /// seeding from `openingBalanceBase` doesn't double-count.
+    public func runningBalanceBase(for tx: Tx) -> Double {
+        if runningBalanceCache == nil {
+            var running = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.openingBalanceBase ?? 0) })
+            var result: [String: Double] = [:]
+            for t in txns.reversed() {
+                running[t.account, default: 0] += t.amount
+                result[t.id] = running[t.account]
+            }
+            runningBalanceCache = result
+        }
+        return runningBalanceCache?[tx.id] ?? 0
+    }
+
     // MARK: - Accounts grouping
 
     public var accountGroupsOrdered: [String] {

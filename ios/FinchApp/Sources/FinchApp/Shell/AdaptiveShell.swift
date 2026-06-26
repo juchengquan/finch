@@ -91,18 +91,29 @@ struct TabBarShell: View {
     }
 }
 
+/// Set true by a tab whose content has entered multi-select (the Activity/Ledger
+/// feed), so the floating add-`+` steps aside while the bulk-action bottom bar
+/// occupies the bottom. Flows up from the content to the `AddTransactionFAB`
+/// modifier that wraps it.
+struct SelectionActiveKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
 /// A floating "add transaction" button for the compact primary tabs — quick
 /// capture from anywhere (it replaces the prominent `+` the removed Activity tab
 /// used to provide). Triggers the same app-root sheet as ⌘N / the command
 /// palette. Hidden until at least one account exists (you can't post without one).
 /// The overlay sits inside the tab's content area, so it floats just above the
-/// bottom bar automatically.
+/// bottom bar automatically. Hidden while the content is in multi-select so it
+/// doesn't overlap the bulk-action bar (see `SelectionActiveKey`).
 private struct AddTransactionFAB: ViewModifier {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
+    @State private var selecting = false
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottomTrailing) {
-            if !store.accounts.isEmpty {
+            if !store.accounts.isEmpty, !selecting {
                 Button { router.showAddTransaction = true } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))
@@ -116,6 +127,7 @@ private struct AddTransactionFAB: ViewModifier {
                 .padding(.bottom, 20)
             }
         }
+        .onPreferenceChange(SelectionActiveKey.self) { selecting = $0 }
     }
 }
 

@@ -21,6 +21,7 @@ struct BudgetSheet: View {
     @State private var kind: Kind
     @State private var amount: String
     @State private var frequency: String
+    @State private var startDate: Date
     @State private var groupId: String              // "" = none
     @State private var selectedCategories: Set<String>
     @State private var selectedAccounts: Set<String>
@@ -36,6 +37,7 @@ struct BudgetSheet: View {
         _kind = State(initialValue: (budget?.type == "income") ? .income : .expense)
         _amount = State(initialValue: budget.map { String(format: "%g", $0.amount) } ?? "")
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
+        _startDate = State(initialValue: budget.flatMap { AppDate.isoDay.date(from: $0.startDate) } ?? Date())
         _groupId = State(initialValue: budget?.groupId ?? "")
         _selectedCategories = State(initialValue: Set(budget?.categoryIds ?? []))
         _selectedAccounts = State(initialValue: Set(budget?.accountIds ?? []))
@@ -61,6 +63,7 @@ struct BudgetSheet: View {
                     Picker("Frequency", selection: $frequency) {
                         ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
                     }
+                    DatePicker("Start date", selection: $startDate, displayedComponents: .date)
                     Picker("Group", selection: $groupId) {
                         Text("None").tag("")
                         ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
@@ -120,7 +123,7 @@ struct BudgetSheet: View {
 
                 if isEdit, budget?.isRecurring == 1 {
                     Section {
-                        Text("Changing the amount on a recurring budget applies from the next cycle.")
+                        Text("Changing the start date or frequency re-bases the cycle and clears any staged amount and rolled-over balance.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -158,6 +161,7 @@ struct BudgetSheet: View {
         guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
         let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
         let accountIds: JSONValue = .array(selectedAccounts.sorted().map { .string($0) })
+        let startDateStr = AppDate.isoDay.string(from: startDate)
 
         // Rollover is expense-only; cap is optional and validated only when set.
         let useRollover = kind == .expense && rollover
@@ -170,19 +174,39 @@ struct BudgetSheet: View {
         }
 
         if let budget {
-            let patch: [String: JSONValue] = [
-                "name": .string(name), "type": .string(kind.rawValue), "amount": .double(value),
-                "frequency": .string(frequency), "categoryIds": categoryIds, "accountIds": accountIds,
+            // Changing the cycle anchor (frequency or start date) re-bases the
+            // budget, so route those through updateBudgetCycle — it clears the
+            // staged pending amount + accumulated rollover. Descriptive/scope
+            // fields always go through updateBudget. (Combined "Change cycle" into
+            // Edit; the web keeps these as two separate actions.)
+            let cycleChanged = frequency != budget.frequency || startDateStr != budget.startDate
+            var patch: [String: JSONValue] = [
+                "name": .string(name), "type": .string(kind.rawValue),
+                "categoryIds": categoryIds, "accountIds": accountIds,
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
                 "rollover": .bool(useRollover), "rolloverLimit": capValue,
             ]
-            do { try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)])); dismiss() }
-            catch { errorMessage = i18nMessage(error) }
+            if !cycleChanged {
+                // Cycle is unchanged → fold amount + frequency into the one patch.
+                patch["amount"] = .double(value)
+                patch["frequency"] = .string(frequency)
+            }
+            do {
+                try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)]))
+                if cycleChanged {
+                    try store.apply(.updateBudgetCycle, Args(["id": .string(budget.id), "patch": .object([
+                        "frequency": .string(frequency),
+                        "startDate": .string(startDateStr),
+                        "amount": .double(value),
+                    ])]))
+                }
+                dismiss()
+            } catch { errorMessage = i18nMessage(error) }
         } else {
             var args: [String: JSONValue] = [
                 "ledgerId": .string(store.activeLedgerId), "name": .string(name),
                 "type": .string(kind.rawValue), "amount": .double(value), "frequency": .string(frequency),
-                "rollover": .bool(useRollover),
+                "startDate": .string(startDateStr), "rollover": .bool(useRollover),
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if !selectedCategories.isEmpty { args["categoryIds"] = categoryIds }
