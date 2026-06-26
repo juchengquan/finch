@@ -131,9 +131,18 @@ struct ScheduledCalendarView: View {
     }
 
     private func grid(byDay: [String: [(date: String, template: ScheduledTemplate)]]) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-            ForEach(0..<firstWeekday, id: \.self) { _ in Color.clear.frame(height: 44) }
-            ForEach(1...daysInMonth, id: \.self) { day in dayCell(day, occ: byDay[iso(day)] ?? []) }
+        // One ordered cell list (leading nils pad to the 1st's weekday, then the
+        // days) rendered by a single ForEach — keeps blanks and days in lockstep
+        // so the columns stay aligned (two separate ForEachs drifted in a List).
+        let cells: [Int?] = Array(repeating: nil, count: firstWeekday) + (1...daysInMonth).map(Optional.init)
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
+                if let day {
+                    dayCell(day, occ: byDay[iso(day)] ?? [])
+                } else {
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+                }
+            }
         }
     }
 
@@ -184,17 +193,22 @@ struct ScheduledCalendarView: View {
     private func occurrenceRow(_ t: ScheduledTemplate, date: String, posted: [String: Bool]) -> some View {
         let st = status(t.id, date, posted)
         let acct = store.accounts.first { $0.id == t.accountId }
-        return HStack {
-            Circle().fill(Color(hex: t.color ?? "") ?? .accentColor).frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(t.name)
-                Text("\(date) · \(acct?.name ?? "—")").font(.caption2).foregroundStyle(.secondary)
+        // Tap the row to edit the template (matches the List view); long-press
+        // still offers Edit / Post now. .plain so it reads as a row, not a button.
+        return Button { onEdit(t) } label: {
+            HStack {
+                Circle().fill(Color(hex: t.color ?? "") ?? .accentColor).frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.name)
+                    Text("\(date) · \(acct?.name ?? "—")").font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let amt = t.amount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
+                statusBadge(st)
             }
-            Spacer()
-            if let amt = t.amount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
-            statusBadge(st)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             if st == .upcoming { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
