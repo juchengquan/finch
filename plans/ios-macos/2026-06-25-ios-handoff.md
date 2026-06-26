@@ -1,7 +1,7 @@
 # iOS/macOS handoff & sync-up
 
 **Date:** 2026-06-25 (status refreshed 2026-06-26)
-**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `1fefe9d` (#347 merged).
+**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `c49f450` (#350 merged).
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
 ## How we work (conventions)
@@ -28,7 +28,8 @@
 - Receipts: in-app preview / Quick Look (#289), **preview from a transaction row** (#327).
 - Merchant detail screen (#306) + **deep-link to filtered feed** (#318).
 - **Notifications:** cancel stale/disabled on refresh + end-to-end audit (#335).
-- Polish: **Settings gear → top-left** (#339), **swap Refund/Adjust-Balance** order in Add (#341), **localize `AppTab.title`** so tab chrome translates / zh-Hans (#346).
+- Polish: **Settings gear → top-left** (#339), **swap Refund/Adjust-Balance** order in Add (#341).
+- **Full zh-Hans localization:** tab titles (#346) → **catalog refresh** capturing +131 stale keys (#349) → **the 96 remaining strings + nav-title bypass fix** (#350). Catalog 456 keys / 441 translated; 15 intentional format tokens. *(The ~97 #350 strings are AI-authored — native review advised before release.)*
 - Docs/infra: parity inventory (#303, refreshed #343) + backlog reconcile (#313) + this handoff (#315/#324); CI cache+skip (#276/#278).
 
 ## Remaining web→iOS parity gaps
@@ -51,7 +52,8 @@ Tracked here + in the inventory. Status as of this snapshot:
 | Receipt **thumbnails** in the Edit list | S | ✅ Done (#331) |
 | Preview a receipt **from a transaction row** | S | ✅ Done (#327) |
 | **Notifications** end-to-end verification | M | ✅ Done (#335) |
-| **Receipt scanning** (VisionKit) | M | open |
+| **zh-Hans translation coverage** | M | ✅ Done (#346/#349/#350) — 441/456 keys; AI-authored, native review advised |
+| **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
 | **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | open — `Ring`/`StackedBar` primitives landed (#342) but aren't wired into real Insights cards yet; the reports + wiring remain |
 | **CloudKit sync maturity** | L | open (iOS-ahead scaffold; needs container provisioning + multi-device testing) |
 
