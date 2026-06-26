@@ -25,29 +25,59 @@ struct FinchProvider: TimelineProvider {
 }
 
 struct FinchWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: FinchEntry
+
+    private var pct: Int { entry.snapshot?.budgetUsedPct ?? 0 }
+    private var nw: String { money(entry.snapshot?.netWorth, entry.snapshot?.currency) }
+    private var wk: String { money(entry.snapshot?.weeklySpent, entry.snapshot?.currency) }
+
     var body: some View {
+        switch family {
+        case .accessoryCircular:
+            Gauge(value: Double(pct), in: 0...100) {
+                Text("Budget")
+            } currentValueLabel: {
+                Text("\(pct)")
+            }
+            .gaugeStyle(.accessoryCircular)
+            .containerBackground(.clear, for: .widget)
+        case .accessoryRectangular:
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Net worth").font(.caption2).foregroundStyle(.secondary)
+                Text(nw).font(.headline).minimumScaleFactor(0.6).widgetAccentable()
+                Text("Budget \(pct)% · Wk \(wk)").font(.caption2).foregroundStyle(.secondary)
+            }
+            .containerBackground(.clear, for: .widget)
+        case .accessoryInline:
+            Text("finch · \(nw)")
+                .containerBackground(.clear, for: .widget)
+        default:
+            systemLayout
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+    }
+
+    private var systemLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-            Text(money(entry.snapshot?.netWorth, entry.snapshot?.currency))
-                .font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+            Text(nw).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
             Spacer(minLength: 2)
             HStack {
-                Gauge(value: Double(entry.snapshot?.budgetUsedPct ?? 0), in: 0...100) {
+                Gauge(value: Double(pct), in: 0...100) {
                     Text("Budget")
                 } currentValueLabel: {
-                    Text("\(entry.snapshot?.budgetUsedPct ?? 0)%").font(.caption2)
+                    Text("\(pct)%").font(.caption2)
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
                 .scaleEffect(0.8)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("This week").font(.caption2).foregroundStyle(.secondary)
-                    Text(money(entry.snapshot?.weeklySpent, entry.snapshot?.currency)).font(.caption).fontWeight(.medium)
+                    Text(wk).font(.caption).fontWeight(.medium)
                 }
             }
         }
         .padding()
-        .containerBackground(.fill.tertiary, for: .widget)
     }
 
     private func money(_ amount: Double?, _ currency: String?) -> String {
@@ -65,7 +95,7 @@ struct FinchWidget: Widget {
         }
         .configurationDisplayName("finch overview")
         .description("Net worth, budget usage, and this week's spending.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
 
