@@ -41,6 +41,10 @@ struct RulesManagerView: View {
                 .swipeActions(edge: .leading) {
                     Button { backfill(rule) } label: { Label("Backfill", systemImage: "arrow.triangle.2.circlepath") }.tint(.blue)
                 }
+                .contextMenu {
+                    Button { backfill(rule) } label: { Label("Backfill", systemImage: "arrow.triangle.2.circlepath") }
+                    Button(role: .destructive) { delete(rule) } label: { Label("Delete", systemImage: "trash") }
+                }
             }
         }
         .navigationTitle("Rules")

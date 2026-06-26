@@ -24,6 +24,9 @@ struct ExchangeRatesView: View {
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { delete(rate) } label: { Label("Delete", systemImage: "trash") }
                 }
+                .contextMenu {
+                    Button(role: .destructive) { delete(rate) } label: { Label("Delete", systemImage: "trash") }
+                }
             }
         }
         .navigationTitle("Exchange rates")

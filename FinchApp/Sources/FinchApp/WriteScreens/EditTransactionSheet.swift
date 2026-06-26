@@ -210,6 +210,9 @@ struct EditTransactionSheet: View {
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
                         }
+                        .contextMenu {
+                            Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
+                        }
                     }
                     PhotosPicker(selection: $pickedPhoto, matching: .images) {
                         Label("Add receipt photo", systemImage: "camera")

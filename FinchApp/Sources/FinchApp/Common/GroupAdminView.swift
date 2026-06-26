@@ -33,6 +33,9 @@ struct GroupAdminView: View {
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(g) } label: { Label("Delete", systemImage: "trash") }
                             }
+                            .contextMenu {
+                                Button(role: .destructive) { delete(g) } label: { Label("Delete", systemImage: "trash") }
+                            }
                     }
                     .onMove(perform: onReorder == nil ? nil : move)
                 }
