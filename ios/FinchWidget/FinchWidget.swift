@@ -1,3 +1,4 @@
+import AppIntents
 import WidgetKit
 import SwiftUI
 import FinchCore
@@ -99,7 +100,63 @@ struct FinchWidget: Widget {
     }
 }
 
+struct AccountEntry: TimelineEntry {
+    let date: Date
+    let item: AccountSnapshotItem?
+}
+
+struct AccountProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> AccountEntry { AccountEntry(date: Date(), item: nil) }
+    func snapshot(for configuration: SelectAccountIntent, in context: Context) async -> AccountEntry { entry(configuration) }
+    func timeline(for configuration: SelectAccountIntent, in context: Context) async -> Timeline<AccountEntry> {
+        Timeline(entries: [entry(configuration)], policy: .after(Date().addingTimeInterval(3600)))
+    }
+    private func entry(_ c: SelectAccountIntent) -> AccountEntry {
+        let snap = AppGroup.readWidgetSnapshot()
+        let item = snap?.accounts?.first { $0.id == c.account?.id } ?? snap?.accounts?.first
+        return AccountEntry(date: Date(), item: item)
+    }
+}
+
+struct AccountWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: AccountEntry
+    var body: some View {
+        if let item = entry.item {
+            let amount = Money.format(item.balance, currency: item.currency)
+            switch family {
+            case .accessoryInline:
+                Text("\(item.name) · \(amount)").containerBackground(.clear, for: .widget)
+            case .accessoryRectangular:
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.name).font(.caption2).foregroundStyle(.secondary)
+                    Text(amount).font(.headline).minimumScaleFactor(0.6).widgetAccentable()
+                }.containerBackground(.clear, for: .widget)
+            default:
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name).font(.caption).foregroundStyle(.secondary)
+                    Text(amount).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+                }.padding().containerBackground(.fill.tertiary, for: .widget)
+            }
+        } else {
+            Text("Pick an account").font(.caption).foregroundStyle(.secondary)
+                .containerBackground(.fill.tertiary, for: .widget)
+        }
+    }
+}
+
+struct AccountWidget: Widget {
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: "FinchAccount", intent: SelectAccountIntent.self, provider: AccountProvider()) { entry in
+            AccountWidgetView(entry: entry)
+        }
+        .configurationDisplayName("finch account")
+        .description("A chosen account's balance.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
+    }
+}
+
 @main
 struct FinchWidgetBundle: WidgetBundle {
-    var body: some Widget { FinchWidget() }
+    var body: some Widget { FinchWidget(); AccountWidget() }
 }
