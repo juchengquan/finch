@@ -42,6 +42,7 @@ struct LedgerTab: View {
 /// (Manage-ledgers lives in the tab's top-right overflow menu.)
 private struct LedgerHeaderSection: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var showingLedgerPicker = false
     private var activeName: String { store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? "Ledger" }
 
     private var thisMonth: (inc: Double, exp: Double) {
@@ -53,20 +54,19 @@ private struct LedgerHeaderSection: View {
         Group {
             Section {
                 HStack {
-                    Menu {
-                        ForEach(store.ledgers) { l in
-                            Button {
-                                if l.id != store.activeLedgerId { store.activeLedgerId = l.id }
-                            } label: {
-                                if l.id == store.activeLedgerId { Label(l.name, systemImage: "checkmark") }
-                                else { Text(l.name) }
-                            }
-                        }
-                    } label: {
+                    // Plain button + confirmationDialog instead of a Menu: the Menu's
+                    // label mis-measured on a name swap and clipped the leading glyph
+                    // ("Personal" → "ersonal"). A normal Text label doesn't.
+                    Button { showingLedgerPicker = true } label: {
                         HStack(spacing: 4) {
-                            Text(activeName).font(.title3.weight(.semibold)).foregroundStyle(.primary)
+                            Text(activeName).font(.title3.weight(.semibold))
+                                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                             Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
                         }
+                    }
+                    .buttonStyle(.borderless)
+                    .popover(isPresented: $showingLedgerPicker) {
+                        ledgerPicker.presentationCompactAdaptation(.popover)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
@@ -94,5 +94,31 @@ private struct LedgerHeaderSection: View {
                 }
             }
         }
+    }
+
+    /// Compact ledger switcher shown as a popover from the header name — a clean
+    /// floating card (one row per ledger, active marked) instead of the Menu.
+    private var ledgerPicker: some View {
+        VStack(spacing: 0) {
+            ForEach(store.ledgers) { l in
+                Button {
+                    if l.id != store.activeLedgerId { store.activeLedgerId = l.id }
+                    showingLedgerPicker = false
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(l.name).foregroundStyle(.primary)
+                        Spacer(minLength: 24)
+                        if l.id == store.activeLedgerId {
+                            Image(systemName: "checkmark").font(.callout.weight(.semibold)).foregroundStyle(.tint)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                if l.id != store.ledgers.last?.id { Divider() }
+            }
+        }
+        .frame(minWidth: 220)
     }
 }
