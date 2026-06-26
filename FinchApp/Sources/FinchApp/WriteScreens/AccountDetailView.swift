@@ -28,6 +28,9 @@ struct AccountDetailView: View {
                     Section {
                         header(account)
                         reconcileBadge(account)
+                        if let ob = account.openingBalanceBase, ob != 0 {
+                            LabeledContent("Opening balance", value: store.displayMoneyBase(ob))
+                        }
                     }
                     forecastSection(account)
                     holdingsSection(account)
