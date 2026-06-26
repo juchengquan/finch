@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import CryptoKit
 import QuickLook
+import UniformTypeIdentifiers
 import FinchCore
 
 /// Edit Transaction (port of the web edit-transaction-form). Editable: merchant,
@@ -33,6 +34,7 @@ struct EditTransactionSheet: View {
     @State private var confirmingDelete = false
     @State private var attachments: [AttachmentRow] = []
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showingFileImporter = false
     @State private var previewURL: URL?
     @State private var status: Entries.Status
     @State private var accountId: String
@@ -214,9 +216,16 @@ struct EditTransactionSheet: View {
                             Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
+                    #if os(macOS)
+                    Button { showingFileImporter = true } label: { Label("Add receipt…", systemImage: "paperclip") }
+                        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image, .pdf]) { result in
+                            if case .success(let url) = result { Task { await addReceiptFile(url) } }
+                        }
+                    #else
                     PhotosPicker(selection: $pickedPhoto, matching: .images) {
                         Label("Add receipt photo", systemImage: "camera")
                     }
+                    #endif
                 }
 
                 Section {
@@ -275,6 +284,14 @@ struct EditTransactionSheet: View {
             try await AttachmentWriter.write(item: item, entryId: txn.id, store: store)
             attachments = store.attachments(for: txn.id)
             pickedPhoto = nil
+        } catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func addReceiptFile(_ url: URL) async {
+        errorMessage = nil
+        do {
+            try await AttachmentWriter.writeFile(url: url, entryId: txn.id, store: store)
+            attachments = store.attachments(for: txn.id)
         } catch { errorMessage = i18nMessage(error) }
     }
 
