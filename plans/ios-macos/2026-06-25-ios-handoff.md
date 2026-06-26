@@ -1,7 +1,7 @@
 # iOS/macOS handoff & sync-up
 
 **Date:** 2026-06-25 (status refreshed 2026-06-26)
-**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `c49f450` (#350 merged).
+**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `5405ee7` (#358 merged). **All web→iOS parity gaps (Tier-1/2/3) are now closed.**
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
 ## How we work (conventions)
@@ -16,7 +16,7 @@
 
 **Tier-1 — all closed:** Scheduled **calendar view** (#307) · Budgets **rollover UI** (#311) · **FX source + currency picker** (#302) · **Rules** builder CP2a/CP2b (#292, #297) · **Insights advice engine** CP1, core 6 rules (#323).
 
-**Tier-2 — closed except one:** Accounts **reconcile status badge + pending/confirmed split** (#329) · **Activity saved searches** (per-ledger filter chips, #333) · **Budgets per-account filter** (#337). **Remaining:** the **guided reconcile session** (see below).
+**Tier-2 — all closed:** Accounts **reconcile status badge + pending/confirmed split** (#329) · **Activity saved searches** (per-ledger filter chips, #333) · **Budgets per-account filter** (#337) · **guided reconcile session** — CP1 tick-cleared + cleared-vs-target tracker + Done/Adjust finish (#355) and CP2 quick-add-missing + confirm-and-clear (#358).
 
 **Tier-3 — all closed:** Insights **`Ring` + `StackedBar`** primitives (#342) · Settings **theme toggle + language picker** (#338) · Budget create form **all 6 frequencies** (#340) · **Opening-balance display** in account detail (#347, also fixed Holdings cost basis).
 
@@ -34,10 +34,7 @@
 
 ## Remaining web→iOS parity gaps
 
-**One Tier-2 gap left:**
-- **Accounts: guided reconcile session** — iOS's `ReconcileSheet` is a simple *statement-balance → auto-adjustment* form. The web has a guided session: **tick cleared transactions**, a **cleared-vs-target** progress display, **quick-add a missing transaction** inline, and **confirm-and-clear** pending rows. This was explicitly deferred when the reconcile badge/split shipped (#329) — it's a UX-model change, deserves its own spec. (Files: `WriteScreens/ReconcileSheet.swift`, `WriteScreens/AccountDetailView.swift`.)
-
-Everything else in the inventory's Tier-1/2/3 is done. See the inventory for per-item detail.
+**None — all Tier-1/2/3 parity gaps from the inventory are closed** (the guided reconcile session, the last one, shipped in #355/#358). Anything further is **iOS-original backlog**, not web parity — see below. Web→iOS feature parity is, as of this snapshot, complete.
 
 ## iOS-original enhancement backlog (not parity)
 
@@ -61,12 +58,12 @@ Tracked here + in the inventory. Status as of this snapshot:
 
 ## Collision avoidance
 
-- 0 open PRs at this snapshot (@`1fefe9d`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
-- **Tier-1/2/3 are essentially done, so the two streams now overlap heavily — coordinate per-feature.** Recent division of labour:
-  - *Other session:* Insights/charts (`Ring`/`StackedBar` #342, and likely the wiring follow-up), Settings/theme/i18n (#338, #346, an in-flight **localize-tab-titles** plan), budget frequencies (#340), notifications (#335).
-  - *This session:* accounts/reconcile (#329), budgets per-account (#337), activity saved searches (#333), opening-balance (#347), UI tweaks (gear #339, tappable txns + Refund/Adjust swap #341).
+- 0 open PRs at this snapshot (@`5405ee7`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
+- **All parity is done — only the iOS-original backlog remains, so coordinate per-feature.** Recent division of labour:
+  - *Other session:* Insights/charts (`Ring`/`StackedBar` #342, + the wiring follow-up), Settings/theme/i18n (#338, #340, zh-Hans #346/#349/#350), roadmap docs (#354), notifications (#335).
+  - *This session:* accounts/reconcile (badge+split #329, **guided reconcile session #355/#358**), budgets per-account (#337), activity saved searches (#333), opening-balance (#347), UI tweaks (gear #339, tappable txns + Refund/Adjust swap #341).
 - **Hot/shared files — check before editing:** `Tabs/ActivityTab.swift`, `WriteScreens/TransactionFilterSheet.swift`, `WriteScreens/EditTransactionSheet.swift`, `WriteScreens/AccountDetailView.swift`, `WriteScreens/BudgetSheet.swift`, `Tabs/SettingsTab.swift`, `Project/Projections+State.swift`, `Selectors/Selectors.swift`, `Common/ChartViews/*`.
-- **Avoid right now (other session active):** Insights/charts wiring, Settings/theme, i18n/localization, budget add-form. **Clear for this session:** the guided reconcile session, receipt scanning, CloudKit.
+- **Avoid right now (other session active):** Insights/charts wiring, Settings/theme, i18n/localization. **Clear for this session (iOS-original backlog):** receipt scanning (VisionKit, device-only), CloudKit sync maturity.
 
 ## Pointers
 
