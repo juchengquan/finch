@@ -33,7 +33,6 @@ struct AccountDetailView: View {
                             LabeledContent("Opening balance", value: store.displayMoneyBase(ob))
                         }
                     }
-                    forecastSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
                 }
@@ -127,21 +126,6 @@ struct AccountDetailView: View {
                         Text(Selectors.holdingValue(h).map { store.displayMoney($0, from: h.currency) } ?? "—")
                             .foregroundStyle(.secondary)
                     }
-                }
-            }
-        }
-    }
-
-    /// 30-day projection from scheduled templates affecting this account —
-    /// ending balance + the low-point (trough). Hidden when nothing is scheduled.
-    @ViewBuilder private func forecastSection(_ a: AccountRow) -> some View {
-        let f = Selectors.accountForecast(a, store.scheduled, store.today, 30)
-        if !f.events.isEmpty {
-            Section("30-day forecast") {
-                LabeledContent("Projected balance", value: store.displayMoney(f.endingBalance, from: a.currency))
-                LabeledContent("Low point") {
-                    Text("\(store.displayMoney(f.trough.balance, from: a.currency)) · \(f.trough.date)")
-                        .foregroundStyle(f.trough.balance < 0 ? .red : .secondary)
                 }
             }
         }

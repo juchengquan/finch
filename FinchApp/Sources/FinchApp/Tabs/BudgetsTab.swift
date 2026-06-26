@@ -116,11 +116,8 @@ struct BudgetsTab: View {
         }
         Section {
             let t = store.budgetTotalsDisplay
-            HStack {
-                Text("Total").fontWeight(.semibold)
-                Spacer()
-                Text("\(t.used) / \(t.base)")
-            }
+            StatusSummaryRow(leadingLabel: "Spent", leadingValue: t.used,
+                             trailingLabel: "Budget", trailingValue: t.base)
         }
     }
 

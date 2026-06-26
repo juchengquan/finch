@@ -130,6 +130,22 @@ struct ScheduledRow: View {
     private var accountCurrency: String {
         store.accounts.first { $0.id == template.accountId }?.currency ?? store.displayCurrency
     }
+    /// next_run is never persisted (NULL on insert), so derive the next occurrence
+    /// from the recurrence — keeps every row (seeded or user-created) showing a
+    /// real date. Horizon of ~13 months covers yearly templates.
+    private var nextRunDisplay: String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let today = store.today
+        let base = cal.date(from: DateComponents(
+            year: Int(today.prefix(4)), month: Int(today.dropFirst(5).prefix(2)),
+            day: Int(today.dropFirst(8).prefix(2)))) ?? Date()
+        let h = cal.dateComponents([.year, .month, .day],
+                                   from: cal.date(byAdding: .day, value: 400, to: base) ?? base)
+        let horizon = String(format: "%04d-%02d-%02d", h.year ?? 0, h.month ?? 1, h.day ?? 1)
+        return Selectors.occurrencesInRange([template], from: today, through: horizon).first?.date
+            ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
+    }
 
     var body: some View {
         HStack {
@@ -138,7 +154,7 @@ struct ScheduledRow: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
-                Text("\(template.frequency.capitalized) · next \(template.nextRun)")
+                Text("\(template.frequency.capitalized) · next \(nextRunDisplay)")
                     .font(.caption).foregroundStyle(.secondary)
                 if let total = template.installmentTotal {
                     Text("Installment \(template.installmentPaid ?? 0)/\(total) · \(accountName)")
