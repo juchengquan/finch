@@ -16,7 +16,7 @@ struct AddTransactionSheet: View {
     var defaultAccountId: String? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
-        case expense, income, transfer, adjust, refund
+        case expense, income, transfer, refund, adjust
         var id: String { rawValue }
         var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
         /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).

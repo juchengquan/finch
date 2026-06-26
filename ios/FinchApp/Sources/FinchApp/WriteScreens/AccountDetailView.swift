@@ -16,6 +16,8 @@ struct AccountDetailView: View {
     @State private var showingAddTx = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
+    @State private var editing: Tx?
+    @State private var previewURL: URL?
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
 
@@ -53,6 +55,8 @@ struct AccountDetailView: View {
                 }
                 .sheet(isPresented: $showingReconcile) { ReconcileSheet(preselect: account.id) }
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
+                .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+                .quickLookPreview($previewURL)
                 .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(account) }
                 } message: {
@@ -148,15 +152,43 @@ struct AccountDetailView: View {
         }
     }
 
+    // Same behavior as the Activity feed: tap opens the editor; swipe / context
+    // menu give delete + confirm + receipt preview. Reuses the feed's `TxRow`.
     @ViewBuilder private func txRow(_ t: Tx) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(t.merchant).lineLimit(1)
-                Text(t.date).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(store.displayMoneyBase(t.amount)).fontWeight(.medium)
+        Button { editing = t } label: {
+            TxRow(txn: t, onPreviewReceipt: { previewReceipt($0) })
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { deleteTxn(t) } label: { Label("Delete", systemImage: "trash") }
+        }
+        .swipeActions(edge: .leading) {
+            if t.pending == true {
+                Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
+            }
+        }
+        .contextMenu {
+            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
+            if !store.attachments(for: t.id).isEmpty {
+                Button { previewReceipt(t) } label: { Label("Preview receipt", systemImage: "paperclip") }
+            }
+            if t.pending == true {
+                Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }
+            }
+            Button(role: .destructive) { deleteTxn(t) } label: { Label("Delete", systemImage: "trash") }
+        }
+    }
+
+    private func previewReceipt(_ txn: Tx) {
+        if let first = store.attachments(for: txn.id).first { previewURL = store.attachmentURL(for: first) }
+    }
+    private func deleteTxn(_ txn: Tx) {
+        do { try store.deleteTransaction(txn.id) } catch { errorMessage = i18nMessage(error) }
+    }
+    private func confirmTxn(_ txn: Tx) {
+        do { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     private func archive(_ a: AccountRow) {
