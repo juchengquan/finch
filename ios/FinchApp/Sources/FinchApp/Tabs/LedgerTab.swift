@@ -1,37 +1,45 @@
 import SwiftUI
 import FinchCore
 
-/// The Ledger tab (home, slot #1) — a compact ledger-context header (active
-/// ledger + switcher, net worth) atop the full activity feed for the active
-/// ledger, with a top-right overflow menu for managing ledgers. Reuses
-/// `ActivityFeedView` with a header section, since a ledger *is* the container
-/// for its transactions.
+/// The Ledger tab (home, slot #1) — a lean ledger overview: active ledger +
+/// switcher, net worth, display currency, and this-month income/expense, with a
+/// "View all activity" link into the full feed (the feed itself also lives in the
+/// Accounts summary). Top-right overflow menu manages ledgers.
 struct LedgerTab: View {
     @State private var showingManage = false
 
     var body: some View {
         NavigationStack {
-            ActivityFeedView(
-                navTitle: "Ledger",
-                headerSection: AnyView(LedgerHeaderSection()),
-                collapseActionsIntoMenu: true,
-                menuExtras: AnyView(
-                    Button { showingManage = true } label: { Label("Manage ledgers", systemImage: "books.vertical") }
-                ))
-                .toolbar {
-                    #if os(iOS)
-                    ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // .topBarLeading is iOS-only; gear is compact-only anyway (macOS uses the sidebar)
-                    #endif
+            List {
+                LedgerHeaderSection()
+                Section {
+                    NavigationLink {
+                        ActivityFeedView()
+                    } label: {
+                        Label("View all activity", systemImage: "list.bullet")
+                    }
                 }
-                .navigationDestination(isPresented: $showingManage) { LedgerManagementView() }
-                .settingsPush()
+            }
+            .navigationTitle("Ledger")
+            .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // .topBarLeading is iOS-only; gear is compact-only anyway (macOS uses the sidebar)
+                #endif
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { showingManage = true } label: { Label("Manage ledgers", systemImage: "books.vertical") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+            .navigationDestination(isPresented: $showingManage) { LedgerManagementView() }
+            .settingsPush()
         }
     }
 }
 
 /// Ledger-context summary at the top of the Ledger tab: active ledger name with
-/// a switcher menu, net worth + trend sparkline, display currency, and this-month
-/// income/expense. (Manage-ledgers lives in the tab's top-right overflow menu.)
+/// a switcher menu, net worth, display currency, and this-month income/expense.
+/// (Manage-ledgers lives in the tab's top-right overflow menu.)
 private struct LedgerHeaderSection: View {
     @EnvironmentObject private var store: FinchStore
     private var activeName: String { store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? "Ledger" }
