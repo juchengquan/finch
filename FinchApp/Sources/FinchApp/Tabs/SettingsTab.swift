@@ -3,11 +3,19 @@ import FinchCore
 
 /// Settings home — a short menu of drill-in categories (Import/Export, Sync &
 /// Backup, Power Tools, Notifications, Security, Advanced) plus an About footer.
-/// Ledger switching, Manage ledgers, and display currency live in the Ledger tab
-/// now, so they're not duplicated here.
+/// Ledger switching, Manage ledgers, and display currency live in the Ledger
+/// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
     var body: some View {
-        MoreTabNavigationStack { SettingsRootList() }
+        MoreTabNavigationStack {
+            SettingsRootList()
+                .toolbar {
+                    #if os(iOS)
+                    ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+                    #endif
+                }
+                .ledgerPush()
+        }
     }
 }
 

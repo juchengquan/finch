@@ -35,13 +35,13 @@ public final class DeepLinkRouter: ObservableObject {
     /// SwiftUI tree) drive the same router the UI observes.
     public static let shared = DeepLinkRouter()
 
-    @Published public var selectedTab: AppTab = .ledger   // Ledger is the home/first tab
+    @Published public var selectedTab: AppTab = .accounts   // Accounts is the launch tab (Ledger moved to the corner control)
     @Published public var focusedId: String? = nil
     @Published var pendingFilter: TxFilter?   // one-shot: consumed by the Activity feed
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
     @Published public var exportRequested = false       // File ▸ Export .finch… (⌘⇧E)
-    @Published public var showSettings = false          // top-left gear (compact, prototype)
+    @Published public var showLedger = false            // top-left corner control → push the two-layer Ledger (compact)
 
     public init() {}
 
