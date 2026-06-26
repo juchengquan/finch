@@ -68,12 +68,17 @@ struct ScheduledCalendarView: View {
             .accessibilityLabel("Month and year")
             .popover(isPresented: $showingMonthYearPicker) { monthYearPicker }
             Spacer()
+            // .borderless so each button is its own tap target inside the List
+            // row (default-styled buttons in a List row fire together / not at all).
             Button("Today") { monthAnchor = Self.firstOfMonth(forISO: store.today); selectedDay = store.today }
                 .font(.caption)
+                .buttonStyle(.borderless)
             // Prev/next grouped together, to the right of the year-month.
             HStack(spacing: 16) {
-                Button { step(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous month")
-                Button { step(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next month")
+                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Previous month").buttonStyle(.borderless)
+                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Next month").buttonStyle(.borderless)
             }
         }
     }
