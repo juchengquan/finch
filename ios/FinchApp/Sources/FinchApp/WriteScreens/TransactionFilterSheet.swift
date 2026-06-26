@@ -3,7 +3,7 @@ import FinchCore
 
 /// The filter state for the transaction feed. Value type; `fromYMD`/`toYMD` convert
 /// the picked dates to the "yyyy-MM-dd" strings `ListOptions` expects.
-struct TxFilter: Equatable {
+struct TxFilter: Equatable, Codable {
     var direction: String? = nil       // nil = all, "in", "out"
     var accountId: String? = nil
     var categoryId: String? = nil
