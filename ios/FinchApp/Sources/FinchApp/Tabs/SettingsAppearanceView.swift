@@ -25,6 +25,7 @@ struct SettingsAppearanceView: View {
     @AppStorage("finch.language") private var languageRaw = AppLanguage.system.rawValue
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
+    @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
     @State private var showRelaunchNote = false
 
     var body: some View {
@@ -55,6 +56,9 @@ struct SettingsAppearanceView: View {
             Section("Activity feed") {
                 Toggle("Group by month", isOn: $groupByMonth)
                 Toggle("Relative dates", isOn: $relativeDates)
+            }
+            Section("Accounts") {
+                Toggle("Show opening balance", isOn: $showOpeningBalance)
             }
         }
         .navigationTitle("Appearance & Language")
