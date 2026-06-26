@@ -23,6 +23,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 struct SettingsAppearanceView: View {
     @AppStorage("finch.appearance") private var appearanceRaw = AppearancePreference.system.rawValue
     @AppStorage("finch.language") private var languageRaw = AppLanguage.system.rawValue
+    @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
+    @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     @State private var showRelaunchNote = false
 
     var body: some View {
@@ -49,6 +51,10 @@ struct SettingsAppearanceView: View {
                 Text(showRelaunchNote ? "Relaunch finch to apply the new language."
                                       : "Switches the app's language. Takes effect after relaunch.")
                     .foregroundStyle(showRelaunchNote ? .orange : .secondary)
+            }
+            Section("Activity feed") {
+                Toggle("Group by month", isOn: $groupByMonth)
+                Toggle("Relative dates", isOn: $relativeDates)
             }
         }
         .navigationTitle("Appearance & Language")
