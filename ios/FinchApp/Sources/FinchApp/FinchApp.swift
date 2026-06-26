@@ -13,6 +13,7 @@ struct FinchApp: App {
     // Foreground idle timer so an `.onIdle` lock timeout fires while the app
     // stays open; tick() is a no-op for the other policies.
     private let idleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    @AppStorage("finch.appearance") private var appearanceRaw = AppearancePreference.system.rawValue
 
     init() {
         #if DEBUG
@@ -48,6 +49,7 @@ struct FinchApp: App {
                         .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
+            .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
                 store.isHydrating = true
