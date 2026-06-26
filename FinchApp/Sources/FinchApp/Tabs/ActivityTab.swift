@@ -119,7 +119,7 @@ struct ActivityFeedView: View {
             }
         }
         .searchable(text: $searchQuery)
-        .navigationTitle(navTitle)
+        .navigationTitle(LocalizedStringKey(navTitle))
         .errorAlert($errorMessage)
         .quickLookPreview($previewURL)
         // Leave selection mode behind when the feed is popped/dismissed so the
