@@ -62,6 +62,11 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         let delivered = Set(await center.deliveredNotifications().map(\.request.identifier))
         let existing = pending.union(delivered)
 
+        let stalePending = NotificationPlanner.cancelIDs(planned: planned, existing: pending)
+        if !stalePending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stalePending) }
+        let staleDelivered = NotificationPlanner.cancelIDs(planned: planned, existing: delivered)
+        if !staleDelivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: staleDelivered) }
+
         for p in planned where !existing.contains(p.id) {
             let content = UNMutableNotificationContent()
             content.title = p.title

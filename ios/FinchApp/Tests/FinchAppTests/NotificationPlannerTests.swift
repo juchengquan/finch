@@ -68,4 +68,10 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertEqual(a.map(\.id), b2.map(\.id))                       // stable
         XCTAssertEqual(Set(a.map(\.id)).count, a.count)                 // unique
     }
+
+    func test_cancelIDs_dropsStaleKeepsPlanned() {
+        let planned = [PlannedNotification(id: "budget:b1", kind: .budgetWarning, title: "", body: "", tab: nil, focusId: nil)]
+        let existing: Set<String> = ["budget:b1", "scheduled:s1", "anomaly:t1"]
+        XCTAssertEqual(NotificationPlanner.cancelIDs(planned: planned, existing: existing), ["anomaly:t1", "scheduled:s1"])
+    }
 }
