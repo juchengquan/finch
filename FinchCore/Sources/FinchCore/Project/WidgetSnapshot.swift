@@ -1,5 +1,24 @@
 import Foundation
 
+public struct AccountSnapshotItem: Codable, Equatable, Sendable, Identifiable {
+    public let id: String
+    public let name: String
+    public let balance: Double
+    public let currency: String
+    public init(id: String, name: String, balance: Double, currency: String) {
+        self.id = id; self.name = name; self.balance = balance; self.currency = currency
+    }
+}
+
+public struct BudgetSnapshotItem: Codable, Equatable, Sendable, Identifiable {
+    public let id: String
+    public let name: String
+    public let usedPct: Int
+    public init(id: String, name: String, usedPct: Int) {
+        self.id = id; self.name = name; self.usedPct = usedPct
+    }
+}
+
 /// Phase 7 — the read-side data the WidgetKit extension + Watch app render. They
 /// have no DB access, so the app writes this snapshot to the shared App Group
 /// container and the widget/Watch read it. Lives in FinchCore so both the app
@@ -10,10 +29,14 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var budgetUsedPct: Int      // 0…100 across all budgets this period
     public var weeklySpent: Double
     public var generatedAt: String
+    public var accounts: [AccountSnapshotItem]?
+    public var budgets: [BudgetSnapshotItem]?
 
-    public init(netWorth: Double, currency: String, budgetUsedPct: Int, weeklySpent: Double, generatedAt: String) {
+    public init(netWorth: Double, currency: String, budgetUsedPct: Int, weeklySpent: Double, generatedAt: String,
+                accounts: [AccountSnapshotItem]? = nil, budgets: [BudgetSnapshotItem]? = nil) {
         self.netWorth = netWorth; self.currency = currency
         self.budgetUsedPct = budgetUsedPct; self.weeklySpent = weeklySpent; self.generatedAt = generatedAt
+        self.accounts = accounts; self.budgets = budgets
     }
 
     /// Net worth in base currency — sum of `includeInNetWorth` account balances,
