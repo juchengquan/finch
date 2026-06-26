@@ -49,8 +49,12 @@ struct LedgerListView: View {
         errorMessage = nil
         Task {
             guard await gate.confirmSensitive() else { return }
-            do { try store.apply(.deleteLedger, Args(["id": .string(ledger.id)])) }
-            catch { errorMessage = i18nMessage(error) }
+            do {
+                try store.apply(.deleteLedger, Args(["id": .string(ledger.id)]))
+                if store.activeLedgerId == ledger.id {   // deleted the active ledger → switch to a remaining one
+                    store.activeLedgerId = store.ledgers.first?.id ?? ""
+                }
+            } catch { errorMessage = i18nMessage(error) }
         }
     }
 }
