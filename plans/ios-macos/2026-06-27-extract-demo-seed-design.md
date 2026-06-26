@@ -1,8 +1,31 @@
-# Extract the simulator demo seed into its own file
+# Enrich demo accounts, then extract the simulator demo seed into its own file
 
 **Date:** 2026-06-27
 **Status:** Design approved, pending implementation
-**Scope:** Move `FinchStore.seedSimulatorDemo` (the ~200-line simulator-only demo data) into a new `SimulatorDemoSeed.swift`, so removing the dummy data later is "delete one file + one line." Pure refactor — no behavior change.
+**Scope:** (1) Enrich the demo account data (add a Retirement group + 4 accounts); (2) move `FinchStore.seedSimulatorDemo` (the simulator-only demo data) into a new `SimulatorDemoSeed.swift`, so removing the dummy data later is "delete one file + one line." Data enrichment + pure refactor — no behavior change beyond the added seed rows.
+
+## Part 1 — Enrich demo accounts
+
+The demo already groups accounts (Cash & Checking / Savings & Investments / Credit Cards,
+5 accounts). Enrich to **9 accounts across 4 groups**. Constraint: `createAccount`
+`validTypes = {savings, credit_card, investment, cash, fx, virtual}` — **no loan/liability
+type**, so liabilities use `credit_card` (the only net-worth-excluded type).
+
+Add a group:
+```swift
+            ("grp-retirement", "Retirement"),     // after grp-savings, before grp-credit
+```
+Add accounts (to the existing `accounts` list, valid types only):
+```swift
+            ("checking", "Checking", "cash", 2_400, "grp-cash"),
+            ("retire-401k", "401(k)", "investment", 42_000, "grp-retirement"),
+            ("roth-ira", "Roth IRA", "investment", 18_500, "grp-retirement"),
+            ("travel-card", "Travel Card", "credit_card", 0, "grp-credit"),
+```
+Result: Cash & Checking (Cash, Everyday, Checking) · Savings & Investments (Savings,
+Brokerage) · **Retirement** (401(k), Roth IRA) · Credit Cards (Credit Card, Travel Card).
+
+## Part 2 — Extract the seed
 
 ## Problem
 
