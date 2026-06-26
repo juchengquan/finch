@@ -9,11 +9,14 @@ import FinchCore
 struct AdaptiveShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
-        if sizeClass == .compact {
-            TabBarShell()
-        } else {
-            SplitViewShell()
+        Group {
+            if sizeClass == .compact {
+                TabBarShell()
+            } else {
+                SplitViewShell()
+            }
         }
+        .modifier(ExportCoordinator())
     }
 }
 

@@ -152,6 +152,9 @@ struct AccountsTab: View {
                         .contextMenu { rowActions(account) }
                 }
             }
+            #if os(macOS)
+            .onDeleteCommand { if let id = selection.wrappedValue, let a = store.accounts.first(where: { $0.id == id }) { delete(a) } }
+            #endif
         } else {
             List {
                 summarySection

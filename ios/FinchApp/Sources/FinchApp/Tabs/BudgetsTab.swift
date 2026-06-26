@@ -79,6 +79,9 @@ struct BudgetsTab: View {
                         .contextMenu { rowActions(budget) }
                 }
             }
+            #if os(macOS)
+            .onDeleteCommand { if let id = selection.wrappedValue, let b = store.budgets.first(where: { $0.id == id }) { delete(b) } }
+            #endif
         } else {
             List {
                 summarySection

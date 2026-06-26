@@ -13,16 +13,20 @@ struct FinchCommands: Commands {
             Button("New Transaction") { router.showAddTransaction = true }
                 .keyboardShortcut("n", modifiers: .command)
         }
+        // File ▸ Export .finch… (⌘⇧E) — drives the ExportCoordinator.
+        CommandGroup(after: .importExport) {
+            Button("Export .finch…") { router.exportRequested = true }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+        }
+        // Help ▸ Finch Command Palette (⌘K).
+        CommandGroup(replacing: .help) {
+            Button("Finch Command Palette") { router.showCommandPalette = true }
+                .keyboardShortcut("k", modifiers: .command)
+        }
         // ⌘K — command palette (under a Find-adjacent group).
         CommandGroup(after: .toolbar) {
             Button("Command Palette…") { router.showCommandPalette = true }
                 .keyboardShortcut("k", modifiers: .command)
-        }
-        // ⌘, — Settings (the standard Mac slot). finch keeps Settings as a tab,
-        // so this focuses it rather than opening a separate Preferences window.
-        CommandGroup(replacing: .appSettings) {
-            Button("Settings…") { router.selectedTab = .settings }
-                .keyboardShortcut(",", modifiers: .command)
         }
         // A "Go" menu: ⌘1–6 to switch tabs.
         CommandMenu("Go") {

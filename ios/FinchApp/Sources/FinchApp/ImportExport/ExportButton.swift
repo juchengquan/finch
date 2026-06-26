@@ -48,3 +48,39 @@ struct ExportedFile: Identifiable {
     let id = UUID()
     let url: URL
 }
+
+/// Drives the menu-bar Export command: watches `router.exportRequested`, builds a
+/// pack, and presents a ShareLink — the `ExportButton` flow, hoisted to the shell.
+struct ExportCoordinator: ViewModifier {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
+    @ObservedObject private var router = DeepLinkRouter.shared
+    @State private var exportedFile: ExportedFile?
+    @State private var exportError: ImportError?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: router.exportRequested) { _, want in
+                guard want else { return }
+                router.exportRequested = false
+                Task { await run() }
+            }
+            .sheet(item: $exportedFile) { file in
+                ShareLink(item: file.url, preview: SharePreview("finch pack"))
+            }
+            .alert(item: $exportError) { err in
+                Alert(title: Text("Export failed"), message: Text(err.message), dismissButton: .default(Text("OK")))
+            }
+    }
+
+    private func run() async {
+        guard await gate.confirmSensitive() else { return }
+        do {
+            let data = try await store.buildPack()
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("finch-\(UUID().uuidString).finch")
+            try data.write(to: tmp)
+            exportedFile = ExportedFile(url: tmp)
+        } catch { exportError = ImportError(message: String(describing: error)) }
+    }
+}

@@ -7,25 +7,30 @@ import FinchCore
 /// now, so they're not duplicated here.
 struct SettingsTab: View {
     var body: some View {
-        MoreTabNavigationStack {
-            List {
-                Section {
-                    NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
-                    NavigationLink { SettingsImportExportView() } label: { Label("Import & Export", systemImage: "square.and.arrow.up.on.square") }
-                    NavigationLink { SettingsSyncBackupView() } label: { Label("Sync & Backup", systemImage: "arrow.triangle.2.circlepath") }
-                    NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
-                    NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
-                    NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
-                    NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
-                }
+        MoreTabNavigationStack { SettingsRootList() }
+    }
+}
 
-                Section("About") {
-                    LabeledContent("App version", value: FinchCore.version)
-                    LabeledContent("Pack format", value: FinchCore.packFormatVersion)
-                }
+/// The Settings drill-in list — reused by the iOS `SettingsTab` and the macOS
+/// Preferences window (which supplies its own `NavigationStack`).
+struct SettingsRootList: View {
+    var body: some View {
+        List {
+            Section {
+                NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
+                NavigationLink { SettingsImportExportView() } label: { Label("Import & Export", systemImage: "square.and.arrow.up.on.square") }
+                NavigationLink { SettingsSyncBackupView() } label: { Label("Sync & Backup", systemImage: "arrow.triangle.2.circlepath") }
+                NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
+                NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
+                NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
+                NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
             }
-            .navigationTitle("Settings")
+            Section("About") {
+                LabeledContent("App version", value: FinchCore.version)
+                LabeledContent("Pack format", value: FinchCore.packFormatVersion)
+            }
         }
+        .navigationTitle("Settings")
     }
 }
 
