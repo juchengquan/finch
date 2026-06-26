@@ -60,6 +60,7 @@ struct ActivityFeedView: View {
     @State private var searchQuery: String = ""
     @State private var filter = TxFilter()
     @State private var sort: TxSort = .dateDesc
+    @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @State private var showingFilter = false
     @State private var visibleCount: Int = 50
     @State private var showingAdd = false
@@ -114,8 +115,14 @@ struct ActivityFeedView: View {
                             }
                         }
                     }
-                    ForEach(sections.flatMap { $0.txns }) { txn in
-                        row(txn)
+                    if groupByMonth {
+                        ForEach(sections) { section in
+                            Section(monthLabel(section.id)) {
+                                ForEach(section.txns) { txn in row(txn) }
+                            }
+                        }
+                    } else {
+                        ForEach(sections.flatMap { $0.txns }) { txn in row(txn) }
                     }
                     if hasMore {
                         Button("Load more") { visibleCount += 50 }
@@ -240,8 +247,14 @@ struct ActivityFeedView: View {
         .onChange(of: searchQuery) { _, _ in recompute() }
         .onChange(of: filter) { _, _ in recompute() }
         .onChange(of: sort) { _, _ in recompute() }
+        .onChange(of: groupByMonth) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
         .onReceive(store.$txns) { _ in recompute() }
+    }
+
+    private func monthLabel(_ key: String) -> String {
+        guard let d = AppDate.isoDay.date(from: "\(key)-01") else { return key }
+        return d.formatted(.dateTime.month(.wide).year())
     }
 
     /// Recompute the cached day-sections. Cheap to call; runs only on the inputs
@@ -251,12 +264,13 @@ struct ActivityFeedView: View {
         filteredCount = f.count
         hasMore = f.count > visibleCount
         var order: [String] = []
-        var byDay: [String: [Tx]] = [:]
+        var byMonth: [String: [Tx]] = [:]
         for txn in f.prefix(visibleCount) {
-            if byDay[txn.date] == nil { order.append(txn.date) }
-            byDay[txn.date, default: []].append(txn)
+            let key = String(txn.date.prefix(7))           // "yyyy-MM"
+            if byMonth[key] == nil { order.append(key) }
+            byMonth[key, default: []].append(txn)
         }
-        sections = order.map { DaySection(id: $0, txns: byDay[$0] ?? []) }
+        sections = order.map { DaySection(id: $0, txns: byMonth[$0] ?? []) }
     }
 
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
@@ -405,6 +419,7 @@ struct ActivityFeedView: View {
 
 struct TxRow: View {
     @EnvironmentObject private var store: FinchStore
+    @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     let txn: Tx
     var onPreviewReceipt: ((Tx) -> Void)? = nil
 
@@ -424,6 +439,7 @@ struct TxRow: View {
     }
 
     private func relativeOrShort(_ ymd: String) -> String {
+        guard relativeDates else { return ymd }
         guard let d = AppDate.isoDay.date(from: ymd) else { return ymd }
         let today = AppDate.isoDay.date(from: store.today) ?? Date()
         let cal = Calendar.current
