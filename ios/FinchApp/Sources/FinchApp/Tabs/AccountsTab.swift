@@ -44,10 +44,10 @@ struct AccountsTab: View {
             .searchable(text: $searchQuery, prompt: "Search accounts")
             #endif
             .navigationTitle("Accounts")
-            .settingsPush()
+            .ledgerPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }
+                ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     #if os(iOS)

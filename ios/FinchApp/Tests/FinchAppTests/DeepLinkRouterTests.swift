@@ -15,4 +15,12 @@ final class DeepLinkRouterTests: XCTestCase {
         r.handle(URL(string: "finch://bogus")!)
         XCTAssertFalse(r.showAddTransaction)
     }
+
+    func test_defaultTabIsAccounts() {
+        XCTAssertEqual(DeepLinkRouter().selectedTab, .accounts)
+    }
+
+    func test_ledgerRouteFlagDefaultsOff() {
+        XCTAssertFalse(DeepLinkRouter().showLedger)
+    }
 }

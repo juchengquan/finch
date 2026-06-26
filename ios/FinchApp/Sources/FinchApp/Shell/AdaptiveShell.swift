@@ -20,22 +20,20 @@ struct AdaptiveShell: View {
     }
 }
 
-/// The iPhone/compact shell — a five-slot bottom bar (Ledger, Accounts, Budgets,
-/// Scheduled, Insights). Settings is reached from a top-right gear on every page
-/// (`SettingsBarButton`) that pushes the Settings screen onto the current tab.
-/// `CompactTabRouting` still bridges the bar selection to the shared
-/// `DeepLinkRouter`; a `.settings` router target (deep link / ⌘K / intent) is
-/// converted to that push instead of selecting a tab.
+/// The iPhone/compact shell — a five-slot bottom bar (Accounts, Budgets,
+/// Scheduled, Insights, Settings). The Ledger is reached from a top-left
+/// `books.vertical` corner control on every tab (`LedgerBarButton`) that pushes
+/// the two-layer Ledger onto the current tab. `CompactTabRouting` bridges the bar
+/// selection to the shared `DeepLinkRouter`; a `.ledger` router target (deep link
+/// / ⌘K / intent / corner button) is converted to that push instead of selecting
+/// a slot. Launch tab is Accounts.
 struct TabBarShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
-    @State private var selected: CompactTab = .ledger
+    @State private var selected: CompactTab = .accounts
 
     var body: some View {
         TabView(selection: $selected) {
-            tabContent(.ledger).modifier(AddTransactionFAB())
-                .tabItem { Label(AppTab.ledger.title, systemImage: AppTab.ledger.icon) }
-                .tag(CompactTab.ledger)
             tabContent(.accounts).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
@@ -48,6 +46,9 @@ struct TabBarShell: View {
             tabContent(.insights).modifier(AddTransactionFAB())
                 .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
                 .tag(CompactTab.insights)
+            tabContent(.settings)
+                .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.icon) }
+                .tag(CompactTab.settings)
         }
         // Activity is no longer a bottom-bar tab, but tx deep links / notifications
         // / Spotlight still route to `.activity` with a focused tx id — open that
@@ -56,7 +57,7 @@ struct TabBarShell: View {
         .onAppear { syncFromRouter(router.selectedTab) }
         .onChange(of: router.selectedTab) { _, tab in syncFromRouter(tab) }
         .onChange(of: selected) { _, sel in
-            router.showSettings = false
+            router.showLedger = false
             if let tab = CompactTabRouting.routerTab(forSelected: sel, current: router.selectedTab) {
                 router.selectedTab = tab
             }
@@ -64,10 +65,10 @@ struct TabBarShell: View {
     }
 
     private func syncFromRouter(_ tab: AppTab) {
-        // A `.settings` route (deep link / ⌘K / intent) → push Settings on the
-        // active tab; settle the bar back on a real primary tab.
-        if tab == .settings {
-            router.showSettings = true
+        // A `.ledger` route (deep link / ⌘K / intent / corner button) → push the
+        // two-layer Ledger on the active tab; settle the bar on a real primary tab.
+        if tab == .ledger {
+            router.showLedger = true
             router.selectedTab = CompactTabRouting.appTab(for: selected) ?? .accounts
             return
         }
@@ -87,7 +88,7 @@ struct TabBarShell: View {
             set: { newValue in
                 if newValue == nil {
                     router.focusedId = nil
-                    if router.selectedTab == .activity { router.selectedTab = .ledger }
+                    if router.selectedTab == .activity { router.selectedTab = .accounts }
                 }
             }
         )
@@ -134,37 +135,34 @@ private struct AddTransactionFAB: ViewModifier {
     }
 }
 
-/// The top-right gear shown on every compact primary tab. Replaces the removed
-/// "More" tab — tapping it pushes Settings onto the current tab (via the
-/// `.settingsPush()` modifier on each tab's NavigationStack). Compact-only, so
-/// the iPad/Mac sidebar (which lists Settings itself) doesn't get a redundant
+/// The top-left Ledger control on every compact primary tab — pushes the
+/// two-layer Ledger onto the current tab (via `.ledgerPush()`). Compact-only, so
+/// the iPad/Mac sidebar (which lists Ledger itself) doesn't get a redundant
 /// button. Drop one in each tab's `.toolbar`:
-/// `ToolbarItem(placement: .topBarTrailing) { SettingsBarButton() }`.
-struct SettingsBarButton: View {
+/// `ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }`.
+struct LedgerBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: DeepLinkRouter
     var body: some View {
         if sizeClass == .compact {
-            Button { router.showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Settings")
+            Button { router.showLedger = true } label: { Image(systemName: "books.vertical") }
+                .accessibilityLabel("Ledger")
         }
     }
 }
 
-/// Pushes Settings onto the enclosing NavigationStack when `router.showSettings`
-/// is set (by the gear or a `.settings` route). Compact-only — iPad/Mac reach
-/// Settings via the sidebar. `.navigationTitle` is set here because SettingsTab's
-/// own title (inside MoreTabNavigationStack's conditional) doesn't surface
-/// through `navigationDestination`.
-private struct SettingsPush: ViewModifier {
+/// Pushes the two-layer Ledger onto the enclosing NavigationStack when
+/// `router.showLedger` is set (by the corner button or a `.ledger` route).
+/// Compact-only — iPad/Mac reach the Ledger via the sidebar.
+private struct LedgerPush: ViewModifier {
     @EnvironmentObject private var router: DeepLinkRouter
     @Environment(\.horizontalSizeClass) private var sizeClass
     func body(content: Content) -> some View {
         #if os(iOS)
         content.navigationDestination(isPresented: Binding(
-            get: { sizeClass == .compact && router.showSettings },
-            set: { if !$0 { router.showSettings = false } })) {
-            SettingsTab().navigationTitle("Settings")
+            get: { sizeClass == .compact && router.showLedger },
+            set: { if !$0 { router.showLedger = false } })) {
+            LedgerListView().navigationTitle("Ledger")
         }
         #else
         content
@@ -173,9 +171,9 @@ private struct SettingsPush: ViewModifier {
 }
 
 extension View {
-    /// Apply inside a compact tab's NavigationStack so the top-right gear (and a
-    /// `.settings` route) pushes Settings there.
-    func settingsPush() -> some View { modifier(SettingsPush()) }
+    /// Apply inside a compact tab's NavigationStack so the top-left Ledger control
+    /// (and a `.ledger` route) pushes the Ledger there.
+    func ledgerPush() -> some View { modifier(LedgerPush()) }
 }
 
 /// The iPad/Mac shell. Accounts and Budgets get a true three-column

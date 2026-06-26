@@ -18,8 +18,9 @@ struct FinchApp: App {
     init() {
         #if DEBUG
         // Testing aid (DEBUG only — never in release): launch with
-        // `-initialTab <accounts|activity|budgets|insights|scheduled|settings>`
-        // to open straight to that tab, so simulator screenshots / UI checks can
+        // `-initialTab <accounts|activity|budgets|insights|scheduled|settings|ledger>`
+        // to open straight to that tab (`ledger` resolves to the top-left corner
+        // push, not a bar slot), so simulator screenshots / UI checks can
         // reach a non-default tab. Foundation maps `-key value` launch args into
         // UserDefaults' argument domain.
         if let raw = UserDefaults.standard.string(forKey: "initialTab"),
