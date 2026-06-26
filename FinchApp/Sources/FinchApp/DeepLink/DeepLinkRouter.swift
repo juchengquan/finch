@@ -6,10 +6,13 @@ public enum AppTab: String, Hashable, CaseIterable, Identifiable, Sendable {
     public var id: Self { self }
     public var title: String {
         switch self {
-        case .ledger: return "Ledger"
-        case .accounts: return "Accounts"; case .activity: return "Activity"
-        case .budgets: return "Budgets"; case .insights: return "Insights"
-        case .scheduled: return "Scheduled"; case .settings: return "Settings"
+        case .ledger: return String(localized: "Ledger")
+        case .accounts: return String(localized: "Accounts")
+        case .activity: return String(localized: "Activity")
+        case .budgets: return String(localized: "Budgets")
+        case .insights: return String(localized: "Insights")
+        case .scheduled: return String(localized: "Scheduled")
+        case .settings: return String(localized: "Settings")
         }
     }
     public var icon: String {
