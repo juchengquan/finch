@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 import FinchCore
 
 /// Add Transaction — the flagship write screen (port of the web add-expense-form).
@@ -41,6 +42,8 @@ struct AddTransactionSheet: View {
     @State private var status: Entries.Status = .confirmed
     @State private var selectedTags: Set<String> = []
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showingFileImporter = false
+    @State private var pickedFileURL: URL?
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
     @State private var showingSplit = false
@@ -128,9 +131,18 @@ struct AddTransactionSheet: View {
                 }
                 if isLineItem {
                     Section("Receipt") {
+                        #if os(macOS)
+                        Button { showingFileImporter = true } label: {
+                            Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
+                        }
+                        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image, .pdf]) { result in
+                            if case .success(let url) = result { pickedFileURL = url }
+                        }
+                        #else
                         PhotosPicker(selection: $pickedPhoto, matching: .images) {
                             Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
                         }
+                        #endif
                     }
                 }
 
@@ -417,6 +429,9 @@ struct AddTransactionSheet: View {
                 }
                 if let eid, let photo = pickedPhoto {
                     Task { try? await AttachmentWriter.write(item: photo, entryId: eid, store: store) }
+                }
+                if let eid, let url = pickedFileURL {
+                    Task { try? await AttachmentWriter.writeFile(url: url, entryId: eid, store: store) }
                 }
             }
             dismiss()
