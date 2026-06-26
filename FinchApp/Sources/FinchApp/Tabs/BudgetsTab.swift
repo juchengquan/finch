@@ -23,10 +23,16 @@ struct BudgetsTab: View {
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
+    @State private var searchQuery = ""                // filters budget rows by name
 
     var body: some View {
         NavigationStack(path: $path) {
             listContent
+            #if os(iOS)
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search budgets")
+            #else
+            .searchable(text: $searchQuery, prompt: "Search budgets")
+            #endif
             .navigationTitle("Budgets")
             .settingsPush()
             .toolbar {
@@ -65,6 +71,7 @@ struct BudgetsTab: View {
             }
         } else if let selection {
             List(selection: selection) {
+                summarySection
                 groupedSections { budget in
                     BudgetRowView(budget: budget)
                         .tag(budget.id)
@@ -74,6 +81,7 @@ struct BudgetsTab: View {
             }
         } else {
             List {
+                summarySection
                 groupedSections { budget in
                     NavigationLink(value: budget.id) {
                         BudgetRowView(budget: budget)
@@ -85,10 +93,43 @@ struct BudgetsTab: View {
         }
     }
 
-    /// Grouped budget sections + totals footer, shared by both layouts.
+    /// Compact totals status pinned at the top: total spent / total budget across
+    /// the active ledger (same StatusSummaryRow style as the Accounts summary).
+    @ViewBuilder private var summarySection: some View {
+        Section {
+            let t = store.budgetTotalsDisplay
+            StatusSummaryRow(leadingLabel: "Spent", leadingValue: t.used,
+                             trailingLabel: "Budget", trailingValue: t.base)
+        }
+    }
+
+    /// True while the user has typed a non-empty budget search.
+    private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Budgets in `group`, narrowed by the search query (case-insensitive name
+    /// contains). No query → the full group.
+    private func filteredBudgets(in group: String) -> [BudgetRow] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let budgets = store.budgets(in: group)
+        guard !q.isEmpty else { return budgets }
+        return budgets.filter { $0.name.lowercased().contains(q) }
+    }
+
+    /// Groups to render: all normally; while searching, only those with at least
+    /// one matching budget.
+    private var groupsToShow: [String] {
+        searchActive ? store.budgetGroupsOrdered.filter { !filteredBudgets(in: $0).isEmpty }
+                     : store.budgetGroupsOrdered
+    }
+
+    /// Grouped budget sections, shared by both layouts. (Totals live in the
+    /// top summary section; see `summarySection`.)
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (BudgetRow) -> Row) -> some View {
-        ForEach(store.budgetGroupsOrdered, id: \.self) { groupName in
+        if searchActive && groupsToShow.isEmpty {
+            Section { Text("No matching budgets").foregroundStyle(.secondary) }
+        }
+        ForEach(groupsToShow, id: \.self) { groupName in
             // Tappable Button row (not a section header) so the chevron toggle
             // fires reliably and keeps the default list look — mirrors AccountsTab (#223).
             Section {
@@ -109,15 +150,11 @@ struct BudgetsTab: View {
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
 
-                if !collapsedGroups.contains(groupName) {
-                    ForEach(store.budgets(in: groupName)) { budget in row(budget) }
+                // Collapse is bypassed while searching so matches always surface.
+                if !collapsedGroups.contains(groupName) || searchActive {
+                    ForEach(filteredBudgets(in: groupName)) { budget in row(budget) }
                 }
             }
-        }
-        Section {
-            let t = store.budgetTotalsDisplay
-            StatusSummaryRow(leadingLabel: "Spent", leadingValue: t.used,
-                             trailingLabel: "Budget", trailingValue: t.base)
         }
     }
 

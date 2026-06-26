@@ -6,12 +6,15 @@ import FinchCore
 /// Mutations route through the parent's closures; expansion via Selectors.
 struct ScheduledCalendarView: View {
     @EnvironmentObject private var store: FinchStore
+    /// Templates to plot — already narrowed by the Scheduled tab's search query.
+    var templates: [ScheduledTemplate]
     var onEdit: (ScheduledTemplate) -> Void
     var onPost: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
 
     @State private var monthAnchor: Date = ScheduledCalendarView.firstOfMonth(forISO: nil)
     @State private var selectedDay: String?
+    @State private var showingMonthYearPicker = false
 
     private static let utc: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()
     private static let weekdaySymbols = ["S", "M", "T", "W", "T", "F", "S"]
@@ -31,30 +34,87 @@ struct ScheduledCalendarView: View {
 
     var body: some View {
         let monthStart = iso(1), monthEnd = iso(daysInMonth)
-        let byDay = Dictionary(grouping: Selectors.occurrencesInRange(store.scheduled, from: monthStart, through: monthEnd), by: { $0.date })
+        let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: monthStart, through: monthEnd), by: { $0.date })
         let posted = Selectors.scheduledPostedMap(store.txns)
-        return ScrollView {
-            VStack(spacing: 12) {
-                header
-                weekdayRow
-                grid(byDay: byDay)
-                Divider()
+        return List {
+            // The month grid sits in its own section card (one row, so no internal
+            // separators); the day-detail / upcoming list follows as a second section.
+            Section {
+                VStack(spacing: 12) {
+                    header
+                    weekdayRow
+                    grid(byDay: byDay)
+                }
+            }
+            Section {
                 detail(byDay: byDay, posted: posted)
             }
-            .padding(.horizontal)
         }
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #endif
     }
 
     private var header: some View {
-        HStack {
-            Button { step(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous month")
+        HStack(spacing: 12) {
+            // Tappable month-year → wheel pickers (jump months/years quickly).
+            Button { showingMonthYearPicker = true } label: {
+                HStack(spacing: 4) {
+                    Text(monthLabel).font(.headline)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Month and year")
+            .popover(isPresented: $showingMonthYearPicker) { monthYearPicker }
             Spacer()
-            Text(monthLabel).font(.headline)
-            Spacer()
-            Button { step(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next month")
             Button("Today") { monthAnchor = Self.firstOfMonth(forISO: store.today); selectedDay = store.today }
                 .font(.caption)
+            // Prev/next grouped together, to the right of the year-month.
+            HStack(spacing: 16) {
+                Button { step(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous month")
+                Button { step(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next month")
+            }
         }
+    }
+
+    /// Side-by-side month + year wheels, shown as a popover from the header.
+    /// Both write straight back to `monthAnchor` so the grid updates live.
+    private var monthYearPicker: some View {
+        HStack(spacing: 0) {
+            Picker("Month", selection: monthBinding) {
+                ForEach(1...12, id: \.self) { m in Text(monthName(m)).tag(m) }
+            }
+            .pickerStyle(.wheel).frame(maxWidth: .infinity)
+            Picker("Year", selection: yearBinding) {
+                ForEach(yearRange, id: \.self) { y in Text(verbatim: String(y)).tag(y) }
+            }
+            .pickerStyle(.wheel).frame(maxWidth: .infinity)
+        }
+        .labelsHidden()
+        .frame(width: 300, height: 200)
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private var monthBinding: Binding<Int> {
+        Binding(get: { month }, set: { setMonthYear(month: $0, year: year) })
+    }
+    private var yearBinding: Binding<Int> {
+        Binding(get: { year }, set: { setMonthYear(month: month, year: $0) })
+    }
+    /// Year wheel range: ±10 around today, always widened to include the
+    /// currently-anchored year (in case the user paged far via the chevrons).
+    private var yearRange: [Int] {
+        let base = Int(store.today.prefix(4)) ?? year
+        return Array(min(base - 10, year)...max(base + 10, year))
+    }
+    private func monthName(_ m: Int) -> String {
+        let f = DateFormatter(); f.calendar = Self.utc
+        return f.standaloneMonthSymbols[m - 1]
+    }
+    private func setMonthYear(month m: Int, year y: Int) {
+        var c = DateComponents(); c.year = y; c.month = m; c.day = 1
+        if let d = Self.utc.date(from: c) { monthAnchor = d }
     }
 
     private var weekdayRow: some View {
@@ -76,7 +136,12 @@ struct ScheduledCalendarView: View {
         let d = iso(day)
         let isSel = d == selectedDay, isToday = d == store.today
         return VStack(spacing: 3) {
-            Text("\(day)").font(.callout).foregroundStyle(isToday ? Color.accentColor : .primary)
+            // Today gets a filled accent circle (white number); other days plain.
+            Text("\(day)")
+                .font(.callout).fontWeight(isToday ? .semibold : .regular)
+                .foregroundStyle(isToday ? Color.white : .primary)
+                .frame(width: 26, height: 26)
+                .background(isToday ? Color.accentColor : Color.clear, in: Circle())
             HStack(spacing: 2) {
                 ForEach(Array(occ.prefix(3).enumerated()), id: \.offset) { _, o in
                     Circle().fill(Color(hex: o.template.color ?? "") ?? .accentColor).frame(width: 6, height: 6)
@@ -85,8 +150,7 @@ struct ScheduledCalendarView: View {
             }.frame(height: 8)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
-        .background(isSel ? Color.accentColor.opacity(0.2) : Color.clear)
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(isToday ? Color.accentColor : .clear, lineWidth: 1))
+        .background(isSel ? Color.accentColor.opacity(0.15) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
         .onTapGesture { selectedDay = (selectedDay == d ? nil : d) }
@@ -106,7 +170,7 @@ struct ScheduledCalendarView: View {
         } else {
             Text("Upcoming").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
             let end = Self.utc.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.today) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.today
-            let up = Array(Selectors.occurrencesInRange(store.scheduled, from: store.today, through: end).prefix(20))
+            let up = Array(Selectors.occurrencesInRange(templates, from: store.today, through: end).prefix(20))
             if up.isEmpty { Text("No upcoming items.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             else { ForEach(Array(up.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
         }

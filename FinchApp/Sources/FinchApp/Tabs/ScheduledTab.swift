@@ -11,15 +11,32 @@ struct ScheduledTab: View {
     @State private var showingAdd = false
     @State private var editing: ScheduledTemplate?
     @State private var errorMessage: String?
-    @State private var mode: Mode = .list
+    @State private var mode: Mode = .calendar
     @State private var addPrefill: Date?
     @State private var addFromCharge: RecurringCharge?
-    private enum Mode: String, CaseIterable { case list = "List", calendar = "Calendar" }
+    @State private var searchQuery = ""                // filters the list view by name
+    // Calendar first (default); List second.
+    private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
 
     private var detected: [RecurringCharge] {
         Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today, store.scheduled).filter { !$0.isScheduled }
     }
     private var detectedMonthly: Double { detected.reduce(0) { $0 + $1.monthlyEstimate } }
+
+    /// True while the user has typed a non-empty search.
+    private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// Scheduled templates narrowed by the search query (case-insensitive name).
+    private var filteredScheduled: [ScheduledTemplate] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return store.scheduled }
+        return store.scheduled.filter { $0.name.lowercased().contains(q) }
+    }
+    /// Detected (not-yet-scheduled) charges narrowed by the same query.
+    private var filteredDetected: [RecurringCharge] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return detected }
+        return detected.filter { $0.merchantName.lowercased().contains(q) }
+    }
 
     var body: some View {
         // A primary tab supplies its own NavigationStack (like Accounts/Insights);
@@ -43,7 +60,7 @@ struct ScheduledTab: View {
                         .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
                         if mode == .list {
                             List {
-                                ForEach(store.scheduled, id: \.id) { t in
+                                ForEach(filteredScheduled, id: \.id) { t in
                                     Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
                                         .swipeActions(edge: .trailing) {
@@ -59,9 +76,9 @@ struct ScheduledTab: View {
                                             Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
                                         }
                                 }
-                                if !detected.isEmpty {
+                                if !filteredDetected.isEmpty {
                                     Section {
-                                        ForEach(detected) { r in
+                                        ForEach(filteredDetected) { r in
                                             Button { addFromCharge = r } label: {
                                                 HStack {
                                                     VStack(alignment: .leading, spacing: 2) {
@@ -80,17 +97,29 @@ struct ScheduledTab: View {
                                         HStack {
                                             Text("Detected · not scheduled")
                                             Spacer()
-                                            Text("~\(store.displayMoneyBase(detectedMonthly))/mo · \(detected.count)")
+                                            Text("~\(store.displayMoneyBase(filteredDetected.reduce(0) { $0 + $1.monthlyEstimate }))/mo · \(filteredDetected.count)")
                                                 .font(.caption).foregroundStyle(.secondary)
                                         }
                                     }
                                 }
                             }
+                            .overlay {
+                                if searchActive && filteredScheduled.isEmpty && filteredDetected.isEmpty {
+                                    ContentUnavailableView.search(text: searchQuery)
+                                }
+                            }
                         } else {
-                            ScheduledCalendarView(onEdit: { editing = $0 }, onPost: postNow,
-                                                  onAdd: { addPrefill = $0; showingAdd = true })
+                            ScheduledCalendarView(templates: filteredScheduled, onEdit: { editing = $0 },
+                                                  onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true })
                         }
                     }
+                    // Search lives outside the Calendar/List toggle, so it's pinned
+                    // at the top and applies to whichever view is showing.
+                    #if os(iOS)
+                    .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search scheduled")
+                    #else
+                    .searchable(text: $searchQuery, prompt: "Search scheduled")
+                    #endif
                 }
             }
             .navigationTitle("Scheduled")
