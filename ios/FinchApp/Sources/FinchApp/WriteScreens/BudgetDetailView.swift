@@ -2,8 +2,9 @@ import SwiftUI
 import FinchCore
 
 /// Budget drill-in: cycle progress (used/base/remaining + bar), this cycle's
-/// matched transactions, contribute (income/goal budgets), and edit / change
-/// cycle / clear-pending / delete. Re-resolves from the store; pops when deleted.
+/// matched transactions, contribute (income/goal budgets), and edit / clear-
+/// pending / delete. Re-resolves from the store; pops when deleted. (Cycle edits
+/// — frequency + start date — live in the Edit sheet, BudgetSheet.)
 struct BudgetDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -12,7 +13,6 @@ struct BudgetDetailView: View {
 
     @State private var showingEdit = false
     @State private var showingContribute = false
-    @State private var showingCycle = false
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
 
@@ -45,14 +45,12 @@ struct BudgetDetailView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
-                            Button { showingCycle = true } label: { Label("Change cycle", systemImage: "calendar") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
                         } label: { Image(systemName: "ellipsis.circle") }
                     }
                 }
                 .sheet(isPresented: $showingEdit) { BudgetSheet(budget: budget) }
                 .sheet(isPresented: $showingContribute) { ContributeSheet(budgetId: budget.id) }
-                .sheet(isPresented: $showingCycle) { ChangeCycleSheet(budget: budget) }
                 .confirmationDialog("Delete this budget?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(budget) }
                 }
@@ -156,66 +154,6 @@ struct ContributeSheet: View {
         errorMessage = nil
         guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount greater than 0."; return }   // web guards amt > 0
         do { try store.apply(.contributeBudget, Args(["id": .string(budgetId), "amount": .double(v)])); dismiss() }
-        catch { errorMessage = i18nMessage(error) }
-    }
-}
-
-/// Change a budget's cycle (frequency + start date + amount) — `updateBudgetCycle`,
-/// which also resets the staged pending amount + rollover.
-struct ChangeCycleSheet: View {
-    @EnvironmentObject private var store: FinchStore
-    @Environment(\.dismiss) private var dismiss
-    let budget: BudgetRow
-    private let frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
-    @State private var frequency: String
-    @State private var startDate: Date
-    @State private var amount: String
-    @State private var errorMessage: String?
-
-    init(budget: BudgetRow) {
-        self.budget = budget
-        _frequency = State(initialValue: budget.frequency)
-        _startDate = State(initialValue: AppDate.isoDay.date(from: budget.startDate) ?? Date())
-        _amount = State(initialValue: String(format: "%g", budget.amount))
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Picker("Frequency", selection: $frequency) {
-                    ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
-                }
-                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
-                HStack {
-                    Text("Amount"); Spacer()
-                    TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-            }
-            .navigationTitle("Change Cycle")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
-                }
-            }
-        }
-    }
-
-    private func save() {
-        errorMessage = nil
-        guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount."; return }
-        let patch: [String: JSONValue] = [
-            "frequency": .string(frequency),
-            "startDate": .string(AppDate.isoDay.string(from: startDate)),
-            "amount": .double(v),
-        ]
-        do { try store.apply(.updateBudgetCycle, Args(["id": .string(budget.id), "patch": .object(patch)])); dismiss() }
         catch { errorMessage = i18nMessage(error) }
     }
 }
