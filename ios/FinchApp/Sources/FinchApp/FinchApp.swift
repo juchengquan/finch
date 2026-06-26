@@ -125,6 +125,16 @@ struct FinchApp: App {
             SidebarCommands()   // ⌃⌘S toggle sidebar + a View menu entry
             #endif
         }
+
+        #if os(macOS)
+        Settings {
+            NavigationStack { SettingsRootList() }
+                .environmentObject(store)
+                .environmentObject(router)
+                .environmentObject(gate)
+                .frame(minWidth: 520, minHeight: 420)
+        }
+        #endif
     }
 }
 
