@@ -15,13 +15,18 @@ struct ScheduledTab: View {
     @State private var addPrefill: Date?
     private enum Mode: String, CaseIterable { case list = "List", calendar = "Calendar" }
 
+    private var detected: [RecurringCharge] {
+        Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today).filter { !$0.isScheduled }
+    }
+    private var detectedMonthly: Double { detected.reduce(0) { $0 + $1.monthlyEstimate } }
+
     var body: some View {
         // A primary tab supplies its own NavigationStack (like Accounts/Insights);
         // it no longer lands in the system More overflow, so MoreTabNavigationStack
         // (a no-op in compact width) would leave it with no nav bar or title.
         NavigationStack {
             Group {
-                if store.scheduled.isEmpty {
+                if store.scheduled.isEmpty && detected.isEmpty {
                     ContentUnavailableView {
                         Label("No scheduled items", systemImage: "calendar")
                     } description: {
@@ -52,6 +57,28 @@ struct ScheduledTab: View {
                                             Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
                                             Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
                                         }
+                                }
+                                if !detected.isEmpty {
+                                    Section {
+                                        ForEach(detected) { r in
+                                            HStack {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(r.merchantName)
+                                                    Text("\(r.cadence.capitalized) · next ~\(r.nextEstimatedDate)")
+                                                        .font(.caption).foregroundStyle(.secondary)
+                                                }
+                                                Spacer()
+                                                Text(store.displayMoneyBase(r.averageAmount)).fontWeight(.medium)
+                                            }
+                                        }
+                                    } header: {
+                                        HStack {
+                                            Text("Detected · not scheduled")
+                                            Spacer()
+                                            Text("~\(store.displayMoneyBase(detectedMonthly))/mo · \(detected.count)")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                             }
                         } else {
