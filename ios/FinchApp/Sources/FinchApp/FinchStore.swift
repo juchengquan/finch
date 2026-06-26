@@ -166,6 +166,7 @@ public final class FinchStore: ObservableObject {
         let accountGroups: [(id: String, name: String)] = [
             ("grp-cash", "Cash & Checking"),
             ("grp-savings", "Savings & Investments"),
+            ("grp-retirement", "Retirement"),
             ("grp-credit", "Credit Cards"),
         ]
         for g in accountGroups {
@@ -177,9 +178,13 @@ public final class FinchStore: ObservableObject {
         let accounts: [(id: String, name: String, type: String, opening: Double, group: String)] = [
             ("cash", "Cash", "cash", 180, "grp-cash"),
             ("everyday", "Everyday", "savings", 3_200, "grp-cash"),
+            ("checking", "Checking", "cash", 2_400, "grp-cash"),
             ("savings", "Savings", "savings", 15_400, "grp-savings"),
             ("brokerage", "Brokerage", "investment", 8_600, "grp-savings"),
+            ("retire-401k", "401(k)", "investment", 42_000, "grp-retirement"),
+            ("roth-ira", "Roth IRA", "investment", 18_500, "grp-retirement"),
             ("credit", "Credit Card", "credit_card", 0, "grp-credit"),
+            ("travel-card", "Travel Card", "credit_card", 0, "grp-credit"),
         ]
         for a in accounts {
             try apply("createAccount", [
