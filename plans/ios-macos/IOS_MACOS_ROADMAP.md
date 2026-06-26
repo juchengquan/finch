@@ -1,5 +1,21 @@
 # finch for iOS & macOS — Phased Roadmap (2026-06)
 
+> **Delivery status — updated 2026-06-26 @ `c49f450`.** The roadmap is **essentially fully delivered**: Phases 1.0–7 shipped; Phase 8 (CloudKit row-level sync) is built as a **scaffold** but inert until the container is provisioned + multi-device-tested.
+>
+> | Phase | Status | Notes |
+> |---|---|---|
+> | 1.0 — read-only app | ✅ Shipped | Accounts / Activity / Budgets / Settings; FinchCore + projections |
+> | 1.5 — Insights + selectors + parity | ✅ Shipped | InsightsTab + advice engine (#323); ParityTests green |
+> | 2 — Entry + CRUD + write chokepoint | ✅ Shipped | `store.apply` chokepoint; full add/edit/splits/transfers/refunds |
+> | 3 — Adaptive iPad / macOS | ✅ Shipped | `AdaptiveShell`; FinchMac target builds every PR |
+> | 4 — Power features | ✅ Shipped | rules / categories / tags / merchants / FX admin; saved searches (#333) |
+> | 5 — Pack engine + iCloud Drive | ✅ Shipped | `.finch` pack, CSV import, auto-backup, iCloud-Drive mirror |
+> | 6 — Spotlight / Notifications / Biometric / App Intents / Share | ✅ Shipped | 6.1–6.5; notifications reconcile-fix + audit (#335); `FinchShare` target |
+> | 7 — Widgets / Live Activities / Watch | ✅ Shipped | `FinchWidget` + `FinchWatch` targets; `WidgetSnapshot` |
+> | 8 — Row-level CloudKit sync | 🚧 Scaffold | `CloudKitSyncCoordinator`/`Sync` built; **inert** until container provisioned + device-tested ("CloudKit sync maturity") |
+>
+> On top of the phases, a long tail of **web→iOS parity** and polish shipped (see `2026-06-25-ios-web-parity-gap-inventory.md`): Tier-1 & Tier-3 fully closed; only *Accounts: guided reconcile / quick-add* (Tier-2) remains. **Full zh-Hans localization** landed (#346/#349/#350). Per-phase status notes are inline under each heading below.
+
 > _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
 
 > **Status**: roadmap sketch — 1-2 pages per phase. Not an implementation plan
@@ -31,6 +47,8 @@
 ---
 
 ## Phase 1.0 — FinchCore + read-only iPhone app (Accounts / Activity / Budgets / Settings)
+
+> **Status: ✅ Shipped.** FinchCore + projections + the four read tabs.
 
 **Goal**: Ship a working, verifiable iPhone app that opens a `.finch` pack
 via the system file picker, displays 4 read-only tabs, and exports a fresh
@@ -116,6 +134,8 @@ via the system file picker, displays 4 read-only tabs, and exports a fresh
 
 ## Phase 1.5 — Insights tab + remaining selectors + JSON-golden parity
 
+> **Status: ✅ Shipped.** InsightsTab + the full selector set + advice engine (#323); JSON-golden ParityTests green.
+
 **Goal**: Add the Insights tab (5th tab) + port the remaining 25
 selectors from `lib/select.ts` (Phase 1.0 ships the 7 required by
 the 4 tabs + Account Detail; Phase 1.5 ships the rest) + ship the
@@ -178,6 +198,8 @@ module + the in-memory `Tx[]` cache are the foundation for selectors)
 ---
 
 ## Phase 2 — Entry + core CRUD + write chokepoint
+
+> **Status: ✅ Shipped.** `store.apply` write chokepoint; add/edit/delete, splits, transfers, refunds, confirm-pending, budget + scheduled CRUD.
 
 **Goal**: Make the app "usable for real" — add transactions, edit them,
 confirm pending, manage budgets, post-now on scheduled items, full
@@ -256,6 +278,8 @@ data the existing read surface can render)
 
 ## Phase 3 — Adaptive iPad / macOS
 
+> **Status: ✅ Shipped.** Single-render `AdaptiveShell` (tab bar ↔ sidebar+split); the `FinchMac` target builds on every PR.
+
 **Goal**: The same code base serves iPhone, iPad, and Mac via
 SwiftUI's adaptive containers. Both distribution paths set up
 (Mac App Store + notarised direct download).
@@ -307,6 +331,8 @@ adaptive layout is most useful when there's stuff to write)
 ---
 
 ## Phase 4 — Power features
+
+> **Status: ✅ Shipped.** Rules builder, categories / tags / merchants / FX admin, saved searches (#333), bulk actions.
 
 **Goal**: Add the heavy-duty write surfaces: reconcile, rules engine
 + builder + backfill, transfers CRUD, merchants / categories / tags
@@ -368,6 +394,8 @@ internally)
 ---
 
 ## Phase 5 — Pack engine + iCloud Drive sync
+
+> **Status: ✅ Shipped.** `.finch` pack export/import (`VACUUM INTO` / swap), CSV statement import, auto-backup, iCloud-Drive mirror + newer-version import.
 
 **Goal**: Implement the `.finch` pack format end-to-end on the
 native side: build, validate, atomic swap, **debounced auto-pack**,
@@ -435,6 +463,8 @@ debounce complexity)
 ---
 
 ## Phase 6 — Native upside (part 1): Spotlight / Notifications / Biometric / App Intents / Share Extension
+
+> **Status: ✅ Shipped (6.1–6.5).** Spotlight + `DeepLinkRouter`, notifications (planner + reconcile-on-refresh + end-to-end audit, #335), biometric `BiometricGate`, `FinchIntents` / App Intents, `FinchShare` extension.
 
 > **Phase 6 is decomposed into 5 sub-specs** (one per Apple
 > platform framework). Each sub-spec is a full design
@@ -543,6 +573,8 @@ details the specifics):
 
 ## Phase 7 — Native upside (part 2): Widgets / Live Activities / Watch
 
+> **Status: ✅ Shipped.** `FinchWidget` + `FinchWatch` targets reading a `WidgetSnapshot` from the App Group (`WidgetSnapshotTests` cover it).
+
 **Goal**: The pure-UI on top of an already-mature data layer. The
 plan's §14 deferred widgets from Phase 6 for the v1 native surface
 focus; this phase is when they land.
@@ -597,6 +629,8 @@ path)
 ---
 
 ## Phase 8 — Row-level sync (the full §4.3-C) — committed to building (future roadmap)
+
+> **Status: 🚧 Scaffold built, inert.** `CloudKitSyncCoordinator` / `CloudKitSync` / `SyncMutation` exist and the Settings toggle is wired, but the network layer only activates once the CloudKit container is provisioned; needs multi-device hardware testing. Tracked as "CloudKit sync maturity" (device-only).
 
 **Goal**: CloudKit or server sync atop the UUID-ready, single-
 chokepoint mutation layer. **Per the resolution-pass decision
