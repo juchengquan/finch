@@ -8,6 +8,7 @@ import FinchCore
 struct AccountDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
 
     let accountId: String
 
@@ -29,7 +30,7 @@ struct AccountDetailView: View {
                     Section {
                         header(account)
                         reconcileBadge(account)
-                        if let ob = account.openingBalanceBase, ob != 0 {
+                        if showOpeningBalance, let ob = account.openingBalanceBase, ob != 0 {
                             LabeledContent("Opening balance", value: store.displayMoneyBase(ob))
                         }
                     }
