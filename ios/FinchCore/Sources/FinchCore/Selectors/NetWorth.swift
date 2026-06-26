@@ -61,6 +61,15 @@ extension Selectors {
         accounts.filter { $0.ledgerId == ledgerId && ($0.includeInNetWorth ?? 1) != 0 && ($0.isActive ?? true) }
     }
 
+    /// Total net worth for a ledger: sum of net-worth-eligible accounts' balances,
+    /// each re-expressed into the ledger base via `toBase`. Mirrors the store's
+    /// `netWorthDisplay`, but parameterized by ledger so any (non-active) ledger
+    /// can be summed.
+    public static func ledgerNetWorth(_ accounts: [AccountRow], _ ledgerId: String,
+                                      _ toBase: ToBase = { a, _ in a }) -> Double {
+        netWorthAccounts(accounts, ledgerId).reduce(0.0) { $0 + toBase($1.balance, $1.currency) }
+    }
+
     // MARK: netWorthByMonth
 
     public static func netWorthByMonth(_ txns: [Tx], _ accounts: [AccountRow], _ ledgerId: String,
