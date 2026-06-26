@@ -33,6 +33,7 @@ struct ReconcileSheet: View {
                         }
                         DatePicker("Statement date", selection: $date, displayedComponents: .date)
                     }
+                    trackerSection(a)
                     transactionsSection(a)
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -44,11 +45,46 @@ struct ReconcileSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: finish) { Image(systemName: "checkmark") }.accessibilityLabel("Reconcile").bold()
+                    if let a = account, parse(statementBalance) != 0 || !statementBalance.isEmpty {
+                        let s = recState(a)
+                        if s.balanced {
+                            Button { finish(postAdjustment: false) } label: { Text("Done") }.bold()
+                        } else {
+                            Button { finish(postAdjustment: true) } label: {
+                                Text("Adjust \(store.displayMoney(s.difference, from: a.currency))")
+                            }
+                        }
+                    }
                 }
             }
             .onAppear { if accountId.isEmpty { accountId = preselect ?? store.accounts.first?.id ?? "" } }
         }
+    }
+
+    private func recState(_ a: AccountRow) -> ReconcileState {
+        Selectors.reconcileState(a, store.transactions(for: a.id), DecimalInput.parse(statementBalance) ?? 0)
+    }
+
+    @ViewBuilder private func trackerSection(_ a: AccountRow) -> some View {
+        if DecimalInput.parse(statementBalance) != nil {
+            let s = recState(a)
+            Section {
+                LabeledContent("Cleared", value: store.displayMoney(s.clearedBalance, from: a.currency))
+                LabeledContent("Difference",
+                    value: store.displayMoney(s.difference, from: a.currency))
+                    .foregroundStyle(s.balanced ? .green : .orange)
+                ProgressView(value: progress(s, parse(statementBalance)))
+                    .tint(s.balanced ? .green : .orange)
+                Text("Cleared \(s.clearedCount) · To review \(s.unclearedCount)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func parse(_ s: String) -> Double { DecimalInput.parse(s) ?? 0 }
+    private func progress(_ s: ReconcileState, _ target: Double) -> Double {
+        guard target != 0 else { return s.balanced ? 1 : 0 }
+        return min(1, max(0, abs(s.clearedBalance / target)))
     }
 
     @ViewBuilder private func transactionsSection(_ a: AccountRow) -> some View {
@@ -86,13 +122,13 @@ struct ReconcileSheet: View {
         catch { errorMessage = i18nMessage(error) }
     }
 
-    private func finish() {
+    private func finish(postAdjustment: Bool) {
         errorMessage = nil
         guard let bal = DecimalInput.parse(statementBalance) else { errorMessage = "Enter the statement balance."; return }
         do {
             try store.apply(.reconcileAccount, Args([
                 "accountId": .string(accountId), "statementBalance": .double(bal),
-                "statementDate": .string(AppDate.isoDay.string(from: date)), "postAdjustment": .bool(true)]))
+                "statementDate": .string(AppDate.isoDay.string(from: date)), "postAdjustment": .bool(postAdjustment)]))
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
     }
