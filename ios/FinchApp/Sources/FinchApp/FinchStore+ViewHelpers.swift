@@ -136,9 +136,11 @@ extension FinchStore {
 
     public var accountGroupsOrdered: [String] {
         var seen = Set<String>(); var out: [String] = []
-        for a in accounts { let g = a.groupName ?? "Ungrouped"; if seen.insert(g).inserted { out.append(g) } }
+        for a in accounts { guard let g = a.groupName else { continue }; if seen.insert(g).inserted { out.append(g) } }
         return out
     }
+    /// Accounts with no group — rendered bare at the top of the list (no "Ungrouped" header).
+    public var ungroupedAccounts: [AccountRow] { accounts.filter { $0.groupName == nil } }
     public func accounts(in group: String) -> [AccountRow] {
         accounts.filter { ($0.groupName ?? "Ungrouped") == group }
     }
@@ -174,10 +176,14 @@ extension FinchStore {
     public var budgetGroupsOrdered: [String] {
         var seen = Set<String>(); var out: [String] = []
         for b in budgets {
-            let g = b.groupId.flatMap { budgetGroupNames[$0] } ?? "Ungrouped"
+            guard let g = b.groupId.flatMap({ budgetGroupNames[$0] }) else { continue }
             if seen.insert(g).inserted { out.append(g) }
         }
         return out
+    }
+    /// Budgets with no (resolvable) group — rendered bare at the top.
+    public var ungroupedBudgets: [BudgetRow] {
+        budgets.filter { $0.groupId.flatMap { budgetGroupNames[$0] } == nil }
     }
     public func budgets(in group: String) -> [BudgetRow] {
         budgets.filter { (($0.groupId.flatMap { budgetGroupNames[$0] }) ?? "Ungrouped") == group }

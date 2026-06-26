@@ -196,6 +196,14 @@ struct AccountsTab: View {
         return accts.filter { ($0.name ?? "").lowercased().contains(q) }
     }
 
+    /// Ungrouped accounts, narrowed by the search query — rendered bare at the top.
+    private var filteredUngroupedAccounts: [AccountRow] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let accts = store.ungroupedAccounts
+        guard !q.isEmpty else { return accts }
+        return accts.filter { ($0.name ?? "").lowercased().contains(q) }
+    }
+
     /// Groups to render: all of them normally; while searching, only those with
     /// at least one matching account (so empty headers don't linger).
     private var groupsToShow: [String] {
@@ -207,8 +215,12 @@ struct AccountsTab: View {
     /// only the per-row view differs (push link vs. selectable row).
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
-        if searchActive && groupsToShow.isEmpty {
+        if searchActive && groupsToShow.isEmpty && filteredUngroupedAccounts.isEmpty {
             Section { Text("No matching accounts").foregroundStyle(.secondary) }
+        }
+        // Ungrouped accounts: bare rows pinned to the top, no "Ungrouped" header.
+        if !filteredUngroupedAccounts.isEmpty {
+            Section { ForEach(filteredUngroupedAccounts) { account in row(account) } }
         }
         ForEach(groupsToShow, id: \.self) { groupName in
             // The group title is a tappable Button *row* (not a section header):
