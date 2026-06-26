@@ -338,4 +338,77 @@ public enum Selectors {
         }
         return out
     }
+
+    /// Detect repeating expense charges (subscriptions). Groups expenses by merchant,
+    /// keeps those with a consistent cadence + stable amount that are still active.
+    public static func detectRecurring(_ txns: [Tx], _ ledgerId: String, _ today: String,
+                                       minOccurrences: Int = 3) -> [RecurringCharge] {
+        var groups: [String: [Tx]] = [:]
+        var names: [String: String] = [:]
+        for t in txns {
+            if ledgerOf(t) != ledgerId { continue }
+            if (t.pending ?? false) { continue }
+            if kindOf(t) != "expense" { continue }
+            guard let key = merchantKey(t) else { continue }
+            groups[key, default: []].append(t)
+            names[key] = t.merchant
+        }
+        let todayDate = date(today)
+        var out: [RecurringCharge] = []
+        for (key, raw) in groups {
+            let items = raw.sorted { ($0.date, $0.time ?? "") < ($1.date, $1.time ?? "") }
+            guard items.count >= minOccurrences else { continue }
+
+            let mags = items.map { abs($0.nativeAmount ?? $0.amount) }
+            let mean = mags.reduce(0, +) / Double(mags.count)
+            guard mean > 0 else { continue }
+            let variance = mags.reduce(0.0) { $0 + ($1 - mean) * ($1 - mean) } / Double(mags.count)
+            guard variance.squareRoot() / mean < 0.35 else { continue }   // amounts roughly equal
+
+            var gaps: [Int] = []
+            for i in 1..<items.count {
+                let g = cal.dateComponents([.day], from: date(items[i-1].date), to: date(items[i].date)).day ?? 0
+                if g > 0 { gaps.append(g) }
+            }
+            guard !gaps.isEmpty else { continue }
+            let med = medianInt(gaps)
+            guard let cadence = cadenceForGap(med) else { continue }
+            guard gaps.allSatisfy({ abs(Double($0) - Double(med)) <= 0.4 * Double(med) }) else { continue }
+
+            let lastDate = items.last!.date
+            let sinceLast = cal.dateComponents([.day], from: date(lastDate), to: todayDate).day ?? 0
+            guard sinceLast <= Int(1.6 * Double(med)) else { continue }    // still active
+
+            let isScheduled = items.contains { ($0.sourceTemplateId?.isEmpty == false) }
+            out.append(RecurringCharge(
+                id: key, merchantName: names[key] ?? key, averageAmount: r2(mean), cadence: cadence,
+                monthlyEstimate: r2(monthlyFor(mean, cadence)), occurrences: items.count,
+                lastDate: lastDate, nextEstimatedDate: ymd(addDays(date(lastDate), med)), isScheduled: isScheduled))
+        }
+        return out.sorted { $0.monthlyEstimate > $1.monthlyEstimate }
+    }
+
+    private static func medianInt(_ xs: [Int]) -> Int {
+        let s = xs.sorted(); let n = s.count
+        return n % 2 == 1 ? s[n/2] : (s[n/2 - 1] + s[n/2]) / 2
+    }
+    private static func cadenceForGap(_ g: Int) -> String? {
+        switch g {
+        case 6...8: return "weekly"
+        case 12...16: return "biweekly"
+        case 26...35: return "monthly"
+        case 80...100: return "quarterly"
+        case 350...380: return "yearly"
+        default: return nil
+        }
+    }
+    private static func monthlyFor(_ amount: Double, _ cadence: String) -> Double {
+        switch cadence {
+        case "weekly": return amount * 30.0 / 7.0
+        case "biweekly": return amount * 30.0 / 14.0
+        case "quarterly": return amount / 3.0
+        case "yearly": return amount / 12.0
+        default: return amount   // monthly
+        }
+    }
 }

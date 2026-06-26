@@ -172,6 +172,25 @@ public struct MerchantStats: Codable, Equatable, Sendable {
     public var std: Double
 }
 
+public struct RecurringCharge: Identifiable, Equatable, Sendable, Codable {
+    public let id: String              // = merchantKey
+    public let merchantName: String
+    public let averageAmount: Double
+    public let cadence: String         // weekly | biweekly | monthly | quarterly | yearly
+    public let monthlyEstimate: Double
+    public let occurrences: Int
+    public let lastDate: String
+    public let nextEstimatedDate: String
+    public let isScheduled: Bool
+    public init(id: String, merchantName: String, averageAmount: Double, cadence: String,
+                monthlyEstimate: Double, occurrences: Int, lastDate: String,
+                nextEstimatedDate: String, isScheduled: Bool) {
+        self.id = id; self.merchantName = merchantName; self.averageAmount = averageAmount
+        self.cadence = cadence; self.monthlyEstimate = monthlyEstimate; self.occurrences = occurrences
+        self.lastDate = lastDate; self.nextEstimatedDate = nextEstimatedDate; self.isScheduled = isScheduled
+    }
+}
+
 public struct AnomalyScore: Codable, Equatable, Sendable {
     public var zScore: Double
     public var mean: Double
