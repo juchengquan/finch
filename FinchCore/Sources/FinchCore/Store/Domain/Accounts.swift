@@ -32,7 +32,11 @@ public enum Accounts {
         } else {
             sortOrder = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM accounts WHERE ledger_id = ? AND group_id IS NULL", arguments: [ledgerId]) ?? 0
         }
-        let inw = type == "credit_card" ? 0 : 1
+        // All account types default to net-worth-included (incl. credit cards),
+        // so a card's debt reduces net worth and shows under Liabilities. Users
+        // can still exclude an individual account via updateAccount. (Diverges
+        // from the web default, which excludes credit_card.)
+        let inw = 1
         try db.execute(sql: """
             INSERT INTO accounts (id,ledger_id,group_id,name,type,currency,current_balance,color,sort_order,include_in_net_worth,is_active,created_at,updated_at)
             VALUES (?,?,?,?,?,?,0,?,?,?,1,datetime('now'),datetime('now'))
