@@ -84,9 +84,10 @@ struct AddTransactionSheet: View {
         NavigationStack {
             Form {
                 Text(kind.label)   // names the icon-only type control above
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                 if kind == .transfer {
                     transferFields
                 } else if kind == .adjust {
