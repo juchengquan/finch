@@ -203,6 +203,81 @@ extension FinchStore {
         return max(0, Int((to.timeIntervalSince(now) / 86_400).rounded(.up)))
     }
 
+    // MARK: - Per-ledger reads (two-layer Ledger tab: detail works for ANY ledger)
+
+    /// Summary figures for the ledger detail page; money fields are in the
+    /// ledger's own base currency. Computed for the active ledger from the live
+    /// published state, and for any other ledger from a fresh projection read.
+    public struct LedgerSummary: Equatable, Sendable {
+        public let netWorth: Double
+        public let monthIncome: Double
+        public let monthExpense: Double
+        public let accounts: [AccountRow]
+    }
+
+    /// A ledger's base currency (falls back to the active base if unknown).
+    func baseCurrency(forLedger ledgerId: String) -> String {
+        ledgers.first { $0.id == ledgerId }?.base ?? baseCurrency
+    }
+    /// Display currency chosen for a ledger (defaults to its base).
+    public func displayCurrency(forLedger ledgerId: String) -> String {
+        displayCurrencyByLedger[ledgerId] ?? baseCurrency(forLedger: ledgerId)
+    }
+    /// Display-currency options for a ledger: its base + every FX rate currency.
+    public func availableDisplayCurrencies(forLedger ledgerId: String) -> [String] {
+        let base = baseCurrency(forLedger: ledgerId)
+        return [base] + Set(exchangeRates.map(\.currency)).subtracting([base]).sorted()
+    }
+    /// account-currency → a specific ledger's base.
+    func toBase(_ amount: Double, from currency: String?, ledgerBase: String) -> Double {
+        Money.convert(amount, from: currency ?? ledgerBase, to: ledgerBase, rates: rateMap) ?? amount
+    }
+    /// Format a ledger-base amount into that ledger's display currency.
+    public func displayMoney(_ baseAmount: Double, forLedger ledgerId: String) -> String {
+        let base = baseCurrency(forLedger: ledgerId)
+        let disp = displayCurrency(forLedger: ledgerId)
+        let v = Money.convert(baseAmount, from: base, to: disp, rates: rateMap) ?? baseAmount
+        return Money.format(v, currency: disp)
+    }
+    /// Accounts for a ledger: live state when active, else a fresh read.
+    func accounts(forLedger ledgerId: String) -> [AccountRow] {
+        if ledgerId == activeLedgerId { return accounts }
+        guard let q = dbQueue else { return [] }
+        return (try? Projection.accounts(dbQueue: q, ledgerId: ledgerId)) ?? []
+    }
+    /// Transactions for a ledger: live state when active, else a fresh read.
+    func txns(forLedger ledgerId: String) -> [Tx] {
+        if ledgerId == activeLedgerId { return txns }
+        guard let q = dbQueue else { return [] }
+        return (try? Projection.run(dbQueue: q, ledgerId: ledgerId)) ?? []
+    }
+    /// Net worth (ledger base) for any ledger — used by the list rows.
+    public func netWorth(forLedger ledgerId: String) -> Double {
+        let base = baseCurrency(forLedger: ledgerId)
+        return Selectors.ledgerNetWorth(accounts(forLedger: ledgerId), ledgerId) { amt, ccy in
+            self.toBase(amt, from: ccy, ledgerBase: base)
+        }
+    }
+    /// Full per-ledger summary for the detail page. "This month" is anchored to
+    /// the ledger's own latest transaction date (wall clock if empty), mirroring
+    /// how the app anchors `today` to the max tx date.
+    public func ledgerSummary(_ ledgerId: String) -> LedgerSummary {
+        let base = baseCurrency(forLedger: ledgerId)
+        let accts = accounts(forLedger: ledgerId)
+        let tx = txns(forLedger: ledgerId)
+        let nw = Selectors.ledgerNetWorth(accts, ledgerId) { amt, ccy in
+            self.toBase(amt, from: ccy, ledgerBase: base)
+        }
+        let anchor = tx.map(\.date).max() ?? Self.isoDay(Date())
+        let p = Selectors.monthlyCashflow(tx, ledgerId, String(anchor.prefix(7)), 1).first
+        return LedgerSummary(netWorth: nw, monthIncome: p?.inc ?? 0,
+                             monthExpense: p?.exp ?? 0, accounts: accts)
+    }
+    /// Set display currency for a specific (possibly non-active) ledger.
+    public func setDisplayCurrency(_ currency: String, ledgerId: String) {
+        try? apply(.setDisplayCurrency, Args(["ledgerId": .string(ledgerId), "currency": .string(currency)]))
+    }
+
     // MARK: - UTC day helpers
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
