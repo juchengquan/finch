@@ -2,8 +2,9 @@ import XCTest
 @testable import FinchCore
 
 final class DetectRecurringTests: XCTestCase {
-    private func exp(_ id: String, _ merchant: String, _ amount: Double, _ date: String, tmpl: String? = nil) -> Tx {
-        Tx(id: id, merchant: merchant, amount: amount, account: "a1", date: date,
+    private func exp(_ id: String, _ merchant: String, _ amount: Double, _ date: String,
+                    tmpl: String? = nil, acct: String = "a1", cat: String? = "food") -> Tx {
+        Tx(id: id, merchant: merchant, category: cat, amount: amount, account: acct, date: date,
            pending: false, ledgerId: "l1", kind: "expense", sourceTemplateId: tmpl)
     }
 
@@ -53,6 +54,33 @@ final class DetectRecurringTests: XCTestCase {
         ]
         let out = Selectors.detectRecurring(txns, "l1", "2026-06-20")
         XCTAssertEqual(out.count, 1)
+        XCTAssertTrue(out[0].isScheduled)
+    }
+
+    func test_carriesModalAccountAndCategory() {
+        let txns = [
+            exp("1", "Netflix", -15.99, "2026-03-03", acct: "a1", cat: "ent"),
+            exp("2", "Netflix", -15.99, "2026-04-03", acct: "a1", cat: "ent"),
+            exp("3", "Netflix", -15.99, "2026-05-03", acct: "a2", cat: "ent"),
+            exp("4", "Netflix", -15.99, "2026-06-03", acct: "a1", cat: "ent"),
+        ]
+        let r = Selectors.detectRecurring(txns, "l1", "2026-06-20")[0]
+        XCTAssertEqual(r.accountId, "a1")   // modal
+        XCTAssertEqual(r.categoryId, "ent")
+    }
+
+    func test_isScheduled_whenTemplateNameMatchesMerchant() {
+        let txns = [
+            exp("1", "Spotify", -11.99, "2026-03-03"),
+            exp("2", "Spotify", -11.99, "2026-04-03"),
+            exp("3", "Spotify", -11.99, "2026-05-03"),
+            exp("4", "Spotify", -11.99, "2026-06-03"),
+        ]
+        let tmpl = ScheduledTemplate(id: "t1", name: "Spotify", description: nil, type: "expense",
+            amount: 11.99, frequency: "monthly", dayOfMonth: 3, weekDay: nil, accountId: "a1",
+            fromAccountId: nil, categoryId: nil, startDate: "2026-03-03", endDate: nil,
+            nextRun: "2026-07-03", maxExecutions: nil, installmentTotal: nil, installmentPaid: nil, color: nil)
+        let out = Selectors.detectRecurring(txns, "l1", "2026-06-20", [tmpl])
         XCTAssertTrue(out[0].isScheduled)
     }
 }

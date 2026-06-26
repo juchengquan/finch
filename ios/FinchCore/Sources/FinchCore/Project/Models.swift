@@ -182,12 +182,16 @@ public struct RecurringCharge: Identifiable, Equatable, Sendable, Codable {
     public let lastDate: String
     public let nextEstimatedDate: String
     public let isScheduled: Bool
+    public let accountId: String?
+    public let categoryId: String?
     public init(id: String, merchantName: String, averageAmount: Double, cadence: String,
                 monthlyEstimate: Double, occurrences: Int, lastDate: String,
-                nextEstimatedDate: String, isScheduled: Bool) {
+                nextEstimatedDate: String, isScheduled: Bool,
+                accountId: String?, categoryId: String?) {
         self.id = id; self.merchantName = merchantName; self.averageAmount = averageAmount
         self.cadence = cadence; self.monthlyEstimate = monthlyEstimate; self.occurrences = occurrences
         self.lastDate = lastDate; self.nextEstimatedDate = nextEstimatedDate; self.isScheduled = isScheduled
+        self.accountId = accountId; self.categoryId = categoryId
     }
 }
 
