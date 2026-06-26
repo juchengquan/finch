@@ -11,6 +11,9 @@ struct ReconcileSheet: View {
     @State private var statementBalance = ""
     @State private var date = Date()
     @State private var errorMessage: String?
+    @State private var addMerchant = ""
+    @State private var addAmount = ""
+    @State private var addIsExpense = true
 
     init(preselect: String? = nil) { self.preselect = preselect }
 
@@ -34,6 +37,7 @@ struct ReconcileSheet: View {
                         DatePicker("Statement date", selection: $date, displayedComponents: .date)
                     }
                     trackerSection(a)
+                    quickAddSection(a)
                     transactionsSection(a)
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -130,6 +134,39 @@ struct ReconcileSheet: View {
                 "accountId": .string(accountId), "statementBalance": .double(bal),
                 "statementDate": .string(AppDate.isoDay.string(from: date)), "postAdjustment": .bool(postAdjustment)]))
             dismiss()
+        } catch { errorMessage = i18nMessage(error) }
+    }
+
+    @ViewBuilder private func quickAddSection(_ a: AccountRow) -> some View {
+        Section("Add missing transaction") {
+            Picker("Type", selection: $addIsExpense) {
+                Text("Expense").tag(true)
+                Text("Income").tag(false)
+            }.pickerStyle(.segmented)
+            TextField("Merchant", text: $addMerchant)
+            HStack {
+                Text("Amount"); Spacer()
+                TextField("0.00", text: $addAmount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            }
+            Button("Add") { quickAdd(a) }
+                .disabled(DecimalInput.parse(addAmount) == nil)
+        }
+    }
+
+    private func quickAdd(_ a: AccountRow) {
+        errorMessage = nil
+        guard let v = DecimalInput.parse(addAmount), v != 0 else { return }
+        let signed = addIsExpense ? -abs(v) : abs(v)
+        let args: [String: JSONValue] = [
+            "ledgerId": .string(store.activeLedgerId), "accountId": .string(a.id),
+            "amount": .double(signed),
+            "merchant": .string(addMerchant.isEmpty ? "Reconcile" : addMerchant),
+            "date": .string(AppDate.isoDay.string(from: date)), "status": .string("confirmed")]
+        do {
+            if let id = try store.applyReturningId(.addTransaction, Args(args)) {
+                try store.apply(.setCleared, Args(["id": .string(id), "cleared": .bool(true)]))
+            }
+            addMerchant = ""; addAmount = ""
         } catch { errorMessage = i18nMessage(error) }
     }
 }
