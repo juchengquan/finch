@@ -246,6 +246,72 @@ public final class FinchStore: ObservableObject {
                 "amount": .double(t.amt), "merchant": .string(t.merchant),
                 "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")])
         }
+
+        // Recurring scheduled templates (bills, subscriptions, salary, a transfer)
+        // so the Scheduled tab is populated. Amounts are positive magnitudes —
+        // `kind` drives the sign when posted. Transfers carry `from` (source);
+        // `acct` is the destination. Start a few months back so the next run is
+        // a real upcoming date.
+        let scheduled: [(name: String, type: String, amount: Double, freq: String,
+                         acct: String, from: String?, cat: String?, day: Int)] = [
+            ("Apartment Rent",     "expense",  1_850, "monthly",   "everyday", nil,        "cat-rent",          1),
+            ("Acme Corp Payroll",  "income",   4_200, "monthly",   "everyday", nil,        "cat-salary",        5),
+            ("Transfer to Savings","transfer",   500, "monthly",   "savings",  "everyday", nil,                 6),
+            ("Netflix",            "expense",   9.99, "monthly",   "credit",   nil,        "cat-entertainment", 9),
+            ("PG&E Utilities",     "expense",  88.30, "monthly",   "everyday", nil,        "cat-utilities",    10),
+            ("Gym Membership",     "expense",     40, "monthly",   "credit",   nil,        "cat-health",       15),
+            ("Phone Bill",         "expense",     55, "monthly",   "credit",   nil,        "cat-utilities",    18),
+            ("Car Insurance",      "expense",    180, "quarterly", "credit",   nil,        "cat-transport",    20),
+            ("Spotify",            "expense",  19.99, "monthly",   "credit",   nil,        "cat-entertainment",25),
+        ]
+        for s in scheduled {
+            var args: [String: JSONValue] = [
+                "ledgerId": .string("personal"), "name": .string(s.name), "type": .string(s.type),
+                "amount": .double(s.amount), "frequency": .string(s.freq),
+                "accountId": .string(s.acct), "dayOfMonth": .double(Double(s.day)),
+                "startDate": .string(monthStart(2)),
+            ]
+            if let from = s.from { args["fromAccountId"] = .string(from) }
+            if let cat = s.cat { args["category"] = .string(cat) }
+            try apply("createScheduled", args)
+        }
+
+        // A second, EUR-based ledger ("Travel") so the ledger switcher + Manage
+        // ledgers aren't single-entry. Kept lightweight (accounts + categories +
+        // a few transactions); Personal stays the default/active ledger.
+        try apply("createLedger", ["id": .string("travel"), "name": .string("Travel"), "base": .string("EUR")])
+        let travelAccounts: [(id: String, name: String, type: String, opening: Double)] = [
+            ("travel-checking", "Travel Checking", "savings", 2_000),
+            ("travel-card", "Travel Card", "credit_card", 0),
+        ]
+        for a in travelAccounts {
+            try apply("createAccount", [
+                "id": .string(a.id), "ledgerId": .string("travel"), "name": .string(a.name),
+                "type": .string(a.type), "currency": .string("EUR"), "openingBalance": .double(a.opening)])
+        }
+        let travelCategories: [(id: String, name: String)] = [
+            ("tcat-flights", "Flights"), ("tcat-lodging", "Lodging"),
+            ("tcat-food", "Food & Drink"), ("tcat-activities", "Activities"),
+        ]
+        for c in travelCategories {
+            try apply("createCategory", [
+                "id": .string(c.id), "ledgerId": .string("travel"),
+                "name": .string(c.name), "type": .string("expense")])
+        }
+        let travelTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
+            (3,  "travel-card",     -420.00, "Lufthansa",     "tcat-flights"),
+            (5,  "travel-card",     -680.00, "Hotel Adlon",   "tcat-lodging"),
+            (6,  "travel-card",      -54.00, "Café Einstein", "tcat-food"),
+            (8,  "travel-card",      -32.00, "Museum Pass",   "tcat-activities"),
+            (10, "travel-checking", -120.00, "Train Tickets", "tcat-activities"),
+            (12, "travel-card",      -75.00, "Brauhaus",      "tcat-food"),
+        ]
+        for t in travelTxns {
+            try apply("addTransaction", [
+                "ledgerId": .string("travel"), "accountId": .string(t.acct),
+                "amount": .double(t.amt), "merchant": .string(t.merchant),
+                "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")])
+        }
     }
     #endif
 

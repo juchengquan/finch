@@ -158,6 +158,16 @@ extension FinchStore {
         displayMoneyBase(accounts.filter { ($0.includeInNetWorth ?? 1) == 1 }
             .reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
     }
+    /// Total liabilities (active ledger): the sum of negative balances among
+    /// net-worth accounts, in display currency (a negative figure). Assets +
+    /// liabilities = net worth.
+    public var liabilitiesDisplay: String {
+        displayMoneyBase(accounts.filter { ($0.includeInNetWorth ?? 1) == 1 }
+            .reduce(0.0) { sum, a in
+                let b = toBase(a.balance, from: a.currency)
+                return b < 0 ? sum + b : sum
+            })
+    }
 
     // MARK: - Budgets grouping
 
