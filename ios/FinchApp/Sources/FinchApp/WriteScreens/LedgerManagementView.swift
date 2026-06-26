@@ -32,6 +32,9 @@ struct LedgerListView: View {
                     Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
                         .disabled(store.ledgers.count <= 1)
                 }
+                .contextMenu {
+                    Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
+                }
             }
         }
         .navigationTitle("Ledgers")

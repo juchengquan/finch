@@ -28,6 +28,9 @@ struct TagAdminView: View {
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { delete(tag) } label: { Label("Delete", systemImage: "trash") }
                 }
+                .contextMenu {
+                    Button(role: .destructive) { delete(tag) } label: { Label("Delete", systemImage: "trash") }
+                }
             }
         }
         .navigationTitle("Tags")

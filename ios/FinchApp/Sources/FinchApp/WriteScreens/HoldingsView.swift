@@ -33,6 +33,9 @@ struct HoldingsView: View {
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) { delete(h) } label: { Label("Delete", systemImage: "trash") }
                             }
+                            .contextMenu {
+                                Button(role: .destructive) { delete(h) } label: { Label("Delete", systemImage: "trash") }
+                            }
                     }
                 }
             }

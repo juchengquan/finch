@@ -143,6 +143,9 @@ struct CategoryAdminView: View {
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
         }
+        .contextMenu {
+            Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
+        }
     }
 
     /// Apply one or more category moves (parentId + sortOrder) through the

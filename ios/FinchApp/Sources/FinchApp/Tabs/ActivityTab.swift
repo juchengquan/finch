@@ -203,16 +203,21 @@ struct ActivityFeedView: View {
                 }
             }
             if isSelecting {
+                #if os(iOS)
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button("Confirm \(selected.count)") { bulkConfirm() }
-                        .disabled(selected.isEmpty)
+                    Button("Confirm \(selected.count)") { bulkConfirm() }.disabled(selected.isEmpty)
                     Spacer()
-                    Button("Recategorize \(selected.count)") { showingBulkCat = true }
-                        .disabled(selected.isEmpty)
+                    Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
                     Spacer()
-                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }
-                        .disabled(selected.isEmpty)
+                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
                 }
+                #else
+                ToolbarItemGroup(placement: .principal) {
+                    Button("Confirm \(selected.count)") { bulkConfirm() }.disabled(selected.isEmpty)
+                    Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
+                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
+                }
+                #endif
             }
         }
         // Selection mode borrows the bottom for the bulk-action bar. Hide the
