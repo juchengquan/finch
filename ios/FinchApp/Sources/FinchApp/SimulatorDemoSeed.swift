@@ -113,45 +113,68 @@ enum SimulatorDemoSeed {
             try apply("createBudget", args)
         }
 
+        // Tags (parity palette) applied to several transactions below.
+        let tags: [(id: String, name: String, color: String)] = [
+            ("tag-reimbursable", "reimbursable", "#00a5da"),
+            ("tag-subscription", "subscription", "#7d7df9"),
+            ("tag-business",     "business",     "#00af67"),
+            ("tag-vacation",     "vacation",     "#ba8600"),
+        ]
+        for t in tags {
+            try apply("createTag", ["id": .string(t.id), "ledgerId": .string("personal"),
+                                    "name": .string(t.name), "color": .string(t.color)])
+        }
+
         // ~3 months of transactions. Expenses negative, income positive.
-        let txns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
-            (2, "credit", -42.18, "Whole Foods", "cat-groceries"),
-            (3, "credit", -16.40, "Blue Bottle Coffee", "cat-dining"),
-            (4, "everyday", -1_850, "Apartment Rent", "cat-rent"),
-            (5, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
-            (6, "credit", -28.75, "Shell Gas", "cat-transport"),
-            (7, "cash", -12.00, "Food Truck", "cat-dining"),
-            (8, "credit", -64.99, "Uniqlo", "cat-shopping"),
-            (9, "credit", -9.99, "Netflix", "cat-entertainment"),
-            (10, "everyday", -88.30, "PG&E Utilities", "cat-utilities"),
-            (12, "credit", -53.20, "Trader Joe's", "cat-groceries"),
-            (13, "credit", -22.50, "Chipotle", "cat-dining"),
-            (14, "credit", -31.00, "Uber", "cat-transport"),
-            (16, "credit", -120.00, "Nordstrom", "cat-shopping"),
-            (17, "cash", -18.00, "Farmers Market", "cat-groceries"),
-            (19, "credit", -45.60, "CVS Pharmacy", "cat-health"),
-            (20, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
-            (21, "credit", -38.40, "Safeway", "cat-groceries"),
-            (23, "credit", -14.25, "Starbucks", "cat-dining"),
-            (25, "credit", -19.99, "Spotify", "cat-entertainment"),
-            (27, "credit", -27.80, "Lyft", "cat-transport"),
-            (30, "credit", -58.10, "Whole Foods", "cat-groceries"),
-            (33, "credit", -72.00, "AMC Theatres", "cat-entertainment"),
-            (35, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
-            (38, "credit", -41.30, "Trader Joe's", "cat-groceries"),
-            (42, "credit", -33.50, "Olive Garden", "cat-dining"),
-            (46, "credit", -95.00, "Best Buy", "cat-shopping"),
-            (50, "everyday", -1_850, "Apartment Rent", "cat-rent"),
-            (55, "credit", -49.90, "Costco", "cat-groceries"),
-            (60, "credit", -24.00, "Shell Gas", "cat-transport"),
-            (68, "credit", -61.40, "REI", "cat-shopping"),
+        let txns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String,
+                    kind: String?, status: String?, tags: [String]?)] = [
+            (2,  "credit",   -42.18, "Whole Foods",        "cat-groceries",     nil,      "pending", ["tag-reimbursable"]),
+            (3,  "credit",   -16.40, "Blue Bottle Coffee", "cat-dining",        nil,      "pending", nil),
+            (4,  "everyday", -1_850, "Apartment Rent",     "cat-rent",          nil,      nil,       nil),
+            (5,  "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",        nil,      nil,       nil),
+            (6,  "credit",   -28.75, "Shell Gas",          "cat-transport",     nil,      nil,       nil),
+            (7,  "cash",     -12.00, "Food Truck",         "cat-dining",        nil,      nil,       nil),
+            (8,  "credit",   -64.99, "Uniqlo",             "cat-shopping",      nil,      nil,       nil),
+            (9,  "credit",    -9.99, "Netflix",            "cat-entertainment", nil,      nil,       ["tag-subscription"]),
+            (10, "everyday",  -88.30, "PG&E Utilities",    "cat-utilities",     nil,      nil,       nil),
+            (11, "credit",    64.99, "Nordstrom Refund",   "cat-shopping",      "refund", nil,       ["tag-vacation"]),
+            (12, "credit",   -53.20, "Trader Joe's",       "cat-groceries",     nil,      nil,       nil),
+            (13, "credit",   -22.50, "Chipotle",           "cat-dining",        nil,      nil,       nil),
+            (14, "credit",   -31.00, "Uber",               "cat-transport",     nil,      nil,       ["tag-business"]),
+            (16, "credit",  -120.00, "Nordstrom",          "cat-shopping",      nil,      nil,       ["tag-vacation"]),
+            (17, "cash",     -18.00, "Farmers Market",     "cat-groceries",     nil,      nil,       nil),
+            (19, "credit",   -45.60, "CVS Pharmacy",       "cat-health",        nil,      nil,       ["tag-reimbursable"]),
+            (20, "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",        nil,      nil,       nil),
+            (21, "credit",   -38.40, "Safeway",            "cat-groceries",     nil,      nil,       nil),
+            (23, "credit",   -14.25, "Starbucks",          "cat-dining",        nil,      nil,       nil),
+            (25, "credit",   -19.99, "Spotify",            "cat-entertainment", nil,      nil,       ["tag-subscription"]),
+            (27, "credit",   -27.80, "Lyft",               "cat-transport",     nil,      nil,       ["tag-business", "tag-reimbursable"]),
+            (30, "credit",   -58.10, "Whole Foods",        "cat-groceries",     nil,      nil,       nil),
+            (33, "credit",   -72.00, "AMC Theatres",       "cat-entertainment", nil,      nil,       nil),
+            (35, "everyday",  4_200, "Acme Corp Payroll",  "cat-salary",        nil,      nil,       nil),
+            (38, "credit",   -41.30, "Trader Joe's",       "cat-groceries",     nil,      nil,       nil),
+            (42, "credit",   -33.50, "Olive Garden",       "cat-dining",        nil,      nil,       nil),
+            (46, "credit",   -95.00, "Best Buy",           "cat-shopping",      nil,      nil,       ["tag-business"]),
+            (50, "everyday", -1_850, "Apartment Rent",     "cat-rent",          nil,      nil,       nil),
+            (55, "credit",   -49.90, "Costco",             "cat-groceries",     nil,      nil,       ["tag-reimbursable"]),
+            (60, "credit",   -24.00, "Shell Gas",          "cat-transport",     nil,      nil,       nil),
+            (68, "credit",   -61.40, "REI",                "cat-shopping",      nil,      nil,       ["tag-vacation"]),
         ]
         for t in txns {
-            try apply("addTransaction", [
+            var args: [String: JSONValue] = [
                 "ledgerId": .string("personal"), "accountId": .string(t.acct),
                 "amount": .double(t.amt), "merchant": .string(t.merchant),
-                "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")])
+                "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")]
+            if let k = t.kind { args["kind"] = .string(k) }
+            if let s = t.status { args["status"] = .string(s) }
+            if let tg = t.tags { args["tagIds"] = .array(tg.map { .string($0) }) }
+            try apply("addTransaction", args)
         }
+
+        // A real posted transfer (Everyday → Savings) so the transfer kind shows in the feed.
+        try apply("createTransfer", [
+            "fromAccountId": .string("everyday"), "toAccountId": .string("savings"),
+            "fromAmount": .double(500), "date": .string(ymd(15)), "time": .string("12:00")])
 
         // Recurring scheduled templates (bills, subscriptions, salary, a transfer)
         // so the Scheduled tab is populated. Amounts are positive magnitudes —
@@ -182,10 +205,20 @@ enum SimulatorDemoSeed {
             try apply("createScheduled", args)
         }
 
+        // An installment plan so the Scheduled tab shows installment progress.
+        try apply("createScheduled", [
+            "ledgerId": .string("personal"), "name": .string("Furniture Plan"),
+            "type": .string("expense"), "amount": .double(120), "frequency": .string("monthly"),
+            "accountId": .string("credit"), "dayOfMonth": .double(12),
+            "startDate": .string(monthStart(2)), "category": .string("cat-shopping"),
+            "installmentTotal": .double(12)])
+
         // A second, EUR-based ledger ("Travel") so the ledger switcher + Manage
         // ledgers aren't single-entry. Kept lightweight (accounts + categories +
         // a few transactions); Personal stays the default/active ledger.
         try apply("createLedger", ["id": .string("travel"), "name": .string("Travel"), "base": .string("EUR")])
+        // EUR↔USD rate (USD is the hub; only non-USD stored) so the Travel ledger converts.
+        try apply("setExchangeRate", ["date": .string(ymd(1)), "currency": .string("EUR"), "rate": .double(1.08)])
         let travelAccounts: [(id: String, name: String, type: String, opening: Double)] = [
             ("travel-checking", "Travel Checking", "savings", 2_000),
             ("travel-card", "Travel Card", "credit_card", 0),
