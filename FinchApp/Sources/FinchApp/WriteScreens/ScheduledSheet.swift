@@ -54,6 +54,21 @@ struct ScheduledSheet: View {
         _installmentTotal = State(initialValue: template?.installmentTotal.map { String($0) } ?? "")
     }
 
+    init(fromCharge c: RecurringCharge) {
+        self.template = nil
+        _name = State(initialValue: c.merchantName)
+        _kind = State(initialValue: .expense)
+        _amount = State(initialValue: String(format: "%g", c.averageAmount))
+        _accountId = State(initialValue: c.accountId ?? "")
+        _fromAccountId = State(initialValue: "")
+        _categoryId = State(initialValue: c.categoryId ?? "")
+        _frequency = State(initialValue: c.cadence)
+        _dayOfMonth = State(initialValue: Int(c.nextEstimatedDate.split(separator: "-").last ?? "1") ?? 1)
+        _startDate = State(initialValue: AppDate.isoDay.date(from: c.nextEstimatedDate) ?? Date())
+        _installmentEnabled = State(initialValue: false)
+        _installmentTotal = State(initialValue: "")
+    }
+
     var body: some View {
         NavigationStack {
             Form {

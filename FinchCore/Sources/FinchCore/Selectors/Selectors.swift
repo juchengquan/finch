@@ -342,7 +342,9 @@ public enum Selectors {
     /// Detect repeating expense charges (subscriptions). Groups expenses by merchant,
     /// keeps those with a consistent cadence + stable amount that are still active.
     public static func detectRecurring(_ txns: [Tx], _ ledgerId: String, _ today: String,
+                                       _ scheduled: [ScheduledTemplate] = [],
                                        minOccurrences: Int = 3) -> [RecurringCharge] {
+        let scheduledNames = Set(scheduled.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
         var groups: [String: [Tx]] = [:]
         var names: [String: String] = [:]
         for t in txns {
@@ -363,7 +365,7 @@ public enum Selectors {
             let mean = mags.reduce(0, +) / Double(mags.count)
             guard mean > 0 else { continue }
             let variance = mags.reduce(0.0) { $0 + ($1 - mean) * ($1 - mean) } / Double(mags.count)
-            guard variance.squareRoot() / mean < 0.35 else { continue }   // amounts roughly equal
+            guard variance.squareRoot() / mean < 0.35 else { continue }
 
             var gaps: [Int] = []
             for i in 1..<items.count {
@@ -377,15 +379,24 @@ public enum Selectors {
 
             let lastDate = items.last!.date
             let sinceLast = cal.dateComponents([.day], from: date(lastDate), to: todayDate).day ?? 0
-            guard sinceLast <= Int(1.6 * Double(med)) else { continue }    // still active
+            guard sinceLast <= Int(1.6 * Double(med)) else { continue }
 
-            let isScheduled = items.contains { ($0.sourceTemplateId?.isEmpty == false) }
+            let mname = (names[key] ?? key).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let isScheduled = items.contains { ($0.sourceTemplateId?.isEmpty == false) } || scheduledNames.contains(mname)
             out.append(RecurringCharge(
                 id: key, merchantName: names[key] ?? key, averageAmount: r2(mean), cadence: cadence,
                 monthlyEstimate: r2(monthlyFor(mean, cadence)), occurrences: items.count,
-                lastDate: lastDate, nextEstimatedDate: ymd(addDays(date(lastDate), med)), isScheduled: isScheduled))
+                lastDate: lastDate, nextEstimatedDate: ymd(addDays(date(lastDate), med)), isScheduled: isScheduled,
+                accountId: mode(items.map { $0.account }), categoryId: mode(items.compactMap { $0.category })))
         }
         return out.sorted { $0.monthlyEstimate > $1.monthlyEstimate }
+    }
+
+    private static func mode(_ xs: [String]) -> String? {
+        guard !xs.isEmpty else { return nil }
+        var counts: [String: Int] = [:]
+        for x in xs { counts[x, default: 0] += 1 }
+        return counts.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }?.key
     }
 
     private static func medianInt(_ xs: [Int]) -> Int {

@@ -13,10 +13,11 @@ struct ScheduledTab: View {
     @State private var errorMessage: String?
     @State private var mode: Mode = .list
     @State private var addPrefill: Date?
+    @State private var addFromCharge: RecurringCharge?
     private enum Mode: String, CaseIterable { case list = "List", calendar = "Calendar" }
 
     private var detected: [RecurringCharge] {
-        Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today).filter { !$0.isScheduled }
+        Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today, store.scheduled).filter { !$0.isScheduled }
     }
     private var detectedMonthly: Double { detected.reduce(0) { $0 + $1.monthlyEstimate } }
 
@@ -61,15 +62,19 @@ struct ScheduledTab: View {
                                 if !detected.isEmpty {
                                     Section {
                                         ForEach(detected) { r in
-                                            HStack {
-                                                VStack(alignment: .leading, spacing: 2) {
-                                                    Text(r.merchantName)
-                                                    Text("\(r.cadence.capitalized) · next ~\(r.nextEstimatedDate)")
-                                                        .font(.caption).foregroundStyle(.secondary)
+                                            Button { addFromCharge = r } label: {
+                                                HStack {
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(r.merchantName)
+                                                        Text("\(r.cadence.capitalized) · next ~\(r.nextEstimatedDate)")
+                                                            .font(.caption).foregroundStyle(.secondary)
+                                                    }
+                                                    Spacer()
+                                                    Text(store.displayMoneyBase(r.averageAmount)).fontWeight(.medium)
                                                 }
-                                                Spacer()
-                                                Text(store.displayMoneyBase(r.averageAmount)).fontWeight(.medium)
+                                                .contentShape(Rectangle())
                                             }
+                                            .buttonStyle(.plain)
                                         }
                                     } header: {
                                         HStack {
@@ -102,6 +107,7 @@ struct ScheduledTab: View {
             }
             .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) { ScheduledSheet(prefillStart: addPrefill) }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
+            .sheet(item: $addFromCharge) { ScheduledSheet(fromCharge: $0) }
             .errorAlert($errorMessage)
         }
     }
