@@ -9,6 +9,7 @@ struct LedgerListView: View {
     @EnvironmentObject private var gate: BiometricGate
     @State private var showingAdd = false
     @State private var errorMessage: String?
+    @State private var pendingDelete: Ledger?   // ledger awaiting delete confirmation
 
     var body: some View {
         List {
@@ -28,13 +29,20 @@ struct LedgerListView: View {
                     }
                 }
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
+                    Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
                         .disabled(store.ledgers.count <= 1)
                 }
             }
         }
         .navigationTitle("Ledgers")
         .errorAlert($errorMessage)
+        .confirmationDialog("Delete this ledger?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingDelete) { ledger in
+            Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
+        } message: { ledger in
+            Text("This permanently deletes \(ledger.name) and all its data.")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }
