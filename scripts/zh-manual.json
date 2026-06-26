@@ -303,5 +303,15 @@
   "· Rolls over": "· 结转",
   "1Y": "1年",
   "3M": "3个月",
-  "6M": "6个月"
+  "6M": "6个月",
+  "Activity feed": "动态",
+  "Group by month": "按月分组",
+  "Relative dates": "相对日期",
+  "Detected · not scheduled": "检测到 · 未加入计划",
+  "%1$@ · next ~%2$@": "%1$@ · 下次 ~%2$@",
+  "~%1$@/mo · %2$lld": "~%1$@/月 · %2$lld",
+  "Cleared %1$lld · To review %2$lld": "已清算 %1$lld · 待审核 %2$lld",
+  "Adjust %@": "调整 %@",
+  "Balance after": "调整后余额",
+  "Changing the start date or frequency re-bases the cycle and clears any staged amount and rolled-over balance.": "更改开始日期或频率会重置周期，并清除所有暂存金额和已结转余额。"
 }
