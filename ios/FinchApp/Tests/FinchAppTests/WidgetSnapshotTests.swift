@@ -26,4 +26,23 @@ final class WidgetSnapshotTests: XCTestCase {
         let data = try JSONEncoder().encode(snap)
         XCTAssertEqual(try JSONDecoder().decode(WidgetSnapshot.self, from: data), snap)
     }
+
+    func test_snapshot_carries_accounts_and_budgets() throws {
+        let snap = WidgetSnapshot(
+            netWorth: 100, currency: "USD", budgetUsedPct: 50, weeklySpent: 20, generatedAt: "t",
+            accounts: [AccountSnapshotItem(id: "a1", name: "Checking", balance: 1240, currency: "USD")],
+            budgets: [BudgetSnapshotItem(id: "b1", name: "Food", usedPct: 75)])
+        let back = try JSONDecoder().decode(WidgetSnapshot.self, from: JSONEncoder().encode(snap))
+        XCTAssertEqual(back.accounts?.map(\.id), ["a1"])
+        XCTAssertEqual(back.accounts?.first?.balance, 1240)
+        XCTAssertEqual(back.budgets?.first?.usedPct, 75)
+    }
+
+    func test_snapshot_back_compat_old_blob_without_arrays() throws {
+        let old = #"{"netWorth":100,"currency":"USD","budgetUsedPct":50,"weeklySpent":20,"generatedAt":"t"}"#
+        let snap = try JSONDecoder().decode(WidgetSnapshot.self, from: Data(old.utf8))
+        XCTAssertNil(snap.accounts)
+        XCTAssertNil(snap.budgets)
+        XCTAssertEqual(snap.netWorth, 100)
+    }
 }
