@@ -46,6 +46,14 @@ struct ActivityFeedView: View {
     var navTitle: String = "Activity"
     var headerSection: AnyView? = nil
     var consumesPendingFilter: Bool = false
+    /// When true, the feed's own actions (select / filter / sort / add) collapse
+    /// into a single top-right overflow menu instead of separate nav-bar buttons
+    /// — used by the Ledger tab, which already carries other chrome up top. The
+    /// dedicated Activity tab keeps them as direct buttons.
+    var collapseActionsIntoMenu: Bool = false
+    /// Extra items appended to that overflow menu (e.g. the Ledger tab's "Manage
+    /// ledgers"), so a host can fold its own actions into the same menu.
+    var menuExtras: AnyView? = nil
     @StateObject private var savedSearches = SavedSearchStore()
     @State private var showingSaveSearch = false
     @State private var newSearchName = ""
@@ -68,6 +76,7 @@ struct ActivityFeedView: View {
     @State private var hasMore = false
     @State private var filteredCount = 0
     @State private var confirmingBulkDelete = false
+    @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
 
     struct DaySection: Identifiable { let id: String; let txns: [Tx] }
 
@@ -130,32 +139,63 @@ struct ActivityFeedView: View {
             // only appears on regular width — compact has the floating FAB, so a
             // nav-bar `+` would be redundant. This also frees the leading slot for
             // the gear (Ledger tab) / back button.
-            ToolbarItem(placement: .primaryAction) {
-                Button(isSelecting ? "Done" : "Select") {
-                    isSelecting.toggle(); selected.removeAll()
-                }.disabled(store.txns.isEmpty)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingFilter = true } label: {
-                    Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                }
-                .accessibilityLabel("Filter")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Picker("Sort", selection: $sort) {
-                        ForEach(TxSort.allCases) { Text($0.label).tag($0) }
+            if collapseActionsIntoMenu {
+                // Ledger tab: fold the actions into the native ⋯ overflow via
+                // .secondaryAction (same style as the Accounts tab) — no Sort here
+                // (the home feed stays newest-first). While selecting, surface a
+                // direct Done so exiting is one tap.
+                if isSelecting {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Done") { isSelecting = false; selected.removeAll() }
                     }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                } else {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Button { isSelecting = true; selected.removeAll() } label: { Label("Select", systemImage: "checklist") }
+                            .disabled(store.txns.isEmpty)
+                    }
+                    ToolbarItem(placement: .secondaryAction) {
+                        Button { showingFilter = true } label: {
+                            Label("Filter", systemImage: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        }
+                    }
+                    if sizeClass != .compact {
+                        ToolbarItem(placement: .secondaryAction) {
+                            Button { showingAdd = true } label: { Label("Add Transaction", systemImage: "plus") }
+                                .disabled(store.accounts.isEmpty)
+                        }
+                    }
+                    if let menuExtras {
+                        ToolbarItem(placement: .secondaryAction) { menuExtras }
+                    }
                 }
-                .accessibilityLabel("Sort")
-            }
-            if sizeClass != .compact {
+            } else {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add Transaction")
-                        .disabled(store.accounts.isEmpty)
+                    Button(isSelecting ? "Done" : "Select") {
+                        isSelecting.toggle(); selected.removeAll()
+                    }.disabled(store.txns.isEmpty)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingFilter = true } label: {
+                        Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityLabel("Filter")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Picker("Sort", selection: $sort) {
+                            ForEach(TxSort.allCases) { Text($0.label).tag($0) }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Sort")
+                }
+                if sizeClass != .compact {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showingAdd = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add Transaction")
+                            .disabled(store.accounts.isEmpty)
+                    }
                 }
             }
             if isSelecting {
@@ -188,6 +228,15 @@ struct ActivityFeedView: View {
                             isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
             Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
             Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete transaction?",
+                            isPresented: Binding(get: { pendingDelete != nil },
+                                                 set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible, presenting: pendingDelete) { txn in
+            Button("Delete", role: .destructive) { delete(txn) }
+            Button("Cancel", role: .cancel) {}
+        } message: { txn in
+            Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
         }
         .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -250,8 +299,10 @@ struct ActivityFeedView: View {
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { delete(txn) } label: { Label("Delete", systemImage: "trash") }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // Reveal a Delete button; tapping it asks for confirmation (no
+            // delete-on-full-swipe — destructive actions get a confirm step).
+            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
         }
         .swipeActions(edge: .leading) {
             if txn.pending == true {
@@ -266,7 +317,7 @@ struct ActivityFeedView: View {
             if txn.pending == true {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { delete(txn) } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
         }
     }
 

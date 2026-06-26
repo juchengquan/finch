@@ -2,26 +2,36 @@ import SwiftUI
 import FinchCore
 
 /// The Ledger tab (home, slot #1) — a compact ledger-context header (active
-/// ledger + switcher, net worth, manage) atop the full activity feed for the
-/// active ledger. Reuses `ActivityFeedView` with a header section, since a
-/// ledger *is* the container for its transactions.
+/// ledger + switcher, net worth) atop the full activity feed for the active
+/// ledger, with a top-right overflow menu for managing ledgers. Reuses
+/// `ActivityFeedView` with a header section, since a ledger *is* the container
+/// for its transactions.
 struct LedgerTab: View {
+    @State private var showingManage = false
+
     var body: some View {
         NavigationStack {
-            ActivityFeedView(navTitle: "Ledger", headerSection: AnyView(LedgerHeaderSection()))
+            ActivityFeedView(
+                navTitle: "Ledger",
+                headerSection: AnyView(LedgerHeaderSection()),
+                collapseActionsIntoMenu: true,
+                menuExtras: AnyView(
+                    Button { showingManage = true } label: { Label("Manage ledgers", systemImage: "books.vertical") }
+                ))
                 .toolbar {
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // .topBarLeading is iOS-only; gear is compact-only anyway (macOS uses the sidebar)
                     #endif
                 }
+                .navigationDestination(isPresented: $showingManage) { LedgerManagementView() }
                 .settingsPush()
         }
     }
 }
 
 /// Ledger-context summary at the top of the Ledger tab: active ledger name with
-/// a switcher menu, net worth + trend sparkline, this-month income/expense, and
-/// a Manage-ledgers drill-in.
+/// a switcher menu, net worth + trend sparkline, display currency, and this-month
+/// income/expense. (Manage-ledgers lives in the tab's top-right overflow menu.)
 private struct LedgerHeaderSection: View {
     @EnvironmentObject private var store: FinchStore
     private var activeName: String { store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? "Ledger" }
@@ -69,11 +79,6 @@ private struct LedgerHeaderSection: View {
                     get: { store.displayCurrency },
                     set: { store.setDisplayCurrency($0) })) {
                     ForEach(store.availableDisplayCurrencies, id: \.self) { Text($0).tag($0) }
-                }
-                NavigationLink {
-                    LedgerManagementView()
-                } label: {
-                    Label("Manage ledgers", systemImage: "books.vertical")
                 }
             }
             Section("This month") {
