@@ -776,3 +776,30 @@ spec.)
   concrete. §5's action handlers are concrete. §6
   enumerates the CI test cases. §7 enumerates the open
   questions with proposed answers.
+
+## §10. Post-implementation note — end-to-end check (2026-06-26)
+
+Audited the shipped subsystem end-to-end. It is **wired and functional** (not a
+stub): permission requested at launch, `NotificationPlanner.plan` (unit-tested)
+drives 4 kinds, `NotificationService.refresh()` actually schedules via
+`UNUserNotificationCenter.add`, re-runs on launch + every store mutation + Settings
+toggles, and taps route through `DeepLinkRouter`.
+
+**Fixed:** `refresh()` previously only *added* notifications — toggling a kind off (or
+a budget falling back under threshold, or a due item being confirmed) left the already
+-scheduled notification pending, so it still fired. `refresh()` now **reconciles**: it
+cancels pending **and** delivered ids no longer in the current plan
+(`NotificationPlanner.cancelIDs`), so the live set always matches the plan. Covered by
+`NotificationPlannerTests.test_cancelIDs_dropsStaleKeepsPlanned` (+ builds iOS/macOS).
+
+**Verification scope:** the cancel logic is unit-tested; the firing path is unchanged
+by this fix and was confirmed present in the audit. A live banner-fires capture under
+sim automation was **not** completed — the permission prompt isn't reliably driveable
+via AppleScript AX and a fresh install starts with no seed data to plan a due item from;
+a manual tap-Allow-and-watch check on device/sim is the remaining confirmation.
+
+**By-design limits (unchanged, not bugs):** no background refresh (`BGTaskScheduler`) —
+notifications recompute on launch / foreground mutation only; scheduling is reactive
+(already-due items, fired shortly after the app refreshes), not proactive future-dated;
+weekly-digest body is captured at schedule time (§8). Re-filing any of these as bugs is
+incorrect — they're explicit non-goals here.
