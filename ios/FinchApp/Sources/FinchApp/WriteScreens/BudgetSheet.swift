@@ -23,6 +23,7 @@ struct BudgetSheet: View {
     @State private var frequency: String
     @State private var groupId: String              // "" = none
     @State private var selectedCategories: Set<String>
+    @State private var selectedAccounts: Set<String>
     @State private var rollover: Bool
     @State private var rolloverCap: String
     @State private var errorMessage: String?
@@ -37,6 +38,7 @@ struct BudgetSheet: View {
         _frequency = State(initialValue: budget?.frequency ?? "monthly")
         _groupId = State(initialValue: budget?.groupId ?? "")
         _selectedCategories = State(initialValue: Set(budget?.categoryIds ?? []))
+        _selectedAccounts = State(initialValue: Set(budget?.accountIds ?? []))
         _rollover = State(initialValue: (budget?.rollover ?? 0) != 0)
         _rolloverCap = State(initialValue: budget?.rolloverLimit.map { String(format: "%g", $0) } ?? "")
     }
@@ -81,6 +83,24 @@ struct BudgetSheet: View {
                     Text(kind == .income ? "Income categories" : "Categories")
                 } footer: {
                     Text("Leave empty to track all \(kind.rawValue) categories.")
+                }
+
+                Section {
+                    ForEach(store.accounts) { acct in
+                        Button { toggleAccount(acct.id) } label: {
+                            HStack {
+                                Text(acct.name ?? "Account").foregroundStyle(.primary)
+                                Spacer()
+                                if selectedAccounts.contains(acct.id) {
+                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Accounts")
+                } footer: {
+                    Text("Leave empty to track all accounts.")
                 }
 
                 if kind == .expense {
@@ -128,11 +148,16 @@ struct BudgetSheet: View {
         if selectedCategories.contains(id) { selectedCategories.remove(id) } else { selectedCategories.insert(id) }
     }
 
+    private func toggleAccount(_ id: String) {
+        if selectedAccounts.contains(id) { selectedAccounts.remove(id) } else { selectedAccounts.insert(id) }
+    }
+
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
         guard let value = DecimalInput.parse(amount), value > 0 else { errorMessage = "Enter an amount."; return }
         let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
+        let accountIds: JSONValue = .array(selectedAccounts.sorted().map { .string($0) })
 
         // Rollover is expense-only; cap is optional and validated only when set.
         let useRollover = kind == .expense && rollover
@@ -147,7 +172,7 @@ struct BudgetSheet: View {
         if let budget {
             let patch: [String: JSONValue] = [
                 "name": .string(name), "type": .string(kind.rawValue), "amount": .double(value),
-                "frequency": .string(frequency), "categoryIds": categoryIds,
+                "frequency": .string(frequency), "categoryIds": categoryIds, "accountIds": accountIds,
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
                 "rollover": .bool(useRollover), "rolloverLimit": capValue,
             ]
@@ -161,6 +186,7 @@ struct BudgetSheet: View {
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if !selectedCategories.isEmpty { args["categoryIds"] = categoryIds }
+            if !selectedAccounts.isEmpty { args["accountIds"] = accountIds }
             if case .double = capValue { args["rolloverLimit"] = capValue }
             do { try store.apply(.createBudget, Args(args)); dismiss() }
             catch { errorMessage = i18nMessage(error) }
