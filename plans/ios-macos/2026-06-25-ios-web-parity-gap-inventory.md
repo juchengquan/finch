@@ -1,36 +1,32 @@
 # iOS ↔ web parity gap inventory
 
-**Date:** 2026-06-25
-**Status:** Reference inventory (not a plan). A survey snapshot to pick future work from.
+**Date:** 2026-06-25 (status refreshed 2026-06-26 @ `db6ab1c`)
+**Status:** Reference inventory (not a plan). A survey snapshot to pick future work from. **Most tiers are now closed** — each item below is annotated ✅ (with PR) or **open**; see "Closed since snapshot" for the roll-up.
 **Method:** Three domain surveys (money-management; analytics/viz; entry/admin/data/settings) cross-read web `frontend/` ↔ native `ios/FinchApp/`, then a 20-item confirm/refute verification pass against the iOS source. Only **verified** gaps are listed — several survey-claimed gaps were false (see "Already at parity").
 
 Direction is **web → iOS** (features the web has that iOS lacks) unless noted. Severity is user-facing impact; effort is a rough guess.
 
-## Tier 1 — biggest user-facing gaps
+## Tier 1 — biggest user-facing gaps — ✅ ALL CLOSED
 
-- **Scheduled: calendar view** — iOS `ScheduledTab` is a plain list; web has a month grid with per-day colored dots + day-detail pane + quick-add. *(High; ~5–6h)*
-  - iOS: `ios/FinchApp/Sources/FinchApp/Tabs/ScheduledTab.swift` (list only, no grid).
-- **Scheduled: occurrence status** — no upcoming/pending/done state surfaced on generated occurrences. *(Med–High; ~3–4h)*
-- **Budgets: rollover UI** — the model already projects `rollover`/`rolloverLimit`/`carryForward` (`Project/Budget.swift`, `Projections+State.swift:92-104`), but the **form can't set rollover** and the **detail doesn't show carried-forward**. UI-only work — the engine/data already support it. *(Med–High; low-ish effort)*
-  - iOS: `WriteScreens/BudgetSheet.swift` (no rollover fields), `WriteScreens/BudgetDetailView.swift` (no carryForward display).
-- **Insights: advice/rules engine** — iOS `InsightsTab` renders chart cards only; web runs ~6 narrative rules (spending trend, over-budget, pending-to-review, top-category mover, weekday skew, goal progress) from `frontend/lib/insights.ts`. *(Med–High; ~Med — port rules as `Selectors` + a card)*
+- **Scheduled: calendar view** — ✅ **done (#307)** (month grid + day detail).
+- **Scheduled: occurrence status** — ✅ effectively covered by the calendar view (#307); re-verify if a distinct upcoming/pending/done badge is still wanted.
+- **Budgets: rollover UI** — ✅ **done (#311)** (form toggle + cap; carried-forward in detail).
+- **Insights: advice/rules engine** — ✅ **done (#323)** (CP1 core 6 rules).
 
 ## Tier 2 — solid wins
 
-- **Accounts: reconcile status badge** — no "last reconciled / stale" indicator (web tracks `lastReconciledAt`/`lastReconciledBalance` with a 35-day stale threshold). *(Med; ~2–3h)*
-  - iOS: `WriteScreens/AccountDetailView.swift`, `WriteScreens/ReconcileSheet.swift`.
-- **Accounts: quick-add missing tx during reconcile** — the reconcile sheet can't add a missing transaction inline. *(Med; ~4–5h)*
-- **Accounts: pending vs confirmed split** in account detail — currently one flat transaction list (web separates a "To confirm" section). *(Med; ~2–3h)*
-- **Activity: saved searches** — filters are session-only; web persists named filter chips per-ledger (localStorage → UserDefaults on iOS). *(Med; ~3h)*
-  - iOS: `TransactionFilterSheet.swift` (ephemeral filter state).
-- **Budgets: per-account filter** — budgets match by category only; web also matches by account (multi-select). *(Med; ~3–4h)*
+- **Accounts: reconcile status badge** — ✅ **done (#329)**.
+- **Accounts: quick-add missing tx during reconcile** — **open** *(Med; ~4–5h)* — the reconcile sheet still can't add a missing transaction inline.
+- **Accounts: pending vs confirmed split** — ✅ **done (#329)**.
+- **Activity: saved searches** — ✅ **done (#333)** (per-ledger filter chips).
+- **Budgets: per-account filter** — ✅ **done (#337)** (account multi-select + detail scope).
 
 ## Tier 3 — polish
 
-- **Insights primitives:** `Ring` + `StackedBar` not ported (web uses them for budget/forecast viz; `frontend/components/primitives.tsx`). *(Low)*
-- **Accounts: opening-balance display** in detail/edit (shown only at account creation). *(Low)*
-- **Settings: theme toggle + locale/language picker** absent (`Tabs/SettingsTab.swift`). *(Low)*
-- **Budgets: add-form frequencies** — the *create* sheet (`BudgetSheet`) offers 4 (weekly/monthly/quarterly/yearly); the change-cycle sheet already offers all 6 (adds daily/biweekly). Minor inconsistency. *(Low)*
+- **Insights primitives** (`Ring` + `StackedBar`) — ✅ **done (#342)**.
+- **Accounts: opening-balance display** in detail/edit — **open** *(Low)* (shown only at account creation). *(Accounts is an active area — #329/#341 — coordinate.)*
+- **Settings: theme toggle + locale/language picker** — ✅ **done (#338)**.
+- **Budgets: add-form frequencies** — ✅ **done (#340)**.
 
 ## Already at parity (verified — no action)
 
@@ -63,23 +59,26 @@ Ideas surfaced while building the above (out-of-scope cuts + product asks). Thes
 **not** web→iOS gaps — track separately from the parity tiers. Re-confirm none have
 since shipped before picking.
 
-**Small**
-- Multi-tag filter (AND/OR) — the feed filter is single-tag.
-- Feed sort options (amount / oldest-first) — currently fixed date-desc.
-- Receipt **thumbnails** in the Edit list (vs the generic icon).
-- Preview a receipt **from a transaction row** (in-app preview is Edit-only, #289).
-- Deep-link **merchant detail → pre-filtered feed** ("see in feed"; pairs with #306/#308).
+**Done**
+- Multi-tag filter Any/All (#314) · feed sort options (#321) · receipt thumbnails (#331) ·
+  preview-from-row (#327) · merchant detail → pre-filtered feed (#318) ·
+  kind reclassification (#319) · notifications end-to-end check + cancel-on-disable fix (#335).
 
-**Medium**
-- **Kind reclassification** in Edit (change a transaction's type; needs leg rebuild).
-- **Receipt scanning** (VisionKit document scanner) — a camera capture path beyond the photo picker.
-- **Insights/analytics expansion** — spend-by-merchant report, net-worth-over-time. *(Overlaps the Tier-1 "Insights advice engine" above.)*
-- **Notifications end-to-end check** — verify the budget/scheduled-alert scaffold actually fires.
+**Still open**
+- **Receipt scanning** (VisionKit document scanner) — *device-only* (no simulator camera).
+- **Insights/analytics expansion** — spend-by-merchant report, net-worth-over-time *(core advice engine landed #323; these specific reports remain)*.
+- **zh-Hans translation coverage** — the language switch works (#338) but some strings (e.g. tab labels) aren't in the catalog yet and fall back to English. *(Content pass on `Localizable.xcstrings`.)*
 
 **Large**
-- **CloudKit sync maturity** — harden the inert sync scaffold into verified cross-device sync (needs container provisioning + multi-device testing). *(Not a parity gap — iOS-ahead scaffold; see "iOS is ahead".)*
+- **CloudKit sync maturity** — harden the inert sync scaffold into verified cross-device sync (needs container provisioning + multi-device testing). *(Not a parity gap — iOS-ahead scaffold; see "iOS is ahead".)* *device-only.*
 
-**Corrections vs. an earlier informal list:** "Goals" is **not** a gap (goals = income budgets by design — see "Already at parity"); "saved filter presets" is the same item as Tier-2 **Activity: saved searches** above (track it there).
+**Corrections vs. an earlier informal list:** "Goals" is **not** a gap (goals = income budgets by design — see "Already at parity"); "saved filter presets" is the same item as Tier-2 **Activity: saved searches** above (now done, #333).
+
+## Closed since the `9406714` snapshot (roll-up)
+
+Parity tiers: **Tier-1 fully closed** (#307/#311/#323); Tier-2 → only *quick-add-during-reconcile* open (#329/#333/#337 closed others); Tier-3 → only *opening-balance display* open (#338/#340/#342 closed others). Plus iOS-original UX (#283/#289/#293/#296/#298/#301/#306/#308/#312/#314/#318/#319/#321/#327/#331/#335) and accounts polish (#339 gear-to-leading, #341 tappable account transactions).
+
+**What's genuinely left (web→iOS parity):** `Accounts: quick-add-during-reconcile` (Tier-2) and `Accounts: opening-balance display` (Tier-3) — both in the Accounts area (coordinate with the other stream). Everything else open is iOS-original (receipt scanning, insights reports, zh-Hans coverage) or device-only (CloudKit).
 
 ## Known CI flakes (non-blocking)
 
@@ -93,6 +92,5 @@ since shipped before picking.
 
 ## Notes
 
-- Parity snapshot: `feat/frontend` @ `9406714` (2026-06-25). The two sections above were
-  reconciled in on 2026-06-25 from the session running-list. Re-verify before acting — work lands frequently.
-- Pick order suggestion: **Scheduled calendar** (largest missing experience) and **Budget rollover UI** (best effort-to-value — engine already supports it) are the strongest Tier-1 candidates; **Insights advice engine** makes Insights feel materially smarter.
+- Original survey snapshot: `feat/frontend` @ `9406714` (2026-06-25). **Status refreshed 2026-06-26 @ `db6ab1c`** against merged PRs. Re-verify before acting — work lands frequently.
+- Pick order suggestion (current): the parity surface is nearly exhausted — only **Accounts: quick-add-during-reconcile** (Tier-2) and **opening-balance display** (Tier-3) remain, both in the Accounts area (coordinate). The rest is iOS-original (receipt scanning, insights reports, zh-Hans coverage) or device-only (CloudKit).
