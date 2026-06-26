@@ -1,11 +1,10 @@
 /// The slots in the iPhone bottom tab bar. The five primaries are Accounts,
 /// Budgets, Scheduled, Insights, Settings; `.more` is the corner-pushed overflow
-/// role, now carrying the two-layer Ledger reached from the top-left control.
+/// role, carrying the two-layer Ledger reached from the top-left control.
 /// (Activity is not a bottom-bar tab — its feed lives inside Accounts.)
-/// `.ledger` is retained only until AdaptiveShell stops referencing it (removed
-/// in the shell-swap task). See plans/ios-macos/2026-06-27-nav-settings-ledger-swap-spec.md.
+/// See plans/ios-macos/2026-06-27-nav-settings-ledger-swap-spec.md.
 enum CompactTab: Hashable {
-    case ledger, accounts, budgets, scheduled, insights, settings, more
+    case accounts, budgets, scheduled, insights, settings, more
 }
 
 /// Pure bridge logic between `DeepLinkRouter.selectedTab` (an `AppTab`) and the
@@ -28,8 +27,7 @@ enum CompactTabRouting {
         }
     }
 
-    /// The app tab a primary slot maps to, or `nil` for `.more` (corner-pushed)
-    /// and the retired `.ledger` slot.
+    /// The app tab a primary slot maps to, or `nil` for `.more` (corner-pushed).
     static func appTab(for compact: CompactTab) -> AppTab? {
         switch compact {
         case .accounts:  return .accounts
@@ -37,7 +35,7 @@ enum CompactTabRouting {
         case .scheduled: return .scheduled
         case .insights:  return .insights
         case .settings:  return .settings
-        case .ledger, .more: return nil
+        case .more: return nil
         }
     }
 

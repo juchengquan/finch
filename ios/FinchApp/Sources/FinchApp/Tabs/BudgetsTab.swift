@@ -34,10 +34,10 @@ struct BudgetsTab: View {
             .searchable(text: $searchQuery, prompt: "Search budgets")
             #endif
             .navigationTitle("Budgets")
-            .settingsPush()
+            .ledgerPush()
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }
+                ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }

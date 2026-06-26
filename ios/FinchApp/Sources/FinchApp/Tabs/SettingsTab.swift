@@ -7,7 +7,15 @@ import FinchCore
 /// now, so they're not duplicated here.
 struct SettingsTab: View {
     var body: some View {
-        MoreTabNavigationStack { SettingsRootList() }
+        MoreTabNavigationStack {
+            SettingsRootList()
+                .toolbar {
+                    #if os(iOS)
+                    ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+                    #endif
+                }
+                .ledgerPush()
+        }
     }
 }
 

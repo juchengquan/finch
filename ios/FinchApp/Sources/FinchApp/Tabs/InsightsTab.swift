@@ -54,11 +54,11 @@ struct InsightsTab: View {
                 }
             }
             .navigationTitle("Insights")
-            .settingsPush()
+            .ledgerPush()
             #if os(iOS)
             .toolbar {
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { SettingsBarButton() }   // .topBarLeading is iOS-only; gear is compact-only (macOS uses the sidebar)
+                ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
                 #endif
             }
             #endif
