@@ -82,6 +82,12 @@ struct BudgetDetailView: View {
                 Spacer()
                 Text("\(p.from) – \(p.to)").font(.caption2).foregroundStyle(.secondary)
             }
+            if !b.accountIds.isEmpty {
+                let names = b.accountIds.compactMap { id in store.accounts.first { $0.id == id }?.name }.joined(separator: ", ")
+                if !names.isEmpty {
+                    Text("Accounts: \(names)").font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
