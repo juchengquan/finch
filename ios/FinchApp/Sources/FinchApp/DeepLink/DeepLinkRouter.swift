@@ -62,4 +62,12 @@ public final class DeepLinkRouter: ObservableObject {
 
     /// Switch directly to a tab (App Intents "open screen", notifications).
     public func open(_ tab: AppTab) { selectedTab = tab }
+
+    /// Handle a `finch://…` deep link (e.g. a widget tap). `finch://add` opens the Add sheet.
+    public func handle(_ url: URL) {
+        switch url.host {
+        case "add": showAddTransaction = true
+        default: break
+        }
+    }
 }
