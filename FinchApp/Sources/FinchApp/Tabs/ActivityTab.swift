@@ -416,10 +416,26 @@ struct TxRow: View {
     private var receipts: [AttachmentRow] { store.attachments(for: txn.id) }
 
     /// Bottom-left line: the transaction's date, with its time appended when set.
-    /// Raw strings (matching the feed's day-section headers) — no locale parsing.
+    /// Shows relative dates (Today/Yesterday) or short format (Jun 25).
     private var dateTimeText: String {
-        if let t = txn.time, !t.isEmpty { return "\(txn.date) · \(t)" }
-        return txn.date
+        let base = relativeOrShort(txn.date)
+        if let t = txn.time, !t.isEmpty { return "\(base) · \(t)" }
+        return base
+    }
+
+    private func relativeOrShort(_ ymd: String) -> String {
+        guard let d = AppDate.isoDay.date(from: ymd) else { return ymd }
+        let today = AppDate.isoDay.date(from: store.today) ?? Date()
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: today)).day ?? 0
+        if days == 0 { return String(localized: "Today") }
+        if days == 1 { return String(localized: "Yesterday") }
+        let sameYear = cal.component(.year, from: d) == cal.component(.year, from: today)
+        if sameYear {
+            return d.formatted(.dateTime.month(.abbreviated).day())
+        } else {
+            return d.formatted(.dateTime.month(.abbreviated).day().year())
+        }
     }
 
     var body: some View {
