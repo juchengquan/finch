@@ -180,7 +180,8 @@ struct ScheduledRow: View {
         HStack {
             Image(systemName: template.type == "transfer" ? "arrow.left.arrow.right"
                   : template.type == "income" ? "arrow.down.circle" : "arrow.up.circle")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(template.type == "income" ? .green
+                                 : template.type == "transfer" ? .blue : .red)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
                 Text("\(template.frequency.capitalized) · next \(nextRunDisplay)")
