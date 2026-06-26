@@ -25,6 +25,7 @@ struct AccountsTab: View {
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
+    @State private var searchQuery = ""                // filters account rows by name
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
     @State private var renamingGroupId: String?        // group long-press → Edit (rename)
     @State private var renameText = ""
@@ -37,6 +38,11 @@ struct AccountsTab: View {
     var body: some View {
         NavigationStack(path: $path) {
             listContent
+            #if os(iOS)
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search accounts")
+            #else
+            .searchable(text: $searchQuery, prompt: "Search accounts")
+            #endif
             .navigationTitle("Accounts")
             .settingsPush()
             .toolbar {
@@ -138,7 +144,7 @@ struct AccountsTab: View {
     @ViewBuilder private var contentList: some View {
         if let selection {
             List(selection: selection) {
-                allTransactionsLink
+                summarySection
                 groupedSections { account in
                     AccountRowView(account: account)
                         .tag(account.id)
@@ -148,7 +154,7 @@ struct AccountsTab: View {
             }
         } else {
             List {
-                allTransactionsLink
+                summarySection
                 groupedSections { account in
                     // Plain Button (navigates via the path) instead of NavigationLink
                     // so there's no trailing disclosure chevron; contentShape keeps
@@ -164,22 +170,47 @@ struct AccountsTab: View {
         }
     }
 
-    /// Pinned entry to the global transaction feed (Activity lives here now,
-    /// rather than in its own bottom-bar tab). Pushes the reusable feed onto the
-    /// Accounts navigation stack.
-    @ViewBuilder private var allTransactionsLink: some View {
+    /// Compact summary pinned at the top: the net-worth / liabilities status row
+    /// and the "All Transactions" entry, sharing one section. Net worth and
+    /// liabilities are the active ledger's net-worth accounts (includeInNetWorth
+    /// == 1); this replaces the former net-worth footer at the bottom of the list.
+    @ViewBuilder private var summarySection: some View {
         Section {
+            StatusSummaryRow(leadingLabel: "Net worth", leadingValue: store.netWorthDisplay,
+                             trailingLabel: "Liabilities", trailingValue: store.liabilitiesDisplay)
             NavigationLink { ActivityFeedView() } label: {
                 Label("All Transactions", systemImage: "list.bullet")
             }
         }
     }
 
+    /// True while the user has typed a non-empty account search.
+    private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Accounts in `group`, narrowed by the search query (case-insensitive name
+    /// contains). No query → the full group.
+    private func filteredAccounts(in group: String) -> [AccountRow] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let accts = store.accounts(in: group)
+        guard !q.isEmpty else { return accts }
+        return accts.filter { ($0.name ?? "").lowercased().contains(q) }
+    }
+
+    /// Groups to render: all of them normally; while searching, only those with
+    /// at least one matching account (so empty headers don't linger).
+    private var groupsToShow: [String] {
+        searchActive ? store.accountGroupsOrdered.filter { !filteredAccounts(in: $0).isEmpty }
+                     : store.accountGroupsOrdered
+    }
+
     /// The grouped account sections + net-worth footer, shared by both layouts —
     /// only the per-row view differs (push link vs. selectable row).
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
-        ForEach(store.accountGroupsOrdered, id: \.self) { groupName in
+        if searchActive && groupsToShow.isEmpty {
+            Section { Text("No matching accounts").foregroundStyle(.secondary) }
+        }
+        ForEach(groupsToShow, id: \.self) { groupName in
             // The group title is a tappable Button *row* (not a section header):
             // Buttons/tap gestures don't fire in List section headers, and the
             // native Section(isExpanded:) chevron only shows in .sidebar style.
@@ -217,17 +248,11 @@ struct AccountsTab: View {
                 .accessibilityHint((collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
                                    + ". Long press for group options.")
 
-                if !collapsedGroups.contains(groupName) {
-                    ForEach(store.accounts(in: groupName)) { account in row(account) }
+                // Collapse is bypassed while searching so matches always surface.
+                if !collapsedGroups.contains(groupName) || searchActive {
+                    ForEach(filteredAccounts(in: groupName)) { account in row(account) }
                         .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
                 }
-            }
-        }
-        Section {
-            HStack {
-                Text("Net worth").fontWeight(.semibold)
-                Spacer()
-                Text(store.netWorthDisplay).fontWeight(.semibold)
             }
         }
     }
@@ -340,6 +365,32 @@ struct AccountsTab: View {
             try store.apply(.deleteAccount, Args(["id": .string(a.id)]))
             if selection?.wrappedValue == a.id { selection?.wrappedValue = nil }
         } catch { errorMessage = i18nMessage(error) }   // engine rejects accounts with transactions
+    }
+}
+
+/// Two-column status/summary row: a caption label over a headline value on each
+/// side, with a little horizontal padding so the figures aren't flush to the
+/// list edges. Shared so the Accounts net-worth/liabilities summary and the
+/// Budgets totals row render in the same style.
+struct StatusSummaryRow: View {
+    let leadingLabel: String
+    let leadingValue: String
+    let trailingLabel: String
+    let trailingValue: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(leadingLabel).font(.caption).foregroundStyle(.secondary)
+                Text(leadingValue).font(.headline)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(trailingLabel).font(.caption).foregroundStyle(.secondary)
+                Text(trailingValue).font(.headline)
+            }
+        }
+        .padding(.horizontal, 8)
     }
 }
 
