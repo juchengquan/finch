@@ -38,6 +38,7 @@ struct ReconcileSheet: View {
                     }
                     trackerSection(a)
                     quickAddSection(a)
+                    pendingSection(a)
                     transactionsSection(a)
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -151,6 +152,34 @@ struct ReconcileSheet: View {
             Button("Add") { quickAdd(a) }
                 .disabled(DecimalInput.parse(addAmount) == nil)
         }
+    }
+
+    @ViewBuilder private func pendingSection(_ a: AccountRow) -> some View {
+        let pending = store.transactions(for: a.id).filter { $0.pending == true }
+        if !pending.isEmpty {
+            Section("To confirm (\(pending.count))") {
+                ForEach(pending, id: \.id) { t in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t.merchant).lineLimit(1)
+                            Text(t.date).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(store.displayMoney(t.nativeAmount ?? t.amount, from: a.currency)).fontWeight(.medium)
+                        Button("Confirm & clear") { confirmAndClear(t) }
+                            .buttonStyle(.borderless).font(.caption)
+                    }
+                }
+            }
+        }
+    }
+
+    private func confirmAndClear(_ t: Tx) {
+        errorMessage = nil
+        do {
+            try store.apply(.confirmTransaction, Args(["id": .string(t.id)]))
+            try store.apply(.setCleared, Args(["id": .string(t.id), "cleared": .bool(true)]))
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     private func quickAdd(_ a: AccountRow) {
