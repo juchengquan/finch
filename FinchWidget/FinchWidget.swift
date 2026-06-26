@@ -92,7 +92,7 @@ struct FinchWidgetView: View {
 struct FinchWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "FinchOverview", provider: FinchProvider()) { entry in
-            FinchWidgetView(entry: entry)
+            FinchWidgetView(entry: entry).widgetURL(URL(string: "finch://add"))
         }
         .configurationDisplayName("finch overview")
         .description("Net worth, budget usage, and this week's spending.")
@@ -148,7 +148,7 @@ struct AccountWidgetView: View {
 struct AccountWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "FinchAccount", intent: SelectAccountIntent.self, provider: AccountProvider()) { entry in
-            AccountWidgetView(entry: entry)
+            AccountWidgetView(entry: entry).widgetURL(URL(string: "finch://add"))
         }
         .configurationDisplayName("finch account")
         .description("A chosen account's balance.")
@@ -201,7 +201,7 @@ struct BudgetWidgetView: View {
 struct BudgetWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "FinchBudget", intent: SelectBudgetIntent.self, provider: BudgetProvider()) { entry in
-            BudgetWidgetView(entry: entry)
+            BudgetWidgetView(entry: entry).widgetURL(URL(string: "finch://add"))
         }
         .configurationDisplayName("finch budget")
         .description("A chosen budget's usage.")
