@@ -86,4 +86,12 @@ public enum NotificationPlanner {
 
         return out
     }
+
+    /// Ids currently scheduled or delivered that are no longer planned — a kind was
+    /// disabled, a budget fell back under threshold, or a due item was confirmed — so
+    /// they should be cancelled.
+    public static func cancelIDs(planned: [PlannedNotification], existing: Set<String>) -> [String] {
+        let keep = Set(planned.map(\.id))
+        return existing.subtracting(keep).sorted()
+    }
 }
