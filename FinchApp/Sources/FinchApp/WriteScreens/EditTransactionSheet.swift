@@ -199,8 +199,7 @@ struct EditTransactionSheet: View {
                     ForEach(attachments) { att in
                         Button { previewURL = store.attachmentURL(for: att) } label: {
                             HStack {
-                                Image(systemName: att.kind == "pdf" ? "doc.richtext" : "photo")
-                                    .foregroundStyle(.secondary)
+                                ReceiptThumbnail(url: store.attachmentURL(for: att), kind: att.kind)
                                 Text(att.originalFilename ?? att.kind.capitalized).foregroundStyle(.primary)
                                 Spacer()
                                 Image(systemName: "eye").font(.caption).foregroundStyle(.tertiary)
