@@ -56,6 +56,7 @@ public final class FinchStore: ObservableObject {
     var rateMap: [String: Double] = [:]
     var displayCurrencyByLedger: [String: String] = [:]
     var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
+    var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
 
     /// A pack that FAILED the audit gate, retained on disk so the iOS-only
     /// `forceImportCurrentPack` (D7) can swap THAT staged DB in later.
@@ -97,7 +98,13 @@ public final class FinchStore: ObservableObject {
         }
         self.dbQueue = live
         if (try? Projection.ledgers(dbQueue: live))?.isEmpty ?? true {
+            #if targetEnvironment(simulator)
+            // Simulator builds get a richer demo dataset so the tabs are populated
+            // for development/screenshots. Production keeps the minimal starter.
+            do { try seedSimulatorDemo(live) } catch { try? seedMinimalStarter(live) }
+            #else
             try? seedMinimalStarter(live)
+            #endif
         }
         self.auditProblems = (try? Audit.run(on: live)) ?? []
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
@@ -125,6 +132,122 @@ public final class FinchStore: ObservableObject {
                             args: Args(["ledgerId": .string("personal"), "name": .string(name), "type": .string(kind)]))
         }
     }
+
+    #if targetEnvironment(simulator)
+    /// Simulator-only demo seed: a Personal/USD ledger with several accounts
+    /// (incl. opening balances), a richer category set, a few monthly budgets,
+    /// and ~3 months of transactions — so a fresh simulator launch shows populated
+    /// tabs without hand-entering data. Routed through the chokepoint so all
+    /// invariants (system categories, balances, budget cache) stay correct.
+    private func seedSimulatorDemo(_ q: DatabaseQueue) throws {
+        func apply(_ action: String, _ args: [String: JSONValue]) throws {
+            try Apply.apply(dbQueue: q, action: action, args: Args(args))
+        }
+        let cal = Calendar.current
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"; df.timeZone = cal.timeZone
+        let now = Date()
+        func ymd(_ daysAgo: Int) -> String {
+            df.string(from: cal.date(byAdding: .day, value: -daysAgo, to: now) ?? now)
+        }
+        // First day of the month `monthsAgo` before now — a budget start that
+        // predates every seeded transaction (oldest is 68 days ≈ 2.3 months back),
+        // so the current monthly window captures real month-to-date spend instead
+        // of starting "today" and counting nothing. See cycleWindow/budgetProgress.
+        func monthStart(_ monthsAgo: Int) -> String {
+            let base = cal.date(byAdding: .month, value: -monthsAgo, to: now) ?? now
+            let comps = cal.dateComponents([.year, .month], from: base)
+            return df.string(from: cal.date(from: comps) ?? base)
+        }
+
+        try apply("createLedger", ["id": .string("personal"), "name": .string("Personal"), "base": .string("USD")])
+        try apply("setDefaultLedger", ["id": .string("personal")])
+
+        // Accounts (with opening balances). Types limited to the valid set.
+        let accounts: [(id: String, name: String, type: String, opening: Double)] = [
+            ("cash", "Cash", "cash", 180),
+            ("everyday", "Everyday", "savings", 3_200),
+            ("savings", "Savings", "savings", 15_400),
+            ("brokerage", "Brokerage", "investment", 8_600),
+            ("credit", "Credit Card", "credit_card", 0),
+        ]
+        for a in accounts {
+            try apply("createAccount", [
+                "id": .string(a.id), "ledgerId": .string("personal"), "name": .string(a.name),
+                "type": .string(a.type), "currency": .string("USD"), "openingBalance": .double(a.opening)])
+        }
+
+        // Categories (explicit ids so transactions/budgets can reference them).
+        let categories: [(id: String, name: String, kind: String)] = [
+            ("cat-groceries", "Groceries", "expense"),
+            ("cat-dining", "Dining", "expense"),
+            ("cat-transport", "Transport", "expense"),
+            ("cat-shopping", "Shopping", "expense"),
+            ("cat-entertainment", "Entertainment", "expense"),
+            ("cat-utilities", "Utilities", "expense"),
+            ("cat-rent", "Rent", "expense"),
+            ("cat-health", "Health", "expense"),
+            ("cat-salary", "Salary", "income"),
+        ]
+        for c in categories {
+            try apply("createCategory", [
+                "id": .string(c.id), "ledgerId": .string("personal"),
+                "name": .string(c.name), "type": .string(c.kind)])
+        }
+
+        // Monthly budgets over a few categories.
+        let budgets: [(name: String, amount: Double, cat: String)] = [
+            ("Groceries", 600, "cat-groceries"), ("Dining", 300, "cat-dining"),
+            ("Shopping", 400, "cat-shopping"), ("Transport", 200, "cat-transport"),
+        ]
+        for b in budgets {
+            try apply("createBudget", [
+                "ledgerId": .string("personal"), "name": .string(b.name), "type": .string("expense"),
+                "amount": .double(b.amount), "frequency": .string("monthly"),
+                "startDate": .string(monthStart(3)),
+                "categoryIds": .array([.string(b.cat)])])
+        }
+
+        // ~3 months of transactions. Expenses negative, income positive.
+        let txns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
+            (2, "credit", -42.18, "Whole Foods", "cat-groceries"),
+            (3, "credit", -16.40, "Blue Bottle Coffee", "cat-dining"),
+            (4, "everyday", -1_850, "Apartment Rent", "cat-rent"),
+            (5, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
+            (6, "credit", -28.75, "Shell Gas", "cat-transport"),
+            (7, "cash", -12.00, "Food Truck", "cat-dining"),
+            (8, "credit", -64.99, "Uniqlo", "cat-shopping"),
+            (9, "credit", -9.99, "Netflix", "cat-entertainment"),
+            (10, "everyday", -88.30, "PG&E Utilities", "cat-utilities"),
+            (12, "credit", -53.20, "Trader Joe's", "cat-groceries"),
+            (13, "credit", -22.50, "Chipotle", "cat-dining"),
+            (14, "credit", -31.00, "Uber", "cat-transport"),
+            (16, "credit", -120.00, "Nordstrom", "cat-shopping"),
+            (17, "cash", -18.00, "Farmers Market", "cat-groceries"),
+            (19, "credit", -45.60, "CVS Pharmacy", "cat-health"),
+            (20, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
+            (21, "credit", -38.40, "Safeway", "cat-groceries"),
+            (23, "credit", -14.25, "Starbucks", "cat-dining"),
+            (25, "credit", -19.99, "Spotify", "cat-entertainment"),
+            (27, "credit", -27.80, "Lyft", "cat-transport"),
+            (30, "credit", -58.10, "Whole Foods", "cat-groceries"),
+            (33, "credit", -72.00, "AMC Theatres", "cat-entertainment"),
+            (35, "everyday", 4_200, "Acme Corp Payroll", "cat-salary"),
+            (38, "credit", -41.30, "Trader Joe's", "cat-groceries"),
+            (42, "credit", -33.50, "Olive Garden", "cat-dining"),
+            (46, "credit", -95.00, "Best Buy", "cat-shopping"),
+            (50, "everyday", -1_850, "Apartment Rent", "cat-rent"),
+            (55, "credit", -49.90, "Costco", "cat-groceries"),
+            (60, "credit", -24.00, "Shell Gas", "cat-transport"),
+            (68, "credit", -61.40, "REI", "cat-shopping"),
+        ]
+        for t in txns {
+            try apply("addTransaction", [
+                "ledgerId": .string("personal"), "accountId": .string(t.acct),
+                "amount": .double(t.amt), "merchant": .string(t.merchant),
+                "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")])
+        }
+    }
+    #endif
 
     // MARK: - Mutations (Task 16: the single mutating entry point)
 
@@ -194,6 +317,7 @@ public final class FinchStore: ObservableObject {
             self.rules = rules; self.tags = tags; self.displayCurrencyByLedger = displayCurrencyByLedger
             self.rateMap = Money.latestRateMap(exchangeRates)
             self.merchantStatsCache = nil   // recompute on next access
+            self.runningBalanceCache = nil  // depends on txns + opening balances; recompute lazily
             self.dataError = nil
         } catch {
             self.dataError = "Couldn't load your data: \(error.localizedDescription)"

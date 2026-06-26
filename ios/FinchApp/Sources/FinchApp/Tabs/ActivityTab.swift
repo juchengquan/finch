@@ -171,6 +171,13 @@ struct ActivityFeedView: View {
                 }
             }
         }
+        // Selection mode borrows the bottom for the bulk-action bar. Hide the
+        // tab bar (compact) so it doesn't sit under/overlap that bar, and signal
+        // the FAB to step aside — the Photos/Mail edit-mode idiom.
+        #if os(iOS)
+        .toolbar(isSelecting ? .hidden : .automatic, for: .tabBar)
+        #endif
+        .preference(key: SelectionActiveKey.self, value: isSelecting)
         .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
         .sheet(isPresented: $showingFilter) { TransactionFilterSheet(filter: $filter) }
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
@@ -361,11 +368,19 @@ struct TxRow: View {
 
     private var receipts: [AttachmentRow] { store.attachments(for: txn.id) }
 
+    /// Bottom-left line: the transaction's date, with its time appended when set.
+    /// Raw strings (matching the feed's day-section headers) — no locale parsing.
+    private var dateTimeText: String {
+        if let t = txn.time, !t.isEmpty { return "\(txn.date) · \(t)" }
+        return txn.date
+    }
+
     var body: some View {
         HStack {
             Image(systemName: TxnKindIcon.icon(for: txn.kind))
                 .foregroundStyle(txn.amount < 0 ? .red : .green)
             VStack(alignment: .leading, spacing: 2) {
+                // Top-left: merchant + status flags + category.
                 HStack(spacing: 4) {
                     Text(txn.merchant)
                     if txn.pending == true {
@@ -386,13 +401,15 @@ struct TxRow: View {
                         .foregroundStyle(.green)
                         .accessibilityLabel("Refund")
                     }
-                }
-                HStack(spacing: 4) {
                     if let cat = store.categoryName(txn.category) {
                         Text(cat).font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(.quaternary, in: Capsule())
                     }
+                }
+                // Bottom-left: date·time + tags.
+                HStack(spacing: 4) {
+                    Text(dateTimeText).font(.caption2).foregroundStyle(.secondary)
                     ForEach(rowTags.prefix(3)) { tag in
                         Text(tag.name).font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -412,7 +429,15 @@ struct TxRow: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Preview receipt")
             }
-            Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
+            // Right: amount (top) + running account balance after this txn (bottom).
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
+                let remaining = store.runningBalanceBase(for: txn)
+                Text(store.displayMoneyBase(remaining))
+                    .font(.caption2)
+                    .foregroundStyle(remaining < 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                    .accessibilityLabel("Balance after")
+            }
         }
     }
 }
