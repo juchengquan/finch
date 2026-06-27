@@ -469,11 +469,18 @@ private struct NetWorthByTypeCard: View {
     var body: some View {
         let rows = Selectors.netWorthByAccountType(store.accounts, store.activeLedgerId) { store.toBase($0, from: $1) }
             .filter { $0.balance != 0 }
+        let assets = rows.filter { $0.balance > 0 }
         Card(title: "Net worth by type") {
             if rows.isEmpty {
                 Text("No accounts").font(.caption).foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 6) {
+                    if !assets.isEmpty {
+                        StackedBar(slices: assets.map {
+                            StackedBar.Slice(value: $0.balance, color: typeColor($0.type))
+                        })
+                        .padding(.bottom, 4)
+                    }
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                         HStack {
                             Text(AccountSheetTypeLabel.label(r.type))
@@ -483,6 +490,17 @@ private struct NetWorthByTypeCard: View {
                     }
                 }
             }
+        }
+    }
+
+    private func typeColor(_ type: String) -> Color {
+        switch type {
+        case "cash":       return .green
+        case "savings":    return .blue
+        case "investment": return .purple
+        case "fx":         return .teal
+        case "virtual":    return .gray
+        default:           return .secondary
         }
     }
 }
