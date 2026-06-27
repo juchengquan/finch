@@ -68,6 +68,7 @@ struct ActivityFeedView: View {
     @State private var previewURL: URL?
     @State private var isSelecting = false
     @State private var selected: Set<String> = []
+    @State private var kbSel: String?            // macOS keyboard-open selection
     @State private var showingBulkCat = false
     @State private var errorMessage: String?
     // Memoized derived state: recomputed only when txns / query / visibleCount
@@ -86,7 +87,7 @@ struct ActivityFeedView: View {
             if store.txns.isEmpty && headerSection == nil {
                 EmptyState(tab: .activity)
             } else {
-                List {
+                List(selection: $kbSel) {
                     if let headerSection { headerSection }
                     savedSearchRow
                     if store.txns.isEmpty {
@@ -129,6 +130,12 @@ struct ActivityFeedView: View {
                         Button("Load more") { visibleCount += 50 }
                     }
                 }
+                #if os(macOS)
+                .onKeyPress(.return) {
+                    if !isSelecting, let id = kbSel, let txn = sections.flatMap({ $0.txns }).first(where: { $0.id == id }) { editing = txn; return .handled }
+                    return .ignored
+                }
+                #endif
             }
         }
         .searchable(text: $searchQuery)
@@ -335,6 +342,7 @@ struct ActivityFeedView: View {
             }
             Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
         }
+        .tag(txn.id)
     }
 
     private func delete(_ txn: Tx) {
