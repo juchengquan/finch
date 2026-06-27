@@ -15,6 +15,7 @@ struct ScheduledTab: View {
     @State private var addPrefill: Date?
     @State private var addFromCharge: RecurringCharge?
     @State private var searchQuery = ""                // filters the list view by name
+    @State private var kbSel: String?            // macOS keyboard-open selection
     // Calendar first (default); List second.
     private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
 
@@ -59,7 +60,7 @@ struct ScheduledTab: View {
                         }
                         .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
                         if mode == .list {
-                            List {
+                            List(selection: $kbSel) {
                                 ForEach(filteredScheduled, id: \.id) { t in
                                     Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
@@ -75,6 +76,7 @@ struct ScheduledTab: View {
                                             Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
                                             Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
                                         }
+                                        .tag(t.id)
                                 }
                                 if !filteredDetected.isEmpty {
                                     Section {
@@ -108,6 +110,12 @@ struct ScheduledTab: View {
                                     ContentUnavailableView.search(text: searchQuery)
                                 }
                             }
+                            #if os(macOS)
+                            .onKeyPress(.return) {
+                                if let id = kbSel, let t = filteredScheduled.first(where: { $0.id == id }) { editing = t; return .handled }
+                                return .ignored
+                            }
+                            #endif
                         } else {
                             ScheduledCalendarView(templates: filteredScheduled, onEdit: { editing = $0 },
                                                   onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true })
