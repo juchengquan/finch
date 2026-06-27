@@ -36,6 +36,7 @@ struct InsightsTab: View {
                                 MonthlySpendingCard(months: rangeMonths)
                                 NetWorthCard(months: rangeMonths)
                                 CashflowCard(months: rangeMonths)
+                                SavingsRateCard()
                                 CategoryDeltasCard()
                                 WeeklyDigestCard()
                                 IncomeSankeyCard()
@@ -340,6 +341,34 @@ private struct CashflowCard: View {
                 LineChart(data: pts.map { LineChart.DataPoint(x: $0.m, y: $0.inc - $0.exp) },
                           xLabel: "Month", yLabel: "Net")
                     .frame(height: 160)
+            }
+        }
+    }
+}
+
+/// This month's savings rate — (income − expense) ÷ income — as a Ring.
+/// Inline math from `monthlyCashflow`; handles no-income and overspent (negative).
+private struct SavingsRateCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let pt = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, String(store.today.prefix(7)), 1).last
+        let inc = pt?.inc ?? 0
+        let exp = pt?.exp ?? 0
+        let rate: Double? = inc > 0 ? (inc - exp) / inc : nil
+        Card(title: "Savings rate") {
+            if let rate {
+                let pct = Int((rate * 100).rounded())
+                HStack(spacing: 16) {
+                    Ring(value: Swift.max(0, rate * 100), max: 100,
+                         color: rate >= 0 ? .green : .orange) {
+                        Text("\(pct)%").font(.caption).fontWeight(.semibold)
+                    }
+                    Text(rate >= 0 ? "of income saved this month"
+                                   : "spent more than earned this month")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("No income this month").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
