@@ -1,7 +1,7 @@
 # iOS/macOS handoff & sync-up
 
 **Date:** 2026-06-25 (status refreshed 2026-06-27)
-**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `3402877` (#387 merged). **All web→iOS parity gaps (Tier-1/2/3) are closed; the native-surfaces "deepen widgets" sub-project is also complete.**
+**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `205a922` (#401 merged). **All web→iOS parity gaps (Tier-1/2/3) are closed; the native-surfaces "deepen widgets" sub-project AND the macOS-parity Phases 1–3 are also complete.**
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
 ## How we work (conventions)
@@ -34,7 +34,10 @@
 - **Native surfaces — "deepen widgets" sub-project (complete):** CP1 lock-screen / accessory families (#364) · CP2 configurable **Account + Budget** widgets (snapshot expansion + `AppIntentConfiguration`, #369) · CP3 interactive **quick-add** (`finch://add` scheme + `onOpenURL` + `.widgetURL`, #374). (Pre-existing scaffolds App Intents/Siri, Spotlight, Share extension, basic Watch glance remain as-is.)
 - **Other session (recent):** recurring-charge detector (#359), flat dated activity feed (#368), confirm-transaction deletes + Ledger overflow menu (#370), budget-cycle edit folded into the edit sheet, gitignore (#366).
 - **Full zh-Hans localization:** tab titles (#346) → **catalog refresh** capturing +131 stale keys (#349) → **the 96 remaining strings + nav-title bypass fix** (#350). Catalog 456 keys / 441 translated; 15 intentional format tokens. *(The ~97 #350 strings are AI-authored — native review advised before release.)*
-- Docs/infra: parity inventory (#303, refreshed #343) + backlog reconcile (#313) + this handoff (#315/#324); CI cache+skip (#276/#278).
+- **Since the last snapshot (#387 → #401):**
+  - *This session:* optional opening-balance row via a Settings toggle (#389); tightened Add-transaction title spacing (#392); confirm-before-delete on the ledger list (#395); **Settings ↔ Ledger nav swap** — Settings is now a bottom-bar tab, the two-layer Ledger is reached from the top-left `books.vertical` corner control, app launches on Accounts (spec/plan #398, impl #400, via superpowers subagent-driven dev). Plus a local-only (gitignored `.claude/skills/`) **ios-build-launch** skill capturing the build/run/test workflow.
+  - *Other session:* **macOS parity Phases 1–3 — now complete:** context-menu coverage + multi-select toolbar (#396), file/PDF receipt picker via `.fileImporter` (#397), Preferences window + menu bar (Export/Help) + ⌫-delete (#399), wrap-up doc confirming Spotlight is already cross-platform + widgets are signing-gated (#401). Also: two-layer Ledger tab list→detail (#394), richer demo data (#393), ungrouped accounts/budgets render bare (#390), credit cards counted in net worth/liabilities by default (#391).
+- Docs/infra: parity inventory (#303, refreshed #343) + backlog reconcile (#313) + this handoff (#315/#324/#388); CI cache+skip (#276/#278).
 
 ## Remaining web→iOS parity gaps
 
@@ -63,18 +66,19 @@ Tracked here + in the inventory. Status as of this snapshot:
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
 | **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | open — `Ring`/`StackedBar` primitives landed (#342) but aren't wired into real Insights cards yet; the reports + wiring remain |
 | **CloudKit sync maturity** | L | open (iOS-ahead scaffold; needs container provisioning + multi-device testing) |
-| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast), PDF/CSV/tax export, iPad multi-column + macOS keyboard/menus |
+| **macOS desktop parity (Phases 1–3)** | M | ✅ Done (#396/#397/#399/#401) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete; Spotlight already cross-platform, widgets signing-gated |
+| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast), PDF/CSV/tax export, iPad multi-column. (macOS keyboard/menus now covered by the parity phases above.) |
 
 **Not gaps (don't add back):** Goals = income budgets by design; "saved filter presets" = Activity saved searches (done #333).
 
 ## Collision avoidance
 
-- 0 open PRs at this snapshot (@`3402877`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
+- 0 open PRs at this snapshot (@`205a922`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
 - **All parity is done — only the iOS-original backlog remains, so coordinate per-feature.** Recent division of labour:
-  - *Other session:* Insights/charts (`Ring`/`StackedBar` #342, + the wiring follow-up), Settings/theme/i18n (#338, #340, zh-Hans #346/#349/#350), roadmap docs (#354), notifications (#335).
-  - *This session:* accounts/reconcile (badge+split #329, **guided reconcile session #355/#358**), budgets per-account (#337), activity saved searches (#333), opening-balance (#347), UI tweaks (gear #339, tappable txns + Refund/Adjust swap #341), **widgets sub-project CP1/2/3 (#364/#369/#374)** + the `finch://` deep-link scheme, **Ledger/Scheduled UI cleanup (#379/#380/#384) + the FinchMac `.wheel` fix (#385)**.
+  - *Other session:* Insights/charts (`Ring`/`StackedBar` #342, + the wiring follow-up), Settings/theme/i18n (#338, #340, zh-Hans #346/#349/#350), roadmap docs (#354), notifications (#335); **macOS parity Phases 1–3 (#396/#397/#399/#401)**, two-layer Ledger (#394), demo data + net-worth tweaks (#390/#391/#393).
+  - *This session:* accounts/reconcile (badge+split #329, **guided reconcile session #355/#358**), budgets per-account (#337), activity saved searches (#333), opening-balance (#347), UI tweaks (gear #339, tappable txns + Refund/Adjust swap #341), **widgets sub-project CP1/2/3 (#364/#369/#374)** + the `finch://` deep-link scheme, **Ledger/Scheduled UI cleanup (#379/#380/#384) + the FinchMac `.wheel` fix (#385)**; opening-balance toggle (#389), title spacing (#392), ledger-delete confirm (#395), **Settings ↔ Ledger nav swap (#398/#400)**.
 - **Hot/shared files — check before editing:** `Tabs/ActivityTab.swift`, `WriteScreens/TransactionFilterSheet.swift`, `WriteScreens/EditTransactionSheet.swift`, `WriteScreens/AccountDetailView.swift`, `WriteScreens/BudgetSheet.swift`, `Tabs/SettingsTab.swift`, `Project/Projections+State.swift`, `Selectors/Selectors.swift`, `Common/ChartViews/*`.
-- **Avoid right now (other session active):** Insights/charts wiring, Settings/theme, i18n/localization, activity-feed structure. **Clear for this session:** the **Watch** sub-project, widget account pre-fill, Insights advice CP2, receipt scanning (device-only), CloudKit, the polish themes. New `finch://` URL scheme + `DeepLinkRouter.handle` are the deep-link entry point for future widget/Watch routes.
+- **Avoid right now (other session active):** Insights/charts wiring, Settings/theme, i18n/localization, activity-feed structure, and the macOS shell (`AdaptiveShell`/`SplitViewShell`/`MasterDetailShell`, Preferences, `FinchCommands`) they just reworked for macOS parity — `git fetch` + check open PRs before editing shared shell/Settings/Insights files. **Clear for this session:** the **Watch** sub-project, widget account pre-fill, Insights advice CP2, receipt scanning (device-only), CloudKit, the remaining polish themes (a11y, PDF/CSV/tax export, iPad multi-column). New `finch://` URL scheme + `DeepLinkRouter.handle` are the deep-link entry point for future widget/Watch routes.
 
 ## Pointers
 
