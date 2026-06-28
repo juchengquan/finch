@@ -75,6 +75,7 @@ struct ActivityFeedView: View {
     // change (via .onReceive/.onChange), not on every body render — the search
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [DaySection] = []
+    @State private var dateShownIds: Set<String> = []
     @State private var hasMore = false
     @State private var filteredCount = 0
     @State private var confirmingBulkDelete = false
@@ -284,6 +285,11 @@ struct ActivityFeedView: View {
             byMonth[key, default: []].append(txn)
         }
         sections = order.map { DaySection(id: $0, txns: byMonth[$0] ?? []) }
+        var shown = Set<String>(); var last: String?
+        for txn in sections.flatMap({ $0.txns }) {
+            if txn.date != last { shown.insert(txn.id); last = txn.date }
+        }
+        dateShownIds = shown
     }
 
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
@@ -317,7 +323,8 @@ struct ActivityFeedView: View {
                     Image(systemName: selected.contains(txn.id) ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 }
-                TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) })
+                TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) },
+                      showDate: dateShownIds.contains(txn.id))
             }
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
@@ -436,6 +443,7 @@ struct TxRow: View {
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     let txn: Tx
     var onPreviewReceipt: ((Tx) -> Void)? = nil
+    var showDate: Bool = true
 
     private var rowTags: [TagRow] {
         guard let ids = txn.tags, !ids.isEmpty else { return [] }
@@ -502,7 +510,7 @@ struct TxRow: View {
                 }
                 // Bottom-left: date·time + tags.
                 HStack(spacing: 4) {
-                    Text(dateTimeText).font(.caption2).foregroundStyle(.secondary)
+                    if showDate { Text(dateTimeText).font(.caption2).foregroundStyle(.secondary) }
                     ForEach(rowTags.prefix(3)) { tag in
                         Text(tag.name).font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
