@@ -1,7 +1,7 @@
 # iOS/macOS handoff & sync-up
 
-**Date:** 2026-06-25 (status refreshed 2026-06-27)
-**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `205a922` (#401 merged). **All web→iOS parity gaps (Tier-1/2/3) are closed; the native-surfaces "deepen widgets" sub-project AND the macOS-parity Phases 1–3 are also complete.**
+**Date:** 2026-06-25 (status refreshed 2026-06-28)
+**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `746dabe` (#407 merged). **All web→iOS parity gaps (Tier-1/2/3) are closed; the native-surfaces "deepen widgets" sub-project AND macOS-parity Phases 1–3 + the macOS keyboard/feed follow-ups are also complete.**
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
 ## How we work (conventions)
@@ -66,8 +66,14 @@ Tracked here + in the inventory. Status as of this snapshot:
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
 | **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | open — `Ring`/`StackedBar` primitives landed (#342) but aren't wired into real Insights cards yet; the reports + wiring remain |
 | **CloudKit sync maturity** | L | open (iOS-ahead scaffold; needs container provisioning + multi-device testing) |
-| **macOS desktop parity (Phases 1–3)** | M | ✅ Done (#396/#397/#399/#401) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete; Spotlight already cross-platform, widgets signing-gated |
-| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast), PDF/CSV/tax export, iPad multi-column. (macOS keyboard/menus now covered by the parity phases above.) |
+| **macOS desktop parity (Phases 1–4)** | M | ✅ Done (#396/#397/#399/#401/#403) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete, **⌫-select + ↵-open** on Scheduled/Activity; Spotlight already cross-platform; **widget = signing-gated** (team-only App Group — needs a paid Dev Team) |
+| **Feed date de-dup** (date shown only when it changes) | S | ✅ Done (#407) |
+| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast), PDF/CSV/tax export, iPad multi-column. |
+
+**Verified already-shipped (2026-06-28 — were mistakenly carried as "deferred" from old plan scope-notes; do NOT re-chase):**
+- **Edit-transaction currency + counterparty** — `EditTransactionSheet` already has the currency `Picker` (saved via `patch["currency"]`) and counterparty typeahead + **"Create "<name>""** (runs `createCounterparty` then links).
+- **Rules multi-condition / multi-action builder** — `RuleSheet` already does all/any multi-condition + multi-action create/edit. Only *advanced* constructs (nested groups / NOT / CP2 fields / split) open read-only.
+- **Tags + status on transfers** — the Add sheet shows the Status + Tags pickers for transfers (`if kind != .adjust`) and the save passes `status` + `tagIds` to `createTransfer`. *Truly* remaining (both niche, low value): **receipt-on-transfer** (Receipt section is line-item-only) and **tags/status on adjust-balance** (Reconcile hardcodes confirmed, no tags).
 
 **Not gaps (don't add back):** Goals = income budgets by design; "saved filter presets" = Activity saved searches (done #333).
 
