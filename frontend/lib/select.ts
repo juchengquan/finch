@@ -689,6 +689,87 @@ export function weeklyDigest(txns: Tx[], ledgerId: string, anchor: string): Week
 }
 
 // ---------------------------------------------------------------------------
+// What-if baseline — average monthly spend per category over the trailing
+// complete months, plus average income/spend totals. The Insights what-if
+// card runs interactive hypotheticals ("cut dining 30%") against this
+// baseline; the slider math itself is trivial and lives in the component.
+// ---------------------------------------------------------------------------
+
+export interface WhatIfBaseline {
+  /** Months (YYYY-MM) the averages cover, oldest first. */
+  months: string[];
+  /** Top categories by average monthly spend, descending (positive amounts). */
+  categories: { categoryId: string; avgMonthly: number }[];
+  /** Average monthly confirmed income over the window. */
+  avgIncome: number;
+  /** Average total monthly spend over the window (all categories, not just top-N). */
+  avgSpend: number;
+}
+
+/**
+ * Baseline for the what-if sliders: category spend averaged over up to
+ * `windowMonths` complete months before `anchorMonth` (the current, likely
+ * partial, month). Months with no confirmed spend are dropped from the
+ * average so a fresh ledger isn't diluted toward zero; when no complete
+ * month has data the anchor month itself is the (1-month) window.
+ * Returns null when there's no spend anywhere to build a baseline from.
+ */
+export function whatIfBaseline(
+  txns: Tx[],
+  ledgerId: string,
+  anchorMonth: string,
+  opts?: { windowMonths?: number; topN?: number },
+): WhatIfBaseline | null {
+  if (!anchorMonth) return null;
+  const windowMonths = opts?.windowMonths ?? 3;
+  const topN = opts?.topN ?? 5;
+
+  const monthSpend = (month: string) => categorySpend(txns, ledgerId, month);
+  const hasSpend = (by: Record<string, number>) => Object.values(by).some((v) => v > 0);
+
+  // Trailing complete months with data; fall back to the anchor month.
+  const candidates = monthsBack(prevMonth(anchorMonth), windowMonths);
+  let window = candidates
+    .map((m) => ({ m, by: monthSpend(m) }))
+    .filter(({ by }) => hasSpend(by));
+  if (window.length === 0) {
+    const by = monthSpend(anchorMonth);
+    if (!hasSpend(by)) return null;
+    window = [{ m: anchorMonth, by }];
+  }
+
+  const n = window.length;
+  const totals: Record<string, number> = {};
+  for (const { by } of window) {
+    for (const [cat, v] of Object.entries(by)) totals[cat] = (totals[cat] ?? 0) + v;
+  }
+  const categories = Object.entries(totals)
+    .map(([categoryId, sum]) => ({ categoryId, avgMonthly: r2(sum / n) }))
+    .filter((c) => c.avgMonthly > 0)
+    .sort((a, b) => b.avgMonthly - a.avgMonthly)
+    .slice(0, topN);
+  if (categories.length === 0) return null;
+
+  const monthSet = new Set(window.map(({ m }) => m));
+  let incomeSum = 0;
+  let spendSum = 0;
+  for (const t of txns) {
+    if (ledgerOf(t) !== ledgerId || t.pending) continue;
+    if (!monthSet.has(t.date.slice(0, 7))) continue;
+    const k = kindOf(t);
+    if (k === 'income') incomeSum += t.amount;
+    else if (isSpend(t)) spendSum += -t.amount;
+  }
+
+  return {
+    months: window.map(({ m }) => m),
+    categories,
+    avgIncome: r2(incomeSum / n),
+    avgSpend: r2(spendSum / n),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Anomaly detection — per-merchant z-score over confirmed expense magnitudes.
 // Catches both fraud ("this is 4× my usual coffee") and "wait, that was
 // expensive". Pure heuristic, no model.

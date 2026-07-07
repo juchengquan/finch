@@ -19,6 +19,7 @@ import { MOCK } from '@/lib/data';
 import { InsightCard } from '@/components/ui/insight-card';
 import { AprVsMay } from '@/components/ui/apr-vs-may';
 import { WeeklyDigestCard } from '@/components/weekly-digest-card';
+import { WhatIfCard } from '@/components/what-if-card';
 import { NetWorthExplainedCard } from '@/components/net-worth-explained-card';
 import { NetWorthByTypeCard } from '@/components/net-worth-by-type-card';
 import { useLedger } from '@/components/ledger-provider';
@@ -26,7 +27,7 @@ import { useMoney } from '@/components/use-money';
 import { useBackup } from '@/components/sqlite-backup-provider';
 import { useFinanceStore } from '@/lib/store';
 import { generateInsights } from '@/lib/insights';
-import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow, weeklyDigest } from '@/lib/select';
+import { categorySpend, currentMonth, prevMonth, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, monthForecast, incomeCategoryFlow, weeklyDigest, whatIfBaseline } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 import type { MonthForecast } from '@/lib/select';
@@ -163,6 +164,10 @@ export default function InsightsPage() {
   // Sunday-night recap card: most recently completed Mon-Sun. `lastDate`
   // approximates "today" without a wall-clock dependency (mirrors monthForecast).
   const digest = lastDate ? weeklyDigest(transactions, activeId, lastDate) : null;
+
+  // What-if sliders: average monthly spend per top category over the trailing
+  // complete months; the card runs the cut hypotheticals client-side.
+  const whatIf = month ? whatIfBaseline(transactions, activeId, month) : null;
 
   return (
     <MobilePage
@@ -410,6 +415,8 @@ export default function InsightsPage() {
             </div>
           </div>
         )}
+
+        <WhatIfCard baseline={whatIf} categories={ledgerCategories} />
 
         <NetWorthExplainedCard />
         <NetWorthByTypeCard />
