@@ -60,7 +60,7 @@ Tracked here + in the inventory. Status as of this snapshot:
 | Widgets: **lock-screen / accessory families** | S | ✅ Done (#364) |
 | Widgets: **configurable Account + Budget** | M | ✅ Done (#369) |
 | Widgets: **interactive quick-add** (tap → Add) | S | ✅ Done (#374) |
-| **Watch: complication + on-wrist quick-add** | M | ✅ Done — CP1 #412 (WCSession transport + live glance; spec #408, plan #410) · CP2 #415 (`FinchWatchComplication`, 4 accessory families + reload-on-push; spec/plan #413) · CP3 this PR (on-wrist quick-add from recent-expense templates: recents ride the snapshot, `transferUserInfo` → phone posts via the chokepoint → snapshot push-back confirms; spec/plan `2026-07-07-watch-cp3-*.md`). Watch sub-project complete |
+| **Watch: complication + on-wrist quick-add** | M | ✅ Done — CP1 #412 (WCSession transport + live glance; spec #408, plan #410) · CP2 #415 (`FinchWatchComplication`, 4 accessory families + reload-on-push; spec/plan #413) · CP3 #417 (on-wrist quick-add from recent-expense templates: recents ride the snapshot, `transferUserInfo` → phone posts via the chokepoint → snapshot push-back confirms; spec/plan `2026-07-07-watch-cp3-*.md`). Watch sub-project complete |
 | Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | ✅ Done (#412) — Account widget's tap URL carries its account; `DeepLinkRouter` parses it into `pendingAddAccountId` → `AddTransactionSheet(defaultAccountId:)` |
 | **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | ✅ Done (#412) — the 5 pattern rules ported into `generateInsights` in web priority order, web-matching gates/copy; +5 tests |
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
@@ -69,7 +69,7 @@ Tracked here + in the inventory. Status as of this snapshot:
 | **macOS desktop parity (Phases 1–4)** | M | ✅ Done (#396/#397/#399/#401/#403) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete, **⌫-select + ↵-open** on Scheduled/Activity; Spotlight already cross-platform; **widget = signing-gated** (team-only App Group — needs a paid Dev Team) |
 | **Feed date de-dup** (date shown only when it changes) | S | ✅ Done (#407) |
 | **iPad multi-column** | M | 🟡 Ledger joins the 3-column shell + split column widths (#414; spec/plan `2026-07-07-ipad-multicolumn-*.md`). Deferred there: Activity/Scheduled detail columns (need net-new inline detail views) and sidebar-collapse persistence (rotation auto-collapse caveat) |
-| **PDF/CSV export** | M | ✅ Done (this PR; spec/plan `2026-07-07-ios-export-report-*.md`) — one-page monthly report PDF (`ImageRenderer`, print-styled) on Insights › Breakdown + a Face-ID-gated full-history CSV row in Settings. CSV builder (`TxExport`) + month-scoped Breakdown CSV already existed. **Tax export stays open** — follows the web `is_tax_relevant` schema feature (FEATURE_IDEAS §8.1) |
+| **PDF/CSV export** | M | ✅ Done (#417; spec/plan `2026-07-07-ios-export-report-*.md`) — one-page monthly report PDF (`ImageRenderer`, print-styled) on Insights › Breakdown + a Face-ID-gated full-history CSV row in Settings. CSV builder (`TxExport`) + month-scoped Breakdown CSV already existed. **Tax export stays open** — follows the web `is_tax_relevant` schema feature (FEATURE_IDEAS §8.1) |
 | **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast). |
 
 **Verified already-shipped (2026-06-28 — were mistakenly carried as "deferred" from old plan scope-notes; do NOT re-chase):**
