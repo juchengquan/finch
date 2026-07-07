@@ -124,6 +124,7 @@ private struct InsightsCard: View {
         switch icon {
         case "arrowUp": return "arrow.up"; case "arrowDown": return "arrow.down"
         case "doc": return "doc.text"; case "fork": return "fork.knife"; case "check": return "checkmark"
+        case "calendar": return "calendar"; case "tag": return "tag"
         default: return "sparkles"
         }
     }

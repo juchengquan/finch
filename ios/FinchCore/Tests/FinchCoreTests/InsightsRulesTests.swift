@@ -76,6 +76,61 @@ final class InsightsRulesTests: XCTestCase {
         XCTAssertTrue(ins.contains { $0.title.contains("Net worth") })
     }
 
+    // MARK: CP2 pattern rules
+
+    func test_weekday_skew_spendy_day() throws {
+        let q = try TestSeed.base()
+        // All spend on Saturdays (2026-05-02/09/16) → ratio 7× the daily mean.
+        for d in ["2026-05-02", "2026-05-09", "2026-05-16"] { try add(q, -100, d) }
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        XCTAssertTrue(ins.contains { $0.title == "Saturdays are your spendy days" && $0.tone == .neut })
+    }
+
+    func test_quietest_day() throws {
+        let q = try TestSeed.base()
+        // Four full weeks (May 1–28); Mondays (4/11/18/25) near-zero, rest heavy.
+        for d in 1...28 {
+            let mondays = [4, 11, 18, 25]
+            try add(q, mondays.contains(d) ? -1 : -100, String(format: "2026-05-%02d", d))
+        }
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        XCTAssertTrue(ins.contains { $0.title == "Mondays are your quietest" && $0.tone == .pos })
+    }
+
+    func test_weekend_vs_weekday() throws {
+        let q = try TestSeed.base()
+        // Range May 1–28 (8 weekend days, 20 weekdays ≥ the 6/15 gates).
+        try add(q, -10, "2026-05-01"); try add(q, -10, "2026-05-28")
+        for d in [2, 3, 9, 10, 16, 17, 23, 24] { try add(q, -90, String(format: "2026-05-%02d", d)) }
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        XCTAssertTrue(ins.contains { $0.title == "Weekends cost more than weekdays" })
+    }
+
+    func test_end_of_month_bump() throws {
+        let q = try TestSeed.base()
+        // Three observed months, each hot at the tail (day 25) vs day 10.
+        for m in ["02", "03", "04"] {
+            try add(q, -10, "2026-\(m)-10")
+            try add(q, -200, "2026-\(m)-25")
+        }
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        XCTAssertTrue(ins.contains { $0.title == "End-of-month runs hotter" })
+    }
+
+    func test_top_category_by_weekday() throws {
+        let q = try TestSeed.base()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('c2','l1',NULL,'Transit','expense',1,datetime('now'),datetime('now'))")
+        }
+        // Saturdays: Food 160 of 220 (73% ≥ 40% share, total ≥ 100, 2 categories).
+        for d in ["2026-05-02", "2026-05-09"] {
+            try add(q, -80, d, cat: "c1")
+            try add(q, -30, d, cat: "c2")
+        }
+        let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
+        XCTAssertTrue(ins.contains { $0.title == "Saturdays are mostly Food" && $0.tone == .neut })
+    }
+
     func test_max_six_and_priority_order() throws {
         let q = try TestSeed.base()
         try add(q, -100, "2026-04-10"); try add(q, -150, "2026-05-10")     // spendingTrend + topCategory
