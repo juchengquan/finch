@@ -9,8 +9,8 @@ import { SchemaChip } from '@/components/ui/schema-chip';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { IconButton } from '@/components/ui/icon-button';
 import { EmptyState } from '@/components/empty-state';
-import { fmtNative } from '@/lib/data';
 import { useLedger } from '@/components/ledger-provider';
+import { useMoney } from '@/components/use-money';
 import { RowActions } from '@/components/row-actions';
 import { useFinanceStore } from '@/lib/store';
 import { selectTransfers } from '@/lib/select';
@@ -39,6 +39,7 @@ type Option = { id: string; name: string };
 
 export default function TransfersPage() {
   const { active, activeId } = useLedger();
+  const { native } = useMoney();
   const t = useTranslations('transfers');
   const tCommon = useTranslations('common');
   const createTransfer = useFinanceStore((s) => s.createTransfer);
@@ -206,13 +207,13 @@ export default function TransfersPage() {
                   {tg.fromName ?? '—'} → {tg.toName ?? '—'}
                 </div>
                 <div className="font-sans text-[15px] font-medium tabular-nums">
-                  {fmtNative(tg.amount, tg.fromCurrency)}
+                  {native(tg.amount, tg.fromCurrency)}
                 </div>
               </div>
               <div className="text-muted-foreground mt-0.5 text-[11px]">
                 {tg.date.replace(/-/g, '/')}{tg.time ? ` ${tg.time}` : ''}
                 {tg.fromCurrency !== tg.toCurrency && tg.amount > 0
-                  ? ` · → ${fmtNative(tg.toAmount, tg.toCurrency)} @ ${(tg.toAmount / tg.amount).toFixed(4)}`
+                  ? ` · → ${native(tg.toAmount, tg.toCurrency)} @ ${(tg.toAmount / tg.amount).toFixed(4)}`
                   : ''}
                 {tg.note ? ` · ${tg.note}` : ''}
               </div>

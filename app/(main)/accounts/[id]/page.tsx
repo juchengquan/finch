@@ -36,7 +36,7 @@ import {
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
 import { useTransactionDialog } from '@/components/transaction-dialog';
-import { MOCK, catById, convertAmount, fmtNative } from '@/lib/data';
+import { MOCK, catById, convertAmount } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { ACCOUNT_TYPE_OPTIONS, accountTypeLabel, toDbType } from '@/lib/account-types';
 import { selectTransactions, accountBalance, balanceSeries, unrealizedFx, holdingsValueForAccount } from '@/lib/select';
@@ -48,7 +48,7 @@ import { cn } from '@/lib/utils';
 
 export default function AccountDetailPage() {
   const { active } = useLedger();
-  const { display, fmtFrom, toBase, fmt, base } = useMoney();
+  const { display, fmtFrom, toBase, fmt, base, native } = useMoney();
   const params = useParams();
   const router = useRouter();
   const t = useTranslations('accounts.detail');
@@ -211,7 +211,7 @@ export default function AccountDetailPage() {
       ledgerId,
     });
     setCleared(id, true); // auto-clear: it's on the statement, that's why we're adding it
-    toast.success(t('reconcileCard.addedClearedToast'), { description: `${addMerchant.trim()} · ${fmtNative(Math.abs(value), currency)}` });
+    toast.success(t('reconcileCard.addedClearedToast'), { description: `${addMerchant.trim()} · ${native(Math.abs(value), currency)}` });
     setAddMerchant('');
     setAddAmount('');
     setAddOpen(false);
@@ -294,7 +294,7 @@ export default function AccountDetailPage() {
               {/* Primary balance is in the account's own currency; the secondary
                   line converts to the display currency (hidden when they match). */}
               <div className="font-serif text-[40px] leading-none -tracking-[1.5px] tabular-nums">
-                {fmtNative(balance, currency)}
+                {native(balance, currency)}
               </div>
               {currency !== display && (
                 <div className="mt-1.5 text-sm text-white/70 tabular-nums">≈ {fmtFrom(balance, currency)}</div>
@@ -306,7 +306,7 @@ export default function AccountDetailPage() {
               )}
               {isInvestment && holdingsTotal > 0 && (
                 <div className="mt-1.5 text-xs text-white/70 tabular-nums">
-                  {t('holdingsLine', { holdings: fmtNative(holdingsTotal, currency), total: fmtNative(balance + holdingsTotal, currency) })}
+                  {t('holdingsLine', { holdings: native(holdingsTotal, currency), total: native(balance + holdingsTotal, currency) })}
                 </div>
               )}
             </div>
@@ -396,17 +396,17 @@ export default function AccountDetailPage() {
               <div className="border-border space-y-2 border-t px-[18px] py-3.5">
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
                   <span className="text-muted-foreground">{t('reconcileCard.cleared')}</span>
-                  <span>{fmtNative(recState.clearedBalance, currency)}</span>
+                  <span>{native(recState.clearedBalance, currency)}</span>
                 </div>
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
                   <span className="text-muted-foreground">{t('reconcileCard.target')}</span>
-                  <span>{fmtNative(recState.statementBalance, currency)}</span>
+                  <span>{native(recState.statementBalance, currency)}</span>
                 </div>
                 <div className="flex items-baseline justify-between font-mono text-[11px]">
                   <span className="text-muted-foreground">{t('reconcileCard.difference')}</span>
                   <span className={cn(recState.balanced ? 'text-success' : 'text-warning')}>
                     {recState.difference >= 0 ? '+' : '−'}
-                    {fmtNative(Math.abs(recState.difference), currency)}
+                    {native(Math.abs(recState.difference), currency)}
                   </span>
                 </div>
                 <div className="bg-secondary h-1.5 w-full overflow-hidden rounded-full">
@@ -433,8 +433,8 @@ export default function AccountDetailPage() {
                 {!recState.balanced && (
                   <p className="text-muted-foreground text-[11px]">
                     {recState.difference > 0
-                      ? t('reconcileCard.shortBy', { amount: fmtNative(Math.abs(recState.difference), currency) })
-                      : t('reconcileCard.overBy', { amount: fmtNative(Math.abs(recState.difference), currency) })}
+                      ? t('reconcileCard.shortBy', { amount: native(Math.abs(recState.difference), currency) })
+                      : t('reconcileCard.overBy', { amount: native(Math.abs(recState.difference), currency) })}
                   </p>
                 )}
 
@@ -488,7 +488,7 @@ export default function AccountDetailPage() {
                 <div className="flex justify-end gap-2 pt-1">
                   {!recState.balanced && (
                     <Button size="sm" variant="ghost" onClick={() => finishReconcile(true)}>
-                      {t('reconcileCard.postAdjustment', { amount: fmtNative(Math.abs(recState.difference), currency) })}
+                      {t('reconcileCard.postAdjustment', { amount: native(Math.abs(recState.difference), currency) })}
                     </Button>
                   )}
                   <Button size="sm" onClick={() => finishReconcile(false)} disabled={!recState.balanced}>

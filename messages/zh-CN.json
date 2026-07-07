@@ -1419,6 +1419,10 @@
         "english": "English",
         "chinese": "中文(简体)"
       },
+      "privacy": {
+        "row": "隐私模式",
+        "aria": "隐藏金额"
+      },
       "bottomBar": {
         "section": "底部导航",
         "hint": "选择并排列底部导航的四个分区。中间的添加按钮始终显示。"
@@ -1538,6 +1542,7 @@
     "reports": "报表",
     "goals": "目标",
     "add": "添加",
+    "privacy": "切换隐私模式",
     "settings": "设置",
     "pending": "待处理",
     "merchants": "商户",

@@ -2,8 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 import { Check } from '@/components/icons';
-import { fmtNative } from '@/lib/data';
 import { cn } from '@/lib/utils';
+import { useMoney } from '@/components/use-money';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 
 const STALE_AFTER_DAYS = 35;
@@ -33,6 +33,7 @@ export function ReconcileStatus({
   today?: Date;
 }) {
   const t = useTranslations('reconcileStatus');
+  const { native } = useMoney();
   if (!account.lastReconciledAt) {
     return (
       <span className="text-muted-foreground inline-flex items-center gap-1.5 font-mono text-[11px]">
@@ -54,7 +55,7 @@ export function ReconcileStatus({
       title={t('title', { date: account.lastReconciledAt })}
     >
       <Check size={11} />
-      {t('reconciledTo', { balance: fmtNative(balance, account.currency), when: ago })}
+      {t('reconciledTo', { balance: native(balance, account.currency), when: ago })}
     </span>
   );
 }
