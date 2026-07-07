@@ -1,5 +1,6 @@
 import SwiftUI
 import WatchConnectivity
+import WidgetKit
 
 /// Watch sub-project CP1 — the standalone watchOS glance. App Groups don't span
 /// devices, so the watch can't read the phone's container; instead it receives the
@@ -28,6 +29,7 @@ final class WatchSnapshotStore: NSObject, ObservableObject, WCSessionDelegate {
             if let cur = self.snapshot, incoming.generatedAt < cur.generatedAt { return }  // ignore stale
             self.suite?.set(data, forKey: self.key)
             self.snapshot = incoming
+            WidgetCenter.shared.reloadAllTimelines()   // CP2: refresh the complication on every push
         }
     }
 }
