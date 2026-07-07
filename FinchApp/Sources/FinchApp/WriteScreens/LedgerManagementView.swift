@@ -7,34 +7,20 @@ import FinchCore
 struct LedgerListView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
+    /// Non-nil → three-column selection mode (rows select and the shell renders
+    /// the detail column); nil → compact push mode. Same convention as
+    /// `AccountsTab`/`BudgetsTab` (remediation #23).
+    var selection: Binding<String?>? = nil
     @State private var showingAdd = false
     @State private var errorMessage: String?
     @State private var pendingDelete: Ledger?   // ledger awaiting delete confirmation
 
     var body: some View {
-        List {
-            ForEach(store.ledgers) { ledger in
-                NavigationLink(value: ledger.id) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(ledger.name).foregroundStyle(.primary)
-                            Text(ledger.base).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if ledger.id == store.activeLedgerId {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
-                        }
-                        Text(store.displayMoney(store.netWorth(forLedger: ledger.id), forLedger: ledger.id))
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
-                        .disabled(store.ledgers.count <= 1)
-                }
-                .contextMenu {
-                    Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
-                }
+        Group {
+            if let selection {
+                List(selection: selection) { rows }
+            } else {
+                List { rows }
             }
         }
         .navigationTitle("Ledgers")
@@ -54,6 +40,40 @@ struct LedgerListView: View {
         }
         .sheet(isPresented: $showingAdd) { AddLedgerSheet() }
         .navigationDestination(for: String.self) { LedgerDetailView(ledgerId: $0) }
+    }
+
+    @ViewBuilder private var rows: some View {
+        ForEach(store.ledgers) { ledger in
+            Group {
+                if selection != nil {
+                    rowContent(ledger).tag(ledger.id)
+                } else {
+                    NavigationLink(value: ledger.id) { rowContent(ledger) }
+                }
+            }
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
+                    .disabled(store.ledgers.count <= 1)
+            }
+            .contextMenu {
+                Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
+            }
+        }
+    }
+
+    private func rowContent(_ ledger: Ledger) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ledger.name).foregroundStyle(.primary)
+                Text(ledger.base).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if ledger.id == store.activeLedgerId {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint)
+            }
+            Text(store.displayMoney(store.netWorth(forLedger: ledger.id), forLedger: ledger.id))
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
     }
 
     private func delete(_ ledger: Ledger) {
