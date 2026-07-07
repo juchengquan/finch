@@ -382,13 +382,20 @@ below; what's still open is summarized here.
    - **Lock-screen widget redaction (remediation #16).** App Intents + entity
      queries already refuse while locked; redacting the home/lock-screen widget
      when the app is locked needs a **physical device** to verify.
-2. **What-if sliders on Insights** (FEATURE_IDEAS §3.3) — "If I cut dining
-   30%, I'd save $1,440/yr." Pure math on top of existing data; no schema
-   change. **M.**
-3. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
+2. **Annual tax report** (FEATURE_IDEAS §8.1) — `is_tax_relevant` bool on
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **What-if sliders on Insights** (this PR; FEATURE_IDEAS §3.3) — new
+  `whatIfBaseline` selector (average monthly spend per top-5 category over
+  up to 3 trailing complete months, plus avg income/spend totals; months
+  without spend are dropped, fresh ledgers fall back to the current month)
+  + a `WhatIfCard` on the Insights Trends view: a native-range slider per
+  category (0–100% in 5% steps) with live per-row savings, an annual
+  headline ("{X} saved per year" + a +{Y}/mo chip), and an
+  avg-monthly-net before → after line. Pure client math over the baseline —
+  nothing persists, no schema change. en + zh-CN catalog keys in lockstep
+  (`insights.whatIf.*`).
 - ✅ **Double-entry PR C — audit wiring + net-worth-explained + F4 fix** (this PR; closes `plans/done/DOUBLE_ENTRY_PLAN.md §12 PR-C`) — `auditLedger` is now wired into `GET /api/db-info` (problem count + first 50 problems surfaced in Settings ▸ Account ▸ Database; clean-DB shows "no problems found") and into `POST /api/import` for both bare-`.sqlite3` and `.finch` paths (audit runs on the swap candidate before any destructive operation; live DB stays untouched on failure). `mutations.test.ts` gained an `afterEach` hook that asserts `auditLedger` clean at the end of every scenario — cheap regression net across ~30 tests. F4 fix: `netWorthByMonth` and `netWorthSeries` now honour `include_in_net_worth`, aligning the Insights trend chart with the Accounts header. New `netWorthExplained` selector + `NetWorthExplainedCard` decompose monthly net-worth movement into income / expense / adjustment / FX via the postings-sum-to-zero residual, surfacing previously-invisible adjustments and FX drift on the Insights page. Settings page renders audit status next to the database path (PR #117 in MASTER_PLAN's PR-# space).
 - ✅ **Double-entry storage core** (PRs #114 + #116, 2026-06-07; design
   record `plans/done/DOUBLE_ENTRY_PLAN.md`) — `transactions` /

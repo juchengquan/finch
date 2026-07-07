@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest, whatIfBaseline } from "@/lib/select";
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
@@ -1017,6 +1017,56 @@ test('weeklyDigest: income counted from income rows only; net = income - spent',
   expect(d.spent).toBe(100);
   expect(d.income).toBe(300);
   expect(d.net).toBe(200);
+});
+
+test('whatIfBaseline: averages category spend over the trailing complete months', () => {
+  const txns = [
+    // Anchor month (partial) — must be excluded when complete months have data.
+    tx({ date: '2026-05-03', amount: -999, category: 'food' }),
+    // Two complete months of history.
+    tx({ date: '2026-04-10', amount: -90, category: 'food' }),
+    tx({ date: '2026-04-12', amount: -30, category: 'transport' }),
+    tx({ date: '2026-03-15', amount: -110, category: 'food' }),
+    tx({ date: '2026-03-20', amount: 500, category: 'salary', kind: 'income' }),
+  ];
+  const b = whatIfBaseline(txns, 'personal', '2026-05')!;
+  expect(b.months).toEqual(['2026-03', '2026-04']);
+  expect(b.categories[0]).toEqual({ categoryId: 'food', avgMonthly: 100 }); // (110+90)/2
+  expect(b.categories[1]).toEqual({ categoryId: 'transport', avgMonthly: 15 }); // 30/2
+  expect(b.avgSpend).toBe(115);
+  expect(b.avgIncome).toBe(250); // 500/2
+});
+
+test('whatIfBaseline: falls back to the anchor month when no complete month has spend', () => {
+  const txns = [tx({ date: '2026-05-03', amount: -80, category: 'food' })];
+  const b = whatIfBaseline(txns, 'personal', '2026-05')!;
+  expect(b.months).toEqual(['2026-05']);
+  expect(b.categories).toEqual([{ categoryId: 'food', avgMonthly: 80 }]);
+});
+
+test('whatIfBaseline: null without any spend; pending and other ledgers ignored', () => {
+  expect(whatIfBaseline([], 'personal', '2026-05')).toBeNull();
+  expect(whatIfBaseline([tx({ date: '2026-04-10', pending: true })], 'personal', '2026-05')).toBeNull();
+  expect(whatIfBaseline([tx({ date: '2026-04-10', ledgerId: 'family' })], 'personal', '2026-05')).toBeNull();
+  expect(whatIfBaseline(
+    [tx({ date: '2026-04-02', amount: 100, category: 'salary', kind: 'income' })],
+    'personal',
+    '2026-05',
+  )).toBeNull();
+});
+
+test('whatIfBaseline: caps categories at topN, sorted desc; refunds net against spend', () => {
+  const txns = [
+    ...['a', 'b', 'c', 'd', 'e', 'f'].map((c, i) =>
+      tx({ date: '2026-04-10', amount: -(60 - i * 10), category: c }),
+    ),
+    // A refund in category `a` nets its total down below `b`.
+    tx({ date: '2026-04-20', amount: 25, category: 'a', kind: 'refund' }),
+  ];
+  const b = whatIfBaseline(txns, 'personal', '2026-05')!;
+  expect(b.categories.length).toBe(5); // f (10) dropped by the top-5 cap
+  expect(b.categories.map((c) => c.categoryId)).toEqual(['b', 'c', 'a', 'd', 'e']);
+  expect(b.categories.find((c) => c.categoryId === 'a')!.avgMonthly).toBe(35); // 60 − 25
 });
 
 test('findDuplicate flags a same-account same-merchant same-amount row within the window', () => {

@@ -490,6 +490,19 @@
       "runRateRest": "Run-rate rest · {amount}",
       "scheduled": "Scheduled · {amount}"
     },
+    "whatIf": {
+      "title": "What if…",
+      "subtitle": "Drag a slider to cut a category — based on your {count, plural, one {last month} other {last # months}} of spending",
+      "avgPerMonth": "{amount}/mo avg",
+      "sliderAria": "Cut {category} by percentage",
+      "rowSaves": "−{pct}% · {amount}/mo",
+      "rowIdle": "—",
+      "perYear": "saved per year",
+      "perMonthChip": "+{amount}/mo",
+      "netChange": "Avg monthly net: {before} → {after}",
+      "prompt": "Move a slider to see what you’d save.",
+      "reset": "Reset"
+    },
     "incomeFlow": {
       "title": "Where {month} income went",
       "incomeIn": "{amount} in",
