@@ -27,6 +27,46 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
         try? s.updateApplicationContext(["snapshot": data])
     }
 
+    // MARK: CP3 — receive on-wrist quick-adds
+
+    /// `transferUserInfo` can redeliver; request ids we've already posted are
+    /// dropped (the store's duplicate-transaction guard is the backstop).
+    /// Only touched on the main actor.
+    private var seenQuickAddIds = Set<String>()
+
+    /// Pure mapping (testable): template → `addTransaction` args. Templates are
+    /// positive magnitudes; an expense posts negative.
+    static func quickAddArgs(_ req: WatchQuickAddRequest, date: String) -> [String: JSONValue] {
+        var args: [String: JSONValue] = [
+            "ledgerId": .string(req.item.ledgerId),
+            "accountId": .string(req.item.accountId),
+            "amount": .double(-abs(req.item.amount)),
+            "merchant": .string(req.item.merchant),
+            "date": .string(date),
+        ]
+        if let cat = req.item.categoryId { args["categoryId"] = .string(cat) }
+        return args
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        guard let data = userInfo["quickAdd"] as? Data,
+              let req = WatchQuickAddRequest.decode(data) else { return }
+        Task { @MainActor in
+            guard !self.seenQuickAddIds.contains(req.id) else { return }
+            self.seenQuickAddIds.insert(req.id)
+            let store = FinchStore.shared
+            do {
+                try store.apply(.addTransaction, Args(Self.quickAddArgs(req, date: store.today)))
+                // The fresh snapshot pushed back to the watch IS the confirmation
+                // (and refreshes the recents + the complication).
+                WidgetSnapshotWriter.write(from: store)
+            } catch {
+                // Deleted account/ledger or the duplicate guard — drop. The watch
+                // row only ever claims "queued", not "posted".
+            }
+        }
+    }
+
     // MARK: WCSessionDelegate (iOS-required stubs)
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
     func sessionDidBecomeInactive(_ session: WCSession) {}

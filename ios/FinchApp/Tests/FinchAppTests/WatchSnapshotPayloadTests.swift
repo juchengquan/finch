@@ -34,6 +34,26 @@ final class WatchSnapshotPayloadTests: XCTestCase {
         XCTAssertEqual(p.netWorth, 10)
     }
 
+    func test_quickAddArgs_mapsExpenseSignAndFields() {
+        let req = WatchQuickAddRequest(id: "r1", item: WatchQuickAddItem(
+            merchant: "Cafe", amount: 4.5, currency: "USD",
+            ledgerId: "l1", accountId: "a1", categoryId: "c1"))
+        let args = PhoneWatchLink.quickAddArgs(req, date: "2026-07-07")
+        XCTAssertEqual(args["amount"], .double(-4.5))
+        XCTAssertEqual(args["ledgerId"], .string("l1"))
+        XCTAssertEqual(args["accountId"], .string("a1"))
+        XCTAssertEqual(args["categoryId"], .string("c1"))
+        XCTAssertEqual(args["date"], .string("2026-07-07"))
+        XCTAssertEqual(args["merchant"], .string("Cafe"))
+    }
+
+    func test_quickAddArgs_omitsNilCategory() {
+        let req = WatchQuickAddRequest(id: "r2", item: WatchQuickAddItem(
+            merchant: "Kiosk", amount: 2, currency: "USD",
+            ledgerId: "l1", accountId: "a1", categoryId: nil))
+        XCTAssertNil(PhoneWatchLink.quickAddArgs(req, date: "2026-07-07")["categoryId"])
+    }
+
     func test_quickAddRequest_roundTrip() throws {
         let req = WatchQuickAddRequest(id: "r1", item: WatchQuickAddItem(
             merchant: "Cafe", amount: 4.5, currency: "USD",

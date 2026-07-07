@@ -26,7 +26,15 @@ public enum WidgetSnapshotWriter {
         let snap = build(from: store)
         if let data = try? JSONEncoder().encode(snap) { try? data.write(to: AppGroup.widgetSnapshotURL) }
         #if os(iOS)
-        PhoneWatchLink.shared.push(WatchSnapshotPayload(widget: snap))
+        var payload = WatchSnapshotPayload(widget: snap)
+        // CP3: ride up to 3 quick-add templates along with the figures; the
+        // ledger is stamped now because the active ledger can change before
+        // the user taps on the watch.
+        payload.recents = Selectors.recentExpenses(store.txns, store.activeLedgerId, 3).map {
+            WatchQuickAddItem(merchant: $0.merchant, amount: $0.amount, currency: $0.currency,
+                              ledgerId: store.activeLedgerId, accountId: $0.accountId, categoryId: $0.categoryId)
+        }
+        PhoneWatchLink.shared.push(payload)
         #endif
     }
 }
