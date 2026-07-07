@@ -3,10 +3,11 @@ import FinchCore
 
 // Phase 3 / remediation #23 — true three-column master–detail on regular width
 // (iPad / Mac). Only the tabs that have a real list→detail relationship —
-// Accounts and Budgets — use three columns: sidebar (sections) │ list │ detail.
-// The dashboard / sheet-based tabs (Insights, Settings, Activity, Scheduled)
-// keep two columns (sidebar │ full-width content) — a dashboard squeezed into a
-// narrow middle column would be worse.
+// Accounts, Budgets, and Ledger (added 2026-07-07, see
+// 2026-07-07-ipad-multicolumn-design.md) — use three columns: sidebar
+// (sections) │ list │ detail. The dashboard / sheet-based tabs (Insights,
+// Settings, Activity, Scheduled) keep two columns (sidebar │ full-width
+// content) — a dashboard squeezed into a narrow middle column would be worse.
 //
 // The list columns ARE `AccountsTab`/`BudgetsTab` themselves, run in their
 // selection mode (given a `selection` binding by SplitViewShell); the same views
@@ -54,8 +55,12 @@ struct ThreeColumnShell<ListColumn: View, DetailColumn: View>: View {
     var body: some View {
         NavigationSplitView {
             SectionSidebar()
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
         } content: {
+            // Keep the list a readable, list-like width — without this,
+            // `.balanced` gives the middle column ~half the content area on iPad.
             list()
+                .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
         } detail: {
             detail()
         }

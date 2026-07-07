@@ -176,7 +176,7 @@ extension View {
     func ledgerPush() -> some View { modifier(LedgerPush()) }
 }
 
-/// The iPad/Mac shell. Accounts and Budgets get a true three-column
+/// The iPad/Mac shell. Accounts, Budgets, and Ledger get a true three-column
 /// master–detail (sidebar │ list │ detail — see MasterDetailShell); the
 /// dashboard / sheet-based tabs (Insights, Settings, Activity, Scheduled) keep
 /// two columns (sidebar │ full-width content), which suits their wide layouts.
@@ -186,6 +186,7 @@ struct SplitViewShell: View {
     @EnvironmentObject private var store: FinchStore
     @State private var accountSelection: String?
     @State private var budgetSelection: String?
+    @State private var ledgerSelection: String?
 
     var body: some View {
         Group {
@@ -211,6 +212,17 @@ struct SplitViewShell: View {
                         DetailPlaceholder(systemImage: "chart.pie", label: "Select a budget")
                     }
                 }
+            case .ledger:
+                ThreeColumnShell {
+                    LedgerTab(selection: $ledgerSelection)
+                } detail: {
+                    // Guard against a stale selection (e.g. a deleted ledger).
+                    if let id = ledgerSelection, store.ledgers.contains(where: { $0.id == id }) {
+                        NavigationStack { LedgerDetailView(ledgerId: id) }
+                    } else {
+                        DetailPlaceholder(systemImage: "books.vertical", label: "Select a ledger")
+                    }
+                }
             default:
                 NavigationSplitView {
                     SectionSidebar()
@@ -220,7 +232,9 @@ struct SplitViewShell: View {
                 .navigationSplitViewStyle(.balanced)
             }
         }
-        // A ledger switch invalidates the per-tab selections.
+        // A ledger switch invalidates the per-tab selections. (`ledgerSelection`
+        // deliberately survives — the ledger list is global, and "make active"
+        // from the detail column must not eject the selection.)
         .onChange(of: store.activeLedgerId) { _, _ in
             accountSelection = nil
             budgetSelection = nil
