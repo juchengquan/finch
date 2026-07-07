@@ -55,6 +55,9 @@ struct FinchApp: App {
             .task {
                 store.isHydrating = true
                 store.bootstrap()   // re-open the persisted live DB on launch
+                #if os(iOS)
+                PhoneWatchLink.shared.activate()   // Watch CP1: WCSession link
+                #endif
                 gate.start()        // Phase 6.3: evaluate lock state
                 // Don't expose financial data in system-wide Spotlight while the
                 // app is locked — index only when unlocked (the lock-transition

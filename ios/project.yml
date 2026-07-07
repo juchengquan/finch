@@ -14,6 +14,7 @@ targets:
     platform: iOS
     sources:
       - path: FinchApp/Sources/FinchApp
+      - path: Shared
     dependencies:
       - package: FinchCore
         product: FinchCore
@@ -113,6 +114,7 @@ targets:
     platform: watchOS
     sources:
       - path: FinchWatch
+      - path: Shared
     settings:
       base:
         INFOPLIST_FILE: FinchWatch/Info.plist
