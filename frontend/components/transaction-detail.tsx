@@ -7,7 +7,7 @@ import { CatBar } from '@/components/ui/cat-bar';
 import { Check, Doc, Pencil, Plus, Sparkle, Split, Sync, X } from '@/components/icons';
 import { AttachmentsRow } from '@/components/transaction-attachments';
 import { useMoney } from '@/components/use-money';
-import { catById, acctById, MOCK, fmtNative } from '@/lib/data';
+import { catById, acctById, MOCK } from '@/lib/data';
 import { useFinanceStore, type Tx, type TxSplitInput } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { RuleBuilderDialog, type RulePrefill } from '@/components/rule-builder-dialog';
@@ -87,6 +87,7 @@ function SplitEditorBody({
   onClose: () => void;
 }) {
   const setTransactionSplits = useFinanceStore((s) => s.setTransactionSplits);
+  const { native } = useMoney();
   const t = useTranslations('txnDetail.splits');
   const tCommon = useTranslations('common');
   const fallbackCategoryId = categoryOptions[0]?.id ?? '';
@@ -137,8 +138,8 @@ function SplitEditorBody({
     onClose();
   };
 
-  const fmtTarget = currency ? fmtNative(targetAbs, currency) : targetAbs.toFixed(2);
-  const fmtDiff = currency ? fmtNative(Math.abs(diff), currency) : Math.abs(diff).toFixed(2);
+  const fmtTarget = currency ? native(targetAbs, currency) : targetAbs.toFixed(2);
+  const fmtDiff = currency ? native(Math.abs(diff), currency) : Math.abs(diff).toFixed(2);
 
   return (
     <>
@@ -258,6 +259,7 @@ function SplitEditorDialog({
  */
 function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
   const addTransaction = useFinanceStore((s) => s.addTransaction);
+  const { native } = useMoney();
   const t = useTranslations('txnDetail.refundDialog');
   const tCommon = useTranslations('common');
   const nativeMag = Math.abs(tx.nativeAmount ?? tx.amount);
@@ -292,7 +294,7 @@ function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
       refundedTransactionId: tx.id,
     });
     toast.success(t('recordedToast'), {
-      description: currency ? fmtNative(value, currency) : value.toFixed(2),
+      description: currency ? native(value, currency) : value.toFixed(2),
     });
     onClose();
   };
@@ -319,7 +321,7 @@ function RefundDialog({ tx, onClose }: { tx: Tx; onClose: () => void }) {
           />
           {over && (
             <p className="text-warning text-[11px]">
-              {t('overWarning', { amount: fmtNative(nativeMag, currency) })}
+              {t('overWarning', { amount: native(nativeMag, currency) })}
             </p>
           )}
         </div>
@@ -461,7 +463,7 @@ export function TransactionDetail({
    *  or navigate away (the detail body would otherwise show "not found"). */
   onDeleted?: () => void;
 }) {
-  const { fmt, base } = useMoney();
+  const { fmt, base, native } = useMoney();
   const { activeId } = useLedger();
   const t = useTranslations('txnDetail');
   const tCommon = useTranslations('common');
@@ -605,19 +607,19 @@ export function TransactionDetail({
       </div>
 
       {tx.currency && tx.currency !== base && tx.nativeAmount != null && (() => {
-        const native = tx.nativeAmount;
+        const nativeAmt = tx.nativeAmount;
         const baseAmt = tx.amount;
-        const rate = native !== 0 ? baseAmt / native : 1;
+        const rate = nativeAmt !== 0 ? baseAmt / nativeAmt : 1;
         return (
           <div className="mb-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-card border-border rounded-[14px] border p-4">
                 <div className="text-muted-foreground font-mono text-[9px] tracking-[1px]">{t('fx.originalLabel', { currency: tx.currency })}</div>
-                <div className="mt-1 font-serif text-2xl">{fmtNative(Math.abs(native), tx.currency)}</div>
+                <div className="mt-1 font-serif text-2xl">{native(Math.abs(nativeAmt), tx.currency)}</div>
               </div>
               <div className="bg-card border-border rounded-[14px] border p-4">
                 <div className="text-muted-foreground font-mono text-[9px] tracking-[1px]">{t('fx.baseLabel', { currency: base })}</div>
-                <div className="mt-1 font-serif text-2xl">{fmtNative(Math.abs(baseAmt), base)}</div>
+                <div className="mt-1 font-serif text-2xl">{native(Math.abs(baseAmt), base)}</div>
               </div>
             </div>
             <div className="bg-secondary text-secondary-foreground mt-2 inline-flex items-center gap-2 rounded-[12px] px-3 py-1 font-mono text-[10px] tracking-[0.5px]">

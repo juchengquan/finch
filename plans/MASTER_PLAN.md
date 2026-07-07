@@ -386,6 +386,17 @@ below; what's still open is summarized here.
    categories + a filtered report page + CSV export. **M, schema change.**
 
 ⊕ **Recently shipped (since this section was last refreshed):**
+- ✅ **Privacy mode** (this PR; FEATURE_IDEAS §9.4) — per-device toggle that
+  masks every rendered amount as `••••`. Implemented at the `useMoney`
+  chokepoint (fmt/short/fmtFrom/shortFrom) plus new privacy-aware
+  `native`/`nativeShort` for own-currency amounts; the 8 components that
+  called `lib/data`'s `fmtNative` directly (account detail incl. reconcile,
+  transfers list + detail, transaction detail incl. FX card/splits/refund,
+  recent-expense chips, holdings, forecast) were swept onto them. Toggles:
+  Settings › Account switch + a ⌘K "Toggle privacy mode" action. Persisted
+  to `localStorage['finch.privacy']` via `useSyncExternalStore` (SSR-safe,
+  cross-tab); never in the DB or exports. Numeric selectors (`toBase`) are
+  untouched — only formatting masks.
 - ✅ **What-if sliders on Insights** (this PR; FEATURE_IDEAS §3.3) — new
   `whatIfBaseline` selector (average monthly spend per top-5 category over
   up to 3 trailing complete months, plus avg income/spend totals; months

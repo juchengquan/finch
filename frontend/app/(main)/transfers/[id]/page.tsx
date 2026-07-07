@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { ArrowD, ArrowU, Chev, Check } from '@/components/icons';
 import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
-import { fmtNative } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { selectTransfers } from '@/lib/select';
 import { useLedger } from '@/components/ledger-provider';
@@ -17,7 +16,7 @@ export default function TransferDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { active, activeId } = useLedger();
-  const { base } = useMoney();
+  const { base, native } = useMoney();
   const t = useTranslations('transfers.detail');
   const tNav = useTranslations('nav');
   const allTxns = useFinanceStore((s) => s.transactions);
@@ -60,10 +59,10 @@ export default function TransferDetailPage() {
 
         <div className="px-1 pb-[22px] text-center">
           <div className="mt-1 font-serif text-[52px] tracking-[-1.8px] leading-none">
-            {fmtNative(fromAmount, tf.fromCurrency)}
+            {native(fromAmount, tf.fromCurrency)}
           </div>
           <div className="mt-1.5 font-serif text-[18px] italic text-secondary-foreground">
-            {t('received', { amount: fmtNative(toAmount, tf.toCurrency) })}
+            {t('received', { amount: native(toAmount, tf.toCurrency) })}
           </div>
           <div className="mt-3.5 inline-flex items-center gap-2 rounded-[14px] bg-secondary px-3 py-1.5 font-mono text-[10px] tracking-[0.6px] text-secondary-foreground">
             <Check size={12} className="text-success" strokeWidth={2} />
@@ -80,7 +79,7 @@ export default function TransferDetailPage() {
               <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('fromLine', { ledger: ledgerLabel })}</div>
               <div className="mt-0.5 text-sm font-medium">{tf.fromName ?? '—'}</div>
             </div>
-            <div className="font-sans text-base font-medium tabular-nums text-destructive">{fmtNative(-fromAmount, tf.fromCurrency)}</div>
+            <div className="font-sans text-base font-medium tabular-nums text-destructive">{native(-fromAmount, tf.fromCurrency)}</div>
           </div>
           <div className="flex items-center gap-3 p-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-[16px] bg-success/10 text-success">
@@ -90,14 +89,14 @@ export default function TransferDetailPage() {
               <div className="font-mono text-[9px] tracking-[1px] text-muted-foreground">{t('toLine', { ledger: ledgerLabel })}</div>
               <div className="mt-0.5 text-sm font-medium">{tf.toName ?? '—'}</div>
             </div>
-            <div className="font-sans text-base font-medium tabular-nums text-success">{fmtNative(toAmount, tf.toCurrency, { signed: true })}</div>
+            <div className="font-sans text-base font-medium tabular-nums text-success">{native(toAmount, tf.toCurrency, { signed: true })}</div>
           </div>
         </div>
 
         <div className="rounded-[14px] border border-border bg-card px-4 py-1">
           {[
             ['transfer_group_id', tf.id],
-            ['amount_base',       t('amountBaseLocked', { amount: fmtNative(amountBase, base) })],
+            ['amount_base',       t('amountBaseLocked', { amount: native(amountBase, base) })],
             ['exchange_rate',     crossCurrency ? t('rateField', { rate, from: tf.fromCurrency, to: tf.toCurrency }) : t('sameCurrency')],
             ['from_currency',     tf.fromCurrency],
             ['to_currency',       tf.toCurrency],

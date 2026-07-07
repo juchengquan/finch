@@ -293,9 +293,12 @@ Read-only CSV import from your bank's downloaded statement. Map columns,
 de-dupe against existing entries, flag conflicts. Closes the "but my bank
 gives me a file" gap for users who don't want manual entry.
 
-### 9.4 Privacy mode (blur amounts) ⚡ S
+### 9.4 Privacy mode (blur amounts) ⚡ S — ✅ shipped
 One-tap blur for showing the app on a train. Lightweight; high
-"feels professional" payoff.
+"feels professional" payoff. Shipped as a mask (••••) at the `useMoney`
+formatting chokepoint (+ a privacy-aware `native()` for own-currency
+amounts), toggled from Settings › Account or the ⌘K palette; per-device
+`localStorage['finch.privacy']`, never the DB.
 
 ### 9.5 Travel mode (auto-trip detection) · M
 Auto-cluster transactions by date range (or location, if we had it) into

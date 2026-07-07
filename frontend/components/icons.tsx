@@ -57,4 +57,6 @@ export { Bookmark as Bookmark } from 'lucide-react';
 export { Paperclip as Paperclip } from 'lucide-react';
 export { Image as ImageIcon } from 'lucide-react';
 export { Banknote as Banknote } from 'lucide-react';
+export { Eye as Eye } from 'lucide-react';
+export { EyeOff as EyeOff } from 'lucide-react';
 export { ShieldCheck as ShieldCheck } from 'lucide-react';

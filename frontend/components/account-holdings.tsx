@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/dialog';
 import { useFinanceStore } from '@/lib/store';
 import { useMoney } from '@/components/use-money';
-import { fmtNative } from '@/lib/data';
 import {
   holdingsForAccount,
   holdingValue,
@@ -46,7 +45,7 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
   const updateHolding = useFinanceStore((s) => s.updateHolding);
   const setHoldingPrice = useFinanceStore((s) => s.setHoldingPrice);
   const deleteHolding = useFinanceStore((s) => s.deleteHolding);
-  const { fmtFrom } = useMoney();
+  const { fmtFrom, native } = useMoney();
   const t = useTranslations('holdings');
   const tCommon = useTranslations('common');
 
@@ -91,10 +90,10 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
                   <div className="text-muted-foreground mt-0.5 text-[11px] tabular-nums">
                     {t('sharesLine', {
                       shares: h.shares.toLocaleString(undefined, { maximumFractionDigits: 4 }),
-                      cost: fmtNative(h.costBasis, h.currency),
+                      cost: native(h.costBasis, h.currency),
                     })}
                     {h.lastPrice != null && h.lastPriceDate && (
-                      <>{t('atPrice', { price: fmtNative(h.lastPrice, h.currency), date: h.lastPriceDate.replace(/-/g, '/') })}</>
+                      <>{t('atPrice', { price: native(h.lastPrice, h.currency), date: h.lastPriceDate.replace(/-/g, '/') })}</>
                     )}
                   </div>
                 </div>
@@ -103,10 +102,10 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
                     <div className="text-muted-foreground text-[12px]">{t('noQuote')}</div>
                   ) : (
                     <>
-                      <div className="font-mono text-[13px] font-semibold tabular-nums">{fmtNative(value, h.currency)}</div>
+                      <div className="font-mono text-[13px] font-semibold tabular-nums">{native(value, h.currency)}</div>
                       {gain != null && (
                         <div className={cn('mt-0.5 text-[11px] tabular-nums', gain >= 0 ? 'text-success' : 'text-destructive')}>
-                          {gain >= 0 ? '+' : ''}{fmtNative(gain, h.currency)}
+                          {gain >= 0 ? '+' : ''}{native(gain, h.currency)}
                         </div>
                       )}
                     </>
@@ -130,12 +129,12 @@ export function AccountHoldings({ accountId, ledgerId, accountCurrency }: Props)
           <div className="border-border bg-secondary/40 border-t px-[18px] py-3">
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-muted-foreground">{t('holdingsValue')}</span>
-              <span className="font-mono font-semibold tabular-nums">{fmtNative(totalValue, accountCurrency)}</span>
+              <span className="font-mono font-semibold tabular-nums">{native(totalValue, accountCurrency)}</span>
             </div>
             <div className="text-muted-foreground mt-1 flex items-center justify-between text-[11px]">
               <span>{t('approxPrefix', { amount: fmtFrom(totalValue, accountCurrency) })}</span>
               <span className={cn('tabular-nums', totalGain >= 0 ? 'text-success' : 'text-destructive')}>
-                {t('unrealized', { amount: `${totalGain >= 0 ? '+' : ''}${fmtNative(totalGain, accountCurrency)}` })}
+                {t('unrealized', { amount: `${totalGain >= 0 ? '+' : ''}${native(totalGain, accountCurrency)}` })}
               </span>
             </div>
           </div>

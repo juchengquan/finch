@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowR } from '@/components/icons';
 import { Sparkline } from '@/components/primitives';
 import { useFinanceStore } from '@/lib/store';
-import { fmtNative } from '@/lib/data';
+import { useMoney } from '@/components/use-money';
 import { accountForecast, type ForecastEvent } from '@/lib/select';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ type Horizon = (typeof HORIZONS)[number];
  *  upcoming event list. Pure derived view — no mutations. */
 export function AccountForecast({ account }: { account: AccountRow }) {
   const scheduled = useFinanceStore((s) => s.scheduled);
+  const { native } = useMoney();
   const [horizon, setHorizon] = useState<Horizon>(30);
   const t = useTranslations('accountForecast');
 
@@ -56,15 +57,15 @@ export function AccountForecast({ account }: { account: AccountRow }) {
       </div>
 
       <div className="grid grid-cols-3 gap-3 px-[18px] py-3.5 text-[12px]">
-        <Stat label={t('today')} value={fmtNative(forecast.startingBalance, forecast.currency)} />
+        <Stat label={t('today')} value={native(forecast.startingBalance, forecast.currency)} />
         <Stat
           label={t('inDays', { days: horizon })}
-          value={fmtNative(forecast.endingBalance, forecast.currency)}
+          value={native(forecast.endingBalance, forecast.currency)}
           accent={forecast.endingBalance >= forecast.startingBalance ? 'success' : 'destructive'}
         />
         <Stat
           label={t('lowPoint')}
-          value={fmtNative(forecast.trough.balance, forecast.currency)}
+          value={native(forecast.trough.balance, forecast.currency)}
           sub={willDip ? forecast.trough.date.slice(5).replace('-', '/') : '—'}
           accent={forecast.trough.balance < 0 ? 'destructive' : willDip ? 'warning' : undefined}
         />
@@ -142,6 +143,7 @@ function Stat({
 }
 
 function EventRow({ event, currency }: { event: ForecastEvent; currency: string }) {
+  const { native } = useMoney();
   const inflow = event.amount > 0;
   return (
     <div className="border-border flex items-center gap-3 border-t px-[18px] py-2.5">
@@ -159,7 +161,7 @@ function EventRow({ event, currency }: { event: ForecastEvent; currency: string 
           inflow ? 'text-success' : 'text-foreground',
         )}
       >
-        {inflow ? '+' : ''}{fmtNative(event.amount, currency)}
+        {inflow ? '+' : ''}{native(event.amount, currency)}
       </div>
       <ArrowR size={12} />
     </div>
