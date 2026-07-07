@@ -138,3 +138,16 @@ jobs:
             -derivedDataPath /tmp/dd \
             -skipPackagePluginValidation -skipMacroValidation -quiet \
             COMPILER_INDEX_STORE_ENABLE=NO
+
+      # Compile the watch app + its complication extension (Watch CP1/CP2) —
+      # neither is covered by the FinchApp/FinchMac builds, and watchOS-only
+      # APIs (WidgetKit accessory families, WCSession receive side) can break
+      # silently otherwise. Build-only compile gate, no watch tests.
+      - name: Build FinchWatch (watchOS)
+        working-directory: ios
+        run: |
+          xcodebuild build -project FinchApp.xcodeproj -scheme FinchWatch \
+            -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath /tmp/dd \
+            -skipPackagePluginValidation -skipMacroValidation -quiet \
+            COMPILER_INDEX_STORE_ENABLE=NO
