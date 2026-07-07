@@ -7,8 +7,8 @@ import WatchConnectivity
 /// Group, and renders it. Uses the shared `WatchSnapshotPayload` wire format.
 final class WatchSnapshotStore: NSObject, ObservableObject, WCSessionDelegate {
     @Published var snapshot: WatchSnapshotPayload?
-    private let suite = UserDefaults(suiteName: "group.com.juchengquan.finch")
-    private let key = "watchSnapshot"
+    private let suite = UserDefaults(suiteName: WatchStore.suite)
+    private let key = WatchStore.key
 
     override init() {
         super.init()
