@@ -69,7 +69,8 @@ Tracked here + in the inventory. Status as of this snapshot:
 | **macOS desktop parity (Phases 1–4)** | M | ✅ Done (#396/#397/#399/#401/#403) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete, **⌫-select + ↵-open** on Scheduled/Activity; Spotlight already cross-platform; **widget = signing-gated** (team-only App Group — needs a paid Dev Team) |
 | **Feed date de-dup** (date shown only when it changes) | S | ✅ Done (#407) |
 | **iPad multi-column** | M | 🟡 Ledger joins the 3-column shell + split column widths (#414; spec/plan `2026-07-07-ipad-multicolumn-*.md`). Deferred there: Activity/Scheduled detail columns (need net-new inline detail views) and sidebar-collapse persistence (rotation auto-collapse caveat) |
-| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast), PDF/CSV/tax export. |
+| **PDF/CSV export** | M | ✅ Done (this PR; spec/plan `2026-07-07-ios-export-report-*.md`) — one-page monthly report PDF (`ImageRenderer`, print-styled) on Insights › Breakdown + a Face-ID-gated full-history CSV row in Settings. CSV builder (`TxExport`) + month-scoped Breakdown CSV already existed. **Tax export stays open** — follows the web `is_tax_relevant` schema feature (FEATURE_IDEAS §8.1) |
+| **Polish themes** (not formally specced) | — | open — accessibility pass (VoiceOver/Dynamic Type/contrast). |
 
 **Verified already-shipped (2026-06-28 — were mistakenly carried as "deferred" from old plan scope-notes; do NOT re-chase):**
 - **Edit-transaction currency + counterparty** — `EditTransactionSheet` already has the currency `Picker` (saved via `patch["currency"]`) and counterparty typeahead + **"Create "<name>""** (runs `createCounterparty` then links).
