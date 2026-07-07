@@ -60,7 +60,7 @@ Tracked here + in the inventory. Status as of this snapshot:
 | Widgets: **lock-screen / accessory families** | S | ✅ Done (#364) |
 | Widgets: **configurable Account + Budget** | M | ✅ Done (#369) |
 | Widgets: **interactive quick-add** (tap → Add) | S | ✅ Done (#374) |
-| **Watch: complication + on-wrist quick-add** | M | 🟡 CP1 done (#412; spec #408, plan #410) — WCSession snapshot transport (shared `WatchSnapshotPayload` + iOS-only `PhoneWatchLink`) + live persisted glance. Complication + on-wrist quick-add remain (CP2; the wire format + `finch://` routes are the entry points) |
+| **Watch: complication + on-wrist quick-add** | M | 🟡 CP1+CP2 done — CP1 #412 (WCSession transport + live glance; spec #408, plan #410) · CP2 #415 (`FinchWatchComplication` WidgetKit extension, 4 accessory families + reload-on-push; spec/plan #413). **On-wrist quick-add (CP3) remains** — own spec (reverse WCSession + `finch://` routes) |
 | Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | ✅ Done (#412) — Account widget's tap URL carries its account; `DeepLinkRouter` parses it into `pendingAddAccountId` → `AddTransactionSheet(defaultAccountId:)` |
 | **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | ✅ Done (#412) — the 5 pattern rules ported into `generateInsights` in web priority order, web-matching gates/copy; +5 tests |
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
