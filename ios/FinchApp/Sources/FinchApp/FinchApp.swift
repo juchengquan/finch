@@ -55,6 +55,9 @@ struct FinchApp: App {
             .task {
                 store.isHydrating = true
                 store.bootstrap()   // re-open the persisted live DB on launch
+                #if os(iOS)
+                PhoneWatchLink.shared.activate()   // Watch CP1: WCSession link
+                #endif
                 gate.start()        // Phase 6.3: evaluate lock state
                 // Don't expose financial data in system-wide Spotlight while the
                 // app is locked — index only when unlocked (the lock-transition
@@ -93,7 +96,7 @@ struct FinchApp: App {
             // When the biometric lock engages, dismiss the global sheets so they
             // can't sit on top of the lock cover (the cover is a ZStack sibling).
             .onChange(of: gate.isLocked) { _, locked in
-                if locked { router.showCommandPalette = false; router.showAddTransaction = false }
+                if locked { router.showCommandPalette = false; router.showAddTransaction = false; router.pendingAddAccountId = nil }
                 // Privacy: drop the Spotlight index while locked; rebuild it on unlock.
                 Task {
                     if locked { await SpotlightIndexer.shared.clearAll() }
@@ -112,8 +115,9 @@ struct FinchApp: App {
             .sheet(isPresented: $router.showCommandPalette) {
                 CommandPalette().environmentObject(router)
             }
-            .sheet(isPresented: $router.showAddTransaction) {
-                AddTransactionSheet().environmentObject(store).environmentObject(router)
+            .sheet(isPresented: $router.showAddTransaction, onDismiss: { router.pendingAddAccountId = nil }) {
+                AddTransactionSheet(defaultAccountId: router.pendingAddAccountId)
+                    .environmentObject(store).environmentObject(router)
             }
         }
         #if os(macOS)

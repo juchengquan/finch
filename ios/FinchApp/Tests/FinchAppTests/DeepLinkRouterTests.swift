@@ -16,6 +16,21 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertFalse(r.showAddTransaction)
     }
 
+    func test_handle_add_url_with_account_prefills() {
+        let r = DeepLinkRouter()
+        r.handle(URL(string: "finch://add?account=a1")!)
+        XCTAssertTrue(r.showAddTransaction)
+        XCTAssertEqual(r.pendingAddAccountId, "a1")
+    }
+
+    func test_handle_plain_add_clears_stale_prefill() {
+        let r = DeepLinkRouter()
+        r.handle(URL(string: "finch://add?account=a1")!)
+        r.handle(URL(string: "finch://add")!)
+        XCTAssertTrue(r.showAddTransaction)
+        XCTAssertNil(r.pendingAddAccountId)
+    }
+
     func test_defaultTabIsAccounts() {
         XCTAssertEqual(DeepLinkRouter().selectedTab, .accounts)
     }

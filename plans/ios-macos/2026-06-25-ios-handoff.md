@@ -1,6 +1,6 @@
 # iOS/macOS handoff & sync-up
 
-**Date:** 2026-06-25 (status refreshed 2026-06-28)
+**Date:** 2026-06-25 (status refreshed 2026-07-07)
 **Branch context:** all work targets `feat/frontend`. Snapshot taken @ `746dabe` (#407 merged). **All web→iOS parity gaps (Tier-1/2/3) are closed; the native-surfaces "deepen widgets" sub-project AND macOS-parity Phases 1–3 + the macOS keyboard/feed follow-ups are also complete.**
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
@@ -60,11 +60,11 @@ Tracked here + in the inventory. Status as of this snapshot:
 | Widgets: **lock-screen / accessory families** | S | ✅ Done (#364) |
 | Widgets: **configurable Account + Budget** | M | ✅ Done (#369) |
 | Widgets: **interactive quick-add** (tap → Add) | S | ✅ Done (#374) |
-| **Watch: complication + on-wrist quick-add** | M | open — next native-surface sub-project; needs a watch snapshot/WCSession path (the watch is self-contained, no FinchCore dep) |
-| Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | open — small follow-up to widgets CP3 |
-| **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | open — deferred from the advice-engine CP1 (#323) |
+| **Watch: complication + on-wrist quick-add** | M | 🟡 CP1 done (#412; spec #408, plan #410) — WCSession snapshot transport (shared `WatchSnapshotPayload` + iOS-only `PhoneWatchLink`) + live persisted glance. Complication + on-wrist quick-add remain (CP2; the wire format + `finch://` routes are the entry points) |
+| Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | ✅ Done (#412) — Account widget's tap URL carries its account; `DeepLinkRouter` parses it into `pendingAddAccountId` → `AddTransactionSheet(defaultAccountId:)` |
+| **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | ✅ Done (#412) — the 5 pattern rules ported into `generateInsights` in web priority order, web-matching gates/copy; +5 tests |
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
-| **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | open — `Ring`/`StackedBar` primitives landed (#342) but aren't wired into real Insights cards yet; the reports + wiring remain |
+| **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | ✅ Done — `Ring`/`StackedBar` wired in #406 (savings-rate ring, net-worth-by-type bar; net-worth-over-time was already `NetWorthCard`); **spend-by-merchant** card + `topMerchants` selector (#412) |
 | **CloudKit sync maturity** | L | open (iOS-ahead scaffold; needs container provisioning + multi-device testing) |
 | **macOS desktop parity (Phases 1–4)** | M | ✅ Done (#396/#397/#399/#401/#403) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete, **⌫-select + ↵-open** on Scheduled/Activity; Spotlight already cross-platform; **widget = signing-gated** (team-only App Group — needs a paid Dev Team) |
 | **Feed date de-dup** (date shown only when it changes) | S | ✅ Done (#407) |

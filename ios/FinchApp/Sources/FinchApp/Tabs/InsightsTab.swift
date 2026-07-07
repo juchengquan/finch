@@ -43,6 +43,7 @@ struct InsightsTab: View {
                                 SpendingHeatmapCard()
                                 NetWorthByTypeCard()
                                 CategoryBreakdownCard()
+                                TopMerchantsCard()
                                 RecentExpensesCard()
                                 ForecastCard()
                                 if !store.holdings.isEmpty { HoldingsCard() }
@@ -124,6 +125,7 @@ private struct InsightsCard: View {
         switch icon {
         case "arrowUp": return "arrow.up"; case "arrowDown": return "arrow.down"
         case "doc": return "doc.text"; case "fork": return "fork.knife"; case "check": return "checkmark"
+        case "calendar": return "calendar"; case "tag": return "tag"
         default: return "sparkles"
         }
     }
@@ -174,6 +176,35 @@ private struct CategoryBreakdownCard: View {
                 Text("No spending this month").font(.caption).foregroundStyle(.secondary)
             } else {
                 Donut(data: data, centerLabel: "This month").frame(height: 200)
+            }
+        }
+    }
+}
+
+/// Where this month's expense money went, by merchant — a StackedBar of the
+/// top-5 shares + a ranked row per merchant.
+private struct TopMerchantsCard: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        let rows = Selectors.topMerchants(store.txns, store.activeLedgerId, String(store.today.prefix(7)))
+        Card(title: "Top merchants") {
+            if rows.isEmpty {
+                Text("No spending this month").font(.caption).foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 6) {
+                    StackedBar(slices: Array(rows.enumerated()).map { i, r in
+                        StackedBar.Slice(value: r.total, color: cardPalette[i % cardPalette.count])
+                    })
+                    .padding(.bottom, 4)
+                    ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                        HStack {
+                            Circle().fill(cardPalette[i % cardPalette.count]).frame(width: 8, height: 8)
+                            Text(r.name).font(.caption).lineLimit(1)
+                            Spacer()
+                            Text(store.displayMoneyBase(r.total)).font(.caption).fontWeight(.medium)
+                        }
+                    }
+                }
             }
         }
     }
