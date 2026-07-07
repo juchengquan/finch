@@ -32,10 +32,20 @@ final class WatchSnapshotStore: NSObject, ObservableObject, WCSessionDelegate {
             WidgetCenter.shared.reloadAllTimelines()   // CP2: refresh the complication on every push
         }
     }
+
+    /// CP3 — queue a quick-add to the phone (transferUserInfo survives
+    /// unreachability). Returns whether it was queued.
+    func sendQuickAdd(_ item: WatchQuickAddItem) -> Bool {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+              let data = WatchQuickAddRequest(id: UUID().uuidString, item: item).encoded() else { return false }
+        WCSession.default.transferUserInfo(["quickAdd": data])
+        return true
+    }
 }
 
 struct GlanceView: View {
     @ObservedObject var store: WatchSnapshotStore
+    @State private var sentKeys: Set<String> = []   // CP3: rows already queued this session
 
     var body: some View {
         ScrollView {
@@ -54,6 +64,13 @@ struct GlanceView: View {
                         Spacer()
                         Text(money(snap.weeklySpent, snap.currency)).font(.caption)
                     }
+                    if let recents = snap.recents, !recents.isEmpty {
+                        Divider().padding(.vertical, 2)
+                        Text("Quick add").font(.caption2).foregroundStyle(.secondary)
+                        ForEach(Array(recents.enumerated()), id: \.offset) { _, item in
+                            quickAddRow(item)
+                        }
+                    }
                 }
                 .padding()
             } else {
@@ -63,6 +80,27 @@ struct GlanceView: View {
                         .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 .padding()
+            }
+        }
+    }
+
+    /// CP3 — one tappable template row. The checkmark means "queued to the
+    /// phone" (transferUserInfo delivers when reachable); the next snapshot
+    /// push updates the figures above as the real confirmation.
+    @ViewBuilder private func quickAddRow(_ item: WatchQuickAddItem) -> some View {
+        let key = "\(item.merchant)|\(item.amount)|\(item.accountId)"
+        Button {
+            if store.sendQuickAdd(item) { sentKeys.insert(key) }
+        } label: {
+            HStack {
+                Text(item.merchant).font(.caption).lineLimit(1)
+                Spacer()
+                if sentKeys.contains(key) {
+                    Image(systemName: "checkmark").font(.caption2)
+                } else {
+                    Text(WatchMoney.short(item.amount, currency: item.currency))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
         }
     }
