@@ -25,5 +25,8 @@ public enum WidgetSnapshotWriter {
     public static func write(from store: FinchStore) {
         let snap = build(from: store)
         if let data = try? JSONEncoder().encode(snap) { try? data.write(to: AppGroup.widgetSnapshotURL) }
+        #if os(iOS)
+        PhoneWatchLink.shared.push(WatchSnapshotPayload(widget: snap))
+        #endif
     }
 }

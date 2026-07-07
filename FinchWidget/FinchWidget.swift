@@ -100,6 +100,16 @@ struct FinchWidget: Widget {
     }
 }
 
+/// `finch://add`, optionally carrying the account to pre-select in the Add sheet
+/// (parsed by `DeepLinkRouter.handle`).
+func addURL(accountId: String?) -> URL? {
+    var c = URLComponents()
+    c.scheme = "finch"
+    c.host = "add"
+    if let accountId { c.queryItems = [URLQueryItem(name: "account", value: accountId)] }
+    return c.url
+}
+
 struct AccountEntry: TimelineEntry {
     let date: Date
     let item: AccountSnapshotItem?
@@ -148,7 +158,9 @@ struct AccountWidgetView: View {
 struct AccountWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "FinchAccount", intent: SelectAccountIntent.self, provider: AccountProvider()) { entry in
-            AccountWidgetView(entry: entry).widgetURL(URL(string: "finch://add"))
+            // Quick-add lands on this widget's account (falls back to a plain add
+            // while unconfigured/empty).
+            AccountWidgetView(entry: entry).widgetURL(addURL(accountId: entry.item?.id))
         }
         .configurationDisplayName("finch account")
         .description("A chosen account's balance.")

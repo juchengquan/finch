@@ -1,62 +1,80 @@
 import SwiftUI
+import WatchConnectivity
 
-/// Phase 7 — the Apple Watch glance. A self-contained watchOS app (watchOS has
-/// no DB access and a limited SwiftUI surface, so it does NOT share the iOS
-/// views): it reads the `WidgetSnapshot` the phone writes to the shared App Group
-/// and shows net worth + budget usage + this-week spend. A small local copy of
-/// the snapshot type avoids pulling FinchCore/GRDB onto the watch.
+/// Watch sub-project CP1 — the standalone watchOS glance. App Groups don't span
+/// devices, so the watch can't read the phone's container; instead it receives the
+/// phone's snapshot over WCSession (see PhoneWatchLink), persists it to its OWN App
+/// Group, and renders it. Uses the shared `WatchSnapshotPayload` wire format.
+final class WatchSnapshotStore: NSObject, ObservableObject, WCSessionDelegate {
+    @Published var snapshot: WatchSnapshotPayload?
+    private let suite = UserDefaults(suiteName: "group.com.juchengquan.finch")
+    private let key = "watchSnapshot"
 
-struct WatchSnapshot: Codable {
-    var netWorth: Double
-    var currency: String
-    var budgetUsedPct: Int
-    var weeklySpent: Double
-    var generatedAt: String
+    override init() {
+        super.init()
+        if let data = suite?.data(forKey: key) { snapshot = WatchSnapshotPayload.decode(data) }
+        if WCSession.isSupported() {
+            WCSession.default.delegate = self
+            WCSession.default.activate()
+        }
+    }
 
-    static func load() -> WatchSnapshot? {
-        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.juchengquan.finch")
-            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        guard let url = base?.appendingPathComponent("widget_snapshot.json"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(WatchSnapshot.self, from: data)
+    func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        guard let data = applicationContext["snapshot"] as? Data,
+              let incoming = WatchSnapshotPayload.decode(data) else { return }
+        Task { @MainActor in
+            if let cur = self.snapshot, incoming.generatedAt < cur.generatedAt { return }  // ignore stale
+            self.suite?.set(data, forKey: self.key)
+            self.snapshot = incoming
+        }
     }
 }
 
 struct GlanceView: View {
-    @State private var snap: WatchSnapshot? = WatchSnapshot.load()
+    @ObservedObject var store: WatchSnapshotStore
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Net worth").font(.caption2).foregroundStyle(.secondary)
-                Text(money(snap?.netWorth, snap?.currency)).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
-                Gauge(value: Double(snap?.budgetUsedPct ?? 0), in: 0...100) {
-                    Text("Budget")
-                } currentValueLabel: {
-                    Text("\(snap?.budgetUsedPct ?? 0)%")
+            if let snap = store.snapshot {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Net worth").font(.caption2).foregroundStyle(.secondary)
+                    Text(money(snap.netWorth, snap.currency)).font(.title3).fontWeight(.semibold).minimumScaleFactor(0.6)
+                    Gauge(value: Double(snap.budgetUsedPct), in: 0...100) {
+                        Text("Budget")
+                    } currentValueLabel: {
+                        Text("\(snap.budgetUsedPct)%")
+                    }
+                    .gaugeStyle(.accessoryLinearCapacity)
+                    HStack {
+                        Text("This week").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(money(snap.weeklySpent, snap.currency)).font(.caption)
+                    }
                 }
-                .gaugeStyle(.accessoryLinearCapacity)
-                HStack {
-                    Text("This week").font(.caption2).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(money(snap?.weeklySpent, snap?.currency)).font(.caption)
+                .padding()
+            } else {
+                VStack(spacing: 6) {
+                    Text("No data yet").font(.headline)
+                    Text("Open finch on your iPhone").font(.caption2)
+                        .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
+                .padding()
             }
-            .padding()
         }
-        .onAppear { snap = WatchSnapshot.load() }
     }
 
-    private func money(_ amount: Double?, _ currency: String?) -> String {
-        guard let amount else { return "—" }
-        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = currency ?? "USD"; f.maximumFractionDigits = 0
+    private func money(_ amount: Double, _ currency: String) -> String {
+        let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = currency; f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
     }
 }
 
 @main
 struct FinchWatchApp: App {
+    @StateObject private var store = WatchSnapshotStore()
     var body: some Scene {
-        WindowGroup { GlanceView() }
+        WindowGroup { GlanceView(store: store) }
     }
 }

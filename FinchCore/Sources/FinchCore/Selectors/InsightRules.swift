@@ -40,6 +40,13 @@ extension Selectors {
         add(overBudgetInsight(c, fmt))
         add(pendingInsight(c, fmt))
         add(topCategoryInsight(c, fmt))
+        // CP2 — the 5 day-of-week / day-of-month pattern surfacers (web PR #82
+        // order: after the actionable rules, before the progress/trend coda).
+        add(weekendVsWeekdayInsight(c, fmt))
+        add(topCategoryByWeekdayInsight(c))
+        add(endOfMonthBumpInsight(c))
+        add(weekdaySkewInsight(c))
+        add(quietestDayInsight(c))
         add(goalProgressInsight(c, fmt))
         add(netWorthTrendInsight(c, fmt))
         return out
@@ -97,6 +104,165 @@ extension Selectors {
         return Insight(tone: .pos, icon: "check",
             title: "\(g.name) is \(pct)% funded",
             body: "\(fmt(g.saved)) of \(fmt(g.amount)) saved.")
+    }
+
+    // MARK: CP2 pattern rules (day-of-week / day-of-month)
+
+    /// Confirmed expense rows in the ledger — the shared filter every pattern
+    /// rule uses (web: `ledgerOf(t) !== ledgerId || t.pending || kindOf(t) !== 'expense'`;
+    /// note: plain expenses only, refunds excluded, matching the web rules).
+    private static func patternExpenses(_ c: InsightContext) -> [Tx] {
+        c.txns.filter { ledgerOf($0) == c.ledgerId && !($0.pending ?? false) && kindOf($0) == "expense" }
+    }
+
+    /// Days since 1970-01-01 for a "YYYY-MM-DD" string (Howard Hinnant's civil
+    /// algorithm — no timezone involved, matching the web's UTC date parsing).
+    private static func serialDay(_ date: String) -> Int? {
+        let parts = date.prefix(10).split(separator: "-")
+        guard parts.count == 3, let y0 = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2]),
+              (1...12).contains(m), (1...31).contains(d) else { return nil }
+        let y = y0 - (m <= 2 ? 1 : 0)
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yoe = y - era * 400
+        let doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        return era * 146097 + doe - 719468
+    }
+
+    /// Day of week for a "YYYY-MM-DD" string, 0 = Sunday … 6 = Saturday
+    /// (the web's `getUTCDay` convention). 1970-01-01 was a Thursday (4).
+    private static func dowOf(_ date: String) -> Int? {
+        guard let s = serialDay(date) else { return nil }
+        return ((s + 4) % 7 + 7) % 7
+    }
+
+    private static let weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    private static func weekdayName(_ dow: Int) -> String { weekdayNames[((dow % 7) + 7) % 7] }
+
+    /// Weekend per-calendar-day spend ≥ 1.5× weekday per-day spend.
+    private static func weekendVsWeekdayInsight(_ c: InsightContext, _ fmt: (Double) -> String) -> Insight? {
+        var weekendSum = 0.0, weekdaySum = 0.0
+        var earliest = "", latest = ""
+        for t in patternExpenses(c) {
+            if earliest.isEmpty || t.date < earliest { earliest = t.date }
+            if latest.isEmpty || t.date > latest { latest = t.date }
+            guard let dow = dowOf(t.date) else { continue }
+            if dow == 0 || dow == 6 { weekendSum += -t.amount } else { weekdaySum += -t.amount }
+        }
+        // Count weekend vs weekday CALENDAR days in the data range so the per-day
+        // means are like-for-like (distinct active dates would under-count
+        // no-spend days and skew toward whichever segment is busier).
+        guard let start = serialDay(earliest), let end = serialDay(latest) else { return nil }
+        var weekendDays = 0, weekdayDays = 0
+        var s = start
+        while s <= end {
+            let dow = ((s + 4) % 7 + 7) % 7
+            if dow == 0 || dow == 6 { weekendDays += 1 } else { weekdayDays += 1 }
+            s += 1
+        }
+        guard weekendDays >= 6, weekdayDays >= 15 else { return nil }
+        let weekendPerDay = weekendSum / Double(weekendDays)
+        let weekdayPerDay = weekdaySum / Double(weekdayDays)
+        guard weekdayPerDay > 0 else { return nil }
+        let ratio = weekendPerDay / weekdayPerDay
+        guard ratio >= 1.5 else { return nil }
+        return Insight(tone: .neut, icon: "calendar",
+            title: "Weekends cost more than weekdays",
+            body: "Weekend days run \(String(format: "%.1f", ratio))× weekday spend (\(fmt(weekendPerDay)) vs \(fmt(weekdayPerDay)) per day).")
+    }
+
+    /// One weekday dominated by one category (share ≥ 40% of a ≥ $100 day).
+    private static func topCategoryByWeekdayInsight(_ c: InsightContext) -> Insight? {
+        guard !c.categories.isEmpty else { return nil }
+        var byDay = Array(repeating: [String: Double](), count: 7)
+        for t in patternExpenses(c) {
+            guard let cat = t.category, let dow = dowOf(t.date) else { continue }
+            byDay[dow][cat, default: 0] += -t.amount
+        }
+        var best: (dow: Int, categoryId: String, share: Double)?
+        for d in 0..<7 {
+            let entries = byDay[d]
+            guard entries.count >= 2 else { continue }
+            let total = entries.values.reduce(0, +)
+            guard total >= 100 else { continue }
+            guard let top = entries.max(by: { $0.value < $1.value }) else { continue }
+            let share = top.value / total
+            guard share >= 0.4 else { continue }
+            if best == nil || share > best!.share { best = (d, top.key, share) }
+        }
+        guard let b = best else { return nil }
+        let name = c.categories.first { $0.id == b.categoryId }?.name ?? b.categoryId
+        let day = weekdayName(b.dow)
+        return Insight(tone: .neut, icon: "tag",
+            title: "\(day)s are mostly \(name)",
+            body: "\(Int((b.share * 100).rounded()))% of your \(day) spending goes to \(name).")
+    }
+
+    /// Days 23–31 average ≥ 1.3× the per-day spend of days 1–22 (≥ 3 months of data).
+    private static func endOfMonthBumpInsight(_ c: InsightContext) -> Insight? {
+        var lastWeekSum = 0.0, restSum = 0.0
+        var months = Set<String>()
+        for t in patternExpenses(c) {
+            months.insert(String(t.date.prefix(7)))
+            let day = Int(t.date.dropFirst(8).prefix(2)) ?? 0
+            if day >= 23 { lastWeekSum += -t.amount } else { restSum += -t.amount }
+        }
+        // Approx: every month has ~8 "last week" days (23-30/31) and ~22 earlier
+        // days; scale by observed-month count to get a per-day mean.
+        guard months.count >= 3 else { return nil }
+        let lastWeekPerDay = lastWeekSum / (Double(months.count) * 8)
+        let restPerDay = restSum / (Double(months.count) * 22)
+        guard restPerDay > 0 else { return nil }
+        let ratio = lastWeekPerDay / restPerDay
+        guard ratio >= 1.3 else { return nil }
+        return Insight(tone: .neut, icon: "calendar",
+            title: "End-of-month runs hotter",
+            body: "Days 23-31 average \(String(format: "%.1f", ratio))× your earlier-month spend per day.")
+    }
+
+    /// One day-of-week ≥ 1.5× the mean daily total.
+    private static func weekdaySkewInsight(_ c: InsightContext) -> Insight? {
+        var totals = Array(repeating: 0.0, count: 7)
+        var any = false
+        for t in patternExpenses(c) {
+            guard let dow = dowOf(t.date) else { continue }
+            totals[dow] += -t.amount
+            any = true
+        }
+        guard any else { return nil }
+        let mean = totals.reduce(0, +) / 7
+        guard mean > 0 else { return nil }
+        var maxDay = 0
+        for i in 1..<7 where totals[i] > totals[maxDay] { maxDay = i }
+        let ratio = totals[maxDay] / mean
+        guard ratio >= 1.5 else { return nil }
+        let day = weekdayName(maxDay)
+        return Insight(tone: .neut, icon: "sparkle",
+            title: "\(day)s are your spendy days",
+            body: "You spend \(String(format: "%.1f", ratio))× the daily average on \(day)s.")
+    }
+
+    /// Counterpart to weekdaySkew — the quietest day-of-week (≤ 0.5× the mean;
+    /// needs ≥ 25 expense rows so a sparse ledger doesn't fire it).
+    private static func quietestDayInsight(_ c: InsightContext) -> Insight? {
+        var totals = Array(repeating: 0.0, count: 7)
+        var counts = Array(repeating: 0, count: 7)
+        for t in patternExpenses(c) {
+            guard let dow = dowOf(t.date) else { continue }
+            totals[dow] += -t.amount
+            counts[dow] += 1
+        }
+        guard counts.reduce(0, +) >= 25 else { return nil }
+        let mean = totals.reduce(0, +) / 7
+        guard mean > 0 else { return nil }
+        var minDay = 0
+        for i in 1..<7 where totals[i] < totals[minDay] { minDay = i }
+        let ratio = totals[minDay] / mean
+        guard ratio <= 0.5 else { return nil }
+        let day = weekdayName(minDay)
+        return Insight(tone: .pos, icon: "check",
+            title: "\(day)s are your quietest",
+            body: "You spend \(Int(((1 - ratio) * 100).rounded()))% less on \(day)s than the daily average.")
     }
 
     private static func netWorthTrendInsight(_ c: InsightContext, _ fmt: (Double) -> String) -> Insight? {

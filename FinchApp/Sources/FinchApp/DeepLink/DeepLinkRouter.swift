@@ -40,6 +40,7 @@ public final class DeepLinkRouter: ObservableObject {
     @Published var pendingFilter: TxFilter?   // one-shot: consumed by the Activity feed
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
+    @Published public var pendingAddAccountId: String? = nil   // widget quick-add pre-fill (finch://add?account=<id>)
     @Published public var exportRequested = false       // File ▸ Export .finch… (⌘⇧E)
     @Published public var showLedger = false            // top-left corner control → push the two-layer Ledger (compact)
 
@@ -64,10 +65,15 @@ public final class DeepLinkRouter: ObservableObject {
     /// Switch directly to a tab (App Intents "open screen", notifications).
     public func open(_ tab: AppTab) { selectedTab = tab }
 
-    /// Handle a `finch://…` deep link (e.g. a widget tap). `finch://add` opens the Add sheet.
+    /// Handle a `finch://…` deep link (e.g. a widget tap). `finch://add` opens the
+    /// Add sheet; `finch://add?account=<id>` pre-selects that account (the Account
+    /// widget passes its configured account). A plain `add` clears any stale pre-fill.
     public func handle(_ url: URL) {
         switch url.host {
-        case "add": showAddTransaction = true
+        case "add":
+            pendingAddAccountId = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "account" })?.value
+            showAddTransaction = true
         default: break
         }
     }
