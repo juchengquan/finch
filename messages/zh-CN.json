@@ -491,6 +491,19 @@
       "runRateRest": "按当前节奏剩余 · {amount}",
       "scheduled": "已计划 · {amount}"
     },
+    "whatIf": {
+      "title": "如果…",
+      "subtitle": "拖动滑块削减某个分类 — 基于你{count, plural, other {过去 # 个月}}的支出",
+      "avgPerMonth": "均 {amount}/月",
+      "sliderAria": "按百分比削减{category}",
+      "rowSaves": "−{pct}% · {amount}/月",
+      "rowIdle": "—",
+      "perYear": "每年可省",
+      "perMonthChip": "+{amount}/月",
+      "netChange": "月均结余：{before} → {after}",
+      "prompt": "拖动滑块，看看你能省多少。",
+      "reset": "重置"
+    },
     "incomeFlow": {
       "title": "{month}收入去向",
       "incomeIn": "收入 {amount}",
