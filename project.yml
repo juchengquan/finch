@@ -115,6 +115,8 @@ targets:
     sources:
       - path: FinchWatch
       - path: Shared
+    dependencies:
+      - target: FinchWatchComplication   # Watch CP2 — embed the complication
     settings:
       base:
         INFOPLIST_FILE: FinchWatch/Info.plist
@@ -125,6 +127,26 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_ENTITLEMENTS: FinchWatch/FinchWatch.entitlements
         CODE_SIGNING_ALLOWED: "NO"
+
+  # Watch CP2 — the watch-face complication (WidgetKit accessory families).
+  # Reads the snapshot WatchSnapshotStore persists to the watch App Group;
+  # FinchCore-free like the rest of the watch stack.
+  FinchWatchComplication:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: FinchWatchComplication
+      - path: Shared
+    settings:
+      base:
+        INFOPLIST_FILE: FinchWatchComplication/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.watch.complication
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: FinchWatchComplication/FinchWatchComplication.entitlements
+        CODE_SIGNING_ALLOWED: "NO"
+        SKIP_INSTALL: "NO"
 
   FinchAppTests:
     type: bundle.unit-test
