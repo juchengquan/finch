@@ -60,11 +60,11 @@ Tracked here + in the inventory. Status as of this snapshot:
 | Widgets: **lock-screen / accessory families** | S | ✅ Done (#364) |
 | Widgets: **configurable Account + Budget** | M | ✅ Done (#369) |
 | Widgets: **interactive quick-add** (tap → Add) | S | ✅ Done (#374) |
-| **Watch: complication + on-wrist quick-add** | M | 🟡 CP1 done (this PR; spec #408, plan #410) — WCSession snapshot transport (shared `WatchSnapshotPayload` + iOS-only `PhoneWatchLink`) + live persisted glance. Complication + on-wrist quick-add remain (CP2; the wire format + `finch://` routes are the entry points) |
-| Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | ✅ Done (this PR) — Account widget's tap URL carries its account; `DeepLinkRouter` parses it into `pendingAddAccountId` → `AddTransactionSheet(defaultAccountId:)` |
-| **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | ✅ Done (this PR) — the 5 pattern rules ported into `generateInsights` in web priority order, web-matching gates/copy; +5 tests |
+| **Watch: complication + on-wrist quick-add** | M | 🟡 CP1 done (#412; spec #408, plan #410) — WCSession snapshot transport (shared `WatchSnapshotPayload` + iOS-only `PhoneWatchLink`) + live persisted glance. Complication + on-wrist quick-add remain (CP2; the wire format + `finch://` routes are the entry points) |
+| Widget **account pre-fill** for quick-add (`finch://add?account=<id>`) | S | ✅ Done (#412) — Account widget's tap URL carries its account; `DeepLinkRouter` parses it into `pendingAddAccountId` → `AddTransactionSheet(defaultAccountId:)` |
+| **Insights advice CP2** (5 day-of-week/day-of-month pattern rules) | S | ✅ Done (#412) — the 5 pattern rules ported into `generateInsights` in web priority order, web-matching gates/copy; +5 tests |
 | **Receipt scanning** (VisionKit) | M | open — *device-only* (no sim camera) |
-| **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | ✅ Done — `Ring`/`StackedBar` wired in #406 (savings-rate ring, net-worth-by-type bar; net-worth-over-time was already `NetWorthCard`); **spend-by-merchant** card + `topMerchants` selector (this PR) |
+| **Insights/analytics expansion** (spend-by-merchant, net-worth-over-time) | M | ✅ Done — `Ring`/`StackedBar` wired in #406 (savings-rate ring, net-worth-by-type bar; net-worth-over-time was already `NetWorthCard`); **spend-by-merchant** card + `topMerchants` selector (#412) |
 | **CloudKit sync maturity** | L | open (iOS-ahead scaffold; needs container provisioning + multi-device testing) |
 | **macOS desktop parity (Phases 1–4)** | M | ✅ Done (#396/#397/#399/#401/#403) — context menus, multi-select toolbar, `.fileImporter` receipts, Preferences window, menu bar (Export/Help), ⌫-delete, **⌫-select + ↵-open** on Scheduled/Activity; Spotlight already cross-platform; **widget = signing-gated** (team-only App Group — needs a paid Dev Team) |
 | **Feed date de-dup** (date shown only when it changes) | S | ✅ Done (#407) |
