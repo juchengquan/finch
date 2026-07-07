@@ -10,6 +10,7 @@ import {
   Cog,
   Coins,
   Doc,
+  Eye,
   Plus,
   Search,
   Sparkle,
@@ -37,6 +38,7 @@ const ICON_FOR: Record<string, typeof Wallet> = {
   sync: Sync,
   tags: Tags,
   coins: Coins,
+  eye: Eye,
 };
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -45,18 +47,20 @@ import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useTransactionDialog } from '@/components/transaction-dialog';
 import { useAddExpense } from '@/components/add-expense-dialog';
+import { usePrivacy } from '@/lib/use-privacy';
 
 // The set of pages we expose to the palette. `labelKey` is looked up under
 // `nav.*` for visible text; `keywords` are matching aliases — kept English
 // because they're internal search aliases, not user-facing copy.
 // `action: 'add-expense'` opens the add-expense sheet instead of navigating.
-const PAGES: { labelKey: string; href?: string; action?: 'add-expense'; icon: string; keywords: string[] }[] = [
+const PAGES: { labelKey: string; href?: string; action?: 'add-expense' | 'toggle-privacy'; icon: string; keywords: string[] }[] = [
   { labelKey: 'accounts', href: '/accounts', icon: 'wallet', keywords: ['balance', 'net worth'] },
   { labelKey: 'activity', href: '/activity', icon: 'doc', keywords: ['transactions', 'feed'] },
   { labelKey: 'budgets', href: '/budgets', icon: 'chart', keywords: ['spending', 'limit', 'goals', 'save', 'income'] },
   { labelKey: 'insights', href: '/insights', icon: 'sparkle', keywords: ['analytics', 'reports'] },
   { labelKey: 'scheduled', href: '/scheduled', icon: 'calendar', keywords: ['bills', 'upcoming', 'subscriptions'] },
   { labelKey: 'add', action: 'add-expense', icon: 'plus', keywords: ['new', 'expense', 'transaction'] },
+  { labelKey: 'privacy', action: 'toggle-privacy', icon: 'eye', keywords: ['privacy', 'blur', 'hide', 'amounts', 'mask'] },
   { labelKey: 'settings', href: '/settings', icon: 'cog', keywords: ['preferences'] },
   // Ledger admin
   { labelKey: 'pending', href: '/pending', icon: 'clock', keywords: ['confirm'] },
@@ -172,6 +176,7 @@ function PaletteBody({ close }: { close: () => void }) {
   const { activeId } = useLedger();
   const { openTransaction } = useTransactionDialog();
   const { openAddExpense } = useAddExpense();
+  const { toggle: togglePrivacy } = usePrivacy();
   const transactions = useFinanceStore((s) => s.transactions);
   const counterparties = useFinanceStore((s) => s.counterparties);
   const categories = useFinanceStore((s) => s.categories);
@@ -204,6 +209,7 @@ function PaletteBody({ close }: { close: () => void }) {
         icon: p.icon,
         run: () => {
           if (p.action === 'add-expense') openAddExpense();
+          else if (p.action === 'toggle-privacy') togglePrivacy();
           else if (p.href) router.push(p.href);
           close();
         },
@@ -305,7 +311,7 @@ function PaletteBody({ close }: { close: () => void }) {
     }
 
     return out;
-  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, close, tNav, tGroups]);
+  }, [query, transactions, counterparties, categories, accounts, tags, activeId, router, openTransaction, openAddExpense, togglePrivacy, close, tNav, tGroups]);
 
   // Group results in source order so the headings appear in the natural order
   // each kind was appended above. A Map preserves insertion order.

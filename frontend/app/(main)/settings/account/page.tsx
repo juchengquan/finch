@@ -1,13 +1,15 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Clock, Doc, Download, ShieldCheck, Sparkle, Sync, Upload } from '@/components/icons';
+import { Clock, Doc, Download, Eye, ShieldCheck, Sparkle, Sync, Upload } from '@/components/icons';
 import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SearchButton } from '@/components/command-palette';
 import { MobileTabsEditor } from '@/components/mobile-tabs-editor';
 import { SettingsTabs } from '@/components/settings-tabs';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Switch } from '@/components/ui/switch';
+import { usePrivacy } from '@/lib/use-privacy';
 import { useTranslations } from 'next-intl';
 import { useAppLocale, SUPPORTED_LOCALES, type Locale } from '@/components/i18n-provider';
 import { useBackup, type BackupEntry, type ImportResult, type DbMetadataView } from '@/components/sqlite-backup-provider';
@@ -44,6 +46,7 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleString();
 const ROW_ICON: Record<string, typeof Sparkle> = {
   sparkle: Sparkle,
   doc: Doc,
+  eye: Eye,
   sync: Sync,
   'shield-check': ShieldCheck,
   download: Download,
@@ -84,6 +87,7 @@ export default function AccountSettingsPage() {
   // I18N_PLAN §4.2 — useAppLocale reads/writes the per-device locale; the
   // useTranslations namespace gives keyed strings for the rows below.
   const { locale, setLocale } = useAppLocale();
+  const { privacy, setPrivacy } = usePrivacy();
   const tSettings = useTranslations('settings.account');
   const tBackup = useTranslations('settings.account.backup');
   const tCommon = useTranslations('common');
@@ -212,6 +216,13 @@ export default function AccountSettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </Row>
+        <Row icon="eye" label={tSettings('privacy.row')}>
+          <Switch
+            checked={privacy}
+            onCheckedChange={setPrivacy}
+            aria-label={tSettings('privacy.aria')}
+          />
         </Row>
 
         <div className="md:hidden">

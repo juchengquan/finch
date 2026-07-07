@@ -1418,6 +1418,10 @@
         "english": "English",
         "chinese": "中文(简体)"
       },
+      "privacy": {
+        "row": "Privacy mode",
+        "aria": "Hide amounts"
+      },
       "bottomBar": {
         "section": "Bottom bar",
         "hint": "Choose and reorder the four sections in your bottom navigation. The center Add button is always shown."
@@ -1537,6 +1541,7 @@
     "reports": "Reports",
     "goals": "Goals",
     "add": "Add",
+    "privacy": "Toggle privacy mode",
     "settings": "Settings",
     "pending": "Pending",
     "merchants": "Merchants",

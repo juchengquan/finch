@@ -15,7 +15,7 @@ import {
   Tag,
   Wallet,
 } from '@/components/icons';
-import { MOCK, CURRENCIES, convertAmount, fmtNative } from '@/lib/data';
+import { MOCK, CURRENCIES, convertAmount } from '@/lib/data';
 import { useFinanceStore } from '@/lib/store';
 import { useLedger } from '@/components/ledger-provider';
 import { useMoney } from '@/components/use-money';
@@ -96,7 +96,7 @@ export function AddExpenseForm({
   const storeTxns = useFinanceStore((s) => s.transactions);
   const storeCps = useFinanceStore((s) => s.counterparties);
   const { activeId } = useLedger();
-  const { base } = useMoney();
+  const { base, native } = useMoney();
   const { openMerchantPicker } = useMerchantPicker();
 
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
@@ -224,7 +224,7 @@ export function AddExpenseForm({
       description: t('toasts.transferDescription', {
         from: fromName,
         to: toName,
-        amount: fmtNative(value, accountCurrency),
+        amount: native(value, accountCurrency),
       }),
     });
     onSaved?.('');
@@ -262,7 +262,7 @@ export function AddExpenseForm({
     toast.success(type === 'income' ? t('toasts.incomeAdded') : t('toasts.expenseAdded'), {
       description: t('toasts.txnDescription', {
         merchant: merchant.trim() || fallbackName,
-        amount: fmtNative(Math.abs(value), accountCurrency),
+        amount: native(Math.abs(value), accountCurrency),
       }),
     });
     onSaved?.(id);
@@ -296,11 +296,11 @@ export function AddExpenseForm({
                 key={`${r.merchant}-${r.amount}-${i}`}
                 type="button"
                 onClick={() => applyRecent(r)}
-                aria-label={t('repeatAria', { merchant: r.merchant, amount: fmtNative(r.amount, r.currency) })}
+                aria-label={t('repeatAria', { merchant: r.merchant, amount: native(r.amount, r.currency) })}
                 className="bg-secondary text-secondary-foreground hover:bg-secondary/80 flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] transition-colors"
               >
                 <span className="truncate max-w-[14ch]">{r.merchant}</span>
-                <span className="text-muted-foreground tabular-nums">{fmtNative(r.amount, r.currency)}</span>
+                <span className="text-muted-foreground tabular-nums">{native(r.amount, r.currency)}</span>
               </button>
             ))}
           </div>
