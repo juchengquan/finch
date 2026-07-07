@@ -172,6 +172,14 @@ public struct MerchantStats: Codable, Equatable, Sendable {
     public var std: Double
 }
 
+/// One row of `Selectors.topMerchants` — a merchant's net expense total
+/// (refunds netted) in the ledger base currency.
+public struct MerchantSpend: Codable, Equatable, Sendable {
+    public let name: String
+    public let total: Double
+    public init(name: String, total: Double) { self.name = name; self.total = total }
+}
+
 public struct RecurringCharge: Identifiable, Equatable, Sendable, Codable {
     public let id: String              // = merchantKey
     public let merchantName: String

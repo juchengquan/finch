@@ -109,6 +109,32 @@ public enum Selectors {
         return out
     }
 
+    // MARK: topMerchants
+
+    /// Top merchants by net expense total (base currency, refunds netted like
+    /// `categorySpend`), optionally scoped to a "YYYY-MM" month. Merchants are
+    /// keyed like `merchantStats` (counterparty FK first, normalized name
+    /// fallback); the display name is the first-seen row's merchant text.
+    public static func topMerchants(_ txns: [Tx], _ ledgerId: String, _ month: String? = nil,
+                                    limit: Int = 5) -> [MerchantSpend] {
+        var totals: [String: (name: String, total: Double)] = [:]
+        for t in txns {
+            if ledgerOf(t) != ledgerId { continue }
+            if let month, t.date.prefix(7) != month { continue }
+            if (t.pending ?? false) || !isSpend(t) { continue }
+            guard let key = merchantKey(t) else { continue }
+            var b = totals[key] ?? (t.merchant.trimmingCharacters(in: .whitespacesAndNewlines), 0)
+            b.total += -t.amount
+            totals[key] = b
+        }
+        return totals.values
+            .filter { $0.total > 0 }
+            .map { MerchantSpend(name: $0.name, total: r2($0.total)) }
+            .sorted { $0.total != $1.total ? $0.total > $1.total : $0.name < $1.name }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     // MARK: anomalyScore
 
     public static func anomalyScore(_ tx: Tx, _ stats: [String: MerchantStats],
