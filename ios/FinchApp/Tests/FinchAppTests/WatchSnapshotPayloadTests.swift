@@ -27,11 +27,35 @@ final class WatchSnapshotPayloadTests: XCTestCase {
     }
 
     func test_decode_cp1PayloadWithoutRecents_isNilRecents() throws {
-        // A CP1/CP2-era payload has no `recents` key — must still decode.
+        // A CP1/CP2-era payload has no `recents`/`quickAdd` keys — must still decode.
         let legacy = #"{"netWorth":10,"currency":"USD","budgetUsedPct":5,"weeklySpent":2,"generatedAt":0}"#
         let p = try XCTUnwrap(WatchSnapshotPayload.decode(Data(legacy.utf8)))
         XCTAssertNil(p.recents)
+        XCTAssertNil(p.quickAdd)
         XCTAssertEqual(p.netWorth, 10)
+    }
+
+    func test_roundTrip_withQuickAddCatalog() throws {
+        var p = WatchSnapshotPayload(netWorth: 1, currency: "USD", budgetUsedPct: 1,
+                                     weeklySpent: 1, generatedAt: Date(timeIntervalSince1970: 0))
+        p.quickAdd = WatchQuickAddCatalog(ledgerId: "l1", accountId: "a1", accountName: "Checking",
+                                          categories: [.init(id: "c1", name: "Food")])
+        let back = try XCTUnwrap(WatchSnapshotPayload.decode(XCTUnwrap(p.encoded())))
+        XCTAssertEqual(back, p)
+        XCTAssertEqual(back.quickAdd?.categories.first?.name, "Food")
+    }
+
+    func test_quickAddRequest_createdAt_roundTripsAndIsOptional() throws {
+        var req = WatchQuickAddRequest(id: "r3", item: WatchQuickAddItem(
+            merchant: "Cafe", amount: 3, currency: "USD",
+            ledgerId: "l1", accountId: "a1", categoryId: nil))
+        req.createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let back = try XCTUnwrap(WatchQuickAddRequest.decode(XCTUnwrap(req.encoded())))
+        XCTAssertEqual(back, req)
+        // Pre-composer sender (no createdAt key) still decodes.
+        let legacy = #"{"id":"r4","item":{"merchant":"K","amount":2,"currency":"USD","ledgerId":"l1","accountId":"a1"}}"#
+        let old = try XCTUnwrap(WatchQuickAddRequest.decode(Data(legacy.utf8)))
+        XCTAssertNil(old.createdAt)
     }
 
     func test_quickAddArgs_mapsExpenseSignAndFields() {

@@ -1,5 +1,7 @@
 # Watch CP3 — on-wrist quick-add — Implementation Plan
 
+> **Post-#417 addendum (2026-07-07).** The quick-add **templates** increment (#417, design record `2026-07-07-watch-quickadd-templates-design.md`) landed while this plan was in review and pre-delivered parts of it: Task 3's dedupe ring (`QuickAddDedupe`, exact key/semantics) + the `didReceiveUserInfo` receive path + the pending-status policy all exist. The composer implementation therefore **reuses `WatchQuickAddRequest` as the up-wire type** (gaining an optional `createdAt` for the tap date) instead of adding the parallel `WatchQuickAddPayload` below — one wire type, one receive path for templates + composer. Everything else (catalog §1, composer UI §4, staleness fallbacks §3) implemented as specced.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Log an expense from the watch: amount + category composer → `transferUserInfo` over the CP1 session → phone dedupes and applies it via `store.apply(.addTransaction)` as a **pending** transaction → the existing snapshot push updates the glance/complication as the ack.
