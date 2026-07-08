@@ -49,6 +49,45 @@ struct ExportedFile: Identifiable {
     let url: URL
 }
 
+/// Active-ledger transactions CSV (all months) → temp file → ShareLink. Face-ID
+/// gated like the pack — it carries the same transaction data. (The month-scoped
+/// variant lives on Insights › Breakdown.)
+struct ExportCsvButton: View {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var gate: BiometricGate
+    @State private var exportedFile: ExportedFile?
+    @State private var exportError: ImportError?
+
+    var body: some View {
+        Button {
+            Task { await export() }
+        } label: {
+            Label("Export transactions (.csv)", systemImage: "tablecells")
+        }
+        .disabled(store.ledgers.isEmpty)
+        .sheet(item: $exportedFile) { file in
+            ShareLink(item: file.url, preview: SharePreview("Transactions CSV"))
+        }
+        .alert(item: $exportError) { err in
+            Alert(title: Text("Export failed"), message: Text(err.message),
+                  dismissButton: .default(Text("OK")))
+        }
+    }
+
+    private func export() async {
+        guard await gate.confirmSensitive() else { return }
+        do {
+            let csv = try store.transactionsCsv(month: nil)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("finch-transactions-\(store.activeLedgerId).csv")
+            try Data(csv.utf8).write(to: url)
+            exportedFile = ExportedFile(url: url)
+        } catch {
+            exportError = ImportError(message: String(describing: error))
+        }
+    }
+}
+
 /// Drives the menu-bar Export command: watches `router.exportRequested`, builds a
 /// pack, and presents a ShareLink — the `ExportButton` flow, hoisted to the shell.
 struct ExportCoordinator: ViewModifier {

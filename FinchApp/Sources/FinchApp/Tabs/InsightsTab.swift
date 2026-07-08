@@ -316,15 +316,48 @@ private struct BreakdownView: View {
                         }
                     }
                 }
-                Button {
-                    exportCsv(month: month)
-                } label: {
-                    Label(month.isEmpty ? "Export CSV" : "Export \(monthLabel(month)) CSV", systemImage: "square.and.arrow.up")
+                HStack(spacing: 16) {
+                    Button {
+                        exportCsv(month: month)
+                    } label: {
+                        Label(month.isEmpty ? "Export CSV" : "Export \(monthLabel(month)) CSV", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        exportPdf(month: month, cats: cats, total: total)
+                    } label: {
+                        Label("Export PDF", systemImage: "doc.richtext")
+                    }
                 }
                 .padding(.top, 4)
             }
         }
-        .sheet(item: $exported) { f in ShareLink(item: f.url, preview: SharePreview("Transactions CSV")) }
+        .sheet(item: $exported) { f in ShareLink(item: f.url, preview: SharePreview(f.url.lastPathComponent)) }
+    }
+
+    /// One-page print-styled report of the picked month (see ReportPdf.swift).
+    private func exportPdf(month: String, cats: [(id: String, name: String, spent: Double)], total: Double) {
+        let flow = Selectors.monthlyCashflow(store.txns, store.activeLedgerId, month, 1).last
+        let income = flow?.inc ?? 0
+        let spent = flow?.exp ?? 0
+        let model = MonthlyReportModel(
+            ledgerName: store.ledgers.first { $0.id == store.activeLedgerId }?.name ?? store.activeLedgerId,
+            monthLabel: monthLabel(month),
+            income: store.displayMoneyBase(income),
+            spent: store.displayMoneyBase(spent),
+            net: store.displayMoneyBase(income - spent),
+            categories: cats.map {
+                .init(name: $0.name, amount: store.displayMoneyBase($0.spent),
+                      pct: total > 0 ? Int(($0.spent / total * 100).rounded()) : 0)
+            },
+            merchants: Selectors.topMerchants(store.txns, store.activeLedgerId, month).map {
+                .init(name: $0.name, amount: store.displayMoneyBase($0.total))
+            },
+            generatedAt: Date.now.formatted(date: .abbreviated, time: .shortened))
+        guard let data = ReportPdf.render(MonthlyReportView(model: model)) else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("finch-report-\(store.activeLedgerId)-\(month).pdf")
+        guard (try? data.write(to: url)) != nil else { return }
+        exported = ExportedCsv(url: url)
     }
 
     private func exportCsv(month: String) {
