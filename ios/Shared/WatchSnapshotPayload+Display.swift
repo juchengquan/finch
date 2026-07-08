@@ -8,10 +8,13 @@ enum WatchStore {
     static let key = "watchSnapshot"
 }
 
-extension WatchSnapshotPayload {
-    /// Compact currency for tiny watch faces: "$842", "$12.3K", "¥1.2M".
-    func shortMoney(_ amount: Double) -> String {
-        let sym = Self.currencySymbols[currency] ?? currency
+/// Compact money for tiny watch faces. Static (CP3) so callers can format in
+/// any currency — quick-add templates are denominated in the ITEM's currency,
+/// not the snapshot's.
+enum WatchMoney {
+    /// "$842", "$12.3K", "¥1.2M".
+    static func short(_ amount: Double, currency: String) -> String {
+        let sym = currencySymbols[currency] ?? currency
         let mag = abs(amount)
         let sign = amount < 0 ? "-" : ""
         func trim(_ v: Double) -> String {
@@ -23,9 +26,6 @@ extension WatchSnapshotPayload {
         return "\(sign)\(sym)\(Int(mag.rounded()))"
     }
 
-    /// Older than 24h — complications dim rather than hide stale data.
-    var isStale: Bool { Date().timeIntervalSince(generatedAt) > 24 * 3600 }
-
     /// The currencies the app ships (seed ledger bases + majors); fallback is
     /// the raw code. A static map, not a Locale scan — the scan's first-match
     /// symbol depends on locale iteration order (e.g. "US$" vs "$") and would
@@ -33,4 +33,12 @@ extension WatchSnapshotPayload {
     private static let currencySymbols: [String: String] = [
         "USD": "$", "SGD": "S$", "CNY": "¥", "JPY": "¥", "EUR": "€", "GBP": "£",
     ]
+}
+
+extension WatchSnapshotPayload {
+    /// Compact currency in the snapshot's own currency (CP2 behavior, unchanged).
+    func shortMoney(_ amount: Double) -> String { WatchMoney.short(amount, currency: currency) }
+
+    /// Older than 24h — complications dim rather than hide stale data.
+    var isStale: Bool { Date().timeIntervalSince(generatedAt) > 24 * 3600 }
 }

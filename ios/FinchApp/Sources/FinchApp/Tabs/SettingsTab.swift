@@ -49,8 +49,9 @@ struct SettingsImportExportView: View {
             Section {
                 ImportButton()
                 ExportButton()
+                ExportCsvButton()
             } footer: {
-                Text("Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first).")
+                Text("Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first). The CSV export covers the active ledger's full transaction history.")
             }
         }
         .navigationTitle("Import & Export")
