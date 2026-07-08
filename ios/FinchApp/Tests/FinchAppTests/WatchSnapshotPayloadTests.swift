@@ -59,10 +59,9 @@ final class WatchSnapshotPayloadTests: XCTestCase {
     }
 
     func test_quickAddArgs_mapsExpenseSignAndFields() {
-        let req = WatchQuickAddRequest(id: "r1", item: WatchQuickAddItem(
-            merchant: "Cafe", amount: 4.5, currency: "USD",
-            ledgerId: "l1", accountId: "a1", categoryId: "c1"))
-        let args = PhoneWatchLink.quickAddArgs(req, date: "2026-07-07")
+        let item = WatchQuickAddItem(merchant: "Cafe", amount: 4.5, currency: "USD",
+                                     ledgerId: "l1", accountId: "a1", categoryId: "c1")
+        let args = PhoneWatchLink.quickAddArgs(item, date: "2026-07-07")
         XCTAssertEqual(args["amount"], .double(-4.5))
         XCTAssertEqual(args["ledgerId"], .string("l1"))
         XCTAssertEqual(args["accountId"], .string("a1"))
@@ -73,10 +72,38 @@ final class WatchSnapshotPayloadTests: XCTestCase {
     }
 
     func test_quickAddArgs_omitsNilCategory() {
-        let req = WatchQuickAddRequest(id: "r2", item: WatchQuickAddItem(
-            merchant: "Kiosk", amount: 2, currency: "USD",
+        let item = WatchQuickAddItem(merchant: "Kiosk", amount: 2, currency: "USD",
+                                     ledgerId: "l1", accountId: "a1", categoryId: nil)
+        XCTAssertNil(PhoneWatchLink.quickAddArgs(item, date: "2026-07-07")["categoryId"])
+    }
+
+    func test_resolvedItem_fallsBackOnStaleIds_dropsOnGoneLedger() {
+        let accounts = [AccountRow(id: "a1", balance: 0, ledgerId: "l1", isActive: true, name: "Cash")]
+        let cats = [CategoryRow(id: "c1", ledgerId: "l1", name: "Food", parentId: nil, kind: "expense")]
+        let stale = WatchQuickAddItem(merchant: "Cafe", amount: 3, currency: "USD",
+                                      ledgerId: "l1", accountId: "gone", categoryId: "also-gone")
+        let resolved = PhoneWatchLink.resolvedItem(stale, accounts: accounts, categories: cats)
+        XCTAssertEqual(resolved?.accountId, "a1")
+        XCTAssertEqual(resolved?.categoryId, "c1")
+        // Known ids pass through untouched.
+        let fresh = WatchQuickAddItem(merchant: "Cafe", amount: 3, currency: "USD",
+                                      ledgerId: "l1", accountId: "a1", categoryId: "c1")
+        XCTAssertEqual(PhoneWatchLink.resolvedItem(fresh, accounts: accounts, categories: cats), fresh)
+        // Whole ledger gone → nil (drop).
+        let orphan = WatchQuickAddItem(merchant: "Cafe", amount: 3, currency: "USD",
+                                       ledgerId: "deleted", accountId: "a9", categoryId: nil)
+        XCTAssertNil(PhoneWatchLink.resolvedItem(orphan, accounts: accounts, categories: cats))
+    }
+
+    func test_bookingDate_usesCreatedAtElseFallback() {
+        var req = WatchQuickAddRequest(id: "r5", item: WatchQuickAddItem(
+            merchant: "Cafe", amount: 3, currency: "USD",
             ledgerId: "l1", accountId: "a1", categoryId: nil))
-        XCTAssertNil(PhoneWatchLink.quickAddArgs(req, date: "2026-07-07")["categoryId"])
+        XCTAssertEqual(PhoneWatchLink.bookingDate(req, fallback: "2026-07-07"), "2026-07-07")
+        let tapped = Date(timeIntervalSince1970: 1_700_000_000)
+        req.createdAt = tapped
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"   // same local-TZ rendering as the impl
+        XCTAssertEqual(PhoneWatchLink.bookingDate(req, fallback: "x"), f.string(from: tapped))
     }
 
     func test_quickAddRequest_roundTrip() throws {
