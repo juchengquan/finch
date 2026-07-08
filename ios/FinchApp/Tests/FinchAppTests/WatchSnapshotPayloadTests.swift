@@ -45,6 +45,7 @@ final class WatchSnapshotPayloadTests: XCTestCase {
         XCTAssertEqual(args["categoryId"], .string("c1"))
         XCTAssertEqual(args["date"], .string("2026-07-07"))
         XCTAssertEqual(args["merchant"], .string("Cafe"))
+        XCTAssertEqual(args["status"], .string("pending"))   // wrist entries are provisional (CP3 spec §3)
     }
 
     func test_quickAddArgs_omitsNilCategory() {

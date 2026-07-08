@@ -29,13 +29,14 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
 
     // MARK: CP3 — receive on-wrist quick-adds
 
-    /// `transferUserInfo` can redeliver; request ids we've already posted are
-    /// dropped (the store's duplicate-transaction guard is the backstop).
-    /// Only touched on the main actor.
-    private var seenQuickAddIds = Set<String>()
+    /// Persisted redelivery guard (the approved CP3 spec's ring; the store's
+    /// duplicate-transaction guard is the backstop).
+    private let dedupe = QuickAddDedupe()
 
     /// Pure mapping (testable): template → `addTransaction` args. Templates are
-    /// positive magnitudes; an expense posts negative.
+    /// positive magnitudes; an expense posts negative. Wrist entries land as
+    /// **pending** (the approved CP3 spec §3) — the phone's Pending review is
+    /// the confirm/edit surface for terse on-wrist captures.
     static func quickAddArgs(_ req: WatchQuickAddRequest, date: String) -> [String: JSONValue] {
         var args: [String: JSONValue] = [
             "ledgerId": .string(req.item.ledgerId),
@@ -43,6 +44,7 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
             "amount": .double(-abs(req.item.amount)),
             "merchant": .string(req.item.merchant),
             "date": .string(date),
+            "status": .string("pending"),
         ]
         if let cat = req.item.categoryId { args["categoryId"] = .string(cat) }
         return args
@@ -50,10 +52,9 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         guard let data = userInfo["quickAdd"] as? Data,
-              let req = WatchQuickAddRequest.decode(data) else { return }
+              let req = WatchQuickAddRequest.decode(data),
+              dedupe.firstSeen(req.id) else { return }
         Task { @MainActor in
-            guard !self.seenQuickAddIds.contains(req.id) else { return }
-            self.seenQuickAddIds.insert(req.id)
             let store = FinchStore.shared
             do {
                 try store.apply(.addTransaction, Args(Self.quickAddArgs(req, date: store.today)))
