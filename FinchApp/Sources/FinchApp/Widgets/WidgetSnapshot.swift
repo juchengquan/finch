@@ -34,6 +34,11 @@ public enum WidgetSnapshotWriter {
             WatchQuickAddItem(merchant: $0.merchant, amount: $0.amount, currency: $0.currency,
                               ledgerId: store.activeLedgerId, accountId: $0.accountId, categoryId: $0.categoryId)
         }
+        // CP3 composer: the entry catalog (default account + top categories).
+        payload.quickAdd = QuickAddCatalogBuilder.build(
+            ledgerId: store.activeLedgerId, accounts: store.accounts, txns: store.txns,
+            categories: store.pickableCategories,
+            since: QuickAddCatalogBuilder.sinceDate(daysBack: 90))
         PhoneWatchLink.shared.push(payload)
         #endif
     }

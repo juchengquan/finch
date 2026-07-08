@@ -33,21 +33,49 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
     /// duplicate-transaction guard is the backstop).
     private let dedupe = QuickAddDedupe()
 
-    /// Pure mapping (testable): template → `addTransaction` args. Templates are
+    /// Pure mapping (testable): item → `addTransaction` args. Items carry
     /// positive magnitudes; an expense posts negative. Wrist entries land as
-    /// **pending** (the approved CP3 spec §3) — the phone's Pending review is
-    /// the confirm/edit surface for terse on-wrist captures.
-    static func quickAddArgs(_ req: WatchQuickAddRequest, date: String) -> [String: JSONValue] {
+    /// **pending** (the CP3 spec §3) — the phone's Pending review is the
+    /// confirm/edit surface for terse on-wrist captures.
+    static func quickAddArgs(_ item: WatchQuickAddItem, date: String) -> [String: JSONValue] {
         var args: [String: JSONValue] = [
-            "ledgerId": .string(req.item.ledgerId),
-            "accountId": .string(req.item.accountId),
-            "amount": .double(-abs(req.item.amount)),
-            "merchant": .string(req.item.merchant),
+            "ledgerId": .string(item.ledgerId),
+            "accountId": .string(item.accountId),
+            "amount": .double(-abs(item.amount)),
+            "merchant": .string(item.merchant),
             "date": .string(date),
             "status": .string("pending"),
         ]
-        if let cat = req.item.categoryId { args["categoryId"] = .string(cat) }
+        if let cat = item.categoryId { args["categoryId"] = .string(cat) }
         return args
+    }
+
+    /// Catalog-staleness guards (CP3 spec §3): an unknown account falls back to
+    /// the ledger's first active account, an unknown category to the ledger's
+    /// first expense category (or none) — rather than dropping the spend. Nil
+    /// only when the whole ledger is gone.
+    static func resolvedItem(_ item: WatchQuickAddItem,
+                             accounts: [AccountRow], categories: [CategoryRow]) -> WatchQuickAddItem? {
+        var out = item
+        let ledgerAccounts = accounts.filter { ($0.ledgerId ?? "personal") == item.ledgerId && ($0.isActive ?? true) }
+        if !ledgerAccounts.contains(where: { $0.id == item.accountId }) {
+            guard let fallback = ledgerAccounts.first else { return nil }
+            out.accountId = fallback.id
+        }
+        if let cat = item.categoryId,
+           !categories.contains(where: { $0.id == cat && $0.ledgerId == item.ledgerId }) {
+            out.categoryId = categories.first { $0.ledgerId == item.ledgerId && ($0.kind ?? "expense") == "expense" }?.id
+        }
+        return out
+    }
+
+    /// Booking date: the wrist tap's `createdAt` when present (an overnight-
+    /// queued add books on the day it was tapped), else the phone's today.
+    static func bookingDate(_ req: WatchQuickAddRequest, fallback: String) -> String {
+        guard let created = req.createdAt else { return fallback }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: created)
     }
 
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
@@ -56,13 +84,16 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
               dedupe.firstSeen(req.id) else { return }
         Task { @MainActor in
             let store = FinchStore.shared
+            guard let item = Self.resolvedItem(req.item, accounts: store.accounts,
+                                               categories: store.pickableCategories) else { return }
             do {
-                try store.apply(.addTransaction, Args(Self.quickAddArgs(req, date: store.today)))
+                try store.apply(.addTransaction,
+                                Args(Self.quickAddArgs(item, date: Self.bookingDate(req, fallback: store.today))))
                 // The fresh snapshot pushed back to the watch IS the confirmation
-                // (and refreshes the recents + the complication).
+                // (and refreshes the recents/catalog + the complication).
                 WidgetSnapshotWriter.write(from: store)
             } catch {
-                // Deleted account/ledger or the duplicate guard — drop. The watch
+                // The duplicate guard or a validation failure — drop. The watch
                 // row only ever claims "queued", not "posted".
             }
         }
