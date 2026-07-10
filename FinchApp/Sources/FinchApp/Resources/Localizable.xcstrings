@@ -318,7 +318,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "动作"
+            "value": "操作"
           }
         }
       }
@@ -818,7 +818,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "应用于 %1$lld 笔所选交易%2$@。"
+            "value": "应用于 %1$lld 笔所选交易。"
           }
         }
       }
@@ -1148,7 +1148,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已清算 %1$lld · 待审核 %2$lld"
+            "value": "已清算 %1$lld · 待复核 %2$lld"
           }
         }
       }
@@ -1288,7 +1288,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "贡献"
+            "value": "贡献…"
           }
         }
       }
@@ -1558,7 +1558,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "删除分组?"
+            "value": "删除分组？"
           }
         }
       }
@@ -1608,7 +1608,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "删除该交易?"
+            "value": "删除该交易？"
           }
         }
       }
@@ -1838,7 +1838,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将整个账本集导出为独立的 .finch 文件；导入将替换你的数据（导入前会先审核）。"
+            "value": "将整个账本集导出为独立的 .finch 文件；导入将替换你的数据（导入前会先审计）。"
           }
         }
       }
@@ -2438,7 +2438,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已将 %1$lld 笔交易%2$@标记为已清算。"
+            "value": "已将 %1$lld 笔交易标记为已清算。"
           }
         }
       }
@@ -2668,7 +2668,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "下一月"
+            "value": "下个月"
           }
         }
       }
@@ -2948,7 +2948,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "备注(可选)"
+            "value": "备注（可选）"
           }
         }
       }
@@ -3208,7 +3208,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "上一月"
+            "value": "上个月"
           }
         }
       }
@@ -3288,7 +3288,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "改类别…"
+            "value": "重新归类"
           }
         }
       }
@@ -3308,7 +3308,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "票据"
+            "value": "收据"
           }
         }
       }
@@ -3328,7 +3328,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "票据"
+            "value": "收据"
           }
         }
       }
@@ -3728,7 +3728,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "设置"
+            "value": "设置…"
           }
         }
       }
@@ -4108,7 +4108,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这将用审核未通过的数据包替换你的实时数据库，且无法撤销。"
+            "value": "这将用审计未通过的数据包替换你的实时数据库，且无法撤销。"
           }
         }
       }
@@ -4308,7 +4308,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "取消标记为已审阅"
+            "value": "取消已复核标记"
           }
         }
       }
@@ -4408,7 +4408,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "核验"
+            "value": "验证"
           }
         }
       }
@@ -4488,7 +4488,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finch"
+            "value": "finch"
           }
         }
       }
