@@ -139,7 +139,11 @@ struct ActivityFeedView: View {
                 #endif
             }
         }
-        .searchable(text: $searchQuery)
+        #if os(iOS)
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
+        #else
+        .searchable(text: $searchQuery, prompt: "Search transactions")
+        #endif
         .navigationTitle(LocalizedStringKey(navTitle))
         .errorAlert($errorMessage)
         .quickLookPreview($previewURL)

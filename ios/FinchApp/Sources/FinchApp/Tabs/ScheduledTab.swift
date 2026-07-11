@@ -46,13 +46,10 @@ struct ScheduledTab: View {
         NavigationStack {
             Group {
                 if store.scheduled.isEmpty && detected.isEmpty {
-                    ContentUnavailableView {
-                        Label("No scheduled items", systemImage: "calendar")
-                    } description: {
-                        Text(store.accounts.isEmpty
-                             ? "Import a .finch pack or add an account first."
-                             : "Tap + to add a recurring transaction or installment plan.")
-                    }
+                    EmptyState(tab: .scheduled,
+                               description: store.accounts.isEmpty
+                                   ? "Import a .finch pack or add an account first."
+                                   : "Tap + to add a recurring transaction or installment plan.")
                 } else {
                     VStack(spacing: 0) {
                         Picker("View", selection: $mode) {
