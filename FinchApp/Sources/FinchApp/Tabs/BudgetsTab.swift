@@ -62,13 +62,8 @@ struct BudgetsTab: View {
 
     @ViewBuilder private var listContent: some View {
         if store.budgets.isEmpty {
-            ContentUnavailableView {
-                Label("No budgets yet", systemImage: "chart.pie")
-            } description: {
-                Text(store.ledgers.isEmpty
-                     ? "Import a .finch pack from Settings to get started."
-                     : "Tap + to create a budget.")
-            }
+            EmptyState(tab: .budgets,
+                       description: store.ledgers.isEmpty ? nil : "Tap + to create a budget.")
         } else if let selection {
             List(selection: selection) {
                 summarySection
@@ -86,9 +81,13 @@ struct BudgetsTab: View {
             List {
                 summarySection
                 groupedSections { budget in
-                    NavigationLink(value: budget.id) {
-                        BudgetRowView(budget: budget)
+                    // Plain Button (navigates via the path) instead of NavigationLink
+                    // so there's no trailing disclosure chevron — same convention as
+                    // the Accounts rows; contentShape keeps the whole row tappable.
+                    Button { path.append(budget.id) } label: {
+                        BudgetRowView(budget: budget).contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) { rowActions(budget) }
                     .contextMenu { rowActions(budget) }
                 }
@@ -138,7 +137,7 @@ struct BudgetsTab: View {
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (BudgetRow) -> Row) -> some View {
         if searchActive && groupsToShow.isEmpty && filteredUngroupedBudgets.isEmpty {
-            Section { Text("No matching budgets").foregroundStyle(.secondary) }
+            Section { ContentUnavailableView.search(text: searchQuery) }
         }
         // Ungrouped budgets: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedBudgets.isEmpty {

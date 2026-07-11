@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// SF Symbol for an account `type`. The real schema types are
 /// savings/credit_card/investment/cash/fx/virtual (accounts table CHECK) —
@@ -13,6 +14,22 @@ enum AccountTypeIcon {
         case "fx":          "dollarsign.arrow.circlepath"
         case "virtual":     "circle.dashed"
         default:            "banknote"
+        }
+    }
+}
+
+/// Color for an account `type` — one palette shared by the Accounts rows and the
+/// Insights net-worth-by-type allocation bar, so "account type ↔ color" reads the
+/// same everywhere. (credit_card and unknown types fall back to secondary.)
+enum AccountTypeColor {
+    static func color(for type: String?) -> Color {
+        switch type {
+        case "cash":       .green
+        case "savings":    .blue
+        case "investment": .purple
+        case "fx":         .teal
+        case "virtual":    .gray
+        default:           Color.secondary
         }
     }
 }
