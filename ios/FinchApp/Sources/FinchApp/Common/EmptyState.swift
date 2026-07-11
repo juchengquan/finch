@@ -5,11 +5,14 @@ import SwiftUI
 struct EmptyState: View {
     enum Tab { case accounts, activity, budgets, scheduled }
     let tab: Tab
+    /// Overrides the default "import a pack" hint — e.g. "Tap + to create a
+    /// budget." once a ledger exists and importing isn't the next step.
+    var description: String? = nil
     var body: some View {
         ContentUnavailableView {
             Label(title, systemImage: symbol)
         } description: {
-            Text("Import a .finch pack from Settings to get started.")
+            Text(description ?? "Import a .finch pack from Settings to get started.")
         }
     }
     private var title: String {

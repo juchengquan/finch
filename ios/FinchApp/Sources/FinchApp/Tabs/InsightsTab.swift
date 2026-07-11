@@ -57,13 +57,11 @@ struct InsightsTab: View {
             }
             .navigationTitle("Insights")
             .ledgerPush()
-            #if os(iOS)
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
                 #endif
             }
-            #endif
         }
     }
 }
@@ -542,7 +540,7 @@ private struct NetWorthByTypeCard: View {
                 VStack(spacing: 6) {
                     if !assets.isEmpty {
                         StackedBar(slices: assets.map {
-                            StackedBar.Slice(value: $0.balance, color: typeColor($0.type))
+                            StackedBar.Slice(value: $0.balance, color: AccountTypeColor.color(for: $0.type))
                         })
                         .padding(.bottom, 4)
                     }
@@ -555,17 +553,6 @@ private struct NetWorthByTypeCard: View {
                     }
                 }
             }
-        }
-    }
-
-    private func typeColor(_ type: String) -> Color {
-        switch type {
-        case "cash":       return .green
-        case "savings":    return .blue
-        case "investment": return .purple
-        case "fx":         return .teal
-        case "virtual":    return .gray
-        default:           return .secondary
         }
     }
 }

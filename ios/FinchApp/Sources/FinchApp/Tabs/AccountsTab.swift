@@ -60,10 +60,12 @@ struct AccountsTab: View {
                     } else {
                         Button { showingAdd = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("Add Account")
+                            .disabled(store.ledgers.isEmpty)   // an account needs a ledger (matches Budgets/Scheduled gating)
                     }
                     #else
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Account")
+                        .disabled(store.ledgers.isEmpty)
                     #endif
                 }
                 // Group + archive management moved off the + into the ⋯ overflow menu.
@@ -219,7 +221,7 @@ struct AccountsTab: View {
     @ViewBuilder private func groupedSections<Row: View>(
         @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
         if searchActive && groupsToShow.isEmpty && filteredUngroupedAccounts.isEmpty {
-            Section { Text("No matching accounts").foregroundStyle(.secondary) }
+            Section { ContentUnavailableView.search(text: searchQuery) }
         }
         // Ungrouped accounts: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedAccounts.isEmpty {
@@ -415,7 +417,7 @@ struct AccountRowView: View {
     var body: some View {
         HStack {
             Image(systemName: AccountTypeIcon.icon(for: account.type))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AccountTypeColor.color(for: account.type))
             Text(account.name ?? "—")
             Spacer()
             Text(store.displayMoney(account.balance, from: account.currency))
