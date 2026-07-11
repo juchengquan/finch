@@ -7,7 +7,12 @@ import FinchCore
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
     var body: some View {
-        MoreTabNavigationStack {
+        // A primary tab supplies its own NavigationStack (like Accounts/Insights).
+        // The old MoreTabNavigationStack was a compact-width no-op (it assumed
+        // Settings was *pushed* into an existing stack), which left this tab with
+        // no nav bar — no title, no Ledger corner button, and disabled (grayed)
+        // NavigationLinks.
+        NavigationStack {
             SettingsRootList()
                 .toolbar {
                     #if os(iOS)

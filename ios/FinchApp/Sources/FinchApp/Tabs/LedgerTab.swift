@@ -11,7 +11,7 @@ struct LedgerTab: View {
     var selection: Binding<String?>? = nil
     var body: some View {
         NavigationStack {
-            LedgerListView(selection: selection).navigationTitle("Ledger")
+            LedgerListView(selection: selection)   // titles itself "Ledgers"
         }
     }
 }

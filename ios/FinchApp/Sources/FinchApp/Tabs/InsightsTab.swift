@@ -224,8 +224,9 @@ private struct RecentExpensesCard: View {
                             Text(r.merchant)
                             Spacer()
                             // recentExpenses returns a positive magnitude; render
-                            // as a spend. `-abs` is robust to the sign convention.
-                            Text(Money.format(-abs(r.amount), currency: r.currency)).fontWeight(.medium)
+                            // as a spend (`-abs` is robust to the sign convention),
+                            // converted to the display currency like every other card.
+                            Text(store.displayMoney(-abs(r.amount), from: r.currency)).fontWeight(.medium)
                         }
                     }
                 }
