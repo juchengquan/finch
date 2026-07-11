@@ -117,7 +117,9 @@ private struct AddTransactionFAB: ViewModifier {
     @State private var selecting = false
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottomTrailing) {
-            if !store.accounts.isEmpty, !selecting {
+            // Hidden while the corner-pushed Ledger is up so that screen has the
+            // same (FAB-free) chrome no matter which tab it was opened from.
+            if !store.accounts.isEmpty, !selecting, !router.showLedger {
                 Button { router.showAddTransaction = true } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))
@@ -162,7 +164,7 @@ private struct LedgerPush: ViewModifier {
         content.navigationDestination(isPresented: Binding(
             get: { sizeClass == .compact && router.showLedger },
             set: { if !$0 { router.showLedger = false } })) {
-            LedgerListView().navigationTitle("Ledger")
+            LedgerListView()   // titles itself "Ledgers" — don't override with a second (dead) title
         }
         #else
         content

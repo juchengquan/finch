@@ -40,9 +40,9 @@ struct ScheduledTab: View {
     }
 
     var body: some View {
-        // A primary tab supplies its own NavigationStack (like Accounts/Insights);
-        // it no longer lands in the system More overflow, so MoreTabNavigationStack
-        // (a no-op in compact width) would leave it with no nav bar or title.
+        // A primary tab supplies its own NavigationStack (like Accounts/Insights)
+        // so it gets a nav bar, large title, and working NavigationLinks in
+        // compact width.
         NavigationStack {
             Group {
                 if store.scheduled.isEmpty && detected.isEmpty {
