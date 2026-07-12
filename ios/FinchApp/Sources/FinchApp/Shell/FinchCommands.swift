@@ -27,6 +27,8 @@ struct FinchCommands: Commands {
         CommandGroup(after: .toolbar) {
             Button("Command Palette…") { router.showCommandPalette = true }
                 .keyboardShortcut("k", modifiers: .command)
+            Button("Hide Amounts") { FinchStore.shared.privacyMode.toggle() }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
         }
         // A "Go" menu: ⌘1–6 to switch tabs.
         CommandMenu("Go") {
