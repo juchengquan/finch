@@ -478,9 +478,14 @@ private struct WhatIfCard: View {
                     Spacer()
                     Text("\(store.displayMoneyBase(monthlySave))/mo").font(.caption).foregroundStyle(.secondary)
                 }
-                let netBefore = b.avgIncome - b.avgSpend
-                Text("Net: \(store.displayMoneyBase(netBefore)) → \(store.displayMoneyBase(netBefore + monthlySave))")
-                    .font(.caption).foregroundStyle(.secondary)
+                // Web parity: the net line only renders when the window saw income
+                // (what-if-card.tsx gates on avgIncome > 0) — a zero-income window
+                // would otherwise show a misleading all-spend "net".
+                if b.avgIncome > 0 {
+                    let netBefore = b.avgIncome - b.avgSpend
+                    Text("Net: \(store.displayMoneyBase(netBefore)) → \(store.displayMoneyBase(netBefore + monthlySave))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             } else {
                 Text("Drag a slider to try a cut.").font(.caption2).foregroundStyle(.secondary)
             }
