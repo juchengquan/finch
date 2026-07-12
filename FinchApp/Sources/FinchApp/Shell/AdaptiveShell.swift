@@ -153,6 +153,20 @@ struct LedgerBarButton: View {
     }
 }
 
+/// The privacy-mode eye toggle shown on every primary tab — one tap masks every
+/// rendered amount as "••••" (web parity: #416). Cross-platform (not compact-gated:
+/// useful on iPad/Mac toolbars too); state lives on FinchStore.privacyMode.
+struct PrivacyToggleButton: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        Button { store.privacyMode.toggle() } label: {
+            Image(systemName: store.privacyMode ? "eye.slash" : "eye")
+        }
+        .accessibilityLabel("Privacy mode")
+        .accessibilityValue(store.privacyMode ? "on" : "off")
+    }
+}
+
 /// Pushes the two-layer Ledger onto the enclosing NavigationStack when
 /// `router.showLedger` is set (by the corner button or a `.ledger` route).
 /// Compact-only — iPad/Mac reach the Ledger via the sidebar.

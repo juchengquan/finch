@@ -49,6 +49,7 @@ struct AccountsTab: View {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
                 #endif
+                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
                 ToolbarItem(placement: .primaryAction) {
                     #if os(iOS)
                     // While reordering (entered from a group's long-press menu),

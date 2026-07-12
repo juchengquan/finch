@@ -96,7 +96,7 @@ struct AccountDetailView: View {
 
     @ViewBuilder private func reconcileBadge(_ a: AccountRow) -> some View {
         let status = Selectors.reconcileStatus(a.lastReconciledAt, store.today)
-        let bal = Money.format(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
+        let bal = store.displayNative(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
         HStack(spacing: 6) {
             switch status {
             case .never:
