@@ -103,7 +103,8 @@ extension FinchStore {
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
         return Money.format(v, currency: displayCurrency)
     }
-    /// account currency → base → display.
+    /// account currency → base → display. Inherits privacy masking via
+    /// `displayMoneyBase`.
     public func displayMoney(_ amount: Double, from currency: String?) -> String {
         displayMoneyBase(toBase(amount, from: currency))
     }

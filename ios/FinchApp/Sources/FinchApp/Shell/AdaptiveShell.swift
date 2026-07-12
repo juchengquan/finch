@@ -163,6 +163,7 @@ struct PrivacyToggleButton: View {
             Image(systemName: store.privacyMode ? "eye.slash" : "eye")
         }
         .accessibilityLabel("Privacy mode")
+        .accessibilityValue(store.privacyMode ? "on" : "off")
     }
 }
 
