@@ -96,14 +96,23 @@ extension FinchStore {
 
     // MARK: - Money formatting
 
-    /// ledger base → display.
+    /// ledger base → display. Returns the privacy mask when privacy mode is on
+    /// (masking here propagates to displayMoney(_:from:)/subtotalDisplay/netWorthDisplay).
     public func displayMoneyBase(_ baseAmount: Double) -> String {
+        if privacyMode { return FinchStore.moneyMask }
         let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
         return Money.format(v, currency: displayCurrency)
     }
-    /// account currency → base → display.
+    /// account currency → base → display. Inherits privacy masking via
+    /// `displayMoneyBase`.
     public func displayMoney(_ amount: Double, from currency: String?) -> String {
         displayMoneyBase(toBase(amount, from: currency))
+    }
+    /// Format an amount already denominated in its own currency — no conversion,
+    /// just format-or-mask. The privacy-aware replacement for calling
+    /// Money.format directly in a view (web's `native` formatter).
+    public func displayNative(_ amount: Double, currency: String) -> String {
+        privacyMode ? FinchStore.moneyMask : Money.format(amount, currency: currency)
     }
 
     /// Whether a transaction is an unusual-spend anomaly (per-merchant z-score).
@@ -232,8 +241,9 @@ extension FinchStore {
     func toBase(_ amount: Double, from currency: String?, ledgerBase: String) -> Double {
         Money.convert(amount, from: currency ?? ledgerBase, to: ledgerBase, rates: rateMap) ?? amount
     }
-    /// Format a ledger-base amount into that ledger's display currency.
+    /// Format a ledger-base amount into that ledger's display currency (privacy-masked).
     public func displayMoney(_ baseAmount: Double, forLedger ledgerId: String) -> String {
+        if privacyMode { return FinchStore.moneyMask }
         let base = baseCurrency(forLedger: ledgerId)
         let disp = displayCurrency(forLedger: ledgerId)
         let v = Money.convert(baseAmount, from: base, to: disp, rates: rateMap) ?? baseAmount

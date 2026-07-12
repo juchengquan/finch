@@ -18,6 +18,9 @@ func paletteCommands() -> [PaletteCommand] {
         PaletteCommand(title: "Go to \(tab.title)", systemImage: tab.icon) { $0.selectedTab = tab }
     }
     cmds.append(PaletteCommand(title: "New Transaction", systemImage: "plus.circle") { $0.showAddTransaction = true })
+    cmds.append(PaletteCommand(title: "Toggle Privacy Mode", systemImage: "eye") { _ in
+        FinchStore.shared.privacyMode.toggle()
+    })
     return cmds
 }
 

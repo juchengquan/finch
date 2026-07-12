@@ -39,6 +39,7 @@ struct BudgetsTab: View {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
                 #endif
+                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Budget")

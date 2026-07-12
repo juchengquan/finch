@@ -71,8 +71,8 @@ struct SplitEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Transaction total", value: Money.format(total, currency: displayCurrency))
-                    LabeledContent("Allocated", value: Money.format(allocated, currency: displayCurrency))
+                    LabeledContent("Transaction total", value: store.displayNative(total, currency: displayCurrency))
+                    LabeledContent("Allocated", value: store.displayNative(allocated, currency: displayCurrency))
                         .foregroundStyle(abs(allocated - total) <= 0.01 ? .primary : .secondary)
                 }
                 Section("Splits") {

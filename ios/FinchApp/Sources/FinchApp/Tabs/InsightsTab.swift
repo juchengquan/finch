@@ -61,6 +61,7 @@ struct InsightsTab: View {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
                 #endif
+                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
             }
         }
     }
