@@ -37,6 +37,7 @@ struct InsightsTab: View {
                                 NetWorthCard(months: rangeMonths)
                                 CashflowCard(months: rangeMonths)
                                 SavingsRateCard()
+                                WhatIfCard()
                                 CategoryDeltasCard()
                                 WeeklyDigestCard()
                                 IncomeSankeyCard()
@@ -433,6 +434,80 @@ private struct SavingsRateCard: View {
                 }
             } else {
                 Text("No income this month").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// What-if sliders — interactive category-cut hypotheticals over a real-history
+/// baseline (web parity: #411). Drag a category's slider to a % cut and see the
+/// monthly/annual savings plus the effect on average monthly net. Pure client
+/// math — cuts are @State only; nothing persists.
+private struct WhatIfCard: View {
+    @EnvironmentObject private var store: FinchStore
+    @State private var cuts: [String: Double] = [:]
+
+    var body: some View {
+        let baseline = Selectors.whatIfBaseline(store.txns, store.activeLedgerId, String(store.today.prefix(7)))
+        Card(title: "What if…") {
+            if let b = baseline {
+                content(b)
+            } else {
+                Text("Not enough spending history yet").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private func content(_ b: Selectors.WhatIfBaseline) -> some View {
+        let monthlySave = b.categories.reduce(0.0) { $0 + $1.avgMonthly * (cuts[$1.categoryId] ?? 0) / 100 }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Based on your last \(b.months.count) month\(b.months.count == 1 ? "" : "s")")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if monthlySave > 0 {
+                    Button("Reset") { cuts = [:] }.font(.caption)
+                }
+            }
+            ForEach(b.categories, id: \.categoryId) { c in row(c) }
+            if monthlySave > 0 {
+                Divider()
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(store.displayMoneyBase(monthlySave * 12)).font(.title3).fontWeight(.semibold)
+                    Text("per year").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(store.displayMoneyBase(monthlySave))/mo").font(.caption).foregroundStyle(.secondary)
+                }
+                // Web parity: the net line only renders when the window saw income
+                // (what-if-card.tsx gates on avgIncome > 0) — a zero-income window
+                // would otherwise show a misleading all-spend "net".
+                if b.avgIncome > 0 {
+                    let netBefore = b.avgIncome - b.avgSpend
+                    Text("Net: \(store.displayMoneyBase(netBefore)) → \(store.displayMoneyBase(netBefore + monthlySave))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Drag a slider to try a cut.").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ c: Selectors.WhatIfBaseline.Category) -> some View {
+        let pct = cuts[c.categoryId] ?? 0
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(store.categoryName(c.categoryId) ?? c.categoryId)
+                Spacer()
+                Text("avg \(store.displayMoneyBase(c.avgMonthly))/mo").font(.caption).foregroundStyle(.secondary)
+            }
+            Slider(value: Binding(get: { cuts[c.categoryId] ?? 0 },
+                                  set: { cuts[c.categoryId] = $0 }),
+                   in: 0...100, step: 5)
+                .accessibilityLabel("Cut \(store.categoryName(c.categoryId) ?? c.categoryId)")
+                .accessibilityValue("\(Int(pct)) percent")
+            if pct > 0 {
+                Text("cut \(Int(pct))% → saves ~\(store.displayMoneyBase(c.avgMonthly * pct / 100))/mo")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
