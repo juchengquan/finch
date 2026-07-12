@@ -33,6 +33,18 @@ public final class FinchStore: ObservableObject {
     /// UserDefaults key for the last-active ledger — a per-device viewing
     /// preference (not ledger data), restored in `bootstrap()`.
     static let activeLedgerKey = "finch.activeLedgerId"
+    /// Privacy mode — a per-device viewing preference that masks every rendered
+    /// amount (web parity: #416). Mirrors the web's localStorage key name; lives
+    /// in UserDefaults only — never the DB, never `.finch` exports.
+    static let privacyKey = "finch.privacy"
+    /// What every masked amount renders as (web's MONEY_MASK).
+    public static let moneyMask = "••••"
+    @Published public var privacyMode: Bool = UserDefaults.standard.bool(forKey: FinchStore.privacyKey) {
+        didSet {
+            guard oldValue != privacyMode else { return }
+            UserDefaults.standard.set(privacyMode, forKey: FinchStore.privacyKey)
+        }
+    }
     @Published public var activeLedgerId: String = "" {
         didSet {
             guard oldValue != activeLedgerId else { return }
