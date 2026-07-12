@@ -22,7 +22,6 @@ struct ScheduledTab: View {
     private var detected: [RecurringCharge] {
         Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today, store.scheduled).filter { !$0.isScheduled }
     }
-    private var detectedMonthly: Double { detected.reduce(0) { $0 + $1.monthlyEstimate } }
 
     /// True while the user has typed a non-empty search.
     private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }

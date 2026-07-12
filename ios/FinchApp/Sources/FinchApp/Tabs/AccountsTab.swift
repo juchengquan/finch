@@ -61,7 +61,7 @@ struct AccountsTab: View {
                     } else {
                         Button { showingAdd = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("Add Account")
-                            .disabled(store.ledgers.isEmpty)   // an account needs a ledger (matches Budgets/Scheduled gating)
+                            .disabled(store.ledgers.isEmpty)   // an account needs a ledger (each tab's + gates on its own prerequisite: Budgets→ledger, Scheduled→account)
                     }
                     #else
                     Button { showingAdd = true } label: { Image(systemName: "plus") }
