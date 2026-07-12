@@ -1,7 +1,7 @@
 # iOS/macOS handoff & sync-up
 
-**Date:** 2026-06-25 (status refreshed 2026-07-11)
-**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `3eb9257` (#423 merged). **All original web→iOS parity gaps (Tier-1/2/3) are closed; the "deepen widgets" sub-project, macOS-parity Phases 1–4, and the full Watch sub-project (CP1 transport/glance · CP2 complication · CP3 on-wrist quick-add) are also complete.** Two *new* web-side features have since opened fresh parity gaps — see "Remaining web→iOS parity gaps".
+**Date:** 2026-06-25 (status refreshed 2026-07-12)
+**Branch context:** all work targets `feat/frontend`. Snapshot taken @ `4a69bef` (#431 merged). **Web→iOS parity is complete again as of this snapshot** — the original Tier-1/2/3 inventory closed at #355/#358, and the two later web-side gaps (privacy mode, what-if sliders) closed at #427/#431. The "deepen widgets" sub-project, macOS-parity Phases 1–4, and the full Watch sub-project are also complete.
 **Purpose:** one page to sync between work sessions — what shipped, what's left, how we work, and how to avoid collisions. Pairs with the verified [parity-gap inventory](2026-06-25-ios-web-parity-gap-inventory.md) (the source of truth for web↔iOS gaps).
 
 ## How we work (conventions)
@@ -41,16 +41,17 @@
   - *This session:* **Insights Ring/StackedBar wiring** — savings-rate ring + net-worth-by-type allocation bar (spec #404, plan #405, impl #406, subagent-driven); Watch CP1 spec/plan (#408/#410, implemented by the other session in #412).
   - *Other session:* macOS ↵-open on Scheduled/Activity (#403) · feed date de-dup (#407) · backlog-reconcile doc (#409) · **what-if sliders** — interactive category-cut hypotheticals on Insights (#411) · **Watch CP1 bundle** — WCSession transport + live glance, widget account pre-fill, advice CP2, top-merchants card (#412) · **iPad multi-column** — Ledger in the 3-column shell (#414, spec/plan `2026-07-07-ipad-multicolumn-*`) · **Watch CP2** complication (#415, spec/plan #413) · **privacy mode** — one-tap mask for every rendered amount (#416, **web-side** — new iOS parity gap, see above) · **monthly-report PDF + Settings CSV export + Watch quick-add templates** (#417) · **Watch CP3 composer** — crown quick-add from a snapshot-borne catalog (#419, spec/plan #418). **The Watch sub-project is complete.** (What-if sliders #411 are also **web-side** — the other new parity gap.)
 - **Since #419 → #423** (this session): full **UI-consistency audit** — visual sweep of every page (simulator screenshots) + code scan. Fix batch 1 (#422): Settings tab had no nav chrome and grayed/disabled rows (`MoreTabNavigationStack` was a compact no-op after the #400 swap — replaced with a real `NavigationStack`, dead More-tab files deleted), Insights Recent-expenses display-currency bug, dead Ledger titles + origin-dependent FAB. Polish batch 2 (#423): Budgets rows chevron-free like Accounts, shared `AccountTypeColor` (Accounts rows ↔ Insights allocation bar), unified `+` disabled-gating, `EmptyState` description param adopted by Budgets/Scheduled + system search-empty, pinned Activity-feed search. Plus handoff refresh #420.
+- **Since #423 → #431** (this session): **both remaining parity gaps closed** — **privacy mode** (#427, spec/plan #425/#426, subagent-driven; final review folded in masking-inheritance doc + VoiceOver value) and **what-if sliders** (#431, spec/plan #429/#430, subagent-driven; final review caught + fixed the web's `avgIncome > 0` Net-line guard the spec missed). Also: audit round 2 confirmed #422/#423 hold and privacy is leak-free (exactly 1 intentional `Money.format` view site); micro-cleanup #428 (gating comment + dead `detectedMonthly`); handoff parity-gap record #424. *Known deferrals:* `ActivityFeedView`'s dead `headerSection`/`navTitle`/`collapseActionsIntoMenu`/`menuExtras` params (+ unreachable empty branch) — ~40-line refactor; palette "Toggle Privacy Mode" vs macOS "Hide Amounts" wording.
 - Docs/infra: parity inventory (#303, refreshed #343) + backlog reconcile (#313, re-reconciled #409) + this handoff (#315/#324/#388/#402/#420); CI cache+skip (#276/#278).
 
 ## Remaining web→iOS parity gaps
 
-**All Tier-1/2/3 gaps from the original inventory are closed** (the guided reconcile session, the last one, shipped in #355/#358). But the web app kept moving — two features shipped web-side **after** the inventory closed and have no iOS counterpart (verified `frontend/`-only diffs):
+**None as of this snapshot.** The original Tier-1/2/3 inventory closed at #355/#358; the two web-side features that later re-opened gaps are now both ported:
 
-| New gap | Web PR | What it is | Size (iOS port) |
-|---|---|---|---|
-| **What-if sliders** | #411 | Interactive category-cut hypotheticals on Insights (`what-if-card.tsx` + `select.ts` selectors, FEATURE_IDEAS §3.3) | M — port the selector math into `FinchCore.Selectors` + an Insights card with sliders |
-| **Privacy mode** | #416 | One-tap mask for every rendered amount (web wraps `use-money.ts`; eye toggle in the command palette/header) | M — iOS has no central mask hook; amounts flow through `store.displayMoney`/`displayMoneyBase` (audited in #422 — `Money.format` stragglers were fixed or are native-currency-intentional), so wrapping those two + a toggle covers most surfaces |
+| Former gap | Web PR | iOS port |
+|---|---|---|
+| **Privacy mode** (one-tap `••••` mask for every rendered amount) | #416 | ✅ #427 (spec/plan #425/#426) — `FinchStore.privacyMode` (UserDefaults `finch.privacy`, same key as web) gates `displayMoneyBase`/`displayMoney(forLedger:)` + `displayNative`; eye toggle on all 5 tabs, ⌘K palette entry, macOS ⌘⇧H |
+| **What-if sliders** (category-cut hypotheticals on Insights) | #411 | ✅ #431 (spec/plan #429/#430) — `Selectors.whatIfBaseline` exact port (web's 4 tests translated) + `WhatIfCard` after the savings-rate ring (5%-step sliders, savings summary, Net line gated on `avgIncome > 0` per web) |
 
 Watch the web repo for further drift when refreshing this doc — "parity complete" is a statement about a snapshot, not a steady state.
 
@@ -92,7 +93,7 @@ Tracked here + in the inventory. Status as of this snapshot:
 
 ## Collision avoidance
 
-- 0 open PRs at this snapshot (@`3eb9257`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
+- 0 open PRs at this snapshot (@`4a69bef`). Both sessions push frequently — **`git fetch` + re-read the inventory/this doc before picking**, and check `gh pr list --base feat/frontend --state open` (inspect the PR's *files*, not just the title).
 - **All parity is done — only the iOS-original backlog remains, so coordinate per-feature.** Recent division of labour:
   - *Other session:* Insights/charts + Settings/theme/i18n + notifications (through #350); **macOS parity Phases 1–4 (#396–#401, #403)**, two-layer Ledger (#394), demo/net-worth tweaks (#390–#393); recently **the whole Watch implementation (#412/#415/#417/#419)**, what-if sliders (#411), iPad multi-column (#414), privacy mode (#416), PDF/CSV export (#417), feed de-dup (#407).
   - *This session:* accounts/reconcile (#329, #355/#358), budgets per-account (#337), saved searches (#333), opening-balance (#347/#389), **widgets sub-project CP1/2/3 (#364/#369/#374)** + the `finch://` scheme, Ledger/Scheduled UI cleanup (#379/#380/#384/#385), title spacing (#392), ledger-delete confirm (#395), **Settings ↔ Ledger nav swap (#398/#400)**, **Insights Ring/StackedBar wiring (#404–#406)**, **Watch CP1 spec/plan (#408/#410)**.
