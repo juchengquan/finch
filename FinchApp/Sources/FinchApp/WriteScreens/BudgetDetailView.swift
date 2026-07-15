@@ -24,6 +24,7 @@ struct BudgetDetailView: View {
                 let p = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
                 List {
                     Section { progress(budget, p) }
+                    historySection(budget)
                     if budget.type == "income" {
                         Section("Goal") {
                             LabeledContent("Saved", value: store.displayMoneyBase(budget.saved))
@@ -107,6 +108,40 @@ struct BudgetDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Spent-vs-budget bars across the trailing cycles (hidden for one-shots and
+    /// when there's under 2 cycles of history — one bar answers nothing).
+    @ViewBuilder private func historySection(_ b: BudgetRow) -> some View {
+        let pts = Selectors.budgetCycleHistory(b, store.txns, store.today, store.categoryNodes)
+        if pts.count >= 2 {
+            Section("History") {
+                BarChart(data: pts.map { p in
+                    BarChart.DataPoint(label: cycleLabel(p.from, b.frequency),
+                                       value: p.used,
+                                       color: (p.over ? Color.red : Color.green)
+                                           .opacity(p.isCurrent ? 0.45 : 1))
+                }, xLabel: "Cycle", yLabel: "Spent", referenceLine: b.amount)
+                .frame(height: 140)
+                Text("Last \(pts.count) cycles · budget \(store.displayMoneyBase(b.amount))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Short x-axis label for a cycle start: month name for monthly, month + year
+    /// for quarterly/yearly (labels must be UNIQUE across the ~6 windows — Swift
+    /// Charts treats equal categorical labels as one x-band and stacks the bars),
+    /// M/d for day-grained frequencies.
+    private func cycleLabel(_ from: String, _ frequency: String) -> String {
+        let parts = from.split(separator: "-")
+        guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]), (1...12).contains(m) else { return from }
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        switch frequency {
+        case "daily", "weekly", "biweekly": return "\(m)/\(d)"
+        case "quarterly", "yearly": return "\(months[m - 1]) '\(parts[0].suffix(2))"   // e.g. "Jan '26" — year disambiguates repeats
+        default: return months[m - 1]   // monthly — 6 consecutive months never repeat
         }
     }
 
