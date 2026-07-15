@@ -203,6 +203,7 @@ struct SplitViewShell: View {
     @State private var accountSelection: String?
     @State private var budgetSelection: String?
     @State private var ledgerSelection: String?
+    @State private var txSelection: String?
 
     var body: some View {
         Group {
@@ -239,6 +240,17 @@ struct SplitViewShell: View {
                         DetailPlaceholder(systemImage: "books.vertical", label: "Select a ledger")
                     }
                 }
+            case .activity:
+                ThreeColumnShell {
+                    ActivityFeedView(consumesPendingFilter: true, selection: $txSelection)
+                } detail: {
+                    // Guard against a stale selection (deleted tx / ledger switch).
+                    if let id = txSelection, store.txns.contains(where: { $0.id == id }) {
+                        NavigationStack { TransactionDetailView(txId: id) }
+                    } else {
+                        DetailPlaceholder(systemImage: "list.bullet", label: "Select a transaction")
+                    }
+                }
             default:
                 PersistedSplitVisibility(columns: .two) { $visibility in
                     NavigationSplitView(columnVisibility: $visibility) {
@@ -256,6 +268,23 @@ struct SplitViewShell: View {
         .onChange(of: store.activeLedgerId) { _, _ in
             accountSelection = nil
             budgetSelection = nil
+            txSelection = nil
+        }
+        // A `tx:` deep link (Spotlight / notification) on regular width: select
+        // the transaction in the Activity detail column (compact shows the edit
+        // sheet instead — see TabBarShell.focusedTx).
+        .onChange(of: router.focusedId) { _, id in
+            guard router.selectedTab == .activity, let id,
+                  store.txns.contains(where: { $0.id == id }) else { return }
+            txSelection = id
+            router.focusedId = nil
+        }
+        .onAppear {
+            if router.selectedTab == .activity, let id = router.focusedId,
+               store.txns.contains(where: { $0.id == id }) {
+                txSelection = id
+                router.focusedId = nil
+            }
         }
     }
 }
