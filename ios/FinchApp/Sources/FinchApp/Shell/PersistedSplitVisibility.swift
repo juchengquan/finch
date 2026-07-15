@@ -46,16 +46,40 @@ enum SplitVisibilityMapping {
 /// macOS windows are effectively always landscape, so Mac toggles persist
 /// naturally through the same path.
 struct PersistedSplitVisibility<Content: View>: View {
+    static var storageKey: String { "finch.sidebarCollapsed" }
+
     let columns: SplitColumns
     @ViewBuilder var content: (Binding<NavigationSplitViewVisibility>) -> Content
 
-    @AppStorage("finch.sidebarCollapsed") private var sidebarCollapsed = false
-    @State private var visibility: NavigationSplitViewVisibility = .automatic
+    @AppStorage(PersistedSplitVisibility.storageKey) private var sidebarCollapsed = false
+    @State private var visibility: NavigationSplitViewVisibility
     @State private var isLandscape = true
+
+    /// Seeds `visibility` at construction time rather than in `.onAppear`.
+    /// `NavigationSplitView` reads `columnVisibility` at first layout, before
+    /// `.onAppear` fires — for the 3-column/`.balanced` shell specifically,
+    /// a value assigned in `.onAppear` arrives one runloop tick too late and
+    /// the split view has already committed to its default (`.all`) layout,
+    /// so `.doubleColumn` never visually takes. Setting the initial `@State`
+    /// value here (via `_visibility = State(initialValue:)`) makes the
+    /// collapsed value available for that very first layout pass.
+    /// `@AppStorage`/`UserDefaults.standard` can't be read through the
+    /// property-wrapper (`sidebarCollapsed`) this early, so this reads
+    /// `UserDefaults.standard` directly with the same key.
+    init(columns: SplitColumns, @ViewBuilder content: @escaping (Binding<NavigationSplitViewVisibility>) -> Content) {
+        self.columns = columns
+        self.content = content
+        let collapsed = UserDefaults.standard.bool(forKey: Self.storageKey)
+        _visibility = State(initialValue: SplitVisibilityMapping.visibility(collapsed: collapsed, columns: columns))
+    }
 
     var body: some View {
         content($visibility)
             .onAppear {
+                // Harmless re-assert: `visibility` is already seeded correctly
+                // by `init`. Kept so a change to `sidebarCollapsed` made
+                // between `init` and `.onAppear` (e.g. by another split view
+                // sharing the same key) is still picked up.
                 visibility = SplitVisibilityMapping.visibility(collapsed: sidebarCollapsed, columns: columns)
             }
             .onChange(of: visibility) { _, v in
