@@ -130,15 +130,18 @@ struct BudgetDetailView: View {
         }
     }
 
-    /// Short x-axis label for a cycle start: month name for month-grained
-    /// frequencies, M/d for day-grained ones.
+    /// Short x-axis label for a cycle start: month name for monthly, month + year
+    /// for quarterly/yearly (labels must be UNIQUE across the ~6 windows — Swift
+    /// Charts treats equal categorical labels as one x-band and stacks the bars),
+    /// M/d for day-grained frequencies.
     private func cycleLabel(_ from: String, _ frequency: String) -> String {
         let parts = from.split(separator: "-")
         guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]), (1...12).contains(m) else { return from }
         let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         switch frequency {
         case "daily", "weekly", "biweekly": return "\(m)/\(d)"
-        default: return months[m - 1]   // monthly / quarterly / yearly
+        case "quarterly", "yearly": return "\(months[m - 1]) '\(parts[0].suffix(2))"   // e.g. "Jan '26" — year disambiguates repeats
+        default: return months[m - 1]   // monthly — 6 consecutive months never repeat
         }
     }
 
