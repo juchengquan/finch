@@ -15,6 +15,10 @@ struct AddTransactionSheet: View {
     /// Optionally pre-select the account (e.g. when added from an account's
     /// detail screen). Falls back to the first account when nil.
     var defaultAccountId: String? = nil
+    /// Optionally pre-select the category (e.g. when added from a budget's
+    /// detail screen). Falls back to the first category when nil or not in the
+    /// current kind's category list.
+    var defaultCategoryId: String? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer, refund, adjust
@@ -341,7 +345,8 @@ struct AddTransactionSheet: View {
             accountId = preferred ?? accounts.first?.id ?? ""
         }
         if categoryId.isEmpty || !categories.contains(where: { $0.id == categoryId }) {
-            categoryId = categories.first?.id ?? ""
+            let preferred = defaultCategoryId.flatMap { id in categories.first { $0.id == id }?.id }
+            categoryId = preferred ?? categories.first?.id ?? ""
         }
         if fromAccountId.isEmpty { fromAccountId = accounts.first?.id ?? "" }
         if toAccountId.isEmpty { toAccountId = accounts.dropFirst().first?.id ?? accounts.first?.id ?? "" }
