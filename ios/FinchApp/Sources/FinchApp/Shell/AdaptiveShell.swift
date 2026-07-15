@@ -240,12 +240,14 @@ struct SplitViewShell: View {
                     }
                 }
             default:
-                NavigationSplitView {
-                    SectionSidebar()
-                } detail: {
-                    tabContent(router.selectedTab)
+                PersistedSplitVisibility(columns: .two) { $visibility in
+                    NavigationSplitView(columnVisibility: $visibility) {
+                        SectionSidebar()
+                    } detail: {
+                        tabContent(router.selectedTab)
+                    }
+                    .navigationSplitViewStyle(.balanced)
                 }
-                .navigationSplitViewStyle(.balanced)
             }
         }
         // A ledger switch invalidates the per-tab selections. (`ledgerSelection`
