@@ -14,6 +14,8 @@ struct BudgetDetailView: View {
     @State private var showingEdit = false
     @State private var showingContribute = false
     @State private var confirmingDelete = false
+    @State private var showingAddTx = false   // budget-aware add (pre-filled category/account)
+    @State private var editing: Tx?           // tapped cycle transaction → edit sheet
     @State private var errorMessage: String?
 
     private var budget: BudgetRow? { store.budgets.first { $0.id == budgetId } }
@@ -43,6 +45,14 @@ struct BudgetDetailView: View {
                 .navigationTitle(budget.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    // Budget-aware add: the sheet opens pre-filled with this
+                    // budget's category (and account, when the budget is
+                    // account-filtered), so the transaction lands in this budget.
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showingAddTx = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Add Transaction")
+                            .disabled(store.accounts.isEmpty)
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
@@ -52,6 +62,11 @@ struct BudgetDetailView: View {
                 }
                 .sheet(isPresented: $showingEdit) { BudgetSheet(budget: budget) }
                 .sheet(isPresented: $showingContribute) { ContributeSheet(budgetId: budget.id) }
+                .sheet(isPresented: $showingAddTx) {
+                    AddTransactionSheet(defaultAccountId: budget.accountIds.first,
+                                        defaultCategoryId: budget.categoryIds.first)
+                }
+                .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .confirmationDialog("Delete this budget?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(budget) }
                 }
@@ -98,14 +113,20 @@ struct BudgetDetailView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 ForEach(txns, id: \.id) { t in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(t.merchant).lineLimit(1)
-                            Text(t.date).font(.caption).foregroundStyle(.secondary)
+                    // Tap opens the editor — same behavior as the account
+                    // detail's transaction rows.
+                    Button { editing = t } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.merchant).lineLimit(1)
+                                Text(t.date).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(store.displayMoneyBase(t.amount))
                         }
-                        Spacer()
-                        Text(store.displayMoneyBase(t.amount))
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
