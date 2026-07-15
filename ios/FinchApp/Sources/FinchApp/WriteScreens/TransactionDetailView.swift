@@ -48,9 +48,10 @@ struct TransactionDetailView: View {
                     .foregroundStyle(t.amount < 0 ? .red : .green)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(t.merchant).font(.headline)
-                    Text(store.displayMoney(t.amount, from: t.currency))
+                    // t.amount is already ledger-base (t.currency is the tx's NATIVE currency — displayMoney(from:) would double-convert)
+                    Text(store.displayMoneyBase(t.amount))
                         .font(.title3).fontWeight(.semibold)
-                        .foregroundStyle(t.amount < 0 ? .primary : Color.green)
+                        .foregroundStyle(.primary)
                 }
             }
         }

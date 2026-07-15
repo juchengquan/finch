@@ -306,6 +306,10 @@ struct ActivityFeedView: View {
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
     /// this tab — open that transaction.
     private func consumeFocus() {
+        // In three-column selection mode, SplitViewShell owns deep-link
+        // consumption (routes focusedId into txSelection instead) — bail so we
+        // don't double-consume the same id via this sheet-based path.
+        guard selection == nil else { return }
         guard let id = router.focusedId, let tx = store.txns.first(where: { $0.id == id }) else { return }
         editing = tx
         router.focusedId = nil
