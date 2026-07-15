@@ -53,7 +53,13 @@ struct PersistedSplitVisibility<Content: View>: View {
 
     @AppStorage(PersistedSplitVisibility.storageKey) private var sidebarCollapsed = false
     @State private var visibility: NavigationSplitViewVisibility
-    @State private var isLandscape = true
+    /// Pessimistic default: nothing is recorded until geometry PROVES landscape.
+    /// Starting `true` would open a cold-launch-in-portrait race where the
+    /// system's auto-collapse gets recorded before the GeometryReader corrects
+    /// the flag — the exact #414 trap this type exists to prevent. (Also note:
+    /// a macOS window dragged taller than wide counts as portrait here, so
+    /// toggles made in a tall window intentionally don't persist.)
+    @State private var isLandscape = false
 
     /// Seeds `visibility` at construction time rather than in `.onAppear`.
     /// `NavigationSplitView` reads `columnVisibility` at first layout, before
