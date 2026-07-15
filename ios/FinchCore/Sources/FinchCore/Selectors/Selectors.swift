@@ -253,7 +253,7 @@ public enum Selectors {
     static func addDays(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: d)! }
     // Foundation's month-add clamps the day to the target month (Jan 31 +1mo → Feb 28), matching JS addMonths.
     private static func addMonths(_ d: Date, _ n: Int) -> Date { cal.date(byAdding: .month, value: n, to: d)! }
-    private static func advance(_ d: Date, _ frequency: String) -> Date {
+    static func advance(_ d: Date, _ frequency: String) -> Date {
         switch frequency {
         case "daily": return addDays(d, 1)
         case "weekly": return addDays(d, 7)
@@ -305,6 +305,23 @@ public enum Selectors {
         return 0
     }
 
+    /// Sum of budget-matched activity in [from, to] — the accumulation shared by
+    /// budgetProgress (current cycle) and budgetCycleHistory (each past cycle).
+    static func usedInWindow(_ budget: BudgetRow, _ txns: [Tx], _ matchSet: Set<String>,
+                             _ accountSet: Set<String>?, from: String, to: String) -> Double {
+        var used = 0.0
+        for t in txns {
+            if ledgerOf(t) != budget.ledgerId { continue }
+            if (t.pending ?? false) || kindOf(t) == "transfer" || kindOf(t) == "adjustment" { continue }
+            if t.date < from || t.date > to { continue }
+            if let accountSet, !accountSet.contains(t.account) { continue }
+            let amt = matchedAmount(t, matchSet)
+            if budget.type == "expense" { if amt < 0 { used += -amt } }
+            else if amt > 0 { used += amt }
+        }
+        return used
+    }
+
     public static func budgetProgress(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
                                       _ categories: [CategoryNode] = []) -> BudgetProgress {
         let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
@@ -316,15 +333,7 @@ public enum Selectors {
         if oneShotIncome {
             used = budget.saved
         } else {
-            for t in txns {
-                if ledgerOf(t) != budget.ledgerId { continue }
-                if (t.pending ?? false) || kindOf(t) == "transfer" || kindOf(t) == "adjustment" { continue }
-                if t.date < win.from || t.date > win.to { continue }
-                if let accountSet, !accountSet.contains(t.account) { continue }
-                let amt = matchedAmount(t, matchSet)
-                if budget.type == "expense" { if amt < 0 { used += -amt } }
-                else if amt > 0 { used += amt }
-            }
+            used = usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
         }
         let base = r2(budget.amount + (budget.type == "expense" ? budget.carryForward : 0))
         used = r2(used)
