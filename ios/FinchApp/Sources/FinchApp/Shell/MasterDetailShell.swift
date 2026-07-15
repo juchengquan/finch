@@ -53,18 +53,20 @@ struct ThreeColumnShell<ListColumn: View, DetailColumn: View>: View {
     @ViewBuilder var list: () -> ListColumn
     @ViewBuilder var detail: () -> DetailColumn
     var body: some View {
-        NavigationSplitView {
-            SectionSidebar()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
-        } content: {
-            // Keep the list a readable, list-like width — without this,
-            // `.balanced` gives the middle column ~half the content area on iPad.
-            list()
-                .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
-        } detail: {
-            detail()
+        PersistedSplitVisibility(columns: .three) { $visibility in
+            NavigationSplitView(columnVisibility: $visibility) {
+                SectionSidebar()
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+            } content: {
+                // Keep the list a readable, list-like width — without this,
+                // `.balanced` gives the middle column ~half the content area on iPad.
+                list()
+                    .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 420)
+            } detail: {
+                detail()
+            }
+            .navigationSplitViewStyle(.balanced)
         }
-        .navigationSplitViewStyle(.balanced)
     }
 }
 
