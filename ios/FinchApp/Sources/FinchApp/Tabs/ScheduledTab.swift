@@ -16,6 +16,10 @@ struct ScheduledTab: View {
     @State private var addFromCharge: RecurringCharge?
     @State private var searchQuery = ""                // filters the list view by name
     @State private var kbSel: String?            // macOS keyboard-open selection
+    /// Non-nil → three-column selection mode (rows/occurrences select and the
+    /// shell renders the detail column); nil → taps open the edit sheet. Same
+    /// convention as AccountsTab/BudgetsTab/ActivityFeedView (#414/#23).
+    var selection: Binding<String?>? = nil
     // Calendar first (default); List second.
     private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
 
@@ -56,9 +60,11 @@ struct ScheduledTab: View {
                         }
                         .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
                         if mode == .list {
-                            List(selection: $kbSel) {
+                            List(selection: selection ?? $kbSel) {
                                 ForEach(filteredScheduled, id: \.id) { t in
-                                    Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
+                                    Button {
+                                        if let selection { selection.wrappedValue = t.id } else { editing = t }
+                                    } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
                                         .swipeActions(edge: .trailing) {
                                             Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
@@ -108,12 +114,19 @@ struct ScheduledTab: View {
                             }
                             #if os(macOS)
                             .onKeyPress(.return) {
-                                if let id = kbSel, let t = filteredScheduled.first(where: { $0.id == id }) { editing = t; return .handled }
+                                // In three-column selection mode the selection already
+                                // drives the detail column — ↵ falls through.
+                                if selection == nil, let id = kbSel, let t = filteredScheduled.first(where: { $0.id == id }) { editing = t; return .handled }
                                 return .ignored
                             }
                             #endif
                         } else {
-                            ScheduledCalendarView(templates: filteredScheduled, onEdit: { editing = $0 },
+                            // In selection mode a calendar tap selects the occurrence's
+                            // template in the detail column instead of opening the sheet.
+                            ScheduledCalendarView(templates: filteredScheduled,
+                                                  onEdit: { t in
+                                                      if let selection { selection.wrappedValue = t.id } else { editing = t }
+                                                  },
                                                   onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true })
                         }
                     }
