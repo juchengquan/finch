@@ -41,19 +41,7 @@ struct ActivityFeedView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// Optional header shown above the feed (the Ledger tab's summary) + a
-    /// configurable nav title — so the feed can be a tab, not only a pushed view.
-    var navTitle: String = "Activity"
-    var headerSection: AnyView? = nil
     var consumesPendingFilter: Bool = false
-    /// When true, the feed's own actions (select / filter / sort / add) collapse
-    /// into a single top-right overflow menu instead of separate nav-bar buttons
-    /// — used by the Ledger tab, which already carries other chrome up top. The
-    /// dedicated Activity tab keeps them as direct buttons.
-    var collapseActionsIntoMenu: Bool = false
-    /// Extra items appended to that overflow menu (e.g. the Ledger tab's "Manage
-    /// ledgers"), so a host can fold its own actions into the same menu.
-    var menuExtras: AnyView? = nil
     /// Non-nil → three-column selection mode (rows select and the shell renders
     /// the detail column); nil → rows open the edit sheet. Same convention as
     /// `AccountsTab`/`BudgetsTab`/`LedgerListView` (#414/#23).
@@ -89,21 +77,16 @@ struct ActivityFeedView: View {
 
     var body: some View {
         Group {
-            if store.txns.isEmpty && headerSection == nil {
+            if store.txns.isEmpty {
                 EmptyState(tab: .activity)
             } else {
                 List(selection: selection ?? $kbSel) {
-                    if let headerSection { headerSection }
                     savedSearchRow
-                    if store.txns.isEmpty {
-                        Section { Text("No transactions in this ledger yet.").foregroundStyle(.secondary) }
-                    } else {
-                        Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-                            .listRowBackground(Color.clear)
-                    }
-                    if !store.txns.isEmpty, sections.isEmpty {
+                    Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+                        .listRowBackground(Color.clear)
+                    if sections.isEmpty {
                         ContentUnavailableView {
                             Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
                         } description: {
@@ -151,7 +134,7 @@ struct ActivityFeedView: View {
         #else
         .searchable(text: $searchQuery, prompt: "Search transactions")
         #endif
-        .navigationTitle(LocalizedStringKey(navTitle))
+        .navigationTitle("Activity")
         .errorAlert($errorMessage)
         .quickLookPreview($previewURL)
         // Leave selection mode behind when the feed is popped/dismissed so the
@@ -160,65 +143,33 @@ struct ActivityFeedView: View {
         .toolbar {
             // Trailing: Select (multi-select for bulk-recategorize). The add `+`
             // only appears on regular width — compact has the floating FAB, so a
-            // nav-bar `+` would be redundant. This also frees the leading slot for
-            // the gear (Ledger tab) / back button.
-            if collapseActionsIntoMenu {
-                // Ledger tab: fold the actions into the native ⋯ overflow via
-                // .secondaryAction (same style as the Accounts tab) — no Sort here
-                // (the home feed stays newest-first). While selecting, surface a
-                // direct Done so exiting is one tap.
-                if isSelecting {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Done") { isSelecting = false; selected.removeAll() }
-                    }
-                } else {
-                    ToolbarItem(placement: .secondaryAction) {
-                        Button { isSelecting = true; selected.removeAll() } label: { Label("Select", systemImage: "checklist") }
-                            .disabled(store.txns.isEmpty)
-                    }
-                    ToolbarItem(placement: .secondaryAction) {
-                        Button { showingFilter = true } label: {
-                            Label("Filter", systemImage: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        }
-                    }
-                    if sizeClass != .compact {
-                        ToolbarItem(placement: .secondaryAction) {
-                            Button { showingAdd = true } label: { Label("Add Transaction", systemImage: "plus") }
-                                .disabled(store.accounts.isEmpty)
-                        }
-                    }
-                    if let menuExtras {
-                        ToolbarItem(placement: .secondaryAction) { menuExtras }
-                    }
+            // nav-bar `+` would be redundant.
+            ToolbarItem(placement: .primaryAction) {
+                Button(isSelecting ? "Done" : "Select") {
+                    isSelecting.toggle(); selected.removeAll()
+                }.disabled(store.txns.isEmpty)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingFilter = true } label: {
+                    Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
-            } else {
+                .accessibilityLabel("Filter")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("Sort", selection: $sort) {
+                        ForEach(TxSort.allCases) { Text($0.label).tag($0) }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort")
+            }
+            if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(isSelecting ? "Done" : "Select") {
-                        isSelecting.toggle(); selected.removeAll()
-                    }.disabled(store.txns.isEmpty)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingFilter = true } label: {
-                        Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                    }
-                    .accessibilityLabel("Filter")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Picker("Sort", selection: $sort) {
-                            ForEach(TxSort.allCases) { Text($0.label).tag($0) }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                    }
-                    .accessibilityLabel("Sort")
-                }
-                if sizeClass != .compact {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { showingAdd = true } label: { Image(systemName: "plus") }
-                            .accessibilityLabel("Add Transaction")
-                            .disabled(store.accounts.isEmpty)
-                    }
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add Transaction")
+                        .disabled(store.accounts.isEmpty)
                 }
             }
             if isSelecting {
