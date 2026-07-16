@@ -16,6 +16,10 @@ struct ScheduledTab: View {
     @State private var addFromCharge: RecurringCharge?
     @State private var searchQuery = ""                // filters the list view by name
     @State private var kbSel: String?            // macOS keyboard-open selection
+    /// Non-nil → three-column selection mode (rows/occurrences select and the
+    /// shell renders the detail column); nil → taps open the edit sheet. Same
+    /// convention as AccountsTab/BudgetsTab/ActivityFeedView (#414/#23).
+    var selection: Binding<String?>? = nil
     // Calendar first (default); List second.
     private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
 
@@ -56,9 +60,11 @@ struct ScheduledTab: View {
                         }
                         .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
                         if mode == .list {
-                            List(selection: $kbSel) {
+                            List(selection: selection ?? $kbSel) {
                                 ForEach(filteredScheduled, id: \.id) { t in
-                                    Button { editing = t } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
+                                    Button {
+                                        if let selection { selection.wrappedValue = t.id } else { editing = t }
+                                    } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
                                         .swipeActions(edge: .trailing) {
                                             Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
@@ -108,12 +114,19 @@ struct ScheduledTab: View {
                             }
                             #if os(macOS)
                             .onKeyPress(.return) {
-                                if let id = kbSel, let t = filteredScheduled.first(where: { $0.id == id }) { editing = t; return .handled }
+                                // In three-column selection mode the selection already
+                                // drives the detail column — ↵ falls through.
+                                if selection == nil, let id = kbSel, let t = filteredScheduled.first(where: { $0.id == id }) { editing = t; return .handled }
                                 return .ignored
                             }
                             #endif
                         } else {
-                            ScheduledCalendarView(templates: filteredScheduled, onEdit: { editing = $0 },
+                            // In selection mode a calendar tap selects the occurrence's
+                            // template in the detail column instead of opening the sheet.
+                            ScheduledCalendarView(templates: filteredScheduled,
+                                                  onEdit: { t in
+                                                      if let selection { selection.wrappedValue = t.id } else { editing = t }
+                                                  },
                                                   onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true })
                         }
                     }
@@ -164,22 +177,7 @@ struct ScheduledRow: View {
     private var accountCurrency: String {
         store.accounts.first { $0.id == template.accountId }?.currency ?? store.displayCurrency
     }
-    /// next_run is never persisted (NULL on insert), so derive the next occurrence
-    /// from the recurrence — keeps every row (seeded or user-created) showing a
-    /// real date. Horizon of ~13 months covers yearly templates.
-    private var nextRunDisplay: String {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let today = store.today
-        let base = cal.date(from: DateComponents(
-            year: Int(today.prefix(4)), month: Int(today.dropFirst(5).prefix(2)),
-            day: Int(today.dropFirst(8).prefix(2)))) ?? Date()
-        let h = cal.dateComponents([.year, .month, .day],
-                                   from: cal.date(byAdding: .day, value: 400, to: base) ?? base)
-        let horizon = String(format: "%04d-%02d-%02d", h.year ?? 0, h.month ?? 1, h.day ?? 1)
-        return Selectors.occurrencesInRange([template], from: today, through: horizon).first?.date
-            ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
-    }
+    private var nextRunDisplay: String { scheduledNextRun(template, today: store.today) }
 
     var body: some View {
         HStack {
@@ -204,4 +202,20 @@ struct ScheduledRow: View {
             }
         }
     }
+}
+
+/// The template's next occurrence date. next_run is never persisted (NULL on
+/// insert), so derive it from the recurrence — a ~400-day horizon covers yearly
+/// templates. Shared by ScheduledRow and ScheduledDetailView.
+func scheduledNextRun(_ template: ScheduledTemplate, today: String) -> String {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let base = cal.date(from: DateComponents(
+        year: Int(today.prefix(4)), month: Int(today.dropFirst(5).prefix(2)),
+        day: Int(today.dropFirst(8).prefix(2)))) ?? Date()
+    let h = cal.dateComponents([.year, .month, .day],
+                               from: cal.date(byAdding: .day, value: 400, to: base) ?? base)
+    let horizon = String(format: "%04d-%02d-%02d", h.year ?? 0, h.month ?? 1, h.day ?? 1)
+    return Selectors.occurrencesInRange([template], from: today, through: horizon).first?.date
+        ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
 }
