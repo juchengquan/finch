@@ -69,11 +69,13 @@ struct ScheduledDetailView: View {
         Section("Schedule") {
             LabeledContent("Frequency", value: t.frequency.capitalized)
             LabeledContent("Next run", value: scheduledNextRun(t, today: store.today))
-            if t.frequency == "monthly" || t.frequency == "yearly" {
+            if t.frequency == "monthly" || t.frequency == "quarterly" || t.frequency == "yearly" {
                 LabeledContent("Day of month", value: "\(t.dayOfMonth)")
             }
             if let wd = t.weekDay {
-                LabeledContent("Weekday", value: Calendar.current.weekdaySymbols[(wd - 1 + 7) % 7])
+                // day_of_week is 0-based Sunday-first (DB schema + Forecast engine
+                // + web all agree) — weekdaySymbols is too, so index directly.
+                LabeledContent("Weekday", value: Calendar.current.weekdaySymbols[((wd % 7) + 7) % 7])
             }
             if let start = t.startDate { LabeledContent("Starts", value: String(start.prefix(10))) }
             if let end = t.endDate { LabeledContent("Ends", value: String(end.prefix(10))) }
