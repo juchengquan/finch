@@ -121,13 +121,13 @@ struct ScheduledTab: View {
                             }
                             #endif
                         } else {
-                            // In selection mode a calendar tap selects the occurrence's
-                            // template in the detail column instead of opening the sheet.
+                            // In selection mode a calendar TAP selects the occurrence's
+                            // template in the detail column (onSelect), while the context
+                            // menu's "Edit" keeps opening the editor (onEdit).
                             ScheduledCalendarView(templates: filteredScheduled,
-                                                  onEdit: { t in
-                                                      if let selection { selection.wrappedValue = t.id } else { editing = t }
-                                                  },
-                                                  onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true })
+                                                  onEdit: { editing = $0 },
+                                                  onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true },
+                                                  onSelect: selection.map { sel in { sel.wrappedValue = $0.id } })
                         }
                     }
                     // Search lives outside the Calendar/List toggle, so it's pinned

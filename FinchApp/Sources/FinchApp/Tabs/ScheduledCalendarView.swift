@@ -11,6 +11,9 @@ struct ScheduledCalendarView: View {
     var onEdit: (ScheduledTemplate) -> Void
     var onPost: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
+    /// Non-nil → a row TAP selects the template (iPad three-column mode) while
+    /// the context menu's "Edit" still edits; nil → taps edit (compact behavior).
+    var onSelect: ((ScheduledTemplate) -> Void)? = nil
 
     @State private var monthAnchor: Date = ScheduledCalendarView.firstOfMonth(forISO: nil)
     @State private var selectedDay: String?
@@ -199,9 +202,10 @@ struct ScheduledCalendarView: View {
     private func occurrenceRow(_ t: ScheduledTemplate, date: String, posted: [String: Bool]) -> some View {
         let st = status(t.id, date, posted)
         let acct = store.accounts.first { $0.id == t.accountId }
-        // Tap the row to edit the template (matches the List view); long-press
-        // still offers Edit / Post now. .plain so it reads as a row, not a button.
-        return Button { onEdit(t) } label: {
+        // Tap the row to edit the template (or select it, in three-column mode);
+        // long-press still offers Edit / Post now — Edit always opens the editor.
+        // .plain so it reads as a row, not a button.
+        return Button { (onSelect ?? onEdit)(t) } label: {
             HStack {
                 Circle().fill(Color(hex: t.color ?? "") ?? .accentColor).frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 2) {

@@ -30,7 +30,9 @@ struct RefundSourcePickerView: View {
                                 Text(tx.date).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(store.displayMoney(tx.amount, from: tx.currency ?? store.baseCurrency))
+                            // tx.amount is already ledger-base (tx.currency is the tx's
+                            // NATIVE currency — displayMoney(from:) double-converts FX).
+                            Text(store.displayMoneyBase(tx.amount))
                                 .foregroundStyle(.secondary)
                         }
                     }
