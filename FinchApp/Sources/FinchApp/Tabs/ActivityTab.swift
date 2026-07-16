@@ -54,6 +54,10 @@ struct ActivityFeedView: View {
     /// Extra items appended to that overflow menu (e.g. the Ledger tab's "Manage
     /// ledgers"), so a host can fold its own actions into the same menu.
     var menuExtras: AnyView? = nil
+    /// Non-nil → three-column selection mode (rows select and the shell renders
+    /// the detail column); nil → rows open the edit sheet. Same convention as
+    /// `AccountsTab`/`BudgetsTab`/`LedgerListView` (#414/#23).
+    var selection: Binding<String?>? = nil
     @StateObject private var savedSearches = SavedSearchStore()
     @State private var showingSaveSearch = false
     @State private var newSearchName = ""
@@ -88,7 +92,7 @@ struct ActivityFeedView: View {
             if store.txns.isEmpty && headerSection == nil {
                 EmptyState(tab: .activity)
             } else {
-                List(selection: $kbSel) {
+                List(selection: selection ?? $kbSel) {
                     if let headerSection { headerSection }
                     savedSearchRow
                     if store.txns.isEmpty {
@@ -133,7 +137,10 @@ struct ActivityFeedView: View {
                 }
                 #if os(macOS)
                 .onKeyPress(.return) {
-                    if !isSelecting, let id = kbSel, let txn = sections.flatMap({ $0.txns }).first(where: { $0.id == id }) { editing = txn; return .handled }
+                    // In three-column selection mode the selection already drives
+                    // the detail column — ↵ falls through (kbSel is unused there).
+                    if !isSelecting, selection == nil, let id = kbSel,
+                       let txn = sections.flatMap({ $0.txns }).first(where: { $0.id == id }) { editing = txn; return .handled }
                     return .ignored
                 }
                 #endif
@@ -299,6 +306,10 @@ struct ActivityFeedView: View {
     /// A deep link / Spotlight / notification tap stashed a tx id + switched to
     /// this tab — open that transaction.
     private func consumeFocus() {
+        // In three-column selection mode, SplitViewShell owns deep-link
+        // consumption (routes focusedId into txSelection instead) — bail so we
+        // don't double-consume the same id via this sheet-based path.
+        guard selection == nil else { return }
         guard let id = router.focusedId, let tx = store.txns.first(where: { $0.id == id }) else { return }
         editing = tx
         router.focusedId = nil
@@ -321,7 +332,11 @@ struct ActivityFeedView: View {
 
     @ViewBuilder
     private func row(_ txn: Tx) -> some View {
-        Button { isSelecting ? toggle(txn) : (editing = txn) } label: {
+        Button {
+            if isSelecting { toggle(txn) }
+            else if let selection { selection.wrappedValue = txn.id }
+            else { editing = txn }
+        } label: {
             HStack {
                 if isSelecting {
                     Image(systemName: selected.contains(txn.id) ? "checkmark.circle.fill" : "circle")
