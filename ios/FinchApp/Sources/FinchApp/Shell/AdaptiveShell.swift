@@ -192,11 +192,11 @@ extension View {
     func ledgerPush() -> some View { modifier(LedgerPush()) }
 }
 
-/// The iPad/Mac shell. Accounts, Budgets, and Ledger get a true three-column
-/// master–detail (sidebar │ list │ detail — see MasterDetailShell); the
-/// dashboard / sheet-based tabs (Insights, Settings, Activity, Scheduled) keep
-/// two columns (sidebar │ full-width content), which suits their wide layouts.
-/// Selection persists per tab across section switches.
+/// The iPad/Mac shell. Accounts, Budgets, Ledger, Activity, and Scheduled get
+/// a true three-column master–detail (sidebar │ list │ detail — see
+/// MasterDetailShell); the dashboard / sheet-based tabs (Insights, Settings)
+/// keep two columns (sidebar │ full-width content), which suits their wide
+/// layouts. Selection persists per tab across section switches.
 struct SplitViewShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
@@ -204,6 +204,7 @@ struct SplitViewShell: View {
     @State private var budgetSelection: String?
     @State private var ledgerSelection: String?
     @State private var txSelection: String?
+    @State private var scheduledSelection: String?
 
     var body: some View {
         Group {
@@ -251,6 +252,17 @@ struct SplitViewShell: View {
                         DetailPlaceholder(systemImage: "list.bullet", label: "Select a transaction")
                     }
                 }
+            case .scheduled:
+                ThreeColumnShell {
+                    ScheduledTab(selection: $scheduledSelection)
+                } detail: {
+                    // Guard against a stale selection (deleted template / ledger switch).
+                    if let id = scheduledSelection, store.scheduled.contains(where: { $0.id == id }) {
+                        NavigationStack { ScheduledDetailView(templateId: id) }
+                    } else {
+                        DetailPlaceholder(systemImage: "calendar", label: "Select a scheduled item")
+                    }
+                }
             default:
                 PersistedSplitVisibility(columns: .two) { $visibility in
                     NavigationSplitView(columnVisibility: $visibility) {
@@ -269,6 +281,7 @@ struct SplitViewShell: View {
             accountSelection = nil
             budgetSelection = nil
             txSelection = nil
+            scheduledSelection = nil
         }
         // A `tx:` deep link (Spotlight / notification) on regular width: select
         // the transaction in the Activity detail column (compact shows the edit
