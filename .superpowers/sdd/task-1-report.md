@@ -1,23 +1,21 @@
-# Task 1 report — engine: setBudgetOrder action + projection + unit test
+# Task 1 report — BudgetReorder model + tests
 
 **Status:** DONE
-**Commit:** 15afdfc1bd08b69c1367e9fac64ee60fdfadfb20 (`feat/ios-budget-order`)
+**Commit:** ae7f456ebe35aeacfe97c8d051299727d158f3af — `feat(ios): BudgetReorder model — grouped reorder rows for budgets (+tests)` (2 files only, no Co-Authored-By)
 
 ## Files
-- `ios/FinchCore/Sources/FinchCore/Store/ActionName.swift` — `case setBudgetOrder` after `setDisplayCurrency`; app_state comment count 5→6.
-- `ios/FinchCore/Sources/FinchCore/Store/Domain/App.swift` — handler entry + `setBudgetOrder` func (design-doc code, verbatim), after `setDisplayCurrency`.
-- `ios/FinchCore/Sources/FinchCore/Project/Projections+State.swift` — `budgetOrderByLedger(dbQueue:) -> [String: [String]]`, exact mirror of the `displayCurrencyByLedger` reader, key `'budgetOrderByLedger'`.
-- `ios/FinchCore/Tests/FinchCoreTests/BudgetOrderTests.swift` — new; round-trip + second-ledger merge (no clobber) + re-set overwrite.
-- `ios/FinchCore/Tests/FinchCoreTests/ArgsTests.swift` — **5th file, required**: `test_actionCount` hard-asserts `ActionName.allCases.count`; bumped 75→76 (that guard exists to be bumped when an action is added; leaving it would break the suite).
-
-## Idiom adaptations (vs plan skeleton)
-- `TestSeed.emptyDB()` → the suite's real helper `TestSeed.base()` (in-memory `DatabaseQueue` + `Migrations.runAll` + seed, ledger `l1`); ledger ids `l1`/`l2` per `DisplayCurrencyTests` style.
-- `Apply.apply` takes a **String** action name (`action: "setBudgetOrder"`) — matched suite call style. `Args`/`.string`/`.array` literals as in the skeleton.
-- Test run path: `swift test` works from `/tmp/finch-bo/ios` (the Package.swift root, NOT `ios/FinchCore/`) with `DEVELOPER_DIR` exported. `xcodebuild -only-testing:FinchCoreTests/...` does NOT work: FinchCoreTests is not in the FinchApp scheme (scheme tests only FinchAppTests) and the auto-generated FinchCore scheme has no test action.
+- `ios/FinchApp/Sources/FinchApp/Common/BudgetReorder.swift` — `BudgetReorderRow` (`.group(id:String?,name:)` / `.item(BudgetRow)`, ids `"g:…"`/`"i:\(id)"`), `BudgetReorder.buildRows(groups:budgets:)`, `applyMove`, `visibleRows(_:collapsed:)`, `itemCount(of:in:)`, `applyVisibleMove`, private `rebuildWithGroupOrder`, and `plan(_:) -> (groups:[(id,order)], items:[(id, groupId?, order)])`. Line-for-line mirror of `AccountReorder` typed to `BudgetRow`; same movement rules (real-group header = block rebuild via new group order; Ungrouped header pinned; no item above the first header; collapsed-aware visible-index translation).
+- `ios/FinchApp/Tests/FinchAppTests/BudgetReorderTests.swift` — all 12 Account-suite cases mirrored. Fixture: `bgt(_ id:,_ gid:)` builds a minimal `BudgetRow` (zeros/empties, `warningPct: 80`); groups `[GroupRow(id:"g1",name:"Bank"), GroupRow(id:"g2",name:"Cards")]`; b1,b2 in g1, b3 in g2, b4 ungrouped.
 
 ## Verification
-- `swift test --filter BudgetOrderTests` → `Executed 1 test, with 0 failures`.
-- Full package suite: `Test Suite 'All tests' passed — Executed 267 tests, with 0 failures`.
-- iOS build: `xcodebuild build -scheme FinchApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro'` → `** BUILD SUCCEEDED **`.
+- Tests (iPhone 17 Pro sim, `xcodebuild test … -only-testing:FinchAppTests/BudgetReorderTests -only-testing:FinchAppTests/AccountReorderTests`):
+  - `BudgetReorderTests`: Executed 12 tests, with 0 failures (0 unexpected)
+  - `AccountReorderTests`: Executed 12 tests, with 0 failures (0 unexpected) — unbroken
+  - `** TEST SUCCEEDED **`
+- iOS build (`xcodebuild build -scheme FinchApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`): `** BUILD SUCCEEDED **`
 
-No schema change (app_state KV only); no web/frontend or FinchApp-source edits.
+## Adaptations
+- None of substance. `AccountReorder.persistencePlan` is named `plan` per spec, returning `items` (not `accounts`); `isAccount` helper mirrored as `isItem`. Group fixture uses `GroupRow` directly (`AccountGroupRow` is a typealias of `GroupRow` in FinchCore `Models.swift`).
+
+## Blockers
+- None. AccountReorder, tabs, and engine untouched.
