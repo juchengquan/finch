@@ -24,6 +24,11 @@ struct BudgetsTab: View {
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
     @State private var searchQuery = ""                // filters budget rows by name
+    @State private var reorderingGroups = false
+    @State private var reorderGroupsDraft: [GroupRow] = []
+    @State private var renamingGroupId: String?
+    @State private var renameText = ""
+    @State private var groupPendingDelete: GroupRow?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -54,6 +59,27 @@ struct BudgetsTab: View {
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
             .errorAlert($errorMessage)
+            .sheet(isPresented: $reorderingGroups) {
+                BudgetGroupReorderSheet(groups: $reorderGroupsDraft,
+                                        counts: Dictionary(grouping: store.budgets.compactMap(\.groupId), by: { $0 }).mapValues(\.count),
+                                        onDone: persistGroupOrder)
+            }
+            .alert("Rename group", isPresented: Binding(
+                get: { renamingGroupId != nil },
+                set: { if !$0 { renamingGroupId = nil } })) {
+                TextField("Name", text: $renameText)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { renameGroup() }
+            }
+            .confirmationDialog("Delete group?", isPresented: Binding(
+                get: { groupPendingDelete != nil },
+                set: { if !$0 { groupPendingDelete = nil } }),
+                presenting: groupPendingDelete) { g in
+                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Budgets in this group become ungrouped.")
+            }
             .navigationDestination(for: String.self) { BudgetDetailView(budgetId: $0) }
             .onAppear { consumeFocus(); collapsedGroups = BudgetGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -164,6 +190,17 @@ struct BudgetsTab: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                .contextMenu {
+                    Button {
+                        let used = Set(store.budgets.compactMap(\.groupId))
+                        reorderGroupsDraft = store.budgetGroups.filter { used.contains($0.id) }
+                        reorderingGroups = true
+                    } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
+                    if let g = store.budgetGroups.first(where: { $0.name == groupName }) {
+                        Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
+                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
+                    }
+                }
 
                 // Collapse is bypassed while searching so matches always surface.
                 if !collapsedGroups.contains(groupName) || searchActive {
@@ -201,6 +238,26 @@ struct BudgetsTab: View {
             if selection?.wrappedValue == budget.id { selection?.wrappedValue = nil }
         } catch { errorMessage = i18nMessage(error) }
     }
+
+    private func persistGroupOrder(_ groups: [GroupRow]) {
+        do {
+            for (i, g) in groups.enumerated() {
+                try store.apply(.updateBudgetGroup, Args(["id": .string(g.id), "patch": .object(["sortOrder": .int(i)])]))
+            }
+        } catch { errorMessage = i18nMessage(error) }
+    }
+    private func renameGroup() {
+        guard let id = renamingGroupId else { return }
+        let name = renameText.trimmingCharacters(in: .whitespaces)
+        renamingGroupId = nil
+        guard !name.isEmpty else { return }
+        do { try store.apply(.updateBudgetGroup, Args(["id": .string(id), "patch": .object(["name": .string(name)])])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+    private func deleteGroup(_ g: GroupRow) {
+        do { try store.apply(.deleteBudgetGroup, Args(["id": .string(g.id)])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
 }
 
 struct BudgetRowView: View {
@@ -230,5 +287,45 @@ struct BudgetRowView: View {
     /// Native 3-color banding (NOT web parity). pct is an INTEGER 0–100.
     private func thresholdColor(_ pct: Int) -> Color {
         pct > 90 ? .red : (pct >= 70 ? .yellow : .green)
+    }
+}
+
+/// Groups-only reorder: each row IS the whole group (budgets can't be ordered
+/// within a group — no budgets.sort_order in the shared schema), so dragging a
+/// row moves the block by construction. Done renumbers budget_groups.sort_order.
+private struct BudgetGroupReorderSheet: View {
+    @Binding var groups: [GroupRow]
+    let counts: [String: Int]
+    var onDone: ([GroupRow]) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(groups) { g in
+                    HStack(spacing: 6) {
+                        Text(g.name).fontWeight(.semibold)
+                        Text("· \(counts[g.id] ?? 0) budgets").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                .onMove { groups.move(fromOffsets: $0, toOffset: $1) }
+            }
+            #if os(iOS)
+            .environment(\.editMode, .constant(.active))
+            #endif
+            .navigationTitle("Reorder Groups")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { onDone(groups); dismiss() }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 360, minHeight: 320)
+        #endif
     }
 }

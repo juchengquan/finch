@@ -182,13 +182,12 @@ extension FinchStore {
 
     // MARK: - Budgets grouping
 
+    /// Group names in `budget_groups.sort_order` (store.budgetGroups is projected
+    /// ORDER BY sort_order, name), keeping only groups that have budgets — same
+    /// hide-empty behavior as before, but the order now honors user reordering.
     public var budgetGroupsOrdered: [String] {
-        var seen = Set<String>(); var out: [String] = []
-        for b in budgets {
-            guard let g = b.groupId.flatMap({ budgetGroupNames[$0] }) else { continue }
-            if seen.insert(g).inserted { out.append(g) }
-        }
-        return out
+        let used = Set(budgets.compactMap(\.groupId))
+        return budgetGroups.filter { used.contains($0.id) }.map(\.name)
     }
     /// Budgets with no (resolvable) group — rendered bare at the top.
     public var ungroupedBudgets: [BudgetRow] {
