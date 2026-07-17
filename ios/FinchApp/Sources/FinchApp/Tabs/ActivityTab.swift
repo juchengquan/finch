@@ -495,9 +495,14 @@ struct TxRow: View {
                 .frame(width: 3)
                 .accessibilityLabel(kindA11yLabel)
             VStack(alignment: .leading, spacing: 1) {
-                // Top-left: merchant + status flags + category.
+                // Top-left: category is the title (merchant lives in edit/detail
+                // only, per user decision) + status flags + tag chips.
                 HStack(spacing: 4) {
-                    Text(txn.merchant)
+                    if let cat = store.categoryName(txn.category) {
+                        Text(cat)
+                    } else {
+                        Text("Uncategorized").foregroundStyle(.secondary)
+                    }
                     if txn.pending == true {
                         Image(systemName: "clock").font(.caption2).foregroundStyle(.orange)
                     }
@@ -505,15 +510,6 @@ struct TxRow: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
                     }
-                    if let cat = store.categoryName(txn.category) {
-                        Text(cat).font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.quaternary, in: Capsule())
-                    }
-                }
-                // Bottom-left: date·time + tags.
-                HStack(spacing: 4) {
-                    if showDate { Text(dateTimeText).font(.footnote).foregroundStyle(.secondary) }
                     ForEach(rowTags.prefix(3)) { tag in
                         Text(tag.name).font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -522,6 +518,15 @@ struct TxRow: View {
                     }
                     if rowTags.count > 3 {
                         Text("+\(rowTags.count - 3)").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                // Bottom-left: date·time + optional note (truncated to one line).
+                HStack(spacing: 4) {
+                    if showDate { Text(dateTimeText).font(.footnote).foregroundStyle(.secondary) }
+                    if let note = txn.note, !note.isEmpty {
+                        Text(showDate ? "· \(note)" : note)
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
             }
