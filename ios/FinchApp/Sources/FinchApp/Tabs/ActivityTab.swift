@@ -440,6 +440,28 @@ struct TxRow: View {
 
     private var receipts: [AttachmentRow] { store.attachments(for: txn.id) }
 
+    /// First `visible` tag chips + a "+N" count chip for the rest (if any).
+    /// The ViewThatFits cascade in the title row calls this with 3→2→1→0.
+    @ViewBuilder private func tagChips(showing visible: Int) -> some View {
+        HStack(spacing: 4) {
+            ForEach(rowTags.prefix(visible)) { tag in
+                Text(tag.name).font(.caption2)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background((Color(hex: tag.color ?? "") ?? .secondary).opacity(0.2), in: Capsule())
+                    .foregroundStyle(Color(hex: tag.color ?? "") ?? .secondary)
+                    .lineLimit(1).fixedSize()
+            }
+            if rowTags.count > visible {
+                Text("+\(rowTags.count - visible)").font(.caption2)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .accessibilityLabel("\(rowTags.count - visible) more tags")
+            }
+        }
+    }
+
     /// Bottom-left line: the transaction's date, with its time appended when set.
     /// Shows relative dates (Today/Yesterday) or short format (Jun 25).
     /// Stripe color by kind: expense red, income green, refund purple (money
@@ -498,11 +520,14 @@ struct TxRow: View {
                 // Top-left: category is the title (merchant lives in edit/detail
                 // only, per user decision) + status flags + tag chips.
                 HStack(spacing: 4) {
-                    if let cat = store.categoryName(txn.category) {
-                        Text(cat)
-                    } else {
-                        Text("Uncategorized").foregroundStyle(.secondary)
+                    Group {
+                        if let cat = store.categoryName(txn.category) {
+                            Text(cat)
+                        } else {
+                            Text("Uncategorized").foregroundStyle(.secondary)
+                        }
                     }
+                    .layoutPriority(1)   // chips yield before the title truncates
                     if txn.pending == true {
                         Image(systemName: "clock").font(.caption2).foregroundStyle(.orange)
                     }
@@ -510,14 +535,15 @@ struct TxRow: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
                     }
-                    // Tags collapse to a compact count — full chips crowded the
-                    // title line; names live in edit/detail.
+                    // Tags: show chips while they fit, then a +N count for the
+                    // hidden rest (ViewThatFits cascade, capped at 3 chips).
                     if !rowTags.isEmpty {
-                        Text("+\(rowTags.count)").font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.quaternary, in: Capsule())
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("\(rowTags.count) tags")
+                        ViewThatFits(in: .horizontal) {
+                            tagChips(showing: min(rowTags.count, 3))
+                            if rowTags.count >= 2 { tagChips(showing: 2) }
+                            if rowTags.count >= 1 { tagChips(showing: 1) }
+                            tagChips(showing: 0)
+                        }
                     }
                 }
                 // Bottom-left: date·time + optional note (truncated to one line).
