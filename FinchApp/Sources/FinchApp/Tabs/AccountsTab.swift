@@ -50,56 +50,25 @@ struct AccountsTab: View {
             .navigationTitle("Accounts")
             .ledgerPush()
             .toolbar {
+                // Reorder is modal: while editing (iOS-only, like editMode itself)
+                // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
-                #endif
-                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
-                ToolbarItem(placement: .primaryAction) {
-                    #if os(iOS)
-                    // While reordering (entered from a group's long-press menu),
-                    // the + turns into the standard "Done" button.
-                    if editMode.isEditing {
+                if editMode.isEditing {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { reorderRows = []; withAnimation { editMode = .inactive } } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Cancel")
+                    }
+                    ToolbarItem(placement: .primaryAction) {
                         Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
-                                .accessibilityLabel("Done")
-                                .fontWeight(.semibold)
-                    } else {
-                        Button { showingAdd = true } label: { Image(systemName: "plus") }
-                            .accessibilityLabel("Add Account")
-                            .disabled(store.ledgers.isEmpty)   // an account needs a ledger (each tab's + gates on its own prerequisite: Budgets→ledger, Scheduled→account)
+                            .fontWeight(.semibold)
+                            .accessibilityLabel("Done")
                     }
-                    #else
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add Account")
-                        .disabled(store.ledgers.isEmpty)
-                    #endif
+                } else {
+                    standardToolbar
                 }
-                // Group + archive management moved off the + into the ⋯ overflow menu.
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
-                }
-                // Reorder moved here from the group-header long-press menu (discoverability).
-                #if os(iOS)
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { withAnimation { editMode = .active } } label: {
-                        Label("Reorder", systemImage: "arrow.up.arrow.down")
-                    }
-                    .disabled(store.accounts.isEmpty)
-                }
+                #else
+                standardToolbar
                 #endif
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
-                }
-                ToolbarItem(placement: .secondaryAction) {
-                    NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
-                }
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
-                        .disabled(store.accounts.isEmpty)
-                }
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { showingImport = true } label: { Label("Import statement (CSV)", systemImage: "doc.badge.plus") }
-                        .disabled(store.accounts.isEmpty)
-                }
             }
             .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
             .sheet(isPresented: $showingImport) { ImportStatementView() }
@@ -153,6 +122,47 @@ struct AccountsTab: View {
                 }
             }
             #endif
+        }
+    }
+
+    /// The complete non-editing toolbar item set (both platforms) — hidden as a
+    /// block while reordering, when only ✕/✓ show (see the branch in `body`).
+    @ToolbarContentBuilder private var standardToolbar: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+        #endif
+        ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+        ToolbarItem(placement: .primaryAction) {
+            Button { showingAdd = true } label: { Image(systemName: "plus") }
+                .accessibilityLabel("Add Account")
+                .disabled(store.ledgers.isEmpty)   // an account needs a ledger (each tab's + gates on its own prerequisite: Budgets→ledger, Scheduled→account)
+        }
+        // Group + archive management moved off the + into the ⋯ overflow menu.
+        ToolbarItem(placement: .secondaryAction) {
+            Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+        }
+        // Reorder moved here from the group-header long-press menu (discoverability).
+        #if os(iOS)
+        ToolbarItem(placement: .secondaryAction) {
+            Button { withAnimation { editMode = .active } } label: {
+                Label("Reorder", systemImage: "arrow.up.arrow.down")
+            }
+            .disabled(store.accounts.isEmpty)
+        }
+        #endif
+        ToolbarItem(placement: .secondaryAction) {
+            Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
+                .disabled(store.accounts.isEmpty)
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button { showingImport = true } label: { Label("Import statement (CSV)", systemImage: "doc.badge.plus") }
+                .disabled(store.accounts.isEmpty)
         }
     }
 
