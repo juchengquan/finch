@@ -90,7 +90,7 @@ struct ScheduledCalendarView: View {
             Spacer()
             // .borderless so each button is its own tap target inside the List
             // row (default-styled buttons in a List row fire together / not at all).
-            Button("Today") { monthAnchor = Self.firstOfMonth(forISO: store.today); selectedDay = store.today }
+            Button("Today") { monthAnchor = Self.firstOfMonth(forISO: store.wallToday); selectedDay = store.wallToday }
                 .font(.caption)
                 .buttonStyle(.borderless)
             // Prev/next grouped together, to the right of the year-month.
@@ -136,7 +136,7 @@ struct ScheduledCalendarView: View {
     /// Year wheel range: ±10 around today, always widened to include the
     /// currently-anchored year (in case the user paged far via the chevrons).
     private var yearRange: [Int] {
-        let base = Int(store.today.prefix(4)) ?? year
+        let base = Int(store.wallToday.prefix(4)) ?? year
         return Array(min(base - 10, year)...max(base + 10, year))
     }
     private func monthName(_ m: Int) -> String {
@@ -174,7 +174,7 @@ struct ScheduledCalendarView: View {
 
     private func dayCell(_ day: Int, occ: [(date: String, template: ScheduledTemplate)]) -> some View {
         let d = iso(day)
-        let isSel = d == selectedDay, isToday = d == store.today
+        let isSel = d == selectedDay, isToday = d == store.wallToday
         return VStack(spacing: 3) {
             // Today gets a filled accent circle (white number); other days plain.
             Text("\(day)")
@@ -209,8 +209,8 @@ struct ScheduledCalendarView: View {
             else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
         } else {
             Text("Upcoming").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-            let end = Self.utc.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.today) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.today
-            let up = Array(Selectors.occurrencesInRange(templates, from: store.today, through: end).prefix(20))
+            let end = Self.utc.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.wallToday) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.wallToday
+            let up = Array(Selectors.occurrencesInRange(templates, from: store.wallToday, through: end).prefix(20))
             if up.isEmpty { Text("No upcoming items.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             else { ForEach(Array(up.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
         }

@@ -433,7 +433,7 @@ struct TxRow: View {
     private func relativeOrShort(_ ymd: String) -> String {
         guard relativeDates else { return ymd }
         guard let d = AppDate.isoDay.date(from: ymd) else { return ymd }
-        let today = AppDate.isoDay.date(from: store.today) ?? Date()
+        let today = AppDate.isoDay.date(from: store.wallToday) ?? Date()
         let cal = Calendar.current
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: d), to: cal.startOfDay(for: today)).day ?? 0
         if days == 0 { return String(localized: "Today") }
