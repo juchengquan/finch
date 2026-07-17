@@ -79,10 +79,20 @@ public final class FinchStore: ObservableObject {
     }
     var pendingRejected: PendingRejected?
 
-    /// The persistent live DB location (survives relaunch).
+    /// True when the process is hosting XCTest (the test bundle injects the
+    /// XCTestCase class). Checked once — it can't change mid-process.
+    private static let isRunningTests = NSClassFromString("XCTestCase") != nil
+
+    /// The persistent live DB location (survives relaunch). Under XCTest it
+    /// moves to a temp directory — the import tests swap packs into the live
+    /// DB by design, and attachmentsRoot lives next door, so pointing this at
+    /// Application Support would let every test run clobber the app's real
+    /// data on a development simulator.
     public var liveDBURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("finch.sqlite3")
+        let dir = Self.isRunningTests
+            ? FileManager.default.temporaryDirectory.appendingPathComponent("finch-tests", isDirectory: true)
+            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return dir.appendingPathComponent("finch.sqlite3")
     }
 
     // MARK: - Launch bootstrap
