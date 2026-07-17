@@ -34,6 +34,7 @@ struct AccountsTab: View {
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
     @State private var reorderRows: [ReorderRow] = []
+    @State private var expandedReorderGroups: Set<String> = []   // reorder mode: groups start collapsed
     #endif
 
     var body: some View {
@@ -133,6 +134,7 @@ struct AccountsTab: View {
             .onChange(of: editMode) { _, mode in
                 if mode.isEditing {
                     reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
+                    expandedReorderGroups = []
                 } else {
                     persistReorder()
                 }
@@ -292,17 +294,37 @@ struct AccountsTab: View {
     /// Flat, fully-draggable list used only while reordering: accounts move
     /// across groups, group headers move their whole block.
     private var reorderList: some View {
-        List {
-            ForEach(reorderRows) { row in
+        let collapsed = Set(store.accountGroups.map(\.id)).subtracting(expandedReorderGroups)
+        return List {
+            ForEach(AccountReorder.visibleRows(reorderRows, collapsed: collapsed)) { row in
                 switch row {
-                case .group(_, let name):
-                    Text(name).fontWeight(.semibold).foregroundStyle(.secondary)
+                case .group(let gid, let name):
+                    if let gid {
+                        // Collapsed-by-default group row: the drag handle moves the whole block.
+                        Button {
+                            if expandedReorderGroups.contains(gid) { expandedReorderGroups.remove(gid) }
+                            else { expandedReorderGroups.insert(gid) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: expandedReorderGroups.contains(gid) ? "chevron.down" : "chevron.right")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(width: 12)
+                                Text(name).fontWeight(.semibold)
+                                Text("· \(AccountReorder.accountCount(of: gid, in: reorderRows)) accounts")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(name).fontWeight(.semibold).foregroundStyle(.secondary)
+                    }
                 case .account(let a):
                     AccountRowView(account: a)
                 }
             }
             .onMove { from, to in
-                reorderRows = AccountReorder.applyMove(reorderRows, from: from, to: to)
+                reorderRows = AccountReorder.applyVisibleMove(reorderRows, collapsed: collapsed, from: from, to: to)
             }
         }
         .environment(\.editMode, .constant(.active))
