@@ -4,7 +4,7 @@ import FinchCore
 /// Accounts grouped by account group, each section with a subtotal, plus a
 /// net-worth footer (includeInNetWorth == 1). All amounts convert
 /// account-currency → base → display via Money. The toolbar `+` menu covers add
-/// / manage groups / archived; swipe + context menus cover edit / archive /
+/// / add group / archived; swipe + context menus cover edit / archive /
 /// delete.
 ///
 /// One view, two layouts: with `selection == nil` (compact / iPhone) rows are
@@ -22,7 +22,7 @@ struct AccountsTab: View {
     @State private var showingAdd = false
     @State private var quickAddFor: AccountRow?    // leading swipe → Add Transaction, prefilled
     @State private var reconcileFor: AccountRow?   // leading swipe → Reconcile, preselected
-    @State private var showingGroups = false
+    @State private var addingGroup = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
     @State private var path: [String] = []             // compact-mode push stack (account ids)
@@ -76,7 +76,7 @@ struct AccountsTab: View {
             .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultAccountId: $0.id) }
             .sheet(item: $reconcileFor) { ReconcileSheet(preselect: $0.id) }
-            .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
+            .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
             // Same confirm-before-delete as the ledger list / account detail page —
@@ -139,7 +139,7 @@ struct AccountsTab: View {
         }
         // Group + archive management moved off the + into the ⋯ overflow menu.
         ToolbarItem(placement: .secondaryAction) {
-            Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+            Button { addingGroup = true } label: { Label("Add Group", systemImage: "folder.badge.plus") }
         }
         // Reorder moved here from the group-header long-press menu (discoverability).
         #if os(iOS)
@@ -282,6 +282,10 @@ struct AccountsTab: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(width: 12)
+                        if let hex = store.accountGroups.first(where: { $0.name == groupName })?.color,
+                           let c = Color(hex: hex) {
+                            Circle().fill(c).frame(width: 8, height: 8)
+                        }
                         Text(groupName).fontWeight(.semibold)
                         Spacer()
                         Text(store.subtotalDisplay(for: groupName)).foregroundStyle(.secondary)
@@ -328,6 +332,10 @@ struct AccountsTab: View {
                             HStack(spacing: 6) {
                                 Image(systemName: expandedReorderGroups.contains(gid) ? "chevron.down" : "chevron.right")
                                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(width: 12)
+                                if let hex = store.accountGroups.first(where: { $0.id == gid })?.color,
+                                   let c = Color(hex: hex) {
+                                    Circle().fill(c).frame(width: 8, height: 8)
+                                }
                                 Text(name).fontWeight(.semibold)
                                 Text("· \(AccountReorder.accountCount(of: gid, in: reorderRows)) accounts")
                                     .font(.caption).foregroundStyle(.secondary)
@@ -499,5 +507,100 @@ struct AccountRowView: View {
             Text(store.displayMoney(account.balance, from: account.currency))
                 .fontWeight(.semibold)
         }
+    }
+}
+
+/// Add Group — a full sheet mirroring Budgets' AddGroupSheet: name + the shared
+/// 8-swatch palette + an account picker. Creates via createAccountGroup.
+private struct AddAccountGroupSheet: View {
+    @EnvironmentObject private var store: FinchStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var colorHex: String? = nil
+    @State private var selectedAccountIds: Set<String> = []
+    @State private var errorMessage: String?
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Group name", text: $name)
+                Section {
+                    HStack(spacing: 10) {
+                        ForEach(TagPalette.hexes, id: \.self) { hex in
+                            Circle().fill(Color(hex: hex) ?? .secondary)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(.primary.opacity(colorHex == hex ? 0.6 : 0), lineWidth: 2))
+                                .onTapGesture { colorHex = (colorHex == hex ? nil : hex) }
+                                .accessibilityLabel(Text(hex))
+                        }
+                    }
+                } header: {
+                    Text("Color")
+                } footer: {
+                    Text("Select accounts below to move them into this new group (optional).")
+                        .padding(.top, 10)
+                }
+                // Pick what moves into the new group — mirrored from the Accounts
+                // page structure: ungrouped first (headerless), then each group
+                // in display order.
+                if !store.ungroupedAccounts.isEmpty {
+                    Section { ForEach(store.ungroupedAccounts) { accountRow($0) } }
+                }
+                ForEach(store.accountGroupsOrdered, id: \.self) { g in
+                    let items = store.accounts(in: g)
+                    if !items.isEmpty {
+                        Section(g) { ForEach(items) { accountRow($0) } }
+                    }
+                }
+                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+            }
+            .navigationTitle("Add Group")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .listSectionSpacing(10)   // tighter gaps between the group sections
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { add() } label: { Image(systemName: "checkmark") }
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityLabel("Add")
+                }
+            }
+        }
+    }
+    @ViewBuilder private func accountRow(_ a: AccountRow) -> some View {
+        Button {
+            if selectedAccountIds.contains(a.id) { selectedAccountIds.remove(a.id) }
+            else { selectedAccountIds.insert(a.id) }
+        } label: {
+            HStack {
+                Text(a.name ?? "—").foregroundStyle(.primary)
+                Spacer()
+                if selectedAccountIds.contains(a.id) {
+                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))   // denser picker rows
+    }
+
+    private func add() {
+        let gid = "ag-\(UUID().uuidString.prefix(8).lowercased())"
+        var args: [String: JSONValue] = ["id": .string(gid),
+                                         "ledgerId": .string(store.activeLedgerId),
+                                         "name": .string(name.trimmingCharacters(in: .whitespaces))]
+        if let colorHex { args["color"] = .string(colorHex) }
+        do {
+            try store.apply(.createAccountGroup, Args(args))
+            for id in selectedAccountIds {
+                try store.apply(.updateAccount, Args(["id": .string(id), "patch": .object(["groupId": .string(gid)])]))
+            }
+            dismiss()
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
