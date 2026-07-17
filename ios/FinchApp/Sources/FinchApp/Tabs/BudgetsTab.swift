@@ -24,8 +24,6 @@ struct BudgetsTab: View {
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
     @State private var searchQuery = ""                // filters budget rows by name
-    @State private var reorderingGroups = false
-    @State private var reorderGroupsDraft: [GroupRow] = []
     @State private var renamingGroupId: String?
     @State private var renameText = ""
     @State private var groupPendingDelete: GroupRow?
@@ -54,25 +52,13 @@ struct BudgetsTab: View {
                 ToolbarItem(placement: .secondaryAction) {
                     Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
                 }
-                // Reorder moved here from the group-header long-press menu (discoverability).
-                ToolbarItem(placement: .secondaryAction) {
-                    Button {
-                        let used = Set(store.budgets.compactMap(\.groupId))
-                        reorderGroupsDraft = store.budgetGroups.filter { used.contains($0.id) }
-                        reorderingGroups = true
-                    } label: { Label("Reorder Groups", systemImage: "arrow.up.arrow.down") }
-                    .disabled(!store.budgets.contains { $0.groupId != nil })
-                }
+                // (Group reordering lives inside Manage Groups — GroupAdminView
+                // supports drag-to-reorder alongside create/rename/delete.)
             }
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
             .errorAlert($errorMessage)
-            .sheet(isPresented: $reorderingGroups) {
-                BudgetGroupReorderSheet(groups: $reorderGroupsDraft,
-                                        counts: Dictionary(grouping: store.budgets.compactMap(\.groupId), by: { $0 }).mapValues(\.count),
-                                        onDone: persistGroupOrder)
-            }
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
                 set: { if !$0 { renamingGroupId = nil } })) {
@@ -245,13 +231,6 @@ struct BudgetsTab: View {
         } catch { errorMessage = i18nMessage(error) }
     }
 
-    private func persistGroupOrder(_ groups: [GroupRow]) {
-        do {
-            for (i, g) in groups.enumerated() {
-                try store.apply(.updateBudgetGroup, Args(["id": .string(g.id), "patch": .object(["sortOrder": .int(i)])]))
-            }
-        } catch { errorMessage = i18nMessage(error) }
-    }
     private func renameGroup() {
         guard let id = renamingGroupId else { return }
         let name = renameText.trimmingCharacters(in: .whitespaces)
@@ -293,45 +272,5 @@ struct BudgetRowView: View {
     /// Native 3-color banding (NOT web parity). pct is an INTEGER 0–100.
     private func thresholdColor(_ pct: Int) -> Color {
         pct > 90 ? .red : (pct >= 70 ? .yellow : .green)
-    }
-}
-
-/// Groups-only reorder: each row IS the whole group (budgets can't be ordered
-/// within a group — no budgets.sort_order in the shared schema), so dragging a
-/// row moves the block by construction. Done renumbers budget_groups.sort_order.
-private struct BudgetGroupReorderSheet: View {
-    @Binding var groups: [GroupRow]
-    let counts: [String: Int]
-    var onDone: ([GroupRow]) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(groups) { g in
-                    HStack(spacing: 6) {
-                        Text(g.name).fontWeight(.semibold)
-                        Text("· \(counts[g.id] ?? 0) budgets").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
-                .onMove { groups.move(fromOffsets: $0, toOffset: $1) }
-            }
-            #if os(iOS)
-            .environment(\.editMode, .constant(.active))
-            #endif
-            .navigationTitle("Reorder Groups")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { onDone(groups); dismiss() }
-                }
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 360, minHeight: 320)
-        #endif
     }
 }

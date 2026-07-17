@@ -46,3 +46,16 @@ Budgets' sheet is groups-only ("Reorder Groups").
 Build iOS + macOS; sim: ⋯ menu on both tabs shows the new item (screenshot if the menu is
 AX-tappable); long-press menu no longer shows Reorder (code assertion); entering reorder from the
 menu works — human pass post-merge as usual for touch flows.
+
+## Addendum (same PR): Budgets consolidated into Manage Groups
+
+Discovery: the shared `GroupAdminView` (behind **Manage Groups**) already supports
+**drag-to-reorder** (`onMove` + EditButton, persisting `sortOrder`) — wired on BOTH tabs.
+The #461 `BudgetGroupReorderSheet` therefore duplicated it (the capability had been
+invisible because the page ignored `sort_order` until #461's ordering fix — that fix stays).
+
+- **Budgets:** removed the redundant sheet, its ⋯ item, state, and persist function.
+  Single ⋯ entry: **Manage Groups** (create / rename / delete / reorder).
+- **Accounts:** keeps **Reorder** (the flat arranger — account order + membership +
+  groups-as-blocks; beyond Manage Groups' scope). A unified "Organize" editor (folding
+  group CRUD into the arranger, dropping Manage Groups from ⋯) is the candidate follow-up.
