@@ -19,6 +19,10 @@ struct AddTransactionSheet: View {
     /// detail screen). Falls back to the first category when nil or not in the
     /// current kind's category list.
     var defaultCategoryId: String? = nil
+    /// Duplicate flow: seed the form from an existing transaction (kind, amount,
+    /// merchant, category, account, currency, tags). Date stays today and the
+    /// note stays blank — a duplicate is a new event; the user confirms via Save.
+    var prefill: Tx? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer, refund, adjust
@@ -49,6 +53,7 @@ struct AddTransactionSheet: View {
     @State private var showingFileImporter = false
     @State private var pickedFileURL: URL?
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
+    @State private var prefillApplied = false             // duplicate-prefill runs once
     @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
     @State private var showingSplit = false
     @State private var refundedTxId: String? = nil
@@ -340,6 +345,18 @@ struct AddTransactionSheet: View {
     /// Default the pickers to the first valid option (and the first two distinct
     /// accounts for a transfer) once the projected store is available.
     private func seedDefaults() {
+        // Duplicate flow: seed once from the source transaction, then let the
+        // fallback logic below fill anything still empty.
+        if let p = prefill, !prefillApplied {
+            prefillApplied = true
+            kind = p.kind == "income" ? .income : .expense
+            amount = String(format: "%g", abs(p.nativeAmount ?? p.amount))
+            merchant = p.merchant
+            if let c = p.category { categoryId = c }
+            accountId = p.account
+            if let cur = p.currency { currencyCode = cur }
+            if let tags = p.tags { selectedTags = Set(tags) }
+        }
         if accountId.isEmpty {
             let preferred = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
             accountId = preferred ?? accounts.first?.id ?? ""

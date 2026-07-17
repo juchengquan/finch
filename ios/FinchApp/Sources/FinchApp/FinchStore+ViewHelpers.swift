@@ -170,6 +170,7 @@ extension FinchStore {
     public func transactions(for accountId: String) -> [Tx] {
         Selectors.selectTransactions(txns, ListOptions(ledgerId: activeLedgerId, accountId: accountId))
     }
+
     public func subtotalDisplay(for group: String) -> String {
         displayMoneyBase(accounts(in: group).reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
     }
