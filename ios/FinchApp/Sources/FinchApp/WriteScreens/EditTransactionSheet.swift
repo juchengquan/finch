@@ -113,6 +113,19 @@ struct EditTransactionSheet: View {
     }
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
+    /// Top control state: nil hides the control (adjustment/opening rows).
+    private var typeControlKind: EditTypeControl.Kind? {
+        switch txn.kind {
+        case "transfer": return .transfer
+        case "adjustment", "opening": return nil
+        default: return EditTypeControl.Kind(rawValue: effectiveKind) ?? .expense
+        }
+    }
+    /// Line items reclassify across expense/income/refund; everything else locks.
+    private var typeControlEnabled: Set<EditTypeControl.Kind> {
+        canReclassify ? [.expense, .income, .refund] : []
+    }
+
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
     }
@@ -145,11 +158,6 @@ struct EditTransactionSheet: View {
                     }
                 } else {
                     Section("Amount & category") {
-                        if canReclassify {
-                            Picker("Type", selection: $selectedKind) {
-                                ForEach(EditKind.allCases) { Text($0.label).tag($0) }
-                            }
-                        }
                         HStack {
                             Text("Amount")
                             Spacer()
@@ -251,6 +259,13 @@ struct EditTransactionSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .principal) {
+                    if let kind = typeControlKind {
+                        EditTypeControl(selected: kind, enabled: typeControlEnabled) { k in
+                            if let ek = EditKind(rawValue: k.rawValue) { selectedKind = ek }
+                        }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
