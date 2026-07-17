@@ -179,8 +179,8 @@ struct AccountsTab: View {
                 groupedSections { account in
                     AccountRowView(account: account)
                         .tag(account.id)
-                        .swipeActions(edge: .trailing) { rowActions(account) }
-                        .swipeActions(edge: .leading) { leadingActions(account) }
+                        .swipeActions(edge: .trailing) { trailingSwipeActions(account) }
+                        .swipeActions(edge: .leading) { leadingSwipeActions(account) }
                         .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
@@ -198,8 +198,8 @@ struct AccountsTab: View {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing) { rowActions(account) }
-                    .swipeActions(edge: .leading) { leadingActions(account) }
+                    .swipeActions(edge: .trailing) { trailingSwipeActions(account) }
+                    .swipeActions(edge: .leading) { leadingSwipeActions(account) }
                     .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
@@ -391,18 +391,30 @@ struct AccountsTab: View {
         catch { errorMessage = i18nMessage(error) }
     }
 
+    /// The complete manage cluster — context menu only. The trailing swipe shows
+    /// the frequent subset (`trailingSwipeActions`); each swipe button costs
+    /// ~75pt of row width, so the swipes stay lean and the menu stays complete.
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
         Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }.tint(.orange)
         Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
     }
 
-    /// Leading (right-)swipe: the per-account quick verbs — full swipe triggers
-    /// Add Transaction (first). Also merged into the context menu so both stay
-    /// mouse-reachable on macOS.
+    /// Trailing swipe: Edit + Delete (full swipe = Edit). Archive is menu-only.
+    @ViewBuilder private func trailingSwipeActions(_ account: AccountRow) -> some View {
+        Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+        Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// The per-account quick verbs — context menu (and macOS reachability).
     @ViewBuilder private func leadingActions(_ account: AccountRow) -> some View {
         Button { quickAddFor = account } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
         Button { reconcileFor = account } label: { Label("Reconcile", systemImage: "checkmark.circle") }.tint(.blue)
+    }
+
+    /// Leading swipe: quick-add only (full swipe = Add). Reconcile is menu-only.
+    @ViewBuilder private func leadingSwipeActions(_ account: AccountRow) -> some View {
+        Button { quickAddFor = account } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
     }
 
     /// A deep link / Spotlight tap stashed an id + switched to this tab — open it
