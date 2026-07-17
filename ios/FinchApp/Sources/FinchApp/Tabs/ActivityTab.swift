@@ -296,7 +296,7 @@ struct ActivityFeedView: View {
                         .foregroundStyle(selected.contains(txn.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 }
                 TxRow(txn: txn, onPreviewReceipt: isSelecting ? nil : { previewReceipt($0) },
-                      showDate: dateShownIds.contains(txn.id))
+                      showDate: dateShownIds.contains(txn.id), showRunningBalance: false)
             }
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
@@ -428,6 +428,10 @@ struct TxRow: View {
     let txn: Tx
     var onPreviewReceipt: ((Tx) -> Void)? = nil
     var showDate: Bool = true
+    /// Running account balance under the amount — a ledger-style column that only
+    /// reads sensibly when every row shares one account (Account Detail). Mixed-
+    /// account lists (feed, counterparty) hide it.
+    var showRunningBalance: Bool = true
 
     private var rowTags: [TagRow] {
         guard let ids = txn.tags, !ids.isEmpty else { return [] }
@@ -532,11 +536,13 @@ struct TxRow: View {
             // Right: amount (top) + running account balance after this txn (bottom).
             VStack(alignment: .trailing, spacing: 1) {
                 Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
-                let remaining = store.runningBalanceBase(for: txn)
-                Text(store.displayMoneyBase(remaining))
-                    .font(.caption2)
-                    .foregroundStyle(remaining < 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                    .accessibilityLabel("Balance after")
+                if showRunningBalance {
+                    let remaining = store.runningBalanceBase(for: txn)
+                    Text(store.displayMoneyBase(remaining))
+                        .font(.caption2)
+                        .foregroundStyle(remaining < 0 ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                        .accessibilityLabel("Balance after")
+                }
             }
         }
     }
