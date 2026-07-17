@@ -513,7 +513,7 @@ struct TxRow: View {
                 }
                 // Bottom-left: date·time + tags.
                 HStack(spacing: 4) {
-                    if showDate { Text(dateTimeText).font(.caption2).foregroundStyle(.secondary) }
+                    if showDate { Text(dateTimeText).font(.footnote).foregroundStyle(.secondary) }
                     ForEach(rowTags.prefix(3)) { tag in
                         Text(tag.name).font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
