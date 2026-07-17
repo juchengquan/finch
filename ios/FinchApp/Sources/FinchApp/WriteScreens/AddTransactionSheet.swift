@@ -35,7 +35,7 @@ struct AddTransactionSheet: View {
     @State private var kind: Kind = .expense
     /// Width of the icon segmented type control in the nav bar — shared by its
     /// frame and the scrub gesture's per-segment math.
-    private static let typeControlWidth: CGFloat = 190
+    static let typeControlWidth: CGFloat = 190   // shared with the floating glass bar
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -151,6 +151,9 @@ struct AddTransactionSheet: View {
                 #endif
             }
             .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+            .modifier(FloatingTypeBar(kind: $kind))
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
@@ -159,14 +162,11 @@ struct AddTransactionSheet: View {
                 // Transaction type sits in the title slot as an icon segmented control.
                 #if os(iOS)
                 if #available(iOS 26.0, *) {
-                    // sharedBackgroundVisibility(.hidden) removes the system's own
-                    // glass island behind the principal item — without it our glass
-                    // sits INSIDE that white capsule, which masks the material and
-                    // blocks the content that should refract through it.
-                    ToolbarItem(placement: .principal) {
-                        GlassTypeControl(kind: $kind, width: 250)
-                    }
-                    .sharedBackgroundVisibility(.hidden)
+                    // The glass bar floats over the form instead (nothing ever
+                    // renders BEHIND the toolbar slot, so glass there is
+                    // physically a flat white capsule — proven by overlaying the
+                    // same control over form rows, where it refracts perfectly).
+                    ToolbarItem(placement: .principal) { EmptyView() }
                 } else {
                     ToolbarItem(placement: .principal) { legacyTypeControl }
                 }
@@ -540,6 +540,22 @@ struct AddTransactionSheet: View {
 }
 
 #if os(iOS)
+/// Floats the glass type bar just below the nav buttons (iOS 26+) so form
+/// rows scroll BENEATH it — the only placement where the glass has content
+/// to refract. No-op pre-26 (the toolbar keeps the segmented control).
+private struct FloatingTypeBar: ViewModifier {
+    @Binding var kind: AddTransactionSheet.Kind
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.safeAreaInset(edge: .top, spacing: 2) {
+                GlassTypeControl(kind: $kind, width: AddTransactionSheet.typeControlWidth)
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// The OS 26 type control: icon segments with a **Liquid Glass** sliding
 /// thumb. Touch-down anywhere selects the segment under the finger and the
 /// glass pill glides with the scrub (and with page swipes / taps).
@@ -547,7 +563,7 @@ struct AddTransactionSheet: View {
 private struct GlassTypeControl: View {
     @Binding var kind: AddTransactionSheet.Kind
     let width: CGFloat
-    private let height: CGFloat = 44
+    private let height: CGFloat = 36
 
     /// Bar-style glyphs — bold, open shapes like the tab bar's, NOT the
     /// circle-enclosed row icons (thin outlined circles read as ghost buttons
@@ -567,11 +583,8 @@ private struct GlassTypeControl: View {
         let seg = width / CGFloat(all.count)
         let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
         ZStack(alignment: .leading) {
-            // The island: one frosted glass capsule for the whole bar (the
-            // system's shared toolbar island is hidden at the call site, so
-            // this is the only surface — content refracts through it).
             Color.clear
-                .glassEffect(.regular, in: Capsule())
+                .glassEffect(.regular.interactive(), in: Capsule())
                 .frame(width: width, height: height)
             // The sliding thumb: a clearly-visible neutral pill filling its
             // segment, like the tab bar's selected-tab pill — accent lives on
@@ -583,7 +596,7 @@ private struct GlassTypeControl: View {
             HStack(spacing: 0) {
                 ForEach(all) { k in
                     Image(systemName: glyph(k))
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(k == kind ? Color.accentColor : Color.primary)
                         .frame(width: seg, height: height)
                         .contentShape(Rectangle())
