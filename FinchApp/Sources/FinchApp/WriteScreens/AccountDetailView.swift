@@ -160,6 +160,7 @@ struct AccountDetailView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation first.
             Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
