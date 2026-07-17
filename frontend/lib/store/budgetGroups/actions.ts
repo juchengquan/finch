@@ -11,7 +11,7 @@ export const budgetGroupActions = (set: SetState, get: GetState) => ({
     const id = newId('bgg', { long: false });
     const ledgerId = input.ledgerId ?? 'personal';
     set((s) => ({
-      budgetGroups: [...s.budgetGroups, { id, ledgerId, name: input.name, sortOrder: s.budgetGroups.length }],
+      budgetGroups: [...s.budgetGroups, { id, ledgerId, name: input.name, color: null, sortOrder: s.budgetGroups.length }],
     }));
     syncMutation('createBudgetGroup', { id, ledgerId, name: input.name });
     return id;

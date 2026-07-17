@@ -192,11 +192,10 @@ extension FinchStore {
     // MARK: - Budgets grouping
 
     /// Group names in `budget_groups.sort_order` (store.budgetGroups is projected
-    /// ORDER BY sort_order, name), keeping only groups that have budgets — same
-    /// hide-empty behavior as before, but the order now honors user reordering.
+    /// ORDER BY sort_order, name). Includes EMPTY groups — a freshly added group
+    /// shows immediately (user direction; the old hide-empty rule read as a bug).
     public var budgetGroupsOrdered: [String] {
-        let used = Set(budgets.compactMap(\.groupId))
-        return budgetGroups.filter { used.contains($0.id) }.map(\.name)
+        budgetGroups.map(\.name)
     }
     /// Budgets with no (resolvable) group — rendered bare at the top.
     public var ungroupedBudgets: [BudgetRow] {
@@ -214,6 +213,13 @@ extension FinchStore {
         return list.enumerated().sorted {
             (pos[$0.element.id] ?? order.count + $0.offset) < (pos[$1.element.id] ?? order.count + $1.offset)
         }.map(\.element)
+    }
+    /// The group's total budget (sum of each member's cycle base) in display
+    /// currency — the Budgets-page analogue of Accounts' `subtotalDisplay`.
+    public func budgetSubtotalDisplay(for group: String) -> String {
+        displayMoneyBase(budgets(in: group).reduce(0.0) {
+            $0 + Selectors.budgetProgress($1, txns, today, categoryNodes).base
+        })
     }
     public var budgetTotalsDisplay: (used: String, base: String) {
         var used = 0.0, base = 0.0

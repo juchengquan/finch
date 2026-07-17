@@ -19,7 +19,6 @@ struct BudgetsTab: View {
     var selection: Binding<String?>? = nil
     @State private var showingAdd = false
     @State private var addingGroup = false
-    @State private var newGroupName = ""
     @State private var editing: BudgetRow?
     @State private var quickAddFor: BudgetRow?     // leading swipe (expense) → Add sheet, category prefilled
     @State private var contributeFor: BudgetRow?   // leading swipe (goal) → Contribute sheet
@@ -71,13 +70,7 @@ struct BudgetsTab: View {
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
             .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
-            .alert("Add group", isPresented: $addingGroup) {
-                TextField("Group name", text: $newGroupName)
-                Button("Cancel", role: .cancel) {}
-                Button("Add") { addGroup() }
-            } message: {
-                Text("New groups appear once a budget is assigned (and immediately in Reorder and the budget's Group picker).")
-            }
+            .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
@@ -128,7 +121,7 @@ struct BudgetsTab: View {
         }
         // Group management moved off the + into the ⋯ overflow menu (matches Accounts).
         ToolbarItem(placement: .secondaryAction) {
-            Button { addingGroup = true; newGroupName = "" } label: { Label("Add Group", systemImage: "folder.badge.plus") }
+            Button { addingGroup = true } label: { Label("Add Group", systemImage: "folder.badge.plus") }
         }
         // Reorder in the ⋯ overflow menu, after Manage Groups (matches Accounts).
         #if os(iOS)
@@ -257,8 +250,13 @@ struct BudgetsTab: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(width: 12)
+                        if let hex = store.budgetGroups.first(where: { $0.name == groupName })?.color,
+                           let c = Color(hex: hex) {
+                            Circle().fill(c).frame(width: 8, height: 8)
+                        }
                         Text(groupName).fontWeight(.semibold)
                         Spacer()
+                        Text(store.budgetSubtotalDisplay(for: groupName)).foregroundStyle(.secondary)
                     }
                     .contentShape(Rectangle())
                 }
@@ -301,6 +299,10 @@ struct BudgetsTab: View {
                             HStack(spacing: 6) {
                                 Image(systemName: expandedReorderGroups.contains(gid) ? "chevron.down" : "chevron.right")
                                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(width: 12)
+                                if let hex = store.budgetGroups.first(where: { $0.id == gid })?.color,
+                                   let c = Color(hex: hex) {
+                                    Circle().fill(c).frame(width: 8, height: 8)
+                                }
                                 Text(name).fontWeight(.semibold)
                                 Text("· \(BudgetReorder.itemCount(of: gid, in: reorderRows)) budgets")
                                     .font(.caption).foregroundStyle(.secondary)
@@ -402,13 +404,6 @@ struct BudgetsTab: View {
         catch { errorMessage = i18nMessage(error) }
     }
 
-    private func addGroup() {
-        let name = newGroupName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        do { try store.apply(.createBudgetGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(name)])) }
-        catch { errorMessage = i18nMessage(error) }
-    }
-
     private func renameGroup() {
         guard let id = renamingGroupId else { return }
         let name = renameText.trimmingCharacters(in: .whitespaces)
@@ -460,5 +455,100 @@ struct BudgetRowView: View {
     /// Native 3-color banding (NOT web parity). pct is an INTEGER 0–100.
     private func thresholdColor(_ pct: Int) -> Color {
         pct > 90 ? .red : (pct >= 70 ? .yellow : .green)
+    }
+}
+
+/// Add Group — a medium-detent bottom sheet (same element family as Add Budget):
+/// name + the shared 8-swatch palette. Creates via createBudgetGroup.
+private struct AddGroupSheet: View {
+    @EnvironmentObject private var store: FinchStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var colorHex: String? = nil
+    @State private var selectedBudgetIds: Set<String> = []
+    @State private var errorMessage: String?
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Group name", text: $name)
+                Section {
+                    HStack(spacing: 10) {
+                        ForEach(TagPalette.hexes, id: \.self) { hex in
+                            Circle().fill(Color(hex: hex) ?? .secondary)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(.primary.opacity(colorHex == hex ? 0.6 : 0), lineWidth: 2))
+                                .onTapGesture { colorHex = (colorHex == hex ? nil : hex) }
+                                .accessibilityLabel(Text(hex))
+                        }
+                    }
+                } header: {
+                    Text("Color")
+                } footer: {
+                    Text("Select budgets below to move them into this new group (optional).")
+                        .padding(.top, 10)
+                }
+                // Pick what moves into the new group — mirrored from the Budgets
+                // page structure: ungrouped first (headerless), then each group
+                // in display order.
+                if !store.ungroupedBudgets.isEmpty {
+                    Section { ForEach(store.ungroupedBudgets) { budgetRow($0) } }
+                }
+                ForEach(store.budgetGroupsOrdered, id: \.self) { g in
+                    let items = store.budgets(in: g)
+                    if !items.isEmpty {
+                        Section(g) { ForEach(items) { budgetRow($0) } }
+                    }
+                }
+                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+            }
+            .navigationTitle("Add Group")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .listSectionSpacing(10)   // tighter gaps between the group sections
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { add() } label: { Image(systemName: "checkmark") }
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityLabel("Add")
+                }
+            }
+        }
+    }
+    @ViewBuilder private func budgetRow(_ b: BudgetRow) -> some View {
+        Button {
+            if selectedBudgetIds.contains(b.id) { selectedBudgetIds.remove(b.id) }
+            else { selectedBudgetIds.insert(b.id) }
+        } label: {
+            HStack {
+                Text(b.name).foregroundStyle(.primary)
+                Spacer()
+                if selectedBudgetIds.contains(b.id) {
+                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))   // denser picker rows
+    }
+
+    private func add() {
+        let gid = "bgg-\(UUID().uuidString.prefix(8).lowercased())"
+        var args: [String: JSONValue] = ["id": .string(gid),
+                                         "ledgerId": .string(store.activeLedgerId),
+                                         "name": .string(name.trimmingCharacters(in: .whitespaces))]
+        if let colorHex { args["color"] = .string(colorHex) }
+        do {
+            try store.apply(.createBudgetGroup, Args(args))
+            for id in selectedBudgetIds {
+                try store.apply(.updateBudget, Args(["id": .string(id), "patch": .object(["groupId": .string(gid)])]))
+            }
+            dismiss()
+        } catch { errorMessage = i18nMessage(error) }
     }
 }

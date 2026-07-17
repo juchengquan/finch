@@ -1,21 +1,21 @@
-# Task 1 report — BudgetReorder model + tests
+# Task 1 report — Web engine: group color column
 
-**Status:** DONE
-**Commit:** ae7f456ebe35aeacfe97c8d051299727d158f3af — `feat(ios): BudgetReorder model — grouped reorder rows for budgets (+tests)` (2 files only, no Co-Authored-By)
+**Status:** DONE. Commit `5af3264a1a63f48a36b3728b59ec0760e7db9fb6` on `feat/ios-group-color` (no Co-Authored-By).
 
-## Files
-- `ios/FinchApp/Sources/FinchApp/Common/BudgetReorder.swift` — `BudgetReorderRow` (`.group(id:String?,name:)` / `.item(BudgetRow)`, ids `"g:…"`/`"i:\(id)"`), `BudgetReorder.buildRows(groups:budgets:)`, `applyMove`, `visibleRows(_:collapsed:)`, `itemCount(of:in:)`, `applyVisibleMove`, private `rebuildWithGroupOrder`, and `plan(_:) -> (groups:[(id,order)], items:[(id, groupId?, order)])`. Line-for-line mirror of `AccountReorder` typed to `BudgetRow`; same movement rules (real-group header = block rebuild via new group order; Ungrouped header pinned; no item above the first header; collapsed-aware visible-index translation).
-- `ios/FinchApp/Tests/FinchAppTests/BudgetReorderTests.swift` — all 12 Account-suite cases mirrored. Fixture: `bgt(_ id:,_ gid:)` builds a minimal `BudgetRow` (zeros/empties, `warningPct: 80`); groups `[GroupRow(id:"g1",name:"Bank"), GroupRow(id:"g2",name:"Cards")]`; b1,b2 in g1, b3 in g2, b4 ungrouped.
+**Gates:** `bun run typecheck` green; `bun test lib` — 556 pass / 0 fail (49 files). No migration/schema test needed changes: `lib/db/migrate.test.ts` builds a stale DB without the group tables, but the runner's `isAlreadyAppliedError` swallows "no such table" on replay, so the new ALTERs are no-ops there and the test's intent (idempotent 06-05 ADD + version re-stamp) is untouched.
 
-## Verification
-- Tests (iPhone 17 Pro sim, `xcodebuild test … -only-testing:FinchAppTests/BudgetReorderTests -only-testing:FinchAppTests/AccountReorderTests`):
-  - `BudgetReorderTests`: Executed 12 tests, with 0 failures (0 unexpected)
-  - `AccountReorderTests`: Executed 12 tests, with 0 failures (0 unexpected) — unbroken
-  - `** TEST SUCCEEDED **`
-- iOS build (`xcodebuild build -scheme FinchApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`): `** BUILD SUCCEEDED **`
+**Latest-version derivation (verify point):** `migrate()` (schema.ts:688) does NOT derive the latest version from the MIGRATIONS map keys. It reads the DB's recorded `db_metadata.schema_version`, replays map entries with keys strictly greater (lex/chronological sort), then stamps the exported constant `SCHEMA_VERSION` via `ensureMetadataRow`. So the constant is the recorded latest and had to be bumped: `SCHEMA_VERSION = '2026-07-17T00:00:00Z'` (was `'2026-06-14T00:00:00Z'`), matching the design doc's "version stamps move together" (= iOS `Schema.version` for Task 2). Without the bump, upgraded DBs would be stamped 2026-06-14 and re-replay the 07-17 entry forever (harmless but wrong).
 
-## Adaptations
-- None of substance. `AccountReorder.persistencePlan` is named `plan` per spec, returning `items` (not `accounts`); `isAccount` helper mirrored as `isItem`. Group fixture uses `GroupRow` directly (`AccountGroupRow` is a typealias of `GroupRow` in FinchCore `Models.swift`).
+**Changes:**
+- `frontend/lib/db/core/schema.ts` — `color TEXT,` after `name` in both `account_groups`/`budget_groups` CREATEs; new MIGRATIONS entry `'2026-07-17T00:00:00Z'` (two ALTERs, comment per plan); `SCHEMA_VERSION` bumped.
+- `frontend/lib/db/queries/budgetGroups.ts` + `accountGroups.ts` — SELECTs return `color` (null-safe map); create INSERT gains column binding `g.color ?? null`; update gains `patch.color !== undefined` branch; update `bind` widened to `(string | number | null)[]` so `color: null` clears.
+- `frontend/lib/db/domain/budgetGroups/types.ts` + `accountGroups/types.ts` — `Row.color: string | null`; `New…`/`…Patch` gain `color?: string | null`.
+- `frontend/lib/db/domain/_args.ts` — inline `createBudgetGroup` args gain `color?: string | null` (`createAccountGroup` uses `NewAccountGroup`, so it inherited it).
+- `frontend/lib/db/domain/budgets/mutations.ts` + `accountGroups/mutations.ts` — create handlers pass `color: args.color ?? null` through to the queries (update handlers cast to Patch, so color flows automatically).
+- `frontend/lib/store/budgetGroups/actions.ts` + `accountGroups/actions.ts` — optimistic create literals gain `color: null` (required by the now-stricter Row type; server projection replaces them after `/api/mutate`).
 
-## Blockers
-- None. AccountReorder, tabs, and engine untouched.
+**Adaptations beyond the letter of the plan:** the two mutation-handler pass-throughs and the two store-literal `color: null` fixes (forced by making Row.color required, and needed for `createBudgetGroup` args to actually reach the INSERT). No blockers.
+
+---
+
+*Note: this file previously held the Task 1 report of the BudgetReorder plan (commit ae7f456); superseded by the group-color plan's Task 1.*

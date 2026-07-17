@@ -3,7 +3,8 @@ import GRDB
 
 // Account-group + budget-group domains — symmetric CRUD over `account_groups` /
 // `budget_groups` (ports of accountGroups/mutations.ts + budgets/mutations.ts's
-// group handlers). createX appends at MAX(sort_order)+1; updateX is name-only.
+// group handlers). createX appends at MAX(sort_order)+1; updateX patches
+// name / color / sortOrder.
 
 public enum AccountGroups {
     public static let handlers: [ActionName: Apply.Handler] = [
@@ -23,14 +24,14 @@ public enum BudgetGroups {
 
 enum Groups {
     static func create(_ db: Database, _ args: Args, table: String, prefix: String) throws {
-        struct A: Decodable { let id: String?; let ledgerId: String?; let name: String }
+        struct A: Decodable { let id: String?; let ledgerId: String?; let name: String; let color: String? }
         let a = try args.to(A.self)
         let name = a.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { throw I18nError("error.required.groupName", [:], "Group name is required") }
         let ledgerId = a.ledgerId ?? "personal"
         let sortOrder = try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM \(table) WHERE ledger_id = ?", arguments: [ledgerId]) ?? 0
-        try db.execute(sql: "INSERT INTO \(table) (id,ledger_id,name,sort_order,created_at,updated_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))",
-                       arguments: [a.id ?? Entries.newId(prefix), ledgerId, name, sortOrder])
+        try db.execute(sql: "INSERT INTO \(table) (id,ledger_id,name,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,datetime('now'),datetime('now'))",
+                       arguments: [a.id ?? Entries.newId(prefix), ledgerId, name, a.color, sortOrder])
     }
 
     static func update(_ db: Database, _ args: Args, table: String) throws {
@@ -44,6 +45,7 @@ enum Groups {
             }
             sets.append("name = ?"); bind.append(name)
         }
+        if let colorV = patch["color"] { sets.append("color = ?"); bind.append(colorV.sqlBind) }
         if let sortV = patch["sortOrder"] { sets.append("sort_order = ?"); bind.append(sortV.sqlBind) }
         if sets.isEmpty { return }
         sets.append("updated_at = datetime('now')")

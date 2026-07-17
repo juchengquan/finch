@@ -17,6 +17,17 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)
         }
 
+        // First post-baseline migration: group colors (web migration
+        // 2026-07-17). Tolerant of duplicate columns — imported web packs may
+        // already carry them while lacking GRDB's bookkeeping table.
+        migrator.registerMigration("2026-07-17-group-color") { db in
+            for table in ["budget_groups", "account_groups"] {
+                do { try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN color TEXT") }
+                catch { if !"\(error)".contains("duplicate column") { throw error } }
+            }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 

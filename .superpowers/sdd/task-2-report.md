@@ -1,46 +1,32 @@
-# Task 2 report — BudgetsTab Reorder editor + modal ✕/✓ chrome (both tabs)
+# Task 2 report — iOS engine: group color column + first post-baseline migration
 
 **Status:** DONE
-**Commit:** `f329d47` — `feat(ios): Budgets Reorder editor (blocks/expand/cross-group) + modal ✕/✓ reorder chrome on both tabs` (2 files only: `Tabs/BudgetsTab.swift`, `Tabs/AccountsTab.swift`; no Co-Authored-By)
-
-## Builds / tests
-- iOS `FinchApp` (iPhone 17 Pro Max sim): `** BUILD SUCCEEDED **`
-- macOS `FinchMac` (`CODE_SIGNING_ALLOWED=NO`): `** BUILD SUCCEEDED **`
-- `-only-testing:FinchAppTests/BudgetReorderTests`: 12/12 passed, `** TEST SUCCEEDED **`
+**Commit:** `5f957aa` — `feat(ios-core): group color column — first post-baseline migration (2026-07-17), create/update/projection support` (no Co-Authored-By; only ios/FinchCore files committed)
 
 ## What was done
 
-### A. BudgetsTab — Reorder editor (mirrors AccountsTab section-by-section)
-1. State: `#if os(iOS)`-gated block exactly like AccountsTab — `editMode: EditMode = .inactive`, `reorderRows: [BudgetReorderRow] = []`, `expandedReorderGroups: Set<String> = []`.
-2. ⋯ menu: iOS-only `secondaryAction` "Reorder" item after Manage Groups (`withAnimation { editMode = .active }`, `arrow.up.arrow.down`, `.disabled(store.budgets.isEmpty)` — mirroring AccountsTab's `.disabled(store.accounts.isEmpty)`).
-3. `.environment(\.editMode, $editMode)` + `.onChange(of: editMode)` at the end of the NavigationStack content (same position as AccountsTab), inside `#if os(iOS)`. Entering: `BudgetReorder.buildRows(groups: store.budgetGroups, budgets: store.budgets)` + `expandedReorderGroups = []`; leaving: `persistReorder(); reorderRows = []` (per plan — BudgetsTab's persistReorder does NOT self-clear, unlike Accounts').
-4. `listContent`: extracted the two existing List layouts into a new `contentList` var (so the swap mirrors AccountsTab's `if editMode.isEditing { reorderList } else { contentList }` inside `#if os(iOS)`, `#else contentList`). EmptyState check unchanged.
-5. `reorderList` (iOS-only): collapsed = all group ids minus expanded; ForEach `BudgetReorder.visibleRows`; real-group rows = chevron toggle Button + name + `Text("· \(BudgetReorder.itemCount(of: gid, in: reorderRows)) budgets")`; Ungrouped header = plain secondary Text; `.item` rows = `BudgetRowView(budget:)`; `.onMove` → `applyVisibleMove`; `.environment(\.editMode, .constant(.active))`.
-6. `persistReorder()` — verbatim from the plan (diff-aware `updateBudgetGroup sortOrder` / `updateBudget groupId` incl. `.null`, one `setBudgetOrder` with flat ids, `guard !reorderRows.isEmpty`, errors → `errorMessage = i18nMessage(error)`).
+1. **`Storage/Schema.swift`** — `color      TEXT,` added after `name` in BOTH `account_groups` and `budget_groups` CREATEs; `Schema.version` → `"2026-07-17T00:00:00Z"` (matches web `SCHEMA_VERSION` from Task 1).
+2. **`Storage/Migrations.swift`** — registered `"2026-07-17-group-color"` after the baseline, exact code from the plan: duplicate-column-tolerant ALTERs over both tables + `Self.ensureMetadataRow(db)` re-stamp.
+3. **`Store/Domain/Groups.swift`** — `create` decodes optional `color` and the INSERT gains the column/bind (applies to both account+budget group twins via the shared helper); `update` gains `if let colorV = patch["color"] { sets.append("color = ?"); bind.append(colorV.sqlBind) }` — note: the actual code uses explicit patch if-lets, not a cols map (plan adapted); `.null` patch clears the color (sqlBind → nil). Header comment updated ("name-only" → name/color/sortOrder).
+4. **`Project/Models.swift`** — `GroupRow` gains `public var color: String?`, init default `nil` (existing call sites + `AccountGroupRow` typealias compile unchanged). **`Project/Projections+State.swift`** — both group readers (`Projection.accountGroups` / `Projection.budgetGroups`) funnel through ONE private `groupRows(...)` helper (line ~95); its SELECT + map gained `color`. The only other `FROM budget_groups` SELECT (`budgetGroupNames`, id→name map) doesn't build GroupRow — untouched by design.
+5. **Tests** — new `Tests/FinchCoreTests/GroupColorTests.swift` (4 tests, TestSeed idioms): create-with-color round-trip (+ nil default), update patch round-trip (+ null clears), account-group twin, and migrator test (PRAGMA table_info contains `color` in both tables, db_metadata re-stamped to 2026-07-17, tolerant-ALTER idiom run a second time doesn't throw).
 
-### B. Modal ✕/✓ toolbar chrome (both tabs)
-Each tab's `.toolbar` is now:
-```swift
-#if os(iOS)
-if editMode.isEditing {
-    ToolbarItem(.topBarLeading)  { ✕  reorderRows = []; editMode = .inactive }  // a11y "Cancel"
-    ToolbarItem(.primaryAction)  { ✓  editMode = .inactive }                    // semibold, a11y "Done"
-} else {
-    standardToolbar
-}
-#else
-standardToolbar
-#endif
-```
-AccountsTab's old inline "+ becomes ✓ while editing" special case was removed (its `+` item is now a single unconditional button — the iOS/macOS duplication collapsed since the branches became identical).
+## Import-path verify finding (step 3)
 
-## Adaptations (deviations from the literal prompt template)
-- **editMode platform gating:** AccountsTab's `editMode` (and `reorderRows`) live inside `#if os(iOS)`, so a bare `if editMode.isEditing` at ToolbarContentBuilder level cannot compile on macOS. Per the plan's "gate the branch the same way", the whole if/else is wrapped in `#if os(iOS)` with a macOS `#else` fallthrough. To keep the existing item set byte-identical WITHOUT duplicating ~50 lines per platform branch, the entire pre-existing item set was extracted (unchanged) into a `@ToolbarContentBuilder private var standardToolbar: some ToolbarContent` on each tab, referenced from both the iOS `else` and the macOS `#else`. macOS chrome is unchanged (standardToolbar keeps its internal `#if os(iOS)` items: LedgerBarButton, Reorder).
-- The ✕/✓ items themselves need no inner `#if os(iOS)` since the whole branch is already iOS-only (the prompt's inner `#if` around topBarLeading would be redundant).
-- `"· %lld budgets"` is not in `Localizable.xcstrings` — but neither is Accounts' `"· %lld accounts"`; mirrored exactly (English fallback, same as the shipped Accounts editor). No catalog edits (commit restricted to the 2 tab files).
+**`Migrations.runAll` IS already called on the imported DB — no change needed.** `FinchApp/Sources/FinchApp/FinchStore+ImportExport.swift:28`: `loadPack` step 3 opens the staged (extracted) DB and runs `try Migrations.runAll(on: stagedQueue)` BEFORE the audit gate and the atomic swap — so the file that gets swapped in is already migrated. The D7 force-import path (`forceImportCurrentPack`) reuses that same retained, already-migrated staged file. The reopen after swap (`swapInAndProject`) therefore correctly does not re-run migrations. This is exactly the case the duplicate-column tolerance covers: a web-authored pack already carries `color` but lacks GRDB's bookkeeping table, so the GRDB migrator replays both migrations on it and the ALTER must swallow "duplicate column".
 
-## Untouched (as required)
-Engine/FinchCore, `BudgetReorder`/`AccountReorder`, Manage Groups (`BudgetGroupsView`/`GroupAdminView`), the #479 in-list `moveBudgets` drag, all swipe actions.
+## Test/build results
+
+- `swift test` (full FinchCore suite): **271 tests, 0 failures** (was 267; +4 new).
+- `xcodegen generate && xcodebuild … FinchApp … iPhone 17 Pro`: **BUILD SUCCEEDED**.
+
+## Adaptations (plan → reality)
+
+- `Groups.update` has no "cols map" (plan wording) — explicit patch if-lets; added the color branch in that idiom.
+- `SchemaTests.test_schemaVersionIsSet` pinned `"2026-06-14T00:00:00Z"`; updated the pin to `"2026-07-17T00:00:00Z"` keeping its intent (constant matches the shared web version) — this was the only pre-existing test needing a touch.
+- Fresh-install path note: the baseline now creates `color` directly, so the post-baseline migration's ALTER hits "duplicate column" even on fresh DBs — intentionally absorbed by the tolerance catch (and exercised by every `Migrations.runAll` in the suite).
+- Note: this file previously held a report from an earlier plan's task numbering (Reorder editor, commit f329d47); overwritten per instructions.
 
 ## Blockers
+
 None.

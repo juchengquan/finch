@@ -94,8 +94,8 @@ extension Projection {
 
     private static func groupRows(dbQueue: DatabaseQueue, ledgerId: String, table: String) throws -> [GroupRow] {
         try dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, name FROM \(table) WHERE ledger_id = ? ORDER BY sort_order, name",
-                             arguments: [ledgerId]).map { GroupRow(id: $0["id"], name: $0["name"]) }
+            try Row.fetchAll(db, sql: "SELECT id, name, color FROM \(table) WHERE ledger_id = ? ORDER BY sort_order, name",
+                             arguments: [ledgerId]).map { GroupRow(id: $0["id"], name: $0["name"], color: $0["color"]) }
         }
     }
 
