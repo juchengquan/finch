@@ -98,6 +98,35 @@ struct AddTransactionSheet: View {
         kind == .transfer && currency(of: fromAccountId) != currency(of: toAccountId)
     }
 
+    /// The pre-26 (and macOS) type control: a system segmented Picker, with the
+    /// scrub-anywhere drag on iOS (a native control only drags from the
+    /// SELECTED thumb — this picks whichever segment is under the finger).
+    private var legacyTypeControl: some View {
+        Picker("Type", selection: $kind) {
+            ForEach(Kind.allCases) { kind in
+                Image(systemName: kind.iconName)
+                    .accessibilityLabel(kind.label)
+                    .tag(kind)
+            }
+        }
+        .pickerStyle(.segmented)
+        // .principal sizes to the item's intrinsic width, so maxWidth: .infinity
+        // collapses back to content size. An explicit width is the only lever
+        // that sets the segment size (~near-square segments).
+        .frame(width: Self.typeControlWidth)
+        #if os(iOS)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    let all = Kind.allCases
+                    let seg = Self.typeControlWidth / CGFloat(all.count)
+                    let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                    if all[idx] != kind { kind = all[idx] }
+                }
+        )
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -129,34 +158,15 @@ struct AddTransactionSheet: View {
                 }
                 // Transaction type sits in the title slot as an icon segmented control.
                 ToolbarItem(placement: .principal) {
-                    Picker("Type", selection: $kind) {
-                        ForEach(Kind.allCases) { kind in
-                            Image(systemName: kind.iconName)
-                                .accessibilityLabel(kind.label)
-                                .tag(kind)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    // .principal sizes to the item's intrinsic width, so maxWidth:
-                    // .infinity collapses back to content size. An explicit width is
-                    // the only lever that sets the segment size. ~190pt keeps each
-                    // segment near-square so the selected highlight reads as a
-                    // rounded pill rather than a wide rectangle.
-                    .frame(width: Self.typeControlWidth)
                     #if os(iOS)
-                    // Scrub-anywhere: a native segmented control only drags from
-                    // the SELECTED thumb — this picks whichever segment is under
-                    // the finger from touch-down, wherever the drag starts.
-                    // simultaneous so plain taps still reach the control.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                let all = Kind.allCases
-                                let seg = Self.typeControlWidth / CGFloat(all.count)
-                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                                if all[idx] != kind { kind = all[idx] }
-                            }
-                    )
+                    if #available(iOS 26.0, *) {
+                        // Liquid Glass variant: the sliding thumb is a glass pill.
+                        GlassTypeControl(kind: $kind, width: Self.typeControlWidth)
+                    } else {
+                        legacyTypeControl
+                    }
+                    #else
+                    legacyTypeControl
                     #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -524,3 +534,48 @@ struct AddTransactionSheet: View {
     private static func day(_ d: Date) -> String { dayFmt.string(from: d) }
     private static func time(_ d: Date) -> String { timeFmt.string(from: d) }
 }
+
+#if os(iOS)
+/// The OS 26 type control: icon segments with a **Liquid Glass** sliding
+/// thumb. Touch-down anywhere selects the segment under the finger and the
+/// glass pill glides with the scrub (and with page swipes / taps).
+@available(iOS 26.0, *)
+private struct GlassTypeControl: View {
+    @Binding var kind: AddTransactionSheet.Kind
+    let width: CGFloat
+    private let height: CGFloat = 36
+
+    var body: some View {
+        let all = AddTransactionSheet.Kind.allCases
+        let seg = width / CGFloat(all.count)
+        let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
+        ZStack(alignment: .leading) {
+            Color.clear
+                .glassEffect(.regular.interactive(), in: Capsule())
+                .frame(width: seg, height: height)
+                .offset(x: seg * idx)
+            HStack(spacing: 0) {
+                ForEach(all) { k in
+                    Image(systemName: k.iconName)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(k == kind ? Color.accentColor : Color.secondary)
+                        .frame(width: seg, height: height)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel(k.label)
+                        .accessibilityAddTraits(k == kind ? .isSelected : [])
+                }
+            }
+        }
+        .frame(width: width, height: height)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    let i = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                    if all[i] != kind { kind = all[i] }
+                }
+        )
+        .animation(.snappy(duration: 0.25), value: kind)
+    }
+}
+#endif
