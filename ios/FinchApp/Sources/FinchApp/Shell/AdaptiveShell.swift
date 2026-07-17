@@ -137,8 +137,7 @@ private struct AddTransactionFAB: ViewModifier {
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 56, height: 56)
-                        .background(Color.accentColor, in: Circle())
-                        .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+                        .modifier(FabSurface())
                 }
                 .accessibilityLabel("Add Transaction")
                 .padding(fabLeft ? .leading : .trailing, 20)
@@ -146,6 +145,21 @@ private struct AddTransactionFAB: ViewModifier {
             }
         }
         .onPreferenceChange(SelectionActiveKey.self) { selecting = $0 }
+    }
+}
+
+/// The floating button's surface: Liquid Glass on OS 26+ so it matches the
+/// system's floating chrome (tab bar, toolbar islands); the flat accent
+/// circle + shadow on earlier OSes.
+private struct FabSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            content.glassEffect(.regular.tint(.accentColor).interactive(), in: Circle())
+        } else {
+            content
+                .background(Color.accentColor, in: Circle())
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+        }
     }
 }
 
