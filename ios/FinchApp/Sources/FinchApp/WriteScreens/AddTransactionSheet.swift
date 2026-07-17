@@ -112,6 +112,9 @@ struct AddTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
+            // ZStack gives the kind-swipe .push transition a stable container to
+            // animate inside (a transition directly at the nav root doesn't run).
+            ZStack {
             Form {
                 Section {
                     Text(kind.label)   // names the icon-only type control above
@@ -189,11 +192,14 @@ struct AddTransactionSheet: View {
             // id + .push: a swipe slides the whole form in from the swipe
             // direction (calendar-style, #460). Field @State lives on the sheet,
             // not the Form subtree, so entered values survive the identity swap.
+            // simultaneousGesture, NOT .gesture: the Form's scroll-view pan
+            // intercepts plain gestures, so a .gesture drag never fires here.
             .id(kind)
             .transition(.push(from: kindPushEdge))
             .contentMargins(.top, 6, for: .scrollContent)
-            .gesture(kindSwipe)
+            .simultaneousGesture(kindSwipe)
             #endif
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
