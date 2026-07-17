@@ -43,6 +43,8 @@ struct EditTransactionSheet: View {
     @State private var currencyCode: String
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var selectedKind: EditKind
+    @State private var fromAmountText = ""   // transfer editor: from-leg native amount
+    @State private var toAmountText = ""     // transfer editor: to-leg native amount (cross-currency)
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
@@ -130,6 +132,23 @@ struct EditTransactionSheet: View {
         store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
     }
 
+    /// The transfer's two legs — this row plus its counterpart, resolved via
+    /// transferGroupId. From = the negative-amount leg.
+    private var transferLegs: (from: Tx, to: Tx)? {
+        guard txn.kind == "transfer", let gid = txn.transferGroupId else { return nil }
+        let legs = store.txns.filter { $0.transferGroupId == gid }
+        guard let from = legs.first(where: { $0.amount < 0 }),
+              let to = legs.first(where: { $0.amount > 0 }), from.id != to.id else { return nil }
+        return (from, to)
+    }
+    private var transferSameCurrency: Bool {
+        guard let legs = transferLegs else { return true }
+        return (legs.from.currency ?? "") == (legs.to.currency ?? "")
+    }
+    private func accountName(_ id: String) -> String {
+        store.accounts.first { $0.id == id }?.name ?? "—"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -153,6 +172,32 @@ struct EditTransactionSheet: View {
                                 Text("Split across \(txn.splits?.count ?? 0) categories")
                                 Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                } else if let legs = transferLegs {
+                    // Transfer legs: a real transfer editor (spec §2). Accounts are
+                    // immutable in updateTransfer → read-only; no Category row for
+                    // transfers.
+                    Section("Transfer") {
+                        LabeledContent("From", value: accountName(legs.from.account))
+                        LabeledContent("To", value: accountName(legs.to.account))
+                        if transferSameCurrency {
+                            HStack {
+                                Text("Amount"); Spacer()
+                                TextField("0.00", text: $fromAmountText)
+                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            }
+                        } else {
+                            HStack {
+                                Text("From amount (\(legs.from.currency ?? ""))"); Spacer()
+                                TextField("0.00", text: $fromAmountText)
+                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            }
+                            HStack {
+                                Text("To amount (\(legs.to.currency ?? ""))"); Spacer()
+                                TextField("0.00", text: $toAmountText)
+                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                             }
                         }
                     }
@@ -284,6 +329,10 @@ struct EditTransactionSheet: View {
             .onAppear {
                 attachments = store.attachments(for: txn.id)
                 if currencyCode.isEmpty { currencyCode = accountCurrency }
+                if let legs = transferLegs {
+                    fromAmountText = String(format: "%g", abs(legs.from.nativeAmount ?? legs.from.amount))
+                    toAmountText = String(format: "%g", abs(legs.to.nativeAmount ?? legs.to.amount))
+                }
             }
             .onChange(of: merchant) { _, _ in createCounterpartyOnSave = false }
             .onChange(of: pickedPhoto) { _, item in
@@ -318,6 +367,7 @@ struct EditTransactionSheet: View {
     }
 
     private func save() {
+        if txn.kind == "transfer" { saveTransfer(); return }
         errorMessage = nil
         var patch: [String: JSONValue] = [
             "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
@@ -365,6 +415,44 @@ struct EditTransactionSheet: View {
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Transfer legs save through the engine's updateTransfer (entry-level:
+    /// amounts/date/time/note — keeps BOTH legs consistent; the old single-leg
+    /// patch path could diverge them). Merchant/status stay leg-level patches;
+    /// tags stay setTransactionTags.
+    private func saveTransfer() {
+        errorMessage = nil
+        guard let legs = transferLegs else { errorMessage = "Transfer legs not found."; return }
+        let result = TransferEditPatch.build(.init(
+            sameCurrency: transferSameCurrency,
+            originalFrom: abs(legs.from.nativeAmount ?? legs.from.amount),
+            originalTo: abs(legs.to.nativeAmount ?? legs.to.amount),
+            editedFrom: fromAmountText,
+            editedTo: transferSameCurrency ? nil : toAmountText,
+            originalDate: txn.date, originalTime: txn.time, originalNote: txn.note,
+            newDate: Self.day(date), newTime: Self.time(date), newNote: note))
+        switch result {
+        case .failure:
+            errorMessage = "Enter an amount greater than 0."
+        case .success(let patch):
+            do {
+                if !patch.isEmpty {
+                    try store.apply(.updateTransfer, Args(["id": .string(txn.id), "patch": .object(patch)]))
+                }
+                var legPatch: [String: JSONValue] = [:]
+                if merchant != txn.merchant { legPatch["merchant"] = .string(merchant.isEmpty ? "Untitled" : merchant) }
+                if status != (txn.pending == true ? .pending : .confirmed) { legPatch["status"] = .string(status.rawValue) }
+                if !legPatch.isEmpty {
+                    try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(legPatch)]))
+                }
+                if selectedTags != Set(txn.tags ?? []) {
+                    try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
+                        "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
+                }
+                dismiss()
+            } catch { errorMessage = i18nMessage(error) }
+        }
     }
 
     private func toggleTag(_ id: String) {
