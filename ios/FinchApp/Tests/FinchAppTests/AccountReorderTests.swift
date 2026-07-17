@@ -69,4 +69,38 @@ final class AccountReorderTests: XCTestCase {
         let plan = AccountReorder.persistencePlan(rows)
         XCTAssertEqual(plan.groups.map { "\($0.id):\($0.order)" }, ["g2:0", "g1:1"])
     }
+
+    func test_visibleRows_hidesCollapsedGroupAccounts_keepsUngrouped() {
+        let rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        let vis = AccountReorder.visibleRows(rows, collapsed: ["g1"])
+        XCTAssertEqual(vis.map(\.id), ["g:g1:Bank", "g:g2:Cards", "a:a3", "g:ungrouped:Ungrouped", "a:a4"])
+    }
+
+    func test_accountCount_countsPerGroup() {
+        let rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        XCTAssertEqual(AccountReorder.accountCount(of: "g1", in: rows), 2)
+        XCTAssertEqual(AccountReorder.accountCount(of: "g2", in: rows), 1)
+    }
+
+    func test_visibleMove_collapsedGroup_movesWholeBlock() {
+        let rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        // both groups collapsed → visible: [g1, g2, Ungrouped, a4]; drag g1 (0) below g2 (dest 2)
+        let out = AccountReorder.applyVisibleMove(rows, collapsed: ["g1", "g2"], from: IndexSet(integer: 0), to: 2)
+        XCTAssertEqual(out.map(\.id), ["g:g2:Cards", "a:a3", "g:g1:Bank", "a:a1", "a:a2", "g:ungrouped:Ungrouped", "a:a4"])
+    }
+
+    func test_visibleMove_accountBelowCollapsedHeader_joinsThatGroupsEnd() {
+        let rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        // g1 collapsed → visible: [g1, g2, a3, Ungrouped, a4]; drag a4 (vis 4) to just below g2's a3 → dest 3 (before Ungrouped)
+        let out = AccountReorder.applyVisibleMove(rows, collapsed: ["g1"], from: IndexSet(integer: 4), to: 3)
+        let plan = AccountReorder.persistencePlan(out)
+        XCTAssertEqual(plan.accounts.first { $0.id == "a4" }?.groupId, "g2")
+    }
+
+    func test_visibleMove_noCollapse_matchesApplyMove() {
+        let rows = AccountReorder.buildRows(groups: groups, accounts: accounts)
+        let a = AccountReorder.applyVisibleMove(rows, collapsed: [], from: IndexSet(integer: 1), to: 5)
+        let b = AccountReorder.applyMove(rows, from: IndexSet(integer: 1), to: 5)
+        XCTAssertEqual(a.map(\.id), b.map(\.id))
+    }
 }

@@ -52,6 +52,45 @@ enum AccountReorder {
         }
     }
 
+    /// Rows visible when `collapsed` groups hide their account rows. Ungrouped
+    /// accounts (current header == nil) are always visible.
+    static func visibleRows(_ rows: [ReorderRow], collapsed: Set<String>) -> [ReorderRow] {
+        var out: [ReorderRow] = []; var current: String? = nil
+        for r in rows {
+            switch r {
+            case .group(let id, _): current = id; out.append(r)
+            case .account: if current == nil || !collapsed.contains(current!) { out.append(r) }
+            }
+        }
+        return out
+    }
+
+    /// Number of accounts under a real group header (for the collapsed row label).
+    static func accountCount(of groupId: String, in rows: [ReorderRow]) -> Int {
+        var current: String? = nil; var n = 0
+        for r in rows {
+            switch r {
+            case .group(let id, _): current = id
+            case .account: if current == groupId { n += 1 }
+            }
+        }
+        return n
+    }
+
+    /// Translate a move expressed in *visible* indices into the full row array,
+    /// then apply the existing rules. The destination maps to the full index of
+    /// the visible row at `destination` (or past the end) — so dropping an
+    /// account just below a collapsed header lands at the END of that group.
+    static func applyVisibleMove(_ rows: [ReorderRow], collapsed: Set<String>,
+                                 from source: IndexSet, to destination: Int) -> [ReorderRow] {
+        let vis = visibleRows(rows, collapsed: collapsed)
+        guard let vSrc = source.first, vSrc < vis.count else { return rows }
+        guard let fSrc = rows.firstIndex(of: vis[vSrc]) else { return rows }
+        let fDst = destination >= vis.count ? rows.count
+                 : (rows.firstIndex(of: vis[destination]) ?? rows.count)
+        return applyMove(rows, from: IndexSet(integer: fSrc), to: fDst)
+    }
+
     /// Recompute the real-group order after a header drag, then rebuild the flat
     /// rows so each group's accounts stay with it; Ungrouped stays last.
     private static func rebuildWithGroupOrder(_ rows: [ReorderRow], movedGroup gid: String, toFlatIndex dest: Int) -> [ReorderRow] {
