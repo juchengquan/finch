@@ -33,9 +33,9 @@ struct AddTransactionSheet: View {
     }
 
     @State private var kind: Kind = .expense
-    /// Width of the icon segmented type control — shared by its frame and the
-    /// scrub gesture's per-segment math (internal: the floating bar uses it too).
-    static let typeControlWidth: CGFloat = 190
+    /// Width of the icon segmented type control in the nav bar — shared by its
+    /// frame and the scrub gesture's per-segment math.
+    private static let typeControlWidth: CGFloat = 190
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -151,12 +151,6 @@ struct AddTransactionSheet: View {
                 #endif
             }
             .navigationBarTitleDisplayMode(.inline)
-            #if os(iOS)
-            // iOS 26: the glass type bar floats OVER the scrolling form — rows
-            // travel beneath it, so the glass actually refracts content (in the
-            // toolbar it sat over a flat background and read as a plain strip).
-            .modifier(FloatingTypeBar(kind: $kind))
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
@@ -166,7 +160,8 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .principal) {
                     #if os(iOS)
                     if #available(iOS 26.0, *) {
-                        EmptyView()   // the glass bar floats over the form instead
+                        // Liquid Glass variant: the sliding thumb is a glass pill.
+                        GlassTypeControl(kind: $kind, width: Self.typeControlWidth)
                     } else {
                         legacyTypeControl
                     }
@@ -541,22 +536,6 @@ struct AddTransactionSheet: View {
 }
 
 #if os(iOS)
-/// Floats the glass type bar over the sheet's scrolling content (iOS 26+);
-/// no-op on earlier OSes (they keep the toolbar segmented control).
-private struct FloatingTypeBar: ViewModifier {
-    @Binding var kind: AddTransactionSheet.Kind
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.safeAreaInset(edge: .top, spacing: 4) {
-                GlassTypeControl(kind: $kind, width: 240)
-                    .padding(.top, 2)
-            }
-        } else {
-            content
-        }
-    }
-}
-
 /// The OS 26 type control: icon segments with a **Liquid Glass** sliding
 /// thumb. Touch-down anywhere selects the segment under the finger and the
 /// glass pill glides with the scrub (and with page swipes / taps).
