@@ -556,16 +556,17 @@ private struct GlassTypeControl: View {
             Color.clear
                 .glassEffect(.regular, in: Capsule())
                 .frame(width: width, height: height)
-            // The sliding lens: a tinted interactive glass pill inset in the bar.
-            Color.clear
-                .glassEffect(.regular.tint(.accentColor.opacity(0.5)).interactive(), in: Capsule())
+            // The sliding thumb: a soft NEUTRAL pill, like the bottom tab bar's
+            // selected-tab pill — the accent color lives on the icon, not the pill.
+            Capsule()
+                .fill(Color.primary.opacity(0.08))
                 .frame(width: seg - 6, height: height - 8)
                 .offset(x: seg * idx + 3)
             HStack(spacing: 0) {
                 ForEach(all) { k in
                     Image(systemName: k.iconName)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(k == kind ? Color.white : Color.secondary)
+                        .foregroundStyle(k == kind ? Color.accentColor : Color.secondary)
                         .frame(width: seg, height: height)
                         .contentShape(Rectangle())
                         .accessibilityLabel(k.label)
