@@ -20,6 +20,8 @@ struct BudgetsTab: View {
     @State private var showingAdd = false
     @State private var showingGroups = false
     @State private var editing: BudgetRow?
+    @State private var quickAddFor: BudgetRow?     // leading swipe (expense) → Add sheet, category prefilled
+    @State private var contributeFor: BudgetRow?   // leading swipe (goal) → Contribute sheet
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
@@ -57,6 +59,8 @@ struct BudgetsTab: View {
             }
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
+            .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
+            .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
             .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
             .errorAlert($errorMessage)
             .alert("Rename group", isPresented: Binding(
@@ -93,7 +97,8 @@ struct BudgetsTab: View {
                     BudgetRowView(budget: budget)
                         .tag(budget.id)
                         .swipeActions(edge: .trailing) { rowActions(budget) }
-                        .contextMenu { rowActions(budget) }
+                        .swipeActions(edge: .leading) { leadingActions(budget) }
+                        .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
             }
             #if os(macOS)
@@ -111,7 +116,8 @@ struct BudgetsTab: View {
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) { rowActions(budget) }
-                    .contextMenu { rowActions(budget) }
+                    .swipeActions(edge: .leading) { leadingActions(budget) }
+                    .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
             }
         }
@@ -209,6 +215,17 @@ struct BudgetsTab: View {
             if nowCollapsed { collapsedGroups.insert(group) } else { collapsedGroups.remove(group) }
         }
         BudgetGroupCollapse.setCollapsed(group, nowCollapsed, ledger: store.activeLedgerId)
+    }
+
+    /// Leading swipe: the budget's quick verb — expense budgets quick-add a
+    /// transaction in their (first) category; goal budgets contribute. Both open
+    /// sheets (confirm-first). Also merged into the context menu for macOS.
+    @ViewBuilder private func leadingActions(_ budget: BudgetRow) -> some View {
+        if budget.type == "income" {
+            Button { contributeFor = budget } label: { Label("Contribute", systemImage: "dollarsign.circle") }.tint(.green)
+        } else {
+            Button { quickAddFor = budget } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
+        }
     }
 
     @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
