@@ -308,9 +308,15 @@ struct ActivityFeedView: View {
             if txn.pending == true {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
             }
+            if ["expense", "income"].contains(txn.kind ?? "") {
+                Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
+            }
         }
         .contextMenu {   // right-click parity on Mac/iPad (swipe is touch-only)
             Button { editing = txn } label: { Label("Edit", systemImage: "pencil") }
+            if ["expense", "income"].contains(txn.kind ?? "") {
+                Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            }
             if !store.attachments(for: txn.id).isEmpty {
                 Button { previewReceipt(txn) } label: { Label("Preview receipt", systemImage: "paperclip") }
             }
@@ -327,6 +333,9 @@ struct ActivityFeedView: View {
     }
     private func confirm(_ txn: Tx) {
         run { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
+    }
+    private func duplicate(_ txn: Tx) {
+        run { try store.duplicateTransaction(txn) }
     }
     private func bulkConfirm() {
         run { for id in selected { try store.apply(.confirmTransaction, Args(["id": .string(id)])) } }

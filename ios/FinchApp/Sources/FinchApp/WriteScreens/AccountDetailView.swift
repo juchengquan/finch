@@ -166,9 +166,15 @@ struct AccountDetailView: View {
             if t.pending == true {
                 Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
             }
+            if ["expense", "income"].contains(t.kind ?? "") {
+                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
+            }
         }
         .contextMenu {
             Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
+            if ["expense", "income"].contains(t.kind ?? "") {
+                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            }
             if !store.attachments(for: t.id).isEmpty {
                 Button { previewReceipt(t) } label: { Label("Preview receipt", systemImage: "paperclip") }
             }
@@ -188,6 +194,9 @@ struct AccountDetailView: View {
     private func confirmTxn(_ txn: Tx) {
         do { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
         catch { errorMessage = i18nMessage(error) }
+    }
+    private func duplicateTxn(_ t: Tx) {
+        do { try store.duplicateTransaction(t) } catch { errorMessage = i18nMessage(error) }
     }
 
     private func archive(_ a: AccountRow) {
