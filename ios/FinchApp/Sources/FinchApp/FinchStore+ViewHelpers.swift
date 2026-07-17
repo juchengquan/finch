@@ -200,10 +200,20 @@ extension FinchStore {
     }
     /// Budgets with no (resolvable) group — rendered bare at the top.
     public var ungroupedBudgets: [BudgetRow] {
-        budgets.filter { $0.groupId.flatMap { budgetGroupNames[$0] } == nil }
+        applyBudgetOrder(budgets.filter { $0.groupId.flatMap { budgetGroupNames[$0] } == nil })
     }
     public func budgets(in group: String) -> [BudgetRow] {
-        budgets.filter { (($0.groupId.flatMap { budgetGroupNames[$0] }) ?? "Ungrouped") == group }
+        applyBudgetOrder(budgets.filter { (($0.groupId.flatMap { budgetGroupNames[$0] }) ?? "Ungrouped") == group })
+    }
+    /// Apply the user's manual order (app_state budgetOrderByLedger); unknown ids
+    /// (e.g. newly created budgets) keep their relative created_at order, after
+    /// the ordered ones.
+    private func applyBudgetOrder(_ list: [BudgetRow]) -> [BudgetRow] {
+        guard let order = budgetOrderByLedger[activeLedgerId], !order.isEmpty else { return list }
+        let pos = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        return list.enumerated().sorted {
+            (pos[$0.element.id] ?? order.count + $0.offset) < (pos[$1.element.id] ?? order.count + $1.offset)
+        }.map(\.element)
     }
     public var budgetTotalsDisplay: (used: String, base: String) {
         var used = 0.0, base = 0.0

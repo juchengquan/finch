@@ -169,7 +169,10 @@ struct BudgetsTab: View {
         }
         // Ungrouped budgets: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedBudgets.isEmpty {
-            Section { ForEach(filteredUngroupedBudgets) { budget in row(budget) } }
+            Section {
+                ForEach(filteredUngroupedBudgets) { budget in row(budget) }
+                    .onMove { moveBudgets(in: "Ungrouped", from: $0, to: $1) }
+            }
         }
         ForEach(groupsToShow, id: \.self) { groupName in
             // Tappable Button row (not a section header) so the chevron toggle
@@ -203,6 +206,7 @@ struct BudgetsTab: View {
                 // Collapse is bypassed while searching so matches always surface.
                 if !collapsedGroups.contains(groupName) || searchActive {
                     ForEach(filteredBudgets(in: groupName)) { budget in row(budget) }
+                        .onMove { moveBudgets(in: groupName, from: $0, to: $1) }
                 }
             }
         }
@@ -246,6 +250,21 @@ struct BudgetsTab: View {
             try store.apply(.removeBudget, Args(["id": .string(budget.id)]))
             if selection?.wrappedValue == budget.id { selection?.wrappedValue = nil }
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Persist a within-group budget reorder (long-press drag, like Accounts).
+    /// Writes the ledger-wide flat order to app_state via setBudgetOrder;
+    /// membership is untouched. No-op while searching (filtered indices).
+    private func moveBudgets(in group: String, from source: IndexSet, to dest: Int) {
+        guard !searchActive else { return }
+        var seg = store.budgets(in: group)
+        seg.move(fromOffsets: source, toOffset: dest)
+        var ids: [String] = []
+        for g in store.budgetGroupsOrdered + ["Ungrouped"] {
+            ids += (g == group ? seg : store.budgets(in: g)).map(\.id)
+        }
+        do { try store.apply(.setBudgetOrder, Args(["ledgerId": .string(store.activeLedgerId), "budgetIds": .array(ids.map { .string($0) })])) }
+        catch { errorMessage = i18nMessage(error) }
     }
 
     private func renameGroup() {

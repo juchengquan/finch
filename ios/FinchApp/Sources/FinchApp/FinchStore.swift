@@ -67,6 +67,7 @@ public final class FinchStore: ObservableObject {
     var budgetGroupNames: [String: String] = [:]
     var rateMap: [String: Double] = [:]
     var displayCurrencyByLedger: [String: String] = [:]
+    var budgetOrderByLedger: [String: [String]] = [:]   // per-ledger manual budget order (app_state)
     var merchantStatsCache: [String: MerchantStats]?   // lazily built; invalidated each reproject
     var runningBalanceCache: [String: Double]?          // txn.id → account balance (base) after that txn; lazy, invalidated each reproject
 
@@ -216,12 +217,14 @@ public final class FinchStore: ObservableObject {
             let rules = try Projection.rules(dbQueue: q, ledgerId: id)
             let tags = try Projection.tags(dbQueue: q, ledgerId: id)
             let displayCurrencyByLedger = try Projection.displayCurrencyByLedger(dbQueue: q)
+            let budgetOrderByLedger = try Projection.budgetOrderByLedger(dbQueue: q)
 
             self.txns = txns; self.accounts = accounts; self.accountGroups = accountGroups
             self.budgets = budgets; self.categories = categories; self.counterparties = counterparties
             self.budgetGroupNames = budgetGroupNames; self.budgetGroups = budgetGroups
             self.holdings = holdings; self.scheduled = scheduled; self.exchangeRates = exchangeRates
             self.rules = rules; self.tags = tags; self.displayCurrencyByLedger = displayCurrencyByLedger
+            self.budgetOrderByLedger = budgetOrderByLedger
             self.rateMap = Money.latestRateMap(exchangeRates)
             self.merchantStatsCache = nil   // recompute on next access
             self.runningBalanceCache = nil  // depends on txns + opening balances; recompute lazily
