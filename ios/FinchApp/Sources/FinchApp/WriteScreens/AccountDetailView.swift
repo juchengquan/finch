@@ -19,6 +19,7 @@ struct AccountDetailView: View {
     @State private var pendingTxDelete: Tx?   // single-transaction delete awaiting confirmation
     @State private var errorMessage: String?
     @State private var editing: Tx?
+    @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var previewURL: URL?
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
@@ -60,6 +61,7 @@ struct AccountDetailView: View {
                 .sheet(isPresented: $showingReconcile) { ReconcileSheet(preselect: account.id) }
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+                .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
                 .quickLookPreview($previewURL)
                 .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(account) }
@@ -196,7 +198,7 @@ struct AccountDetailView: View {
         catch { errorMessage = i18nMessage(error) }
     }
     private func duplicateTxn(_ t: Tx) {
-        do { try store.duplicateTransaction(t) } catch { errorMessage = i18nMessage(error) }
+        duplicating = t   // opens the Add sheet pre-filled; Save posts it
     }
 
     private func archive(_ a: AccountRow) {

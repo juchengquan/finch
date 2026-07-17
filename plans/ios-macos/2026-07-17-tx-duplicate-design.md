@@ -63,3 +63,14 @@ Leading swipe gains, after the existing pending-Confirm button:
 - Build iOS + macOS. Sim: DB-verify a duplicate — count rows for a merchant, then (since swipes
   aren't scriptable) verify by calling path review + human pass post-merge; launch sanity.
 - "Duplicate" is a new user-facing string → English fallback until the next zh batch.
+
+## Revision (user feedback, same PR): prefilled Add sheet instead of silent post
+
+Duplicating now **opens the Add Transaction sheet pre-filled** (kind, |amount|, merchant,
+category, account, currency, tags; date = today, note blank) — the user tweaks and confirms
+via **Save**. Rationale: a silent write gave no chance to adjust amount/date and an accidental
+full swipe posted real financial data with no undo. Implementation: `AddTransactionSheet` gains
+`prefill: Tx?` (seeded once in `seedDefaults()`, mirroring Edit's `%g` amount formatting);
+the three call sites present `.sheet(item: $duplicating)`; the silent
+`store.duplicateTransaction` helper was removed (no silent write path remains), and
+CounterpartyDetailView's added error state was dropped again (nothing throws there now).

@@ -60,6 +60,7 @@ struct ActivityFeedView: View {
     @State private var previewURL: URL?
     @State private var isSelecting = false
     @State private var selected: Set<String> = []
+    @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var kbSel: String?            // macOS keyboard-open selection
     @State private var showingBulkCat = false
     @State private var errorMessage: String?
@@ -200,6 +201,7 @@ struct ActivityFeedView: View {
         .sheet(isPresented: $showingAdd) { AddTransactionSheet() }
         .sheet(isPresented: $showingFilter) { TransactionFilterSheet(filter: $filter) }
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+        .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
         }
@@ -334,8 +336,10 @@ struct ActivityFeedView: View {
     private func confirm(_ txn: Tx) {
         run { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
     }
+    /// Duplicate opens the Add sheet pre-filled from the source row — the
+    /// user tweaks/confirms via Save (no silent write).
     private func duplicate(_ txn: Tx) {
-        run { try store.duplicateTransaction(txn) }
+        duplicating = txn
     }
     private func bulkConfirm() {
         run { for id in selected { try store.apply(.confirmTransaction, Args(["id": .string(id)])) } }

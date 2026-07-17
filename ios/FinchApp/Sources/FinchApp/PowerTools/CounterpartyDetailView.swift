@@ -6,7 +6,7 @@ struct CounterpartyDetailView: View {
     @EnvironmentObject private var store: FinchStore
     let counterparty: Counterparty
     @State private var editing: Tx?
-    @State private var errorMessage: String?
+    @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
 
     private var txns: [Tx] {
         Selectors.merchantTransactions(store.txns, store.merchants, counterparty.id, store.activeLedgerId)
@@ -53,11 +53,11 @@ struct CounterpartyDetailView: View {
             }
         }
         .navigationTitle(counterparty.name)
-        .errorAlert($errorMessage)
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+        .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
     }
 
     private func duplicate(_ tx: Tx) {
-        do { try store.duplicateTransaction(tx) } catch { errorMessage = i18nMessage(error) }
+        duplicating = tx   // opens the Add sheet pre-filled; Save posts it
     }
 }

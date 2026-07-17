@@ -170,21 +170,6 @@ extension FinchStore {
     public func transactions(for accountId: String) -> [Tx] {
         Selectors.selectTransactions(txns, ListOptions(ledgerId: activeLedgerId, accountId: accountId))
     }
-    /// Re-posts a copy of a transaction dated today (same account / merchant /
-    /// category / signed amount / currency / tags) via the addTransaction
-    /// chokepoint — the "same coffee again" quick verb. Expense/income only;
-    /// note, receipts, refund links, and pending status are deliberately not
-    /// copied (a duplicate is a new event).
-    public func duplicateTransaction(_ txn: Tx) throws {
-        var args: [String: JSONValue] = [
-            "ledgerId": .string(activeLedgerId), "accountId": .string(txn.account),
-            "amount": .double(txn.amount), "merchant": .string(txn.merchant),
-            "date": .string(today)]
-        if let c = txn.category { args["categoryId"] = .string(c) }
-        if let cur = txn.currency { args["currency"] = .string(cur) }
-        if let tags = txn.tags, !tags.isEmpty { args["tagIds"] = .array(tags.map { .string($0) }) }
-        try apply(.addTransaction, Args(args))
-    }
 
     public func subtotalDisplay(for group: String) -> String {
         displayMoneyBase(accounts(in: group).reduce(0.0) { $0 + toBase($1.balance, from: $1.currency) })
