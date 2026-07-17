@@ -39,7 +39,6 @@ struct LedgerListView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddLedgerSheet() }
-        .navigationDestination(for: String.self) { LedgerDetailView(ledgerId: $0) }
     }
 
     @ViewBuilder private var rows: some View {
@@ -48,7 +47,15 @@ struct LedgerListView: View {
                 if selection != nil {
                     rowContent(ledger).tag(ledger.id)
                 } else {
-                    NavigationLink(value: ledger.id) { rowContent(ledger) }
+                    // A view-destination link, NOT NavigationLink(value:) + a
+                    // .navigationDestination(for: String.self): this list is pushed
+                    // onto whichever tab's stack is current (ledgerPush()), and the
+                    // Accounts/Budgets stacks use a typed [String] path — there SwiftUI
+                    // ignores non-root destinations ("Only root-level navigation
+                    // destinations are effective for a navigation stack with a
+                    // homogeneous path"), so a value link would resolve against the
+                    // TAB's String destination and push a blank page.
+                    NavigationLink { LedgerDetailView(ledgerId: ledger.id) } label: { rowContent(ledger) }
                 }
             }
             .swipeActions(edge: .trailing) {
