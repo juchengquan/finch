@@ -16,6 +16,9 @@ struct ScheduledCalendarView: View {
     var onSelect: ((ScheduledTemplate) -> Void)? = nil
 
     @State private var monthAnchor: Date = ScheduledCalendarView.firstOfMonth(forISO: nil)
+    /// Which edge the incoming month slides in from (set by step()): next month
+    /// pushes in from the trailing edge, previous from the leading edge.
+    @State private var pushEdge: Edge = .trailing
     @State private var selectedDay: String?
     @State private var showingMonthYearPicker = false
 
@@ -46,8 +49,15 @@ struct ScheduledCalendarView: View {
                 VStack(spacing: 12) {
                     header
                     weekdayRow
+                    // id + .push give the month a directional slide when paged via
+                    // swipe/chevrons (step() animates); the Today button and the
+                    // month-year wheel change monthAnchor without withAnimation, so
+                    // those jump instantly. .clipped keeps the slide inside the card.
                     grid(byDay: byDay)
+                        .id(String(format: "%04d-%02d", year, month))
+                        .transition(.push(from: pushEdge))
                 }
+                .clipped()
                 #if os(iOS)
                 // Swipe horizontally anywhere on the month card to page months
                 // (standard calendar idiom; the header chevrons remain for
@@ -250,12 +260,16 @@ struct ScheduledCalendarView: View {
         DragGesture(minimumDistance: 30)
             .onEnded { v in
                 guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                withAnimation { step(v.translation.width < 0 ? 1 : -1) }
+                step(v.translation.width < 0 ? 1 : -1)
             }
     }
     #endif
 
-    private func step(_ n: Int) { if let d = Self.utc.date(byAdding: .month, value: n, to: monthAnchor) { monthAnchor = d } }
+    private func step(_ n: Int) {
+        guard let d = Self.utc.date(byAdding: .month, value: n, to: monthAnchor) else { return }
+        pushEdge = n > 0 ? .trailing : .leading
+        withAnimation(.easeInOut(duration: 0.25)) { monthAnchor = d }
+    }
     private func pretty(_ iso: String) -> String {
         guard let d = AppDate.isoDay.date(from: iso) else { return iso }
         let f = DateFormatter(); f.calendar = Self.utc; f.timeZone = Self.utc.timeZone; f.dateFormat = "EEE, MMM d"; return f.string(from: d)
