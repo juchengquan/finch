@@ -450,6 +450,16 @@ struct TxRow: View {
         }
     }
 
+    private var kindA11yLabel: Text {
+        switch txn.kind {
+        case "income": Text("Income")
+        case "refund": Text("Refund")
+        case "transfer": Text("Transfer")
+        case "adjustment": Text("Adjustment")
+        default: Text("Expense")
+        }
+    }
+
     private var dateTimeText: String {
         let base = relativeOrShort(txn.date)
         if let t = txn.time, !t.isEmpty { return "\(base) · \(t)" }
@@ -479,6 +489,7 @@ struct TxRow: View {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(kindColor)
                 .frame(width: 3)
+                .accessibilityLabel(kindA11yLabel)
             VStack(alignment: .leading, spacing: 1) {
                 // Top-left: merchant + status flags + category.
                 HStack(spacing: 4) {
@@ -489,39 +500,6 @@ struct TxRow: View {
                     if store.isAnomaly(txn) {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
-                    }
-                    if txn.kind == "refund" {
-                        HStack(spacing: 2) {
-                            Image(systemName: "arrow.uturn.left")
-                            Text("Refund")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.purple.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.purple)
-                        .accessibilityLabel("Refund")
-                    }
-                    if txn.kind == "transfer" {
-                        HStack(spacing: 2) {
-                            Image(systemName: "arrow.left.arrow.right")
-                            Text("Transfer")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.blue.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.blue)
-                        .accessibilityLabel("Transfer")
-                    }
-                    if txn.kind == "adjustment" {
-                        HStack(spacing: 2) {
-                            Image(systemName: "slider.horizontal.3")
-                            Text("Adjustment")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.secondary.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Adjustment")
                     }
                     if let cat = store.categoryName(txn.category) {
                         Text(cat).font(.caption2)

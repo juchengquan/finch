@@ -27,3 +27,12 @@ direction: expense **red** · income **green** · **refund purple** (money back,
 distinct from income — user call) · transfer **blue** · adjustment **gray**. The refund *badge*
 also went green → purple to match. The amount **reverts to primary** (one signal, one place — no
 red-heavy feed). Badges remain the accessible/semantic layer; the stripe is the at-a-glance one.
+
+## Revision 2 (user direction): stripe replaces the badges too
+
+With the stripe carrying kind, the **Refund / Transfer / Adjustment badges are removed** —
+verified redundant: a transfer row's title *is* "Transfer" (entry description), adjustments say
+"Balance adjustment", and refund reads from the purple stripe + positive amount. VoiceOver
+retains the kind via an `accessibilityLabel` on the stripe (Expense/Income/Refund/Transfer/
+Adjustment). Net row: `▎ merchant + pending/anomaly flags + chip · date/tags · amount` — no
+new fallback strings introduced (badge texts gone; a11y labels reuse catalog terms).
