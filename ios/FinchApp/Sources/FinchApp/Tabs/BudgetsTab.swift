@@ -29,6 +29,11 @@ struct BudgetsTab: View {
     @State private var renamingGroupId: String?
     @State private var renameText = ""
     @State private var groupPendingDelete: GroupRow?
+    #if os(iOS)
+    @State private var editMode: EditMode = .inactive  // drives reorder; entered via the ⋯ overflow menu
+    @State private var reorderRows: [BudgetReorderRow] = []
+    @State private var expandedReorderGroups: Set<String> = []   // reorder mode: groups start collapsed
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -41,21 +46,25 @@ struct BudgetsTab: View {
             .navigationTitle("Budgets")
             .ledgerPush()
             .toolbar {
+                // Reorder is modal: while editing (iOS-only, like editMode itself)
+                // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).
                 #if os(iOS)
-                ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+                if editMode.isEditing {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { reorderRows = []; withAnimation { editMode = .inactive } } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Cancel")
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
+                            .fontWeight(.semibold)
+                            .accessibilityLabel("Done")
+                    }
+                } else {
+                    standardToolbar
+                }
+                #else
+                standardToolbar
                 #endif
-                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add Budget")
-                        .disabled(store.ledgers.isEmpty)
-                }
-                // Group management moved off the + into the ⋯ overflow menu (matches Accounts).
-                ToolbarItem(placement: .secondaryAction) {
-                    Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
-                }
-                // (Group reordering lives inside Manage Groups — GroupAdminView
-                // supports drag-to-reorder alongside create/rename/delete.)
             }
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
@@ -83,14 +92,69 @@ struct BudgetsTab: View {
             .onAppear { consumeFocus(); collapsedGroups = BudgetGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = BudgetGroupCollapse.collapsed(ledger: lid) }
+            #if os(iOS)
+            .environment(\.editMode, $editMode)
+            .onChange(of: editMode) { _, mode in
+                if mode.isEditing {
+                    reorderRows = BudgetReorder.buildRows(groups: store.budgetGroups, budgets: store.budgets)
+                    expandedReorderGroups = []
+                } else {
+                    persistReorder()
+                    reorderRows = []
+                }
+            }
+            #endif
         }
+    }
+
+    /// The complete non-editing toolbar item set (both platforms) — hidden as a
+    /// block while reordering, when only ✕/✓ show (see the branch in `body`).
+    @ToolbarContentBuilder private var standardToolbar: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+        #endif
+        ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+        ToolbarItem(placement: .primaryAction) {
+            Button { showingAdd = true } label: { Image(systemName: "plus") }
+                .accessibilityLabel("Add Budget")
+                .disabled(store.ledgers.isEmpty)
+        }
+        // Group management moved off the + into the ⋯ overflow menu (matches Accounts).
+        ToolbarItem(placement: .secondaryAction) {
+            Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+        }
+        // Reorder in the ⋯ overflow menu, after Manage Groups (matches Accounts).
+        #if os(iOS)
+        ToolbarItem(placement: .secondaryAction) {
+            Button { withAnimation { editMode = .active } } label: {
+                Label("Reorder", systemImage: "arrow.up.arrow.down")
+            }
+            .disabled(store.budgets.isEmpty)
+        }
+        #endif
+        // (Group reordering also lives inside Manage Groups — GroupAdminView
+        // supports drag-to-reorder alongside create/rename/delete.)
     }
 
     @ViewBuilder private var listContent: some View {
         if store.budgets.isEmpty {
             EmptyState(tab: .budgets,
                        description: store.ledgers.isEmpty ? nil : "Tap + to create a budget.")
-        } else if let selection {
+        } else {
+            #if os(iOS)
+            if editMode.isEditing {
+                reorderList
+            } else {
+                contentList
+            }
+            #else
+            contentList
+            #endif
+        }
+    }
+
+    @ViewBuilder private var contentList: some View {
+        if let selection {
             List(selection: selection) {
                 summarySection
                 groupedSections { budget in
@@ -211,6 +275,70 @@ struct BudgetsTab: View {
             }
         }
     }
+
+    #if os(iOS)
+    /// Flat, fully-draggable list used only while reordering: budgets move
+    /// across groups, group headers move their whole block.
+    private var reorderList: some View {
+        let collapsed = Set(store.budgetGroups.map(\.id)).subtracting(expandedReorderGroups)
+        return List {
+            ForEach(BudgetReorder.visibleRows(reorderRows, collapsed: collapsed)) { row in
+                switch row {
+                case .group(let gid, let name):
+                    if let gid {
+                        // Collapsed-by-default group row: the drag handle moves the whole block.
+                        Button {
+                            if expandedReorderGroups.contains(gid) { expandedReorderGroups.remove(gid) }
+                            else { expandedReorderGroups.insert(gid) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: expandedReorderGroups.contains(gid) ? "chevron.down" : "chevron.right")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(width: 12)
+                                Text(name).fontWeight(.semibold)
+                                Text("· \(BudgetReorder.itemCount(of: gid, in: reorderRows)) budgets")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(name).fontWeight(.semibold).foregroundStyle(.secondary)
+                    }
+                case .item(let b):
+                    BudgetRowView(budget: b)
+                }
+            }
+            .onMove { from, to in
+                reorderRows = BudgetReorder.applyVisibleMove(reorderRows, collapsed: collapsed, from: from, to: to)
+            }
+        }
+        .environment(\.editMode, .constant(.active))
+    }
+
+    /// Persist the reordered state on ✓ (diff-aware, mirrors Accounts'): group
+    /// order via updateBudgetGroup, changed membership via updateBudget, then the
+    /// ledger-wide flat order in one setBudgetOrder. Writes go through the
+    /// per-call `store.apply` chokepoint (like `moveBudgets`), so it isn't
+    /// atomic — a mid-loop failure is cosmetic and self-heals on the next
+    /// reorder. The ✕ cancel path clears `reorderRows` first → the guard no-ops.
+    private func persistReorder() {
+        guard !reorderRows.isEmpty else { return }
+        let plan = BudgetReorder.plan(reorderRows)
+        let curGroupOrder = Dictionary(uniqueKeysWithValues: store.budgetGroups.enumerated().map { ($1.id, $0) })
+        let curGroupOf = Dictionary(uniqueKeysWithValues: store.budgets.map { ($0.id, $0.groupId) })
+        do {
+            for g in plan.groups where curGroupOrder[g.id] != g.order {
+                try store.apply(.updateBudgetGroup, Args(["id": .string(g.id), "patch": .object(["sortOrder": .int(g.order)])]))
+            }
+            for it in plan.items where curGroupOf[it.id] != it.groupId {
+                try store.apply(.updateBudget, Args(["id": .string(it.id), "patch": .object(["groupId": it.groupId.map(JSONValue.string) ?? .null])]))
+            }
+            try store.apply(.setBudgetOrder, Args(["ledgerId": .string(store.activeLedgerId),
+                                                   "budgetIds": .array(plan.items.map { .string($0.id) })]))
+        } catch { errorMessage = i18nMessage(error) }
+    }
+    #endif
 
     /// Toggle a group's collapsed state and persist it.
     private func toggleGroup(_ group: String) {
