@@ -103,6 +103,13 @@ enum SimulatorDemoSeed {
             ("Entertainment", 120, "cat-entertainment", "bgg-lifestyle"),
             ("Health", 100, "cat-health", nil),
         ]
+        // A savings goal (income budget, tracked via contributions) so the goal
+        // surfaces — Contribute swipe, Goal section, saved progress — are demo-able.
+        try apply("createBudget", [
+            "ledgerId": .string("personal"), "name": .string("Vacation Fund"),
+            "type": .string("income"), "amount": .double(2_000), "saved": .double(650),
+            "startDate": .string(monthStart(3))])
+
         for b in budgets {
             var args: [String: JSONValue] = [
                 "ledgerId": .string("personal"), "name": .string(b.name), "type": .string("expense"),
