@@ -543,20 +543,24 @@ struct AddTransactionSheet: View {
 private struct GlassTypeControl: View {
     @Binding var kind: AddTransactionSheet.Kind
     let width: CGFloat
-    private let height: CGFloat = 36
+    private let height: CGFloat = 40
 
     var body: some View {
         let all = AddTransactionSheet.Kind.allCases
         let seg = width / CGFloat(all.count)
         let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
         ZStack(alignment: .leading) {
-            // Tinted: over the toolbar's flat background an untinted glass pane
-            // has nothing to refract and reads as a plain pale circle — the
-            // translucent accent tint is what makes it read as *glass*.
+            // The island: one frosted glass capsule for the whole bar — this is
+            // what makes the control read as Liquid Glass even over the flat
+            // toolbar (an isolated small pane has nothing to refract).
             Color.clear
-                .glassEffect(.regular.tint(.accentColor.opacity(0.45)).interactive(), in: Capsule())
-                .frame(width: seg, height: height)
-                .offset(x: seg * idx)
+                .glassEffect(.regular, in: Capsule())
+                .frame(width: width, height: height)
+            // The sliding lens: a tinted interactive glass pill inset in the bar.
+            Color.clear
+                .glassEffect(.regular.tint(.accentColor.opacity(0.5)).interactive(), in: Capsule())
+                .frame(width: seg - 6, height: height - 8)
+                .offset(x: seg * idx + 3)
             HStack(spacing: 0) {
                 ForEach(all) { k in
                     Image(systemName: k.iconName)
