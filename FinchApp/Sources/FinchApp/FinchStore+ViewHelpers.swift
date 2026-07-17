@@ -151,10 +151,11 @@ extension FinchStore {
 
     // MARK: - Accounts grouping
 
+    /// Group names in `account_groups.sort_order` (store.accountGroups is projected
+    /// ORDER BY sort_order, name). Includes EMPTY groups — a freshly added group
+    /// shows immediately (mirrors budgetGroupsOrdered).
     public var accountGroupsOrdered: [String] {
-        var seen = Set<String>(); var out: [String] = []
-        for a in accounts { guard let g = a.groupName else { continue }; if seen.insert(g).inserted { out.append(g) } }
-        return out
+        accountGroups.map(\.name)
     }
     /// Accounts with no group — rendered bare at the top of the list (no "Ungrouped" header).
     public var ungroupedAccounts: [AccountRow] { accounts.filter { $0.groupName == nil } }
