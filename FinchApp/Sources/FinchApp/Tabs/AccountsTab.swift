@@ -30,6 +30,7 @@ struct AccountsTab: View {
     @State private var renamingGroupId: String?        // group long-press → Edit (rename)
     @State private var renameText = ""
     @State private var groupPendingDelete: AccountGroupRow?
+    @State private var pendingDelete: AccountRow?       // account awaiting delete confirmation
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
     @State private var reorderRows: [ReorderRow] = []
@@ -95,6 +96,18 @@ struct AccountsTab: View {
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
+            // Same confirm-before-delete as the ledger list / account detail page —
+            // swipe/context-menu/⌫ Delete asks first (Archive stays one-tap: it's
+            // recoverable from Settings › Archived Accounts).
+            .confirmationDialog("Delete this account?", isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible, presenting: pendingDelete) { account in
+                Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
+                Button("Cancel", role: .cancel) {}
+            } message: { account in
+                Text("This permanently deletes \(account.name ?? "this account").")
+            }
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
                 set: { if !$0 { renamingGroupId = nil } })) {
@@ -156,7 +169,7 @@ struct AccountsTab: View {
                 }
             }
             #if os(macOS)
-            .onDeleteCommand { if let id = selection.wrappedValue, let a = store.accounts.first(where: { $0.id == id }) { delete(a) } }
+            .onDeleteCommand { if let id = selection.wrappedValue, let a = store.accounts.first(where: { $0.id == id }) { pendingDelete = a } }
             #endif
         } else {
             List {
@@ -349,7 +362,7 @@ struct AccountsTab: View {
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
         Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }.tint(.orange)
-        Button(role: .destructive) { delete(account) } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
     }
 
     /// A deep link / Spotlight tap stashed an id + switched to this tab — open it
