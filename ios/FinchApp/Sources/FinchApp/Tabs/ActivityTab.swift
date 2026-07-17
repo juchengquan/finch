@@ -301,6 +301,7 @@ struct ActivityFeedView: View {
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation (no
             // delete-on-full-swipe — destructive actions get a confirm step).
@@ -437,6 +438,28 @@ struct TxRow: View {
 
     /// Bottom-left line: the transaction's date, with its time appended when set.
     /// Shows relative dates (Today/Yesterday) or short format (Jun 25).
+    /// Stripe color by kind: expense red, income green, refund purple (money
+    /// back, but distinct from income), transfer blue, adjustment gray.
+    private var kindColor: Color {
+        switch txn.kind {
+        case "income": .green
+        case "refund": .purple
+        case "transfer": .blue
+        case "adjustment": Color.gray
+        default: .red
+        }
+    }
+
+    private var kindA11yLabel: Text {
+        switch txn.kind {
+        case "income": Text("Income")
+        case "refund": Text("Refund")
+        case "transfer": Text("Transfer")
+        case "adjustment": Text("Adjustment")
+        default: Text("Expense")
+        }
+    }
+
     private var dateTimeText: String {
         let base = relativeOrShort(txn.date)
         if let t = txn.time, !t.isEmpty { return "\(base) · \(t)" }
@@ -460,10 +483,14 @@ struct TxRow: View {
     }
 
     var body: some View {
-        HStack {
-            Image(systemName: TxnKindIcon.icon(for: txn.kind))
-                .foregroundStyle(txn.amount < 0 ? .red : .green)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 8) {
+            // Thin kind/direction stripe — the leading icon's replacement: near-zero
+            // width, consistent on every row, scannable down the column.
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(kindColor)
+                .frame(width: 3)
+                .accessibilityLabel(kindA11yLabel)
+            VStack(alignment: .leading, spacing: 1) {
                 // Top-left: merchant + status flags + category.
                 HStack(spacing: 4) {
                     Text(txn.merchant)
@@ -473,17 +500,6 @@ struct TxRow: View {
                     if store.isAnomaly(txn) {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
-                    }
-                    if txn.kind == "refund" {
-                        HStack(spacing: 2) {
-                            Image(systemName: "arrow.uturn.left")
-                            Text("Refund")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.green.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.green)
-                        .accessibilityLabel("Refund")
                     }
                     if let cat = store.categoryName(txn.category) {
                         Text(cat).font(.caption2)
@@ -514,7 +530,7 @@ struct TxRow: View {
                 .accessibilityLabel("Preview receipt")
             }
             // Right: amount (top) + running account balance after this txn (bottom).
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 1) {
                 Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
                 let remaining = store.runningBalanceBase(for: txn)
                 Text(store.displayMoneyBase(remaining))

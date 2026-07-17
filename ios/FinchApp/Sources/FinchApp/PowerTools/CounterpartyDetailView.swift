@@ -37,6 +37,7 @@ struct CounterpartyDetailView: View {
                     ForEach(txns) { tx in
                         Button { editing = tx } label: { TxRow(txn: tx).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
                             .swipeActions(edge: .leading) {
                                 if ["expense", "income"].contains(tx.kind ?? "") {
                                     Button { duplicate(tx) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
