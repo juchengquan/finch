@@ -18,3 +18,12 @@ Net: roughly 20–25% shorter rows, plus ~24pt reclaimed row width.
 **Testing:** builds iOS + macOS; no scriptable route to a TxRow list (feed is behind a nav
 push; `finch://` only handles `add`), so the visual is the human pass post-merge. New
 fallback strings "Transfer"/"Adjustment" → next zh batch.
+
+## Revision (user direction, same PR): thin accent stripe instead of icon-less rows
+
+A 3pt leading **stripe** (rounded rect, row-height) replaces the removed icon's role — consistent
+on every row, near-zero width, scannable down the column, and it carries **kind**, not just
+direction: expense **red** · income **green** · **refund purple** (money back, deliberately
+distinct from income — user call) · transfer **blue** · adjustment **gray**. The refund *badge*
+also went green → purple to match. The amount **reverts to primary** (one signal, one place — no
+red-heavy feed). Badges remain the accessible/semantic layer; the stripe is the at-a-glance one.
