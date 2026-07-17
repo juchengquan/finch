@@ -29,10 +29,6 @@ struct AddTransactionSheet: View {
     }
 
     @State private var kind: Kind = .expense
-    /// Which edge the incoming form slides in from on a kind swipe (next type
-    /// pushes from trailing, previous from leading). Segmented-control taps
-    /// don't set this path — they swap instantly, like the calendar's Today.
-    @State private var kindPushEdge: Edge = .trailing
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -81,7 +77,10 @@ struct AddTransactionSheet: View {
 
     /// Expense → expense categories; income → income categories.
     private var categories: [CategoryRow] {
-        store.pickableCategories.filter { kind == .income ? $0.kind == "income" : $0.kind != "income" }
+        categories(for: kind)
+    }
+    private func categories(for k: Kind) -> [CategoryRow] {
+        store.pickableCategories.filter { k == .income ? $0.kind == "income" : $0.kind != "income" }
     }
 
     private func currency(of accountId: String) -> String {
@@ -91,115 +90,26 @@ struct AddTransactionSheet: View {
         kind == .transfer && currency(of: fromAccountId) != currency(of: toAccountId)
     }
 
-    #if os(iOS)
-    /// Horizontal swipe anywhere on the form steps through the transaction
-    /// types in segmented-control order (finger left → next, right → previous;
-    /// no wrap-around). 30pt minimum + the dominance check keep vertical form
-    /// scrolling and row interactions unaffected.
-    private var kindSwipe: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { v in
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                let all = Kind.allCases
-                guard let i = all.firstIndex(of: kind) else { return }
-                let next = v.translation.width < 0 ? all.index(after: i) : i - 1
-                guard all.indices.contains(next) else { return }
-                kindPushEdge = v.translation.width < 0 ? .trailing : .leading
-                withAnimation(.easeInOut(duration: 0.25)) { kind = all[next] }
-            }
-    }
-    #endif
-
     var body: some View {
         NavigationStack {
-            // ZStack gives the kind-swipe .push transition a stable container to
-            // animate inside (a transition directly at the nav root doesn't run).
-            ZStack {
-            Form {
-                Section {
-                    Text(kind.label)   // names the icon-only type control above
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                }
+            Group {
                 #if os(iOS)
-                // Pull the label close to the nav bar and to the first section —
-                // it's a caption for the type control above, not a section of its own.
-                .listSectionSpacing(6)
+                // Page-style TabView so a horizontal swipe INTERACTIVELY drags the
+                // next type's form in with the finger (a .transition can only
+                // animate after the state flips). Selection is the same `kind` the
+                // toolbar's segmented control drives, so they stay in sync. Each
+                // page renders for its own `k` (neighbors pre-render mid-swipe).
+                TabView(selection: $kind) {
+                    ForEach(Kind.allCases) { k in
+                        formPage(k).tag(k)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                #else
+                formPage(kind)
                 #endif
-                if kind == .transfer {
-                    transferFields
-                } else if kind == .adjust {
-                    adjustFields
-                } else {
-                    expenseIncomeFields
-                }
-
-                Section {
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
-                    HStack {
-                        Text("Note"); Spacer()
-                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
-                    }
-                }
-
-                if kind != .adjust {
-                    Section {
-                        Picker("Status", selection: $status) {
-                            Text("Confirmed").tag(Entries.Status.confirmed)
-                            Text("Pending").tag(Entries.Status.pending)
-                        }
-                    }
-                    if !store.tags.isEmpty {
-                        Section("Tags") {
-                            ForEach(store.tags) { tag in
-                                Button { toggleTag(tag.id) } label: {
-                                    HStack {
-                                        Text(tag.name).foregroundStyle(.primary)
-                                        Spacer()
-                                        if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if isLineItem {
-                    Section("Receipt") {
-                        #if os(macOS)
-                        Button { showingFileImporter = true } label: {
-                            Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
-                        }
-                        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image, .pdf]) { result in
-                            if case .success(let url) = result { pickedFileURL = url }
-                        }
-                        #else
-                        PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                            Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
-                        }
-                        #endif
-                    }
-                }
-
-                if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-                }
             }
             .navigationBarTitleDisplayMode(.inline)
-            #if os(iOS)
-            // id + .push: a swipe slides the whole form in from the swipe
-            // direction (calendar-style, #460). Field @State lives on the sheet,
-            // not the Form subtree, so entered values survive the identity swap.
-            // simultaneousGesture, NOT .gesture: the Form's scroll-view pan
-            // intercepts plain gestures, so a .gesture drag never fires here.
-            .id(kind)
-            .transition(.push(from: kindPushEdge))
-            .contentMargins(.top, 6, for: .scrollContent)
-            .simultaneousGesture(kindSwipe)
-            #endif
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
@@ -261,19 +171,98 @@ struct AddTransactionSheet: View {
         }
     }
 
-    @ViewBuilder private var expenseIncomeFields: some View {
+
+    @ViewBuilder private func formPage(_ k: Kind) -> some View {
+            Form {
+                Section {
+                    Text(k.label)   // names the icon-only type control above
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                }
+                #if os(iOS)
+                // Pull the label close to the nav bar and to the first section —
+                // it's a caption for the type control above, not a section of its own.
+                .listSectionSpacing(6)
+                #endif
+                if k == .transfer {
+                    transferFields
+                } else if k == .adjust {
+                    adjustFields
+                } else {
+                    expenseIncomeFields(for: k)
+                }
+
+                Section {
+                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
+                    HStack {
+                        Text("Note"); Spacer()
+                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                    }
+                }
+
+                if k != .adjust {
+                    Section {
+                        Picker("Status", selection: $status) {
+                            Text("Confirmed").tag(Entries.Status.confirmed)
+                            Text("Pending").tag(Entries.Status.pending)
+                        }
+                    }
+                    if !store.tags.isEmpty {
+                        Section("Tags") {
+                            ForEach(store.tags) { tag in
+                                Button { toggleTag(tag.id) } label: {
+                                    HStack {
+                                        Text(tag.name).foregroundStyle(.primary)
+                                        Spacer()
+                                        if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if k == .expense || k == .income || k == .refund {
+                    Section("Receipt") {
+                        #if os(macOS)
+                        Button { showingFileImporter = true } label: {
+                            Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
+                        }
+                        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image, .pdf]) { result in
+                            if case .success(let url) = result { pickedFileURL = url }
+                        }
+                        #else
+                        PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                            Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
+                        }
+                        #endif
+                    }
+                }
+
+                if let errorMessage {
+                    Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+                }
+            }
+            #if os(iOS)
+            .contentMargins(.top, 6, for: .scrollContent)
+            #endif
+    }
+
+    @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
             amountField
             HStack {
-                Text(kind == .income ? "Source" : "Merchant"); Spacer()
+                Text(k == .income ? "Source" : "Merchant"); Spacer()
                 TextField("", text: $merchant).multilineTextAlignment(.trailing)
             }
             merchantSuggestionRows
             if pendingSplits == nil {
                 SearchablePickerRow(title: "Category",
-                    options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+                    options: categories(for: k).map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
             }
-            if kind != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
+            if k != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
                 Button {
                     showingSplit = true
                 } label: {
@@ -291,7 +280,7 @@ struct AddTransactionSheet: View {
                     ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
                 }
             }
-            if kind == .refund {
+            if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     HStack {
                         Text("Refunds")
