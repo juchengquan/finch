@@ -54,6 +54,15 @@ struct BudgetsTab: View {
                 ToolbarItem(placement: .secondaryAction) {
                     Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
                 }
+                // Reorder moved here from the group-header long-press menu (discoverability).
+                ToolbarItem(placement: .secondaryAction) {
+                    Button {
+                        let used = Set(store.budgets.compactMap(\.groupId))
+                        reorderGroupsDraft = store.budgetGroups.filter { used.contains($0.id) }
+                        reorderingGroups = true
+                    } label: { Label("Reorder Groups", systemImage: "arrow.up.arrow.down") }
+                    .disabled(!store.budgets.contains { $0.groupId != nil })
+                }
             }
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
@@ -190,12 +199,9 @@ struct BudgetsTab: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint(collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
+                // Long-press a group → Edit / Delete (real groups only).
+                // Reorder Groups lives in the ⋯ overflow menu.
                 .contextMenu {
-                    Button {
-                        let used = Set(store.budgets.compactMap(\.groupId))
-                        reorderGroupsDraft = store.budgetGroups.filter { used.contains($0.id) }
-                        reorderingGroups = true
-                    } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
                     if let g = store.budgetGroups.first(where: { $0.name == groupName }) {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
                         Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
