@@ -432,8 +432,10 @@ struct BudgetRowView: View {
             HStack {
                 Text(budget.name)
                 Spacer()
+                // Amounts read as data (primary), matching account rows; group
+                // headers keep the secondary summary style on both pages.
                 Text("\(store.displayMoneyBase(progress.used)) / \(store.displayMoneyBase(progress.base))")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
             }
             ProgressView(value: min(Double(progress.pct) / 100, 1.0))
                 .tint(isGoal ? .green : thresholdColor(progress.pct))   // native enhancement
