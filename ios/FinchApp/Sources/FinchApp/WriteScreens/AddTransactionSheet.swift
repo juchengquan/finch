@@ -550,15 +550,18 @@ private struct GlassTypeControl: View {
         let seg = width / CGFloat(all.count)
         let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
         ZStack(alignment: .leading) {
+            // Tinted: over the toolbar's flat background an untinted glass pane
+            // has nothing to refract and reads as a plain pale circle — the
+            // translucent accent tint is what makes it read as *glass*.
             Color.clear
-                .glassEffect(.regular.interactive(), in: Capsule())
+                .glassEffect(.regular.tint(.accentColor.opacity(0.45)).interactive(), in: Capsule())
                 .frame(width: seg, height: height)
                 .offset(x: seg * idx)
             HStack(spacing: 0) {
                 ForEach(all) { k in
                     Image(systemName: k.iconName)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(k == kind ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(k == kind ? Color.white : Color.secondary)
                         .frame(width: seg, height: height)
                         .contentShape(Rectangle())
                         .accessibilityLabel(k.label)
