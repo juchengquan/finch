@@ -132,8 +132,8 @@ struct BudgetsTab: View {
             .disabled(store.budgets.isEmpty)
         }
         #endif
-        // (Group reordering also lives inside Manage Groups — GroupAdminView
-        // supports drag-to-reorder alongside create/rename/delete.)
+        // (Group order lives in the Reorder editor; create via Add Group;
+        // rename/delete via the group header's long-press menu.)
     }
 
     @ViewBuilder private var listContent: some View {

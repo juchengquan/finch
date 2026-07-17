@@ -1,21 +1,25 @@
-# Task 1 report — Web engine: group color column
+# Task 1 report — AccountsTab Add Group sheet + empty groups + dots
 
-**Status:** DONE. Commit `5af3264a1a63f48a36b3728b59ec0760e7db9fb6` on `feat/ios-group-color` (no Co-Authored-By).
+**Status:** DONE. Commit `7f45b4f` on `feat/ios-account-group-parity` (no Co-Authored-By; 2 files only).
 
-**Gates:** `bun run typecheck` green; `bun test lib` — 556 pass / 0 fail (49 files). No migration/schema test needed changes: `lib/db/migrate.test.ts` builds a stale DB without the group tables, but the runner's `isAlreadyAppliedError` swallows "no such table" on replay, so the new ALTERs are no-ops there and the test's intent (idempotent 06-05 ADD + version re-stamp) is untouched.
+**Build:** iOS `** BUILD SUCCEEDED **` (xcodegen generate + FinchApp scheme, iPhone 17 Pro sim).
 
-**Latest-version derivation (verify point):** `migrate()` (schema.ts:688) does NOT derive the latest version from the MIGRATIONS map keys. It reads the DB's recorded `db_metadata.schema_version`, replays map entries with keys strictly greater (lex/chronological sort), then stamps the exported constant `SCHEMA_VERSION` via `ensureMetadataRow`. So the constant is the recorded latest and had to be bumped: `SCHEMA_VERSION = '2026-07-17T00:00:00Z'` (was `'2026-06-14T00:00:00Z'`), matching the design doc's "version stamps move together" (= iOS `Schema.version` for Task 2). Without the bump, upgraded DBs would be stamped 2026-06-14 and re-replay the 07-17 entry forever (harmless but wrong).
+## Changes
+1. `ios/FinchApp/Sources/FinchApp/FinchStore+ViewHelpers.swift` — `accountGroupsOrdered` now `accountGroups.map(\.name)` with a doc comment mirroring `budgetGroupsOrdered` (includes EMPTY groups — a freshly added group shows immediately). `accounts(in:)`, `subtotalDisplay`, `ungroupedAccounts` untouched.
+2. `ios/FinchApp/Sources/FinchApp/Tabs/AccountsTab.swift`:
+   - ⋯ Manage Groups item → Add Group (`folder.badge.plus`, `addingGroup = true`), mirroring BudgetsTab's.
+   - State `showingGroups` → `addingGroup = false`; `.sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }` replaces the AccountGroupsView presentation.
+   - `AddAccountGroupSheet` (private) appended — faithful adaptation of BudgetsTab's `AddGroupSheet`: "Group name" TextField · Color section (TagPalette.hexes swatches, tap-toggle, header "Color", footer "Select accounts below to move them into this new group (optional)." with 10pt top pad) · picker mirroring the page (ungrouped headerless first via `store.ungroupedAccounts`, then `store.accountGroupsOrdered` sections with `store.accounts(in: g)`, empties skipped) · Button rows `a.name ?? "—"` + trailing checkmark, insets 4/20 · `.listSectionSpacing(10)` in the iOS block · ✕/✓ toolbar (✓ disabled on empty name, a11y "Cancel"/"Add") · `add()`: `ag-<uuid8>` via `.createAccountGroup` (+color when set), then `.updateAccount` groupId patch per selected account, errors → `i18nMessage`.
+   - Color dots: 8pt circle before the group name in `groupedSections`' header (resolved by name via `store.accountGroups ... ?.color` + `Color(hex:)`) and in `reorderList`'s real-group rows (resolved by gid) — both mirror BudgetsTab's two dot sites exactly.
 
-**Changes:**
-- `frontend/lib/db/core/schema.ts` — `color TEXT,` after `name` in both `account_groups`/`budget_groups` CREATEs; new MIGRATIONS entry `'2026-07-17T00:00:00Z'` (two ALTERs, comment per plan); `SCHEMA_VERSION` bumped.
-- `frontend/lib/db/queries/budgetGroups.ts` + `accountGroups.ts` — SELECTs return `color` (null-safe map); create INSERT gains column binding `g.color ?? null`; update gains `patch.color !== undefined` branch; update `bind` widened to `(string | number | null)[]` so `color: null` clears.
-- `frontend/lib/db/domain/budgetGroups/types.ts` + `accountGroups/types.ts` — `Row.color: string | null`; `New…`/`…Patch` gain `color?: string | null`.
-- `frontend/lib/db/domain/_args.ts` — inline `createBudgetGroup` args gain `color?: string | null` (`createAccountGroup` uses `NewAccountGroup`, so it inherited it).
-- `frontend/lib/db/domain/budgets/mutations.ts` + `accountGroups/mutations.ts` — create handlers pass `color: args.color ?? null` through to the queries (update handlers cast to Patch, so color flows automatically).
-- `frontend/lib/store/budgetGroups/actions.ts` + `accountGroups/actions.ts` — optimistic create literals gain `color: null` (required by the now-stricter Row type; server projection replaces them after `/api/mutate`).
+## Adaptations beyond the letter of the plan
+- Updated the file-top doc comment ("manage groups" → "add group") so it no longer states a removed menu item.
+- Footer string "Select accounts below to move them into this new group (optional)." is new to the catalog → zh batch note (already flagged in the plan's self-review).
+- `AccountGroupsView` / `GroupAdminView` NOT touched (Task 2's scope).
 
-**Adaptations beyond the letter of the plan:** the two mutation-handler pass-throughs and the two store-literal `color: null` fixes (forced by making Row.color required, and needed for `createBudgetGroup` args to actually reach the INSERT). No blockers.
+## Blockers
+None.
 
 ---
 
-*Note: this file previously held the Task 1 report of the BudgetReorder plan (commit ae7f456); superseded by the group-color plan's Task 1.*
+*Note: this file previously held the Task 1 report of the group-color plan (commit 5af3264); superseded by the account-group-parity plan's Task 1.*

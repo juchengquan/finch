@@ -46,20 +46,3 @@ struct ArchivedAccountsView: View {
     }
 }
 
-/// Create / rename / delete account groups (via the shared GroupAdminView).
-struct AccountGroupsView: View {
-    @EnvironmentObject private var store: FinchStore
-    var body: some View {
-        GroupAdminView(
-            title: "Account Groups",
-            groups: store.accountGroups,
-            onCreate: { try store.apply(.createAccountGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string($0)])) },
-            onRename: { try store.apply(.updateAccountGroup, Args(["id": .string($0), "patch": .object(["name": .string($1)])])) },
-            onDelete: { try store.apply(.deleteAccountGroup, Args(["id": .string($0)])) },
-            onReorder: { ids in
-                for (i, id) in ids.enumerated() {
-                    try store.apply(.updateAccountGroup, Args(["id": .string(id), "patch": .object(["sortOrder": .int(i)])]))
-                }
-            })
-    }
-}
