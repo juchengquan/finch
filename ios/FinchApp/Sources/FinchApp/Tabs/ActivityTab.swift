@@ -510,14 +510,14 @@ struct TxRow: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
                             .accessibilityLabel("Unusual amount")
                     }
-                    ForEach(rowTags.prefix(3)) { tag in
-                        Text(tag.name).font(.caption2)
+                    // Tags collapse to a compact count — full chips crowded the
+                    // title line; names live in edit/detail.
+                    if !rowTags.isEmpty {
+                        Text("+\(rowTags.count)").font(.caption2)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background((Color(hex: tag.color ?? "") ?? .secondary).opacity(0.2), in: Capsule())
-                            .foregroundStyle(Color(hex: tag.color ?? "") ?? .secondary)
-                    }
-                    if rowTags.count > 3 {
-                        Text("+\(rowTags.count - 3)").font(.caption2).foregroundStyle(.secondary)
+                            .background(.quaternary, in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("\(rowTags.count) tags")
                     }
                 }
                 // Bottom-left: date·time + optional note (truncated to one line).
