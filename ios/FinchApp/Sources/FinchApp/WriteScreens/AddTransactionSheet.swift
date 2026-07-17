@@ -164,7 +164,7 @@ struct AddTransactionSheet: View {
                     // sits INSIDE that white capsule, which masks the material and
                     // blocks the content that should refract through it.
                     ToolbarItem(placement: .principal) {
-                        GlassTypeControl(kind: $kind, width: Self.typeControlWidth)
+                        GlassTypeControl(kind: $kind, width: 250)
                     }
                     .sharedBackgroundVisibility(.hidden)
                 } else {
@@ -547,30 +547,44 @@ struct AddTransactionSheet: View {
 private struct GlassTypeControl: View {
     @Binding var kind: AddTransactionSheet.Kind
     let width: CGFloat
-    private let height: CGFloat = 40
+    private let height: CGFloat = 44
+
+    /// Bar-style glyphs — bold, open shapes like the tab bar's, NOT the
+    /// circle-enclosed row icons (thin outlined circles read as ghost buttons
+    /// and bury both the pill and the glass).
+    private func glyph(_ k: AddTransactionSheet.Kind) -> String {
+        switch k {
+        case .expense: return "arrow.up.right"
+        case .income: return "arrow.down.left"
+        case .transfer: return "arrow.left.arrow.right"
+        case .refund: return "arrow.uturn.backward"
+        case .adjust: return "slider.horizontal.3"
+        }
+    }
 
     var body: some View {
         let all = AddTransactionSheet.Kind.allCases
         let seg = width / CGFloat(all.count)
         let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
         ZStack(alignment: .leading) {
-            // The island: one frosted glass capsule for the whole bar — this is
-            // what makes the control read as Liquid Glass even over the flat
-            // toolbar (an isolated small pane has nothing to refract).
+            // The island: one frosted glass capsule for the whole bar (the
+            // system's shared toolbar island is hidden at the call site, so
+            // this is the only surface — content refracts through it).
             Color.clear
                 .glassEffect(.regular, in: Capsule())
                 .frame(width: width, height: height)
-            // The sliding thumb: a soft NEUTRAL pill, like the bottom tab bar's
-            // selected-tab pill — the accent color lives on the icon, not the pill.
+            // The sliding thumb: a clearly-visible neutral pill filling its
+            // segment, like the tab bar's selected-tab pill — accent lives on
+            // the glyph, not the pill.
             Capsule()
-                .fill(Color.primary.opacity(0.08))
+                .fill(Color.primary.opacity(0.12))
                 .frame(width: seg - 6, height: height - 8)
                 .offset(x: seg * idx + 3)
             HStack(spacing: 0) {
                 ForEach(all) { k in
-                    Image(systemName: k.iconName)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(k == kind ? Color.accentColor : Color.secondary)
+                    Image(systemName: glyph(k))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(k == kind ? Color.accentColor : Color.primary)
                         .frame(width: seg, height: height)
                         .contentShape(Rectangle())
                         .accessibilityLabel(k.label)
