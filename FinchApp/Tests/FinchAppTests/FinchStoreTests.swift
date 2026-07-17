@@ -2,8 +2,12 @@ import XCTest
 @testable import FinchApp
 import FinchCore
 
-/// DESIGN §4 — the import pipeline. Uses CLEAN/dirty web-built `.finch` fixtures
-/// (the round-trip samples; no pre-DE fixture, D1).
+/// DESIGN §4 — the import pipeline. `sample.finch` (CLEAN) is built from
+/// SimulatorDemoSeed — seed a scratch DB, export via buildPack(), replace the
+/// fixture — so the data these tests swap into a dev sim matches the demo the
+/// app seeds itself. `dirty.finch` stays web-built (proves a web-exported pack
+/// still hits the audit gate). Note: this drops the web-built CLEAN-import
+/// proof — revisit at release if cross-platform pack interchange matters.
 final class FinchStoreTests: XCTestCase {
     /// Resources are bundled via a folder reference (preserves the
     /// `Fixtures/roundtrip/` hierarchy); reach them through the test bundle.
