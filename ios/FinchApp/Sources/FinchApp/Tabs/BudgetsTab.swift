@@ -256,6 +256,7 @@ struct BudgetsTab: View {
                         }
                         Text(groupName).fontWeight(.semibold)
                         Spacer()
+                        Text(store.budgetSubtotalDisplay(for: groupName)).foregroundStyle(.secondary)
                     }
                     .contentShape(Rectangle())
                 }

@@ -214,6 +214,13 @@ extension FinchStore {
             (pos[$0.element.id] ?? order.count + $0.offset) < (pos[$1.element.id] ?? order.count + $1.offset)
         }.map(\.element)
     }
+    /// The group's total budget (sum of each member's cycle base) in display
+    /// currency — the Budgets-page analogue of Accounts' `subtotalDisplay`.
+    public func budgetSubtotalDisplay(for group: String) -> String {
+        displayMoneyBase(budgets(in: group).reduce(0.0) {
+            $0 + Selectors.budgetProgress($1, txns, today, categoryNodes).base
+        })
+    }
     public var budgetTotalsDisplay: (used: String, base: String) {
         var used = 0.0, base = 0.0
         for b in budgets {
