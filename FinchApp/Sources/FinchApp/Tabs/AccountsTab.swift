@@ -20,6 +20,8 @@ struct AccountsTab: View {
     @State private var showingReconcile = false
     @State private var showingImport = false
     @State private var showingAdd = false
+    @State private var quickAddFor: AccountRow?    // leading swipe → Add Transaction, prefilled
+    @State private var reconcileFor: AccountRow?   // leading swipe → Reconcile, preselected
     @State private var showingGroups = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
@@ -103,6 +105,8 @@ struct AccountsTab: View {
             .sheet(isPresented: $showingImport) { ImportStatementView() }
             .sheet(isPresented: $showingAdd) { AccountSheet(defaultCurrency: store.baseCurrency) }
             .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
+            .sheet(item: $quickAddFor) { AddTransactionSheet(defaultAccountId: $0.id) }
+            .sheet(item: $reconcileFor) { ReconcileSheet(preselect: $0.id) }
             .sheet(isPresented: $showingGroups) { NavigationStack { AccountGroupsView() } }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
@@ -176,7 +180,8 @@ struct AccountsTab: View {
                     AccountRowView(account: account)
                         .tag(account.id)
                         .swipeActions(edge: .trailing) { rowActions(account) }
-                        .contextMenu { rowActions(account) }
+                        .swipeActions(edge: .leading) { leadingActions(account) }
+                        .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
             #if os(macOS)
@@ -194,7 +199,8 @@ struct AccountsTab: View {
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) { rowActions(account) }
-                    .contextMenu { rowActions(account) }
+                    .swipeActions(edge: .leading) { leadingActions(account) }
+                    .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
         }
@@ -389,6 +395,14 @@ struct AccountsTab: View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
         Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }.tint(.orange)
         Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// Leading (right-)swipe: the per-account quick verbs — full swipe triggers
+    /// Add Transaction (first). Also merged into the context menu so both stay
+    /// mouse-reachable on macOS.
+    @ViewBuilder private func leadingActions(_ account: AccountRow) -> some View {
+        Button { quickAddFor = account } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
+        Button { reconcileFor = account } label: { Label("Reconcile", systemImage: "checkmark.circle") }.tint(.blue)
     }
 
     /// A deep link / Spotlight tap stashed an id + switched to this tab — open it
