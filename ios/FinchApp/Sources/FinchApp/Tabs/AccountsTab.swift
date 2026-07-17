@@ -75,6 +75,15 @@ struct AccountsTab: View {
                 ToolbarItem(placement: .secondaryAction) {
                     Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
                 }
+                // Reorder moved here from the group-header long-press menu (discoverability).
+                #if os(iOS)
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { withAnimation { editMode = .active } } label: {
+                        Label("Reorder", systemImage: "arrow.up.arrow.down")
+                    }
+                    .disabled(store.accounts.isEmpty)
+                }
+                #endif
                 ToolbarItem(placement: .secondaryAction) {
                     Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
                 }
@@ -264,14 +273,9 @@ struct AccountsTab: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // Long-press a group → Reorder / Edit / Delete. (Reorder is
-                // iOS-only; Edit/Delete only for real groups, not "Ungrouped".)
+                // Long-press a group → Edit / Delete (real groups only, not
+                // "Ungrouped"). Reorder lives in the ⋯ overflow menu.
                 .contextMenu {
-                    #if os(iOS)
-                    Button { withAnimation { editMode = .active } } label: {
-                        Label("Reorder", systemImage: "arrow.up.arrow.down")
-                    }
-                    #endif
                     if let g = store.accountGroups.first(where: { $0.name == groupName }) {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
                         Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
