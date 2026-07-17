@@ -48,6 +48,13 @@ struct ScheduledCalendarView: View {
                     weekdayRow
                     grid(byDay: byDay)
                 }
+                #if os(iOS)
+                // Swipe horizontally anywhere on the month card to page months
+                // (standard calendar idiom; the header chevrons remain for
+                // accessibility/discovery). minimumDistance + the dominance check
+                // keep day-cell taps and the List's vertical scroll unaffected.
+                .gesture(monthSwipe)
+                #endif
             }
             Section {
                 detail(byDay: byDay, posted: posted)
@@ -236,6 +243,17 @@ struct ScheduledCalendarView: View {
         Text(label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.15)).foregroundStyle(color).clipShape(Capsule())
     }
+
+    #if os(iOS)
+    /// Horizontal month paging: finger left → next month, right → previous.
+    private var monthSwipe: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { v in
+                guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                withAnimation { step(v.translation.width < 0 ? 1 : -1) }
+            }
+    }
+    #endif
 
     private func step(_ n: Int) { if let d = Self.utc.date(byAdding: .month, value: n, to: monthAnchor) { monthAnchor = d } }
     private func pretty(_ iso: String) -> String {
