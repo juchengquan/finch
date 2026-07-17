@@ -419,8 +419,9 @@ struct EditTransactionSheet: View {
 
     /// Transfer legs save through the engine's updateTransfer (entry-level:
     /// amounts/date/time/note — keeps BOTH legs consistent; the old single-leg
-    /// patch path could diverge them). Merchant/status stay leg-level patches;
-    /// tags stay setTransactionTags.
+    /// patch path could diverge them). Merchant/status go through the plain
+    /// updateTransaction patch (entry-level on a transfer); tags via
+    /// setTransactionTags.
     private func saveTransfer() {
         errorMessage = nil
         guard let legs = transferLegs else { errorMessage = "Transfer legs not found."; return }

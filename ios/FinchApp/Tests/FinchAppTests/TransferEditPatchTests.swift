@@ -38,11 +38,18 @@ final class TransferEditPatchTests: XCTestCase {
         XCTAssertEqual(patch["toAmount"]?.asDouble, 101)
     }
 
-    func test_crossCurrency_onlyToChanged_sendsToOnly() throws {
+    func test_crossCurrency_onlyToChanged_sendsBoth() throws {
         let patch = try TransferEditPatch.build(inputs(sameCurrency: false,
             originalFrom: 100, originalTo: 92, editedFrom: "100", editedTo: "95")).get()
-        XCTAssertNil(patch["fromAmount"])
+        XCTAssertEqual(patch["fromAmount"]?.asDouble, 100)
         XCTAssertEqual(patch["toAmount"]?.asDouble, 95)
+    }
+
+    func test_crossCurrency_unchanged_sendsNeither() throws {
+        let patch = try TransferEditPatch.build(inputs(sameCurrency: false,
+            originalFrom: 100, originalTo: 92, editedFrom: "100", editedTo: "92")).get()
+        XCTAssertNil(patch["fromAmount"])
+        XCTAssertNil(patch["toAmount"])
     }
 
     func test_badAmount_fails() {

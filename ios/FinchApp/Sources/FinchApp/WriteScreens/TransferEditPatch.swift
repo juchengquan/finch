@@ -6,7 +6,10 @@ import FinchCore
 /// "nothing to save"); amounts are validated > 0. Same-currency transfers send
 /// `fromAmount` only — the engine ratio-scales the other leg, which for equal
 /// legs keeps them equal (sending both would trip its mismatch check on
-/// rounding). Cross-currency sends whichever side(s) changed.
+/// rounding). Cross-currency transfers must send BOTH `fromAmount` and
+/// `toAmount` whenever either changed: the engine treats a lone amount key as
+/// a ratio-scale instruction for the *other* leg, so sending only one would
+/// silently rewrite an amount the user never touched.
 enum TransferEditPatch {
     struct Inputs {
         var sameCurrency: Bool
@@ -27,12 +30,18 @@ enum TransferEditPatch {
     static func build(_ i: Inputs) -> Result<[String: JSONValue], Failure> {
         var patch: [String: JSONValue] = [:]
         guard let from = DecimalInput.parse(i.editedFrom), from > 0 else { return .failure(.badAmount) }
-        if abs(from - i.originalFrom) > 0.001 { patch["fromAmount"] = .double(from) }
-        if !i.sameCurrency {
+        let fromChanged = abs(from - i.originalFrom) > 0.001
+        if i.sameCurrency {
+            if fromChanged { patch["fromAmount"] = .double(from) }
+        } else {
             guard let toText = i.editedTo, let to = DecimalInput.parse(toText), to > 0 else {
                 return .failure(.badAmount)
             }
-            if abs(to - i.originalTo) > 0.001 { patch["toAmount"] = .double(to) }
+            let toChanged = abs(to - i.originalTo) > 0.001
+            if fromChanged || toChanged {
+                patch["fromAmount"] = .double(from)
+                patch["toAmount"] = .double(to)
+            }
         }
         if i.newDate != i.originalDate { patch["date"] = .string(i.newDate) }
         if i.newTime != (i.originalTime ?? "") { patch["time"] = .string(i.newTime) }
