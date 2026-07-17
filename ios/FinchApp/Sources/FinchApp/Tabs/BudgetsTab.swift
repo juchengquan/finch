@@ -132,8 +132,8 @@ struct BudgetsTab: View {
             .disabled(store.budgets.isEmpty)
         }
         #endif
-        // (Group reordering also lives inside Manage Groups — GroupAdminView
-        // supports drag-to-reorder alongside create/rename/delete.)
+        // (Group order lives in the Reorder editor; create via Add Group;
+        // rename/delete via the group header's long-press menu.)
     }
 
     @ViewBuilder private var listContent: some View {
@@ -432,8 +432,10 @@ struct BudgetRowView: View {
             HStack {
                 Text(budget.name)
                 Spacer()
+                // Amounts read as data (primary), matching account rows; group
+                // headers keep the secondary summary style on both pages.
                 Text("\(store.displayMoneyBase(progress.used)) / \(store.displayMoneyBase(progress.base))")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
             }
             ProgressView(value: min(Double(progress.pct) / 100, 1.0))
                 .tint(isGoal ? .green : thresholdColor(progress.pct))   // native enhancement
