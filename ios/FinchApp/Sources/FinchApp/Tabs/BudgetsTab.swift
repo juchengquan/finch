@@ -484,6 +484,7 @@ private struct AddGroupSheet: View {
                     Text("Color")
                 } footer: {
                     Text("Select budgets below to move them into this new group (optional).")
+                        .padding(.top, 10)
                 }
                 // Pick what moves into the new group — mirrored from the Budgets
                 // page structure: ungrouped first (headerless), then each group
@@ -502,6 +503,7 @@ private struct AddGroupSheet: View {
             .navigationTitle("Add Group")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .listSectionSpacing(10)   // tighter gaps between the group sections
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -531,6 +533,7 @@ private struct AddGroupSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))   // denser picker rows
     }
 
     private func add() {
