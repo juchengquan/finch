@@ -105,6 +105,10 @@ struct AddTransactionSheet: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // The pager's own background shows wherever a page's Form doesn't
+                // cover it (behind the bars at rest, page bounce) — paint it the
+                // same grouped color so the sheet reads as one surface.
+                .background(Color(uiColor: .systemGroupedBackground))
                 #else
                 formPage(kind)
                 #endif
