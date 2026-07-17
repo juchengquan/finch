@@ -10,6 +10,7 @@ public enum AppDomain {
         .deleteExchangeRate: deleteExchangeRate,
         .setMobileTabIds: setMobileTabIds,
         .setDisplayCurrency: setDisplayCurrency,
+        .setBudgetOrder: setBudgetOrder,
         .setBackupFrequency: setBackupFrequency,
         .setBackupRetention: setBackupRetention,
         .reset: reset,
@@ -79,6 +80,16 @@ public enum AppDomain {
            let parsed = try? JSONDecoder().decode([String: String].self, from: data) { map = parsed }
         map[a.ledgerId] = a.currency
         try setAppState(db, "displayCurrencyByLedger", String(data: try JSONEncoder().encode(map), encoding: .utf8) ?? "{}")
+    }
+
+    static func setBudgetOrder(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let ledgerId: String; let budgetIds: [String] }
+        let a = try args.to(A.self)
+        var map: [String: [String]] = [:]
+        if let raw = try getAppState(db, "budgetOrderByLedger"), let data = raw.data(using: .utf8),
+           let parsed = try? JSONDecoder().decode([String: [String]].self, from: data) { map = parsed }
+        map[a.ledgerId] = a.budgetIds
+        try setAppState(db, "budgetOrderByLedger", String(data: try JSONEncoder().encode(map), encoding: .utf8) ?? "{}")
     }
 
     static func setBackupFrequency(_ db: Database, _ args: Args) throws {

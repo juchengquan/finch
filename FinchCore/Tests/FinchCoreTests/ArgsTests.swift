@@ -2,9 +2,10 @@ import XCTest
 @testable import FinchCore
 
 final class ArgsTests: XCTestCase {
-    /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment` = 75.
+    /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment`
+    /// + the native-first `setBudgetOrder` = 76.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 75)
+        XCTAssertEqual(ActionName.allCases.count, 76)
     }
 
     func test_actionNameRawValues() {
