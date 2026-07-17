@@ -25,11 +25,10 @@ struct AddTransactionSheet: View {
     var prefill: Tx? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
-        case expense, income, transfer, refund, adjust
+        case expense, income, transfer, refund
         var id: String { rawValue }
-        var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
-        /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).
-        var iconName: String { TxnKindIcon.icon(for: self == .adjust ? "adjustment" : rawValue) }
+        var label: String { rawValue.capitalized }
+        var iconName: String { TxnKindIcon.icon(for: rawValue) }
     }
 
     @State private var kind: Kind = .expense
@@ -43,7 +42,6 @@ struct AddTransactionSheet: View {
     @State private var fromAccountId = ""
     @State private var toAccountId = ""
     @State private var received = ""
-    @State private var targetBalance = ""   // adjust-balance: the account's new balance
     @State private var date = Date()
     @State private var note = ""
     @State private var currencyCode = ""
@@ -215,8 +213,6 @@ struct AddTransactionSheet: View {
                 #endif
                 if k == .transfer {
                     transferFields
-                } else if k == .adjust {
-                    adjustFields
                 } else {
                     expenseIncomeFields(for: k)
                 }
@@ -230,22 +226,20 @@ struct AddTransactionSheet: View {
                     }
                 }
 
-                if k != .adjust {
-                    Section {
-                        Picker("Status", selection: $status) {
-                            Text("Confirmed").tag(Entries.Status.confirmed)
-                            Text("Pending").tag(Entries.Status.pending)
-                        }
+                Section {
+                    Picker("Status", selection: $status) {
+                        Text("Confirmed").tag(Entries.Status.confirmed)
+                        Text("Pending").tag(Entries.Status.pending)
                     }
-                    if !store.tags.isEmpty {
-                        Section("Tags") {
-                            ForEach(store.tags) { tag in
-                                Button { toggleTag(tag.id) } label: {
-                                    HStack {
-                                        Text(tag.name).foregroundStyle(.primary)
-                                        Spacer()
-                                        if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                    }
+                }
+                if !store.tags.isEmpty {
+                    Section("Tags") {
+                        ForEach(store.tags) { tag in
+                            Button { toggleTag(tag.id) } label: {
+                                HStack {
+                                    Text(tag.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
                                 }
                             }
                         }
@@ -380,20 +374,6 @@ struct AddTransactionSheet: View {
         }
     }
 
-    @ViewBuilder private var adjustFields: some View {
-        Section {
-            SearchablePickerRow(title: "Account",
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
-            HStack {
-                Text("New balance"); Spacer()
-                // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
-                TextField("0.00", text: $targetBalance).keyboardType(.numbersAndPunctuation).multilineTextAlignment(.trailing)
-            }
-        } footer: {
-            Text("Posts an adjustment for the difference from the account's current balance.")
-        }
-    }
-
     private func toggleTag(_ id: String) {
         if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
     }
@@ -428,18 +408,6 @@ struct AddTransactionSheet: View {
 
     private func save() {
         errorMessage = nil
-        if kind == .adjust {
-            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
-            do {
-                var args: [String: JSONValue] = [
-                    "accountId": .string(accountId), "targetBalance": .double(target), "date": .string(Self.day(date)),
-                ]
-                if !note.isEmpty { args["note"] = .string(note) }
-                try store.apply(.adjustAccountBalance, Args(args))
-                dismiss()
-            } catch { errorMessage = i18nMessage(error) }
-            return
-        }
         // Keep category valid when the type toggles between expense/income.
         if kind != .transfer, !categories.contains(where: { $0.id == categoryId }) {
             categoryId = categories.first?.id ?? ""

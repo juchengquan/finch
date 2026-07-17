@@ -14,6 +14,7 @@ struct AccountDetailView: View {
 
     @State private var showingEdit = false
     @State private var showingReconcile = false
+    @State private var showingAdjust = false
     @State private var showingAddTx = false
     @State private var confirmingDelete = false
     @State private var pendingTxDelete: Tx?   // single-transaction delete awaiting confirmation
@@ -50,6 +51,7 @@ struct AccountDetailView: View {
                         Menu {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
                             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
+                            Button { showingAdjust = true } label: { Label("Adjust balance…", systemImage: TxnKindIcon.icon(for: "adjustment")) }
                             Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
                         } label: { Image(systemName: "ellipsis.circle") }
@@ -59,6 +61,7 @@ struct AccountDetailView: View {
                     AccountSheet(account: account, defaultCurrency: store.baseCurrency)
                 }
                 .sheet(isPresented: $showingReconcile) { ReconcileSheet(preselect: account.id) }
+                .sheet(isPresented: $showingAdjust) { AdjustBalanceSheet(account: account) }
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
