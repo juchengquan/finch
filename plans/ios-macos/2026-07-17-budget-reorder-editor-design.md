@@ -80,3 +80,13 @@ Toolbar becomes two branches:
 - **Manual (sim, finch-fresh-6):** ⋯ → Reorder on Budgets → collapsed group rows with counts;
   toolbar shows only ✕/✓ (both tabs); ✕ discards (order unchanged after relaunch), ✓ persists
   (DB: `budget_groups.sort_order`, `app_state.budgetOrderByLedger`). Drag itself = human pass.
+
+## Addendum (same PR): Budgets ⋯ consolidation — Add Group replaces Manage Groups
+
+User direction: Manage Groups' four capabilities are now covered individually — reorder (the new
+editor), rename/delete (group-header long-press, #461) — except CREATE, which gets an explicit
+**⋯ → Add Group** (`folder.badge.plus`, name alert → `createBudgetGroup`). Manage Groups (and the
+now-dead `BudgetGroupsView`) removed; the Budgets ⋯ menu is now **Add Group · Reorder**. Known
+quirk (flagged in the alert copy): empty groups stay hidden on the page (hide-empty rule) until a
+budget joins — they appear immediately in the Reorder editor and the Group picker. Moving "+"
+into ⋯ was discussed and deferred.

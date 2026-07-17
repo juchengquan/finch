@@ -18,7 +18,8 @@ struct BudgetsTab: View {
     /// Non-nil → three-column selection mode (drives the shell's detail column).
     var selection: Binding<String?>? = nil
     @State private var showingAdd = false
-    @State private var showingGroups = false
+    @State private var addingGroup = false
+    @State private var newGroupName = ""
     @State private var editing: BudgetRow?
     @State private var quickAddFor: BudgetRow?     // leading swipe (expense) → Add sheet, category prefilled
     @State private var contributeFor: BudgetRow?   // leading swipe (goal) → Contribute sheet
@@ -70,7 +71,13 @@ struct BudgetsTab: View {
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
             .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
-            .sheet(isPresented: $showingGroups) { NavigationStack { BudgetGroupsView() } }
+            .alert("Add group", isPresented: $addingGroup) {
+                TextField("Group name", text: $newGroupName)
+                Button("Cancel", role: .cancel) {}
+                Button("Add") { addGroup() }
+            } message: {
+                Text("New groups appear once a budget is assigned (and immediately in Reorder and the budget's Group picker).")
+            }
             .errorAlert($errorMessage)
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
@@ -121,7 +128,7 @@ struct BudgetsTab: View {
         }
         // Group management moved off the + into the ⋯ overflow menu (matches Accounts).
         ToolbarItem(placement: .secondaryAction) {
-            Button { showingGroups = true } label: { Label("Manage Groups", systemImage: "folder") }
+            Button { addingGroup = true; newGroupName = "" } label: { Label("Add Group", systemImage: "folder.badge.plus") }
         }
         // Reorder in the ⋯ overflow menu, after Manage Groups (matches Accounts).
         #if os(iOS)
@@ -392,6 +399,13 @@ struct BudgetsTab: View {
             ids += (g == group ? seg : store.budgets(in: g)).map(\.id)
         }
         do { try store.apply(.setBudgetOrder, Args(["ledgerId": .string(store.activeLedgerId), "budgetIds": .array(ids.map { .string($0) })])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func addGroup() {
+        let name = newGroupName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        do { try store.apply(.createBudgetGroup, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(name)])) }
         catch { errorMessage = i18nMessage(error) }
     }
 

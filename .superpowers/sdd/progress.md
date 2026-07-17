@@ -1,8 +1,8 @@
-# Budget order — progress
-Worktree: /tmp/finch-bo  Branch: feat/ios-budget-order
-- Task 1: engine (action+projection+test) — pending
-- Task 2: store+UI — pending
+# Budget reorder editor — progress
+Worktree: /tmp/finch-be  Branch: feat/ios-budget-reorder-editor
+- Task 1: BudgetReorder model + tests — pending
+- Task 2: BudgetsTab editor + chrome both tabs — pending
 - Task 3: verify — pending (controller)
-- Task 1: DONE (15afdfc; 267/267 tests; count-guard 75→76).
-- Task 2: DONE inline (agent hit session limit pre-edit; 7 anchor-verified edits; both builds OK).
-- Task 3: VERIFIED — reversed order via app_state → page renders Transport/Utilities/Groceries/Rent (screenshot); read path proven end-to-end; write path unit-tested. Test artifact cleared.
+- Task 1: DONE (ae7f456; 12+12 tests green).
+- Task 2: DONE (f329d47; both builds + 12/12; standardToolbar extraction).
+- Task 3: builds+tests verified by T1/T2 runs; chrome/drag = human pass (menu entry unscriptable).
