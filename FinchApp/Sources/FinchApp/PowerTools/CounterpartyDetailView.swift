@@ -6,6 +6,7 @@ struct CounterpartyDetailView: View {
     @EnvironmentObject private var store: FinchStore
     let counterparty: Counterparty
     @State private var editing: Tx?
+    @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
 
     private var txns: [Tx] {
         Selectors.merchantTransactions(store.txns, store.merchants, counterparty.id, store.activeLedgerId)
@@ -36,11 +37,27 @@ struct CounterpartyDetailView: View {
                     ForEach(txns) { tx in
                         Button { editing = tx } label: { TxRow(txn: tx).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .leading) {
+                                if ["expense", "income"].contains(tx.kind ?? "") {
+                                    Button { duplicate(tx) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
+                                }
+                            }
+                            .contextMenu {
+                                Button { editing = tx } label: { Label("Edit", systemImage: "pencil") }
+                                if ["expense", "income"].contains(tx.kind ?? "") {
+                                    Button { duplicate(tx) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                                }
+                            }
                     }
                 }
             }
         }
         .navigationTitle(counterparty.name)
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+        .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
+    }
+
+    private func duplicate(_ tx: Tx) {
+        duplicating = tx   // opens the Add sheet pre-filled; Save posts it
     }
 }

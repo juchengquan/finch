@@ -19,6 +19,7 @@ struct AccountDetailView: View {
     @State private var pendingTxDelete: Tx?   // single-transaction delete awaiting confirmation
     @State private var errorMessage: String?
     @State private var editing: Tx?
+    @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var previewURL: URL?
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
@@ -60,6 +61,7 @@ struct AccountDetailView: View {
                 .sheet(isPresented: $showingReconcile) { ReconcileSheet(preselect: account.id) }
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+                .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
                 .quickLookPreview($previewURL)
                 .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { delete(account) }
@@ -166,9 +168,15 @@ struct AccountDetailView: View {
             if t.pending == true {
                 Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
             }
+            if ["expense", "income"].contains(t.kind ?? "") {
+                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
+            }
         }
         .contextMenu {
             Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
+            if ["expense", "income"].contains(t.kind ?? "") {
+                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            }
             if !store.attachments(for: t.id).isEmpty {
                 Button { previewReceipt(t) } label: { Label("Preview receipt", systemImage: "paperclip") }
             }
@@ -188,6 +196,9 @@ struct AccountDetailView: View {
     private func confirmTxn(_ txn: Tx) {
         do { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
         catch { errorMessage = i18nMessage(error) }
+    }
+    private func duplicateTxn(_ t: Tx) {
+        duplicating = t   // opens the Add sheet pre-filled; Save posts it
     }
 
     private func archive(_ a: AccountRow) {
