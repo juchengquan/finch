@@ -470,7 +470,7 @@ private struct AddGroupSheet: View {
         NavigationStack {
             Form {
                 TextField("Group name", text: $name)
-                Section("Color") {
+                Section {
                     HStack(spacing: 10) {
                         ForEach(TagPalette.hexes, id: \.self) { hex in
                             Circle().fill(Color(hex: hex) ?? .secondary)
@@ -480,6 +480,10 @@ private struct AddGroupSheet: View {
                                 .accessibilityLabel(Text(hex))
                         }
                     }
+                } header: {
+                    Text("Color")
+                } footer: {
+                    Text("Select budgets below to move them into this new group (optional).")
                 }
                 // Pick what moves into the new group — mirrored from the Budgets
                 // page structure: ungrouped first (headerless), then each group
