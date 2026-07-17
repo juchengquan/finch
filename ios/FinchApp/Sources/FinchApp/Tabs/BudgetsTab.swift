@@ -70,7 +70,7 @@ struct BudgetsTab: View {
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
             .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
-            .sheet(isPresented: $addingGroup) { AddGroupSheet().presentationDetents([.medium]) }
+            .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
