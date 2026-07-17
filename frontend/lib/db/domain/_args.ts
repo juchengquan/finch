@@ -111,7 +111,7 @@ export type Args = {
   contributeBudget: { id: string; amount: number };
 
   // --- budget groups (3) ---
-  createBudgetGroup: { id?: string; ledgerId?: string; name: string };
+  createBudgetGroup: { id?: string; ledgerId?: string; name: string; color?: string | null };
   updateBudgetGroup: { id: string; patch: BudgetGroupPatch };
   deleteBudgetGroup: { id: string };
 

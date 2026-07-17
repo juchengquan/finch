@@ -7,6 +7,8 @@ export interface BudgetGroupRow {
   id: string;
   ledgerId: string;
   name: string;
+  /** Optional accent color (hex), shared with the iOS engine; null = none. */
+  color: string | null;
   sortOrder: number;
 }
 
@@ -14,10 +16,13 @@ export interface NewBudgetGroup {
   id: string;
   ledgerId: string;
   name: string;
+  color?: string | null;
 }
 
 export interface BudgetGroupPatch {
   name?: string;
+  /** Set to a hex string, or null to clear. */
+  color?: string | null;
   /** Position among the ledger's budget groups — written by drag-to-reorder. */
   sortOrder?: number;
 }
