@@ -14,6 +14,10 @@ struct ScheduledCalendarView: View {
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
     /// the context menu's "Edit" still edits; nil → taps edit (compact behavior).
     var onSelect: ((ScheduledTemplate) -> Void)? = nil
+    /// Optional row rendered above the month card (the Scheduled tab passes its
+    /// Calendar/List mode picker) so the toggle lives inside THIS List — keeping
+    /// the List the nav stack's primary scroll view for large-title collapse.
+    var topRow: AnyView? = nil
 
     @State private var monthAnchor: Date = ScheduledCalendarView.firstOfMonth(forISO: nil)
     /// Which edge the incoming month slides in from (set by step()): next month
@@ -43,6 +47,7 @@ struct ScheduledCalendarView: View {
         let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: monthStart, through: monthEnd), by: { $0.date })
         let posted = Selectors.scheduledPostedMap(store.txns)
         return List {
+            if let topRow { topRow }
             // The month grid sits in its own section card (one row, so no internal
             // separators); the day-detail / upcoming list follows as a second section.
             Section {
