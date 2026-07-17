@@ -267,6 +267,11 @@ struct BudgetRowView: View {
     let budget: BudgetRow
     var body: some View {
         let progress = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
+        // Goals (income, non-recurring — "tracked via contributions") have no
+        // cycle: no days-left countdown, no Over flag, and MORE saved is better
+        // (so the 3-color spend banding would read backwards) — show % saved
+        // with a green bar instead.
+        let isGoal = budget.type == "income" && budget.isRecurring == 0
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(budget.name)
@@ -275,13 +280,18 @@ struct BudgetRowView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             ProgressView(value: min(Double(progress.pct) / 100, 1.0))
-                .tint(thresholdColor(progress.pct))   // native enhancement
+                .tint(isGoal ? .green : thresholdColor(progress.pct))   // native enhancement
             HStack {
-                Text("\(store.daysLeft(until: progress.to)) days left")
-                    .font(.caption2).foregroundStyle(.secondary)
-                if progress.over {
-                    Spacer()
-                    Text("Over").font(.caption2).foregroundStyle(.red)
+                if isGoal {
+                    Text("\(progress.pct)% saved")
+                        .font(.caption2).foregroundStyle(.secondary)
+                } else {
+                    Text("\(store.daysLeft(until: progress.to)) days left")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    if progress.over {
+                        Spacer()
+                        Text("Over").font(.caption2).foregroundStyle(.red)
+                    }
                 }
             }
         }
