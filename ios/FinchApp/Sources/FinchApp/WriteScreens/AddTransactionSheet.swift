@@ -29,6 +29,10 @@ struct AddTransactionSheet: View {
     }
 
     @State private var kind: Kind = .expense
+    /// Which edge the incoming form slides in from on a kind swipe (next type
+    /// pushes from trailing, previous from leading). Segmented-control taps
+    /// don't set this path — they swap instantly, like the calendar's Today.
+    @State private var kindPushEdge: Edge = .trailing
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -100,7 +104,8 @@ struct AddTransactionSheet: View {
                 guard let i = all.firstIndex(of: kind) else { return }
                 let next = v.translation.width < 0 ? all.index(after: i) : i - 1
                 guard all.indices.contains(next) else { return }
-                withAnimation { kind = all[next] }
+                kindPushEdge = v.translation.width < 0 ? .trailing : .leading
+                withAnimation(.easeInOut(duration: 0.25)) { kind = all[next] }
             }
     }
     #endif
@@ -181,6 +186,11 @@ struct AddTransactionSheet: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             #if os(iOS)
+            // id + .push: a swipe slides the whole form in from the swipe
+            // direction (calendar-style, #460). Field @State lives on the sheet,
+            // not the Form subtree, so entered values survive the identity swap.
+            .id(kind)
+            .transition(.push(from: kindPushEdge))
             .contentMargins(.top, 6, for: .scrollContent)
             .gesture(kindSwipe)
             #endif
