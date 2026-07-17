@@ -127,6 +127,18 @@ struct AddTransactionSheet: View {
         #endif
     }
 
+    /// Bar-style glyphs — bold open shapes like the tab bar's (the row icons'
+    /// circle-enclosed variants read as ghost buttons in a bar).
+    static func barGlyph(_ k: Kind) -> String {
+        switch k {
+        case .expense: return "arrow.up.right"
+        case .income: return "arrow.down.left"
+        case .transfer: return "arrow.left.arrow.right"
+        case .refund: return "arrow.uturn.backward"
+        case .adjust: return "slider.horizontal.3"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -151,9 +163,6 @@ struct AddTransactionSheet: View {
                 #endif
             }
             .navigationBarTitleDisplayMode(.inline)
-            #if os(iOS)
-            .modifier(FloatingTypeBar(kind: $kind))
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
@@ -162,11 +171,29 @@ struct AddTransactionSheet: View {
                 // Transaction type sits in the title slot as an icon segmented control.
                 #if os(iOS)
                 if #available(iOS 26.0, *) {
-                    // The glass bar floats over the form instead (nothing ever
-                    // renders BEHIND the toolbar slot, so glass there is
-                    // physically a flat white capsule — proven by overlaying the
-                    // same control over form rows, where it refracts perfectly).
-                    ToolbarItem(placement: .principal) { EmptyView() }
+                    // Real Liquid Glass BUTTONS (.glass / .glassProminent) — the
+                    // same material the X/✓ toolbar buttons are made of, with its
+                    // specular depth visible even at rest. One HStack in the
+                    // principal slot (a multi-item principal group gets collapsed
+                    // by the system; a custom view gets no island; a hand-rolled
+                    // glassEffect here has nothing behind it to refract).
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            // All .glass (.glassProminent doesn't render in the
+                            // toolbar); selection = accent glyph, like the tab bar.
+                            ForEach(Kind.allCases) { k in
+                                Button {
+                                    withAnimation(.snappy(duration: 0.25)) { kind = k }
+                                } label: {
+                                    Image(systemName: Self.barGlyph(k)).fontWeight(.semibold)
+                                        .foregroundStyle(k == kind ? Color.accentColor : Color.primary)
+                                }
+                                .buttonStyle(.glass)
+                                .accessibilityLabel(k.label)
+                                .accessibilityAddTraits(k == kind ? .isSelected : [])
+                            }
+                        }
+                    }
                 } else {
                     ToolbarItem(placement: .principal) { legacyTypeControl }
                 }
@@ -539,82 +566,3 @@ struct AddTransactionSheet: View {
     private static func time(_ d: Date) -> String { timeFmt.string(from: d) }
 }
 
-#if os(iOS)
-/// Floats the glass type bar just below the nav buttons (iOS 26+) so form
-/// rows scroll BENEATH it — the only placement where the glass has content
-/// to refract. No-op pre-26 (the toolbar keeps the segmented control).
-private struct FloatingTypeBar: ViewModifier {
-    @Binding var kind: AddTransactionSheet.Kind
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.safeAreaInset(edge: .top, spacing: 2) {
-                GlassTypeControl(kind: $kind, width: AddTransactionSheet.typeControlWidth)
-            }
-        } else {
-            content
-        }
-    }
-}
-
-/// The OS 26 type control: icon segments with a **Liquid Glass** sliding
-/// thumb. Touch-down anywhere selects the segment under the finger and the
-/// glass pill glides with the scrub (and with page swipes / taps).
-@available(iOS 26.0, *)
-private struct GlassTypeControl: View {
-    @Binding var kind: AddTransactionSheet.Kind
-    let width: CGFloat
-    private let height: CGFloat = 36
-
-    /// Bar-style glyphs — bold, open shapes like the tab bar's, NOT the
-    /// circle-enclosed row icons (thin outlined circles read as ghost buttons
-    /// and bury both the pill and the glass).
-    private func glyph(_ k: AddTransactionSheet.Kind) -> String {
-        switch k {
-        case .expense: return "arrow.up.right"
-        case .income: return "arrow.down.left"
-        case .transfer: return "arrow.left.arrow.right"
-        case .refund: return "arrow.uturn.backward"
-        case .adjust: return "slider.horizontal.3"
-        }
-    }
-
-    var body: some View {
-        let all = AddTransactionSheet.Kind.allCases
-        let seg = width / CGFloat(all.count)
-        let idx = CGFloat(all.firstIndex(of: kind) ?? 0)
-        ZStack(alignment: .leading) {
-            Color.clear
-                .glassEffect(.regular.interactive(), in: Capsule())
-                .frame(width: width, height: height)
-            // The sliding thumb: a clearly-visible neutral pill filling its
-            // segment, like the tab bar's selected-tab pill — accent lives on
-            // the glyph, not the pill.
-            Capsule()
-                .fill(Color.primary.opacity(0.12))
-                .frame(width: seg - 6, height: height - 8)
-                .offset(x: seg * idx + 3)
-            HStack(spacing: 0) {
-                ForEach(all) { k in
-                    Image(systemName: glyph(k))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(k == kind ? Color.accentColor : Color.primary)
-                        .frame(width: seg, height: height)
-                        .contentShape(Rectangle())
-                        .accessibilityLabel(k.label)
-                        .accessibilityAddTraits(k == kind ? .isSelected : [])
-                }
-            }
-        }
-        .frame(width: width, height: height)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { v in
-                    let i = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                    if all[i] != kind { kind = all[i] }
-                }
-        )
-        .animation(.snappy(duration: 0.25), value: kind)
-    }
-}
-#endif
