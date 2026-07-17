@@ -481,30 +481,16 @@ private struct AddGroupSheet: View {
                         }
                     }
                 }
-                // All budgets (grouped ones too) — pick what moves into the new group.
-                if !store.budgets.isEmpty {
-                    Section("Budgets") {
-                        ForEach(store.budgets) { b in
-                            Button {
-                                if selectedBudgetIds.contains(b.id) { selectedBudgetIds.remove(b.id) }
-                                else { selectedBudgetIds.insert(b.id) }
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(b.name).foregroundStyle(.primary)
-                                        if let gid = b.groupId, let g = store.budgetGroups.first(where: { $0.id == gid }) {
-                                            Text(g.name).font(.caption2).foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    Spacer()
-                                    if selectedBudgetIds.contains(b.id) {
-                                        Image(systemName: "checkmark").foregroundStyle(.tint)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                // Pick what moves into the new group — mirrored from the Budgets
+                // page structure: ungrouped first (headerless), then each group
+                // in display order.
+                if !store.ungroupedBudgets.isEmpty {
+                    Section { ForEach(store.ungroupedBudgets) { budgetRow($0) } }
+                }
+                ForEach(store.budgetGroupsOrdered, id: \.self) { g in
+                    let items = store.budgets(in: g)
+                    if !items.isEmpty {
+                        Section(g) { ForEach(items) { budgetRow($0) } }
                     }
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -526,6 +512,23 @@ private struct AddGroupSheet: View {
             }
         }
     }
+    @ViewBuilder private func budgetRow(_ b: BudgetRow) -> some View {
+        Button {
+            if selectedBudgetIds.contains(b.id) { selectedBudgetIds.remove(b.id) }
+            else { selectedBudgetIds.insert(b.id) }
+        } label: {
+            HStack {
+                Text(b.name).foregroundStyle(.primary)
+                Spacer()
+                if selectedBudgetIds.contains(b.id) {
+                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func add() {
         let gid = "bgg-\(UUID().uuidString.prefix(8).lowercased())"
         var args: [String: JSONValue] = ["id": .string(gid),
