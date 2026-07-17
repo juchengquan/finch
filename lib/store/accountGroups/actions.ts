@@ -13,7 +13,7 @@ export const accountGroupActions = (set: SetState, get: GetState) => ({
     set((s) => ({
       accountGroups: [
         ...s.accountGroups,
-        { id, ledgerId, name: input.name, sortOrder: s.accountGroups.length },
+        { id, ledgerId, name: input.name, color: null, sortOrder: s.accountGroups.length },
       ],
     }));
     syncMutation('createAccountGroup', { id, ledgerId, name: input.name });

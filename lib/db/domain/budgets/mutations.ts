@@ -94,6 +94,7 @@ export const handlers = {
       id: str(args.id || newId('bgg')),
       ledgerId: str(args.ledgerId || 'personal'),
       name,
+      color: args.color ?? null,
     });
   },
   updateBudgetGroup: async (exec, args: Args['updateBudgetGroup']) => {

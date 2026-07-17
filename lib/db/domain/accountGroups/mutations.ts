@@ -21,6 +21,7 @@ export const handlers = {
       id: str(args.id || newId('ag')),
       ledgerId: str(args.ledgerId || 'personal'),
       name,
+      color: args.color ?? null,
     });
   },
   updateAccountGroup: (exec, args: Args['updateAccountGroup']) => {

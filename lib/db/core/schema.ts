@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS account_groups (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
+  color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS budget_groups (
   id         TEXT PRIMARY KEY,
   ledger_id  TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
   name       TEXT NOT NULL,
+  color      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -432,7 +434,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-06-14T00:00:00Z';
+export const SCHEMA_VERSION = '2026-07-17T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -613,6 +615,11 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
     ...CATEGORIES_UPGRADE,
     ENTRY_ATTACHMENTS_DDL,
     ENTRIES_FTS_DDL,
+  ],
+  // Group colors (iOS-first UI; engine parity): nullable, additive.
+  '2026-07-17T00:00:00Z': [
+    'ALTER TABLE budget_groups ADD COLUMN color TEXT',
+    'ALTER TABLE account_groups ADD COLUMN color TEXT',
   ],
 };
 
