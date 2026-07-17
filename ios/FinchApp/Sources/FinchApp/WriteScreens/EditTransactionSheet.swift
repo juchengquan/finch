@@ -148,6 +148,20 @@ struct EditTransactionSheet: View {
     private func accountName(_ id: String) -> String {
         store.accounts.first { $0.id == id }?.name ?? "—"
     }
+    /// Transfer amount row: fixed currency label from the leg (accounts own
+    /// their currency — no picker). `mirrored` = same-currency To row: disabled,
+    /// live-synced to the From field.
+    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String, mirrored: Bool = false) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0.00", text: text)
+                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                .disabled(mirrored)
+                .foregroundStyle(mirrored ? Color.secondary : Color.primary)
+            Text(currency).foregroundStyle(.secondary)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -182,23 +196,17 @@ struct EditTransactionSheet: View {
                     Section("Transfer") {
                         LabeledContent("From", value: accountName(legs.from.account))
                         LabeledContent("To", value: accountName(legs.to.account))
+                        // Always TWO amount rows, each in its leg's own currency.
+                        // Same currency → the To row mirrors From (disabled);
+                        // cross-currency → independent To amount.
+                        transferAmountRow("From amount", text: $fromAmountText,
+                                          currency: legs.from.currency ?? "")
                         if transferSameCurrency {
-                            HStack {
-                                Text("Amount"); Spacer()
-                                TextField("0.00", text: $fromAmountText)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                            }
+                            transferAmountRow("To amount", text: $fromAmountText,
+                                              currency: legs.to.currency ?? "", mirrored: true)
                         } else {
-                            HStack {
-                                Text("From amount (\(legs.from.currency ?? ""))"); Spacer()
-                                TextField("0.00", text: $fromAmountText)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                            }
-                            HStack {
-                                Text("To amount (\(legs.to.currency ?? ""))"); Spacer()
-                                TextField("0.00", text: $toAmountText)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                            }
+                            transferAmountRow("To amount", text: $toAmountText,
+                                              currency: legs.to.currency ?? "")
                         }
                     }
                 } else {
@@ -207,11 +215,11 @@ struct EditTransactionSheet: View {
                             Text("Amount")
                             Spacer()
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                        }
-                        if txn.kind != "transfer", currencyOptions.count > 1 {
-                            Picker("Currency", selection: $currencyCode) {
+                            // Currency lives inline with the amount, always visible.
+                            Picker("", selection: $currencyCode) {
                                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
                             }
+                            .pickerStyle(.menu).labelsHidden().fixedSize()
                         }
                         SearchablePickerRow(title: "Category",
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
