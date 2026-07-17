@@ -219,9 +219,13 @@ enum SimulatorDemoSeed {
         try apply("createLedger", ["id": .string("travel"), "name": .string("Travel"), "base": .string("EUR")])
         // EUR↔USD rate (USD is the hub; only non-USD stored) so the Travel ledger converts.
         try apply("setExchangeRate", ["date": .string(ymd(1)), "currency": .string("EUR"), "rate": .double(1.08)])
+        // Account ids are a GLOBAL primary key (not per-ledger) — these must not
+        // reuse the Personal ledger's ids ("travel-card" already exists there; the
+        // collision used to abort the whole Travel section mid-seed, silently, via
+        // bootstrap()'s do/catch).
         let travelAccounts: [(id: String, name: String, type: String, opening: Double)] = [
-            ("travel-checking", "Travel Checking", "savings", 2_000),
-            ("travel-card", "Travel Card", "credit_card", 0),
+            ("tvl-checking", "Travel Checking", "savings", 2_000),
+            ("tvl-card", "Travel Card", "credit_card", 0),
         ]
         for a in travelAccounts {
             try apply("createAccount", [
@@ -238,12 +242,12 @@ enum SimulatorDemoSeed {
                 "name": .string(c.name), "type": .string("expense")])
         }
         let travelTxns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String)] = [
-            (3,  "travel-card",     -420.00, "Lufthansa",     "tcat-flights"),
-            (5,  "travel-card",     -680.00, "Hotel Adlon",   "tcat-lodging"),
-            (6,  "travel-card",      -54.00, "Café Einstein", "tcat-food"),
-            (8,  "travel-card",      -32.00, "Museum Pass",   "tcat-activities"),
-            (10, "travel-checking", -120.00, "Train Tickets", "tcat-activities"),
-            (12, "travel-card",      -75.00, "Brauhaus",      "tcat-food"),
+            (3,  "tvl-card",     -420.00, "Lufthansa",     "tcat-flights"),
+            (5,  "tvl-card",     -680.00, "Hotel Adlon",   "tcat-lodging"),
+            (6,  "tvl-card",      -54.00, "Café Einstein", "tcat-food"),
+            (8,  "tvl-card",      -32.00, "Museum Pass",   "tcat-activities"),
+            (10, "tvl-checking", -120.00, "Train Tickets", "tcat-activities"),
+            (12, "tvl-card",      -75.00, "Brauhaus",      "tcat-food"),
         ]
         for t in travelTxns {
             try apply("addTransaction", [
