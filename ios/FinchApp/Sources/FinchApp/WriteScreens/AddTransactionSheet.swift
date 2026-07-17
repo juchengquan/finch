@@ -29,6 +29,9 @@ struct AddTransactionSheet: View {
     }
 
     @State private var kind: Kind = .expense
+    /// Width of the icon segmented type control in the nav bar — shared by its
+    /// frame and the scrub gesture's per-segment math.
+    private static let typeControlWidth: CGFloat = 190
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -131,10 +134,25 @@ struct AddTransactionSheet: View {
                     .pickerStyle(.segmented)
                     // .principal sizes to the item's intrinsic width, so maxWidth:
                     // .infinity collapses back to content size. An explicit width is
-                    // the only lever that sets the segment size. ~190pt keeps each of
-                    // the four segments near-square (~44pt) so the selected highlight
-                    // reads as a rounded pill rather than a wide rectangle.
-                    .frame(width: 190)
+                    // the only lever that sets the segment size. ~190pt keeps each
+                    // segment near-square so the selected highlight reads as a
+                    // rounded pill rather than a wide rectangle.
+                    .frame(width: Self.typeControlWidth)
+                    #if os(iOS)
+                    // Scrub-anywhere: a native segmented control only drags from
+                    // the SELECTED thumb — this picks whichever segment is under
+                    // the finger from touch-down, wherever the drag starts.
+                    // simultaneous so plain taps still reach the control.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                let all = Kind.allCases
+                                let seg = Self.typeControlWidth / CGFloat(all.count)
+                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                                if all[idx] != kind { kind = all[idx] }
+                            }
+                    )
+                    #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
