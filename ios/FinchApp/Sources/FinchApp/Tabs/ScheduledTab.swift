@@ -24,7 +24,7 @@ struct ScheduledTab: View {
     private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
 
     private var detected: [RecurringCharge] {
-        Selectors.detectRecurring(store.txns, store.activeLedgerId, store.today, store.scheduled).filter { !$0.isScheduled }
+        Selectors.detectRecurring(store.txns, store.activeLedgerId, store.wallToday, store.scheduled).filter { !$0.isScheduled }
     }
 
     /// True while the user has typed a non-empty search.
@@ -177,7 +177,7 @@ struct ScheduledRow: View {
     private var accountCurrency: String {
         store.accounts.first { $0.id == template.accountId }?.currency ?? store.displayCurrency
     }
-    private var nextRunDisplay: String { scheduledNextRun(template, today: store.today) }
+    private var nextRunDisplay: String { scheduledNextRun(template, today: store.wallToday) }
 
     var body: some View {
         HStack {

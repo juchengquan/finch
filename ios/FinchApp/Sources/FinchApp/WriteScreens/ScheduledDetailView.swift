@@ -68,7 +68,7 @@ struct ScheduledDetailView: View {
     @ViewBuilder private func scheduleSection(_ t: ScheduledTemplate) -> some View {
         Section("Schedule") {
             LabeledContent("Frequency", value: t.frequency.capitalized)
-            LabeledContent("Next run", value: scheduledNextRun(t, today: store.today))
+            LabeledContent("Next run", value: scheduledNextRun(t, today: store.wallToday))
             if t.frequency == "monthly" || t.frequency == "quarterly" || t.frequency == "yearly" {
                 LabeledContent("Day of month", value: "\(t.dayOfMonth)")
             }

@@ -88,7 +88,7 @@ final class PhoneWatchLink: NSObject, WCSessionDelegate {
                                                categories: store.pickableCategories) else { return }
             do {
                 try store.apply(.addTransaction,
-                                Args(Self.quickAddArgs(item, date: Self.bookingDate(req, fallback: store.today))))
+                                Args(Self.quickAddArgs(item, date: Self.bookingDate(req, fallback: store.wallToday))))
                 // The fresh snapshot pushed back to the watch IS the confirmation
                 // (and refreshes the recents/catalog + the complication).
                 WidgetSnapshotWriter.write(from: store)

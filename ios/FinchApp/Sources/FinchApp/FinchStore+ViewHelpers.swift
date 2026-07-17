@@ -26,10 +26,18 @@ extension FinchStore {
         try? apply(.setDisplayCurrency, Args(["ledgerId": .string(activeLedgerId), "currency": .string(currency)]))
     }
 
-    /// `today` for budget windows = the max confirmed-tx date (the web anchors
-    /// the window on the data, so the oracle's budgetProgress lines up); falls
-    /// back to the wall clock only when there are no transactions.
+    /// The DATA-anchored "today" = the max tx date (falls back to the wall
+    /// clock only when there are no transactions). The web deliberately anchors
+    /// budget windows AND the Insights forecast/digest on the data (demo
+    /// determinism, no hydration mismatch) — use this ONLY for those surfaces.
+    /// Anything that means the literal current day (calendar Today ring,
+    /// Today/Yesterday labels, scheduled next-runs, posting dates) must use
+    /// `wallToday` — this value lags behind the real date whenever the newest
+    /// transaction isn't from today.
     public var today: String { txns.map(\.date).max() ?? Self.isoDay(Date()) }
+
+    /// The real current day (wall clock), for surfaces that mean literal today.
+    public var wallToday: String { Self.isoDay(Date()) }
 
     public var categoryNodes: [CategoryNode] {
         categories.map { CategoryNode(id: $0.id, parentId: $0.parentId) }
