@@ -6,7 +6,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertFalse(Schema.version.isEmpty)
         // The current web `SCHEMA_VERSION` (lib/db/core/schema.ts:435). Phase 1.0
         // ships the post-DE schema; the version string is shared cross-app.
-        XCTAssertEqual(Schema.version, "2026-06-14T00:00:00Z")
+        // 2026-07-17: group-color migration (first post-baseline evolution).
+        XCTAssertEqual(Schema.version, "2026-07-17T00:00:00Z")
         XCTAssertEqual(Schema.appName, "finch")
     }
 }
