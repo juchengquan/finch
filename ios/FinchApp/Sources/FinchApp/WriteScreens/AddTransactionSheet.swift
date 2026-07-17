@@ -87,14 +87,39 @@ struct AddTransactionSheet: View {
         kind == .transfer && currency(of: fromAccountId) != currency(of: toAccountId)
     }
 
+    #if os(iOS)
+    /// Horizontal swipe anywhere on the form steps through the transaction
+    /// types in segmented-control order (finger left → next, right → previous;
+    /// no wrap-around). 30pt minimum + the dominance check keep vertical form
+    /// scrolling and row interactions unaffected.
+    private var kindSwipe: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { v in
+                guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                let all = Kind.allCases
+                guard let i = all.firstIndex(of: kind) else { return }
+                let next = v.translation.width < 0 ? all.index(after: i) : i - 1
+                guard all.indices.contains(next) else { return }
+                withAnimation { kind = all[next] }
+            }
+    }
+    #endif
+
     var body: some View {
         NavigationStack {
             Form {
-                Text(kind.label)   // names the icon-only type control above
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                Section {
+                    Text(kind.label)   // names the icon-only type control above
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                }
+                #if os(iOS)
+                // Pull the label close to the nav bar and to the first section —
+                // it's a caption for the type control above, not a section of its own.
+                .listSectionSpacing(6)
+                #endif
                 if kind == .transfer {
                     transferFields
                 } else if kind == .adjust {
@@ -155,6 +180,10 @@ struct AddTransactionSheet: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+            .contentMargins(.top, 6, for: .scrollContent)
+            .gesture(kindSwipe)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
