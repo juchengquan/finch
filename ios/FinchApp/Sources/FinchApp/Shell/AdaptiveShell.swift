@@ -111,15 +111,27 @@ struct SelectionActiveKey: PreferenceKey {
 /// The overlay sits inside the tab's content area, so it floats just above the
 /// bottom bar automatically. Hidden while the content is in multi-select so it
 /// doesn't overlap the bulk-action bar (see `SelectionActiveKey`).
+/// User preference for which bottom corner hosts the floating add button
+/// (Settings › Appearance › Quick add button). Stored as a raw string so the
+/// Settings picker and the FAB read the same key.
+enum FabPosition: String, CaseIterable, Identifiable {
+    case left, right
+    var id: String { rawValue }
+    var label: LocalizedStringKey { self == .left ? "Bottom left" : "Bottom right" }
+}
+
 private struct AddTransactionFAB: ViewModifier {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
     @State private var selecting = false
+    @AppStorage("finch.fab.enabled") private var fabEnabled = true
+    @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
+    private var fabLeft: Bool { fabPositionRaw == FabPosition.left.rawValue }
     func body(content: Content) -> some View {
-        content.overlay(alignment: .bottomTrailing) {
+        content.overlay(alignment: fabLeft ? .bottomLeading : .bottomTrailing) {
             // Hidden while the corner-pushed Ledger is up so that screen has the
             // same (FAB-free) chrome no matter which tab it was opened from.
-            if !store.accounts.isEmpty, !selecting, !router.showLedger {
+            if fabEnabled, !store.accounts.isEmpty, !selecting, !router.showLedger {
                 Button { router.showAddTransaction = true } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))
@@ -129,7 +141,7 @@ private struct AddTransactionFAB: ViewModifier {
                         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
                 }
                 .accessibilityLabel("Add Transaction")
-                .padding(.trailing, 20)
+                .padding(fabLeft ? .leading : .trailing, 20)
                 .padding(.bottom, 20)
             }
         }

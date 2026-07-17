@@ -26,6 +26,8 @@ struct SettingsAppearanceView: View {
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
+    @AppStorage("finch.fab.enabled") private var fabEnabled = true
+    @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
     @State private var showRelaunchNote = false
 
     var body: some View {
@@ -59,6 +61,19 @@ struct SettingsAppearanceView: View {
             }
             Section("Accounts") {
                 Toggle("Show opening balance", isOn: $showOpeningBalance)
+            }
+            Section {
+                Toggle("Floating add button", isOn: $fabEnabled)
+                if fabEnabled {
+                    Picker("Position", selection: $fabPositionRaw) {
+                        ForEach(FabPosition.allCases) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            } header: {
+                Text("Quick add button")
+            } footer: {
+                Text("The floating + for quickly adding a transaction on iPhone. The toolbar and \u{2318}N ways to add are always available.")
             }
         }
         .navigationTitle("Appearance & Language")
