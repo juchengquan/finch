@@ -67,3 +67,11 @@ Manage-Groups-style admin (removed in #481); `packFormatVersion` bump (not neede
 Unit (engine, both new paths) + both platform builds + web `bun test lib` (db suites) +
 sim: fresh install (baseline path) and upgrade-in-place (migration path — reuse ios-finch2's
 existing DB), Add Group sheet creates a colored group, dot renders, pack export→import survives.
+
+## Addendum 2 (user feedback): empty groups render + budget picker in the sheet
+
+The hide-empty rule read as a bug ("I add a group, it does not show"). Two changes:
+(1) `budgetGroupsOrdered` now includes empty groups — a new group appears immediately;
+(2) the Add Group sheet lists ALL budgets (current group shown as a caption) with checkmark
+multi-select — chosen budgets are re-parented into the new group on create (sheet passes an
+explicit `bgg-…` id so create + updateBudget(groupId) run in one pass).

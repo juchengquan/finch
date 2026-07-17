@@ -464,6 +464,7 @@ private struct AddGroupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var colorHex: String? = nil
+    @State private var selectedBudgetIds: Set<String> = []
     @State private var errorMessage: String?
     var body: some View {
         NavigationStack {
@@ -477,6 +478,32 @@ private struct AddGroupSheet: View {
                                 .overlay(Circle().strokeBorder(.primary.opacity(colorHex == hex ? 0.6 : 0), lineWidth: 2))
                                 .onTapGesture { colorHex = (colorHex == hex ? nil : hex) }
                                 .accessibilityLabel(Text(hex))
+                        }
+                    }
+                }
+                // All budgets (grouped ones too) — pick what moves into the new group.
+                if !store.budgets.isEmpty {
+                    Section("Budgets") {
+                        ForEach(store.budgets) { b in
+                            Button {
+                                if selectedBudgetIds.contains(b.id) { selectedBudgetIds.remove(b.id) }
+                                else { selectedBudgetIds.insert(b.id) }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(b.name).foregroundStyle(.primary)
+                                        if let gid = b.groupId, let g = store.budgetGroups.first(where: { $0.id == gid }) {
+                                            Text(g.name).font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    if selectedBudgetIds.contains(b.id) {
+                                        Image(systemName: "checkmark").foregroundStyle(.tint)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -500,10 +527,17 @@ private struct AddGroupSheet: View {
         }
     }
     private func add() {
-        var args: [String: JSONValue] = ["ledgerId": .string(store.activeLedgerId),
+        let gid = "bgg-\(UUID().uuidString.prefix(8).lowercased())"
+        var args: [String: JSONValue] = ["id": .string(gid),
+                                         "ledgerId": .string(store.activeLedgerId),
                                          "name": .string(name.trimmingCharacters(in: .whitespaces))]
         if let colorHex { args["color"] = .string(colorHex) }
-        do { try store.apply(.createBudgetGroup, Args(args)); dismiss() }
-        catch { errorMessage = i18nMessage(error) }
+        do {
+            try store.apply(.createBudgetGroup, Args(args))
+            for id in selectedBudgetIds {
+                try store.apply(.updateBudget, Args(["id": .string(id), "patch": .object(["groupId": .string(gid)])]))
+            }
+            dismiss()
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
