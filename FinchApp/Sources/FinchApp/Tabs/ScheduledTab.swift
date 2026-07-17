@@ -54,13 +54,16 @@ struct ScheduledTab: View {
                                    ? "Import a .finch pack or add an account first."
                                    : "Tap + to add a recurring transaction or installment plan.")
                 } else {
-                    VStack(spacing: 0) {
-                        Picker("View", selection: $mode) {
-                            ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented).padding(.horizontal).padding(.bottom, 4)
+                    // The mode picker lives INSIDE each List (first row) rather than
+                    // in a VStack above it: wrapped in a VStack the List is no longer
+                    // the nav stack's primary scroll view, so the large title never
+                    // collapsed on scroll like every other tab. (safeAreaInset(.top)
+                    // is no alternative — it makes the List render as pre-scrolled
+                    // and the title disappears entirely.)
+                    Group {
                         if mode == .list {
                             List(selection: selection ?? $kbSel) {
+                                modePickerRow
                                 ForEach(filteredScheduled, id: \.id) { t in
                                     Button {
                                         if let selection { selection.wrappedValue = t.id } else { editing = t }
@@ -127,7 +130,8 @@ struct ScheduledTab: View {
                             ScheduledCalendarView(templates: filteredScheduled,
                                                   onEdit: { editing = $0 },
                                                   onPost: postNow, onAdd: { addPrefill = $0; showingAdd = true },
-                                                  onSelect: selection.map { sel in { sel.wrappedValue = $0.id } })
+                                                  onSelect: selection.map { sel in { sel.wrappedValue = $0.id } },
+                                                  topRow: AnyView(modePickerRow))
                         }
                     }
                     // Search lives outside the Calendar/List toggle, so it's pinned
@@ -157,6 +161,18 @@ struct ScheduledTab: View {
             .sheet(item: $addFromCharge) { ScheduledSheet(fromCharge: $0) }
             .errorAlert($errorMessage)
         }
+    }
+
+    /// The Calendar/List toggle as a list row (clear background, no separator)
+    /// — shared by both modes so each List can own it as its first row.
+    private var modePickerRow: some View {
+        Picker("View", selection: $mode) {
+            ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     private func postNow(_ t: ScheduledTemplate) {
