@@ -157,18 +157,22 @@ struct AddTransactionSheet: View {
                         .accessibilityLabel("Cancel")
                 }
                 // Transaction type sits in the title slot as an icon segmented control.
-                ToolbarItem(placement: .principal) {
-                    #if os(iOS)
-                    if #available(iOS 26.0, *) {
-                        // Liquid Glass variant: the sliding thumb is a glass pill.
+                #if os(iOS)
+                if #available(iOS 26.0, *) {
+                    // sharedBackgroundVisibility(.hidden) removes the system's own
+                    // glass island behind the principal item — without it our glass
+                    // sits INSIDE that white capsule, which masks the material and
+                    // blocks the content that should refract through it.
+                    ToolbarItem(placement: .principal) {
                         GlassTypeControl(kind: $kind, width: Self.typeControlWidth)
-                    } else {
-                        legacyTypeControl
                     }
-                    #else
-                    legacyTypeControl
-                    #endif
+                    .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .principal) { legacyTypeControl }
                 }
+                #else
+                ToolbarItem(placement: .principal) { legacyTypeControl }
+                #endif
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
                         .accessibilityLabel("Save").bold()
