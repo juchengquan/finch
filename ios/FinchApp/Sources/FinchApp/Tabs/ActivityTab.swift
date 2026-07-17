@@ -301,6 +301,7 @@ struct ActivityFeedView: View {
             .contentShape(Rectangle())   // make the whole row tappable — without this the Spacer gap (middle) doesn't hit-test
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation (no
             // delete-on-full-swipe — destructive actions get a confirm step).
@@ -461,9 +462,7 @@ struct TxRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: TxnKindIcon.icon(for: txn.kind))
-                .foregroundStyle(txn.amount < 0 ? .red : .green)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 // Top-left: merchant + status flags + category.
                 HStack(spacing: 4) {
                     Text(txn.merchant)
@@ -484,6 +483,28 @@ struct TxRow: View {
                         .background(.green.opacity(0.15), in: Capsule())
                         .foregroundStyle(.green)
                         .accessibilityLabel("Refund")
+                    }
+                    if txn.kind == "transfer" {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.left.arrow.right")
+                            Text("Transfer")
+                        }
+                        .font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.blue.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.blue)
+                        .accessibilityLabel("Transfer")
+                    }
+                    if txn.kind == "adjustment" {
+                        HStack(spacing: 2) {
+                            Image(systemName: "slider.horizontal.3")
+                            Text("Adjustment")
+                        }
+                        .font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.secondary.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Adjustment")
                     }
                     if let cat = store.categoryName(txn.category) {
                         Text(cat).font(.caption2)
@@ -514,8 +535,10 @@ struct TxRow: View {
                 .accessibilityLabel("Preview receipt")
             }
             // Right: amount (top) + running account balance after this txn (bottom).
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 1) {
+                // Direction lives on the amount now (was the leading kind icon's red/green).
                 Text(store.displayMoneyBase(txn.amount)).fontWeight(.semibold)
+                    .foregroundStyle(txn.amount < 0 ? Color.red : Color.green)
                 let remaining = store.runningBalanceBase(for: txn)
                 Text(store.displayMoneyBase(remaining))
                     .font(.caption2)
