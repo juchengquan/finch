@@ -14,6 +14,8 @@ struct FinchApp: App {
     // stays open; tick() is a no-op for the other policies.
     private let idleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     @AppStorage("finch.appearance") private var appearanceRaw = AppearancePreference.system.rawValue
+    @AppStorage(TextSize.systemKey) private var useSystemTextSize = true
+    @AppStorage(TextSize.stepKey) private var textSizeStep = TextSize.defaultStep
 
     init() {
         #if DEBUG
@@ -51,6 +53,7 @@ struct FinchApp: App {
                 }
             }
             .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
+            .modifier(TextSizeModifier(useSystem: useSystemTextSize, step: textSizeStep))
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
                 store.isHydrating = true
