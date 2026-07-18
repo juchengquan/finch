@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// The transaction-type switcher shared by the Add and Edit sheets' nav bars.
-/// Modeled on the app's bottom tab bar: the SELECTED segment sits in a real
-/// Liquid Glass capsule (`glassEffect`) that SLIDES between segments on change
-/// (matched-geometry morph) — so it reads as glass in light mode too, not just a
-/// flat pill. `enabled` limits the kinds the user may switch TO (empty → fully
-/// locked; Edit shows Transfer as present-but-locked for line items). Tap a
-/// segment, or scrub-anywhere on iOS.
+/// The whole control is one interactive Liquid Glass capsule (so it has the glass
+/// rim + press reaction of the toolbar pods / tab bar), and the SELECTED segment
+/// is a bright accent thumb that SLIDES between segments (matched-geometry). Tap a
+/// segment or scrub-anywhere. `enabled` limits the kinds the user may switch TO
+/// (empty → fully locked; Edit shows Transfer as present-but-locked for line items).
 struct TxTypeControl: View {
     /// Add-sheet kinds in Add-sheet order.
     enum Kind: String, CaseIterable, Identifiable {
@@ -31,11 +30,12 @@ struct TxTypeControl: View {
             ForEach(Kind.allCases) { k in
                 ZStack {
                     if k == selected {
-                        selectionThumb
+                        Capsule().fill(Color.accentColor)
+                            .padding(2)
                             .matchedGeometryEffect(id: "txTypeThumb", in: glassNS)
                     }
                     Image(systemName: k.iconName)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(color(for: k))
                 }
                 .frame(width: seg, height: height)
@@ -46,9 +46,7 @@ struct TxTypeControl: View {
             }
         }
         .frame(width: width, height: height)
-        .background(track)
-        // Slide the glass thumb whenever selection changes — including when a page
-        // swipe in the Add sheet drives `kind` externally, not just tap/scrub.
+        .glassCapsule()
         .animation(.snappy(duration: 0.3), value: selected)
         #if os(iOS)
         // Scrub-anywhere: drag picks whichever segment is under the finger.
@@ -67,26 +65,20 @@ struct TxTypeControl: View {
         withAnimation(.snappy(duration: 0.3)) { onSelect(k) }
     }
 
-    /// The sliding selected pill — a real glass capsule on OS 26+, a soft fill
-    /// before (those toolbars have no glass anyway).
-    @ViewBuilder private var selectionThumb: some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            Color.clear
-                .glassEffect(.regular.interactive(), in: .capsule)
-                .padding(2)
-        } else {
-            Capsule().fill(Color.primary.opacity(0.14)).padding(2)
-        }
-    }
-
-    /// The control's own capsule background (the "track" the thumb slides in),
-    /// so the whole control reads as a pill like the tab bar.
-    private var track: some View {
-        Capsule().fill(Color.primary.opacity(0.05))
-    }
-
     private func color(for k: Kind) -> Color {
-        if k == selected { return .accentColor }
+        if k == selected { return .white }
         return enabled.contains(k) ? .primary : Color.secondary.opacity(0.4)
+    }
+}
+
+private extension View {
+    /// The control itself as an interactive Liquid Glass capsule on OS 26+ (glass
+    /// rim + press reaction, like the ✕/✓ pods); a soft material capsule before.
+    @ViewBuilder func glassCapsule() -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            self.glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            self.background(Capsule().fill(.thinMaterial))
+        }
     }
 }
