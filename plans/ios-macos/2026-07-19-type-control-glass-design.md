@@ -39,14 +39,33 @@ scrolled under the toolbar, with vs. without the pager) proved why:
   view: form content flows under the bar and the glass refracts for real (verified —
   the ✕/✓ pods and the type capsule pick up colors from content scrolling beneath).
 
-**Decision (user):** remove the pager for real glass; accept losing the interactive
-finger-drag swipe between types. Types still switch via `TxTypeControl` (tap +
-scrub-anywhere); type changes animate with a **direction-aware slide** (`.transition`
-keyed on `kind` via `.id(kind)`; `slideEdge` set from the index delta;
-`withAnimation(.snappy)`).
+## Correction: revert to the native segmented Picker (not a custom glass control)
+
+Two further findings changed the fix:
+
+1. **The custom `.glassEffect` control renders flat over the white form.** Its glass is
+   the "refract what's behind me" kind — over a white sheet there's nothing to refract,
+   so it looks like a plain white pill (identical to the system ✕/✓ pods, which are also
+   plain white here and only tinted when a rainbow was scrolled under them). A tint would
+   force a glassy look, but that's a colored chip, not the system treatment.
+2. **The Edit sheet has no pager and already showed working glass with the same custom
+   control** — proving the *component* was never the blocker; only the Add sheet's
+   **pager** was. And a **native `.pickerStyle(.segmented)`** carries the system's own
+   Liquid Glass selection thumb (the morphing/sliding selector) that the custom control
+   replaced with a static highlight — that native selector is the "liquid glass" the
+   original request was about (it was working before the Add sheet swapped it out in the
+   #499 change, and before the #471 pager blocked content from scrolling under the bar).
+
+**Final decision (user):** Add sheet → **native segmented Picker** (system Liquid Glass
+selection thumb) **+ no pager** (single Form, so content scrolls under the bar). This is
+the pre-#471 + pre-#499 Add-sheet state the user identified as having working glass. The
+interactive page-drag between types is dropped (accepted); the Picker keeps tap +
+scrub-anywhere. The **Edit sheet keeps the custom `TxTypeControl`** — it has no pager
+(glass already works) and needs per-segment enable/disable (native Pickers can't disable
+individual segments), matching its own pre-#499 state (`EditTypeControl`).
 
 ## Verification
 
-- Rainbow-under-toolbar A/B (pager vs. no-pager) proved the mechanism; real form content
-  confirmed scrolling under the glass in the shipped single-Form build.
-- FinchAppTests + FinchApp + FinchMac builds. Type-switch slide + scrub still work.
+- Rainbow-under-toolbar A/B (pager vs. no-pager) proved the pager was the blocker; the
+  Edit sheet (no pager) proved the component wasn't. Native picker restored in Add.
+- FinchAppTests 185/185; FinchApp + FinchMac builds clean.

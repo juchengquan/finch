@@ -56,7 +56,10 @@ struct AddTransactionSheet: View {
     @State private var showingSplit = false
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
-    @State private var slideEdge: Edge = .trailing   // direction of the type-switch slide
+
+    /// Width of the icon segmented type control in the nav bar — shared by its
+    /// frame and the scrub gesture's per-segment math.
+    private static let typeControlWidth: CGFloat = 190
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -96,39 +99,47 @@ struct AddTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
-            // A SINGLE Form (not a paged TabView). The nav toolbar can only apply
-            // Liquid Glass over content that scrolls under it, and it only tracks a
-            // single scroll view — a TabView(.page) wraps each form in its own inset
-            // scroll view the toolbar can't follow, so it fell back to an opaque bar
-            // and the glass never refracted. One tracked Form fixes that; type
-            // changes animate via a direction-aware slide (the segmented control's
-            // tap/scrub drives `kind`; the interactive page-drag is intentionally
-            // dropped for the glass).
-            Group {
-                formPage(kind)
-                    .id(kind)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: slideEdge).combined(with: .opacity),
-                        removal: .move(edge: slideEdge == .trailing ? .leading : .trailing).combined(with: .opacity)))
-            }
+            // A SINGLE Form (not a paged TabView). The nav toolbar applies Liquid
+            // Glass only over content that scrolls under it, and it tracks a single
+            // scroll view — the former TabView(.page) gave each form its own inset
+            // scroll view the toolbar couldn't follow, so it fell back to an opaque
+            // bar and the glass never engaged. One tracked Form fixes that. The type
+            // switcher is the NATIVE segmented Picker (`.pickerStyle(.segmented)`),
+            // which carries the system's own Liquid Glass selection thumb — a custom
+            // control loses that. (Interactive page-drag between types intentionally
+            // dropped; the Picker's tap + scrub still switch type.)
+            formPage(kind)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
-                // Transaction type sits in the title slot — the shared glass
-                // icon-segment control (TxTypeControl carries the scrub gesture).
+                // Transaction type — native segmented Picker (system Liquid Glass).
                 ToolbarItem(placement: .principal) {
-                    TxTypeControl(selected: TxTypeControl.Kind(rawValue: kind.rawValue) ?? .expense,
-                                  enabled: Set(TxTypeControl.Kind.allCases)) { k in
-                        guard let nk = Kind(rawValue: k.rawValue), nk != kind else { return }
-                        // Slide the new form in from the side the type moved toward.
-                        let order = Kind.allCases
-                        let forward = (order.firstIndex(of: nk) ?? 0) > (order.firstIndex(of: kind) ?? 0)
-                        slideEdge = forward ? .trailing : .leading
-                        withAnimation(.snappy(duration: 0.28)) { kind = nk }
+                    Picker("Type", selection: $kind) {
+                        ForEach(Kind.allCases) { kind in
+                            Image(systemName: kind.iconName)
+                                .accessibilityLabel(kind.label)
+                                .tag(kind)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: Self.typeControlWidth)
+                    #if os(iOS)
+                    // Scrub-anywhere: a native segmented control only drags from the
+                    // selected thumb — this picks whichever segment is under the finger
+                    // from touch-down. simultaneous so plain taps still reach it.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                let all = Kind.allCases
+                                let seg = Self.typeControlWidth / CGFloat(all.count)
+                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                                if all[idx] != kind { kind = all[idx] }
+                            }
+                    )
+                    #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
