@@ -113,11 +113,17 @@ public final class CloudKitSyncService {
     /// it does NOT confuse the *user's* iCloud login (which on macOS is visible even
     /// to an unentitled app) with the *app's* entitlement.
     ///
-    /// iOS: there's no public API to read your own entitlements, so fall back to
-    /// `ubiquityIdentityToken`, which is documented to be nil whenever iCloud is
-    /// unavailable to the app — including when its entitlements aren't configured for
-    /// iCloud, and on the account-less simulator. (Reliable on iOS precisely because,
-    /// unlike macOS, the token is gated on the app entitlement.)
+    /// iOS: there's no public API to read your own entitlements. The
+    /// `ubiquityIdentityToken` heuristic used previously is NOT reliable: on an
+    /// iCloud-signed-in DEVICE the token can be non-nil even when this binary
+    /// carries no iCloud entitlements (observed 2026-07-18 on a personal-team
+    /// device build with stripped entitlements — `CKContainer` then trapped at
+    /// launch). So read the truth from the **embedded provisioning profile**
+    /// (present in development / ad-hoc / TestFlight builds — exactly the ones
+    /// that can be mis-provisioned). Builds without an embedded profile fall
+    /// back to the token heuristic: App Store builds are always signed with the
+    /// project's full entitlements (which include CloudKit), and unsigned
+    /// simulator builds have no account, so the token is nil there.
     private static var hasCloudKitEntitlement: Bool {
         #if os(macOS)
         guard let task = SecTaskCreateFromSelf(nil),
@@ -127,8 +133,46 @@ public final class CloudKitSyncService {
         else { return false }
         return services.contains("CloudKit") || services.contains("CloudKit-Anonymous")
         #else
+        if let ents = embeddedProvisioningEntitlements() {
+            return cloudKitPermitted(byEntitlements: ents, containerID: containerID)
+        }
         return FileManager.default.ubiquityIdentityToken != nil
         #endif
+    }
+
+    /// Whether an entitlements dict permits our CloudKit use: the services array
+    /// must include CloudKit (or -Anonymous) AND our container id must be listed.
+    /// (Both matter — `CKContainer(identifier:)` traps on a missing container id,
+    /// first use traps on missing services.)
+    nonisolated static func cloudKitPermitted(byEntitlements ents: [String: Any], containerID: String) -> Bool {
+        guard let services = ents["com.apple.developer.icloud-services"] as? [String],
+              services.contains("CloudKit") || services.contains("CloudKit-Anonymous"),
+              let ids = ents["com.apple.developer.icloud-container-identifiers"] as? [String],
+              ids.contains(containerID)
+        else { return false }
+        return true
+    }
+
+    /// The Entitlements dict from `embedded.mobileprovision` (nil when the build
+    /// embeds none — App Store and simulator). The profile is a CMS blob wrapping
+    /// an XML plist; extract the plist bytes and read its "Entitlements" key.
+    private nonisolated static func embeddedProvisioningEntitlements() -> [String: Any]? {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url)
+        else { return nil }
+        return parseProvisioningEntitlements(from: data)
+    }
+
+    /// Pure CMS-blob → Entitlements-dict extraction (internal for unit tests).
+    nonisolated static func parseProvisioningEntitlements(from data: Data) -> [String: Any]? {
+        guard let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex)
+        else { return nil }
+        let plistData = data.subdata(in: start.lowerBound..<end.upperBound)
+        guard let plist = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil),
+              let dict = plist as? [String: Any]
+        else { return nil }
+        return dict["Entitlements"] as? [String: Any]
     }
 
     /// Set by the coordinator: replay a fetched remote mutation through the
