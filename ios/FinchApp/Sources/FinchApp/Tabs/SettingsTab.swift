@@ -222,6 +222,17 @@ struct SettingsAdvancedView: View {
 
     var body: some View {
         List {
+            Section {
+                Toggle("Auto-update exchange rates", isOn: exchangeAutoUpdateBinding)
+                if let last = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date {
+                    LabeledContent("Last updated", value: last.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)))
+                }
+            } header: {
+                Text("Exchange rates")
+            } footer: {
+                Text("Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.")
+            }
+
             Section("Database") {
                 LabeledContent("Filename", value: store.dbInfo.filename)
                 LabeledContent("Size", value: store.dbInfo.formattedSize)
@@ -269,6 +280,14 @@ struct SettingsAdvancedView: View {
         } message: {
             Text("This replaces your live database with the audit-rejected pack and cannot be undone.")
         }
+    }
+
+    /// Absent key == ON (default-ON semantics shared with RateAutoUpdater).
+    private var exchangeAutoUpdateBinding: Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.object(forKey: RateAutoUpdater.toggleKey) == nil
+                   || UserDefaults.standard.bool(forKey: RateAutoUpdater.toggleKey) },
+            set: { UserDefaults.standard.set($0, forKey: RateAutoUpdater.toggleKey) })
     }
 }
 
