@@ -13,6 +13,7 @@ import FinchCore
 /// FinchStore.apply.
 struct EditTransactionSheet: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingAttachmentDelete: AttachmentRow?   // receipt awaiting delete confirmation
     @Environment(\.dismiss) private var dismiss
 
     let txn: Tx
@@ -271,10 +272,11 @@ struct EditTransactionSheet: View {
                         }
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
+                            // Not role: .destructive — fake removal animation pre-confirm.
+                            Button { pendingAttachmentDelete = att } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                         }
                         .contextMenu {
-                            Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) { pendingAttachmentDelete = att } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                     #if os(macOS)
@@ -300,6 +302,13 @@ struct EditTransactionSheet: View {
                         run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
                     }
                     Button("Delete transaction", role: .destructive) { confirmingDelete = true }
+                        // Anchored on the button (iOS 26 positions popouts at their source).
+                        .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) {
+                                do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
+                                catch { errorMessage = i18nMessage(error) }
+                            }
+                        }
                 }
 
                 if let errorMessage {
@@ -325,11 +334,14 @@ struct EditTransactionSheet: View {
                         .accessibilityLabel("Save").bold()
                 }
             }
-            .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
-                    catch { errorMessage = i18nMessage(error) }
-                }
+            // Centered ALERT (window-level) — see ActivityTab's delete alert.
+            .alert("Delete receipt?", isPresented: Binding(
+                get: { pendingAttachmentDelete != nil }, set: { if !$0 { pendingAttachmentDelete = nil } }),
+                presenting: pendingAttachmentDelete) { att in
+                Button("Delete", role: .destructive) { removeAttachment(att) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("The file is deleted permanently.")
             }
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
             .quickLookPreview($previewURL)

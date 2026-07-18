@@ -5,6 +5,7 @@ import FinchCore
 /// rename, verify/unverify, delete. Routes FinchStore.apply.
 struct CounterpartyAdminView: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingDelete: Counterparty?   // merchant awaiting delete confirmation
     @State private var search = ""
     @State private var showingAdd = false
     @State private var editing: Counterparty?
@@ -41,13 +42,14 @@ struct CounterpartyAdminView: View {
                             }
                         }
                         .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) { delete(cp) } label: { Label("Delete", systemImage: "trash") }
+                            // Not role: .destructive — fake removal animation pre-confirm.
+                            Button { pendingDelete = cp } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                             Button { editing = cp } label: { Label("Rename", systemImage: "pencil") }.tint(.blue)
                         }
                         .contextMenu {
                             Button { editing = cp } label: { Label("Rename", systemImage: "pencil") }
                             Button { toggleVerify(cp) } label: { Label(cp.isVerified ? "Unverify" : "Verify", systemImage: "checkmark.seal") }
-                            Button(role: .destructive) { delete(cp) } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) { pendingDelete = cp } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                 }
@@ -55,6 +57,15 @@ struct CounterpartyAdminView: View {
             }
         }
         .navigationTitle("Merchants")
+        // Centered ALERT (window-level) — see ActivityTab's delete alert.
+        .alert("Delete merchant?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { cp in
+            Button("Delete", role: .destructive) { delete(cp) }
+            Button("Cancel", role: .cancel) {}
+        } message: { cp in
+            Text("This permanently deletes \(cp.name).")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add Merchant")

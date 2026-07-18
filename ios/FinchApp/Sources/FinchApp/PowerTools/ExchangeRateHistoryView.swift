@@ -7,6 +7,7 @@ import FinchCore
 struct ExchangeRateHistoryView: View {
     let currency: String
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingDelete: ExchangeRate?   // rate row awaiting delete confirmation
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteAll = false
     @State private var errorMessage: String?
@@ -36,10 +37,11 @@ struct ExchangeRateHistoryView: View {
                         SourceBadge(source: rate.source)
                     }
                     .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) { delete(rate) } label: { Label("Delete", systemImage: "trash") }
+                        // Not role: .destructive — fake removal animation pre-confirm.
+                        Button { pendingDelete = rate } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                     }
                     .contextMenu {
-                        Button(role: .destructive) { delete(rate) } label: { Label("Delete", systemImage: "trash") }
+                        Button(role: .destructive) { pendingDelete = rate } label: { Label("Delete", systemImage: "trash") }
                     }
                 }
             }
@@ -54,10 +56,20 @@ struct ExchangeRateHistoryView: View {
                         }
                     }
                 } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("More")
+                // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
+                .confirmationDialog("Delete all \(currency) rates", isPresented: $showDeleteAll, titleVisibility: .visible) {
+                    Button("Delete \(rows.count) rates", role: .destructive) { deleteAll() }
+                }
             }
         }
-        .confirmationDialog("Delete all \(currency) rates", isPresented: $showDeleteAll, titleVisibility: .visible) {
-            Button("Delete \(rows.count) rates", role: .destructive) { deleteAll() }
+        // Centered ALERT (window-level) — see ActivityTab's delete alert.
+        .alert("Delete rate?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { r in
+            Button("Delete", role: .destructive) { delete(r) }
+            Button("Cancel", role: .cancel) {}
+        } message: { r in
+            Text("\(currency) · \(r.date)")
         }
         .errorAlert($errorMessage)
     }
