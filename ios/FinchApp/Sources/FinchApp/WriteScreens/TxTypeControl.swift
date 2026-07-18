@@ -60,17 +60,16 @@ struct TxTypeControl: View {
         #endif
     }
 
-    /// The focused item: a NEUTRAL (clear) "crystal" Liquid Glass capsule on
-    /// OS 26+ — exactly the bottom tab bar's selection (frosted glass is the pill;
-    /// the colour lives on the glyph, not the glass). A soft fill before.
+    /// The focused item: a raised frosted "crystal" pill (the bottom tab bar's
+    /// selection look). A neutral Liquid Glass capsule alone is invisible over
+    /// the white form (glass is translucent — nothing to refract), so the pill is
+    /// a bright frosted material with a soft shadow for elevation/contrast, and
+    /// the colour lives on the glyph, not the glass.
     @ViewBuilder private var selectedThumb: some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            Color.clear
-                .glassEffect(.regular.interactive(), in: .capsule)
-                .padding(2)
-        } else {
-            Capsule().fill(Color.primary.opacity(0.12)).padding(2)
-        }
+        Capsule()
+            .fill(.regularMaterial)
+            .shadow(color: .black.opacity(0.16), radius: 2.5, y: 0.5)
+            .padding(2)
     }
 
     private func pick(_ k: Kind) {
