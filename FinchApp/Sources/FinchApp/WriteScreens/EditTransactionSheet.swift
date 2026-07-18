@@ -43,6 +43,8 @@ struct EditTransactionSheet: View {
     @State private var currencyCode: String
     @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var selectedKind: EditKind
+    @State private var fromAmountText = ""   // transfer editor: from-leg native amount
+    @State private var toAmountText = ""     // transfer editor: to-leg native amount (cross-currency)
 
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
@@ -113,8 +115,52 @@ struct EditTransactionSheet: View {
     }
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
+    /// Top control state: nil hides the control (adjustment/opening rows).
+    private var typeControlKind: EditTypeControl.Kind? {
+        switch txn.kind {
+        case "transfer": return .transfer
+        case "adjustment", "opening": return nil
+        default: return EditTypeControl.Kind(rawValue: effectiveKind) ?? .expense
+        }
+    }
+    /// Line items reclassify across expense/income/refund; everything else locks.
+    private var typeControlEnabled: Set<EditTypeControl.Kind> {
+        canReclassify ? [.expense, .income, .refund] : []
+    }
+
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
+    }
+
+    /// The transfer's two legs — this row plus its counterpart, resolved via
+    /// transferGroupId. From = the negative-amount leg.
+    private var transferLegs: (from: Tx, to: Tx)? {
+        guard txn.kind == "transfer", let gid = txn.transferGroupId else { return nil }
+        let legs = store.txns.filter { $0.transferGroupId == gid }
+        guard let from = legs.first(where: { $0.amount < 0 }),
+              let to = legs.first(where: { $0.amount > 0 }), from.id != to.id else { return nil }
+        return (from, to)
+    }
+    private var transferSameCurrency: Bool {
+        guard let legs = transferLegs else { return true }
+        return (legs.from.currency ?? "") == (legs.to.currency ?? "")
+    }
+    private func accountName(_ id: String) -> String {
+        store.accounts.first { $0.id == id }?.name ?? "—"
+    }
+    /// Transfer amount row: fixed currency label from the leg (accounts own
+    /// their currency — no picker). `mirrored` = same-currency To row: disabled,
+    /// live-synced to the From field.
+    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String, mirrored: Bool = false) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0.00", text: text)
+                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                .disabled(mirrored)
+                .foregroundStyle(mirrored ? Color.secondary : Color.primary)
+            Text(currency).foregroundStyle(.secondary)
+        }
     }
 
     var body: some View {
@@ -143,22 +189,37 @@ struct EditTransactionSheet: View {
                             }
                         }
                     }
+                } else if let legs = transferLegs {
+                    // Transfer legs: a real transfer editor (spec §2). Accounts are
+                    // immutable in updateTransfer → read-only; no Category row for
+                    // transfers.
+                    Section("Transfer") {
+                        LabeledContent("From", value: accountName(legs.from.account))
+                        LabeledContent("To", value: accountName(legs.to.account))
+                        // Always TWO amount rows, each in its leg's own currency.
+                        // Same currency → the To row mirrors From (disabled);
+                        // cross-currency → independent To amount.
+                        transferAmountRow("From amount", text: $fromAmountText,
+                                          currency: legs.from.currency ?? "")
+                        if transferSameCurrency {
+                            transferAmountRow("To amount", text: $fromAmountText,
+                                              currency: legs.to.currency ?? "", mirrored: true)
+                        } else {
+                            transferAmountRow("To amount", text: $toAmountText,
+                                              currency: legs.to.currency ?? "")
+                        }
+                    }
                 } else {
                     Section("Amount & category") {
-                        if canReclassify {
-                            Picker("Type", selection: $selectedKind) {
-                                ForEach(EditKind.allCases) { Text($0.label).tag($0) }
-                            }
-                        }
                         HStack {
                             Text("Amount")
                             Spacer()
                             TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                        }
-                        if txn.kind != "transfer", currencyOptions.count > 1 {
-                            Picker("Currency", selection: $currencyCode) {
+                            // Currency lives inline with the amount, always visible.
+                            Picker("", selection: $currencyCode) {
                                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
                             }
+                            .pickerStyle(.menu).labelsHidden().fixedSize()
                         }
                         SearchablePickerRow(title: "Category",
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
@@ -252,6 +313,13 @@ struct EditTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
+                ToolbarItem(placement: .principal) {
+                    if let kind = typeControlKind {
+                        EditTypeControl(selected: kind, enabled: typeControlEnabled) { k in
+                            if let ek = EditKind(rawValue: k.rawValue) { selectedKind = ek }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
                         .accessibilityLabel("Save").bold()
@@ -269,6 +337,10 @@ struct EditTransactionSheet: View {
             .onAppear {
                 attachments = store.attachments(for: txn.id)
                 if currencyCode.isEmpty { currencyCode = accountCurrency }
+                if let legs = transferLegs {
+                    fromAmountText = String(format: "%g", abs(legs.from.nativeAmount ?? legs.from.amount))
+                    toAmountText = String(format: "%g", abs(legs.to.nativeAmount ?? legs.to.amount))
+                }
             }
             .onChange(of: merchant) { _, _ in createCounterpartyOnSave = false }
             .onChange(of: pickedPhoto) { _, item in
@@ -303,6 +375,7 @@ struct EditTransactionSheet: View {
     }
 
     private func save() {
+        if txn.kind == "transfer" { saveTransfer(); return }
         errorMessage = nil
         var patch: [String: JSONValue] = [
             "merchant": .string(merchant.isEmpty ? "Untitled" : merchant),
@@ -350,6 +423,45 @@ struct EditTransactionSheet: View {
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Transfer legs save through the engine's updateTransfer (entry-level:
+    /// amounts/date/time/note — keeps BOTH legs consistent; the old single-leg
+    /// patch path could diverge them). Merchant/status go through the plain
+    /// updateTransaction patch (entry-level on a transfer); tags via
+    /// setTransactionTags.
+    private func saveTransfer() {
+        errorMessage = nil
+        guard let legs = transferLegs else { errorMessage = "Transfer legs not found."; return }
+        let result = TransferEditPatch.build(.init(
+            sameCurrency: transferSameCurrency,
+            originalFrom: abs(legs.from.nativeAmount ?? legs.from.amount),
+            originalTo: abs(legs.to.nativeAmount ?? legs.to.amount),
+            editedFrom: fromAmountText,
+            editedTo: transferSameCurrency ? nil : toAmountText,
+            originalDate: txn.date, originalTime: txn.time, originalNote: txn.note,
+            newDate: Self.day(date), newTime: Self.time(date), newNote: note))
+        switch result {
+        case .failure:
+            errorMessage = "Enter an amount greater than 0."
+        case .success(let patch):
+            do {
+                if !patch.isEmpty {
+                    try store.apply(.updateTransfer, Args(["id": .string(txn.id), "patch": .object(patch)]))
+                }
+                var legPatch: [String: JSONValue] = [:]
+                if merchant != txn.merchant { legPatch["merchant"] = .string(merchant.isEmpty ? "Untitled" : merchant) }
+                if status != (txn.pending == true ? .pending : .confirmed) { legPatch["status"] = .string(status.rawValue) }
+                if !legPatch.isEmpty {
+                    try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(legPatch)]))
+                }
+                if selectedTags != Set(txn.tags ?? []) {
+                    try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
+                        "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
+                }
+                dismiss()
+            } catch { errorMessage = i18nMessage(error) }
+        }
     }
 
     private func toggleTag(_ id: String) {
