@@ -3,7 +3,7 @@ import GRDB
 
 extension JSONValue {
     /// The string payload, or nil for any non-string (incl. .null).
-    var asString: String? { if case .string(let s) = self { return s }; return nil }
+    public var asString: String? { if case .string(let s) = self { return s }; return nil }
 
     /// True only for a non-empty, trimmed string value.
     var isNonEmptyTrimmedString: Bool {
@@ -23,7 +23,7 @@ extension JSONValue {
     }
 
     /// Numeric payload as Double (int or double); nil otherwise.
-    var asDouble: Double? {
+    public var asDouble: Double? {
         switch self { case .int(let i): return Double(i); case .double(let d): return d; default: return nil }
     }
 

@@ -296,11 +296,6 @@ struct AddTransactionSheet: View {
             }
             SearchablePickerRow(title: "Account",
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
-            if currencyOptions.count > 1 {
-                Picker("Currency", selection: $currencyCode) {
-                    ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
-                }
-            }
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     HStack {
@@ -351,26 +346,48 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private var transferFields: some View {
         Section {
-            amountField
             SearchablePickerRow(title: "From",
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
             SearchablePickerRow(title: "To",
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $toAccountId)
+            // Always TWO amount rows, each in its account's own currency. Same
+            // currency → the To row mirrors From (disabled); cross-currency →
+            // the To row is the independent received amount.
+            transferAmountRow("From amount", text: $amount, currency: currency(of: fromAccountId))
             if transferIsCrossCurrency {
-                HStack {
-                    Text("Received (\(currency(of: toAccountId)))")
-                    Spacer()
-                    TextField("0.00", text: $received).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                }
+                transferAmountRow("To amount", text: $received, currency: currency(of: toAccountId))
+            } else {
+                transferAmountRow("To amount", text: $amount, currency: currency(of: toAccountId), mirrored: true)
             }
         }
     }
 
+    /// Line-item amount row: Amount + the currency menu inline (currency is
+    /// ALWAYS visible, even when only one option exists).
     private var amountField: some View {
         HStack {
             Text("Amount")
             Spacer()
             TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            Picker("", selection: $currencyCode) {
+                ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu).labelsHidden().fixedSize()
+        }
+    }
+
+    /// Transfer amount row: fixed currency label from the leg's account (the
+    /// account owns the currency — no picker). `mirrored` renders the
+    /// same-currency To row: disabled, live-synced to the From field.
+    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String, mirrored: Bool = false) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0.00", text: text)
+                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                .disabled(mirrored)
+                .foregroundStyle(mirrored ? Color.secondary : Color.primary)
+            Text(currency).foregroundStyle(.secondary)
         }
     }
 
