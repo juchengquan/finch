@@ -86,6 +86,26 @@
       }
     },
     "%@": {},
+    "%@ is removed from all transactions.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 将从所有交易中移除。"
+          }
+        }
+      }
+    },
+    "%@ is removed from this account.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 将从此账户移除。"
+          }
+        }
+      }
+    },
     "%@ left": {
       "localizations": {
         "zh-Hans": {
@@ -112,6 +132,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ · 中心货币"
+          }
+        }
+      }
+    },
+    "%@ — future runs will stop.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 未来的执行将停止。"
           }
         }
       }
@@ -1719,6 +1749,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除分组？"
+          }
+        }
+      }
+    },
+    "Delete holding?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除持仓？"
+          }
+        }
+      }
+    },
+    "Delete merchant?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除商户？"
+          }
+        }
+      }
+    },
+    "Delete rate?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除汇率？"
+          }
+        }
+      }
+    },
+    "Delete receipt?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除收据？"
+          }
+        }
+      }
+    },
+    "Delete rule?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除规则？"
+          }
+        }
+      }
+    },
+    "Delete saved search?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除已保存的搜索？"
+          }
+        }
+      }
+    },
+    "Delete scheduled item?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除计划项目？"
+          }
+        }
+      }
+    },
+    "Delete tag?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除标签？"
           }
         }
       }
@@ -4633,6 +4743,16 @@
         }
       }
     },
+    "The file is deleted permanently.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件将被永久删除。"
+          }
+        }
+      }
+    },
     "The floating + for quickly adding a transaction on iPhone. The toolbar and ⌘N ways to add are always available.": {
       "localizations": {
         "zh-Hans": {
@@ -4679,6 +4799,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "本月"
+          }
+        }
+      }
+    },
+    "This permanently deletes %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这将永久删除 %@。"
+          }
+        }
+      }
+    },
+    "This permanently deletes the rule.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这将永久删除该规则。"
           }
         }
       }

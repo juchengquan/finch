@@ -12,6 +12,7 @@ struct ScheduledTab: View {
     @State private var editing: ScheduledTemplate?
     @State private var errorMessage: String?
     @State private var mode: Mode = .calendar
+    @State private var pendingDelete: ScheduledTemplate?   // template awaiting delete confirmation
     @State private var addPrefill: Date?
     @State private var addFromCharge: RecurringCharge?
     @State private var searchQuery = ""                // filters the list view by name
@@ -75,7 +76,8 @@ struct ScheduledTab: View {
                                     } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
                                         .swipeActions(edge: .trailing) {
-                                            Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
+                                            // Not role: .destructive — the role plays a fake row-removal animation before the confirm.
+                                            Button { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                                             Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
                                         }
                                         .swipeActions(edge: .leading) {
@@ -84,7 +86,7 @@ struct ScheduledTab: View {
                                         .contextMenu {
                                             Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
                                             Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
-                                            Button(role: .destructive) { delete(t) } label: { Label("Delete", systemImage: "trash") }
+                                            Button(role: .destructive) { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }
                                         }
                                         .tag(t.id)
                                 }
@@ -164,6 +166,15 @@ struct ScheduledTab: View {
             .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) { ScheduledSheet(prefillStart: addPrefill) }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
             .sheet(item: $addFromCharge) { ScheduledSheet(fromCharge: $0) }
+            // Centered ALERT (window-level) — see ActivityTab's delete alert.
+            .alert("Delete scheduled item?", isPresented: Binding(
+                get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                presenting: pendingDelete) { t in
+                Button("Delete", role: .destructive) { delete(t) }
+                Button("Cancel", role: .cancel) {}
+            } message: { t in
+                Text("\(t.name) — future runs will stop.")
+            }
             .errorAlert($errorMessage)
         }
     }
