@@ -57,10 +57,6 @@ struct AddTransactionSheet: View {
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
 
-    /// Width of the icon segmented type control in the nav bar — shared by its
-    /// frame and the scrub gesture's per-segment math.
-    private static let typeControlWidth: CGFloat = 190
-
     private var accounts: [AccountRow] { store.accounts }
 
     /// Expense / income / refund all post a single account leg + category — they
@@ -115,31 +111,12 @@ struct AddTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
-                // Transaction type — native segmented Picker (system Liquid Glass).
+                // Transaction type — the shared glass control (sliding glass thumb).
                 ToolbarItem(placement: .principal) {
-                    Picker("Type", selection: $kind) {
-                        ForEach(Kind.allCases) { kind in
-                            Image(systemName: kind.iconName)
-                                .accessibilityLabel(kind.label)
-                                .tag(kind)
-                        }
+                    TxTypeControl(selected: TxTypeControl.Kind(rawValue: kind.rawValue) ?? .expense,
+                                  enabled: Set(TxTypeControl.Kind.allCases)) { k in
+                        if let nk = Kind(rawValue: k.rawValue) { kind = nk }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: Self.typeControlWidth)
-                    #if os(iOS)
-                    // Scrub-anywhere: a native segmented control only drags from the
-                    // selected thumb — this picks whichever segment is under the finger
-                    // from touch-down. simultaneous so plain taps still reach it.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                let all = Kind.allCases
-                                let seg = Self.typeControlWidth / CGFloat(all.count)
-                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                                if all[idx] != kind { kind = all[idx] }
-                            }
-                    )
-                    #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }

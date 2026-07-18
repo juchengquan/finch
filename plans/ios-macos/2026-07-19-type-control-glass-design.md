@@ -64,8 +64,24 @@ scrub-anywhere. The **Edit sheet keeps the custom `TxTypeControl`** — it has n
 (glass already works) and needs per-segment enable/disable (native Pickers can't disable
 individual segments), matching its own pre-#499 state (`EditTypeControl`).
 
+## Final: glass selection thumb modeled on the bottom tab bar
+
+The native picker still read flat in light mode (translucent glass over the white form is
+white — visible only in dark mode / when content scrolls under). The user's reference was
+the app's **bottom tab bar** (a native `TabView`): its selected item sits in a distinct
+Liquid Glass **capsule** that is visibly glassy in light mode and slides between items.
+
+`TxTypeControl` was rebuilt to match: the selected segment renders a real
+`glassEffect(.regular.interactive(), in: .capsule)` **thumb** that **slides** between
+segments via `matchedGeometryEffect` (`withAnimation(.snappy)`), over a soft capsule
+track. That gives a defined glass element (visible in light mode, like the tab-bar
+selection) plus the sliding motion the user wanted — without the page-swipe pager (which
+still blocks the toolbar glass and stays removed). Both sheets share the control (Edit's
+per-segment `enabled` set keeps working — locked Transfer on line items).
+
 ## Verification
 
-- Rainbow-under-toolbar A/B (pager vs. no-pager) proved the pager was the blocker; the
-  Edit sheet (no pager) proved the component wasn't. Native picker restored in Add.
+- Rainbow-under-toolbar A/B proved the pager was the toolbar-glass blocker; the Edit sheet
+  (no pager) proved the component wasn't. Final control = glass-thumb slider matching the
+  tab bar; shared Add + Edit.
 - FinchAppTests 185/185; FinchApp + FinchMac builds clean.
