@@ -1,35 +1,52 @@
 import Foundation
 import FinchCore
 
+/// What a fetch attempt did — drives "Refresh now" feedback (auto path discards it).
+enum RefreshOutcome: Equatable {
+    case updated(Int)   // wrote N rates; stamp written
+    case failed         // URL/network/non-200/decode failure — nothing written
+    case skipped        // no non-USD currencies in use — nothing to fetch
+}
+
 /// Daily FX auto-refresh from Frankfurter (api.frankfurter.dev — no key, central-
 /// bank reference rates; the app's only third-party network call). Fetches ONLY
 /// the currency codes in use, stores USD-per-unit via the setExchangeRate
 /// chokepoint (source "ECB"), fails silently (offline-first; manual entry wins
-/// by being later). Governed by Settings › Advanced → Auto-update exchange rates.
+/// by being later). Governed by the toggle on Power Tools › Exchange rates.
 @MainActor
 enum RateAutoUpdater {
     static let toggleKey = "finch.fx.autoUpdate"
     static let stampKey = "finch.fx.lastAutoUpdate"
     static let minInterval: TimeInterval = 20 * 60 * 60   // ~daily, DST-proof
 
+    /// Guarded entry point (foreground trigger): toggle on (absent key = ON),
+    /// ≥ minInterval since last success. Outcome discarded — auto path is silent.
     static func refreshIfDue(store: FinchStore) async {
         let d = UserDefaults.standard
         guard d.object(forKey: toggleKey) == nil || d.bool(forKey: toggleKey) else { return }  // default ON
         guard isDue(now: Date(), last: d.object(forKey: stampKey) as? Date) else { return }
+        _ = await refresh(store: store)
+    }
+
+    /// Unguarded fetch (also the "Refresh now" path — a deliberate manual act, so
+    /// it ignores toggle + throttle). Stamps lastAutoUpdate ONLY on success, so a
+    /// manual refresh satisfies "today's fetch" and the next auto-run throttles.
+    static func refresh(store: FinchStore) async -> RefreshOutcome {
         let codes = currenciesInUse(store: store)
-        guard !codes.isEmpty else { return }
-        guard let url = URL(string: "https://api.frankfurter.dev/v2/rates?base=USD&quotes=\(codes.joined(separator: ","))") else { return }
+        guard !codes.isEmpty else { return .skipped }
+        guard let url = URL(string: "https://api.frankfurter.dev/v2/rates?base=USD&quotes=\(codes.joined(separator: ","))") else { return .failed }
         var req = URLRequest(url: url); req.timeoutInterval = 10
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return .failed }
         let rows = parse(data)
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty else { return .failed }
         for r in rows {
             try? store.apply(.setExchangeRate, Args([
                 "date": .string(r.date), "currency": .string(r.currency),
                 "rate": .double(r.ratePerUSD), "source": .string("ECB")]))
         }
-        d.set(Date(), forKey: stampKey)
+        UserDefaults.standard.set(Date(), forKey: stampKey)
+        return .updated(rows.count)
     }
 
     /// Pure + testable. Frankfurter rows are {date, base, quote, rate} with rate =
