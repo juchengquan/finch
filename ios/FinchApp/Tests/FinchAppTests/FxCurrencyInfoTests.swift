@@ -16,6 +16,7 @@ final class FxCurrencyInfoTests: XCTestCase {
     func test_label_composition_andRepeatIsCached() {
         XCTAssertEqual(FxCurrencyInfo.label("EUR"), "\(FxCurrencyInfo.name("EUR")) (€)")
         XCTAssertEqual(FxCurrencyInfo.label("ZZZ"), "ZZZ")     // no bracket without a distinct symbol
+        XCTAssertNotNil(FxCurrencyInfo.labelCache["EUR"])   // first call memoized
         XCTAssertEqual(FxCurrencyInfo.label("EUR"), FxCurrencyInfo.label("EUR"))
     }
 }

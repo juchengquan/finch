@@ -6,7 +6,7 @@ import Foundation
 /// refreshes and search keystrokes don't re-hit Locale.
 @MainActor
 enum FxCurrencyInfo {
-    private static var labelCache: [String: String] = [:]
+    static var labelCache: [String: String] = [:]   // internal so tests can verify memoization
 
     private static let symbolByCode: [String: String] = {
         var best: [String: String] = [:]
