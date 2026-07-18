@@ -16,12 +16,19 @@ enum TextSize {
     }
 }
 
-/// Root modifier: identity in system mode so the OS value (incl. accessibility
-/// sizes) flows through untouched.
+/// Root modifier. Uses `transformEnvironment` (a SINGLE, always-same view type)
+/// rather than an `if useSystem { … } else { … }` branch: a @ViewBuilder branch
+/// is a `_ConditionalContent` whose two arms have DIFFERENT identity, so toggling
+/// the switch tore down and rebuilt the whole subtree — including the shell's
+/// NavigationStack, which reset its path and popped the user back to the
+/// Settings root. transformEnvironment keeps identity stable. In system mode the
+/// closure leaves the inherited OS value untouched (incl. accessibility sizes).
 struct TextSizeModifier: ViewModifier {
     let useSystem: Bool
     let step: Int
     func body(content: Content) -> some View {
-        if useSystem { content } else { content.dynamicTypeSize(TextSize.size(forStep: step)) }
+        content.transformEnvironment(\.dynamicTypeSize) { size in
+            if !useSystem { size = TextSize.size(forStep: step) }
+        }
     }
 }
