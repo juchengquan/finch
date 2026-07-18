@@ -277,7 +277,7 @@ struct AccountsTab: View {
                 .contextMenu {
                     if let g = store.accountGroups.first(where: { $0.name == groupName }) {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
-                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
+                        Button(role: .destructive) { RowPresentation.afterCollapse { groupPendingDelete = g } } label: { Label("Delete Group", systemImage: "trash") }
                     }
                 }
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
@@ -422,13 +422,13 @@ struct AccountsTab: View {
     @ViewBuilder private func rowActions(_ account: AccountRow) -> some View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
         Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }.tint(.orange)
-        Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = account } } label: { Label("Delete", systemImage: "trash") }
     }
 
     /// Trailing swipe: Edit + Delete (full swipe = Edit). Archive is menu-only.
     @ViewBuilder private func trailingSwipeActions(_ account: AccountRow) -> some View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = account } } label: { Label("Delete", systemImage: "trash") }
     }
 
     /// The per-account quick verbs — context menu (and macOS reachability).

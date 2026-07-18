@@ -158,7 +158,7 @@ struct AccountDetailView: View {
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation first.
-            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { pendingTxDelete = t } } label: { Label("Delete", systemImage: "trash") }
         }
         .swipeActions(edge: .leading) {
             if t.pending == true {
@@ -179,7 +179,7 @@ struct AccountDetailView: View {
             if t.pending == true {
                 Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { pendingTxDelete = t } } label: { Label("Delete", systemImage: "trash") }
         }
         // Anchored on the row (iOS 26 positions popouts at their source).
         .confirmationDialog("Delete transaction?",

@@ -52,7 +52,7 @@ struct LedgerListView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
+                Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = ledger } } label: { Label("Delete", systemImage: "trash") }
                     .disabled(store.ledgers.count <= 1)
             }
             .contextMenu {

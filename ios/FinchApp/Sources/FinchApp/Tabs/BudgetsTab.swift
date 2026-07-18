@@ -259,7 +259,7 @@ struct BudgetsTab: View {
                 .contextMenu {
                     if let g = store.budgetGroups.first(where: { $0.name == groupName }) {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
-                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
+                        Button(role: .destructive) { RowPresentation.afterCollapse { groupPendingDelete = g } } label: { Label("Delete Group", systemImage: "trash") }
                     }
                 }
                 // Anchored on the header row (iOS 26 positions popouts at their source).

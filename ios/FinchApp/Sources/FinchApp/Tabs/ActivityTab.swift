@@ -304,7 +304,7 @@ struct ActivityFeedView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation (no
             // delete-on-full-swipe — destructive actions get a confirm step).
-            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = txn } } label: { Label("Delete", systemImage: "trash") }
         }
         .swipeActions(edge: .leading) {
             if txn.pending == true {
@@ -325,7 +325,7 @@ struct ActivityFeedView: View {
             if txn.pending == true {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = txn } } label: { Label("Delete", systemImage: "trash") }
         }
         // Anchored on the row (iOS 26 positions the popout at its source; a
         // container-attached dialog pops at the top of the screen instead).

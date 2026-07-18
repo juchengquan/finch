@@ -133,10 +133,10 @@ struct CategoryAdminView: View {
         }
         .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { deleting = c } } label: { Label("Delete", systemImage: "trash") }
         }
         .contextMenu {
-            Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { RowPresentation.afterCollapse { deleting = c } } label: { Label("Delete", systemImage: "trash") }
         }
         // Anchored on the row (iOS 26 positions popouts at their source).
         .confirmationDialog("Delete \(c.name)?",
