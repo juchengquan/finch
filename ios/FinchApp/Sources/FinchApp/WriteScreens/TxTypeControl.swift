@@ -30,7 +30,10 @@ struct TxTypeControl: View {
             ForEach(Kind.allCases) { k in
                 ZStack {
                     if k == selected {
-                        Capsule().fill(Color.accentColor)
+                        // `.tint` (not Color.accentColor) so the thumb blue matches
+                        // the app's other interactive blues (USD picker, checkmarks,
+                        // links, tab-bar selection), which all use the tint.
+                        Capsule().fill(.tint)
                             .padding(2)
                             .matchedGeometryEffect(id: "txTypeThumb", in: glassNS)
                     }
