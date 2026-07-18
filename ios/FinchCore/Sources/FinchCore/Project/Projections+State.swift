@@ -92,6 +92,17 @@ extension Projection {
         }
     }
 
+    /// The global FX auto-update fetch list (`app_state.fxTrackedCurrencies`).
+    /// Nil when the key is absent (seeded-default mode) — distinct from empty.
+    public static func trackedCurrencies(dbQueue: DatabaseQueue) throws -> [String]? {
+        try dbQueue.read { db in
+            guard let raw = try String.fetchOne(db, sql: "SELECT value FROM app_state WHERE key = 'fxTrackedCurrencies'"),
+                  let data = raw.data(using: .utf8),
+                  let list = try? JSONDecoder().decode([String].self, from: data) else { return nil }
+            return list
+        }
+    }
+
     private static func groupRows(dbQueue: DatabaseQueue, ledgerId: String, table: String) throws -> [GroupRow] {
         try dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT id, name, color FROM \(table) WHERE ledger_id = ? ORDER BY sort_order, name",

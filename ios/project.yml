@@ -165,13 +165,25 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: FinchApp
+
+  FinchCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FinchCore/Tests/FinchCoreTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: FinchCore
+        product: FinchCore
 schemes:
   FinchApp:
     build:
       targets:
         FinchApp: all
     test:
-      targets: [FinchAppTests]
+      targets: [FinchAppTests, FinchCoreTests]
   FinchMac:
     build:
       targets:
