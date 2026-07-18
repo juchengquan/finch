@@ -20,9 +20,10 @@ struct ScheduledCalendarView: View {
     var topRow: AnyView? = nil
 
     @State private var monthAnchor: Date = ScheduledCalendarView.firstOfMonth(forISO: nil)
-    /// Which edge the incoming month slides in from (set by step()): next month
-    /// pushes in from the trailing edge, previous from the leading edge.
-    @State private var pushEdge: Edge = .trailing
+    /// 3-page carousel position (-1/0/+1 around monthAnchor). A settled swipe
+    /// commits the month and snaps back to 0 without animation (a TabView over
+    /// ALL months would build every page eagerly — the carousel keeps it at 3).
+    @State private var pagerIndex = 0
     @State private var selectedDay: String?
     @State private var showingMonthYearPicker = false
 
@@ -54,22 +55,29 @@ struct ScheduledCalendarView: View {
                 VStack(spacing: 12) {
                     header
                     weekdayRow
-                    // id + .push give the month a directional slide when paged via
-                    // swipe/chevrons (step() animates); the Today button and the
-                    // month-year wheel change monthAnchor without withAnimation, so
-                    // those jump instantly. .clipped keeps the slide inside the card.
-                    grid(byDay: byDay)
-                        .id(String(format: "%04d-%02d", year, month))
-                        .transition(.push(from: pushEdge))
+                    #if os(iOS)
+                    // Interactive month paging: prev/current/next are REAL pages in
+                    // a .page TabView, so the neighboring month follows the finger
+                    // (an after-the-fact .transition can't do that). On settle,
+                    // commit the month and snap back to center animation-free.
+                    TabView(selection: $pagerIndex) {
+                        monthPage(offsetFromAnchor: -1).tag(-1)
+                        monthPage(offsetFromAnchor: 0).tag(0)
+                        monthPage(offsetFromAnchor: 1).tag(1)
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: Self.gridHeight)
+                    .onChange(of: pagerIndex) { _, idx in
+                        guard idx != 0 else { return }
+                        monthAnchor = Self.utc.date(byAdding: .month, value: idx, to: monthAnchor) ?? monthAnchor
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { pagerIndex = 0 }
+                    }
+                    #else
+                    monthPage(offsetFromAnchor: 0)
+                    #endif
                 }
-                .clipped()
-                #if os(iOS)
-                // Swipe horizontally anywhere on the month card to page months
-                // (standard calendar idiom; the header chevrons remain for
-                // accessibility/discovery). minimumDistance + the dominance check
-                // keep day-cell taps and the List's vertical scroll unaffected.
-                .gesture(monthSwipe)
-                #endif
             }
             Section {
                 detail(byDay: byDay, posted: posted)
@@ -161,15 +169,29 @@ struct ScheduledCalendarView: View {
         }
     }
 
-    private func grid(byDay: [String: [(date: String, template: ScheduledTemplate)]]) -> some View {
+    /// Constant grid height: always 6 padded weeks (44pt cells, 4pt spacing) so
+    /// the three carousel pages align and paging never jumps vertically.
+    static let gridHeight: CGFloat = 6 * 44 + 5 * 4
+
+    /// One month's grid, self-contained (computes its own occurrence map) so the
+    /// carousel's prev/next pages render their own real content.
+    private func monthPage(offsetFromAnchor: Int) -> some View {
+        let m = Self.utc.date(byAdding: .month, value: offsetFromAnchor, to: monthAnchor) ?? monthAnchor
+        let year = Self.utc.component(.year, from: m)
+        let month = Self.utc.component(.month, from: m)
+        let days = Self.utc.range(of: .day, in: .month, for: m)?.count ?? 30
+        let firstWeekday = Self.utc.component(.weekday, from: m) - 1
+        func iso(_ day: Int) -> String { String(format: "%04d-%02d-%02d", year, month, day) }
+        let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: iso(1), through: iso(days)), by: { $0.date })
         // One ordered cell list (leading nils pad to the 1st's weekday, then the
-        // days) rendered by a single ForEach — keeps blanks and days in lockstep
-        // so the columns stay aligned (two separate ForEachs drifted in a List).
-        let cells: [Int?] = Array(repeating: nil, count: firstWeekday) + (1...daysInMonth).map(Optional.init)
+        // days, then trailing nils to a constant 42 cells) rendered by a single
+        // ForEach — keeps blanks and days in lockstep so the columns stay aligned.
+        var cells: [Int?] = Array(repeating: nil, count: firstWeekday) + (1...days).map(Optional.init)
+        cells += Array(repeating: nil, count: 42 - cells.count)
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
                 if let day {
-                    dayCell(day, occ: byDay[iso(day)] ?? [])
+                    dayCell(day, iso: iso(day), occ: byDay[iso(day)] ?? [])
                 } else {
                     Color.clear.frame(maxWidth: .infinity, minHeight: 44)
                 }
@@ -177,8 +199,7 @@ struct ScheduledCalendarView: View {
         }
     }
 
-    private func dayCell(_ day: Int, occ: [(date: String, template: ScheduledTemplate)]) -> some View {
-        let d = iso(day)
+    private func dayCell(_ day: Int, iso d: String, occ: [(date: String, template: ScheduledTemplate)]) -> some View {
         let isSel = d == selectedDay, isToday = d == store.wallToday
         return VStack(spacing: 3) {
             // Today gets a filled accent circle (white number); other days plain.
@@ -259,21 +280,15 @@ struct ScheduledCalendarView: View {
             .background(color.opacity(0.15)).foregroundStyle(color).clipShape(Capsule())
     }
 
-    #if os(iOS)
-    /// Horizontal month paging: finger left → next month, right → previous.
-    private var monthSwipe: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { v in
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                step(v.translation.width < 0 ? 1 : -1)
-            }
-    }
-    #endif
-
     private func step(_ n: Int) {
+        #if os(iOS)
+        // Animate the carousel to the neighbor; its onChange commits the month
+        // and recenters. (Chevrons get the same slide as a swipe.)
+        withAnimation(.easeInOut(duration: 0.25)) { pagerIndex = n }
+        #else
         guard let d = Self.utc.date(byAdding: .month, value: n, to: monthAnchor) else { return }
-        pushEdge = n > 0 ? .trailing : .leading
-        withAnimation(.easeInOut(duration: 0.25)) { monthAnchor = d }
+        monthAnchor = d
+        #endif
     }
     private func pretty(_ iso: String) -> String {
         guard let d = AppDate.isoDay.date(from: iso) else { return iso }
