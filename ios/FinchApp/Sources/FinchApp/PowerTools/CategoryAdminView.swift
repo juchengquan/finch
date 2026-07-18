@@ -144,7 +144,7 @@ struct CategoryAdminView: View {
         .confirmationDialog("Delete \(c.name)?",
                             isPresented: Binding(get: { deleting?.id == c.id }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { delete(c) }
+            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { delete(c) } }
         } message: {
             Text("Its subcategories move up a level — they won't be deleted.")
         }

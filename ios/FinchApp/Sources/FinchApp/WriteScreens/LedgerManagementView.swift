@@ -64,7 +64,7 @@ struct LedgerListView: View {
             .confirmationDialog("Delete this ledger?", isPresented: Binding(
                 get: { pendingDelete?.id == ledger.id }, set: { if !$0 { pendingDelete = nil } }),
                 titleVisibility: .visible) {
-                Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
+                Button("Delete \(ledger.name)", role: .destructive) { RowPresentation.afterCollapse { delete(ledger) } }
             } message: {
                 Text("This permanently deletes \(ledger.name) and all its data.")
             }

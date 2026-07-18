@@ -267,7 +267,7 @@ struct BudgetsTab: View {
                     get: { groupPendingDelete?.name == groupName },
                     set: { if !$0 { groupPendingDelete = nil } }),
                     presenting: groupPendingDelete) { g in
-                    Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                    Button("Delete \(g.name)", role: .destructive) { RowPresentation.afterCollapse { deleteGroup(g) } }
                     Button("Cancel", role: .cancel) {}
                 } message: { _ in
                     Text("Budgets in this group become ungrouped.")

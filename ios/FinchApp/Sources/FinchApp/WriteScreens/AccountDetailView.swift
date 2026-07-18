@@ -188,7 +188,7 @@ struct AccountDetailView: View {
                             isPresented: Binding(get: { pendingTxDelete?.id == t.id },
                                                  set: { if !$0 { pendingTxDelete = nil } }),
                             titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { deleteTxn(t) }
+            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { deleteTxn(t) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")

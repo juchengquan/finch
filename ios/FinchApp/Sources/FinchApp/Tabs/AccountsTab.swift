@@ -288,7 +288,7 @@ struct AccountsTab: View {
                     get: { groupPendingDelete?.name == groupName },
                     set: { if !$0 { groupPendingDelete = nil } }),
                     presenting: groupPendingDelete) { g in
-                    Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                    Button("Delete \(g.name)", role: .destructive) { RowPresentation.afterCollapse { deleteGroup(g) } }
                     Button("Cancel", role: .cancel) {}
                 } message: { _ in
                     Text("Accounts in this group become ungrouped.")
@@ -409,7 +409,7 @@ struct AccountsTab: View {
                 isPresented: Binding(get: { pendingDelete?.id == account.id },
                                      set: { if !$0 { pendingDelete = nil } }),
                 titleVisibility: .visible) {
-                Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
+                Button("Delete \(account.name ?? "account")", role: .destructive) { RowPresentation.afterCollapse { delete(account) } }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This permanently deletes \(account.name ?? "this account").")

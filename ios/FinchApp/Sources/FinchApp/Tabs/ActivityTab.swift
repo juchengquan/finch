@@ -336,7 +336,7 @@ struct ActivityFeedView: View {
                             isPresented: Binding(get: { pendingDelete?.id == txn.id },
                                                  set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { delete(txn) }
+            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { delete(txn) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
