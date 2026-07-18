@@ -40,4 +40,10 @@ final class FxDeriveTests: XCTestCase {
         XCTAssertTrue(fxDisplayDay("2026-07-17", withYear: true).contains("2026"))
         XCTAssertEqual(fxDisplayDay("garbage"), "garbage")
     }
+
+    func test_effectiveTracked_absentFallsBack_emptyIsRespected() {
+        XCTAssertEqual(fxEffectiveTracked(stored: nil, fallback: ["CAD", "EUR"]), ["CAD", "EUR"])
+        XCTAssertEqual(fxEffectiveTracked(stored: [], fallback: ["CAD", "EUR"]), [])   // user untracked everything
+        XCTAssertEqual(fxEffectiveTracked(stored: ["JPY"], fallback: ["CAD", "EUR"]), ["JPY"])
+    }
 }

@@ -32,7 +32,7 @@ enum RateAutoUpdater {
     /// it ignores toggle + throttle). Stamps lastAutoUpdate ONLY on success, so a
     /// manual refresh satisfies "today's fetch" and the next auto-run throttles.
     static func refresh(store: FinchStore) async -> RefreshOutcome {
-        let codes = currenciesInUse(store: store)
+        let codes = fxEffectiveTracked(stored: store.trackedCurrencies, fallback: currenciesInUse(store: store))
         guard !codes.isEmpty else { return .skipped }
         guard let url = URL(string: "https://api.frankfurter.dev/v2/rates?base=USD&quotes=\(codes.joined(separator: ","))") else { return .failed }
         var req = URLRequest(url: url); req.timeoutInterval = 10

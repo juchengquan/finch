@@ -30,3 +30,10 @@ func fxDisplayDay(_ isoDay: String, withYear: Bool = false) -> String {
     return withYear ? d.formatted(.dateTime.month(.abbreviated).day().year())
                     : d.formatted(.dateTime.month(.abbreviated).day())
 }
+
+/// The FX auto-update fetch list: the user's explicit tracked set when the
+/// app_state key exists (even empty = untracked everything), else the seeded
+/// default (currencies in use).
+func fxEffectiveTracked(stored: [String]?, fallback: [String]) -> [String] {
+    stored ?? fallback
+}
