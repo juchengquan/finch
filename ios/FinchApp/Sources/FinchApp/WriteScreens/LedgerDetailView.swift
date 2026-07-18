@@ -40,9 +40,6 @@ struct LedgerDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .errorAlert($errorMessage)
                 .sheet(item: $editing) { EditLedgerSheet(ledger: $0) }
-                .confirmationDialog("Delete this ledger?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                    Button("Delete", role: .destructive) { delete(ledger) }
-                }
                 .task(id: ledgerId) { summary = store.ledgerSummary(ledgerId) }
                 .onChange(of: store.txns) { _, _ in summary = store.ledgerSummary(ledgerId) }
             } else {
@@ -106,6 +103,10 @@ struct LedgerDetailView: View {
             Button("Edit") { editing = ledger }
             Button("Delete", role: .destructive) { confirmingDelete = true }
                 .disabled(store.ledgers.count <= 1)
+                // Anchored on the button (iOS 26 positions popouts at their source).
+                .confirmationDialog("Delete this ledger?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) { delete(ledger) }
+                }
         }
     }
 

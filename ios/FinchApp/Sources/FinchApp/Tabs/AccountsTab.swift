@@ -79,33 +79,12 @@ struct AccountsTab: View {
             .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
-            // Same confirm-before-delete as the ledger list / account detail page —
-            // swipe/context-menu/⌫ Delete asks first (Archive stays one-tap: it's
-            // recoverable from Settings › Archived Accounts).
-            .confirmationDialog("Delete this account?", isPresented: Binding(
-                get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } }),
-                titleVisibility: .visible, presenting: pendingDelete) { account in
-                Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
-                Button("Cancel", role: .cancel) {}
-            } message: { account in
-                Text("This permanently deletes \(account.name ?? "this account").")
-            }
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
                 set: { if !$0 { renamingGroupId = nil } })) {
                 TextField("Name", text: $renameText)
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
-            }
-            .confirmationDialog("Delete group?", isPresented: Binding(
-                get: { groupPendingDelete != nil },
-                set: { if !$0 { groupPendingDelete = nil } }),
-                presenting: groupPendingDelete) { g in
-                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("Accounts in this group become ungrouped.")
             }
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
@@ -266,7 +245,7 @@ struct AccountsTab: View {
         }
         // Ungrouped accounts: bare rows pinned to the top, no "Ungrouped" header.
         if !filteredUngroupedAccounts.isEmpty {
-            Section { ForEach(filteredUngroupedAccounts) { account in row(account) } }
+            Section { ForEach(filteredUngroupedAccounts) { account in confirmedRow(account, row: row) } }
         }
         ForEach(groupsToShow, id: \.self) { groupName in
             // The group title is a tappable Button *row* (not a section header):
@@ -304,10 +283,20 @@ struct AccountsTab: View {
                 .accessibilityValue(collapsedGroups.contains(groupName) ? "Collapsed" : "Expanded")
                 .accessibilityHint((collapsedGroups.contains(groupName) ? "Double tap to expand" : "Double tap to collapse")
                                    + ". Long press for group options.")
+                // Anchored on the header row (iOS 26 positions popouts at their source).
+                .confirmationDialog("Delete group?", isPresented: Binding(
+                    get: { groupPendingDelete?.name == groupName },
+                    set: { if !$0 { groupPendingDelete = nil } }),
+                    presenting: groupPendingDelete) { g in
+                    Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { _ in
+                    Text("Accounts in this group become ungrouped.")
+                }
 
                 // Collapse is bypassed while searching so matches always surface.
                 if !collapsedGroups.contains(groupName) || searchActive {
-                    ForEach(filteredAccounts(in: groupName)) { account in row(account) }
+                    ForEach(filteredAccounts(in: groupName)) { account in confirmedRow(account, row: row) }
                         .onMove { moveAccounts(in: groupName, from: $0, to: $1) }
                 }
             }
@@ -407,6 +396,24 @@ struct AccountsTab: View {
     private func deleteGroup(_ g: AccountGroupRow) {
         do { try store.apply(.deleteAccountGroup, Args(["id": .string(g.id)])) }
         catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// An account row + its anchored delete confirmation — same confirm-before-
+    /// delete as the ledger list / account detail page (swipe/context-menu/⌫ all
+    /// ask first; Archive stays one-tap). Attached per-row so the iOS 26 popout
+    /// anchors at the row instead of the top of the screen.
+    @ViewBuilder private func confirmedRow<Row: View>(_ account: AccountRow,
+                                                      @ViewBuilder row: @escaping (AccountRow) -> Row) -> some View {
+        row(account)
+            .confirmationDialog("Delete this account?",
+                isPresented: Binding(get: { pendingDelete?.id == account.id },
+                                     set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible) {
+                Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes \(account.name ?? "this account").")
+            }
     }
 
     /// The complete manage cluster — context menu only. The trailing swipe shows

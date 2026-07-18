@@ -300,6 +300,13 @@ struct EditTransactionSheet: View {
                         run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
                     }
                     Button("Delete transaction", role: .destructive) { confirmingDelete = true }
+                        // Anchored on the button (iOS 26 positions popouts at their source).
+                        .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) {
+                                do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
+                                catch { errorMessage = i18nMessage(error) }
+                            }
+                        }
                 }
 
                 if let errorMessage {
@@ -323,12 +330,6 @@ struct EditTransactionSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
                         .accessibilityLabel("Save").bold()
-                }
-            }
-            .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
-                    catch { errorMessage = i18nMessage(error) }
                 }
             }
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }

@@ -180,13 +180,13 @@ struct ActivityFeedView: View {
                     Spacer()
                     Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
                     Spacer()
-                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
+                    bulkDeleteButton
                 }
                 #else
                 ToolbarItemGroup(placement: .principal) {
                     Button("Confirm \(selected.count)") { bulkConfirm() }.disabled(selected.isEmpty)
                     Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
-                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
+                    bulkDeleteButton
                 }
                 #endif
             }
@@ -204,20 +204,6 @@ struct ActivityFeedView: View {
         .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
-        }
-        .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
-                            isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
-            Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog("Delete transaction?",
-                            isPresented: Binding(get: { pendingDelete != nil },
-                                                 set: { if !$0 { pendingDelete = nil } }),
-                            titleVisibility: .visible, presenting: pendingDelete) { txn in
-            Button("Delete", role: .destructive) { delete(txn) }
-            Button("Cancel", role: .cancel) {}
-        } message: { txn in
-            Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
         }
         .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -284,6 +270,19 @@ struct ActivityFeedView: View {
     }
 
     @ViewBuilder
+    /// The selection-bar Delete with its confirmation attached — so the iOS 26
+    /// popout anchors at this button (shared by the iOS bottom bar and the
+    /// macOS principal group).
+    private var bulkDeleteButton: some View {
+        Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }
+            .disabled(selected.isEmpty)
+            .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
+                                isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
+                Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
+                Button("Cancel", role: .cancel) {}
+            }
+    }
+
     private func row(_ txn: Tx) -> some View {
         Button {
             if isSelecting { toggle(txn) }
@@ -327,6 +326,17 @@ struct ActivityFeedView: View {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
             Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
+        }
+        // Anchored on the row (iOS 26 positions the popout at its source; a
+        // container-attached dialog pops at the top of the screen instead).
+        .confirmationDialog("Delete transaction?",
+                            isPresented: Binding(get: { pendingDelete?.id == txn.id },
+                                                 set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { delete(txn) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
         }
         .tag(txn.id)
     }

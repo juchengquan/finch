@@ -79,15 +79,6 @@ struct BudgetsTab: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
             }
-            .confirmationDialog("Delete group?", isPresented: Binding(
-                get: { groupPendingDelete != nil },
-                set: { if !$0 { groupPendingDelete = nil } }),
-                presenting: groupPendingDelete) { g in
-                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("Budgets in this group become ungrouped.")
-            }
             .navigationDestination(for: String.self) { BudgetDetailView(budgetId: $0) }
             .onAppear { consumeFocus(); collapsedGroups = BudgetGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -270,6 +261,16 @@ struct BudgetsTab: View {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
                         Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
                     }
+                }
+                // Anchored on the header row (iOS 26 positions popouts at their source).
+                .confirmationDialog("Delete group?", isPresented: Binding(
+                    get: { groupPendingDelete?.name == groupName },
+                    set: { if !$0 { groupPendingDelete = nil } }),
+                    presenting: groupPendingDelete) { g in
+                    Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { _ in
+                    Text("Budgets in this group become ungrouped.")
                 }
 
                 // Collapse is bypassed while searching so matches always surface.

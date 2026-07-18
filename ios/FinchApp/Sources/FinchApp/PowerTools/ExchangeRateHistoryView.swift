@@ -54,10 +54,11 @@ struct ExchangeRateHistoryView: View {
                         }
                     }
                 } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("More")
+                // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
+                .confirmationDialog("Delete all \(currency) rates", isPresented: $showDeleteAll, titleVisibility: .visible) {
+                    Button("Delete \(rows.count) rates", role: .destructive) { deleteAll() }
+                }
             }
-        }
-        .confirmationDialog("Delete all \(currency) rates", isPresented: $showDeleteAll, titleVisibility: .visible) {
-            Button("Delete \(rows.count) rates", role: .destructive) { deleteAll() }
         }
         .errorAlert($errorMessage)
     }

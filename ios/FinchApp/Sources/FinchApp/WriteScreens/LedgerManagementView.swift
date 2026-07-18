@@ -25,13 +25,6 @@ struct LedgerListView: View {
         }
         .navigationTitle("Ledgers")
         .errorAlert($errorMessage)
-        .confirmationDialog("Delete this ledger?", isPresented: Binding(
-            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible, presenting: pendingDelete) { ledger in
-            Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
-        } message: { ledger in
-            Text("This permanently deletes \(ledger.name) and all its data.")
-        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }
@@ -64,6 +57,14 @@ struct LedgerListView: View {
             }
             .contextMenu {
                 Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
+            }
+            // Anchored on the row (iOS 26 positions popouts at their source).
+            .confirmationDialog("Delete this ledger?", isPresented: Binding(
+                get: { pendingDelete?.id == ledger.id }, set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible) {
+                Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
+            } message: {
+                Text("This permanently deletes \(ledger.name) and all its data.")
             }
         }
     }

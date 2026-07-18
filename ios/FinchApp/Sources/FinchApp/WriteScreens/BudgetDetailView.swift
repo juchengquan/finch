@@ -58,6 +58,10 @@ struct BudgetDetailView: View {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
                         } label: { Image(systemName: "ellipsis.circle") }
+                        // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
+                        .confirmationDialog("Delete this budget?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) { delete(budget) }
+                        }
                     }
                 }
                 .sheet(isPresented: $showingEdit) { BudgetSheet(budget: budget) }
@@ -67,9 +71,6 @@ struct BudgetDetailView: View {
                                         defaultCategoryId: budget.categoryIds.first)
                 }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
-                .confirmationDialog("Delete this budget?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                    Button("Delete", role: .destructive) { delete(budget) }
-                }
             } else {
                 Color.clear.onAppear { dismiss() }
             }
