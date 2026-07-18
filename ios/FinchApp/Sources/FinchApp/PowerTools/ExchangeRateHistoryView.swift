@@ -25,6 +25,9 @@ struct ExchangeRateHistoryView: View {
                 }
             }
             Section {
+                if rows.isEmpty {
+                    Text("No rates yet.").foregroundStyle(.secondary)
+                }
                 ForEach(rows, id: \.self) { rate in
                     HStack {
                         Text(fxDisplayDay(rate.date, withYear: true))
@@ -45,8 +48,10 @@ struct ExchangeRateHistoryView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button(role: .destructive) { showDeleteAll = true } label: {
-                        Label("Delete all \(currency) rates", systemImage: "trash")
+                    if !rows.isEmpty {
+                        Button(role: .destructive) { showDeleteAll = true } label: {
+                            Label("Delete all \(currency) rates", systemImage: "trash")
+                        }
                     }
                 } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("More")
             }
