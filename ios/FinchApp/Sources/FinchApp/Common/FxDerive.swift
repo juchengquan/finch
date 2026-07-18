@@ -37,3 +37,35 @@ func fxDisplayDay(_ isoDay: String, withYear: Bool = false) -> String {
 func fxEffectiveTracked(stored: [String]?, fallback: [String]) -> [String] {
     stored ?? fallback
 }
+
+/// One row of the Currencies page.
+struct FxCurrencyRow: Equatable {
+    let code: String
+    let label: String     // "Euro (€)" via FxCurrencyInfo
+    let rate: Double?     // latest stored USD-per-unit; 1.0 for the hub; nil = none
+    let tracked: Bool
+    let isHub: Bool       // USD — pinned first, no toggle
+}
+
+/// USD hub first, then tracked A–Z, then the rest A–Z.
+@MainActor
+func fxCurrencyRows(all: [String], rates: [ExchangeRate], tracked: [String]) -> [FxCurrencyRow] {
+    let trackedSet = Set(tracked)
+    let codes = all.sorted()
+    func row(_ code: String, tracked: Bool) -> FxCurrencyRow {
+        FxCurrencyRow(code: code, label: FxCurrencyInfo.label(code),
+                      rate: fxLatest(rates, code)?.rate, tracked: tracked, isHub: false)
+    }
+    var rows = [FxCurrencyRow(code: "USD", label: FxCurrencyInfo.label("USD"),
+                              rate: 1.0, tracked: false, isHub: true)]
+    rows += codes.filter { $0 != "USD" && trackedSet.contains($0) }.map { row($0, tracked: true) }
+    rows += codes.filter { $0 != "USD" && !trackedSet.contains($0) }.map { row($0, tracked: false) }
+    return rows
+}
+
+/// Case-insensitive search over code or label; empty query passes everything through.
+func fxFilterRows(_ rows: [FxCurrencyRow], query: String) -> [FxCurrencyRow] {
+    let q = query.trimmingCharacters(in: .whitespaces)
+    guard !q.isEmpty else { return rows }
+    return rows.filter { $0.code.localizedCaseInsensitiveContains(q) || $0.label.localizedCaseInsensitiveContains(q) }
+}
