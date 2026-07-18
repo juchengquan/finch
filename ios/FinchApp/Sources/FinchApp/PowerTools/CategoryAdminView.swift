@@ -133,7 +133,9 @@ struct CategoryAdminView: View {
         }
         .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { RowPresentation.afterCollapse { deleting = c } } label: { Label("Delete", systemImage: "trash") }
+            // Not role: .destructive — see ActivityTab (fake removal animation
+            // kills the row-anchored popout).
+            Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .contextMenu {
             Button(role: .destructive) { RowPresentation.afterCollapse { deleting = c } } label: { Label("Delete", systemImage: "trash") }

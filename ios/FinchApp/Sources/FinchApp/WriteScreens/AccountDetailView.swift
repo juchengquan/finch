@@ -158,7 +158,9 @@ struct AccountDetailView: View {
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation first.
-            Button(role: .destructive) { RowPresentation.afterCollapse { pendingTxDelete = t } } label: { Label("Delete", systemImage: "trash") }
+            // Not role: .destructive — see ActivityTab (fake removal animation
+            // kills the row-anchored popout).
+            Button { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .swipeActions(edge: .leading) {
             if t.pending == true {

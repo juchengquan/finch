@@ -304,7 +304,10 @@ struct ActivityFeedView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation (no
             // delete-on-full-swipe — destructive actions get a confirm step).
-            Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = txn } } label: { Label("Delete", systemImage: "trash") }
+            // Deliberately NOT role: .destructive — that role plays a fake
+            // row-removal animation on tap, which both looks like a premature
+            // delete and tears down the row-anchored confirmation popout.
+            Button { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .swipeActions(edge: .leading) {
             if txn.pending == true {

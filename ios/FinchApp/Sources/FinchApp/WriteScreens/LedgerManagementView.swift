@@ -52,7 +52,9 @@ struct LedgerListView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = ledger } } label: { Label("Delete", systemImage: "trash") }
+                // Not role: .destructive — see ActivityTab (fake removal
+                // animation kills the row-anchored popout).
+                Button { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                     .disabled(store.ledgers.count <= 1)
             }
             .contextMenu {
