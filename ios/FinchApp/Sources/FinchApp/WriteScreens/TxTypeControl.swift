@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// The transaction-type switcher shared by the Add and Edit sheets' nav bars.
-/// The whole control is one interactive Liquid Glass capsule (so it has the glass
-/// rim + press reaction of the toolbar pods / tab bar), and the SELECTED segment
-/// is a bright accent thumb that SLIDES between segments (matched-geometry). Tap a
-/// segment or scrub-anywhere. `enabled` limits the kinds the user may switch TO
-/// (empty → fully locked; Edit shows Transfer as present-but-locked for line items).
+/// Transaction-type switcher shared by the Add + Edit sheets' nav bars. Models
+/// the app's bottom tab bar: the SELECTED segment is a tinted "crystal" Liquid
+/// Glass capsule (`glassEffect` + tint — a translucent frosted pill, not a solid
+/// color chip) that SLIDES between segments (matched-geometry), over a subtle
+/// material track. `enabled` limits the kinds the user may switch TO (empty →
+/// fully locked; Edit shows Transfer as present-but-locked for line items). Tap a
+/// segment or scrub-anywhere.
 struct TxTypeControl: View {
     /// Add-sheet kinds in Add-sheet order.
     enum Kind: String, CaseIterable, Identifiable {
@@ -30,16 +31,12 @@ struct TxTypeControl: View {
             ForEach(Kind.allCases) { k in
                 ZStack {
                     if k == selected {
-                        // `.tint` (not Color.accentColor) so the thumb blue matches
-                        // the app's other interactive blues (USD picker, checkmarks,
-                        // links, tab-bar selection), which all use the tint.
-                        Capsule().fill(.tint)
-                            .padding(2)
+                        selectedThumb
                             .matchedGeometryEffect(id: "txTypeThumb", in: glassNS)
                     }
                     Image(systemName: k.iconName)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(color(for: k))
+                        .foregroundStyle(iconStyle(for: k))
                 }
                 .frame(width: seg, height: height)
                 .contentShape(Rectangle())
@@ -49,7 +46,7 @@ struct TxTypeControl: View {
             }
         }
         .frame(width: width, height: height)
-        .glassCapsule()
+        .background(Capsule().fill(.quaternary))
         .animation(.snappy(duration: 0.3), value: selected)
         #if os(iOS)
         // Scrub-anywhere: drag picks whichever segment is under the finger.
@@ -63,25 +60,28 @@ struct TxTypeControl: View {
         #endif
     }
 
+    /// The focused item: a NEUTRAL (clear) "crystal" Liquid Glass capsule on
+    /// OS 26+ — exactly the bottom tab bar's selection (frosted glass is the pill;
+    /// the colour lives on the glyph, not the glass). A soft fill before.
+    @ViewBuilder private var selectedThumb: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .padding(2)
+        } else {
+            Capsule().fill(Color.primary.opacity(0.12)).padding(2)
+        }
+    }
+
     private func pick(_ k: Kind) {
         guard k != selected, enabled.contains(k) else { return }
         withAnimation(.snappy(duration: 0.3)) { onSelect(k) }
     }
 
-    private func color(for k: Kind) -> Color {
-        if k == selected { return .white }
-        return enabled.contains(k) ? .primary : Color.secondary.opacity(0.4)
-    }
-}
-
-private extension View {
-    /// The control itself as an interactive Liquid Glass capsule on OS 26+ (glass
-    /// rim + press reaction, like the ✕/✓ pods); a soft material capsule before.
-    @ViewBuilder func glassCapsule() -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: .capsule)
-        } else {
-            self.background(Capsule().fill(.thinMaterial))
-        }
+    /// Selected glyph in the accent tint (like the tab bar's selected item);
+    /// others primary, disabled dimmed.
+    private func iconStyle(for k: Kind) -> AnyShapeStyle {
+        if k == selected { return AnyShapeStyle(.tint) }
+        return AnyShapeStyle(enabled.contains(k) ? Color.primary : Color.secondary.opacity(0.4))
     }
 }
