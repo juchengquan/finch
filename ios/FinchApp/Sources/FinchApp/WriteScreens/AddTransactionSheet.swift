@@ -56,6 +56,7 @@ struct AddTransactionSheet: View {
     @State private var showingSplit = false
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
+    @State private var slideEdge: Edge = .trailing   // direction of the type-switch slide
 
     private var accounts: [AccountRow] { store.accounts }
 
@@ -95,26 +96,20 @@ struct AddTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
+            // A SINGLE Form (not a paged TabView). The nav toolbar can only apply
+            // Liquid Glass over content that scrolls under it, and it only tracks a
+            // single scroll view — a TabView(.page) wraps each form in its own inset
+            // scroll view the toolbar can't follow, so it fell back to an opaque bar
+            // and the glass never refracted. One tracked Form fixes that; type
+            // changes animate via a direction-aware slide (the segmented control's
+            // tap/scrub drives `kind`; the interactive page-drag is intentionally
+            // dropped for the glass).
             Group {
-                #if os(iOS)
-                // Page-style TabView so a horizontal swipe INTERACTIVELY drags the
-                // next type's form in with the finger (a .transition can only
-                // animate after the state flips). Selection is the same `kind` the
-                // toolbar's segmented control drives, so they stay in sync. Each
-                // page renders for its own `k` (neighbors pre-render mid-swipe).
-                TabView(selection: $kind) {
-                    ForEach(Kind.allCases) { k in
-                        formPage(k).tag(k)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // The pager's own background shows wherever a page's Form doesn't
-                // cover it (behind the bars at rest, page bounce) — paint it the
-                // same grouped color so the sheet reads as one surface.
-                .background(Color(uiColor: .systemGroupedBackground))
-                #else
                 formPage(kind)
-                #endif
+                    .id(kind)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: slideEdge).combined(with: .opacity),
+                        removal: .move(edge: slideEdge == .trailing ? .leading : .trailing).combined(with: .opacity)))
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -127,7 +122,12 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .principal) {
                     TxTypeControl(selected: TxTypeControl.Kind(rawValue: kind.rawValue) ?? .expense,
                                   enabled: Set(TxTypeControl.Kind.allCases)) { k in
-                        if let nk = Kind(rawValue: k.rawValue) { kind = nk }
+                        guard let nk = Kind(rawValue: k.rawValue), nk != kind else { return }
+                        // Slide the new form in from the side the type moved toward.
+                        let order = Kind.allCases
+                        let forward = (order.firstIndex(of: nk) ?? 0) > (order.firstIndex(of: kind) ?? 0)
+                        slideEdge = forward ? .trailing : .leading
+                        withAnimation(.snappy(duration: 0.28)) { kind = nk }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
