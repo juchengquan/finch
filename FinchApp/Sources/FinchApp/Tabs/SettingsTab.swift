@@ -35,6 +35,7 @@ struct SettingsRootList: View {
                 NavigationLink { SettingsImportExportView() } label: { Label("Import & Export", systemImage: "square.and.arrow.up.on.square") }
                 NavigationLink { SettingsSyncBackupView() } label: { Label("Sync & Backup", systemImage: "arrow.triangle.2.circlepath") }
                 NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
+                NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
                 NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
                 NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
                 NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
@@ -139,7 +140,6 @@ struct SettingsPowerToolsView: View {
             NavigationLink("Categories") { CategoryAdminView() }
             NavigationLink("Tags") { TagAdminView() }
             NavigationLink("Merchants") { CounterpartyAdminView() }
-            NavigationLink("Exchange rates") { ExchangeRatesView() }
         }
         .navigationTitle("Power Tools")
     }

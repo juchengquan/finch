@@ -1,18 +1,26 @@
 import SwiftUI
 import FinchCore
 
-/// Phase 4 (FX tools) — the FX home. Auto-update controls (moved here from
-/// Settings › Advanced in the page redesign), manual "Refresh now", and rates
-/// grouped one-row-per-currency (latest rate, both directions); history and
-/// deletes live in ExchangeRateHistoryView. Writes stay on the
-/// setExchangeRate / deleteExchangeRate chokepoints.
-struct ExchangeRatesView: View {
+/// Settings › Currencies — the FX home. Auto-update controls on top (master
+/// toggle, last-updated, manual refresh), then ALL ISO currencies (hub first,
+/// tracked A–Z, rest A–Z, searchable): code + localized name (sign), latest
+/// USD-per-unit rate, and a tracking toggle that drives what the daily
+/// Frankfurter fetch requests. Tap → per-currency history. Writes stay on the
+/// setExchangeRate / deleteExchangeRate / setTrackedCurrencies chokepoints.
+struct CurrenciesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var showingAdd = false
     @State private var errorMessage: String?
     @State private var refreshing = false
     @State private var lastUpdated: Date?
     @State private var refreshNote: LocalizedStringKey?
+    @State private var query = ""
+
+    /// The user's explicit tracked set, or the seeded default before first toggle.
+    private var effectiveTracked: [String] {
+        fxEffectiveTracked(stored: store.trackedCurrencies,
+                           fallback: RateAutoUpdater.currenciesInUse(store: store))
+    }
 
     var body: some View {
         List {
@@ -37,22 +45,18 @@ struct ExchangeRatesView: View {
                 Text("Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.")
             }
 
-            Section("Rates") {
-                if store.exchangeRates.isEmpty {
-                    Text("No exchange rates. USD is the hub (rate 1).").foregroundStyle(.secondary)
-                }
-                ForEach(fxCurrencies(store.exchangeRates), id: \.self) { code in
-                    if let latest = fxLatest(store.exchangeRates, code) {
-                        NavigationLink {
-                            ExchangeRateHistoryView(currency: code)
-                        } label: {
-                            currencyRow(code: code, latest: latest)
-                        }
+            Section("Currencies") {
+                ForEach(fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query), id: \.code) { row in
+                    NavigationLink {
+                        ExchangeRateHistoryView(currency: row.code)
+                    } label: {
+                        currencyRow(row)
                     }
                 }
             }
         }
-        .navigationTitle("Exchange rates")
+        .searchable(text: $query)
+        .navigationTitle("Currencies")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add rate")
@@ -63,22 +67,34 @@ struct ExchangeRatesView: View {
         .onAppear { lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date }
     }
 
-    /// Latest rate both ways: primary = stored USD-per-unit, caption = inverse.
-    private func currencyRow(code: String, latest: ExchangeRate) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(code).fontWeight(.medium)
-                SourceBadge(source: latest.source)
+    private func currencyRow(_ row: FxCurrencyRow) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.code).fontWeight(.medium)
+                Text(row.isHub ? "\(row.label) · hub" : row.label)
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Text("1 \(code) = \(String(format: "%.4f", latest.rate)) USD")
-            Text("1 USD = \(inverseText(latest.rate)) \(code) · \(fxDisplayDay(latest.date))")
-                .font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Text(row.rate.map { String(format: "%.4f", $0) } ?? "—")
+                .foregroundStyle(row.rate == nil ? Color.secondary : Color.primary)
+            if !row.isHub {
+                Toggle("", isOn: Binding(get: { row.tracked }, set: { setTracked(row.code, $0) }))
+                    .labelsHidden()
+                    .accessibilityLabel(Text("Track \(row.code)"))
+            }
         }
         .padding(.vertical, 2)
     }
 
-    private func inverseText(_ rate: Double) -> String {
-        rate > 0 ? String(format: "%.4f", 1.0 / rate) : "—"
+    /// Tracking writes materialize the app_state key (seed ± code). Toggling ON a
+    /// currency with no stored rate fetches immediately (manual-act semantics).
+    private func setTracked(_ code: String, _ on: Bool) {
+        var set = Set(effectiveTracked)
+        if on { set.insert(code) } else { set.remove(code) }
+        do {
+            try store.apply(.setTrackedCurrencies, Args(["codes": .array(set.sorted().map { JSONValue.string($0) })]))
+            if on && fxLatest(store.exchangeRates, code) == nil { refreshNow() }
+        } catch { errorMessage = i18nMessage(error) }
     }
 
     /// A deliberate manual act — bypasses toggle + throttle (RateAutoUpdater.refresh).
