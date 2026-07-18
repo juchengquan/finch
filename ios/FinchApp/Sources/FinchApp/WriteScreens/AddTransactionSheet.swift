@@ -95,16 +95,24 @@ struct AddTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
-            // A SINGLE Form (not a paged TabView). The nav toolbar applies Liquid
-            // Glass only over content that scrolls under it, and it tracks a single
-            // scroll view — the former TabView(.page) gave each form its own inset
-            // scroll view the toolbar couldn't follow, so it fell back to an opaque
-            // bar and the glass never engaged. One tracked Form fixes that. The type
-            // switcher is the NATIVE segmented Picker (`.pickerStyle(.segmented)`),
-            // which carries the system's own Liquid Glass selection thumb — a custom
-            // control loses that. (Interactive page-drag between types intentionally
-            // dropped; the Picker's tap + scrub still switch type.)
-            formPage(kind)
+            Group {
+                #if os(iOS)
+                // Page-style TabView so a horizontal swipe interactively drags the
+                // next type's form in with the finger. The type switcher's Liquid
+                // Glass is the self-contained glass THUMB on TxTypeControl (not the
+                // toolbar refracting scrolled content), so the pager doesn't affect
+                // it — swipe and glass coexist.
+                TabView(selection: $kind) {
+                    ForEach(Kind.allCases) { k in
+                        formPage(k).tag(k)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .background(Color(uiColor: .systemGroupedBackground))
+                #else
+                formPage(kind)
+                #endif
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

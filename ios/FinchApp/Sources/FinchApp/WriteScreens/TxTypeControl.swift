@@ -47,6 +47,9 @@ struct TxTypeControl: View {
         }
         .frame(width: width, height: height)
         .background(track)
+        // Slide the glass thumb whenever selection changes — including when a page
+        // swipe in the Add sheet drives `kind` externally, not just tap/scrub.
+        .animation(.snappy(duration: 0.3), value: selected)
         #if os(iOS)
         // Scrub-anywhere: drag picks whichever segment is under the finger.
         .simultaneousGesture(
