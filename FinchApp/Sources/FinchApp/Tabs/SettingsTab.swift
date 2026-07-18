@@ -32,8 +32,7 @@ struct SettingsRootList: View {
         List {
             Section {
                 NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
-                NavigationLink { SettingsImportExportView() } label: { Label("Import & Export", systemImage: "square.and.arrow.up.on.square") }
-                NavigationLink { SettingsSyncBackupView() } label: { Label("Sync & Backup", systemImage: "arrow.triangle.2.circlepath") }
+                NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
                 NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
                 NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
                 NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
@@ -49,25 +48,11 @@ struct SettingsRootList: View {
     }
 }
 
-/// Settings › Import & Export — the `.finch` pack import/export buttons.
-struct SettingsImportExportView: View {
-    var body: some View {
-        List {
-            Section {
-                ImportButton()
-                ExportButton()
-                ExportCsvButton()
-            } footer: {
-                Text("Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first). The CSV export covers the active ledger's full transaction history.")
-            }
-        }
-        .navigationTitle("Import & Export")
-    }
-}
-
-/// Settings › Sync & Backup — iCloud (CloudKit) live sync + local/iCloud-Drive
-/// backups (both about keeping your data safe across devices).
-struct SettingsSyncBackupView: View {
+/// Settings › Backup & Sync — everything about keeping your data safe and
+/// portable: iCloud (CloudKit) live sync, local/iCloud-Drive backups, and the
+/// `.finch` pack / CSV import-export buttons (merged from the former
+/// Import & Export page).
+struct SettingsBackupSyncView: View {
     @EnvironmentObject private var store: FinchStore
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
@@ -126,8 +111,18 @@ struct SettingsSyncBackupView: View {
             } footer: {
                 Text("Automatic local .finch backups after edits (kept: last 14), mirrored to iCloud Drive when signed in. Newer versions from other devices are offered for import (never auto-replaced).")
             }
+
+            Section {
+                ImportButton()
+                ExportButton()
+                ExportCsvButton()
+            } header: {
+                Text("Import & Export")
+            } footer: {
+                Text("Export your whole ledger set as a self-contained .finch file; import to replace your data (audited first). The CSV export covers the active ledger's full transaction history.")
+            }
         }
-        .navigationTitle("Sync & Backup")
+        .navigationTitle("Backup & Sync")
         .errorAlert($importError, title: "Import failed")
     }
 }
