@@ -4563,6 +4563,16 @@
         }
       }
     },
+    "Tap + or a calendar day to add a recurring transaction.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按 + 或日历中的日期以添加定期交易。"
+          }
+        }
+      }
+    },
     "Tap + to add a position.": {
       "localizations": {
         "zh-Hans": {
