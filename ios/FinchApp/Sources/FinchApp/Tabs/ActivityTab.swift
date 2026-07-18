@@ -47,6 +47,7 @@ struct ActivityFeedView: View {
     /// `AccountsTab`/`BudgetsTab`/`LedgerListView` (#414/#23).
     var selection: Binding<String?>? = nil
     @StateObject private var savedSearches = SavedSearchStore()
+    @State private var pendingSearchDelete: SavedSearch?   // saved search awaiting delete confirmation
     @State private var showingSaveSearch = false
     @State private var newSearchName = ""
     @State private var searchQuery: String = ""
@@ -180,13 +181,13 @@ struct ActivityFeedView: View {
                     Spacer()
                     Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
                     Spacer()
-                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
+                    bulkDeleteButton
                 }
                 #else
                 ToolbarItemGroup(placement: .principal) {
                     Button("Confirm \(selected.count)") { bulkConfirm() }.disabled(selected.isEmpty)
                     Button("Recategorize \(selected.count)") { showingBulkCat = true }.disabled(selected.isEmpty)
-                    Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }.disabled(selected.isEmpty)
+                    bulkDeleteButton
                 }
                 #endif
             }
@@ -205,19 +206,24 @@ struct ActivityFeedView: View {
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
         }
-        .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
-                            isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
-            Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
-            Button("Cancel", role: .cancel) {}
-        }
-        .confirmationDialog("Delete transaction?",
-                            isPresented: Binding(get: { pendingDelete != nil },
-                                                 set: { if !$0 { pendingDelete = nil } }),
-                            titleVisibility: .visible, presenting: pendingDelete) { txn in
+        // A centered ALERT, not a row-anchored confirmationDialog: window-level,
+        // so it presents instantly and survives swipe collapse / cell recycling
+        // (row-anchored popouts kept getting torn down or pinning dead cells).
+        .alert("Delete transaction?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { txn in
             Button("Delete", role: .destructive) { delete(txn) }
             Button("Cancel", role: .cancel) {}
         } message: { txn in
             Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
+        }
+        .alert("Delete saved search?", isPresented: Binding(
+            get: { pendingSearchDelete != nil }, set: { if !$0 { pendingSearchDelete = nil } }),
+            presenting: pendingSearchDelete) { s in
+            Button("Delete", role: .destructive) { savedSearches.remove(s.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in
+            Text("\(s.name)")
         }
         .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
@@ -227,7 +233,10 @@ struct ActivityFeedView: View {
         .onChange(of: sort) { _, _ in recompute() }
         .onChange(of: groupByMonth) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
-        .onReceive(store.$txns) { _ in recompute() }
+        // Deferred one runloop turn: @Published emits during willSet, so a
+        // synchronous recompute here reads the OLD store.txns and rebuilds the
+        // stale list (deleted rows lingered). After the hop the store is settled.
+        .onReceive(store.$txns) { _ in DispatchQueue.main.async { recompute() } }
     }
 
     private func monthLabel(_ key: String) -> String {
@@ -284,6 +293,19 @@ struct ActivityFeedView: View {
     }
 
     @ViewBuilder
+    /// The selection-bar Delete with its confirmation attached — so the iOS 26
+    /// popout anchors at this button (shared by the iOS bottom bar and the
+    /// macOS principal group).
+    private var bulkDeleteButton: some View {
+        Button("Delete \(selected.count)", role: .destructive) { confirmingBulkDelete = true }
+            .disabled(selected.isEmpty)
+            .confirmationDialog("Delete \(selected.count) transaction\(selected.count == 1 ? "" : "s")?",
+                                isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
+                Button("Delete \(selected.count)", role: .destructive) { bulkDelete() }
+                Button("Cancel", role: .cancel) {}
+            }
+    }
+
     private func row(_ txn: Tx) -> some View {
         Button {
             if isSelecting { toggle(txn) }
@@ -305,7 +327,10 @@ struct ActivityFeedView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation (no
             // delete-on-full-swipe — destructive actions get a confirm step).
-            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
+            // Deliberately NOT role: .destructive — that role plays a fake
+            // row-removal animation on tap, which both looks like a premature
+            // delete and tears down the row-anchored confirmation popout.
+            Button { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .swipeActions(edge: .leading) {
             if txn.pending == true {
@@ -367,7 +392,7 @@ struct ActivityFeedView: View {
                         Button { filter = s.filter } label: { chipLabel(s.name, selected: filter == s.filter) }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                Button(role: .destructive) { savedSearches.remove(s.id) } label: { Label("Delete", systemImage: "trash") }
+                                Button(role: .destructive) { pendingSearchDelete = s } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
                     if filter.isActive, !saved.contains(where: { $0.filter == filter }) {

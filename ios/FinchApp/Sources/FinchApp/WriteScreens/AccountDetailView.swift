@@ -55,6 +55,12 @@ struct AccountDetailView: View {
                             Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
                         } label: { Image(systemName: "ellipsis.circle") }
+                        // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
+                        .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) { delete(account) }
+                        } message: {
+                            Text("Accounts with transactions can't be deleted — archive instead.")
+                        }
                     }
                 }
                 .sheet(isPresented: $showingEdit) {
@@ -66,15 +72,11 @@ struct AccountDetailView: View {
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
                 .quickLookPreview($previewURL)
-                .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                    Button("Delete", role: .destructive) { delete(account) }
-                } message: {
-                    Text("Accounts with transactions can't be deleted — archive instead.")
-                }
-                .confirmationDialog("Delete transaction?",
-                                    isPresented: Binding(get: { pendingTxDelete != nil },
-                                                         set: { if !$0 { pendingTxDelete = nil } }),
-                                    titleVisibility: .visible, presenting: pendingTxDelete) { t in
+                // A centered ALERT, not a row-anchored confirmationDialog — see
+                // ActivityTab (window-level survives swipe collapse / recycling).
+                .alert("Delete transaction?", isPresented: Binding(
+                    get: { pendingTxDelete != nil }, set: { if !$0 { pendingTxDelete = nil } }),
+                    presenting: pendingTxDelete) { t in
                     Button("Delete", role: .destructive) { deleteTxn(t) }
                     Button("Cancel", role: .cancel) {}
                 } message: { t in
@@ -166,7 +168,9 @@ struct AccountDetailView: View {
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // Reveal a Delete button; tapping it asks for confirmation first.
-            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
+            // Not role: .destructive — see ActivityTab (fake removal animation
+            // kills the row-anchored popout).
+            Button { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .swipeActions(edge: .leading) {
             if t.pending == true {

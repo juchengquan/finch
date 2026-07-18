@@ -133,6 +133,16 @@ struct AddTransactionSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
                         .accessibilityLabel("Save").bold()
+                        // Anchored on ✓ — the save that raised it (iOS 26
+                        // positions popouts at their source).
+                        .confirmationDialog("Possible duplicate", isPresented: Binding(
+                            get: { pendingDuplicate != nil }, set: { if !$0 { pendingDuplicate = nil } }),
+                            presenting: pendingDuplicate) { _ in
+                            Button("Add anyway") { dupConfirmed = true; pendingDuplicate = nil; save() }
+                            Button("Cancel", role: .cancel) { pendingDuplicate = nil }
+                        } message: { m in
+                            Text("Looks like “\(m.merchant)” on \(m.date) already exists.")
+                        }
                 }
             }
             .onAppear(perform: seedDefaults)
@@ -158,14 +168,6 @@ struct AddTransactionSheet: View {
                 RefundSourcePickerView { refundedTxId = $0 }
             }
             .onChange(of: kind) { _, k in if k != .refund { refundedTxId = nil } }
-            .confirmationDialog("Possible duplicate", isPresented: Binding(
-                get: { pendingDuplicate != nil }, set: { if !$0 { pendingDuplicate = nil } }),
-                presenting: pendingDuplicate) { _ in
-                Button("Add anyway") { dupConfirmed = true; pendingDuplicate = nil; save() }
-                Button("Cancel", role: .cancel) { pendingDuplicate = nil }
-            } message: { m in
-                Text("Looks like “\(m.merchant)” on \(m.date) already exists.")
-            }
         }
     }
 

@@ -5,6 +5,7 @@ import FinchCore
 /// (create/update/deleteTag). Color uses the shared web tag palette.
 struct TagAdminView: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingDelete: TagRow?   // tag awaiting delete confirmation
     @State private var showingAdd = false
     @State private var renaming: TagRow?
     @State private var errorMessage: String?
@@ -26,14 +27,24 @@ struct TagAdminView: View {
                     }
                 }
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { delete(tag) } label: { Label("Delete", systemImage: "trash") }
+                    // Not role: .destructive — fake removal animation pre-confirm.
+                    Button { pendingDelete = tag } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                 }
                 .contextMenu {
-                    Button(role: .destructive) { delete(tag) } label: { Label("Delete", systemImage: "trash") }
+                    Button(role: .destructive) { pendingDelete = tag } label: { Label("Delete", systemImage: "trash") }
                 }
             }
         }
         .navigationTitle("Tags")
+        // Centered ALERT (window-level) — see ActivityTab's delete alert.
+        .alert("Delete tag?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { t in
+            Button("Delete", role: .destructive) { delete(t) }
+            Button("Cancel", role: .cancel) {}
+        } message: { t in
+            Text("\(t.name) is removed from all transactions.")
+        }
         .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

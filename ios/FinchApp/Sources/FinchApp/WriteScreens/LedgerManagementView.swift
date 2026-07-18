@@ -25,10 +25,13 @@ struct LedgerListView: View {
         }
         .navigationTitle("Ledgers")
         .errorAlert($errorMessage)
-        .confirmationDialog("Delete this ledger?", isPresented: Binding(
+        // A centered ALERT, not a row-anchored confirmationDialog — see
+        // ActivityTab (window-level survives swipe collapse / recycling).
+        .alert("Delete this ledger?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible, presenting: pendingDelete) { ledger in
+            presenting: pendingDelete) { ledger in
             Button("Delete \(ledger.name)", role: .destructive) { delete(ledger) }
+            Button("Cancel", role: .cancel) {}
         } message: { ledger in
             Text("This permanently deletes \(ledger.name) and all its data.")
         }
@@ -59,11 +62,13 @@ struct LedgerListView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
+                // Not role: .destructive — see ActivityTab (fake removal
+                // animation kills the row-anchored popout).
+                Button { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                     .disabled(store.ledgers.count <= 1)
             }
             .contextMenu {
-                Button(role: .destructive) { delete(ledger) } label: { Label("Delete", systemImage: "trash") }
+                Button(role: .destructive) { pendingDelete = ledger } label: { Label("Delete", systemImage: "trash") }
             }
         }
     }

@@ -79,17 +79,25 @@ struct AccountsTab: View {
             .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
             .errorAlert($errorMessage)
-            // Same confirm-before-delete as the ledger list / account detail page —
-            // swipe/context-menu/⌫ Delete asks first (Archive stays one-tap: it's
-            // recoverable from Settings › Archived Accounts).
-            .confirmationDialog("Delete this account?", isPresented: Binding(
-                get: { pendingDelete != nil },
-                set: { if !$0 { pendingDelete = nil } }),
-                titleVisibility: .visible, presenting: pendingDelete) { account in
+            // Centered ALERTS, not row-anchored confirmationDialogs: window-level,
+            // so they present instantly and survive swipe collapse / cell
+            // recycling (row-anchored popouts kept getting torn down or pinning
+            // dead cells). Same confirm-before-delete as the ledger list.
+            .alert("Delete this account?", isPresented: Binding(
+                get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                presenting: pendingDelete) { account in
                 Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
                 Button("Cancel", role: .cancel) {}
             } message: { account in
                 Text("This permanently deletes \(account.name ?? "this account").")
+            }
+            .alert("Delete group?", isPresented: Binding(
+                get: { groupPendingDelete != nil }, set: { if !$0 { groupPendingDelete = nil } }),
+                presenting: groupPendingDelete) { g in
+                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Accounts in this group become ungrouped.")
             }
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
@@ -97,15 +105,6 @@ struct AccountsTab: View {
                 TextField("Name", text: $renameText)
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
-            }
-            .confirmationDialog("Delete group?", isPresented: Binding(
-                get: { groupPendingDelete != nil },
-                set: { if !$0 { groupPendingDelete = nil } }),
-                presenting: groupPendingDelete) { g in
-                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("Accounts in this group become ungrouped.")
             }
             .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
@@ -419,9 +418,12 @@ struct AccountsTab: View {
     }
 
     /// Trailing swipe: Edit + Delete (full swipe = Edit). Archive is menu-only.
+    /// Delete is deliberately NOT role: .destructive — that role plays a fake
+    /// row-removal animation on tap, which both looks like a premature delete
+    /// and tears down the row-anchored confirmation popout.
     @ViewBuilder private func trailingSwipeActions(_ account: AccountRow) -> some View {
         Button { editing = account } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        Button(role: .destructive) { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }
+        Button { pendingDelete = account } label: { Label("Delete", systemImage: "trash") }.tint(.red)
     }
 
     /// The per-account quick verbs — context menu (and macOS reachability).
