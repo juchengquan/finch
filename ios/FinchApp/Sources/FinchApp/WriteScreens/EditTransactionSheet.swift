@@ -116,15 +116,15 @@ struct EditTransactionSheet: View {
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
     /// Top control state: nil hides the control (adjustment/opening rows).
-    private var typeControlKind: EditTypeControl.Kind? {
+    private var typeControlKind: TxTypeControl.Kind? {
         switch txn.kind {
         case "transfer": return .transfer
         case "adjustment", "opening": return nil
-        default: return EditTypeControl.Kind(rawValue: effectiveKind) ?? .expense
+        default: return TxTypeControl.Kind(rawValue: effectiveKind) ?? .expense
         }
     }
     /// Line items reclassify across expense/income/refund; everything else locks.
-    private var typeControlEnabled: Set<EditTypeControl.Kind> {
+    private var typeControlEnabled: Set<TxTypeControl.Kind> {
         canReclassify ? [.expense, .income, .refund] : []
     }
 
@@ -315,7 +315,7 @@ struct EditTransactionSheet: View {
                 }
                 ToolbarItem(placement: .principal) {
                     if let kind = typeControlKind {
-                        EditTypeControl(selected: kind, enabled: typeControlEnabled) { k in
+                        TxTypeControl(selected: kind, enabled: typeControlEnabled) { k in
                             if let ek = EditKind(rawValue: k.rawValue) { selectedKind = ek }
                         }
                     }
