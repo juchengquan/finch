@@ -46,7 +46,7 @@ struct ExchangeRatesView: View {
 }
 
 /// Color-coded provenance badge (mirrors the web's SOURCE_STYLE). nil → "manual".
-private struct SourceBadge: View {
+struct SourceBadge: View {
     let source: String?
     private var label: String { source ?? "manual" }
     private var color: Color {
