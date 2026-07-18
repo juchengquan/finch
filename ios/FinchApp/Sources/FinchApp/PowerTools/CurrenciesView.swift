@@ -71,7 +71,9 @@ struct CurrenciesView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.code).fontWeight(.medium)
-                Text(row.isHub ? "\(row.label) · hub" : row.label)
+                // String(localized:) so the hub suffix goes through the catalog
+                // (a String ternary would render verbatim and skip localization).
+                Text(row.isHub ? String(localized: "\(row.label) · hub") : row.label)
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
