@@ -6,6 +6,7 @@ import FinchCore
 /// Rules using CP2 fields / nested groups / not / split open read-only.
 struct RulesManagerView: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingDelete: RuleSummary?   // rule awaiting delete confirmation
     @State private var creating = false
     @State private var editing: RuleSummary?
     @State private var viewing: RuleSummary?
@@ -36,18 +37,28 @@ struct RulesManagerView: View {
                         .labelsHidden().accessibilityLabel("Active")
                 }
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { delete(rule) } label: { Label("Delete", systemImage: "trash") }
+                    // Not role: .destructive — fake removal animation pre-confirm.
+                    Button { pendingDelete = rule } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                 }
                 .swipeActions(edge: .leading) {
                     Button { backfill(rule) } label: { Label("Backfill", systemImage: "arrow.triangle.2.circlepath") }.tint(.blue)
                 }
                 .contextMenu {
                     Button { backfill(rule) } label: { Label("Backfill", systemImage: "arrow.triangle.2.circlepath") }
-                    Button(role: .destructive) { delete(rule) } label: { Label("Delete", systemImage: "trash") }
+                    Button(role: .destructive) { pendingDelete = rule } label: { Label("Delete", systemImage: "trash") }
                 }
             }
         }
         .navigationTitle("Rules")
+        // Centered ALERT (window-level) — see ActivityTab's delete alert.
+        .alert("Delete rule?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { r in
+            Button("Delete", role: .destructive) { delete(r) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This permanently deletes the rule.")
+        }
         .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

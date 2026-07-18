@@ -13,6 +13,7 @@ import FinchCore
 /// FinchStore.apply.
 struct EditTransactionSheet: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingAttachmentDelete: AttachmentRow?   // receipt awaiting delete confirmation
     @Environment(\.dismiss) private var dismiss
 
     let txn: Tx
@@ -271,10 +272,11 @@ struct EditTransactionSheet: View {
                         }
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
+                            // Not role: .destructive — fake removal animation pre-confirm.
+                            Button { pendingAttachmentDelete = att } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                         }
                         .contextMenu {
-                            Button(role: .destructive) { removeAttachment(att) } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) { pendingAttachmentDelete = att } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                     #if os(macOS)
@@ -331,6 +333,15 @@ struct EditTransactionSheet: View {
                     Button(action: save) { Image(systemName: "checkmark") }
                         .accessibilityLabel("Save").bold()
                 }
+            }
+            // Centered ALERT (window-level) — see ActivityTab's delete alert.
+            .alert("Delete receipt?", isPresented: Binding(
+                get: { pendingAttachmentDelete != nil }, set: { if !$0 { pendingAttachmentDelete = nil } }),
+                presenting: pendingAttachmentDelete) { att in
+                Button("Delete", role: .destructive) { removeAttachment(att) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("The file is deleted permanently.")
             }
             .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
             .quickLookPreview($previewURL)

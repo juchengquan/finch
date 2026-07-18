@@ -29,6 +29,7 @@ struct BudgetsTab: View {
     @State private var renamingGroupId: String?
     @State private var renameText = ""
     @State private var groupPendingDelete: GroupRow?
+    @State private var pendingBudgetDelete: BudgetRow?   // budget awaiting delete confirmation
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via the ⋯ overflow menu
     @State private var reorderRows: [BudgetReorderRow] = []
@@ -72,8 +73,16 @@ struct BudgetsTab: View {
             .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
             .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
-            // A centered ALERT, not a row-anchored confirmationDialog — see
+            // Centered ALERTS, not row-anchored confirmationDialogs — see
             // AccountsTab (window-level survives header-row animations).
+            .alert("Delete this budget?", isPresented: Binding(
+                get: { pendingBudgetDelete != nil }, set: { if !$0 { pendingBudgetDelete = nil } }),
+                presenting: pendingBudgetDelete) { b in
+                Button("Delete", role: .destructive) { delete(b) }
+                Button("Cancel", role: .cancel) {}
+            } message: { b in
+                Text("This permanently deletes \(b.name).")
+            }
             .alert("Delete group?", isPresented: Binding(
                 get: { groupPendingDelete != nil }, set: { if !$0 { groupPendingDelete = nil } }),
                 presenting: groupPendingDelete) { g in
@@ -161,7 +170,7 @@ struct BudgetsTab: View {
                 groupedSections { budget in
                     BudgetRowView(budget: budget)
                         .tag(budget.id)
-                        .swipeActions(edge: .trailing) { rowActions(budget) }
+                        .swipeActions(edge: .trailing) { trailingSwipeActions(budget) }
                         .swipeActions(edge: .leading) { leadingActions(budget) }
                         .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
@@ -180,7 +189,7 @@ struct BudgetsTab: View {
                         BudgetRowView(budget: budget).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing) { rowActions(budget) }
+                    .swipeActions(edge: .trailing) { trailingSwipeActions(budget) }
                     .swipeActions(edge: .leading) { leadingActions(budget) }
                     .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
@@ -370,9 +379,17 @@ struct BudgetsTab: View {
         }
     }
 
+    /// Context-menu manage cluster (role stays destructive there).
     @ViewBuilder private func rowActions(_ budget: BudgetRow) -> some View {
         Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-        Button(role: .destructive) { delete(budget) } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { pendingBudgetDelete = budget } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    /// Trailing swipe: Delete is NOT role: .destructive — the role plays a fake
+    /// row-removal animation before the confirm.
+    @ViewBuilder private func trailingSwipeActions(_ budget: BudgetRow) -> some View {
+        Button { editing = budget } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+        Button { pendingBudgetDelete = budget } label: { Label("Delete", systemImage: "trash") }.tint(.red)
     }
 
     /// A deep link stashed a budget id + switched to this tab — open it.

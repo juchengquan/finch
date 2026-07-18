@@ -47,6 +47,7 @@ struct ActivityFeedView: View {
     /// `AccountsTab`/`BudgetsTab`/`LedgerListView` (#414/#23).
     var selection: Binding<String?>? = nil
     @StateObject private var savedSearches = SavedSearchStore()
+    @State private var pendingSearchDelete: SavedSearch?   // saved search awaiting delete confirmation
     @State private var showingSaveSearch = false
     @State private var newSearchName = ""
     @State private var searchQuery: String = ""
@@ -216,6 +217,14 @@ struct ActivityFeedView: View {
         } message: { txn in
             Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
         }
+        .alert("Delete saved search?", isPresented: Binding(
+            get: { pendingSearchDelete != nil }, set: { if !$0 { pendingSearchDelete = nil } }),
+            presenting: pendingSearchDelete) { s in
+            Button("Delete", role: .destructive) { savedSearches.remove(s.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in
+            Text("\(s.name)")
+        }
         .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         .onChange(of: router.pendingFilter) { _, _ in consumePendingFilter() }
@@ -383,7 +392,7 @@ struct ActivityFeedView: View {
                         Button { filter = s.filter } label: { chipLabel(s.name, selected: filter == s.filter) }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                Button(role: .destructive) { savedSearches.remove(s.id) } label: { Label("Delete", systemImage: "trash") }
+                                Button(role: .destructive) { pendingSearchDelete = s } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
                     if filter.isActive, !saved.contains(where: { $0.filter == filter }) {

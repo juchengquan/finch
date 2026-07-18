@@ -7,6 +7,7 @@ import FinchCore
 /// setHoldingPrice / deleteHolding through FinchStore.apply.
 struct HoldingsView: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var pendingDelete: Holding?   // holding awaiting delete confirmation
     @State private var showingAdd = false
     @State private var pricing: Holding?
     @State private var errorMessage: String?
@@ -31,16 +32,26 @@ struct HoldingsView: View {
                         Button { pricing = h } label: { HoldingRow(holding: h).contentShape(Rectangle()) }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) { delete(h) } label: { Label("Delete", systemImage: "trash") }
+                                // Not role: .destructive — fake removal animation pre-confirm.
+                                Button { pendingDelete = h } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                             }
                             .contextMenu {
-                                Button(role: .destructive) { delete(h) } label: { Label("Delete", systemImage: "trash") }
+                                Button(role: .destructive) { pendingDelete = h } label: { Label("Delete", systemImage: "trash") }
                             }
                     }
                 }
             }
         }
         .navigationTitle("Holdings")
+        // Centered ALERT (window-level) — see ActivityTab's delete alert.
+        .alert("Delete holding?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { h in
+            Button("Delete", role: .destructive) { delete(h) }
+            Button("Cancel", role: .cancel) {}
+        } message: { h in
+            Text("\(h.symbol) is removed from this account.")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingAdd = true } label: { Image(systemName: "plus") }
