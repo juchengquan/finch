@@ -48,11 +48,12 @@ struct ScheduledTab: View {
         // compact width.
         NavigationStack {
             Group {
-                if store.scheduled.isEmpty && detected.isEmpty {
+                // Empty state only when nothing CAN be scheduled (no accounts; the
+                // + button is disabled too). With accounts, the calendar always
+                // renders — an empty month grid still offers day-tap add.
+                if store.accounts.isEmpty {
                     EmptyState(tab: .scheduled,
-                               description: store.accounts.isEmpty
-                                   ? "Import a .finch pack or add an account first."
-                                   : "Tap + to add a recurring transaction or installment plan.")
+                               description: "Import a .finch pack or add an account first.")
                 } else {
                     // The mode picker lives INSIDE each List (first row) rather than
                     // in a VStack above it: wrapped in a VStack the List is no longer
@@ -64,6 +65,10 @@ struct ScheduledTab: View {
                         if mode == .list {
                             List(selection: selection ?? $kbSel) {
                                 modePickerRow
+                                if filteredScheduled.isEmpty && filteredDetected.isEmpty && !searchActive {
+                                    Text("Tap + or a calendar day to add a recurring transaction.")
+                                        .foregroundStyle(.secondary)
+                                }
                                 ForEach(filteredScheduled, id: \.id) { t in
                                     Button {
                                         if let selection { selection.wrappedValue = t.id } else { editing = t }
