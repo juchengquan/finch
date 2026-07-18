@@ -224,7 +224,10 @@ struct ActivityFeedView: View {
         .onChange(of: sort) { _, _ in recompute() }
         .onChange(of: groupByMonth) { _, _ in recompute() }
         .onChange(of: visibleCount) { _, _ in recompute() }
-        .onReceive(store.$txns) { _ in recompute() }
+        // Deferred one runloop turn: @Published emits during willSet, so a
+        // synchronous recompute here reads the OLD store.txns and rebuilds the
+        // stale list (deleted rows lingered). After the hop the store is settled.
+        .onReceive(store.$txns) { _ in DispatchQueue.main.async { recompute() } }
     }
 
     private func monthLabel(_ key: String) -> String {
