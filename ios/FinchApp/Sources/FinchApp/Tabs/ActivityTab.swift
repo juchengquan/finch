@@ -205,6 +205,17 @@ struct ActivityFeedView: View {
         .sheet(isPresented: $showingBulkCat) {
             BulkRecategorizeSheet(ids: Array(selected)) { isSelecting = false; selected.removeAll() }
         }
+        // A centered ALERT, not a row-anchored confirmationDialog: window-level,
+        // so it presents instantly and survives swipe collapse / cell recycling
+        // (row-anchored popouts kept getting torn down or pinning dead cells).
+        .alert("Delete transaction?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { txn in
+            Button("Delete", role: .destructive) { delete(txn) }
+            Button("Cancel", role: .cancel) {}
+        } message: { txn in
+            Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
+        }
         .onAppear { consumeFocus(); consumePendingFilter(); recompute() }
         .onChange(of: router.focusedId) { _, _ in consumeFocus() }
         .onChange(of: router.pendingFilter) { _, _ in consumePendingFilter() }
@@ -328,18 +339,7 @@ struct ActivityFeedView: View {
             if txn.pending == true {
                 Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { RowPresentation.afterCollapse { pendingDelete = txn } } label: { Label("Delete", systemImage: "trash") }
-        }
-        // Anchored on the row (iOS 26 positions the popout at its source; a
-        // container-attached dialog pops at the top of the screen instead).
-        .confirmationDialog("Delete transaction?",
-                            isPresented: Binding(get: { pendingDelete?.id == txn.id },
-                                                 set: { if !$0 { pendingDelete = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { delete(txn) } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(txn.merchant) · \(store.displayMoneyBase(txn.amount))")
+            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
         }
         .tag(txn.id)
     }

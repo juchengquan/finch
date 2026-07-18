@@ -44,6 +44,16 @@ struct CategoryAdminView: View {
         .sheet(isPresented: $creatingTop) { CategoryEditSheet(category: nil) }
         .sheet(item: $creatingUnder) { parent in CategoryEditSheet(category: nil, parent: parent) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
+        // A centered ALERT, not a row-anchored confirmationDialog — see
+        // ActivityTab (window-level survives swipe collapse / recycling).
+        .alert("Delete \(deleting?.name ?? "")?", isPresented: Binding(
+            get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+            presenting: deleting) { c in
+            Button("Delete", role: .destructive) { delete(c) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Its subcategories move up a level — they won't be deleted.")
+        }
     }
 
     /// Drop here to move a category to the top level (un-nest).
@@ -138,15 +148,7 @@ struct CategoryAdminView: View {
             Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .contextMenu {
-            Button(role: .destructive) { RowPresentation.afterCollapse { deleting = c } } label: { Label("Delete", systemImage: "trash") }
-        }
-        // Anchored on the row (iOS 26 positions popouts at their source).
-        .confirmationDialog("Delete \(c.name)?",
-                            isPresented: Binding(get: { deleting?.id == c.id }, set: { if !$0 { deleting = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { delete(c) } }
-        } message: {
-            Text("Its subcategories move up a level — they won't be deleted.")
+            Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
         }
     }
 

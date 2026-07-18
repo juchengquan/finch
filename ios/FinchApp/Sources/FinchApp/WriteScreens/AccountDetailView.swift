@@ -72,6 +72,16 @@ struct AccountDetailView: View {
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
                 .quickLookPreview($previewURL)
+                // A centered ALERT, not a row-anchored confirmationDialog — see
+                // ActivityTab (window-level survives swipe collapse / recycling).
+                .alert("Delete transaction?", isPresented: Binding(
+                    get: { pendingTxDelete != nil }, set: { if !$0 { pendingTxDelete = nil } }),
+                    presenting: pendingTxDelete) { t in
+                    Button("Delete", role: .destructive) { deleteTxn(t) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { t in
+                    Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
+                }
             } else {
                 // Archived or deleted while open → pop back.
                 Color.clear.onAppear { dismiss() }
@@ -181,17 +191,7 @@ struct AccountDetailView: View {
             if t.pending == true {
                 Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }
             }
-            Button(role: .destructive) { RowPresentation.afterCollapse { pendingTxDelete = t } } label: { Label("Delete", systemImage: "trash") }
-        }
-        // Anchored on the row (iOS 26 positions popouts at their source).
-        .confirmationDialog("Delete transaction?",
-                            isPresented: Binding(get: { pendingTxDelete?.id == t.id },
-                                                 set: { if !$0 { pendingTxDelete = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { RowPresentation.afterCollapse { deleteTxn(t) } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
+            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
         }
     }
 

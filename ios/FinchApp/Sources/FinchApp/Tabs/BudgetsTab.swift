@@ -72,6 +72,16 @@ struct BudgetsTab: View {
             .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
             .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
+            // A centered ALERT, not a row-anchored confirmationDialog — see
+            // AccountsTab (window-level survives header-row animations).
+            .alert("Delete group?", isPresented: Binding(
+                get: { groupPendingDelete != nil }, set: { if !$0 { groupPendingDelete = nil } }),
+                presenting: groupPendingDelete) { g in
+                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Budgets in this group become ungrouped.")
+            }
             .alert("Rename group", isPresented: Binding(
                 get: { renamingGroupId != nil },
                 set: { if !$0 { renamingGroupId = nil } })) {
@@ -259,18 +269,8 @@ struct BudgetsTab: View {
                 .contextMenu {
                     if let g = store.budgetGroups.first(where: { $0.name == groupName }) {
                         Button { renamingGroupId = g.id; renameText = g.name } label: { Label("Edit", systemImage: "pencil") }
-                        Button(role: .destructive) { RowPresentation.afterCollapse { groupPendingDelete = g } } label: { Label("Delete Group", systemImage: "trash") }
+                        Button(role: .destructive) { groupPendingDelete = g } label: { Label("Delete Group", systemImage: "trash") }
                     }
-                }
-                // Anchored on the header row (iOS 26 positions popouts at their source).
-                .confirmationDialog("Delete group?", isPresented: Binding(
-                    get: { groupPendingDelete?.name == groupName },
-                    set: { if !$0 { groupPendingDelete = nil } }),
-                    presenting: groupPendingDelete) { g in
-                    Button("Delete \(g.name)", role: .destructive) { RowPresentation.afterCollapse { deleteGroup(g) } }
-                    Button("Cancel", role: .cancel) {}
-                } message: { _ in
-                    Text("Budgets in this group become ungrouped.")
                 }
 
                 // Collapse is bypassed while searching so matches always surface.
