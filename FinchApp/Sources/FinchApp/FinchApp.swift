@@ -86,7 +86,10 @@ struct FinchApp: App {
                 case .background:
                     gate.didEnterBackground()
                     Task { await AutoBackupManager.shared.flush() }   // Phase 5: flush before kill
-                case .active: gate.didBecomeActive()
+                case .active:
+                    gate.didBecomeActive()
+                    // Daily FX refresh (Frankfurter) — lock-gated like Spotlight below.
+                    if !gate.isLocked { Task { await RateAutoUpdater.refreshIfDue(store: store) } }
                 default: break
                 }
             }
