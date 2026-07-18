@@ -10,9 +10,11 @@ enum RefreshOutcome: Equatable {
 
 /// Daily FX auto-refresh from Frankfurter (api.frankfurter.dev — no key, central-
 /// bank reference rates; the app's only third-party network call). Fetches ONLY
-/// the currency codes in use, stores USD-per-unit via the setExchangeRate
-/// chokepoint (source "ECB"), fails silently (offline-first; manual entry wins
-/// by being later). Governed by the toggle on Power Tools › Exchange rates.
+/// the effective tracked set (user's toggles, else the currencies in use), stores
+/// USD-per-unit via the setExchangeRate chokepoint (source "ECB"), fails silently
+/// (offline-first; manual entry wins by being later). Governed by the master
+/// toggle on Settings › Currencies. Frankfurter silently drops quote codes it
+/// doesn't publish (verified: mixed requests return the supported subset, 200).
 @MainActor
 enum RateAutoUpdater {
     static let toggleKey = "finch.fx.autoUpdate"
