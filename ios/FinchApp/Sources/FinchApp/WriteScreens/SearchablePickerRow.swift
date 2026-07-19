@@ -6,31 +6,40 @@ struct PickerOption: Identifiable, Hashable {
     let name: String
 }
 
-/// A form row that shows the current selection and pushes a searchable list to
-/// change it — for long lists (categories, accounts) where an inline menu is
-/// cramped. Drop-in replacement for a `Picker` bound to a String id.
+/// A form row that shows the current selection and opens a full-height BOTTOM
+/// SHEET (slides up from the bottom) with a searchable single-select list —
+/// replacing the older pushed nav list. Drop-in: same (title, options,
+/// selection) API, so every call site upgrades at once.
 struct SearchablePickerRow: View {
     let title: String
     let options: [PickerOption]
     @Binding var selection: String
+    @State private var presented = false
 
     private var selectedName: String { options.first { $0.id == selection }?.name ?? "—" }
 
     var body: some View {
-        NavigationLink {
-            SearchablePickerList(title: title, options: options, selection: $selection)
-        } label: {
+        Button { presented = true } label: {
             HStack {
-                Text(title)
+                Text(title).foregroundStyle(.primary)
                 Spacer()
                 Text(selectedName).foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $presented) {
+            SearchablePickerSheet(title: title, options: options, selection: $selection)
+                #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
         }
     }
 }
 
-/// The pushed list: searchable, single-select, pops on choose.
-private struct SearchablePickerList: View {
+/// The sheet body: searchable, single-select, dismisses on choose or Cancel.
+private struct SearchablePickerSheet: View {
     let title: String
     let options: [PickerOption]
     @Binding var selection: String
@@ -43,22 +52,31 @@ private struct SearchablePickerList: View {
     }
 
     var body: some View {
-        List(filtered) { opt in
-            Button {
-                selection = opt.id
-                dismiss()
-            } label: {
-                HStack {
-                    Text(opt.name)
-                    Spacer()
-                    if opt.id == selection { Image(systemName: "checkmark").foregroundStyle(.tint) }
+        NavigationStack {
+            List(filtered) { opt in
+                Button {
+                    selection = opt.id
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(opt.name)
+                        Spacer()
+                        if opt.id == selection { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .searchable(text: $query)
+            .navigationTitle(title)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
         }
-        .searchable(text: $query)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
