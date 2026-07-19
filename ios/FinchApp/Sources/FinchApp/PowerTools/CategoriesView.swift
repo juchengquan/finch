@@ -8,6 +8,13 @@ private enum CategoryKind: String, CaseIterable, Identifiable {
     var label: LocalizedStringKey { self == .expense ? "Expense" : "Income" }
 }
 
+/// A chosen (initiating A, target B) pair for a merge; the alert picks which survives.
+private struct MergePair: Identifiable {
+    let a: CategoryRow   // the row the merge was started from
+    let b: CategoryRow   // the picked other category
+    var id: String { a.id + "|" + b.id }
+}
+
 /// Categories admin — a 3-level tree (inline expand/collapse) with per-category
 /// icon + color, search, create-child, edit, delete (children promote up a
 /// level), and **drag to reparent + reorder** (only in Reorder mode, entered via
@@ -25,6 +32,8 @@ struct CategoriesView: View {
     @State private var creating = false
     @State private var deleting: CategoryRow?
     @State private var selectedCategoryId: String?   // tapped row → transactions
+    @State private var mergingFrom: CategoryRow?   // → target picker sheet
+    @State private var mergeChoice: MergePair?     // → keep-which-name alert
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
@@ -67,6 +76,50 @@ struct CategoriesView: View {
             if let c = store.pickableCategories.first(where: { $0.id == id }) {
                 CategoryDetailView(category: c)
             }
+        }
+        .sheet(item: $mergingFrom) { a in
+            NavigationStack {
+                List {
+                    if mergeTargets(excluding: a).isEmpty {
+                        ContentUnavailableView("No other categories", systemImage: "arrow.triangle.merge",
+                                               description: Text("There's nothing to merge \(a.name) with yet."))
+                    } else {
+                        ForEach(mergeTargets(excluding: a)) { f in
+                            Button {
+                                let b = f.row
+                                mergingFrom = nil
+                                mergeChoice = MergePair(a: a, b: b)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    ZStack {
+                                        Circle().fill(Color(hex: effectiveColor(f.row, byId)) ?? .gray).frame(width: 24, height: 24)
+                                        Image(systemName: CategoryIcon.symbol(for: effectiveIcon(f.row, byId)))
+                                            .font(.system(size: 11)).foregroundStyle(.white)
+                                    }
+                                    Text(String(repeating: "   ", count: f.depth) + f.row.name).foregroundStyle(.primary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .navigationTitle("Merge \(a.name) with…")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { mergingFrom = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                    }
+                }
+            }
+        }
+        .alert("Keep which name after merge?", isPresented: Binding(
+            get: { mergeChoice != nil }, set: { if !$0 { mergeChoice = nil } }),
+            presenting: mergeChoice) { pair in
+            Button("Keep \"\(pair.a.name)\"") { merge(source: pair.b, target: pair.a) }
+            Button("Keep \"\(pair.b.name)\"") { merge(source: pair.a, target: pair.b) }
+            Button("Cancel", role: .cancel) {}
+        } message: { pair in
+            if let msg = mergeImpactMessage(txCount: mergeTxCount(pair.a, pair.b)) { Text(msg) }
         }
         .sheet(isPresented: $creating) { CategoryEditSheet(createIn: kind.rawValue) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
@@ -183,9 +236,11 @@ struct CategoriesView: View {
                     // Not role: .destructive — see ActivityTab (fake removal
                     // animation kills the row-anchored popout).
                     Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+                    Button { mergingFrom = c } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
                 }
                 .contextMenu {
                     Button { editing = c } label: { Label("Edit", systemImage: "pencil") }
+                    Button { mergingFrom = c } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
                     Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
                 }
         }
@@ -264,6 +319,31 @@ struct CategoriesView: View {
     private func delete(_ c: CategoryRow) {
         errorMessage = nil
         do { try store.apply(.deleteCategory, Args(["id": .string(c.id)])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Same-kind categories eligible as a merge target: everything in the current
+    /// kind except `a` itself and `a`'s descendants (no depth filter — a target may
+    /// be at any depth, including an ancestor of `a`). Tree-ordered for an indented list.
+    private func mergeTargets(excluding a: CategoryRow) -> [FlatCategory] {
+        let flat = flattenCategories(categoryForest(rows), expanded: Set(rows.map(\.id)), search: "")
+        var excluded: Set<String> = [a.id]
+        for f in flat where f.row.parentId.map(excluded.contains) == true { excluded.insert(f.row.id) }
+        return flat.filter { !excluded.contains($0.row.id) }
+    }
+
+    /// Choice-independent union of transactions referencing either category.
+    private func mergeTxCount(_ a: CategoryRow, _ b: CategoryRow) -> Int {
+        let ledger = store.activeLedgerId
+        let ids = Set(Selectors.categoryTransactions(store.txns, a.id, ledger).map(\.id))
+            .union(Selectors.categoryTransactions(store.txns, b.id, ledger).map(\.id))
+        return ids.count
+    }
+
+    private func merge(source: CategoryRow, target: CategoryRow) {
+        errorMessage = nil
+        mergeChoice = nil
+        do { try store.apply(.mergeCategory, Args(["sourceId": .string(source.id), "targetId": .string(target.id)])) }
         catch { errorMessage = i18nMessage(error) }
     }
 }
