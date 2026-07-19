@@ -212,7 +212,7 @@ struct CategoriesView: View {
                         Text("\(n)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .padding(.horizontal, 12).padding(.vertical, 3)
                             .background(.quaternary, in: Capsule())
                             .accessibilityLabel("\(n) transactions")
                     }
@@ -231,6 +231,10 @@ struct CategoriesView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!search.isEmpty)   // search force-expands; chevron is inert
+            } else {
+                // Reserve the chevron slot on leaf rows so count pills / trailing
+                // edges line up across parent and leaf rows.
+                Color.clear.frame(width: 22, height: 30)
             }
         }
         .padding(.leading, CGFloat(item.depth) * 14)
