@@ -370,9 +370,6 @@ struct AddTransactionSheet: View {
         }
     }
 
-    private func toggleTag(_ id: String) {
-        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
-    }
 
     /// Default the pickers to the first valid option (and the first two distinct
     /// accounts for a transfer) once the projected store is available.

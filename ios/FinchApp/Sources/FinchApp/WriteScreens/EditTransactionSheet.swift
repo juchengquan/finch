@@ -309,6 +309,16 @@ struct EditTransactionSheet: View {
                         }
                     }
                 }
+                // Adjustment/opening entries have no payee, so no Merchant row —
+                // but keep an editable Note (e.g. "year-end reconciliation").
+                if txn.kind == "adjustment" || txn.kind == "opening" {
+                    Section("Details") {
+                        HStack {
+                            Text("Note"); Spacer()
+                            TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                        }
+                    }
+                }
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -476,7 +486,7 @@ struct EditTransactionSheet: View {
                     try store.apply(.updateTransfer, Args(["id": .string(txn.id), "patch": .object(patch)]))
                 }
                 var legPatch: [String: JSONValue] = [:]
-                if merchant != txn.merchant { legPatch["merchant"] = .string(merchant.isEmpty ? "Untitled" : merchant) }
+                // (Transfers have no Merchant field in the UI — merchant can't change here.)
                 if status != (txn.pending == true ? .pending : .confirmed) { legPatch["status"] = .string(status.rawValue) }
                 if !legPatch.isEmpty {
                     try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(legPatch)]))
@@ -488,10 +498,6 @@ struct EditTransactionSheet: View {
                 dismiss()
             } catch { errorMessage = i18nMessage(error) }
         }
-    }
-
-    private func toggleTag(_ id: String) {
-        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).
