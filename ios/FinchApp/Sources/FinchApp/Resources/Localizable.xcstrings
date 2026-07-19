@@ -1,6 +1,106 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ — %lld transactions keep the name but lose the merchant link.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ —— %lld 笔交易保留名称，但将失去商户关联。"
+          }
+        }
+      }
+    },
+    "1 transaction will be combined": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将合并 1 笔交易"
+          }
+        }
+      }
+    },
+    "Keep \"%@\"": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留“%@”"
+          }
+        }
+      }
+    },
+    "Keep which name?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留哪个名称？"
+          }
+        }
+      }
+    },
+    "Merge %@ with…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将 %@ 合并到…"
+          }
+        }
+      }
+    },
+    "Merge (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合并（%lld）"
+          }
+        }
+      }
+    },
+    "Merge…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合并…"
+          }
+        }
+      }
+    },
+    "No other merchants": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有其他商户"
+          }
+        }
+      }
+    },
+    "There's nothing to merge %@ with yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前没有可与 %@ 合并的商户。"
+          }
+        }
+      }
+    },
+    "%lld transactions will be combined": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将合并 %lld 笔交易"
+          }
+        }
+      }
+    },
     "%1$@ is removed from %2$lld transactions.": {
       "localizations": {
         "zh-Hans": {
