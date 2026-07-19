@@ -61,7 +61,7 @@ struct TagsView: View {
     @ViewBuilder private func row(_ tag: TagRow, _ counts: [String: Int]) -> some View {
         Button { selectedTagId = tag.id } label: {
             HStack(spacing: 10) {
-                Circle().fill(Color(hex: tag.color ?? "") ?? .secondary).frame(width: 26, height: 26)
+                TagSwatch(hex: tag.color)
                 Text(tag.name).foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let n = counts[tag.id], n > 0 {
@@ -111,13 +111,19 @@ struct TagEditSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     let tag: TagRow?
+    /// Called with the new tag's id after a successful create (nil on edit).
+    let onCreated: ((String) -> Void)?
     @State private var name: String
     @State private var color: String     // "" = none
     @State private var errorMessage: String?
 
-    init(tag: TagRow?) {
+    /// `tag` = edit an existing tag; nil = create. `prefillName` seeds the name
+    /// field on create (e.g. the text typed in the transaction tag picker), and
+    /// `onCreated` reports the new id so the caller can select it.
+    init(tag: TagRow?, prefillName: String? = nil, onCreated: ((String) -> Void)? = nil) {
         self.tag = tag
-        _name = State(initialValue: tag?.name ?? "")
+        self.onCreated = onCreated
+        _name = State(initialValue: tag?.name ?? prefillName ?? "")
         _color = State(initialValue: tag?.color ?? "")
     }
 
@@ -166,11 +172,16 @@ struct TagEditSheet: View {
                 ]
                 try store.apply(.updateTag, Args(["id": .string(t.id), "patch": .object(patch)]))
             } else {
+                // Client-generated id so callers (e.g. the tag picker) can select
+                // the tag the moment it's created — createTag doesn't return one.
+                let id = "tag-\(UUID().uuidString.prefix(8).lowercased())"
                 var args: [String: JSONValue] = [
+                    "id": .string(id),
                     "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
                 ]
                 if !color.isEmpty { args["color"] = .string(color) }
                 try store.apply(.createTag, Args(args))
+                onCreated?(id)
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
