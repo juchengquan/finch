@@ -1,6 +1,9 @@
 {
   "_comment": "Hand-authored zh-Hans for strings the web messages don't cover. Keys are the compiler-extracted source strings (with %@/%lld/%1$@ format specifiers). Merged with priority over the web-derived map by build-xcstrings.ts. Terminology matches the web: 账户/预算/交易/账本/商户/类别/标签/计划/汇率/持仓/对账/净资产/待处理/已清算.",
   "%1$@ is %2$@.": "%1$@ 余额为 %2$@。",
+  "Data": "数据",
+  "Experimental Labs": "实验室",
+  "General": "通用",
   "%@ — %lld transactions keep the name but lose the merchant link.": "%@ —— %lld 笔交易保留名称，但将失去商户关联。",
   "1 transaction will be combined": "将合并 1 笔交易",
   "Keep \"%@\"": "保留“%@”",
