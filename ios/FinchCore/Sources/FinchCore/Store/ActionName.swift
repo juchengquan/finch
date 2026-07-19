@@ -59,7 +59,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case updateBudgetGroup
     case deleteBudgetGroup
 
-    // --- categories (3) ---
+    // --- categories (4) ---
     case createCategory
     case updateCategory
     case deleteCategory

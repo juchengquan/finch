@@ -3,7 +3,8 @@ import XCTest
 
 final class ArgsTests: XCTestCase {
     /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment`
-    /// + the native-first `setBudgetOrder` + `setTrackedCurrencies` = 77.
+    /// + the native-first `setBudgetOrder` + `setTrackedCurrencies`
+    /// + `mergeCategory` (native-only, no web counterpart) = 78.
     func test_actionCount() {
         XCTAssertEqual(ActionName.allCases.count, 78)
     }
