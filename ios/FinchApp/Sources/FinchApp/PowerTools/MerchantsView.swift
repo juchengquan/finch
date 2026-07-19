@@ -145,10 +145,7 @@ struct MerchantsView: View {
 
     @ViewBuilder private func rowLabel(_ cp: Counterparty, _ counts: [String: Int], chevron: Bool) -> some View {
         HStack(spacing: 8) {
-            Text(cp.name).foregroundStyle(.primary)
-            if cp.isVerified {
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(.tint).accessibilityLabel("Verified")
-            }
+            MerchantLabel(name: cp.name, isVerified: cp.isVerified)
             Spacer(minLength: 8)
             if let n = counts[cp.id], n > 0 {
                 Text("\(n)")
@@ -174,7 +171,7 @@ struct MerchantsView: View {
                         Button {
                             pendingMerge = MerchantMergePair(a: a, b: t)
                             mergingFrom = nil
-                        } label: { Text(t.name).foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }
+                        } label: { MerchantLabel(name: t.name, isVerified: t.isVerified).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                     }
                 }
