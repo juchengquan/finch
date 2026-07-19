@@ -32,9 +32,6 @@ struct AddTransactionSheet: View {
     }
 
     @State private var kind: Kind = .expense
-    /// Width of the icon segmented type control in the nav bar — shared by its
-    /// frame and the scrub gesture's per-segment math.
-    private static let typeControlWidth: CGFloat = 190
     @State private var amount = ""
     @State private var merchant = ""
     @State private var categoryId = ""
@@ -100,20 +97,17 @@ struct AddTransactionSheet: View {
         NavigationStack {
             Group {
                 #if os(iOS)
-                // Page-style TabView so a horizontal swipe INTERACTIVELY drags the
-                // next type's form in with the finger (a .transition can only
-                // animate after the state flips). Selection is the same `kind` the
-                // toolbar's segmented control drives, so they stay in sync. Each
-                // page renders for its own `k` (neighbors pre-render mid-swipe).
+                // Page-style TabView so a horizontal swipe interactively drags the
+                // next type's form in with the finger. The type switcher's Liquid
+                // Glass is the self-contained glass THUMB on TxTypeControl (not the
+                // toolbar refracting scrolled content), so the pager doesn't affect
+                // it — swipe and glass coexist.
                 TabView(selection: $kind) {
                     ForEach(Kind.allCases) { k in
                         formPage(k).tag(k)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                // The pager's own background shows wherever a page's Form doesn't
-                // cover it (behind the bars at rest, page bounce) — paint it the
-                // same grouped color so the sheet reads as one surface.
                 .background(Color(uiColor: .systemGroupedBackground))
                 #else
                 formPage(kind)
@@ -125,37 +119,18 @@ struct AddTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
-                // Transaction type sits in the title slot as an icon segmented control.
+                // Transaction type — the shared glass control (sliding glass thumb).
+                // Native segmented Picker — same control as the Theme toggle in
+                // Settings › Appearance, so it gets the system's crystal Liquid
+                // Glass selection (a custom View can't reproduce that).
                 ToolbarItem(placement: .principal) {
                     Picker("Type", selection: $kind) {
-                        ForEach(Kind.allCases) { kind in
-                            Image(systemName: kind.iconName)
-                                .accessibilityLabel(kind.label)
-                                .tag(kind)
+                        ForEach(Kind.allCases) { k in
+                            Image(systemName: k.iconName).accessibilityLabel(k.label).tag(k)
                         }
                     }
                     .pickerStyle(.segmented)
-                    // .principal sizes to the item's intrinsic width, so maxWidth:
-                    // .infinity collapses back to content size. An explicit width is
-                    // the only lever that sets the segment size. ~190pt keeps each
-                    // segment near-square so the selected highlight reads as a
-                    // rounded pill rather than a wide rectangle.
-                    .frame(width: Self.typeControlWidth)
-                    #if os(iOS)
-                    // Scrub-anywhere: a native segmented control only drags from
-                    // the SELECTED thumb — this picks whichever segment is under
-                    // the finger from touch-down, wherever the drag starts.
-                    // simultaneous so plain taps still reach the control.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                let all = Kind.allCases
-                                let seg = Self.typeControlWidth / CGFloat(all.count)
-                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                                if all[idx] != kind { kind = all[idx] }
-                            }
-                    )
-                    #endif
+                    .frame(width: 200)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }

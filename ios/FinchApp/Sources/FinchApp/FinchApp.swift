@@ -29,6 +29,11 @@ struct FinchApp: App {
            let tab = AppTab(rawValue: raw) {
             DeepLinkRouter.shared.selectedTab = tab
         }
+        // `-openAdd YES` opens the Add-transaction sheet on launch (same flag the
+        // finch://add deep link sets) so sim screenshots can reach the sheet.
+        if UserDefaults.standard.bool(forKey: "openAdd") {
+            DeepLinkRouter.shared.showAddTransaction = true
+        }
         #endif
     }
 
