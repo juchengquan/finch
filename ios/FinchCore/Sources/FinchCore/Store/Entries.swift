@@ -193,10 +193,12 @@ public enum Entries {
         return rate
     }
 
-    static func resolveCounterpartyIdByName(_ db: Database, _ ledgerId: String, _ name: String) throws -> String? {
+    static func resolveCounterpartyIdByName(_ db: Database, _ name: String) throws -> String? {
+        // Merchants are global; the name column is COLLATE NOCASE so `=` matches
+        // case-insensitively and the name index serves the lookup directly.
         try String.fetchOne(db, sql:
-            "SELECT id FROM counterparties WHERE ledger_id = ? AND name = ? COLLATE NOCASE LIMIT 1",
-            arguments: [ledgerId, name])
+            "SELECT id FROM counterparties WHERE name = ? COLLATE NOCASE LIMIT 1",
+            arguments: [name])
     }
 
     private static func resolveLegs(_ db: Database, _ ledgerId: String, _ date: String,
@@ -330,7 +332,7 @@ public enum Entries {
         var description = e.description
         var notes = e.notes
         var kind = e.kind
-        var counterpartyId: String? = try e.counterpartyId ?? resolveCounterpartyIdByName(db, e.ledgerId, e.description)
+        var counterpartyId: String? = try e.counterpartyId ?? resolveCounterpartyIdByName(db, e.description)
         var appliedRuleIds: [String]? = nil
         var tagIdsAdd: [String]? = nil
         var reviewedAt: String? = nil

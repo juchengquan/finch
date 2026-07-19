@@ -124,7 +124,7 @@ public enum Ledgers {
             "DELETE FROM holdings WHERE ledger_id = ?", "DELETE FROM budgets WHERE ledger_id = ?",
             "DELETE FROM budget_groups WHERE ledger_id = ?", "DELETE FROM accounts WHERE ledger_id = ?",
             "DELETE FROM account_groups WHERE ledger_id = ?", "DELETE FROM categories WHERE ledger_id = ?",
-            "DELETE FROM tags WHERE ledger_id = ?", "DELETE FROM counterparties WHERE ledger_id = ?",
+            "DELETE FROM tags WHERE ledger_id = ?",
         ] { try db.execute(sql: sql, arguments: [id]) }
 
         if wasDefaultInt == 1 {

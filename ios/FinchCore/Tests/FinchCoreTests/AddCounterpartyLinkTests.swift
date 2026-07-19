@@ -23,7 +23,7 @@ final class AddCounterpartyLinkTests: XCTestCase {
         let q = try TestSeed.base()
         let eid = try Apply.applyReturningId(dbQueue: q, action: "addTransaction", args: addArgs("Nowhere"))
         XCTAssertNil(try counterpartyId(q, eid!))
-        let cpCount = try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM counterparties WHERE ledger_id = 'l1'") }
+        let cpCount = try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM counterparties") }
         XCTAssertEqual(cpCount, 0)   // never auto-creates
     }
 }

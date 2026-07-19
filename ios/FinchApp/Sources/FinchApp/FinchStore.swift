@@ -209,7 +209,7 @@ public final class FinchStore: ObservableObject {
             let accountGroups = try Projection.accountGroups(dbQueue: q, ledgerId: id)
             let budgets  = try Projection.budgets(dbQueue: q, ledgerId: id)
             let categories = try Projection.categories(dbQueue: q, ledgerId: id)
-            let counterparties = try Projection.counterparties(dbQueue: q, ledgerId: id)
+            let counterparties = try Projection.counterparties(dbQueue: q)
             let budgetGroupNames = try Projection.budgetGroupNames(dbQueue: q, ledgerId: id)
             let budgetGroups = try Projection.budgetGroups(dbQueue: q, ledgerId: id)
             let holdings = try Projection.holdings(dbQueue: q, ledgerId: id)

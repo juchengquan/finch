@@ -5,11 +5,10 @@ import Foundation
 /// (so a catalog rename follows through to every transaction).
 public struct Counterparty: Identifiable, Equatable, Sendable, Codable {
     public let id: String
-    public let ledgerId: String
     public let name: String
     public let isVerified: Bool
 
-    public init(id: String, ledgerId: String, name: String, isVerified: Bool = false) {
-        self.id = id; self.ledgerId = ledgerId; self.name = name; self.isVerified = isVerified
+    public init(id: String, name: String, isVerified: Bool = false) {
+        self.id = id; self.name = name; self.isVerified = isVerified
     }
 }
