@@ -295,6 +295,7 @@ struct EditTransactionSheet: View {
                 }
             }
             .navigationTitle("Edit Transaction")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

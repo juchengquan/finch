@@ -16,6 +16,10 @@ struct AdaptiveShell: View {
                 SplitViewShell()
             }
         }
+        // Global gap between grouped List sections (e.g. account groups) for the main
+        // tabs — environment-based, so every descendant (non-sheet) List inherits it.
+        // Sheets don't inherit; they apply .finchSectionSpacing() themselves. Tune in Common/Metrics.swift.
+        .finchSectionSpacing()
         .modifier(ExportCoordinator())
     }
 }

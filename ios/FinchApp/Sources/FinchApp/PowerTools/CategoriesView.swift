@@ -506,6 +506,7 @@ struct CategoryEditSheet: View {
                 }
             }
             .navigationTitle(category == nil ? "New Category" : "Edit Category")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

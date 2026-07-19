@@ -190,6 +190,7 @@ struct EditLedgerSheet: View {
                 if let errorMessage { Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) } }
             }
             .navigationTitle("Edit Ledger")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
