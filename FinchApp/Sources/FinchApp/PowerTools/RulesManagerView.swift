@@ -265,8 +265,8 @@ struct RuleSheet: View {
             case .merchant, .note:
                 TextField("Text", text: c.value)
             case .amount:
-                TextField("Amount", text: c.value.decimalInput).keyboardType(.decimalPad)
-                if c.wrappedValue.op == "between" { TextField("and", text: c.value2.decimalInput).keyboardType(.decimalPad) }
+                TextField("Amount", text: c.value).numericInput(c.value).keyboardType(.decimalPad)
+                if c.wrappedValue.op == "between" { TextField("and", text: c.value2).numericInput(c.value2).keyboardType(.decimalPad) }
             case .kind:
                 if c.wrappedValue.op == "in" { multiSelect("Kinds", c.values, kindValues.map { PickItem(id: $0, name: $0.capitalized) }) }
                 else { Picker("Kind", selection: c.value) { ForEach(kindValues, id: \.self) { Text($0.capitalized).tag($0) } } }
@@ -285,7 +285,7 @@ struct RuleSheet: View {
                 if c.wrappedValue.op == "has" { entityPicker("Tag", c.value, store.tags.map { PickItem(id: $0.id, name: $0.name) }) }
                 else { multiSelect("Tags", c.values, store.tags.map { PickItem(id: $0.id, name: $0.name) }) }
             case .dateDom:
-                TextField("Day (1–31)", text: c.value.integerInput).keyboardType(.numberPad)
+                TextField("Day (1–31)", text: c.value).numericInput(c.value, allowsDecimal: false).keyboardType(.numberPad)
             case .dateDow:
                 weekdayChips(c.values)
             }
