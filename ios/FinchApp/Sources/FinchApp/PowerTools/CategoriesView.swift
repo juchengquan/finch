@@ -1,12 +1,6 @@
 import SwiftUI
 import FinchCore
 
-/// Categories admin — a 3-level tree (inline expand/collapse) with per-category
-/// icon + color, search, create-child, edit, delete (children promote up a
-/// level), and **drag to reparent + reorder**: drop on a row's middle to nest
-/// under it, its top quarter to place the dragged category before it, its bottom
-/// quarter to place it after it; the "Top level" zone un-nests. All through the
-/// chokepoint (create / update / deleteCategory).
 /// Expense/income filter for the Categories page (maps to `CategoryRow.kind`).
 private enum CategoryKind: String, CaseIterable, Identifiable {
     case expense, income
@@ -14,6 +8,12 @@ private enum CategoryKind: String, CaseIterable, Identifiable {
     var label: LocalizedStringKey { self == .expense ? "Expense" : "Income" }
 }
 
+/// Categories admin — a 3-level tree (inline expand/collapse) with per-category
+/// icon + color, search, create-child, edit, delete (children promote up a
+/// level), and **drag to reparent + reorder**: drop on a row's middle to nest
+/// under it, its top quarter to place the dragged category before it, its bottom
+/// quarter to place it after it; the "Top level" zone un-nests. All through the
+/// chokepoint (create / update / deleteCategory).
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var kind: CategoryKind = .expense
