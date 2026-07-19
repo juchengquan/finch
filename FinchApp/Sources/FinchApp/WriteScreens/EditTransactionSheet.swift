@@ -323,7 +323,8 @@ struct EditTransactionSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
             // Centered ALERT (window-level) — see ActivityTab's delete alert.

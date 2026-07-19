@@ -201,7 +201,8 @@ struct ContributeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Add").bold()
+                        .accessibilityLabel("Add")
+                        .confirmCheckmarkStyle()
                 }
             }
         }
