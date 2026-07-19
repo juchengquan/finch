@@ -59,6 +59,21 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so git-restore-mtime can date each file
+
+      # Stamp each source file with its last-commit mtime. Without this, checkout
+      # marks every file "now" — newer than any cached build object — so Xcode and
+      # SwiftPM recompile everything even with a warm cache, defeating the
+      # DerivedData cache below. With it, only files changed in this push look
+      # newer, so unchanged files reuse their cached objects (true incremental).
+      - name: Restore source mtimes (enables incremental build caching)
+        run: |
+          # git-restore-mtime is a standalone script (not on PyPI). Pinned to a
+          # commit SHA for reproducibility/supply-chain safety.
+          curl -fsSL -o /tmp/git-restore-mtime \
+            https://raw.githubusercontent.com/MestreLion/git-tools/b5822d297b3ca4a3b6574e78327a464790b14937/git-restore-mtime
+          python3 /tmp/git-restore-mtime ios
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -106,9 +121,8 @@ jobs:
           echo "Using simulator: $NAME"
 
       # Cache Xcode's resolved SwiftPM checkouts so the FinchApp/FinchMac builds
-      # don't re-clone/re-resolve GRDB et al. (Build products live elsewhere in
-      # DerivedData and are intentionally NOT cached — that's the flakier win,
-      # deferred.) Both xcodebuild steps share one -derivedDataPath (/tmp/dd).
+      # don't re-clone/re-resolve GRDB et al. Both xcodebuild steps share one
+      # -derivedDataPath (/tmp/dd).
       - name: Cache Xcode SwiftPM checkouts
         uses: actions/cache@v4
         with:
@@ -116,6 +130,23 @@ jobs:
           key: xcspm-${{ runner.os }}-${{ hashFiles('ios/Package.resolved') }}
           restore-keys: |
             xcspm-${{ runner.os }}-
+
+      # EXPERIMENT: cache Xcode's compiled intermediates (.o / .swiftmodule +
+      # per-file incremental build records) + the clang module cache so the three
+      # app builds recompile only what changed instead of from scratch. Only the
+      # Intermediates are cached (not the large linked Products, which relink
+      # cheaply from cached objects). Rolling key (github.sha never matches, so a
+      # fresh cache saves each run) + restore-keys to pull the most recent one.
+      # Effectiveness hinges on the mtime restore above — measured before keeping.
+      - name: Cache Xcode DerivedData (incremental compile)
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/dd/Build/Intermediates.noindex
+            /tmp/dd/ModuleCache.noindex
+          key: dd-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            dd-${{ runner.os }}-
 
       - name: Build + test FinchApp
         working-directory: ios
