@@ -524,7 +524,7 @@ private struct AddGroupSheet: View {
             .navigationTitle("Add Group")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .listSectionSpacing(10)   // tighter gaps between the group sections
+            .finchSectionSpacing()
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -48,6 +48,7 @@ struct ImportStatementView: View {
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("Import statement")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
