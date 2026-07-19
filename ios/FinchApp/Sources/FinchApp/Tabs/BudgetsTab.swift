@@ -57,8 +57,8 @@ struct BudgetsTab: View {
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
-                            .fontWeight(.semibold)
                             .accessibilityLabel("Done")
+                            .confirmCheckmarkStyle()
                     }
                 } else {
                     standardToolbar
@@ -535,6 +535,7 @@ private struct AddGroupSheet: View {
                     Button { add() } label: { Image(systemName: "checkmark") }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityLabel("Add")
+                        .confirmCheckmarkStyle()
                 }
             }
         }

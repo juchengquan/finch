@@ -33,7 +33,8 @@ struct BulkRecategorizeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: apply) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Apply").bold()
+                        .accessibilityLabel("Apply")
+                        .confirmCheckmarkStyle()
                 }
             }
             .onAppear { if categoryId.isEmpty { categoryId = store.pickableCategories.first?.id ?? "" } }

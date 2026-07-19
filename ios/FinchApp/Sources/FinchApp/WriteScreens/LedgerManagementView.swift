@@ -127,7 +127,8 @@ struct AddLedgerSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: create) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Create").bold()
+                        .accessibilityLabel("Create")
+                        .confirmCheckmarkStyle()
                 }
             }
         }
@@ -197,7 +198,8 @@ struct EditLedgerSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await save() } } label: { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
         }

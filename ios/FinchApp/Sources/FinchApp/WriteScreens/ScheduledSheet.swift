@@ -146,7 +146,8 @@ struct ScheduledSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
             .onAppear(perform: seedDefaults)

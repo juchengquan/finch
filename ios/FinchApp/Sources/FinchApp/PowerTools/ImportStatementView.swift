@@ -56,7 +56,8 @@ struct ImportStatementView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: apply) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Apply").bold().disabled(results.isEmpty)
+                        .accessibilityLabel("Apply").disabled(results.isEmpty)
+                        .confirmCheckmarkStyle()
                 }
             }
             .onAppear { if accountId.isEmpty { accountId = store.accounts.first?.id ?? "" } }

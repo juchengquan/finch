@@ -127,7 +127,8 @@ struct AddHoldingSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
             .onAppear { if accountId.isEmpty { accountId = accounts.first?.id ?? "" } }
@@ -186,7 +187,8 @@ struct SetHoldingPriceSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
         }

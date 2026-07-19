@@ -113,6 +113,7 @@ struct CategoriesView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark") }
                     .accessibilityLabel("Done")
+                    .confirmCheckmarkStyle()
             }
         } else {
             ToolbarItem(placement: .primaryAction) {
@@ -364,7 +365,7 @@ struct CategoryEditSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").bold()
+                    Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").confirmCheckmarkStyle()
                 }
             }
         }
