@@ -154,18 +154,21 @@ struct EditTransactionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack {
-                        Text("Merchant"); Spacer()
-                        TextField("", text: $merchant).multilineTextAlignment(.trailing)
+                // Line items build their own primary section (Account/Amount/
+                // Category/Date) below; split & transfer keep Date here.
+                if isSplit || transferLegs != nil {
+                    Section {
+                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
+                        // Transfers have no Merchant field (design), but previously
+                        // exposed Note via this shared top section — keep that.
+                        if transferLegs != nil {
+                            HStack {
+                                Text("Note"); Spacer()
+                                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                            }
+                        }
                     }
-                    merchantSuggestionRows
-                    HStack {
-                        Text("Note"); Spacer()
-                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
-                    }
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
                 }
                 if isSplit {
                     Section("Split") {
@@ -198,7 +201,9 @@ struct EditTransactionSheet: View {
                         }
                     }
                 } else {
-                    Section("Amount & category") {
+                    Section {
+                        SearchablePickerRow(title: "Account",
+                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                         HStack {
                             Text("Amount")
                             Spacer()
@@ -211,11 +216,14 @@ struct EditTransactionSheet: View {
                         }
                         SearchablePickerRow(title: "Category",
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.locale, AppDate.h24Locale)
                         Button("Split across categories…") { showingSplit = true }
                     }
                 }
 
-                if txn.kind != "transfer" {
+                // Split still needs an Account row (line items have it above; transfer doesn't).
+                if isSplit {
                     Section("Account") {
                         SearchablePickerRow(title: "Account",
                             options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
@@ -233,17 +241,7 @@ struct EditTransactionSheet: View {
                 }
 
                 if !store.tags.isEmpty {
-                    Section("Tags") {
-                        ForEach(store.tags) { tag in
-                            Button { toggleTag(tag.id) } label: {
-                                HStack {
-                                    Text(tag.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                }
-                            }
-                        }
-                    }
+                    Section("Tags") { TagChipFlow(tags: store.tags, selected: $selectedTags) }
                 }
 
                 Section("Receipts") {
@@ -296,6 +294,20 @@ struct EditTransactionSheet: View {
                                 catch { errorMessage = i18nMessage(error) }
                             }
                         }
+                }
+
+                if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
+                    Section("Details") {
+                        HStack {
+                            Text(effectiveKind == "income" ? "Source" : "Merchant"); Spacer()
+                            TextField("", text: $merchant).multilineTextAlignment(.trailing)
+                        }
+                        merchantSuggestionRows
+                        HStack {
+                            Text("Note"); Spacer()
+                            TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                        }
+                    }
                 }
 
                 if let errorMessage {
