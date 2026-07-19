@@ -195,32 +195,13 @@ struct AddTransactionSheet: View {
                 }
 
                 Section {
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
-                    HStack {
-                        Text("Note"); Spacer()
-                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
-                    }
-                }
-
-                Section {
                     Picker("Status", selection: $status) {
                         Text("Confirmed").tag(Entries.Status.confirmed)
                         Text("Pending").tag(Entries.Status.pending)
                     }
                 }
                 if !store.tags.isEmpty {
-                    Section("Tags") {
-                        ForEach(store.tags) { tag in
-                            Button { toggleTag(tag.id) } label: {
-                                HStack {
-                                    Text(tag.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                }
-                            }
-                        }
-                    }
+                    Section("Tags") { TagChipFlow(tags: store.tags, selected: $selectedTags) }
                 }
                 if k == .expense || k == .income || k == .refund {
                     Section("Receipt") {
@@ -238,6 +219,9 @@ struct AddTransactionSheet: View {
                         #endif
                     }
                 }
+                if k == .expense || k == .income || k == .refund {
+                    detailsSection(for: k)
+                }
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
@@ -250,16 +234,15 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
-            HStack {
-                Text(k == .income ? "Source" : "Merchant"); Spacer()
-                TextField("", text: $merchant).multilineTextAlignment(.trailing)
-            }
-            merchantSuggestionRows
             if pendingSplits == nil {
                 SearchablePickerRow(title: "Category",
                     options: categories(for: k).map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
             }
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.locale, AppDate.h24Locale)
             if k != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
                 Button {
                     showingSplit = true
@@ -271,8 +254,6 @@ struct AddTransactionSheet: View {
                     }
                 }
             }
-            SearchablePickerRow(title: "Account",
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     HStack {
@@ -281,6 +262,21 @@ struct AddTransactionSheet: View {
                         Text(refundedSummary).foregroundStyle(.secondary)
                     }
                 }
+            }
+        }
+    }
+
+    /// Merchant/Source + Note — optional free-text, shown as the LAST section.
+    @ViewBuilder private func detailsSection(for k: Kind) -> some View {
+        Section("Details") {
+            HStack {
+                Text(k == .income ? "Source" : "Merchant"); Spacer()
+                TextField("", text: $merchant).multilineTextAlignment(.trailing)
+            }
+            merchantSuggestionRows
+            HStack {
+                Text("Note"); Spacer()
+                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
             }
         }
     }
