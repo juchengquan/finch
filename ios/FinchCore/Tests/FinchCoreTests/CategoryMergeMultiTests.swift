@@ -79,4 +79,17 @@ final class CategoryMergeMultiTests: XCTestCase {
         }
         XCTAssertThrowsError(try mergeMany(q, ["cB"], "cKid"))
     }
+
+    func test_three_sources_all_repoint_and_are_deleted() throws {
+        let q = try seeded()  // seeds cKeep, cB, cC
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,sort_order,created_at,updated_at) VALUES ('cD','l1',NULL,'cD','expense',0,datetime('now'),datetime('now'))")
+        }
+        try addTx(q, "t1", "cB"); try addTx(q, "t2", "cC"); try addTx(q, "t3", "cD")
+        try mergeMany(q, ["cB", "cC", "cD"], "cKeep")
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM postings WHERE category_id = 'cKeep'"), 3)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM categories WHERE id IN ('cB','cC','cD')"), 0)
+        }
+    }
 }

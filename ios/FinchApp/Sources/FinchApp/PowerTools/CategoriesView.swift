@@ -183,7 +183,7 @@ struct CategoriesView: View {
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         if isSelecting {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Merge (\(selected.count))") { mergeManySurvivorChoice = selected.compactMap { byId[$0] } }
+                Button("Merge (\(selected.count))") { mergeManySurvivorChoice = selected.compactMap { byId[$0] }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending } }
                     .disabled(selected.count < 2)
             }
             ToolbarItem(placement: .cancellationAction) {
@@ -339,6 +339,7 @@ struct CategoriesView: View {
         }
         .padding(.leading, CGFloat(item.depth) * 14)
         .opacity(selectDisabled ? 0.35 : 1)
+        .accessibilityAddTraits(isSelecting && selected.contains(c.id) ? [.isSelected] : [])
         .contentShape(Rectangle())
     }
 

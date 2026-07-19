@@ -70,4 +70,17 @@ final class CategoryForestTests: XCTestCase {
         // Nothing selected → nothing disabled.
         XCTAssertFalse(mergeSelectionDisabled("food", selected: [], byId: byId))
     }
+
+    func test_mergeSelectionDisabled_grandparent_and_multi_selection() {
+        let rows = [cat("food", "Food"), cat("groc", "Groceries", parent: "food"),
+                    cat("organic", "Organic", parent: "groc"), cat("home", "Home"),
+                    cat("rent", "Rent", parent: "home")]
+        let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        // 2-hop: selecting "organic" disables its grandparent "food"
+        XCTAssertTrue(mergeSelectionDisabled("food", selected: ["organic"], byId: byId))
+        // multi-element selection: with "home" selected, its child "rent" is disabled
+        XCTAssertTrue(mergeSelectionDisabled("rent", selected: ["groc", "home"], byId: byId))
+        // "organic" is unrelated to "home" alone
+        XCTAssertFalse(mergeSelectionDisabled("organic", selected: ["home"], byId: byId))
+    }
 }
