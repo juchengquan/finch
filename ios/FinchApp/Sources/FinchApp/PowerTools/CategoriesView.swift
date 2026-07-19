@@ -180,7 +180,7 @@ struct CategoriesView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Image(systemName: "ellipsis") }
                 .accessibilityLabel("More")
             }
         }
