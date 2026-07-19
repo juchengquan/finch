@@ -94,7 +94,7 @@ public enum Categories {
                   let parsed = try? JSONDecoder().decode([String].self, from: data), parsed.contains(source) else { continue }
             var seen = Set<String>()
             let rewritten = parsed.map { $0 == source ? target : $0 }.filter { seen.insert($0).inserted }
-            let json = (try? JSONEncoder().encode(rewritten)).flatMap { String(data: $0, encoding: .utf8) }
+            let json = String(data: try JSONEncoder().encode(rewritten), encoding: .utf8)
             try db.execute(sql: "UPDATE budgets SET category_ids = ?, updated_at = datetime('now') WHERE id = ?",
                            arguments: [json, row["id"] as String])
         }

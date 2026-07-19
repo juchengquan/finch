@@ -55,13 +55,14 @@ final class CategoryMergeTests: XCTestCase {
     func test_scheduled_split_repoints_and_delete_succeeds() throws {
         let q = try seeded()
         try q.write { db in
-            try db.execute(sql: "INSERT INTO scheduled_templates (id,ledger_id,kind,account_id,frequency,start_date,created_at,updated_at) VALUES ('st1','l1','expense','a1','monthly','2026-05-01',datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO scheduled_templates (id,ledger_id,kind,account_id,category_id,frequency,start_date,created_at,updated_at) VALUES ('st1','l1','expense','a1','cSource','monthly','2026-05-01',datetime('now'),datetime('now'))")
             // scheduled_splits.category_id is ON DELETE RESTRICT — a plain delete of cSource would fail.
             try db.execute(sql: "INSERT INTO scheduled_splits (id,template_id,account_id,amount_abs,category_id,sort_order) VALUES ('ss1','st1','a1',10,'cSource',0)")
         }
         try merge(q, "cSource", "cTarget")
         try q.read { db in
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT category_id FROM scheduled_splits WHERE id = 'ss1'"), "cTarget")
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT category_id FROM scheduled_templates WHERE id = 'st1'"), "cTarget")
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM categories WHERE id = 'cSource'"), 0) // RESTRICT cleared → delete OK
         }
     }
@@ -120,6 +121,12 @@ final class CategoryMergeTests: XCTestCase {
     func test_merge_into_self_is_rejected() throws {
         let q = try seeded()
         XCTAssertThrowsError(try merge(q, "cSource", "cSource"))
+    }
+
+    func test_missing_source_or_target_is_rejected() throws {
+        let q = try seeded()
+        XCTAssertThrowsError(try merge(q, "nope", "cTarget"))
+        XCTAssertThrowsError(try merge(q, "cSource", "nope"))
     }
 
     func test_merge_into_own_descendant_is_rejected() throws {
