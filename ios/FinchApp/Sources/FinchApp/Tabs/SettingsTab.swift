@@ -1,8 +1,10 @@
 import SwiftUI
 import FinchCore
 
-/// Settings home — a short menu of drill-in categories (Import/Export, Sync &
-/// Backup, Power Tools, Notifications, Security, Advanced) plus an About footer.
+/// Settings home — grouped drill-in sections: **General** (appearance,
+/// notifications, security), **Ledger** (categories, tags, merchants,
+/// currencies), **Data** (backup & sync, advanced), an unlabeled **Experimental
+/// Labs** row (formerly "Power Tools"; holds Rules), plus an **About** footer.
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
@@ -30,17 +32,26 @@ struct SettingsTab: View {
 struct SettingsRootList: View {
     var body: some View {
         List {
-            Section {
+            Section("General") {
                 NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
-                NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
-                NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
-                NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
+                NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
+                NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
+            }
+            Section("Ledger") {
                 NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
                 NavigationLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
                 NavigationLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
-                NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
-                NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
+                NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
+            }
+            Section("Data") {
+                NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
                 NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
+            }
+            // "Experimental Labs" (formerly "Power Tools") — power-user / beta
+            // features; currently holds Rules. Its own unlabeled section so it
+            // isn't miscategorised under Ledger and can grow beyond Rules.
+            Section {
+                NavigationLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
             }
             Section("About") {
                 LabeledContent("App version", value: FinchCore.version)
@@ -130,13 +141,14 @@ struct SettingsBackupSyncView: View {
     }
 }
 
-/// Settings › Power Tools — the ledger-admin editors.
+/// Settings › Experimental Labs (formerly "Power Tools") — power-user / beta
+/// features; currently just Rules.
 struct SettingsPowerToolsView: View {
     var body: some View {
         List {
             NavigationLink("Rules") { RulesManagerView() }
         }
-        .navigationTitle("Power Tools")
+        .navigationTitle("Experimental Labs")
     }
 }
 
