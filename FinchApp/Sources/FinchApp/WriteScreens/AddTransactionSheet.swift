@@ -25,10 +25,11 @@ struct AddTransactionSheet: View {
     var prefill: Tx? = nil
 
     enum Kind: String, CaseIterable, Identifiable {
-        case expense, income, transfer, refund
+        case expense, income, transfer, refund, adjust
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
-        var iconName: String { TxnKindIcon.icon(for: rawValue) }
+        var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
+        /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).
+        var iconName: String { TxnKindIcon.icon(for: self == .adjust ? "adjustment" : rawValue) }
     }
 
     @State private var kind: Kind = .expense
@@ -55,8 +56,18 @@ struct AddTransactionSheet: View {
     @State private var showingSplit = false
     @State private var refundedTxId: String? = nil
     @State private var showingRefundPicker = false
+    @State private var targetBalance = ""   // adjust-balance: the account's new balance
+    /// Adjust Balance is an opt-in 5th type (Settings › Appearance); it's account
+    /// maintenance, so it's hidden by default. Always reachable from an account's ⋯ menu.
+    @AppStorage("finch.addSheet.showAdjustBalance") private var showAdjustInAddSheet = false
 
     private var accounts: [AccountRow] { store.accounts }
+
+    /// Types shown in the segmented control — Adjust Balance only when opted in,
+    /// so the default control stays four roomy segments.
+    private var availableKinds: [Kind] {
+        showAdjustInAddSheet ? Kind.allCases : Kind.allCases.filter { $0 != .adjust }
+    }
 
     /// Expense / income / refund all post a single account leg + category — they
     /// share the line-item field set and the status/tags/receipt/merchant extras.
@@ -113,12 +124,12 @@ struct AddTransactionSheet: View {
                 // Glass selection (a custom View can't reproduce that).
                 ToolbarItem(placement: .principal) {
                     Picker("Type", selection: $kind) {
-                        ForEach(Kind.allCases) { k in
+                        ForEach(availableKinds) { k in
                             Image(systemName: k.iconName).accessibilityLabel(k.label).tag(k)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 200)
+                    .frame(width: CGFloat(availableKinds.count) * 50)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
@@ -178,17 +189,22 @@ struct AddTransactionSheet: View {
                 #endif
                 if k == .transfer {
                     transferFields
+                } else if k == .adjust {
+                    adjustFields
                 } else {
                     expenseIncomeFields(for: k)
                 }
 
-                Section {
-                    Picker("Status", selection: $status) {
-                        Text("Confirmed").tag(Entries.Status.confirmed)
-                        Text("Pending").tag(Entries.Status.pending)
+                // Adjust Balance is account maintenance — no status/tags/receipt/merchant.
+                if k != .adjust {
+                    Section {
+                        Picker("Status", selection: $status) {
+                            Text("Confirmed").tag(Entries.Status.confirmed)
+                            Text("Pending").tag(Entries.Status.pending)
+                        }
                     }
                 }
-                if !store.tags.isEmpty {
+                if !store.tags.isEmpty, k != .adjust {
                     Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
                 }
                 if k == .expense || k == .income || k == .refund {
@@ -271,6 +287,35 @@ struct AddTransactionSheet: View {
 
 
 
+
+    /// Adjust Balance — the opt-in 5th type. Posts an `adjustment` for the
+    /// difference to the account's target balance (same engine action as the
+    /// account-detail sheet). Date-only — `adjustAccountBalance` takes no time.
+    @ViewBuilder private var adjustFields: some View {
+        Section {
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+            HStack {
+                Text("New balance"); Spacer()
+                // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
+                TextField("0.00", text: $targetBalance)
+                    #if os(iOS)
+                    .keyboardType(.numbersAndPunctuation)
+                    #endif
+                    .multilineTextAlignment(.trailing)
+            }
+        } footer: {
+            Text("Posts an adjustment for the difference from the account's current balance.")
+        }
+        Section {
+            DatePicker("Date", selection: $date, displayedComponents: [.date])
+                .environment(\.locale, AppDate.h24Locale)
+            HStack {
+                Text("Note"); Spacer()
+                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            }
+        }
+    }
 
     @ViewBuilder private var transferFields: some View {
         Section {
@@ -363,6 +408,18 @@ struct AddTransactionSheet: View {
 
     private func save() {
         errorMessage = nil
+        if kind == .adjust {
+            guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
+            do {
+                var args: [String: JSONValue] = [
+                    "accountId": .string(accountId), "targetBalance": .double(target), "date": .string(Self.day(date)),
+                ]
+                if !note.isEmpty { args["note"] = .string(note) }
+                try store.apply(.adjustAccountBalance, Args(args))
+                dismiss()
+            } catch { errorMessage = i18nMessage(error) }
+            return
+        }
         // Drop a category that isn't valid for the (possibly toggled) type;
         // stays empty otherwise (uncategorized is allowed).
         if kind != .transfer, !categoryId.isEmpty, !categories.contains(where: { $0.id == categoryId }) {
