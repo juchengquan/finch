@@ -102,6 +102,7 @@ struct SplitEditorView: View {
                 }
             }
             .navigationTitle("Split Category")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -241,6 +241,7 @@ struct RuleSheet: View {
                 if let errorMessage { Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) } }
             }
             .navigationTitle(isEdit ? "Edit Rule" : "New Rule")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -481,6 +482,7 @@ struct RuleDetailView: View {
                 }
             }
             .navigationTitle("Rule")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }

@@ -112,6 +112,7 @@ struct AddTransactionSheet: View {
             // the bottom safe-area inset (masked the last row) — dropping it
             // restores the system's native header + bottom behavior for free.
             formPage(kind)
+            .finchSectionSpacing()   // whole-form: every section follows the global gap
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -182,11 +183,6 @@ struct AddTransactionSheet: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                 }
-                #if os(iOS)
-                // Pull the label close to the nav bar and to the first section —
-                // it's a caption for the type control above, not a section of its own.
-                .listSectionSpacing(6)
-                #endif
                 if k == .transfer {
                     transferFields
                 } else if k == .adjust {

@@ -133,6 +133,7 @@ struct BudgetSheet: View {
                 }
             }
             .navigationTitle(isEdit ? "Edit Budget" : "Add Budget")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

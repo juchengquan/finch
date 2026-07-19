@@ -44,6 +44,7 @@ struct ReconcileSheet: View {
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("Reconcile")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

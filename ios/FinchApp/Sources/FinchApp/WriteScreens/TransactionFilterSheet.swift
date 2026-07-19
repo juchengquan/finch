@@ -123,6 +123,7 @@ struct TransactionFilterSheet: View {
                 }
             }
             .navigationTitle("Filter")
+            .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") }

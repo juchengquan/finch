@@ -46,6 +46,7 @@ struct AdjustBalanceSheet: View {
                 }
             }
             .navigationTitle("Adjust Balance")
+            .finchSectionSpacing()
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
