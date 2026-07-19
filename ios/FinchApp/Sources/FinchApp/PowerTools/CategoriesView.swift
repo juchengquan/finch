@@ -35,6 +35,9 @@ struct CategoriesView: View {
     @State private var mergingFrom: CategoryRow?   // → target picker sheet
     @State private var pendingMerge: MergePair?    // staged in the sheet, promoted on its dismiss
     @State private var mergeChoice: MergePair?     // → keep-which-name alert
+    @State private var isSelecting = false                  // ⋯ → Merge multi-select mode
+    @State private var selected: Set<String> = []           // ids ticked in select mode
+    @State private var mergeManySurvivorChoice: [CategoryRow]?   // → keep-which-name dialog
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
@@ -126,6 +129,17 @@ struct CategoriesView: View {
         } message: { pair in
             if let msg = mergeImpactMessage(txCount: mergeTxCount(pair.a, pair.b)) { Text(msg) }
         }
+        .confirmationDialog("Keep which name?", isPresented: Binding(
+            get: { mergeManySurvivorChoice != nil }, set: { if !$0 { mergeManySurvivorChoice = nil } }),
+            titleVisibility: .visible, presenting: mergeManySurvivorChoice) { picks in
+            ForEach(picks) { survivor in
+                Button("Keep \"\(survivor.name)\"") { mergeMany(keeping: survivor, from: picks) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { picks in
+            if let msg = mergeImpactMessage(txCount: mergeManyTxCount(picks)) { Text(msg) }
+        }
+        .onChange(of: kind) { _, _ in selected = [] }
         .sheet(isPresented: $creating) { CategoryEditSheet(createIn: kind.rawValue) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
         // A centered ALERT, not a row-anchored confirmationDialog — see
@@ -167,7 +181,16 @@ struct CategoriesView: View {
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        if isReordering {
+        if isSelecting {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Merge (\(selected.count))") { mergeManySurvivorChoice = selected.compactMap { byId[$0] } }
+                    .disabled(selected.count < 2)
+            }
+            ToolbarItem(placement: .cancellationAction) {
+                Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark") }
+                    .accessibilityLabel("Cancel")
+            }
+        } else if isReordering {
             ToolbarItem(placement: .confirmationAction) {
                 Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark") }
                     .accessibilityLabel("Done")
@@ -181,6 +204,7 @@ struct CategoriesView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
+                    Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
                 } label: { Image(systemName: "ellipsis") }
                 .accessibilityLabel("More")
             }
@@ -204,7 +228,9 @@ struct CategoriesView: View {
 
     @ViewBuilder private func row(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
-        if isReordering {
+        if isSelecting {
+            rowContent(item, counts)   // rowContent shows the checkmark + toggles selection
+        } else if isReordering {
             rowContent(item, counts)
                 // Capture row height (background GeometryReader doesn't affect
                 // layout or block taps) so the drop handler can map location.y.
@@ -252,16 +278,27 @@ struct CategoriesView: View {
         }
     }
 
-    /// The shared row visual: a tap target (swatch + name + count pill) that opens
-    /// the category's transactions, plus — for parents — a trailing disclosure
-    /// chevron that expands/collapses. The swatch is leftmost (no leading gutter)
-    /// and the chevron is on the right, so rows read tight. Mode-specific modifiers
-    /// (drag vs swipe) are applied by `row`; tap-navigation is inert while reordering.
+    /// The shared row visual. In select mode it shows a leading checkmark and taps
+    /// toggle selection (relatives of a selected row are dimmed + inert); otherwise
+    /// the swatch/name/count opens the category's transactions, with a trailing
+    /// disclosure chevron for parents.
     @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
+        let selectDisabled = isSelecting && mergeSelectionDisabled(c.id, selected: selected, byId: byId)
         HStack(spacing: 8) {
+            if isSelecting {
+                Image(systemName: selected.contains(c.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(selected.contains(c.id) ? Color.accentColor : .secondary)
+            }
             Button {
-                if !isReordering { selectedCategoryId = c.id }
+                if isSelecting {
+                    if !selectDisabled {
+                        if selected.contains(c.id) { selected.remove(c.id) } else { selected.insert(c.id) }
+                    }
+                } else if !isReordering {
+                    selectedCategoryId = c.id
+                }
             } label: {
                 HStack(spacing: 10) {
                     ZStack {
@@ -301,6 +338,7 @@ struct CategoriesView: View {
             }
         }
         .padding(.leading, CGFloat(item.depth) * 14)
+        .opacity(selectDisabled ? 0.35 : 1)
         .contentShape(Rectangle())
     }
 
@@ -351,6 +389,27 @@ struct CategoriesView: View {
         mergeChoice = nil
         do { try store.apply(.mergeCategory, Args(["sourceId": .string(source.id), "targetId": .string(target.id)])) }
         catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Combined transaction count across the selected categories (choice-independent).
+    private func mergeManyTxCount(_ catRows: [CategoryRow]) -> Int {
+        let ledger = store.activeLedgerId
+        var ids = Set<String>()
+        for c in catRows { ids.formUnion(Selectors.categoryTransactions(store.txns, c.id, ledger).map(\.id)) }
+        return ids.count
+    }
+
+    /// Merge every selected category except the survivor into it, atomically.
+    private func mergeMany(keeping survivor: CategoryRow, from all: [CategoryRow]) {
+        errorMessage = nil
+        mergeManySurvivorChoice = nil
+        let sources = all.filter { $0.id != survivor.id }.map(\.id)
+        do {
+            try store.apply(.mergeCategories, Args([
+                "sourceIds": .array(sources.map(JSONValue.string)),
+                "targetId": .string(survivor.id)]))
+            isSelecting = false; selected = []
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
 
