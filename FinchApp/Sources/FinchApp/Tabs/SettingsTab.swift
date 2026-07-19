@@ -35,6 +35,7 @@ struct SettingsRootList: View {
                 NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
                 NavigationLink { SettingsPowerToolsView() } label: { Label("Power Tools", systemImage: "wrench.and.screwdriver") }
                 NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
+                NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
                 NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
                 NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
                 NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
@@ -132,7 +133,6 @@ struct SettingsPowerToolsView: View {
     var body: some View {
         List {
             NavigationLink("Rules") { RulesManagerView() }
-            NavigationLink("Categories") { CategoryAdminView() }
             NavigationLink("Tags") { TagAdminView() }
             NavigationLink("Merchants") { CounterpartyAdminView() }
         }
