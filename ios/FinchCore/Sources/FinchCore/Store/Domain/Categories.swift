@@ -10,6 +10,7 @@ public enum Categories {
         .updateCategory: update,
         .deleteCategory: delete,
         .mergeCategory: merge,
+        .mergeCategories: mergeMany,
     ]
 
     static func create(_ db: Database, _ args: Args) throws {
@@ -67,8 +68,30 @@ public enum Categories {
     static func merge(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let sourceId: String; let targetId: String }
         let a = try args.to(A.self)
-        let source = a.sourceId, target = a.targetId
+        try validateMerge(db, source: a.sourceId, target: a.targetId)
+        try mergeOne(db, source: a.sourceId, target: a.targetId)
+        try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [a.sourceId])
+    }
 
+    /// Combine many `sourceIds` into `targetId` in one transaction (Apply wraps).
+    /// All sources are validated up-front, so a bad one aborts the whole set with
+    /// nothing merged. Sources' children re-parent under target; sources deleted.
+    static func mergeMany(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let sourceIds: [String]; let targetId: String }
+        let a = try args.to(A.self)
+        if a.sourceIds.isEmpty {
+            throw I18nError("error.invalidArgs", [:], "mergeCategories requires at least one source")
+        }
+        for source in a.sourceIds { try validateMerge(db, source: source, target: a.targetId) }
+        for source in a.sourceIds { try mergeOne(db, source: source, target: a.targetId) }
+        for source in a.sourceIds {
+            try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [source])
+        }
+    }
+
+    /// Shared guards for a single source→target merge (self, existence, same-kind,
+    /// not-into-own-descendant). Read-only — no writes.
+    private static func validateMerge(_ db: Database, source: String, target: String) throws {
         if source == target {
             throw I18nError("error.category.mergeSelf", [:], "Cannot merge a category into itself")
         }
@@ -82,13 +105,15 @@ public enum Categories {
         if try isInSubtreeOf(db, target, source) {
             throw I18nError("error.category.mergeDescendant", [:], "Cannot merge a category into its own subcategory")
         }
+    }
 
-        // 1. transaction legs (covers split legs too)
+    /// Repoint every reference `source` holds onto `target` and re-parent source's
+    /// children under target (top-level fallback past the 3-level cap). Does NOT
+    /// validate or delete `source`. Runs inside the caller's transaction.
+    private static func mergeOne(_ db: Database, source: String, target: String) throws {
         try db.execute(sql: "UPDATE postings SET category_id = ? WHERE category_id = ?", arguments: [target, source])
-        // 2. scheduled references (the scheduled_splits one clears the ON DELETE RESTRICT)
         try db.execute(sql: "UPDATE scheduled_templates SET category_id = ? WHERE category_id = ?", arguments: [target, source])
         try db.execute(sql: "UPDATE scheduled_splits SET category_id = ? WHERE category_id = ?", arguments: [target, source])
-        // 3. budgets: rewrite category_ids JSON (source→target, de-duplicated, order-preserving)
         for row in try Row.fetchAll(db, sql: "SELECT id, category_ids FROM budgets WHERE category_ids LIKE ?", arguments: ["%\(source)%"]) {
             guard let raw = row["category_ids"] as String?, let data = raw.data(using: .utf8),
                   let parsed = try? JSONDecoder().decode([String].self, from: data), parsed.contains(source) else { continue }
@@ -98,15 +123,12 @@ public enum Categories {
             try db.execute(sql: "UPDATE budgets SET category_ids = ?, updated_at = datetime('now') WHERE id = ?",
                            arguments: [json, row["id"] as String])
         }
-        // 4. re-parent source's children under target, or to top level past the cap
         let children = try String.fetchAll(db, sql: "SELECT id FROM categories WHERE parent_id = ?", arguments: [source])
         for child in children {
             let fits = try categoryDepth(db, target) + subtreeDepth(db, child) <= 3
             try db.execute(sql: "UPDATE categories SET parent_id = ?, updated_at = datetime('now') WHERE id = ?",
                            arguments: [fits ? target : nil, child])
         }
-        // 5. remove the absorbed category
-        try db.execute(sql: "DELETE FROM categories WHERE id = ?", arguments: [source])
     }
 
     // MARK: depth / cycle guards (port of lib/db/domain/categories/_depth.ts)
