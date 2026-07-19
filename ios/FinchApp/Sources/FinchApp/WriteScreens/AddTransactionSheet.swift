@@ -338,6 +338,14 @@ struct AddTransactionSheet: View {
             } else {
                 transferAmountRow("To amount", text: $amount, currency: currency(of: toAccountId), mirrored: true)
             }
+            // Transfer has no Merchant/category, so Date + Note live here (the
+            // reorder moved the shared Date/Note section into the line-item path).
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.locale, AppDate.h24Locale)
+            HStack {
+                Text("Note"); Spacer()
+                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            }
         }
     }
 
