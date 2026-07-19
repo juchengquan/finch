@@ -116,19 +116,6 @@ struct EditTransactionSheet: View {
     }
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
-    /// Top control state: nil hides the control (adjustment/opening rows).
-    private var typeControlKind: EditTypeControl.Kind? {
-        switch txn.kind {
-        case "transfer": return .transfer
-        case "adjustment", "opening": return nil
-        default: return EditTypeControl.Kind(rawValue: effectiveKind) ?? .expense
-        }
-    }
-    /// Line items reclassify across expense/income/refund; everything else locks.
-    private var typeControlEnabled: Set<EditTypeControl.Kind> {
-        canReclassify ? [.expense, .income, .refund] : []
-    }
-
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
     }
@@ -322,11 +309,26 @@ struct EditTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
+                // Native segmented Picker (system crystal glass) — same control as
+                // Settings' Theme toggle. Line items reclassify across the 3 kinds;
+                // a transfer shows a locked single segment; adjustment/opening none.
                 ToolbarItem(placement: .principal) {
-                    if let kind = typeControlKind {
-                        EditTypeControl(selected: kind, enabled: typeControlEnabled) { k in
-                            if let ek = EditKind(rawValue: k.rawValue) { selectedKind = ek }
+                    if canReclassify {
+                        Picker("Type", selection: $selectedKind) {
+                            ForEach(EditKind.allCases) { k in
+                                Image(systemName: TxnKindIcon.icon(for: k.rawValue))
+                                    .accessibilityLabel(k.label).tag(k)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .frame(width: 150)
+                    } else if txn.kind == "transfer" {
+                        Picker("Type", selection: .constant(0)) {
+                            Image(systemName: TxnKindIcon.icon(for: "transfer")).tag(0)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 52)
+                        .disabled(true)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
