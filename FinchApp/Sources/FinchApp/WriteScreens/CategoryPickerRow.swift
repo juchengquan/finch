@@ -1,6 +1,13 @@
 import SwiftUI
 import FinchCore
 
+/// The Category row's value when a transaction is split: the split's category names
+/// joined for display, or nil for a single category (fewer than 2 names).
+/// E.g. ["Groceries", "Household"] → "Groceries, Household".
+func splitSummaryText(categoryNames: [String]) -> String? {
+    categoryNames.count >= 2 ? categoryNames.joined(separator: ", ") : nil
+}
+
 /// The Category field as a tap-to-open row + bottom sheet that renders the
 /// category HIERARCHY — an indented tree with expand/collapse, matching the
 /// Settings › Categories page — instead of a flat list. Same staged-then-Confirm
@@ -10,20 +17,46 @@ struct CategoryPickerRow: View {
     let title: String
     let categories: [CategoryRow]         // kind-filtered rows (sort_order order)
     @Binding var selection: String
+    /// Non-nil ⇒ the transaction is split: the row shows this summary instead of the
+    /// picked category name, and tapping the row (or icon) reopens the split editor.
+    var splitSummary: String? = nil
+    /// Whether the split icon is actionable (a split needs a non-zero amount).
+    var splitEnabled: Bool = false
+    /// nil ⇒ no split affordance (e.g. refunds); non-nil ⇒ show the trailing split icon.
+    var onSplit: (() -> Void)? = nil
     @State private var presented = false
 
     private var selectedName: String { categories.first { $0.id == selection }?.name ?? "—" }
 
     var body: some View {
-        Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                Text(selectedName).foregroundStyle(.secondary)
+        HStack {
+            Button {
+                if splitSummary != nil { onSplit?() } else { presented = true }
+            } label: {
+                HStack {
+                    Text(title).foregroundStyle(.primary)
+                    Text(splitSummary ?? selectedName).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .lineLimit(1).truncationMode(.tail)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            if let onSplit {
+                Button { onSplit() } label: {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.body)
+                        .foregroundStyle(splitSummary != nil ? Color.accentColor : Color.secondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(splitSummary == nil && !splitEnabled)
+                .opacity(splitSummary == nil && !splitEnabled ? 0.4 : 1)   // dim until an amount exists
+                .accessibilityLabel(splitSummary != nil ? "Edit split" : "Split across categories")
+            }
         }
-        .buttonStyle(.plain)
         .sheet(isPresented: $presented) {
             CategoryPickerSheet(title: title, categories: categories, selection: $selection)
                 #if os(iOS)
@@ -38,7 +71,7 @@ struct CategoryPickerRow: View {
 /// category (checkmark); the trailing chevron on parents expands/collapses.
 /// Starts collapsed (top level only); typing force-expands to reveal matches.
 /// Confirm applies the staged id to the binding; Cancel discards.
-private struct CategoryPickerSheet: View {
+struct CategoryPickerSheet: View {
     let title: String
     let categories: [CategoryRow]
     @Binding var selection: String

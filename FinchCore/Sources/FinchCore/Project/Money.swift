@@ -45,6 +45,12 @@ public enum Money {
         return sign + c.sym + absStr
     }
 
+    /// The display symbol for `currency` — the same prefix `format` uses (e.g. "$",
+    /// "S$", "€"; unknown currencies fall back to "CODE ").
+    public static func symbol(for currency: String) -> String {
+        (currencies[currency] ?? Cur(sym: currency + " ", decimals: 2)).sym
+    }
+
     /// Latest USD-per-1-unit rate per currency (USD pinned to 1). Mirrors
     /// `latestRateMap` (fx.ts): for each currency keep the row with the max date.
     public static func latestRateMap(_ rates: [ExchangeRate]) -> [String: Double] {

@@ -43,9 +43,10 @@ struct SplitEditorView: View {
         if let s = initialSplits, s.count >= 2 {
             _rows = State(initialValue: s.map { Row(categoryId: $0.categoryId ?? "", amount: String(format: "%g", abs($0.amount))) })
         } else if let first = initialSplits?.first {
-            // Seed row 1 from the single source category + total; row 2 empty.
+            // Seed row 1 with the single source category only (name, NOT the amount)
+            // so amounts are allocated fresh across the splits; row 2 empty.
             _rows = State(initialValue: [
-                Row(categoryId: first.categoryId ?? "", amount: String(format: "%g", abs(first.amount))),
+                Row(categoryId: first.categoryId ?? "", amount: ""),
                 Row(categoryId: "", amount: ""),
             ])
         } else {
@@ -78,13 +79,14 @@ struct SplitEditorView: View {
                 Section("Splits") {
                     ForEach($rows) { $row in
                         HStack {
-                            Picker("", selection: $row.categoryId) {
-                                Text("Uncategorized").tag("")
-                                ForEach(categories) { Text($0.name).tag($0.id) }
-                            }.labelsHidden()
-                            Spacer()
-                            TextField("0.00", text: $row.amount)
-                                .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
+                            CategoryTreeButton(categories: categories, selection: $row.categoryId)
+                            // Symbol + amount kept tight so they read as one right-aligned
+                            // unit ("$0.00"), matching Transaction total / Allocated above.
+                            HStack(spacing: 2) {
+                                Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
+                                TextField("0.00", text: $row.amount)
+                                    .keyboardType(.decimalPad).fixedSize()
+                            }
                         }
                     }
                     .onDelete { rows.remove(atOffsets: $0) }
@@ -99,7 +101,7 @@ struct SplitEditorView: View {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 }
             }
-            .navigationTitle("Split")
+            .navigationTitle("Split Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -143,5 +145,33 @@ struct SplitEditorView: View {
         guard case .existing(let id) = target else { return }
         do { try store.apply(.setTransactionSplits, Args(["id": .string(id), "splits": .array([])])); dismiss() }
         catch { errorMessage = i18nMessage(error) }
+    }
+}
+
+/// A split row's category cell: shows the selected category's name and opens the
+/// SAME hierarchical (tree, expand/collapse) picker as the main Category row, so a
+/// split leg is chosen the same way as a single category.
+private struct CategoryTreeButton: View {
+    let categories: [CategoryRow]
+    @Binding var selection: String
+    @State private var presented = false
+    private var name: String {
+        selection.isEmpty ? "Uncategorized" : (categories.first { $0.id == selection }?.name ?? "—")
+    }
+    var body: some View {
+        Button { presented = true } label: {
+            Text(name)
+                .foregroundStyle(selection.isEmpty ? .secondary : .primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $presented) {
+            CategoryPickerSheet(title: "Category", categories: categories, selection: $selection)
+                #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
+        }
     }
 }
