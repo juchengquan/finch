@@ -132,6 +132,27 @@ enum SimulatorDemoSeed {
                                     "name": .string(t.name), "color": .string(t.color)])
         }
 
+        // Merchants (counterparties). Names match the transaction merchants below,
+        // so the catalog resolves each merchant's transactions by name (populating
+        // the Merchants page with counts); a few are marked verified.
+        let merchants: [(id: String, name: String, verified: Bool)] = [
+            ("cp-wholefoods", "Whole Foods",        true),
+            ("cp-traderjoes", "Trader Joe's",       true),
+            ("cp-acme",       "Acme Corp Payroll",  true),
+            ("cp-starbucks",  "Starbucks",          false),
+            ("cp-bluebottle", "Blue Bottle Coffee", false),
+            ("cp-shell",      "Shell Gas",          false),
+            ("cp-netflix",    "Netflix",            false),
+            ("cp-spotify",    "Spotify",            false),
+            ("cp-uber",       "Uber",               false),
+            ("cp-lyft",       "Lyft",               false),
+            ("cp-costco",     "Costco",             false),
+        ]
+        for m in merchants {
+            try apply("createCounterparty", ["id": .string(m.id), "ledgerId": .string("personal"), "name": .string(m.name)])
+            if m.verified { try apply("verifyCounterparty", ["id": .string(m.id)]) }
+        }
+
         // ~3 months of transactions. Expenses negative, income positive.
         let txns: [(d: Int, acct: String, amt: Double, merchant: String, cat: String,
                     kind: String?, status: String?, tags: [String]?)] = [

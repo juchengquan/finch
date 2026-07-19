@@ -37,6 +37,7 @@ struct SettingsRootList: View {
                 NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
                 NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
                 NavigationLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
+                NavigationLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
                 NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
                 NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
                 NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
@@ -134,7 +135,6 @@ struct SettingsPowerToolsView: View {
     var body: some View {
         List {
             NavigationLink("Rules") { RulesManagerView() }
-            NavigationLink("Merchants") { CounterpartyAdminView() }
         }
         .navigationTitle("Power Tools")
     }
