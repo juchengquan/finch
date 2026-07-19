@@ -305,18 +305,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  The client's optimistic flow replaces state from the server projection;
  *  the returned id feeds txTouches + rollover invalidation in mutations.ts.
  *
- *  Cross-ledger counterparty guard preserved: if the caller passes a
- *  counterpartyId from a different ledger, it is dropped and the
- *  name-based auto-resolve inside postEntry runs instead. */
+ *  Merchants are global, so an explicit counterpartyId links regardless of
+ *  ledger; when absent, the name-based auto-resolve inside postEntry runs. */
 export async function addTransaction(exec: Exec, input: AddInput): Promise<string> {
-  // Cross-ledger counterparty guard (preserved from legacy path).
-  let counterpartyId = input.counterpartyId ?? undefined;
-  if (counterpartyId) {
-    const [cp] = await exec('SELECT ledger_id FROM counterparties WHERE id = ?', [counterpartyId]);
-    if (!cp || String(cp.ledger_id) !== input.ledgerId) {
-      counterpartyId = undefined;
-    }
-  }
+  const counterpartyId = input.counterpartyId ?? undefined;
 
   const kind: EntryKind = (input.kind ?? (input.amount > 0 ? 'income' : 'expense')) as EntryKind;
 
@@ -470,10 +462,7 @@ export async function updateTransaction(
   // Merchant → description + counterparty re-resolve.
   if (patch.merchant !== undefined) {
     entryPatch.description = patch.merchant;
-    const ledgerId = String(cur.ledger_id ?? '');
-    entryPatch.counterpartyId = ledgerId
-      ? await resolveCounterpartyIdByName(exec, ledgerId, patch.merchant)
-      : null;
+    entryPatch.counterpartyId = await resolveCounterpartyIdByName(exec, patch.merchant);
   }
 
   // Determine if we need to rebuild legs.
@@ -622,16 +611,14 @@ export async function confirmPendingWithMerchant(
 ): Promise<void> {
   const ref = await resolveEntryRef(exec, id);
   if (!ref) return;
-  const [row] = await exec('SELECT description, ledger_id FROM entries WHERE id = ?', [ref.entryId]);
+  const [row] = await exec('SELECT description FROM entries WHERE id = ?', [ref.entryId]);
   if (!row) return;
-  const ledgerId = String(row.ledger_id ?? '');
 
   let counterpartyId: string | null = null;
   let description = String(row.description ?? '');
   if (resolution.counterpartyId) {
-    const [cp] = await exec('SELECT name FROM counterparties WHERE id = ? AND ledger_id = ?', [
+    const [cp] = await exec('SELECT name FROM counterparties WHERE id = ?', [
       resolution.counterpartyId,
-      ledgerId,
     ]);
     if (cp) {
       counterpartyId = String(cp.id ?? resolution.counterpartyId);
@@ -641,8 +628,8 @@ export async function confirmPendingWithMerchant(
     const name = resolution.newCounterpartyName.trim();
     const newCpId = `cp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     await exec(
-      "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
-      [newCpId, ledgerId, name],
+      "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))",
+      [newCpId, name],
     );
     counterpartyId = newCpId;
     description = name;

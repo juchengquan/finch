@@ -97,7 +97,7 @@ export default function MerchantsPage() {
 
   // Drive the list off the projected counterparties; fall back to the static
   // seed only until the store hydrates so the first paint isn't empty.
-  const projected = counterparties.filter((c) => c.ledgerId === CP_LEDGER);
+  const projected = counterparties; // merchants are global (no per-ledger filter)
   const rows: MerchantData[] = projected.length
     ? projected.map((c) => ({ id: c.id, name: c.name, verified: c.verified, color: colorFor(c.id, c.name), txCount: MOCK_BY_ID.get(c.id)?.txCount ?? null }))
     : LEDGER.counterparties.map((c) => ({ id: c.id, name: c.name, verified: c.verified === 1, color: oklchToHex(0.65, 0.2, c.hue), txCount: c.txCount }));

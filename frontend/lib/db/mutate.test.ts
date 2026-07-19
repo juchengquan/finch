@@ -317,7 +317,7 @@ test('updateScheduled and updateCounterparty edit fields', async () => {
   expect(Number(r.day_of_month)).toBe(5);
   expect(Number(r.auto_post)).toBe(0);
 
-  const cpId = String((await exec("SELECT id FROM counterparties WHERE ledger_id = 'personal' LIMIT 1"))[0].id);
+  const cpId = String((await exec("SELECT id FROM counterparties LIMIT 1"))[0].id);
   await applyMutation(exec, 'updateCounterparty', { id: cpId, patch: { name: 'Renamed Co' } });
   const [cp] = await exec('SELECT name FROM counterparties WHERE id = ?', [cpId]);
   expect(String(cp.name)).toBe('Renamed Co');

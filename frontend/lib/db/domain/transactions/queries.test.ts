@@ -102,9 +102,9 @@ test('counterparty resolver matches via COLLATE NOCASE (no LOWER in WHERE)', asy
   const exec = await seeded();
   const { resolveCounterpartyIdByName } = await import('@/lib/db/queries/counterparties');
   // Seed has "Grab" (cp-02); mixed-case + leading/trailing space should still resolve.
-  expect(await resolveCounterpartyIdByName(exec, 'personal', '  gRAb  ')).toBe('cp-02');
-  expect(await resolveCounterpartyIdByName(exec, 'personal', 'GRAB')).toBe('cp-02');
-  expect(await resolveCounterpartyIdByName(exec, 'personal', 'NoSuchMerchant')).toBeNull();
+  expect(await resolveCounterpartyIdByName(exec, '  gRAb  ')).toBe('cp-02');
+  expect(await resolveCounterpartyIdByName(exec, 'GRAB')).toBe('cp-02');
+  expect(await resolveCounterpartyIdByName(exec, 'NoSuchMerchant')).toBeNull();
 });
 
 test('filter by account and category', async () => {

@@ -197,7 +197,7 @@ export function RuleBuilderDialog({
     .map((c) => ({ id: c.id, name: categoryPath(c, ledgerCatByIdMap) }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const ledgerAccounts = accounts.filter((a) => a.ledgerId === activeId);
-  const ledgerCounterparties = counterparties.filter((c) => c.ledgerId === activeId);
+  const ledgerCounterparties = counterparties; // merchants are global
   const ledgerTags = tags.filter((t) => t.ledgerId === activeId);
 
   // Live preview — runs the draft against the last 100 confirmed transactions

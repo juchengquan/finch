@@ -273,7 +273,7 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
   let kind = e.kind;
   let counterpartyId: string | null = e.counterpartyId !== undefined
     ? e.counterpartyId
-    : await resolveCounterpartyIdByName(exec, e.ledgerId, description);
+    : await resolveCounterpartyIdByName(exec, description);
   let appliedRuleIds: string[] | null = null;
   let tagIdsAdd: string[] | null = null;
   let reviewedAt: string | null = null;

@@ -74,7 +74,7 @@ export const ledgerActions = (set: SetState, get: GetState) => ({
         transactions: s.transactions.filter((t) => (t.ledgerId ?? 'personal') !== id),
         categories: s.categories.filter((c) => c.ledgerId !== id),
         tags: s.tags.filter((t) => t.ledgerId !== id),
-        counterparties: s.counterparties.filter((c) => c.ledgerId !== id),
+        // Merchants are global — they survive a ledger deletion.
         budgets: s.budgets.filter((b) => b.ledgerId !== id),
         budgetGroups: s.budgetGroups.filter((g) => g.ledgerId !== id),
         accountGroups: s.accountGroups.filter((g) => g.ledgerId !== id),

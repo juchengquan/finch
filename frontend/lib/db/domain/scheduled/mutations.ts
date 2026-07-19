@@ -175,7 +175,7 @@ export const handlers = {
 
       const amount = (type === 'income' ? 1 : -1) * Number(r.amount);
       const categoryId = r.category_id == null ? null : String(r.category_id);
-      const cpId = await resolveCounterpartyIdByName(exec, ledgerId, description);
+      const cpId = await resolveCounterpartyIdByName(exec, description);
       for (const date of dates) {
         await postSimple(exec, {
           ledgerId, accountId: acctId, date,
