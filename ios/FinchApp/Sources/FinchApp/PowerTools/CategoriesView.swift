@@ -33,6 +33,7 @@ struct CategoriesView: View {
     @State private var deleting: CategoryRow?
     @State private var selectedCategoryId: String?   // tapped row → transactions
     @State private var mergingFrom: CategoryRow?   // → target picker sheet
+    @State private var pendingMerge: MergePair?    // staged in the sheet, promoted on its dismiss
     @State private var mergeChoice: MergePair?     // → keep-which-name alert
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
@@ -77,7 +78,12 @@ struct CategoriesView: View {
                 CategoryDetailView(category: c)
             }
         }
-        .sheet(item: $mergingFrom) { a in
+        // Present the keep-name alert only AFTER the picker sheet has fully
+        // dismissed (onDismiss) — chaining dismiss + present in one transaction can
+        // drop the second presentation on some iOS versions.
+        .sheet(item: $mergingFrom, onDismiss: {
+            if let p = pendingMerge { mergeChoice = p; pendingMerge = nil }
+        }) { a in
             NavigationStack {
                 List {
                     if mergeTargets(excluding: a).isEmpty {
@@ -86,9 +92,8 @@ struct CategoriesView: View {
                     } else {
                         ForEach(mergeTargets(excluding: a)) { f in
                             Button {
-                                let b = f.row
+                                pendingMerge = MergePair(a: a, b: f.row)
                                 mergingFrom = nil
-                                mergeChoice = MergePair(a: a, b: b)
                             } label: {
                                 HStack(spacing: 10) {
                                     ZStack {
