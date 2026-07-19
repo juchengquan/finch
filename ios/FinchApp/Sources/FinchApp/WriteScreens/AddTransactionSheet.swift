@@ -131,20 +131,6 @@ struct AddTransactionSheet: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 200)
-                    #if os(iOS)
-                    // Scrub-anywhere: a native segmented control only drags from the
-                    // selected thumb — this lets a press on ANY segment grab the
-                    // crystal pill and follow the finger. simultaneous so plain taps
-                    // still reach the control.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0).onChanged { v in
-                            let all = Kind.allCases
-                            let seg = 200.0 / CGFloat(all.count)
-                            let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                            if all[idx] != kind { kind = all[idx] }
-                        }
-                    )
-                    #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }

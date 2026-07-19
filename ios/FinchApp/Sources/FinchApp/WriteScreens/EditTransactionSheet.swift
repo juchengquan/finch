@@ -322,17 +322,6 @@ struct EditTransactionSheet: View {
                         }
                         .pickerStyle(.segmented)
                         .frame(width: 150)
-                        #if os(iOS)
-                        // Scrub-anywhere (matches the Add sheet).
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 0).onChanged { v in
-                                let all = EditKind.allCases
-                                let seg = 150.0 / CGFloat(all.count)
-                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
-                                if all[idx] != selectedKind { selectedKind = all[idx] }
-                            }
-                        )
-                        #endif
                     } else if txn.kind == "transfer" {
                         Picker("Type", selection: .constant(0)) {
                             Image(systemName: TxnKindIcon.icon(for: "transfer")).tag(0)
