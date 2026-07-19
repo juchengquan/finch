@@ -336,7 +336,7 @@ struct AddTransactionSheet: View {
         HStack {
             Text("Amount")
             Spacer()
-            TextField("0.00", text: $amount.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).numericInput($amount)
             Picker("", selection: $currencyCode) {
                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
             }
@@ -351,7 +351,7 @@ struct AddTransactionSheet: View {
         HStack {
             Text(label)
             Spacer()
-            TextField("0.00", text: text.decimalInput)
+            TextField("0.00", text: text).numericInput(text)
                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                 .disabled(mirrored)
                 .foregroundStyle(mirrored ? Color.secondary : Color.primary)
