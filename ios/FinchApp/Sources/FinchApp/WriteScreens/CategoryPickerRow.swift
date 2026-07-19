@@ -71,7 +71,7 @@ struct CategoryPickerRow: View {
 /// category (checkmark); the trailing chevron on parents expands/collapses.
 /// Starts collapsed (top level only); typing force-expands to reveal matches.
 /// Confirm applies the staged id to the binding; Cancel discards.
-private struct CategoryPickerSheet: View {
+struct CategoryPickerSheet: View {
     let title: String
     let categories: [CategoryRow]
     @Binding var selection: String
