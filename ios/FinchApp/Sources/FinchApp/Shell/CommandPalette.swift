@@ -50,7 +50,7 @@ struct CommandPalette: View {
             }
             .searchable(text: $query, placement: .toolbar, prompt: "Type a command…")
             .navigationTitle("Commands")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close") } }
         }
     }
 }

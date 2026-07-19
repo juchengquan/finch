@@ -125,9 +125,9 @@ struct TransactionFilterSheet: View {
             .navigationTitle("Filter")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { apply(); dismiss() }.bold()
+                    Button { apply(); dismiss() } label: { Image(systemName: "checkmark") }.accessibilityLabel("Done").confirmCheckmarkStyle()
                 }
             }
         }

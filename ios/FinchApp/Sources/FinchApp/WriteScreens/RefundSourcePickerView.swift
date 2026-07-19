@@ -41,7 +41,7 @@ struct RefundSourcePickerView: View {
             .searchable(text: $query)
             .navigationTitle("Refunded transaction")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") } }
         }
     }
 }
