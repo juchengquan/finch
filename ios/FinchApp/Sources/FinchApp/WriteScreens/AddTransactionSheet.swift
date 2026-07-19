@@ -248,8 +248,7 @@ struct AddTransactionSheet: View {
             if pendingSplits == nil {
                 CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId)
             }
-            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .environment(\.locale, AppDate.h24Locale)
+            DateFieldRow(date: $date)
             if k != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
                 Button {
                     showingSplit = true
@@ -334,8 +333,7 @@ struct AddTransactionSheet: View {
             }
             // Transfer has no Merchant/category, so Date + Note live here (the
             // reorder moved the shared Date/Note section into the line-item path).
-            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .environment(\.locale, AppDate.h24Locale)
+            DateFieldRow(date: $date)
             HStack {
                 Text("Note"); Spacer()
                 TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)

@@ -127,8 +127,7 @@ struct EditTransactionSheet: View {
                 // Category/Date) below; split & transfer keep Date here.
                 if isSplit || transferLegs != nil {
                     Section {
-                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                            .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
+                        DateFieldRow(date: $date)
                         // Transfers have no Merchant field (design), but previously
                         // exposed Note via this shared top section — keep that.
                         if transferLegs != nil {
@@ -184,8 +183,7 @@ struct EditTransactionSheet: View {
                             .pickerStyle(.menu).labelsHidden().fixedSize()
                         }
                         CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
-                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                            .environment(\.locale, AppDate.h24Locale)
+                        DateFieldRow(date: $date)
                         if effectiveKind != "refund", (DecimalInput.parse(amountText) ?? 0) != 0 {
                             Button("Split…") { showingSplit = true }
                         }
