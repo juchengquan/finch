@@ -511,12 +511,12 @@ public enum Entries {
     /// balance-reconciliation entry. Zero/sub-cent delta is a silent no-op.
     @discardableResult
     public static func postAdjustment(_ db: Database, ledgerId: String, accountId: String, delta: Double,
-                                      date: String, note: String? = nil, source: String? = nil,
+                                      date: String, time: String? = nil, note: String? = nil, source: String? = nil,
                                       id: String? = nil, timestamp: String? = nil) throws -> String? {
         if r2(delta) == 0 { return nil }
         let sys = try ensureSystemCategories(db, ledgerId)
         return try postEntry(db, NewEntry(
-            id: id, ledgerId: ledgerId, date: date,
+            id: id, ledgerId: ledgerId, date: date, time: time,
             description: source == "reconcile" ? "Reconciliation adjustment" : "Balance adjustment",
             kind: .adjustment, legs: [.account(AccountLeg(accountId: accountId, amount: r2(delta)))],
             autoBalance: .category(sys.adjustment), notes: note, timestamp: timestamp, skipRules: true))

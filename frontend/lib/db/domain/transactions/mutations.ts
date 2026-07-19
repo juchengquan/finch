@@ -57,6 +57,7 @@ export const handlers = {
       accountId,
       delta,
       date: args.date ? str(args.date) : new Date().toISOString().slice(0, 10),
+      time: args.time ? str(args.time) : undefined,
       note: args.note ? str(args.note) : undefined,
       source,
     });

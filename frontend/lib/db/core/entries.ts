@@ -445,7 +445,7 @@ export async function postTransfer(exec: Exec, a: {
 /** Account delta against the adjustment equity category — supersedes the
  *  kind='adjustment' row of adjustAccountBalance / reconcileAccount. */
 export async function postAdjustment(exec: Exec, a: {
-  ledgerId: string; accountId: string; delta: number; date: string;
+  ledgerId: string; accountId: string; delta: number; date: string; time?: string | null;
   note?: string | null; source?: 'manual' | 'reconcile'; id?: string; timestamp?: string;
 }): Promise<{ entryId: string } | null> {
   if (!Number.isFinite(a.delta)) throw new Error('Adjustment must be a number');
@@ -454,7 +454,7 @@ export async function postAdjustment(exec: Exec, a: {
   if (r2(a.delta) === 0) return null;
   const sys = await ensureSystemCategories(exec, a.ledgerId);
   return postEntry(exec, {
-    id: a.id, ledgerId: a.ledgerId, date: a.date,
+    id: a.id, ledgerId: a.ledgerId, date: a.date, time: a.time ?? null,
     description: a.source === 'reconcile' ? 'Reconciliation adjustment' : 'Balance adjustment',
     kind: 'adjustment', notes: a.note ?? null, counterpartyId: null, skipRules: true, timestamp: a.timestamp,
     legs: [{ accountId: a.accountId, amount: r2(a.delta) }],
