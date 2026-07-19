@@ -318,7 +318,7 @@ struct CategoryEditSheet: View {
                 Section {
                     if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 } footer: {
-                    Text("Icon and color are inherited from the parent category when left unset.")
+                    Text("When unset, icon and color inherit from the parent category, or fall back to a default.")
                 }
             }
             .navigationTitle(title)

@@ -7,15 +7,20 @@ import Foundation
 ///   uncategorized. Its subcategories keep their own transactions.
 /// - `subcatCount`: the category's direct children — they move to top level.
 ///
-/// Clauses join with " · "; each is omitted when its count is 0. Strings are
-/// intentionally non-pluralized to match the shared copy / zh-Hans batch.
+/// Clauses join with " · "; each is omitted when its count is 0. Singular and
+/// plural (including verb agreement) are spelled out explicitly so a count of 1
+/// reads grammatically.
 func deleteImpactMessage(txCount: Int, subcatCount: Int) -> String? {
     var clauses: [String] = []
     if txCount > 0 {
-        clauses.append(String(localized: "\(txCount) transactions will become uncategorized"))
+        clauses.append(txCount == 1
+            ? String(localized: "1 transaction will become uncategorized")
+            : String(localized: "\(txCount) transactions will become uncategorized"))
     }
     if subcatCount > 0 {
-        clauses.append(String(localized: "\(subcatCount) subcategories move to top level"))
+        clauses.append(subcatCount == 1
+            ? String(localized: "1 subcategory moves to top level")
+            : String(localized: "\(subcatCount) subcategories move to top level"))
     }
     return clauses.isEmpty ? nil : clauses.joined(separator: " · ")
 }
