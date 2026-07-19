@@ -43,9 +43,10 @@ struct SplitEditorView: View {
         if let s = initialSplits, s.count >= 2 {
             _rows = State(initialValue: s.map { Row(categoryId: $0.categoryId ?? "", amount: String(format: "%g", abs($0.amount))) })
         } else if let first = initialSplits?.first {
-            // Seed row 1 from the single source category + total; row 2 empty.
+            // Seed row 1 with the single source category only (name, NOT the amount)
+            // so amounts are allocated fresh across the splits; row 2 empty.
             _rows = State(initialValue: [
-                Row(categoryId: first.categoryId ?? "", amount: String(format: "%g", abs(first.amount))),
+                Row(categoryId: first.categoryId ?? "", amount: ""),
                 Row(categoryId: "", amount: ""),
             ])
         } else {
@@ -79,9 +80,9 @@ struct SplitEditorView: View {
                     ForEach($rows) { $row in
                         HStack {
                             CategoryTreeButton(categories: categories, selection: $row.categoryId)
+                            Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
                             TextField("0.00", text: $row.amount)
                                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
-                            Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
                         }
                     }
                     .onDelete { rows.remove(atOffsets: $0) }
