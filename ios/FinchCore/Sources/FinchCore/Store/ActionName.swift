@@ -68,10 +68,12 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case mergeCategory
     case mergeCategories
 
-    // --- tags (3) ---
+    // --- tags (5) ---
     case createTag
     case updateTag
     case deleteTag
+    case mergeTag     // iOS-only — no web parity (native-ahead)
+    case mergeTags    // iOS-only — no web parity (native-ahead)
 
     // --- rules (4) ---
     case createRule

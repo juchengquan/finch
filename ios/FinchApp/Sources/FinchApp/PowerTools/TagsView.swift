@@ -1,11 +1,19 @@
 import SwiftUI
 import FinchCore
 
+/// A chosen (initiating A, target B) pair for a merge; the alert picks which survives.
+private struct TagMergePair: Identifiable {
+    let a: TagRow   // the row the merge was started from
+    let b: TagRow   // the picked other tag
+    var id: String { a.id + "|" + b.id }
+}
+
 /// Tags admin — a flat, color-only list (Settings top-level). Mirrors the
 /// Categories page: search, color-swatch rows with a transaction-count pill,
 /// tap → the tag's transactions, swipe Edit/Delete, + to add. All through the
 /// existing chokepoints (create / update / deleteTag). Tags have no hierarchy,
-/// kind, icon, or order — so no tree, kind picker, reorder, or merge here.
+/// kind, icon, or order — so no tree, kind picker, or reorder here, but merge
+/// (single + multi-select) mirrors Categories.
 struct TagsView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var selectedTagId: String?          // tapped row → transactions
@@ -14,6 +22,12 @@ struct TagsView: View {
     @State private var deleting: TagRow?
     @State private var search = ""
     @State private var errorMessage: String?
+    @State private var mergingFrom: TagRow?              // → target-picker sheet
+    @State private var pendingMerge: TagMergePair?       // staged in the sheet, promoted on its dismiss
+    @State private var mergeChoice: TagMergePair?        // → keep-which-name alert
+    @State private var isSelecting = false               // ⋯ → Merge multi-select mode
+    @State private var selected: Set<String> = []        // ids ticked in select mode
+    @State private var mergeManySurvivorChoice: [TagRow]? // → keep-which-name dialog
 
     private var rows: [TagRow] {
         guard !search.isEmpty else { return store.tags }
@@ -33,9 +47,29 @@ struct TagsView: View {
         .navigationTitle("Tags")
         .errorAlert($errorMessage)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { creating = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("New tag")
+            if isSelecting {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Merge (\(selected.count))") {
+                        mergeManySurvivorChoice = selected.compactMap { id in store.tags.first { $0.id == id } }
+                            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                    }
+                    .disabled(selected.count < 2)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
+                }
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { creating = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("New tag")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
+                    } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("More")
+                }
             }
         }
         .navigationDestination(item: $selectedTagId) { id in
@@ -53,37 +87,106 @@ struct TagsView: View {
             let n = counts[t.id] ?? 0
             if n > 0 { Text("\(t.name) is removed from \(n) transactions.") }
         }
+        // Single merge: pick a target, then the keep-which-name alert (staged via
+        // onDismiss so chaining dismiss+present doesn't drop the alert).
+        .sheet(item: $mergingFrom, onDismiss: {
+            if let p = pendingMerge { mergeChoice = p; pendingMerge = nil }
+        }) { a in
+            NavigationStack {
+                List {
+                    let others = store.tags.filter { $0.id != a.id }
+                    if others.isEmpty {
+                        ContentUnavailableView("No other tags", systemImage: "arrow.triangle.merge",
+                                               description: Text("There's nothing to merge \(a.name) with yet."))
+                    } else {
+                        ForEach(others) { b in
+                            Button { pendingMerge = TagMergePair(a: a, b: b); mergingFrom = nil } label: {
+                                HStack(spacing: 10) {
+                                    TagSwatch(hex: b.color)
+                                    Text(b.name).foregroundStyle(.primary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .navigationTitle("Merge \(a.name) with…")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { mergingFrom = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                    }
+                }
+            }
+        }
+        .alert("Keep which name after merge?", isPresented: Binding(
+            get: { mergeChoice != nil }, set: { if !$0 { mergeChoice = nil } }),
+            presenting: mergeChoice) { pair in
+            Button("Keep \"\(pair.a.name)\"") { merge(source: pair.b, target: pair.a) }
+            Button("Keep \"\(pair.b.name)\"") { merge(source: pair.a, target: pair.b) }
+            Button("Cancel", role: .cancel) {}
+        } message: { pair in
+            if let msg = mergeImpactMessage(txCount: mergeTxCount(pair.a, pair.b)) { Text(msg) }
+        }
+        .alert("Keep which name?", isPresented: Binding(
+            get: { mergeManySurvivorChoice != nil }, set: { if !$0 { mergeManySurvivorChoice = nil } }),
+            presenting: mergeManySurvivorChoice) { picks in
+            ForEach(picks) { survivor in
+                Button("Keep \"\(survivor.name)\"") { mergeMany(keeping: survivor, from: picks) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { picks in
+            if let msg = mergeImpactMessage(txCount: mergeManyTxCount(picks)) { Text(msg) }
+        }
     }
 
     /// A tag row: color swatch + name + count pill + a trailing chevron (every
     /// row navigates to its detail). Tap opens transactions; Edit/Delete are on
     /// the swipe (Edit is the full-swipe default) and context menu.
     @ViewBuilder private func row(_ tag: TagRow, _ counts: [String: Int]) -> some View {
-        Button { selectedTagId = tag.id } label: {
-            HStack(spacing: 10) {
-                TagSwatch(hex: tag.color)
-                Text(tag.name).foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let n = counts[tag.id], n > 0 {
-                    Text("\(n)")
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        .padding(.horizontal, 12).padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
-                        .accessibilityLabel("\(n) transactions")
-                }
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+            if isSelecting {
+                Image(systemName: selected.contains(tag.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(selected.contains(tag.id) ? Color.accentColor : .secondary)
             }
-            .contentShape(Rectangle())
+            Button {
+                if isSelecting {
+                    if selected.contains(tag.id) { selected.remove(tag.id) } else { selected.insert(tag.id) }
+                } else {
+                    selectedTagId = tag.id
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    TagSwatch(hex: tag.color)
+                    Text(tag.name).foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let n = counts[tag.id], n > 0 {
+                        Text("\(n)")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            .padding(.horizontal, 12).padding(.vertical, 3)
+                            .background(.quaternary, in: Capsule())
+                            .accessibilityLabel("\(n) transactions")
+                    }
+                    if !isSelecting {
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelecting && selected.contains(tag.id) ? [.isSelected] : [])
         .swipeActions(edge: .trailing) {
             // Edit declared first ⇒ outer edge / full-swipe default (never delete).
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
+            Button { mergingFrom = tag } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }.tint(.orange)
             // Not role: .destructive — the alert confirms; matches Categories.
             Button { deleting = tag } label: { Label("Delete", systemImage: "trash") }.tint(.red)
         }
         .contextMenu {
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }
+            Button { mergingFrom = tag } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
             Button(role: .destructive) { deleting = tag } label: { Label("Delete", systemImage: "trash") }
         }
     }
@@ -104,6 +207,39 @@ struct TagsView: View {
         errorMessage = nil
         do { try store.apply(.deleteTag, Args(["id": .string(t.id)])) }
         catch { errorMessage = i18nMessage(error) }
+    }
+
+    /// Choice-independent union of transactions referencing either tag.
+    private func mergeTxCount(_ a: TagRow, _ b: TagRow) -> Int {
+        let ledger = store.activeLedgerId
+        let ids = Set(Selectors.tagTransactions(store.txns, a.id, ledger).map(\.id))
+            .union(Selectors.tagTransactions(store.txns, b.id, ledger).map(\.id))
+        return ids.count
+    }
+
+    private func merge(source: TagRow, target: TagRow) {
+        errorMessage = nil; mergeChoice = nil
+        do { try store.apply(.mergeTag, Args(["sourceId": .string(source.id), "targetId": .string(target.id)])) }
+        catch { errorMessage = i18nMessage(error) }
+    }
+
+    private func mergeManyTxCount(_ tagRows: [TagRow]) -> Int {
+        let ledger = store.activeLedgerId
+        var ids = Set<String>()
+        for t in tagRows { ids.formUnion(Selectors.tagTransactions(store.txns, t.id, ledger).map(\.id)) }
+        return ids.count
+    }
+
+    /// Merge every selected tag except the survivor into it, atomically.
+    private func mergeMany(keeping survivor: TagRow, from all: [TagRow]) {
+        errorMessage = nil; mergeManySurvivorChoice = nil
+        let sources = all.filter { $0.id != survivor.id }.map(\.id)
+        do {
+            try store.apply(.mergeTags, Args([
+                "sourceIds": .array(sources.map(JSONValue.string)),
+                "targetId": .string(survivor.id)]))
+            isSelecting = false; selected = []
+        } catch { errorMessage = i18nMessage(error) }
     }
 }
 
