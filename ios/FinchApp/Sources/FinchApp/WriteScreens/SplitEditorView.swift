@@ -80,9 +80,13 @@ struct SplitEditorView: View {
                     ForEach($rows) { $row in
                         HStack {
                             CategoryTreeButton(categories: categories, selection: $row.categoryId)
-                            Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
-                            TextField("0.00", text: $row.amount)
-                                .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
+                            // Symbol + amount kept tight so they read as one right-aligned
+                            // unit ("$0.00"), matching Transaction total / Allocated above.
+                            HStack(spacing: 2) {
+                                Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
+                                TextField("0.00", text: $row.amount)
+                                    .keyboardType(.decimalPad).fixedSize()
+                            }
                         }
                     }
                     .onDelete { rows.remove(atOffsets: $0) }
