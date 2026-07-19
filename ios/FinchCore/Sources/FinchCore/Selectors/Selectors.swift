@@ -232,6 +232,22 @@ public enum Selectors {
         return out
     }
 
+    /// Transactions in `ledgerId` that reference `categoryId`, matched the SAME
+    /// way as `categoryTxCounts` — a split txn by its split legs' categoryIds,
+    /// otherwise by `tx.category` — and excluding pending, so this list agrees
+    /// with the count badge. Date-desc sorted (time-desc tiebreak).
+    public static func categoryTransactions(_ txns: [Tx], _ categoryId: String, _ ledgerId: String) -> [Tx] {
+        let matched = txns.filter { t in
+            guard ledgerOf(t) == ledgerId else { return false }
+            if (t.pending ?? false) { return false }
+            if let splits = t.splits, !splits.isEmpty {
+                return splits.contains { $0.categoryId == categoryId }
+            }
+            return t.category == categoryId
+        }
+        return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
+    }
+
     // MARK: cycleWindow + date helpers
 
     // internal (not private) so the TimeSeries.swift extension can share them.

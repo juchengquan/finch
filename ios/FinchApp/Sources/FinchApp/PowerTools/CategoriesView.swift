@@ -24,6 +24,8 @@ struct CategoriesView: View {
     @State private var editing: CategoryRow?
     @State private var creating = false
     @State private var deleting: CategoryRow?
+    @State private var selectedCategoryId: String?   // tapped row → transactions
+
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
     @State private var rowHeights: [String: CGFloat] = [:]   // per-row height for drop-position thirds
@@ -61,6 +63,11 @@ struct CategoriesView: View {
         .navigationTitle("Categories")
         .errorAlert($errorMessage)
         .toolbar { toolbarContent }
+        .navigationDestination(item: $selectedCategoryId) { id in
+            if let c = store.pickableCategories.first(where: { $0.id == id }) {
+                CategoryDetailView(category: c)
+            }
+        }
         .sheet(isPresented: $creating) { CategoryEditSheet(createIn: kind.rawValue) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
         // A centered ALERT, not a row-anchored confirmationDialog — see
@@ -182,42 +189,48 @@ struct CategoriesView: View {
         }
     }
 
-    /// The shared row visual (disclosure chevron for parents, icon+color swatch,
-    /// name, count badge). Mode-specific modifiers are applied by `row`. Creating
-    /// a subcategory now goes through the ＋ toolbar's Parent picker, not a per-row
-    /// button, which keeps the row tight.
+    /// The shared row visual: a tap target (swatch + name + count pill) that opens
+    /// the category's transactions, plus — for parents — a trailing disclosure
+    /// chevron that expands/collapses. The swatch is leftmost (no leading gutter)
+    /// and the chevron is on the right, so rows read tight. Mode-specific modifiers
+    /// (drag vs swipe) are applied by `row`; tap-navigation is inert while reordering.
     @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         HStack(spacing: 8) {
+            Button {
+                if !isReordering { selectedCategoryId = c.id }
+            } label: {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
+                        Image(systemName: CategoryIcon.symbol(for: effectiveIcon(c, byId)))
+                            .font(.system(size: 12)).foregroundStyle(.white)
+                    }
+                    Text(c.name).foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let n = counts[c.id], n > 0 {
+                        Text("\(n)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                            .accessibilityLabel("\(n) transactions")
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
             if item.hasChildren {
                 Button {
                     if expanded.contains(c.id) { expanded.remove(c.id) } else { expanded.insert(c.id) }
                 } label: {
                     Image(systemName: (expanded.contains(c.id) || !search.isEmpty) ? "chevron.down" : "chevron.right")
-                        .font(.caption).foregroundStyle(.secondary).frame(width: 10)
+                        .font(.caption).foregroundStyle(.secondary)
+                        .frame(width: 22, height: 30).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!search.isEmpty)   // search force-expands; chevron is inert
-            } else {
-                Color.clear.frame(width: 10)
-            }
-
-            ZStack {
-                Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
-                Image(systemName: CategoryIcon.symbol(for: effectiveIcon(c, byId)))
-                    .font(.system(size: 12)).foregroundStyle(.white)
-            }
-
-            Button { editing = c } label: {
-                Text(c.name).foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if let n = counts[c.id], n > 0 {
-                Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .accessibilityLabel("\(n) transactions")
             }
         }
         .padding(.leading, CGFloat(item.depth) * 14)
