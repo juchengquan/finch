@@ -42,7 +42,6 @@ struct EditTransactionSheet: View {
     @State private var refundedTxId: String?
     @State private var showingRefundPicker = false
     @State private var currencyCode: String
-    @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var selectedKind: EditKind
     @State private var fromAmountText = ""   // transfer editor: from-leg native amount
     @State private var toAmountText = ""     // transfer editor: to-leg native amount (cross-currency)
@@ -63,36 +62,6 @@ struct EditTransactionSheet: View {
         set.formUnion(store.exchangeRates.map { $0.currency })
         set.insert(accountCurrency)
         return set.sorted()
-    }
-
-    /// Existing counterparties (active ledger) whose name contains the typed
-    /// merchant text, minus an exact match (nothing to suggest there). Capped at 5.
-    private var matchingCounterparties: [Counterparty] {
-        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return [] }
-        return Array(store.counterparties
-            .filter { $0.name.localizedCaseInsensitiveContains(t)
-                   && $0.name.caseInsensitiveCompare(t) != .orderedSame }
-            .prefix(5))
-    }
-    @ViewBuilder private var merchantSuggestionRows: some View {
-        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        if txn.kind != "transfer", !t.isEmpty {
-            ForEach(matchingCounterparties) { cp in
-                Button { pickCounterparty(cp.name) } label: {
-                    Label(cp.name, systemImage: "building.2").font(.callout)
-                }
-            }
-            if !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(t) == .orderedSame }) {
-                Button { createCounterpartyOnSave = true } label: {
-                    Label("Create \"\(t)\"", systemImage: "plus.circle").font(.callout)
-                }
-            }
-        }
-    }
-    private func pickCounterparty(_ name: String) {
-        merchant = name
-        createCounterpartyOnSave = false
     }
 
     init(txn: Tx) {
@@ -286,11 +255,8 @@ struct EditTransactionSheet: View {
 
                 if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
                     Section("Details") {
-                        HStack {
-                            Text(effectiveKind == "income" ? "Source" : "Merchant"); Spacer()
-                            TextField("", text: $merchant).multilineTextAlignment(.trailing)
-                        }
-                        merchantSuggestionRows
+                        MerchantPickerRow(title: effectiveKind == "income" ? "Source" : "Merchant",
+                                          counterparties: store.counterparties, merchant: $merchant)
                         HStack {
                             Text("Note"); Spacer()
                             TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
@@ -381,7 +347,6 @@ struct EditTransactionSheet: View {
                     toAmountText = String(format: "%g", abs(legs.to.nativeAmount ?? legs.to.amount))
                 }
             }
-            .onChange(of: merchant) { _, _ in createCounterpartyOnSave = false }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
                 Task { await addReceipt(item) }
@@ -448,12 +413,11 @@ struct EditTransactionSheet: View {
             patch["refundedTransactionId"] = .null
         }
         do {
-            if createCounterpartyOnSave {
-                let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cpName.isEmpty,
-                   !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                    try store.apply(.createCounterparty, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
-                }
+            // Remember any unrecognized merchant name as a counterparty.
+            let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cpName.isEmpty,
+               !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
+                try store.apply(.createCounterparty, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
             }
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
             if selectedTags != Set(txn.tags ?? []) {

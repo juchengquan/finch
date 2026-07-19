@@ -50,7 +50,6 @@ struct AddTransactionSheet: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var showingFileImporter = false
     @State private var pickedFileURL: URL?
-    @State private var createCounterpartyOnSave = false   // set by the "Create <name>" row
     @State private var prefillApplied = false             // duplicate-prefill runs once
     @State private var pendingSplits: [SplitEditorView.DraftSplit]? = nil
     @State private var showingSplit = false
@@ -139,7 +138,6 @@ struct AddTransactionSheet: View {
             .onAppear(perform: seedDefaults)
             // Auto-categorize from the merchant's history (the user can still override).
             .onChange(of: merchant) { _, m in
-                createCounterpartyOnSave = false
                 guard kind != .transfer, !m.isEmpty else { return }
                 if let s = Selectors.suggestCategory(store.txns, store.activeLedgerId, m),
                    categories.contains(where: { $0.id == s.categoryId }) {
@@ -262,11 +260,8 @@ struct AddTransactionSheet: View {
     /// Merchant/Source + Note — optional free-text, shown as the LAST section.
     @ViewBuilder private func detailsSection(for k: Kind) -> some View {
         Section("Details") {
-            HStack {
-                Text(k == .income ? "Source" : "Merchant"); Spacer()
-                TextField("", text: $merchant).multilineTextAlignment(.trailing)
-            }
-            merchantSuggestionRows
+            MerchantPickerRow(title: k == .income ? "Source" : "Merchant",
+                              counterparties: store.counterparties, merchant: $merchant)
             HStack {
                 Text("Note"); Spacer()
                 TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
@@ -274,41 +269,8 @@ struct AddTransactionSheet: View {
         }
     }
 
-    /// Existing counterparties (active ledger) whose name contains the typed
-    /// merchant text, minus an exact match (nothing to suggest there). Capped at 5.
-    private var matchingCounterparties: [Counterparty] {
-        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return [] }
-        return Array(store.counterparties
-            .filter { $0.name.localizedCaseInsensitiveContains(t)
-                   && $0.name.caseInsensitiveCompare(t) != .orderedSame }
-            .prefix(5))
-    }
 
-    /// Suggestion rows shown beneath the Merchant field: matching counterparties
-    /// to pick (the engine links them by name on save), plus a "Create <name>" row
-    /// for a brand-new name (flagged to create on save). Empty for non-expense/income
-    /// or an empty/exact-match field.
-    @ViewBuilder private var merchantSuggestionRows: some View {
-        let t = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        if isLineItem, !t.isEmpty {
-            ForEach(matchingCounterparties) { cp in
-                Button { pickCounterparty(cp.name) } label: {
-                    Label(cp.name, systemImage: "building.2").font(.callout)
-                }
-            }
-            if !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(t) == .orderedSame }) {
-                Button { createCounterpartyOnSave = true } label: {
-                    Label("Create “\(t)”", systemImage: "plus.circle").font(.callout)
-                }
-            }
-        }
-    }
 
-    private func pickCounterparty(_ name: String) {
-        merchant = name
-        createCounterpartyOnSave = false
-    }
 
     @ViewBuilder private var transferFields: some View {
         Section {
@@ -449,13 +411,12 @@ struct AddTransactionSheet: View {
                 }
                 args["status"] = .string(status.rawValue)
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
-                if createCounterpartyOnSave {
-                    let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !cpName.isEmpty,
-                       !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                        try store.apply(.createCounterparty, Args([
-                            "ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
-                    }
+                // Remember any unrecognized merchant name as a counterparty.
+                let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cpName.isEmpty,
+                   !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
+                    try store.apply(.createCounterparty, Args([
+                        "ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
                 }
                 if kind == .refund {
                     args["kind"] = .string("refund")
