@@ -7,9 +7,10 @@ struct PickerOption: Identifiable, Hashable {
 }
 
 /// A form row that shows the current selection and opens a full-height BOTTOM
-/// SHEET (slides up from the bottom) with a searchable single-select list —
-/// replacing the older pushed nav list. Drop-in: same (title, options,
-/// selection) API, so every call site upgrades at once.
+/// SHEET (slides up from the bottom) with a searchable single-select list.
+/// Drop-in: same (title, options, selection) API. The sheet STAGES the tapped
+/// option and commits it on Confirm (Cancel discards) — no accidental change on
+/// a stray tap.
 struct SearchablePickerRow: View {
     let title: String
     let options: [PickerOption]
@@ -38,13 +39,22 @@ struct SearchablePickerRow: View {
     }
 }
 
-/// The sheet body: searchable, single-select, dismisses on choose or Cancel.
+/// The sheet body: searchable, single-select. Tapping stages a choice; Confirm
+/// applies it to the binding and dismisses; Cancel discards.
 private struct SearchablePickerSheet: View {
     let title: String
     let options: [PickerOption]
     @Binding var selection: String
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var staged: String
+
+    init(title: String, options: [PickerOption], selection: Binding<String>) {
+        self.title = title
+        self.options = options
+        self._selection = selection
+        self._staged = State(initialValue: selection.wrappedValue)
+    }
 
     private var filtered: [PickerOption] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -55,13 +65,12 @@ private struct SearchablePickerSheet: View {
         NavigationStack {
             List(filtered) { opt in
                 Button {
-                    selection = opt.id
-                    dismiss()
+                    staged = opt.id
                 } label: {
                     HStack {
                         Text(opt.name)
                         Spacer()
-                        if opt.id == selection { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                        if opt.id == staged { Image(systemName: "checkmark").foregroundStyle(.tint) }
                     }
                     .contentShape(Rectangle())
                 }
@@ -75,6 +84,9 @@ private struct SearchablePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Confirm") { selection = staged; dismiss() }.bold()
                 }
             }
         }
