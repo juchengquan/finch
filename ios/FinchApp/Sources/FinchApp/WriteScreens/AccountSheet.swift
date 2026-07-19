@@ -69,7 +69,7 @@ struct AccountSheet: View {
                     Section("Opening balance") {
                         HStack {
                             Text("Amount"); Spacer()
-                            TextField("0.00", text: $openingBalance)
+                            TextField("0.00", text: $openingBalance.decimalInput)
                                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
                     }

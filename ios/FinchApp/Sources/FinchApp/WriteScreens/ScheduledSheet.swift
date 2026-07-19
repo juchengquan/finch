@@ -82,7 +82,7 @@ struct ScheduledSheet: View {
                     }
                     HStack {
                         Text("Amount"); Spacer()
-                        TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        TextField("0.00", text: $amount.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                     }
                     if !installmentEnabled {
                         Text("Leave empty for a variable amount (entered when posting).")
@@ -128,7 +128,7 @@ struct ScheduledSheet: View {
                     if installmentEnabled {
                         HStack {
                             Text("Number of payments"); Spacer()
-                            TextField("12", text: $installmentTotal).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            TextField("12", text: $installmentTotal.integerInput).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                         }
                     }
                 }
