@@ -7,7 +7,7 @@ import FinchCore
 /// under it, its top quarter to place the dragged category before it, its bottom
 /// quarter to place it after it; the "Top level" zone un-nests. All through the
 /// chokepoint (create / update / deleteCategory).
-struct CategoryAdminView: View {
+struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var expanded: Set<String> = []
     @State private var search = ""
