@@ -34,9 +34,8 @@ struct AdjustBalanceSheet: View {
                     Text("Posts an adjustment for the difference from the account's current balance.")
                 }
                 Section {
-                    // Date-only: adjustAccountBalance takes no time argument.
-                    DatePicker("Date", selection: $date, displayedComponents: [.date])
-                        .environment(\.locale, AppDate.h24Locale)
+                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                        .environment(\.locale, AppDate.h24Locale)   // 24-hour wheel regardless of device setting
                     HStack {
                         Text("Note"); Spacer()
                         TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
@@ -71,6 +70,7 @@ struct AdjustBalanceSheet: View {
             var args: [String: JSONValue] = [
                 "accountId": .string(account.id), "targetBalance": .double(target),
                 "date": .string(AppDate.isoDay.string(from: date)),
+                "time": .string(AppDate.isoTime.string(from: date)),
             ]
             if !note.isEmpty { args["note"] = .string(note) }
             try store.apply(.adjustAccountBalance, Args(args))

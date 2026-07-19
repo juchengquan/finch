@@ -493,6 +493,20 @@ test('postAdjustment books the delta against the adjustment equity category', as
   const eq = await exec('SELECT amount_base FROM postings WHERE entry_id = ? AND category_id = ?', [entryId, sys.adjustment]);
   expect(Number(eq[0].amount_base)).toBe(12.34);
   expect(await balanceOf(exec, 'a-adj')).toBe(-12.34);
+  // No time given → the entry's time column stays NULL.
+  const [noTime] = await exec('SELECT time FROM entries WHERE id = ?', [entryId]);
+  expect(noTime.time).toBeNull();
+});
+
+test('postAdjustment stores an optional time-of-day when given', async () => {
+  const exec = await newDb();
+  await withTestLedger(exec);
+  await addAccount(exec, 'a-adjt', 'SGD', 'lt');
+  const res = await postAdjustment(exec, {
+    ledgerId: 'lt', accountId: 'a-adjt', delta: 20, date: '2026-06-04', time: '14:30',
+  });
+  const [e] = await exec('SELECT time FROM entries WHERE id = ?', [res!.entryId]);
+  expect(String(e.time)).toBe('14:30');
 });
 
 test('postSimple defaults kind by sign', async () => {

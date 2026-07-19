@@ -37,6 +37,7 @@ export type Args = {
     accountId: string;
     targetBalance: number;
     date?: string;
+    time?: string;
     note?: string;
     source?: 'reconcile' | 'manual';
   };

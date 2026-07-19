@@ -308,7 +308,7 @@ struct AddTransactionSheet: View {
             Text("Posts an adjustment for the difference from the account's current balance.")
         }
         Section {
-            DatePicker("Date", selection: $date, displayedComponents: [.date])
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.locale, AppDate.h24Locale)
             HStack {
                 Text("Note"); Spacer()
@@ -412,7 +412,8 @@ struct AddTransactionSheet: View {
             guard let target = DecimalInput.parse(targetBalance) else { errorMessage = "Enter a new balance."; return }
             do {
                 var args: [String: JSONValue] = [
-                    "accountId": .string(accountId), "targetBalance": .double(target), "date": .string(Self.day(date)),
+                    "accountId": .string(accountId), "targetBalance": .double(target),
+                    "date": .string(Self.day(date)), "time": .string(Self.time(date)),
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
                 try store.apply(.adjustAccountBalance, Args(args))
