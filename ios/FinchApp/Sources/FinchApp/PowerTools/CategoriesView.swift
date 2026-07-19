@@ -177,10 +177,12 @@ struct CategoriesView: View {
         } else {
             rowContent(item, counts)
                 .swipeActions(edge: .trailing) {
+                    // Edit is declared first so it sits at the outer edge and is the
+                    // full-swipe action — a careless full swipe edits, never deletes.
+                    Button { editing = c } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
                     // Not role: .destructive — see ActivityTab (fake removal
                     // animation kills the row-anchored popout).
                     Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
-                    Button { editing = c } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
                 }
                 .contextMenu {
                     Button { editing = c } label: { Label("Edit", systemImage: "pencil") }
