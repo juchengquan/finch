@@ -113,6 +113,14 @@ Mirror `CategoriesView`'s merge, dropping the tree/kind-specific parts:
 - **Saved-search tag filters** (per-device `UserDefaults`, not the DB) are not
   repointed. A merged-away id lingering in a saved filter simply matches nothing —
   harmless; documented, not fixed here.
+- **Rule *conditions* on a tag id** (a rule that *matches on* a tag via `has` /
+  `has_any` / `has_all`) are **not** repointed — only rule *actions* (`add_tag` /
+  `remove_tag`) are. A rule whose condition tests a merged-away tag quietly stops
+  matching it; this is non-corrupting (the merged transactions still carry the
+  target tag) and the same harmless-stale-id class as saved-search filters. It
+  also mirrors category merge, which repoints no rules at all, so a
+  `category_id` *condition* goes equally stale. A future follow-up may repoint
+  conditions for **both** tags and categories together.
 - **Scheduled templates** carry no tag ids (verified — no tag column), so nothing
   to repoint there.
 - No reorder, icons, kind, or hierarchy (tags remain flat/color-only, per #520).
