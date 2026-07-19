@@ -103,7 +103,8 @@ struct AccountSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                 }
             }
         }

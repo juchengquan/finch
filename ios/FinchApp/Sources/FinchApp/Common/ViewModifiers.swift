@@ -16,4 +16,11 @@ extension View {
             Text(message.wrappedValue ?? "")
         }
     }
+
+    /// Accent-filled prominent styling for a toolbar confirm/save ✓ button.
+    /// `.borderedProminent` is iOS 15+/macOS 12+ safe; on iOS 26 the system
+    /// auto-upgrades a prominent toolbar button to prominent Liquid Glass.
+    func confirmCheckmarkStyle() -> some View {
+        buttonStyle(.borderedProminent).tint(.accentColor)
+    }
 }

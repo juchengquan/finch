@@ -34,8 +34,8 @@ struct ArchivedAccountsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Image(systemName: "checkmark") }
-                    .accessibilityLabel("Done")
+                Button { dismiss() } label: { Image(systemName: "xmark") }
+                    .accessibilityLabel("Close")
             }
         }
     }

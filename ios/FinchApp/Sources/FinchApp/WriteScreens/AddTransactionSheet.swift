@@ -122,7 +122,8 @@ struct AddTransactionSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Save").bold()
+                        .accessibilityLabel("Save")
+                        .confirmCheckmarkStyle()
                         // Anchored on ✓ — the save that raised it (iOS 26
                         // positions popouts at their source).
                         .confirmationDialog("Possible duplicate", isPresented: Binding(
