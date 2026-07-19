@@ -113,8 +113,8 @@ struct TransactionFilterSheet: View {
                     if useTo { DatePicker("To date", selection: $toDate, displayedComponents: .date).labelsHidden() }
                 }
                 Section("Amount range") {
-                    HStack { Text("Min"); Spacer(); TextField("0", text: $minText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                    HStack { Text("Max"); Spacer(); TextField("∞", text: $maxText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                    HStack { Text("Min"); Spacer(); TextField("0", text: $minText.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                    HStack { Text("Max"); Spacer(); TextField("∞", text: $maxText.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 }
                 Section {
                     Button("Clear all", role: .destructive) {

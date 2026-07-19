@@ -188,7 +188,7 @@ struct ContributeSheet: View {
             Form {
                 HStack {
                     Text("Amount"); Spacer()
-                    TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    TextField("0.00", text: $amount.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }

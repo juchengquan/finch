@@ -1,0 +1,49 @@
+import XCTest
+@testable import FinchApp
+
+final class DecimalInputTests: XCTestCase {
+    // MARK: filter — decimal
+    func test_keeps_plain_decimal() {
+        XCTAssertEqual(DecimalInput.filter("12.34", allowsDecimal: true), "12.34")
+    }
+    func test_strips_letters_and_symbols() {
+        XCTAssertEqual(DecimalInput.filter("1a2b.3c", allowsDecimal: true), "12.3")
+        XCTAssertEqual(DecimalInput.filter("$1 234", allowsDecimal: true), "1234")
+    }
+    func test_keeps_comma_separator() {
+        XCTAssertEqual(DecimalInput.filter("1,5", allowsDecimal: true), "1,5")
+    }
+    func test_last_separator_wins_grouping_collapses() {
+        XCTAssertEqual(DecimalInput.filter("1,234.50", allowsDecimal: true), "1234.50")
+        XCTAssertEqual(DecimalInput.filter("1.234,50", allowsDecimal: true), "1234,50")
+        XCTAssertEqual(DecimalInput.filter("1.2.3", allowsDecimal: true), "12.3")
+    }
+    func test_leading_minus_kept_midstring_dropped() {
+        XCTAssertEqual(DecimalInput.filter("-5.5", allowsDecimal: true), "-5.5")
+        XCTAssertEqual(DecimalInput.filter("5-3", allowsDecimal: true), "53")
+        XCTAssertEqual(DecimalInput.filter("--5", allowsDecimal: true), "-5")
+    }
+    func test_intermediate_states_preserved() {
+        XCTAssertEqual(DecimalInput.filter("-", allowsDecimal: true), "-")
+        XCTAssertEqual(DecimalInput.filter(".", allowsDecimal: true), ".")
+        XCTAssertEqual(DecimalInput.filter("", allowsDecimal: true), "")
+    }
+    // MARK: filter — integer
+    func test_integer_strips_separators() {
+        XCTAssertEqual(DecimalInput.filter("12.5", allowsDecimal: false), "125")
+        XCTAssertEqual(DecimalInput.filter("1,2a3", allowsDecimal: false), "123")
+        XCTAssertEqual(DecimalInput.filter("-7", allowsDecimal: false), "-7")
+    }
+    // MARK: parse — comma normalize (locale-independent)
+    func test_parse_dot_and_comma() {
+        XCTAssertEqual(DecimalInput.parse("1.5"), 1.5)
+        XCTAssertEqual(DecimalInput.parse("1,5"), 1.5)
+        XCTAssertEqual(DecimalInput.parse("0,89"), 0.89)
+        XCTAssertEqual(DecimalInput.parse("-5"), -5)
+        XCTAssertEqual(DecimalInput.parse("1000"), 1000)
+    }
+    func test_parse_empty_and_junk_nil() {
+        XCTAssertNil(DecimalInput.parse(""))
+        XCTAssertNil(DecimalInput.parse("abc"))
+    }
+}

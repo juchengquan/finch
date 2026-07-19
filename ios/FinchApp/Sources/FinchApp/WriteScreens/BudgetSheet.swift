@@ -58,7 +58,7 @@ struct BudgetSheet: View {
                         .pickerStyle(.segmented)
                     HStack {
                         Text("Amount"); Spacer()
-                        TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        TextField("0.00", text: $amount.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                     }
                     Picker("Frequency", selection: $frequency) {
                         ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
@@ -112,7 +112,7 @@ struct BudgetSheet: View {
                         if rollover {
                             HStack {
                                 Text("Cap"); Spacer()
-                                TextField("Optional", text: $rolloverCap)
+                                TextField("Optional", text: $rolloverCap.decimalInput)
                                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                             }
                         }
