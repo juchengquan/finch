@@ -116,19 +116,6 @@ struct EditTransactionSheet: View {
     }
     private var effectiveKind: String { canReclassify ? selectedKind.rawValue : (txn.kind ?? "expense") }
 
-    /// Top control state: nil hides the control (adjustment/opening rows).
-    private var typeControlKind: TxTypeControl.Kind? {
-        switch txn.kind {
-        case "transfer": return .transfer
-        case "adjustment", "opening": return nil
-        default: return TxTypeControl.Kind(rawValue: effectiveKind) ?? .expense
-        }
-    }
-    /// Line items reclassify across expense/income/refund; everything else locks.
-    private var typeControlEnabled: Set<TxTypeControl.Kind> {
-        canReclassify ? [.expense, .income, .refund] : []
-    }
-
     private var categories: [CategoryRow] {
         store.pickableCategories.filter { effectiveKind == "income" ? $0.kind == "income" : $0.kind != "income" }
     }
@@ -322,11 +309,37 @@ struct EditTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
+                // Native segmented Picker (system crystal glass) — same control as
+                // Settings' Theme toggle. Line items reclassify across the 3 kinds;
+                // a transfer shows a locked single segment; adjustment/opening none.
                 ToolbarItem(placement: .principal) {
-                    if let kind = typeControlKind {
-                        TxTypeControl(selected: kind, enabled: typeControlEnabled) { k in
-                            if let ek = EditKind(rawValue: k.rawValue) { selectedKind = ek }
+                    if canReclassify {
+                        Picker("Type", selection: $selectedKind) {
+                            ForEach(EditKind.allCases) { k in
+                                Image(systemName: TxnKindIcon.icon(for: k.rawValue))
+                                    .accessibilityLabel(k.label).tag(k)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .frame(width: 150)
+                        #if os(iOS)
+                        // Scrub-anywhere (matches the Add sheet).
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 0).onChanged { v in
+                                let all = EditKind.allCases
+                                let seg = 150.0 / CGFloat(all.count)
+                                let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                                if all[idx] != selectedKind { selectedKind = all[idx] }
+                            }
+                        )
+                        #endif
+                    } else if txn.kind == "transfer" {
+                        Picker("Type", selection: .constant(0)) {
+                            Image(systemName: TxnKindIcon.icon(for: "transfer")).tag(0)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 52)
+                        .disabled(true)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {

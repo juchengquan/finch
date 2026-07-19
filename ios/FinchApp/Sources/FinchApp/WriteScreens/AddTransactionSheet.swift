@@ -120,11 +120,31 @@ struct AddTransactionSheet: View {
                         .accessibilityLabel("Cancel")
                 }
                 // Transaction type — the shared glass control (sliding glass thumb).
+                // Native segmented Picker — same control as the Theme toggle in
+                // Settings › Appearance, so it gets the system's crystal Liquid
+                // Glass selection (a custom View can't reproduce that).
                 ToolbarItem(placement: .principal) {
-                    TxTypeControl(selected: TxTypeControl.Kind(rawValue: kind.rawValue) ?? .expense,
-                                  enabled: Set(TxTypeControl.Kind.allCases)) { k in
-                        if let nk = Kind(rawValue: k.rawValue) { kind = nk }
+                    Picker("Type", selection: $kind) {
+                        ForEach(Kind.allCases) { k in
+                            Image(systemName: k.iconName).accessibilityLabel(k.label).tag(k)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                    #if os(iOS)
+                    // Scrub-anywhere: a native segmented control only drags from the
+                    // selected thumb — this lets a press on ANY segment grab the
+                    // crystal pill and follow the finger. simultaneous so plain taps
+                    // still reach the control.
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0).onChanged { v in
+                            let all = Kind.allCases
+                            let seg = 200.0 / CGFloat(all.count)
+                            let idx = max(0, min(all.count - 1, Int(v.location.x / seg)))
+                            if all[idx] != kind { kind = all[idx] }
+                        }
+                    )
+                    #endif
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
