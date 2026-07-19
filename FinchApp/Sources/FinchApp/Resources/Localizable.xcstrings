@@ -1,6 +1,46 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%1$@ is removed from %2$lld transactions.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 将从 %2$lld 笔交易中移除。"
+          }
+        }
+      }
+    },
+    "New tag": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建标签"
+          }
+        }
+      }
+    },
+    "No tags yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无标签"
+          }
+        }
+      }
+    },
+    "Tap + to add one.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击 + 添加一个。"
+          }
+        }
+      }
+    },
     "%1$@ / %2$@": {},
     "%1$@ is %2$@.": {
       "localizations": {

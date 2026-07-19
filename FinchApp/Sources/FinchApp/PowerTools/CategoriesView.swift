@@ -551,16 +551,3 @@ struct CategoryEditSheet: View {
         } catch { errorMessage = i18nMessage(error) }
     }
 }
-
-/// Cross-platform search: uses `.navigationBarDrawer(displayMode:.always)` on iOS
-/// (keeps search bar always visible) and the default placement on macOS.
-private struct SearchableModifier: ViewModifier {
-    @Binding var text: String
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always))
-        #else
-        content.searchable(text: $text)
-        #endif
-    }
-}
