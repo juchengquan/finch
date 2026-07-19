@@ -154,18 +154,21 @@ struct EditTransactionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack {
-                        Text("Merchant"); Spacer()
-                        TextField("", text: $merchant).multilineTextAlignment(.trailing)
+                // Line items build their own primary section (Account/Amount/
+                // Category/Date) below; split & transfer keep Date here.
+                if isSplit || transferLegs != nil {
+                    Section {
+                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
+                        // Transfers have no Merchant field (design), but previously
+                        // exposed Note via this shared top section — keep that.
+                        if transferLegs != nil {
+                            HStack {
+                                Text("Note"); Spacer()
+                                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                            }
+                        }
                     }
-                    merchantSuggestionRows
-                    HStack {
-                        Text("Note"); Spacer()
-                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
-                    }
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
                 }
                 if isSplit {
                     Section("Split") {
@@ -198,7 +201,9 @@ struct EditTransactionSheet: View {
                         }
                     }
                 } else {
-                    Section("Amount & category") {
+                    Section {
+                        SearchablePickerRow(title: "Account",
+                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                         HStack {
                             Text("Amount")
                             Spacer()
@@ -211,42 +216,43 @@ struct EditTransactionSheet: View {
                         }
                         SearchablePickerRow(title: "Category",
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
-                        Button("Split across categories…") { showingSplit = true }
-                    }
-                }
-
-                if txn.kind != "transfer" {
-                    Section("Account") {
-                        SearchablePickerRow(title: "Account",
-                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
-                    }
-                }
-                if effectiveKind == "refund" {
-                    Section("Refund") {
-                        Button { showingRefundPicker = true } label: {
-                            HStack {
-                                Text("Refunds"); Spacer()
-                                Text(refundedSummary).foregroundStyle(.secondary)
-                            }
+                        DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.locale, AppDate.h24Locale)
+                        if effectiveKind != "refund", (DecimalInput.parse(amountText) ?? 0) != 0 {
+                            Button("Split…") { showingSplit = true }
                         }
-                    }
-                }
-
-                if !store.tags.isEmpty {
-                    Section("Tags") {
-                        ForEach(store.tags) { tag in
-                            Button { toggleTag(tag.id) } label: {
+                        // Refund link inline in the primary section (matches the Add sheet).
+                        if effectiveKind == "refund" {
+                            Button { showingRefundPicker = true } label: {
                                 HStack {
-                                    Text(tag.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                    Text("Refunds"); Spacer()
+                                    Text(refundedSummary).foregroundStyle(.secondary)
                                 }
                             }
                         }
                     }
                 }
 
-                Section("Receipts") {
+                // Split still needs an Account row (line items have it above; transfer doesn't).
+                if isSplit {
+                    Section("Account") {
+                        SearchablePickerRow(title: "Account",
+                            options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                    }
+                }
+                // Status directly after the primary/split rows (matches the Add sheet).
+                Section {
+                    Picker("Status", selection: $status) {
+                        Text("Confirmed").tag(Entries.Status.confirmed)
+                        Text("Pending").tag(Entries.Status.pending)
+                    }
+                }
+
+                if !store.tags.isEmpty {
+                    Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
+                }
+
+                Section("Receipt") {
                     ForEach(attachments) { att in
                         Button { previewURL = store.attachmentURL(for: att) } label: {
                             HStack {
@@ -278,12 +284,31 @@ struct EditTransactionSheet: View {
                     #endif
                 }
 
-                Section {
-                    Picker("Status", selection: $status) {
-                        Text("Confirmed").tag(Entries.Status.confirmed)
-                        Text("Pending").tag(Entries.Status.pending)
+                if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
+                    Section("Details") {
+                        HStack {
+                            Text(effectiveKind == "income" ? "Source" : "Merchant"); Spacer()
+                            TextField("", text: $merchant).multilineTextAlignment(.trailing)
+                        }
+                        merchantSuggestionRows
+                        HStack {
+                            Text("Note"); Spacer()
+                            TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                        }
                     }
                 }
+                // Adjustment/opening entries have no payee, so no Merchant row —
+                // but keep an editable Note (e.g. "year-end reconciliation").
+                if txn.kind == "adjustment" || txn.kind == "opening" {
+                    Section("Details") {
+                        HStack {
+                            Text("Note"); Spacer()
+                            TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+                        }
+                    }
+                }
+
+                // Edit-only meta actions at the very bottom.
                 Section {
                     Button(txn.reviewedAt == nil ? "Mark reviewed" : "Unmark reviewed") {
                         run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
@@ -464,7 +489,7 @@ struct EditTransactionSheet: View {
                     try store.apply(.updateTransfer, Args(["id": .string(txn.id), "patch": .object(patch)]))
                 }
                 var legPatch: [String: JSONValue] = [:]
-                if merchant != txn.merchant { legPatch["merchant"] = .string(merchant.isEmpty ? "Untitled" : merchant) }
+                // (Transfers have no Merchant field in the UI — merchant can't change here.)
                 if status != (txn.pending == true ? .pending : .confirmed) { legPatch["status"] = .string(status.rawValue) }
                 if !legPatch.isEmpty {
                     try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(legPatch)]))
@@ -476,10 +501,6 @@ struct EditTransactionSheet: View {
                 dismiss()
             } catch { errorMessage = i18nMessage(error) }
         }
-    }
-
-    private func toggleTag(_ id: String) {
-        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
     }
 
     /// Run a lifecycle action then dismiss (these don't re-edit the open form).

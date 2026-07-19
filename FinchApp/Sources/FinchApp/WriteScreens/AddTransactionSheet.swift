@@ -95,24 +95,13 @@ struct AddTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                #if os(iOS)
-                // Page-style TabView so a horizontal swipe interactively drags the
-                // next type's form in with the finger. The type switcher's Liquid
-                // Glass is the self-contained glass THUMB on TxTypeControl (not the
-                // toolbar refracting scrolled content), so the pager doesn't affect
-                // it — swipe and glass coexist.
-                TabView(selection: $kind) {
-                    ForEach(Kind.allCases) { k in
-                        formPage(k).tag(k)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .background(Color(uiColor: .systemGroupedBackground))
-                #else
-                formPage(kind)
-                #endif
-            }
+            // A plain Form (type switches on TAP of the toolbar segmented
+            // control), exactly like the Edit sheet. The previous paged TabView
+            // enabled finger-swipe between types but sat between the nav bar and
+            // the scroll view, breaking the translucent scroll-edge header and
+            // the bottom safe-area inset (masked the last row) — dropping it
+            // restores the system's native header + bottom behavior for free.
+            formPage(kind)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -195,32 +184,13 @@ struct AddTransactionSheet: View {
                 }
 
                 Section {
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                        .environment(\.locale, AppDate.h24Locale)   // 24-hour time wheel regardless of device setting
-                    HStack {
-                        Text("Note"); Spacer()
-                        TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
-                    }
-                }
-
-                Section {
                     Picker("Status", selection: $status) {
                         Text("Confirmed").tag(Entries.Status.confirmed)
                         Text("Pending").tag(Entries.Status.pending)
                     }
                 }
                 if !store.tags.isEmpty {
-                    Section("Tags") {
-                        ForEach(store.tags) { tag in
-                            Button { toggleTag(tag.id) } label: {
-                                HStack {
-                                    Text(tag.name).foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTags.contains(tag.id) { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                }
-                            }
-                        }
-                    }
+                    Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
                 }
                 if k == .expense || k == .income || k == .refund {
                     Section("Receipt") {
@@ -238,28 +208,34 @@ struct AddTransactionSheet: View {
                         #endif
                     }
                 }
+                if k == .expense || k == .income || k == .refund {
+                    detailsSection(for: k)
+                }
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 }
             }
             #if os(iOS)
+            // Pull the "Expense" caption close under the nav bar. A plain Form in
+            // a NavigationStack gets the system's translucent scroll-edge header +
+            // bottom safe-area inset natively (matching the Edit sheet and the
+            // main tabs) — no background/toolbar overrides needed.
             .contentMargins(.top, 6, for: .scrollContent)
             #endif
     }
 
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
+            SearchablePickerRow(title: "Account",
+                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
-            HStack {
-                Text(k == .income ? "Source" : "Merchant"); Spacer()
-                TextField("", text: $merchant).multilineTextAlignment(.trailing)
-            }
-            merchantSuggestionRows
             if pendingSplits == nil {
                 SearchablePickerRow(title: "Category",
                     options: categories(for: k).map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
             }
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.locale, AppDate.h24Locale)
             if k != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
                 Button {
                     showingSplit = true
@@ -271,8 +247,6 @@ struct AddTransactionSheet: View {
                     }
                 }
             }
-            SearchablePickerRow(title: "Account",
-                options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     HStack {
@@ -281,6 +255,21 @@ struct AddTransactionSheet: View {
                         Text(refundedSummary).foregroundStyle(.secondary)
                     }
                 }
+            }
+        }
+    }
+
+    /// Merchant/Source + Note — optional free-text, shown as the LAST section.
+    @ViewBuilder private func detailsSection(for k: Kind) -> some View {
+        Section("Details") {
+            HStack {
+                Text(k == .income ? "Source" : "Merchant"); Spacer()
+                TextField("", text: $merchant).multilineTextAlignment(.trailing)
+            }
+            merchantSuggestionRows
+            HStack {
+                Text("Note"); Spacer()
+                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
             }
         }
     }
@@ -336,6 +325,14 @@ struct AddTransactionSheet: View {
             } else {
                 transferAmountRow("To amount", text: $amount, currency: currency(of: toAccountId), mirrored: true)
             }
+            // Transfer has no Merchant/category, so Date + Note live here (the
+            // reorder moved the shared Date/Note section into the line-item path).
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.locale, AppDate.h24Locale)
+            HStack {
+                Text("Note"); Spacer()
+                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            }
         }
     }
 
@@ -368,9 +365,6 @@ struct AddTransactionSheet: View {
         }
     }
 
-    private func toggleTag(_ id: String) {
-        if selectedTags.contains(id) { selectedTags.remove(id) } else { selectedTags.insert(id) }
-    }
 
     /// Default the pickers to the first valid option (and the first two distinct
     /// accounts for a transfer) once the projected store is available.
@@ -391,9 +385,14 @@ struct AddTransactionSheet: View {
             let preferred = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
             accountId = preferred ?? accounts.first?.id ?? ""
         }
-        if categoryId.isEmpty || !categories.contains(where: { $0.id == categoryId }) {
-            let preferred = defaultCategoryId.flatMap { id in categories.first { $0.id == id }?.id }
-            categoryId = preferred ?? categories.first?.id ?? ""
+        // Only seed a category from a prefill/duplicate or an explicit
+        // defaultCategoryId — a FRESH add starts uncategorized (no default),
+        // so the user makes an intentional choice.
+        if !categoryId.isEmpty, !categories.contains(where: { $0.id == categoryId }) {
+            categoryId = ""
+        }
+        if categoryId.isEmpty, let id = defaultCategoryId, categories.contains(where: { $0.id == id }) {
+            categoryId = id
         }
         if fromAccountId.isEmpty { fromAccountId = accounts.first?.id ?? "" }
         if toAccountId.isEmpty { toAccountId = accounts.dropFirst().first?.id ?? accounts.first?.id ?? "" }
@@ -402,9 +401,10 @@ struct AddTransactionSheet: View {
 
     private func save() {
         errorMessage = nil
-        // Keep category valid when the type toggles between expense/income.
-        if kind != .transfer, !categories.contains(where: { $0.id == categoryId }) {
-            categoryId = categories.first?.id ?? ""
+        // Drop a category that isn't valid for the (possibly toggled) type;
+        // stays empty otherwise (uncategorized is allowed).
+        if kind != .transfer, !categoryId.isEmpty, !categories.contains(where: { $0.id == categoryId }) {
+            categoryId = ""
         }
         guard let value = DecimalInput.parse(amount), value != 0 else { errorMessage = "Enter an amount."; return }
         let ymd = Self.day(date)
@@ -439,7 +439,7 @@ struct AddTransactionSheet: View {
                 var args: [String: JSONValue] = [
                     "ledgerId": .string(store.activeLedgerId), "accountId": .string(accountId),
                     "amount": .double(signed), "merchant": .string(merchant.isEmpty ? fallback : merchant),
-                    "categoryId": .string(categoryId), "date": .string(ymd), "time": .string(hm),
+                    "categoryId": categoryId.isEmpty ? .null : .string(categoryId), "date": .string(ymd), "time": .string(hm),
                 ]
                 if !note.isEmpty { args["note"] = .string(note) }
                 // Foreign-currency entry: pass the chosen currency so the engine
