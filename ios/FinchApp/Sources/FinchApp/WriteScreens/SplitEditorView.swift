@@ -81,7 +81,7 @@ struct SplitEditorView: View {
                             CategoryTreeButton(categories: categories, selection: $row.categoryId)
                             TextField("0.00", text: $row.amount)
                                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
-                            Text(displayCurrency).foregroundStyle(.secondary)
+                            Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
                         }
                     }
                     .onDelete { rows.remove(atOffsets: $0) }
