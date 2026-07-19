@@ -28,6 +28,7 @@ struct SettingsAppearanceView: View {
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
+    @AppStorage("finch.addSheet.showAdjustBalance") private var showAdjustInAddSheet = false
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
     @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
     @State private var showRelaunchNote = false
@@ -82,6 +83,11 @@ struct SettingsAppearanceView: View {
             }
             Section("Accounts") {
                 Toggle("Show opening balance", isOn: $showOpeningBalance)
+            }
+            Section {
+                Toggle("Adjust Balance in Add sheet", isOn: $showAdjustInAddSheet)
+            } footer: {
+                Text("Adds an Adjust Balance type to the Add-transaction sheet. It's always available from an account's \u{22EF} menu.")
             }
             Section {
                 Toggle("Floating add button", isOn: $fabEnabled)
