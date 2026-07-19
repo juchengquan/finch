@@ -122,7 +122,7 @@ private struct TagPickerSheet: View {
             .sheet(item: $creating) { new in
                 TagEditSheet(tag: nil, prefillName: new.name, onCreated: { id in staged.insert(id) })
                     #if os(iOS)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     #endif
             }
