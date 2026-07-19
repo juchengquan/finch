@@ -108,6 +108,7 @@ struct AddLedgerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var base = "USD"
+    @State private var startFrom: String? = nil
     @State private var errorMessage: String?
 
     var body: some View {
@@ -116,6 +117,10 @@ struct AddLedgerSheet: View {
                 TextField("Name", text: $name)
                 TextField("Base currency (e.g. USD)", text: $base)
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                Picker("Start from", selection: $startFrom) {
+                    Text("Blank").tag(String?.none)
+                    ForEach(store.ledgers) { l in Text(l.name).tag(Optional(l.id)) }
+                }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
             }
             .navigationTitle("New Ledger")
@@ -144,6 +149,10 @@ struct AddLedgerSheet: View {
                 "id": .string(id), "name": .string(trimmed),
                 "base": .string(base.trimmingCharacters(in: .whitespaces).uppercased()),
             ]))
+            if let from = startFrom {
+                try? store.apply(.copyCategories, Args(["fromLedgerId": .string(from), "toLedgerId": .string(id)]))
+                try? store.apply(.copyTags, Args(["fromLedgerId": .string(from), "toLedgerId": .string(id)]))
+            }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
     }
