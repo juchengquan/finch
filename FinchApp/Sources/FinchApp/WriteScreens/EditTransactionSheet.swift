@@ -116,7 +116,7 @@ struct EditTransactionSheet: View {
         HStack {
             Text(label)
             Spacer()
-            TextField("0.00", text: text)
+            TextField("0.00", text: text.decimalInput)
                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                 .disabled(mirrored)
                 .foregroundStyle(mirrored ? Color.secondary : Color.primary)
@@ -179,7 +179,7 @@ struct EditTransactionSheet: View {
                         HStack {
                             Text("Amount")
                             Spacer()
-                            TextField("0.00", text: $amountText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            TextField("0.00", text: $amountText.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                             // Currency lives inline with the amount, always visible.
                             Picker("", selection: $currencyCode) {
                                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
