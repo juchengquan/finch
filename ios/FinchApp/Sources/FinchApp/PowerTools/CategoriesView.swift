@@ -129,9 +129,11 @@ struct CategoriesView: View {
         } message: { pair in
             if let msg = mergeImpactMessage(txCount: mergeTxCount(pair.a, pair.b)) { Text(msg) }
         }
-        .confirmationDialog("Keep which name?", isPresented: Binding(
+        // Centered alert (the delete-confirmation style), not a bottom action-sheet
+        // popout — consistent with deletes and the pairwise merge prompt.
+        .alert("Keep which name?", isPresented: Binding(
             get: { mergeManySurvivorChoice != nil }, set: { if !$0 { mergeManySurvivorChoice = nil } }),
-            titleVisibility: .visible, presenting: mergeManySurvivorChoice) { picks in
+            presenting: mergeManySurvivorChoice) { picks in
             ForEach(picks) { survivor in
                 Button("Keep \"\(survivor.name)\"") { mergeMany(keeping: survivor, from: picks) }
             }
