@@ -63,6 +63,7 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case createCategory
     case updateCategory
     case deleteCategory
+    case mergeCategory
 
     // --- tags (3) ---
     case createTag

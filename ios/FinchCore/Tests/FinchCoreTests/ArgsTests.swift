@@ -5,7 +5,7 @@ final class ArgsTests: XCTestCase {
     /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment`
     /// + the native-first `setBudgetOrder` + `setTrackedCurrencies` = 77.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 77)
+        XCTAssertEqual(ActionName.allCases.count, 78)
     }
 
     func test_actionNameRawValues() {
