@@ -65,8 +65,12 @@ struct CategoriesView: View {
             presenting: deleting) { c in
             Button("Delete", role: .destructive) { delete(c) }
             Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("Its subcategories move up a level — they won't be deleted.")
+        } message: { c in
+            if let msg = deleteImpactMessage(
+                txCount: counts[c.id] ?? 0,
+                subcatCount: rows.filter { $0.parentId == c.id }.count) {
+                Text(msg)
+            }
         }
     }
 
