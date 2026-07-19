@@ -49,7 +49,11 @@ struct EditTransactionSheet: View {
     /// The original native (account-currency) amount, the basis for the edit.
     private var originalNative: Double { txn.nativeAmount ?? txn.amount }
     /// A split transaction owns its categories via legs — hide amount/category here.
-    private var isSplit: Bool { (txn.splits?.count ?? 0) >= 2 }
+    /// `txn` re-read from the LIVE store projection (not the init-time snapshot), so a
+    /// split applied in-session via SplitEditorView reflects here immediately instead of
+    /// leaving the sheet on the stale single-category view.
+    private var liveTxn: Tx { store.txns.first(where: { $0.id == txn.id }) ?? txn }
+    private var isSplit: Bool { (liveTxn.splits?.count ?? 0) >= 2 }
     private var refundedSummary: String {
         guard let id = refundedTxId, let t = store.txns.first(where: { $0.id == id }) else { return "Optional" }
         return t.merchant.isEmpty ? t.date : t.merchant
@@ -143,7 +147,7 @@ struct EditTransactionSheet: View {
                     Section("Split") {
                         Button { showingSplit = true } label: {
                             HStack {
-                                Text("Split across \(txn.splits?.count ?? 0) categories")
+                                Text("Split across \(liveTxn.splits?.count ?? 0) categories")
                                 Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                             }
@@ -335,7 +339,7 @@ struct EditTransactionSheet: View {
             } message: { _ in
                 Text("The file is deleted permanently.")
             }
-            .sheet(isPresented: $showingSplit) { SplitEditorView(txn: txn) }
+            .sheet(isPresented: $showingSplit) { SplitEditorView(txn: liveTxn) }
             .quickLookPreview($previewURL)
             .sheet(isPresented: $showingRefundPicker) { RefundSourcePickerView { refundedTxId = $0 } }
             .onAppear {
