@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Locale-aware parse + live input filtering for numeric text fields.
+/// Parse + live input filtering for numeric text fields. Decimal input uses "." as
+/// the only decimal separator ("," is rejected on input); `parse` reads plain "."
+/// decimals.
 enum DecimalInput {
     private static let formatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -9,48 +11,50 @@ enum DecimalInput {
         return f
     }()
 
-    /// Parse decimal text to a Double. The input carries at most one separator (the
-    /// filter guarantees it), so a lone comma is normalized to a dot first — this
-    /// makes comma-decimal users parse correctly regardless of device locale. Falls
-    /// back to the locale formatter last (for any grouping-formatted seed strings).
+    /// Parse decimal text (a plain "." decimal, as produced by `filter`) to a Double.
+    /// Falls back to the locale formatter for any grouping-formatted seed strings.
     static func parse(_ s: String) -> Double? {
-        var t = s.trimmingCharacters(in: .whitespaces)
+        let t = s.trimmingCharacters(in: .whitespaces)
         if t.isEmpty { return nil }
-        if !t.contains("."), t.contains(",") {
-            t = t.replacingOccurrences(of: ",", with: ".")
-        }
         if let d = Double(t) { return d }
         return formatter.number(from: t)?.doubleValue
     }
 
     /// Strip a live text-field string to a valid numeric string. Keeps an optional
-    /// leading "-" and ASCII digits; for decimals, keeps the LAST separator ("." or
-    /// ",") as the decimal point and drops earlier separators (so pasted grouping
-    /// like "1,234.50" collapses to "1234.50", while a typed "1,5" stays "1,5").
-    /// Everything else is removed. Does NOT reformat; intermediate "-"/"." survive.
+    /// leading "-" and ASCII digits; for decimals, keeps the FIRST "." and drops every
+    /// later separator (so once a number has a decimal point, another is ignored —
+    /// "5.4." → "5.4", "5.4.4.4" → "5.444"). "," is NOT a decimal separator here — it is
+    /// removed like any other stray character, along with letters, spaces, currency
+    /// symbols, and grouping. Does NOT reformat; intermediate "-"/"." survive so typing
+    /// isn't blocked.
     static func filter(_ s: String, allowsDecimal: Bool) -> String {
-        let negative = s.first == "-"
-        var kept = s.filter { ($0.isASCII && $0.isNumber) || (allowsDecimal && ($0 == "." || $0 == ",")) }
-        if allowsDecimal, let lastSep = kept.lastIndex(where: { $0 == "." || $0 == "," }) {
-            let intPart = kept[..<lastSep].filter { $0 != "." && $0 != "," }
-            let fracPart = kept[kept.index(after: lastSep)...]
-            kept = intPart + String(kept[lastSep]) + fracPart
+        var out = ""
+        var sawSeparator = false
+        for (i, ch) in s.enumerated() {
+            if ch == "-" {
+                if i == 0 { out.append(ch) }                 // only a leading minus
+            } else if ch.isASCII && ch.isNumber {            // 0–9
+                out.append(ch)
+            } else if allowsDecimal && ch == "." {           // "." only — comma rejected
+                if !sawSeparator { out.append(ch); sawSeparator = true }
+            }
+            // else: strip
         }
-        return (negative ? "-" : "") + kept
+        return out
     }
 }
 
-extension Binding where Value == String {
-    /// A decimal-only mirror of this string binding: the setter runs
-    /// `DecimalInput.filter(_, allowsDecimal: true)` so the field can only hold a
-    /// valid decimal string. Reads pass through unchanged.
-    var decimalInput: Binding<String> {
-        Binding(get: { wrappedValue },
-                set: { wrappedValue = DecimalInput.filter($0, allowsDecimal: true) })
-    }
-    /// Integer-only mirror (optional leading "-", digits, no separator).
-    var integerInput: Binding<String> {
-        Binding(get: { wrappedValue },
-                set: { wrappedValue = DecimalInput.filter($0, allowsDecimal: false) })
+extension View {
+    /// Live-filter a numeric text field. After each edit, rewrite `text` to a valid
+    /// numeric string (`DecimalInput.filter`). Writing back through the field's own
+    /// state forces SwiftUI to correct the *displayed* text — so a rejected character
+    /// (a letter, a comma, a 2nd separator) can't linger on screen while the field is
+    /// being edited. Works identically on iOS/iPad and macOS, and against paste.
+    /// `allowsDecimal: false` restricts to integers (no separator).
+    func numericInput(_ text: Binding<String>, allowsDecimal: Bool = true) -> some View {
+        onChange(of: text.wrappedValue) { _, newValue in
+            let filtered = DecimalInput.filter(newValue, allowsDecimal: allowsDecimal)
+            if filtered != newValue { text.wrappedValue = filtered }
+        }
     }
 }
