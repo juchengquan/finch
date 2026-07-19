@@ -10,10 +10,11 @@ private enum CategoryKind: String, CaseIterable, Identifiable {
 
 /// Categories admin — a 3-level tree (inline expand/collapse) with per-category
 /// icon + color, search, create-child, edit, delete (children promote up a
-/// level), and **drag to reparent + reorder**: drop on a row's middle to nest
-/// under it, its top quarter to place the dragged category before it, its bottom
-/// quarter to place it after it; the "Top level" zone un-nests. All through the
-/// chokepoint (create / update / deleteCategory).
+/// level), and **drag to reparent + reorder** (only in Reorder mode, entered via
+/// ⋯ → Reorder): drop on a row's middle to nest under it, its top quarter to
+/// place the dragged category before it, its bottom quarter to place it after it;
+/// the "Top level" zone un-nests. All through the chokepoint (create / update /
+/// deleteCategory).
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var kind: CategoryKind = .expense
@@ -39,20 +40,23 @@ struct CategoriesView: View {
 
     var body: some View {
         let counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
-        return List {
-            if isReordering { topLevelDropZone }
+        return Group {
             if rows.isEmpty {
                 ContentUnavailableView(
                     kind == .expense ? "No expense categories yet" : "No income categories yet",
                     systemImage: "square.grid.2x2",
                     description: Text("Tap + to add one."))
             } else {
-                ForEach(visible) { item in row(item, counts) }
+                List {
+                    if isReordering { topLevelDropZone }
+                    ForEach(visible) { item in row(item, counts) }
+                }
             }
         }
         .safeAreaInset(edge: .top) { kindPicker }
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
+        .navigationBarTitleDisplayMode(.inline)
         .errorAlert($errorMessage)
         .toolbar { toolbarContent }
         .sheet(isPresented: $creatingTop) { CategoryEditSheet(kind: kind.rawValue) }
@@ -87,7 +91,7 @@ struct CategoriesView: View {
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         if isReordering {
             ToolbarItem(placement: .confirmationAction) {
-                Button { isReordering = false } label: { Image(systemName: "checkmark") }
+                Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark") }
                     .accessibilityLabel("Done")
             }
         } else {
