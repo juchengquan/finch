@@ -6,36 +6,55 @@ struct PickerOption: Identifiable, Hashable {
     let name: String
 }
 
-/// A form row that shows the current selection and pushes a searchable list to
-/// change it — for long lists (categories, accounts) where an inline menu is
-/// cramped. Drop-in replacement for a `Picker` bound to a String id.
+/// A form row that shows the current selection and opens a full-height BOTTOM
+/// SHEET (slides up from the bottom) with a searchable single-select list.
+/// Drop-in: same (title, options, selection) API. The sheet STAGES the tapped
+/// option and commits it on Confirm (Cancel discards) — no accidental change on
+/// a stray tap.
 struct SearchablePickerRow: View {
     let title: String
     let options: [PickerOption]
     @Binding var selection: String
+    @State private var presented = false
 
     private var selectedName: String { options.first { $0.id == selection }?.name ?? "—" }
 
     var body: some View {
-        NavigationLink {
-            SearchablePickerList(title: title, options: options, selection: $selection)
-        } label: {
+        Button { presented = true } label: {
             HStack {
-                Text(title)
+                Text(title).foregroundStyle(.primary)
                 Spacer()
                 Text(selectedName).foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $presented) {
+            SearchablePickerSheet(title: title, options: options, selection: $selection)
+                #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
         }
     }
 }
 
-/// The pushed list: searchable, single-select, pops on choose.
-private struct SearchablePickerList: View {
+/// The sheet body: searchable, single-select. Tapping stages a choice; Confirm
+/// applies it to the binding and dismisses; Cancel discards.
+private struct SearchablePickerSheet: View {
     let title: String
     let options: [PickerOption]
     @Binding var selection: String
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var staged: String
+
+    init(title: String, options: [PickerOption], selection: Binding<String>) {
+        self.title = title
+        self.options = options
+        self._selection = selection
+        self._staged = State(initialValue: selection.wrappedValue)
+    }
 
     private var filtered: [PickerOption] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -43,22 +62,33 @@ private struct SearchablePickerList: View {
     }
 
     var body: some View {
-        List(filtered) { opt in
-            Button {
-                selection = opt.id
-                dismiss()
-            } label: {
-                HStack {
-                    Text(opt.name)
-                    Spacer()
-                    if opt.id == selection { Image(systemName: "checkmark").foregroundStyle(.tint) }
+        NavigationStack {
+            List(filtered) { opt in
+                Button {
+                    staged = opt.id
+                } label: {
+                    HStack {
+                        Text(opt.name)
+                        Spacer()
+                        if opt.id == staged { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .searchable(text: $query)
+            .navigationTitle(title)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Confirm") { selection = staged; dismiss() }.bold()
+                }
+            }
         }
-        .searchable(text: $query)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
