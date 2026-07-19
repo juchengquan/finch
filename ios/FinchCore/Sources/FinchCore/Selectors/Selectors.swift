@@ -248,6 +248,18 @@ public enum Selectors {
         return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
     }
 
+    /// Transactions in `ledgerId` tagged with `tagId`, matched the SAME way as
+    /// `tagTxCounts` (non-pending; `tx.tags` holds tag ids), so this list agrees
+    /// with the count badge. Date-desc sorted (time-desc tiebreak).
+    public static func tagTransactions(_ txns: [Tx], _ tagId: String, _ ledgerId: String) -> [Tx] {
+        let matched = txns.filter { t in
+            guard ledgerOf(t) == ledgerId else { return false }
+            if (t.pending ?? false) { return false }
+            return (t.tags ?? []).contains(tagId)
+        }
+        return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }
+    }
+
     // MARK: cycleWindow + date helpers
 
     // internal (not private) so the TimeSeries.swift extension can share them.
