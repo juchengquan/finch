@@ -4,9 +4,9 @@ import FinchCore
 /// The Merchant/Source field as a tap-to-open row + bottom sheet, consistent
 /// with the Category/Account pickers. Merchant is free text, so the sheet's
 /// search box doubles as new-merchant entry: typing a name with no exact match
-/// surfaces a "Use ‹text›" row. The chosen name is staged and applied on
-/// Confirm; a name that isn't an existing counterparty is created on save (the
-/// caller's save path already does this for any unrecognized merchant).
+/// surfaces a "Use ‹text›" row. A name that isn't an existing counterparty is
+/// created on save (the caller's save path already does this for any
+/// unrecognized merchant).
 struct MerchantPickerRow: View {
     let title: String                     // "Merchant" or "Source"
     let counterparties: [Counterparty]
@@ -33,19 +33,24 @@ struct MerchantPickerRow: View {
     }
 }
 
+/// Search-driven single-select. Unlike the staged Category/Account sheet, this
+/// one COMMITS ON TAP (tap = select + dismiss) rather than staging behind a
+/// Confirm button. Reason: searching is the primary interaction here (the field
+/// doubles as new-merchant entry), and iOS collapses the navigation bar while a
+/// `.searchable` field is active — which hides a `.confirmationAction` Confirm
+/// exactly when the user has typed a name to "Use". Commit-on-tap keeps the
+/// interaction reachable and gives immediate feedback (the sheet closes).
 private struct MerchantPickerSheet: View {
     let title: String
     let counterparties: [Counterparty]
     @Binding var merchant: String
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
-    @State private var staged: String
 
     init(title: String, counterparties: [Counterparty], merchant: Binding<String>) {
         self.title = title
         self.counterparties = counterparties
         self._merchant = merchant
-        self._staged = State(initialValue: merchant.wrappedValue)
     }
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -59,29 +64,34 @@ private struct MerchantPickerSheet: View {
             && !counterparties.contains { $0.name.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
     }
 
+    private func pick(_ name: String) {
+        merchant = name
+        dismiss()
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                Button { staged = "" } label: {
+                Button { pick("") } label: {
                     HStack {
                         Text("None").foregroundStyle(.secondary)
                         Spacer()
-                        if staged.isEmpty { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                        if merchant.isEmpty { Image(systemName: "checkmark").foregroundStyle(.tint) }
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain)
 
                 if showUseNew {
-                    Button { staged = trimmedQuery } label: {
+                    Button { pick(trimmedQuery) } label: {
                         Label("Use “\(trimmedQuery)”", systemImage: "plus.circle").foregroundStyle(.tint)
                     }
                 }
 
                 ForEach(filtered) { cp in
-                    Button { staged = cp.name } label: {
+                    Button { pick(cp.name) } label: {
                         HStack {
                             Text(cp.name).foregroundStyle(.primary)
                             Spacer()
-                            if cp.name.caseInsensitiveCompare(staged) == .orderedSame {
+                            if cp.name.caseInsensitiveCompare(merchant) == .orderedSame {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }
                         }.contentShape(Rectangle())
@@ -95,9 +105,6 @@ private struct MerchantPickerSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Confirm") { merchant = staged; dismiss() }.bold()
-                }
             }
         }
     }
