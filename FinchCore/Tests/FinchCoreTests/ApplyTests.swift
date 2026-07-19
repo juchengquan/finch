@@ -65,6 +65,21 @@ final class ApplyTests: XCTestCase {
         try q.read { db in
             XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id = 'a1'") ?? -1, 500, accuracy: 0.001)
             XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE kind = 'adjustment'"), 1)
+            // No time passed → the entry's time column stays NULL (web parity).
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT time FROM entries WHERE kind = 'adjustment'"))
+        }
+    }
+
+    /// adjustAccountBalance stores an optional time-of-day on the entry when given.
+    func test_applyAdjustAccountBalance_withTime() throws {
+        let q = try freshDB()
+        try seedLedgerAccount(q)
+        try Apply.apply(dbQueue: q, action: "adjustAccountBalance", args: Args([
+            "accountId": .string("a1"), "targetBalance": .double(500),
+            "date": .string("2026-05-01"), "time": .string("14:30"),
+        ]))
+        try q.read { db in
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT time FROM entries WHERE kind = 'adjustment'"), "14:30")
         }
     }
 

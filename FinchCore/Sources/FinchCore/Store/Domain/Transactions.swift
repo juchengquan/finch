@@ -274,7 +274,7 @@ public enum Transactions {
 
     // MARK: adjustAccountBalance (→ postAdjustment)
 
-    struct AdjustArgs: Decodable { let accountId: String; let targetBalance: Double; let date: String?; let note: String?; let source: String? }
+    struct AdjustArgs: Decodable { let accountId: String; let targetBalance: Double; let date: String?; let time: String?; let note: String?; let source: String? }
     static func adjustAccountBalance(_ db: Database, _ args: Args) throws {
         let a = try args.to(AdjustArgs.self)
         guard a.targetBalance.isFinite else { throw I18nError("error.adjust.targetRequired", [:], "Enter a target balance") }
@@ -286,7 +286,7 @@ public enum Transactions {
         let delta = Entries.r2(a.targetBalance - current)
         let date = a.date ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
         try Entries.postAdjustment(db, ledgerId: ledgerId, accountId: a.accountId, delta: delta,
-                                   date: date, note: a.note, source: a.source == "reconcile" ? "reconcile" : "manual")
+                                   date: date, time: a.time, note: a.note, source: a.source == "reconcile" ? "reconcile" : "manual")
     }
 
     // MARK: deleteTransaction (→ resolveEntryRef + deleteEntry)
