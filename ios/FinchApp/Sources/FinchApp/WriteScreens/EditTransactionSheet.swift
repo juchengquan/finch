@@ -218,7 +218,18 @@ struct EditTransactionSheet: View {
                             options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
                         DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                             .environment(\.locale, AppDate.h24Locale)
-                        Button("Split across categories…") { showingSplit = true }
+                        if effectiveKind != "refund", (DecimalInput.parse(amountText) ?? 0) != 0 {
+                            Button("Split…") { showingSplit = true }
+                        }
+                        // Refund link inline in the primary section (matches the Add sheet).
+                        if effectiveKind == "refund" {
+                            Button { showingRefundPicker = true } label: {
+                                HStack {
+                                    Text("Refunds"); Spacer()
+                                    Text(refundedSummary).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -229,22 +240,19 @@ struct EditTransactionSheet: View {
                             options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                     }
                 }
-                if effectiveKind == "refund" {
-                    Section("Refund") {
-                        Button { showingRefundPicker = true } label: {
-                            HStack {
-                                Text("Refunds"); Spacer()
-                                Text(refundedSummary).foregroundStyle(.secondary)
-                            }
-                        }
+                // Status directly after the primary/split rows (matches the Add sheet).
+                Section {
+                    Picker("Status", selection: $status) {
+                        Text("Confirmed").tag(Entries.Status.confirmed)
+                        Text("Pending").tag(Entries.Status.pending)
                     }
                 }
 
                 if !store.tags.isEmpty {
-                    Section("Tags") { TagChipFlow(tags: store.tags, selected: $selectedTags) }
+                    Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
                 }
 
-                Section("Receipts") {
+                Section("Receipt") {
                     ForEach(attachments) { att in
                         Button { previewURL = store.attachmentURL(for: att) } label: {
                             HStack {
@@ -276,26 +284,6 @@ struct EditTransactionSheet: View {
                     #endif
                 }
 
-                Section {
-                    Picker("Status", selection: $status) {
-                        Text("Confirmed").tag(Entries.Status.confirmed)
-                        Text("Pending").tag(Entries.Status.pending)
-                    }
-                }
-                Section {
-                    Button(txn.reviewedAt == nil ? "Mark reviewed" : "Unmark reviewed") {
-                        run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
-                    }
-                    Button("Delete transaction", role: .destructive) { confirmingDelete = true }
-                        // Anchored on the button (iOS 26 positions popouts at their source).
-                        .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                            Button("Delete", role: .destructive) {
-                                do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
-                                catch { errorMessage = i18nMessage(error) }
-                            }
-                        }
-                }
-
                 if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
                     Section("Details") {
                         HStack {
@@ -318,6 +306,21 @@ struct EditTransactionSheet: View {
                             TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
                         }
                     }
+                }
+
+                // Edit-only meta actions at the very bottom.
+                Section {
+                    Button(txn.reviewedAt == nil ? "Mark reviewed" : "Unmark reviewed") {
+                        run(.setReviewed, ["id": .string(txn.id), "reviewed": .bool(txn.reviewedAt == nil)])
+                    }
+                    Button("Delete transaction", role: .destructive) { confirmingDelete = true }
+                        // Anchored on the button (iOS 26 positions popouts at their source).
+                        .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) {
+                                do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
+                                catch { errorMessage = i18nMessage(error) }
+                            }
+                        }
                 }
 
                 if let errorMessage {
