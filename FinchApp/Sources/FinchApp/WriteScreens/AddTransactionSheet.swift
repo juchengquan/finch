@@ -229,8 +229,7 @@ struct AddTransactionSheet: View {
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
             if pendingSplits == nil {
-                SearchablePickerRow(title: "Category",
-                    options: categories(for: k).map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+                CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId)
             }
             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.locale, AppDate.h24Locale)

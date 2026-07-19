@@ -183,8 +183,7 @@ struct EditTransactionSheet: View {
                             }
                             .pickerStyle(.menu).labelsHidden().fixedSize()
                         }
-                        SearchablePickerRow(title: "Category",
-                            options: categories.map { PickerOption(id: $0.id, name: $0.name) }, selection: $categoryId)
+                        CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
                         DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                             .environment(\.locale, AppDate.h24Locale)
                         if effectiveKind != "refund", (DecimalInput.parse(amountText) ?? 0) != 0 {
