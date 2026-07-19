@@ -4,7 +4,7 @@ import FinchCore
 /// A category's transactions + aggregate stats. Pushed from the Categories page
 /// when a row is tapped. Mirrors `CounterpartyDetailView` (the merchants analog):
 /// membership matches the row's count badge (`categoryTransactions` ≙
-/// `categoryTxCounts`), with a jump to the full Activity feed filter.
+/// `categoryTxCounts`, i.e. includes split legs, excludes pending).
 struct CategoryDetailView: View {
     @EnvironmentObject private var store: FinchStore
     let category: CategoryRow
@@ -26,14 +26,6 @@ struct CategoryDetailView: View {
                 }
             }
             if !txns.isEmpty {
-                Section {
-                    Button {
-                        DeepLinkRouter.shared.pendingFilter = TxFilter(categoryId: category.id)
-                        DeepLinkRouter.shared.selectedTab = .activity
-                    } label: {
-                        Label("See in Activity feed", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                }
                 Section("Transactions") {
                     ForEach(txns) { tx in
                         Button { editing = tx } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
