@@ -144,14 +144,13 @@ struct EditTransactionSheet: View {
                     }
                 }
                 if isSplit {
-                    Section("Split") {
-                        Button { showingSplit = true } label: {
-                            HStack {
-                                Text("Split across \(liveTxn.splits?.count ?? 0) categories")
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-                            }
-                        }
+                    // Still the Category row (not a "Split" abstraction) — its value is the
+                    // split's category names; tapping it reopens the split editor.
+                    Section {
+                        CategoryPickerRow(title: "Category", categories: categories, selection: .constant(""),
+                            splitSummary: splitSummaryText(categoryNames: (liveTxn.splits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
+                            splitEnabled: true,
+                            onSplit: { showingSplit = true })
                     }
                 } else if let legs = transferLegs {
                     // Transfer legs: a real transfer editor (spec §2). Accounts are

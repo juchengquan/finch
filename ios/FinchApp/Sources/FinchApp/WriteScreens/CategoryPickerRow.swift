@@ -1,10 +1,11 @@
 import SwiftUI
 import FinchCore
 
-/// "Split across N categories" when N ≥ 2 (a real split); nil for a single
-/// category. Drives the Category row's split-state label.
-func splitSummaryText(count: Int) -> String? {
-    count >= 2 ? String(localized: "Split across \(count) categories") : nil
+/// The Category row's value when a transaction is split: the split's category names
+/// joined for display, or nil for a single category (fewer than 2 names).
+/// E.g. ["Groceries", "Household"] → "Groceries, Household".
+func splitSummaryText(categoryNames: [String]) -> String? {
+    categoryNames.count >= 2 ? categoryNames.joined(separator: ", ") : nil
 }
 
 /// The Category field as a tap-to-open row + bottom sheet that renders the
@@ -34,8 +35,9 @@ struct CategoryPickerRow: View {
             } label: {
                 HStack {
                     Text(title).foregroundStyle(.primary)
-                    Spacer()
                     Text(splitSummary ?? selectedName).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .lineLimit(1).truncationMode(.tail)
                 }
                 .contentShape(Rectangle())
             }

@@ -246,7 +246,7 @@ struct AddTransactionSheet: View {
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
             CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId,
-                splitSummary: splitSummaryText(count: pendingSplits?.count ?? 0),
+                splitSummary: splitSummaryText(categoryNames: (pendingSplits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                 splitEnabled: (DecimalInput.parse(amount) ?? 0) != 0,
                 onSplit: k == .refund ? nil : { showingSplit = true })
             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])

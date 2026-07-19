@@ -3,11 +3,11 @@ import XCTest
 
 final class SplitSummaryTests: XCTestCase {
     func test_single_or_zero_is_nil() {
-        XCTAssertNil(splitSummaryText(count: 0))
-        XCTAssertNil(splitSummaryText(count: 1))
+        XCTAssertNil(splitSummaryText(categoryNames: []))
+        XCTAssertNil(splitSummaryText(categoryNames: ["Food"]))
     }
-    func test_two_or_more_summarizes() {
-        XCTAssertEqual(splitSummaryText(count: 2), "Split across 2 categories")
-        XCTAssertEqual(splitSummaryText(count: 3), "Split across 3 categories")
+    func test_two_or_more_joins_names() {
+        XCTAssertEqual(splitSummaryText(categoryNames: ["Groceries", "Household"]), "Groceries, Household")
+        XCTAssertEqual(splitSummaryText(categoryNames: ["A", "B", "C"]), "A, B, C")
     }
 }
