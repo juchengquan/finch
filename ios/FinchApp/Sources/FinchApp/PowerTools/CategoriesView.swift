@@ -7,8 +7,16 @@ import FinchCore
 /// under it, its top quarter to place the dragged category before it, its bottom
 /// quarter to place it after it; the "Top level" zone un-nests. All through the
 /// chokepoint (create / update / deleteCategory).
+/// Expense/income filter for the Categories page (maps to `CategoryRow.kind`).
+private enum CategoryKind: String, CaseIterable, Identifiable {
+    case expense, income
+    var id: String { rawValue }
+    var label: LocalizedStringKey { self == .expense ? "Expense" : "Income" }
+}
+
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
+    @State private var kind: CategoryKind = .expense
     @State private var expanded: Set<String> = []
     @State private var search = ""
     @State private var editing: CategoryRow?
@@ -20,7 +28,9 @@ struct CategoriesView: View {
     @State private var rowHeights: [String: CGFloat] = [:]   // per-row height for drop-position thirds
     @State private var errorMessage: String?
 
-    private var rows: [CategoryRow] { store.pickableCategories }
+    private var rows: [CategoryRow] {
+        store.pickableCategories.filter { ($0.kind ?? "expense") == kind.rawValue }
+    }
     private var byId: [String: CategoryRow] { Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) }) }
     private var visible: [FlatCategory] {
         flattenCategories(categoryForest(rows), expanded: expanded, search: search)
@@ -30,8 +40,16 @@ struct CategoriesView: View {
         let counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
         return List {
             topLevelDropZone
-            ForEach(visible) { item in row(item, counts) }
+            if rows.isEmpty {
+                ContentUnavailableView(
+                    kind == .expense ? "No expense categories yet" : "No income categories yet",
+                    systemImage: "square.grid.2x2",
+                    description: Text("Tap + to add one."))
+            } else {
+                ForEach(visible) { item in row(item, counts) }
+            }
         }
+        .safeAreaInset(edge: .top) { kindPicker }
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
         .errorAlert($errorMessage)
@@ -41,8 +59,8 @@ struct CategoriesView: View {
                     .accessibilityLabel("Add category")
             }
         }
-        .sheet(isPresented: $creatingTop) { CategoryEditSheet(category: nil) }
-        .sheet(item: $creatingUnder) { parent in CategoryEditSheet(category: nil, parent: parent) }
+        .sheet(isPresented: $creatingTop) { CategoryEditSheet(kind: kind.rawValue) }
+        .sheet(item: $creatingUnder) { parent in CategoryEditSheet(parent: parent) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
         // A centered ALERT, not a row-anchored confirmationDialog — see
         // ActivityTab (window-level survives swipe collapse / recycling).
@@ -54,6 +72,16 @@ struct CategoriesView: View {
         } message: { _ in
             Text("Its subcategories move up a level — they won't be deleted.")
         }
+    }
+
+    private var kindPicker: some View {
+        Picker("Kind", selection: $kind) {
+            ForEach(CategoryKind.allCases) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
     }
 
     /// Drop here to move a category to the top level (un-nest).
@@ -177,27 +205,39 @@ struct CategoriesView: View {
     }
 }
 
-/// Create (category == nil), create-under-a-parent (parent != nil), or edit an
-/// existing category. Name + icon + color always; kind is create-top-level only.
+/// Create a top-level category (`init(kind:)`), create under a parent
+/// (`init(parent:)`), or edit an existing one (`init(category:)`). Name + icon +
+/// color are always editable; kind is fixed (current tab on create, parent's kind
+/// for a subcategory, the row's own kind on edit) so a category with transactions
+/// never crosses expense↔income.
 struct CategoryEditSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     let category: CategoryRow?
     let parent: CategoryRow?
+    let createKind: String?     // set only for a top-level create
     @State private var name: String
-    @State private var kind: String
     @State private var icon: String     // "" = none (inherit at render)
     @State private var color: String    // "" = none (inherit/default at render)
     @State private var errorMessage: String?
 
-    init(category: CategoryRow?, parent: CategoryRow? = nil) {
-        self.category = category
-        self.parent = parent
-        _name = State(initialValue: category?.name ?? "")
-        _kind = State(initialValue: category?.kind ?? parent?.kind ?? "expense")
-        _icon = State(initialValue: category?.icon ?? "")
-        _color = State(initialValue: category?.color ?? "")
+    init(category: CategoryRow) {
+        self.category = category; self.parent = nil; self.createKind = nil
+        _name = State(initialValue: category.name)
+        _icon = State(initialValue: category.icon ?? "")
+        _color = State(initialValue: category.color ?? "")
     }
+    init(parent: CategoryRow) {
+        self.category = nil; self.parent = parent; self.createKind = nil
+        _name = State(initialValue: ""); _icon = State(initialValue: ""); _color = State(initialValue: "")
+    }
+    init(kind: String) {
+        self.category = nil; self.parent = nil; self.createKind = kind
+        _name = State(initialValue: ""); _icon = State(initialValue: ""); _color = State(initialValue: "")
+    }
+
+    /// Fixed kind for the save: existing row → parent → create tab → expense.
+    private var resolvedKind: String { category?.kind ?? parent?.kind ?? createKind ?? "expense" }
 
     private let iconColumns = Array(repeating: GridItem(.flexible()), count: 6)
 
@@ -205,10 +245,6 @@ struct CategoryEditSheet: View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
-                if category == nil && parent == nil {
-                    Picker("Kind", selection: $kind) { Text("Expense").tag("expense"); Text("Income").tag("income") }
-                        .pickerStyle(.segmented)
-                }
                 Section("Icon") {
                     LazyVGrid(columns: iconColumns, spacing: 12) {
                         ForEach(CategoryIcon.names, id: \.self) { n in
@@ -235,7 +271,11 @@ struct CategoryEditSheet: View {
                         }
                     }
                 }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+                Section {
+                    if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+                } footer: {
+                    Text("Icon and color are inherited from the parent category when left unset.")
+                }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -270,7 +310,8 @@ struct CategoryEditSheet: View {
                 try store.apply(.updateCategory, Args(["id": .string(c.id), "patch": .object(patch)]))
             } else {
                 var args: [String: JSONValue] = [
-                    "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed), "type": .string(kind),
+                    "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
+                    "type": .string(resolvedKind),
                 ]
                 if !icon.isEmpty { args["icon"] = .string(icon) }
                 if !color.isEmpty { args["color"] = .string(color) }
