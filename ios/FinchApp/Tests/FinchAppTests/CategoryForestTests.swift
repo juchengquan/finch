@@ -55,4 +55,19 @@ final class CategoryForestTests: XCTestCase {
         XCTAssertTrue(flat[0].hasChildren); XCTAssertEqual(flat[0].depth, 0)
         XCTAssertFalse(flat[1].hasChildren); XCTAssertEqual(flat[1].depth, 1)
     }
+
+    func test_mergeSelectionDisabled_flags_ancestors_and_descendants_only() {
+        // food → groc → organic ; home (unrelated)
+        let rows = [cat("food", "Food"), cat("groc", "Groceries", parent: "food"),
+                    cat("organic", "Organic", parent: "groc"), cat("home", "Home")]
+        let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        // With "groc" selected: its ancestor (food) and descendant (organic) are disabled…
+        XCTAssertTrue(mergeSelectionDisabled("food", selected: ["groc"], byId: byId))
+        XCTAssertTrue(mergeSelectionDisabled("organic", selected: ["groc"], byId: byId))
+        // …an unrelated peer is not, and the selected row itself is not disabled.
+        XCTAssertFalse(mergeSelectionDisabled("home", selected: ["groc"], byId: byId))
+        XCTAssertFalse(mergeSelectionDisabled("groc", selected: ["groc"], byId: byId))
+        // Nothing selected → nothing disabled.
+        XCTAssertFalse(mergeSelectionDisabled("food", selected: [], byId: byId))
+    }
 }
