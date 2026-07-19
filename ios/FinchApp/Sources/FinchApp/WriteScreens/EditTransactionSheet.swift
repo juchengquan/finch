@@ -214,10 +214,10 @@ struct EditTransactionSheet: View {
                         Text("Confirmed").tag(Entries.Status.confirmed)
                         Text("Pending").tag(Entries.Status.pending)
                     }
-                }
-
-                if !store.tags.isEmpty {
-                    Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
+                    // Tags is a single row here (wraps to hold all selected), not its own section.
+                    if !store.tags.isEmpty {
+                        TagField(tags: store.tags, selected: $selectedTags)
+                    }
                 }
 
                 Section("Receipt") {

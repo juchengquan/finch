@@ -202,10 +202,11 @@ struct AddTransactionSheet: View {
                             Text("Confirmed").tag(Entries.Status.confirmed)
                             Text("Pending").tag(Entries.Status.pending)
                         }
+                        // Tags is a single row here (wraps to hold all selected), not its own section.
+                        if !store.tags.isEmpty {
+                            TagField(tags: store.tags, selected: $selectedTags)
+                        }
                     }
-                }
-                if !store.tags.isEmpty, k != .adjust {
-                    Section("Tags") { TagField(tags: store.tags, selected: $selectedTags) }
                 }
                 if k == .expense || k == .income || k == .refund {
                     Section("Receipt") {

@@ -1,41 +1,39 @@
 import SwiftUI
 import FinchCore
 
-/// The tag field on the Add/Edit forms: shows the SELECTED tags as wrapping
-/// colored chips (display only), and opens a full-height multi-select bottom
-/// sheet to edit the selection (Confirm/Cancel). Chips are capped for display
-/// with a "+N" overflow so a heavily-tagged transaction stays compact.
+/// The tag field on the Add/Edit forms: a single labeled row ("Tags") whose
+/// value shows the SELECTED tags as colored chips that WRAP across as many rows
+/// as needed (via the custom `FlowLayout`) — the row grows vertically to hold
+/// them all, no "+N" cap. "None" when nothing is selected. Tapping anywhere
+/// opens the full-height multi-select bottom sheet (Confirm/Cancel).
 struct TagField: View {
     let tags: [TagRow]
     @Binding var selected: Set<String>
-    var displayCap: Int = 8
     @State private var presented = false
 
-    /// Selected tags (in `tags` order) to render as chips, plus how many are
-    /// hidden past the display cap. Pure — unit-tested.
-    static func displayChips(tags: [TagRow], selected: Set<String>, cap: Int) -> (shown: [TagRow], overflow: Int) {
-        let chosen = tags.filter { selected.contains($0.id) }
-        if chosen.count <= cap { return (chosen, 0) }
-        return (Array(chosen.prefix(cap)), chosen.count - cap)
+    /// Selected tags in `tags` order (unknown ids ignored). Pure — unit-tested.
+    static func selectedRows(tags: [TagRow], selected: Set<String>) -> [TagRow] {
+        tags.filter { selected.contains($0.id) }
     }
 
     var body: some View {
-        let d = Self.displayChips(tags: tags, selected: selected, cap: displayCap)
+        let chosen = Self.selectedRows(tags: tags, selected: selected)
         Button { presented = true } label: {
-            if d.shown.isEmpty {
-                HStack {
-                    Text("Add tags").foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                Text("Tags").foregroundStyle(.primary)
+                if chosen.isEmpty {
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    Text("None").foregroundStyle(.secondary)
+                } else {
+                    // Chips fill the space to the right of the label and wrap;
+                    // the row height follows the number of selected tags.
+                    FlowLayout(spacing: 8, rowSpacing: 8) {
+                        ForEach(chosen) { tag in chip(tag.name, tint: Color(hex: tag.color ?? "") ?? .accentColor) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .contentShape(Rectangle())
-            } else {
-                FlowLayout(spacing: 8, rowSpacing: 8) {
-                    ForEach(d.shown) { tag in chip(tag.name, tint: Color(hex: tag.color ?? "") ?? .accentColor) }
-                    if d.overflow > 0 { chip("+\(d.overflow)", tint: .secondary) }
-                }
-                .contentShape(Rectangle())
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $presented) {
