@@ -90,11 +90,10 @@ private struct TagPickerSheet: View {
         NavigationStack {
             List {
                 if showCreate {
-                    Button {
-                        newNames.append(trimmedQuery)
+                    let name = trimmedQuery
+                    CreateTagRow(name: name) {
+                        newNames.append(name)
                         query = ""
-                    } label: {
-                        Label("Create “\(trimmedQuery)”", systemImage: "plus.circle").foregroundStyle(.tint)
                     }
                 }
                 // Pending new tags (not yet written) — tap to unstage.
@@ -157,5 +156,25 @@ private struct TagPickerSheet: View {
         }
         selected = ids
         dismiss()
+    }
+}
+
+/// The "Create ‹name›" row. It lives in its own view so it can read the
+/// `dismissSearch` action — which is only available *inside* the `.searchable`
+/// scope (a descendant of the modified List). Tapping it stages the tag and
+/// collapses the search field, so the toolbar's ✓ Confirm (hidden by iOS while
+/// search is active) comes back into reach.
+private struct CreateTagRow: View {
+    let name: String
+    let onCreate: () -> Void
+    @Environment(\.dismissSearch) private var dismissSearch
+
+    var body: some View {
+        Button {
+            onCreate()
+            dismissSearch()
+        } label: {
+            Label("Create “\(name)”", systemImage: "plus.circle").foregroundStyle(.tint)
+        }
     }
 }
