@@ -2,35 +2,29 @@ import XCTest
 @testable import FinchApp
 import FinchCore
 
-/// The tag field's display-chip cap is pure: show selected tags (in order) up to
-/// a cap, then a "+N" overflow count.
+/// The tag field's chip selection is pure: the selected tags, in tag order, with
+/// unknown ids ignored. All selected tags are shown (the row wraps them); no cap.
 final class TagChipFlowTests: XCTestCase {
     private func tags(_ ids: [String]) -> [TagRow] { ids.map { TagRow(id: $0, name: $0, color: nil) } }
 
-    func test_noneSelected_showsNothing() {
-        let d = TagField.displayChips(tags: tags(["a","b","c"]), selected: [], cap: 8)
-        XCTAssertTrue(d.shown.isEmpty)
-        XCTAssertEqual(d.overflow, 0)
+    func test_noneSelected_isEmpty() {
+        XCTAssertTrue(TagField.selectedRows(tags: tags(["a","b","c"]), selected: []).isEmpty)
     }
 
-    func test_underCap_showsAllSelectedInOrder() {
-        let d = TagField.displayChips(tags: tags(["a","b","c","d"]), selected: ["b","d"], cap: 8)
-        XCTAssertEqual(d.shown.map(\.id), ["b","d"])
-        XCTAssertEqual(d.overflow, 0)
+    func test_showsAllSelectedInTagOrder() {
+        let rows = TagField.selectedRows(tags: tags(["a","b","c","d"]), selected: ["d","b"])
+        XCTAssertEqual(rows.map(\.id), ["b","d"])   // tag order, not selection order
     }
 
-    func test_overCap_capsAndCountsOverflow() {
+    func test_manySelected_areAllReturned() {
         let all = tags((1...12).map { "t\($0)" })
-        let sel = Set(all.map(\.id))   // all 12 selected
-        let d = TagField.displayChips(tags: all, selected: sel, cap: 8)
-        XCTAssertEqual(d.shown.count, 8)
-        XCTAssertEqual(d.shown.first?.id, "t1")   // original order preserved
-        XCTAssertEqual(d.overflow, 4)
+        let rows = TagField.selectedRows(tags: all, selected: Set(all.map(\.id)))
+        XCTAssertEqual(rows.count, 12)              // no cap — the row wraps to hold all
+        XCTAssertEqual(rows.first?.id, "t1")        // original order preserved
     }
 
     func test_ignoresUnknownSelectedIds() {
-        let d = TagField.displayChips(tags: tags(["a","b"]), selected: ["a","ghost"], cap: 8)
-        XCTAssertEqual(d.shown.map(\.id), ["a"])
-        XCTAssertEqual(d.overflow, 0)
+        let rows = TagField.selectedRows(tags: tags(["a","b"]), selected: ["a","ghost"])
+        XCTAssertEqual(rows.map(\.id), ["a"])
     }
 }
