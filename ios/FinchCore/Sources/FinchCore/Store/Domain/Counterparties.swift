@@ -9,6 +9,8 @@ public enum Counterparties {
         .deleteCounterparty: deleteCounterparty,
         .verifyCounterparty: verify,
         .unverifyCounterparty: unverify,
+        .mergeCounterparty: merge,
+        .mergeCounterparties: mergeMany,
     ]
 
     static func createCounterparty(_ db: Database, _ args: Args) throws {
@@ -40,5 +42,48 @@ public enum Counterparties {
         struct A: Decodable { let id: String }
         try db.execute(sql: "UPDATE counterparties SET is_verified = ?, updated_at = datetime('now') WHERE id = ?",
                        arguments: [v, try args.to(A.self).id])
+    }
+
+    static func merge(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let sourceId: String; let targetId: String }
+        let a = try args.to(A.self)
+        try validateMerge(db, source: a.sourceId, target: a.targetId)
+        try mergeOne(db, source: a.sourceId, target: a.targetId)
+        try db.execute(sql: "DELETE FROM counterparties WHERE id = ?", arguments: [a.sourceId])
+    }
+
+    /// Combine many `sourceIds` into `targetId` in one transaction (Apply wraps).
+    /// All sources are validated up-front, so a bad one aborts the whole set.
+    static func mergeMany(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let sourceIds: [String]; let targetId: String }
+        let a = try args.to(A.self)
+        if a.sourceIds.isEmpty {
+            throw I18nError("error.invalidArgs", [:], "mergeCounterparties requires at least one source")
+        }
+        for source in a.sourceIds { try validateMerge(db, source: source, target: a.targetId) }
+        for source in a.sourceIds { try mergeOne(db, source: source, target: a.targetId) }
+        for source in a.sourceIds {
+            try db.execute(sql: "DELETE FROM counterparties WHERE id = ?", arguments: [source])
+        }
+    }
+
+    /// Repoint transactions linked to `source` (by counterparty_id) onto `target`.
+    /// Does NOT validate or delete `source`. Runs inside the caller's transaction.
+    private static func mergeOne(_ db: Database, source: String, target: String) throws {
+        try db.execute(sql: "UPDATE entries SET counterparty_id = ? WHERE counterparty_id = ?", arguments: [target, source])
+    }
+
+    /// Guards for a single source→target merge: not-self, both exist, same ledger.
+    private static func validateMerge(_ db: Database, source: String, target: String) throws {
+        if source == target {
+            throw I18nError("error.counterparty.mergeSelf", [:], "Cannot merge a merchant into itself")
+        }
+        guard let sLedger = try String.fetchOne(db, sql: "SELECT ledger_id FROM counterparties WHERE id = ?", arguments: [source]),
+              let tLedger = try String.fetchOne(db, sql: "SELECT ledger_id FROM counterparties WHERE id = ?", arguments: [target]) else {
+            throw I18nError("error.notFound.counterparty", [:], "Merchant does not exist")
+        }
+        if sLedger != tLedger {
+            throw I18nError("error.counterparty.mergeLedger", [:], "Merchants must be in the same ledger to merge")
+        }
     }
 }

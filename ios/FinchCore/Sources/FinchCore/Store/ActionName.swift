@@ -27,12 +27,14 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case adjustAccountBalance
     case confirmAllPending
 
-    // --- counterparties (5) ---
+    // --- counterparties (7) ---
     case createCounterparty
     case updateCounterparty
     case deleteCounterparty
     case verifyCounterparty
     case unverifyCounterparty
+    case mergeCounterparty
+    case mergeCounterparties
 
     // --- accounts (5) ---
     case createAccount
