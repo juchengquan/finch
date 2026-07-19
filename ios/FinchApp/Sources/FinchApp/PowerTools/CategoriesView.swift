@@ -17,6 +17,7 @@ private enum CategoryKind: String, CaseIterable, Identifiable {
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
     @State private var kind: CategoryKind = .expense
+    @State private var isReordering = false
     @State private var expanded: Set<String> = []
     @State private var search = ""
     @State private var editing: CategoryRow?
@@ -39,7 +40,7 @@ struct CategoriesView: View {
     var body: some View {
         let counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
         return List {
-            topLevelDropZone
+            if isReordering { topLevelDropZone }
             if rows.isEmpty {
                 ContentUnavailableView(
                     kind == .expense ? "No expense categories yet" : "No income categories yet",
@@ -53,12 +54,7 @@ struct CategoriesView: View {
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
         .errorAlert($errorMessage)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { creatingTop = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add category")
-            }
-        }
+        .toolbar { toolbarContent }
         .sheet(isPresented: $creatingTop) { CategoryEditSheet(kind: kind.rawValue) }
         .sheet(item: $creatingUnder) { parent in CategoryEditSheet(parent: parent) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
@@ -84,6 +80,33 @@ struct CategoriesView: View {
         .background(.bar)
     }
 
+    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+        if isReordering {
+            ToolbarItem(placement: .confirmationAction) {
+                Button { isReordering = false } label: { Image(systemName: "checkmark") }
+                    .accessibilityLabel("Done")
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Button { creatingTop = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("Add category")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
+                    Button { expandAll() } label: { Label("Expand all", systemImage: "chevron.down") }
+                    Button { expanded = [] } label: { Label("Collapse all", systemImage: "chevron.right") }
+                } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("More")
+            }
+        }
+    }
+
+    /// Expand every category that has children (in the current kind).
+    private func expandAll() {
+        expanded = Set(rows.filter { r in rows.contains { $0.parentId == r.id } }.map(\.id))
+    }
+
     /// Drop here to move a category to the top level (un-nest).
     private var topLevelDropZone: some View {
         HStack(spacing: 8) {
@@ -100,6 +123,54 @@ struct CategoriesView: View {
     }
 
     @ViewBuilder private func row(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
+        let c = item.row
+        if isReordering {
+            rowContent(item, counts)
+                // Capture row height (background GeometryReader doesn't affect
+                // layout or block taps) so the drop handler can map location.y.
+                .background(GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { rowHeights[c.id] = proxy.size.height }
+                        .onChange(of: proxy.size.height) { _, h in rowHeights[c.id] = h }
+                })
+                .draggable(c.id)
+                .dropDestination(for: String.self) { items, location in
+                    guard let src = items.first else { return false }
+                    let h = rowHeights[c.id] ?? 44
+                    let frac = h > 0 ? location.y / h : 0.5
+                    let moves: [CategoryMove]
+                    if frac < 0.25 {
+                        moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
+                    } else if frac > 0.75 {
+                        moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
+                    } else {
+                        moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
+                    }
+                    guard !moves.isEmpty else { return false }
+                    applyMoves(moves); return true
+                } isTargeted: { isTargeted in
+                    if isTargeted { dropTargetId = c.id }
+                    else if dropTargetId == c.id { dropTargetId = nil }
+                }
+                .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
+        } else {
+            rowContent(item, counts)
+                .swipeActions(edge: .trailing) {
+                    // Not role: .destructive — see ActivityTab (fake removal
+                    // animation kills the row-anchored popout).
+                    Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+                    Button { editing = c } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)
+                }
+                .contextMenu {
+                    Button { editing = c } label: { Label("Edit", systemImage: "pencil") }
+                    Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
+                }
+        }
+    }
+
+    /// The shared row visual (chevron, icon+color swatch, name, count badge,
+    /// inline add-subcategory). Mode-specific modifiers are applied by `row`.
+    @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         HStack(spacing: 8) {
             if item.hasChildren {
@@ -143,41 +214,6 @@ struct CategoriesView: View {
         }
         .padding(.leading, CGFloat(item.depth) * 16)
         .contentShape(Rectangle())
-        // Capture the row's height (background GeometryReader doesn't affect layout
-        // or block taps) so the drop handler can map location.y → top/mid/bottom.
-        .background(GeometryReader { proxy in
-            Color.clear
-                .onAppear { rowHeights[c.id] = proxy.size.height }
-                .onChange(of: proxy.size.height) { _, h in rowHeights[c.id] = h }
-        })
-        .draggable(c.id)
-        .dropDestination(for: String.self) { items, location in
-            guard let src = items.first else { return false }
-            let h = rowHeights[c.id] ?? 44
-            let frac = h > 0 ? location.y / h : 0.5
-            let moves: [CategoryMove]
-            if frac < 0.25 {
-                moves = CategoryReorder.reorder(src, .before, of: c.id, in: rows)
-            } else if frac > 0.75 {
-                moves = CategoryReorder.reorder(src, .after, of: c.id, in: rows)
-            } else {
-                moves = CategoryReorder.reparent(src, under: c.id, in: rows).map { [$0] } ?? []
-            }
-            guard !moves.isEmpty else { return false }
-            applyMoves(moves); return true
-        } isTargeted: { isTargeted in
-            if isTargeted { dropTargetId = c.id }
-            else if dropTargetId == c.id { dropTargetId = nil }
-        }
-        .listRowBackground(dropTargetId == c.id ? Color.accentColor.opacity(0.15) : nil)
-        .swipeActions(edge: .trailing) {
-            // Not role: .destructive — see ActivityTab (fake removal animation
-            // kills the row-anchored popout).
-            Button { deleting = c } label: { Label("Delete", systemImage: "trash") }.tint(.red)
-        }
-        .contextMenu {
-            Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
-        }
     }
 
     /// Apply one or more category moves (parentId + sortOrder) through the
