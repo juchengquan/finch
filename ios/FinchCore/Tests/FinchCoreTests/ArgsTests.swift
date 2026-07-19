@@ -6,9 +6,10 @@ final class ArgsTests: XCTestCase {
     /// + the native-first `setBudgetOrder` + `setTrackedCurrencies`
     /// + `mergeCategory` + `mergeCategories` (native-only) = 79
     /// + `mergeCounterparty` + `mergeCounterparties` (native-only) = 81
-    /// + `mergeTag` + `mergeTags` (native-only, tag merge) = 83.
+    /// + `mergeTag` + `mergeTags` (native-only, tag merge) = 83
+    /// + `copyCategories` + `copyTags` (native-first, ledger reference copy) = 85.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 83)
+        XCTAssertEqual(ActionName.allCases.count, 85)
     }
 
     func test_actionNameRawValues() {
