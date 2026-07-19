@@ -183,12 +183,11 @@ struct EditTransactionSheet: View {
                             }
                             .pickerStyle(.menu).labelsHidden().fixedSize()
                         }
-                        CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
+                        CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId,
+                            splitEnabled: (DecimalInput.parse(amountText) ?? 0) != 0,
+                            onSplit: effectiveKind == "refund" ? nil : { showingSplit = true })
                         DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                             .environment(\.locale, AppDate.h24Locale)
-                        if effectiveKind != "refund", (DecimalInput.parse(amountText) ?? 0) != 0 {
-                            Button("Split…") { showingSplit = true }
-                        }
                         // Refund link inline in the primary section (matches the Add sheet).
                         if effectiveKind == "refund" {
                             Button { showingRefundPicker = true } label: {

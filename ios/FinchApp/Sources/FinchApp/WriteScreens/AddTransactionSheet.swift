@@ -245,22 +245,12 @@ struct AddTransactionSheet: View {
             SearchablePickerRow(title: "Account",
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
-            if pendingSplits == nil {
-                CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId)
-            }
+            CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId,
+                splitSummary: splitSummaryText(count: pendingSplits?.count ?? 0),
+                splitEnabled: (DecimalInput.parse(amount) ?? 0) != 0,
+                onSplit: k == .refund ? nil : { showingSplit = true })
             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.locale, AppDate.h24Locale)
-            if k != .refund, DecimalInput.parse(amount) ?? 0 != 0 {
-                Button {
-                    showingSplit = true
-                } label: {
-                    HStack {
-                        Text(pendingSplits == nil ? "Split…" : "Split across \(pendingSplits!.count) categories")
-                        Spacer()
-                        if pendingSplits != nil { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
-                    }
-                }
-            }
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
                     HStack {
