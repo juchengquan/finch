@@ -99,9 +99,9 @@ private struct TagPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel") }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Confirm") { selected = staged; dismiss() }.bold()
+                    Button { selected = staged; dismiss() } label: { Image(systemName: "checkmark") }.accessibilityLabel("Confirm").confirmCheckmarkStyle()
                 }
             }
         }
