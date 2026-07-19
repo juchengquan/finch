@@ -22,8 +22,7 @@ struct CategoriesView: View {
     @State private var expanded: Set<String> = []
     @State private var search = ""
     @State private var editing: CategoryRow?
-    @State private var creatingTop = false
-    @State private var creatingUnder: CategoryRow?
+    @State private var creating = false
     @State private var deleting: CategoryRow?
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
@@ -40,27 +39,29 @@ struct CategoriesView: View {
 
     var body: some View {
         let counts = Selectors.categoryTxCounts(store.txns, store.activeLedgerId)
-        return Group {
+        // The kind picker is the List's first row (not a safeAreaInset / VStack):
+        // that keeps the List the nav stack's primary scroll view so the large
+        // "Categories" title renders and collapses normally. See ScheduledTab —
+        // safeAreaInset(.top) here makes the title disappear.
+        return List {
+            Section {
+                kindPicker
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            if isReordering { topLevelDropZone }
             if rows.isEmpty {
-                ContentUnavailableView(
-                    kind == .expense ? "No expense categories yet" : "No income categories yet",
-                    systemImage: "square.grid.2x2",
-                    description: Text("Tap + to add one."))
+                emptyKindMessage
             } else {
-                List {
-                    if isReordering { topLevelDropZone }
-                    ForEach(visible) { item in row(item, counts) }
-                }
+                ForEach(visible) { item in row(item, counts) }
             }
         }
-        .safeAreaInset(edge: .top) { kindPicker }
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
-        .navigationBarTitleDisplayMode(.inline)
         .errorAlert($errorMessage)
         .toolbar { toolbarContent }
-        .sheet(isPresented: $creatingTop) { CategoryEditSheet(kind: kind.rawValue) }
-        .sheet(item: $creatingUnder) { parent in CategoryEditSheet(parent: parent) }
+        .sheet(isPresented: $creating) { CategoryEditSheet(createIn: kind.rawValue) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
         // A centered ALERT, not a row-anchored confirmationDialog — see
         // ActivityTab (window-level survives swipe collapse / recycling).
@@ -83,9 +84,21 @@ struct CategoriesView: View {
             ForEach(CategoryKind.allCases) { Text($0.label).tag($0) }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
+    }
+
+    /// Centered per-kind empty state, shown as a List row so the kind picker
+    /// above it stays visible (letting the user switch to the other kind).
+    private var emptyKindMessage: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "square.grid.2x2").font(.largeTitle).foregroundStyle(.secondary)
+            Text(kind == .expense ? "No expense categories yet" : "No income categories yet")
+                .font(.headline)
+            Text("Tap + to add one.").font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
@@ -96,23 +109,16 @@ struct CategoriesView: View {
             }
         } else {
             ToolbarItem(placement: .primaryAction) {
-                Button { creatingTop = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add category")
+                Button { creating = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("New category")
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
-                    Button { expandAll() } label: { Label("Expand all", systemImage: "chevron.down") }
-                    Button { expanded = [] } label: { Label("Collapse all", systemImage: "chevron.right") }
                 } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("More")
             }
         }
-    }
-
-    /// Expand every category that has children (in the current kind).
-    private func expandAll() {
-        expanded = Set(rows.filter { r in rows.contains { $0.parentId == r.id } }.map(\.id))
     }
 
     /// Drop here to move a category to the top level (un-nest).
@@ -176,8 +182,10 @@ struct CategoriesView: View {
         }
     }
 
-    /// The shared row visual (chevron, icon+color swatch, name, count badge,
-    /// inline add-subcategory). Mode-specific modifiers are applied by `row`.
+    /// The shared row visual (disclosure chevron for parents, icon+color swatch,
+    /// name, count badge). Mode-specific modifiers are applied by `row`. Creating
+    /// a subcategory now goes through the ＋ toolbar's Parent picker, not a per-row
+    /// button, which keeps the row tight.
     @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         HStack(spacing: 8) {
@@ -186,18 +194,18 @@ struct CategoriesView: View {
                     if expanded.contains(c.id) { expanded.remove(c.id) } else { expanded.insert(c.id) }
                 } label: {
                     Image(systemName: (expanded.contains(c.id) || !search.isEmpty) ? "chevron.down" : "chevron.right")
-                        .font(.caption).foregroundStyle(.secondary).frame(width: 16)
+                        .font(.caption).foregroundStyle(.secondary).frame(width: 10)
                 }
                 .buttonStyle(.plain)
                 .disabled(!search.isEmpty)   // search force-expands; chevron is inert
             } else {
-                Color.clear.frame(width: 16)
+                Color.clear.frame(width: 10)
             }
 
             ZStack {
-                Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 28, height: 28)
+                Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
                 Image(systemName: CategoryIcon.symbol(for: effectiveIcon(c, byId)))
-                    .font(.system(size: 13)).foregroundStyle(.white)
+                    .font(.system(size: 12)).foregroundStyle(.white)
             }
 
             Button { editing = c } label: {
@@ -211,16 +219,8 @@ struct CategoriesView: View {
                 Text("\(n)×").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     .accessibilityLabel("\(n) transactions")
             }
-
-            if item.depth < 2 {   // engine caps nesting at 3 levels
-                Button { creatingUnder = c } label: {
-                    Image(systemName: "plus.circle").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add subcategory under \(c.name)")
-            }
         }
-        .padding(.leading, CGFloat(item.depth) * 16)
+        .padding(.leading, CGFloat(item.depth) * 14)
         .contentShape(Rectangle())
     }
 
@@ -249,46 +249,63 @@ struct CategoriesView: View {
     }
 }
 
-/// Create a top-level category (`init(kind:)`), create under a parent
-/// (`init(parent:)`), or edit an existing one (`init(category:)`). Name + icon +
-/// color are always editable; kind is fixed (current tab on create, parent's kind
-/// for a subcategory, the row's own kind on edit) so a category with transactions
-/// never crosses expense↔income.
+/// Create a category (`init(createIn:)`, optional preset parent) or edit an
+/// existing one (`init(category:)`). Name, **parent**, icon, and color are all
+/// editable; kind is fixed to the sheet's kind so a category with transactions
+/// never crosses expense↔income. Choosing a parent nests the category (or moves
+/// it, on edit); "None" keeps/makes it top-level. Reparent sort-order reuses the
+/// same `CategoryReorder.reparent` math as drag.
 struct CategoryEditSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
-    let category: CategoryRow?
-    let parent: CategoryRow?
-    let createKind: String?     // set only for a top-level create
+    let category: CategoryRow?       // nil = create
+    let kind: String                 // fixed kind for this sheet
     @State private var name: String
+    @State private var parentId: String?    // nil = top level
     @State private var icon: String     // "" = none (inherit at render)
     @State private var color: String    // "" = none (inherit/default at render)
     @State private var errorMessage: String?
 
+    init(createIn kind: String, parentId: String? = nil) {
+        self.category = nil; self.kind = kind
+        _name = State(initialValue: "")
+        _parentId = State(initialValue: parentId)
+        _icon = State(initialValue: ""); _color = State(initialValue: "")
+    }
     init(category: CategoryRow) {
-        self.category = category; self.parent = nil; self.createKind = nil
+        self.category = category; self.kind = category.kind ?? "expense"
         _name = State(initialValue: category.name)
+        _parentId = State(initialValue: category.parentId)
         _icon = State(initialValue: category.icon ?? "")
         _color = State(initialValue: category.color ?? "")
     }
-    init(parent: CategoryRow) {
-        self.category = nil; self.parent = parent; self.createKind = nil
-        _name = State(initialValue: ""); _icon = State(initialValue: ""); _color = State(initialValue: "")
-    }
-    init(kind: String) {
-        self.category = nil; self.parent = nil; self.createKind = kind
-        _name = State(initialValue: ""); _icon = State(initialValue: ""); _color = State(initialValue: "")
-    }
-
-    /// Fixed kind for the save: existing row → parent → create tab → expense.
-    private var resolvedKind: String { category?.kind ?? parent?.kind ?? createKind ?? "expense" }
 
     private let iconColumns = Array(repeating: GridItem(.flexible()), count: 6)
+
+    /// Same-kind categories eligible as a parent: depth < 2 (so the child stays
+    /// within the 3-level cap) and, when editing, excluding the category itself
+    /// and its descendants. Tree-ordered for an indented menu.
+    private var parentOptions: [FlatCategory] {
+        let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+        let flat = flattenCategories(categoryForest(all), expanded: Set(all.map(\.id)), search: "")
+        var excluded = Set<String>()
+        if let c = category {
+            excluded.insert(c.id)
+            for f in flat where f.row.parentId.map(excluded.contains) == true { excluded.insert(f.row.id) }
+        }
+        return flat.filter { $0.depth < 2 && !excluded.contains($0.row.id) }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
+                Picker("Parent", selection: $parentId) {
+                    Text("None (top level)").tag(String?.none)
+                    ForEach(parentOptions) { f in
+                        Text(String(repeating: "   ", count: f.depth) + f.row.name).tag(Optional(f.row.id))
+                    }
+                }
                 Section("Icon") {
                     LazyVGrid(columns: iconColumns, spacing: 12) {
                         ForEach(CategoryIcon.names, id: \.self) { n in
@@ -321,7 +338,7 @@ struct CategoryEditSheet: View {
                     Text("When unset, icon and color inherit from the parent category, or fall back to a default.")
                 }
             }
-            .navigationTitle(title)
+            .navigationTitle(category == nil ? "New Category" : "Edit Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -334,32 +351,33 @@ struct CategoryEditSheet: View {
         }
     }
 
-    private var title: String {
-        if category != nil { return "Edit Category" }
-        if let parent { return "New under \(parent.name)" }
-        return "New Category"
-    }
-
     private func save() {
         errorMessage = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
         do {
             if let c = category {
-                let patch: [String: JSONValue] = [
+                var patch: [String: JSONValue] = [
                     "name": .string(trimmed),
                     "icon": icon.isEmpty ? .null : .string(icon),
                     "color": color.isEmpty ? .null : .string(color),
                 ]
+                if parentId != c.parentId {
+                    // Reparent: place last in the new parent's group (same math as drag).
+                    let kinRows = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+                    let sortOrder = CategoryReorder.reparent(c.id, under: parentId, in: kinRows)?.sortOrder ?? 0
+                    patch["parentId"] = parentId.map(JSONValue.string) ?? .null
+                    patch["sortOrder"] = .int(sortOrder)
+                }
                 try store.apply(.updateCategory, Args(["id": .string(c.id), "patch": .object(patch)]))
             } else {
                 var args: [String: JSONValue] = [
                     "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
-                    "type": .string(resolvedKind),
+                    "type": .string(kind),
                 ]
                 if !icon.isEmpty { args["icon"] = .string(icon) }
                 if !color.isEmpty { args["color"] = .string(color) }
-                if let parent { args["parentId"] = .string(parent.id) }
+                if let parentId { args["parentId"] = .string(parentId) }
                 try store.apply(.createCategory, Args(args))
             }
             dismiss()
