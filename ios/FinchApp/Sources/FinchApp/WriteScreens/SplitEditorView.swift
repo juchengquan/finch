@@ -84,7 +84,7 @@ struct SplitEditorView: View {
                             // unit ("$0.00"), matching Transaction total / Allocated above.
                             HStack(spacing: 2) {
                                 Text(Money.symbol(for: displayCurrency)).foregroundStyle(.secondary)
-                                TextField("0.00", text: $row.amount.decimalInput)
+                                TextField("0.00", text: $row.amount).numericInput($row.amount)
                                     .keyboardType(.decimalPad).fixedSize()
                             }
                         }

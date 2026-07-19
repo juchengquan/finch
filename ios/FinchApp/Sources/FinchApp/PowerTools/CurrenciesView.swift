@@ -165,7 +165,7 @@ struct AddExchangeRateSheet: View {
         NavigationStack {
             Form {
                 SearchablePickerRow(title: "Currency", options: currencyOptions, selection: $currency)
-                HStack { Text("Rate (per USD)"); Spacer(); TextField("0.0000", text: $rate.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                HStack { Text("Rate (per USD)"); Spacer(); TextField("0.0000", text: $rate).numericInput($rate).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 DatePicker("As of", selection: $date, displayedComponents: .date)
                 Picker("Source", selection: $source) { ForEach(fxSources, id: \.self) { Text($0).tag($0) } }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }

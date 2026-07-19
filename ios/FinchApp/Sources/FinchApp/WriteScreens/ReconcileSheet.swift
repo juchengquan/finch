@@ -32,7 +32,7 @@ struct ReconcileSheet: View {
                         LabeledContent("Current balance", value: store.displayMoney(a.balance, from: a.currency))
                         HStack {
                             Text("Statement balance"); Spacer()
-                            TextField("0.00", text: $statementBalance.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            TextField("0.00", text: $statementBalance).numericInput($statementBalance).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
                         DatePicker("Statement date", selection: $date, displayedComponents: .date)
                     }
@@ -148,7 +148,7 @@ struct ReconcileSheet: View {
             TextField("Merchant", text: $addMerchant)
             HStack {
                 Text("Amount"); Spacer()
-                TextField("0.00", text: $addAmount.decimalInput).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                TextField("0.00", text: $addAmount).numericInput($addAmount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
             }
             Button("Add") { quickAdd(a) }
                 .disabled(DecimalInput.parse(addAmount) == nil)
