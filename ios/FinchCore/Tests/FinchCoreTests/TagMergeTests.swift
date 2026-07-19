@@ -71,6 +71,28 @@ final class TagMergeTests: XCTestCase {
         }
     }
 
+    func test_mergeTag_ruleActions_dedupOnCollision() throws {
+        let q = try freshDB(); try seed(q)
+        try Apply.apply(dbQueue: q, action: "createRule", args: Args([
+            "ledgerId": .string("l1"), "id": .string("r1"), "name": .string("R"),
+            "condition": .object(["field": .string("merchant"), "op": .string("contains"), "value": .string("z")]),
+            "actions": .array([
+                .object(["type": .string("add_tag"), "tagId": .string("t1")]),
+                .object(["type": .string("add_tag"), "tagId": .string("t2")]),
+            ])]))
+        try Apply.apply(dbQueue: q, action: "mergeTag", args: Args(["sourceId": .string("t2"), "targetId": .string("t1")]))
+        try q.read { db in
+            let actions = try String.fetchOne(db, sql: "SELECT actions FROM rules WHERE id = 'r1'") ?? ""
+            let data = try XCTUnwrap(actions.data(using: .utf8))
+            let parsed = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+            let addTagT1 = parsed.filter { ($0["type"] as? String) == "add_tag" && ($0["tagId"] as? String) == "t1" }
+            let addTagT2 = parsed.filter { ($0["type"] as? String) == "add_tag" && ($0["tagId"] as? String) == "t2" }
+            XCTAssertEqual(addTagT1.count, 1)   // repointed + deduped down to a single reference
+            XCTAssertEqual(addTagT2.count, 0)   // no leftover reference to the source
+            XCTAssertFalse(actions.contains("t2"))
+        }
+    }
+
     func test_mergeTags_manyIntoOne() throws {
         let q = try freshDB(); try seed(q)
         try Apply.apply(dbQueue: q, action: "createTag", args: Args(["id": .string("t3"), "ledgerId": .string("l1"), "name": .string("FOOD")]))
