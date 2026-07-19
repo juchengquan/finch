@@ -108,7 +108,6 @@ struct AddTransactionSheet: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .background(Color(uiColor: .systemGroupedBackground))
                 #else
                 formPage(kind)
                 #endif
@@ -228,6 +227,13 @@ struct AddTransactionSheet: View {
                 }
             }
             #if os(iOS)
+            // The grouped background lives HERE (scrolling with the Form's
+            // content) rather than on the enclosing TabView, so the nav bar
+            // above keeps its translucent scroll-edge material (content blurs
+            // faintly beneath it, matching Accounts/Budgets) while all four
+            // pager pages still render the same unified background.
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
             .contentMargins(.top, 6, for: .scrollContent)
             #endif
     }
