@@ -75,3 +75,25 @@ func flattenCategories(_ forest: [CategoryTreeNode], expanded: Set<String>, sear
     for top in forest { walk(top, 0) }
     return out
 }
+
+/// True if `candidate` shares an ancestor/descendant line with any id in
+/// `selected` (excluding itself). Used to disable a category during multi-select
+/// merge when one of its ancestors or descendants is already selected, so the
+/// selected set stays mutually unrelated (no merging a category with its own
+/// parent/child). Bounded walk (≤10 hops; the tree is ≤3 deep).
+func mergeSelectionDisabled(_ candidate: String, selected: Set<String>, byId: [String: CategoryRow]) -> Bool {
+    func isAncestor(_ a: String, of b: String) -> Bool {
+        var cur = byId[b]?.parentId
+        var hops = 0
+        while let c = cur, hops < 10 {
+            if c == a { return true }
+            cur = byId[c]?.parentId
+            hops += 1
+        }
+        return false
+    }
+    for s in selected where s != candidate {
+        if isAncestor(candidate, of: s) || isAncestor(s, of: candidate) { return true }
+    }
+    return false
+}

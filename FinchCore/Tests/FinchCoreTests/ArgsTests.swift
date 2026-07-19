@@ -4,9 +4,10 @@ import XCTest
 final class ArgsTests: XCTestCase {
     /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment`
     /// + the native-first `setBudgetOrder` + `setTrackedCurrencies`
-    /// + `mergeCategory` (native-only, no web counterpart) = 78.
+    /// + `mergeCategory` (native-only, no web counterpart) = 78
+    /// + `mergeCategories` (native-only, atomic multi-source merge) = 79.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 78)
+        XCTAssertEqual(ActionName.allCases.count, 79)
     }
 
     func test_actionNameRawValues() {
