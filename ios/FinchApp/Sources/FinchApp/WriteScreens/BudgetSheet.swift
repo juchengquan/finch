@@ -54,8 +54,6 @@ struct BudgetSheet: View {
             Form {
                 Section {
                     TextField("Name", text: $name)
-                    Picker("Type", selection: $kind) { ForEach(Kind.allCases) { Text($0.label).tag($0) } }
-                        .pickerStyle(.segmented)
                     HStack {
                         Text("Amount"); Spacer()
                         TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
@@ -71,39 +69,18 @@ struct BudgetSheet: View {
                 }
 
                 Section {
-                    ForEach(categories) { cat in
-                        Button { toggle(cat.id) } label: {
-                            HStack {
-                                Text(cat.name).foregroundStyle(.primary)
-                                Spacer()
-                                if selectedCategories.contains(cat.id) {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    Text(kind == .income ? "Income categories" : "Categories")
+                    CategoryMultiPickerRow(
+                        title: kind == .income ? "Income categories" : "Categories",
+                        categories: categories,
+                        selection: $selectedCategories,
+                        emptyLabel: kind == .income ? "All income categories" : "All categories")
+                    MultiSelectPickerRow(
+                        title: "Accounts",
+                        options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
+                        selection: $selectedAccounts,
+                        emptyLabel: "All accounts")
                 } footer: {
-                    Text("Leave empty to track all \(kind.rawValue) categories.")
-                }
-
-                Section {
-                    ForEach(store.accounts) { acct in
-                        Button { toggleAccount(acct.id) } label: {
-                            HStack {
-                                Text(acct.name ?? "Account").foregroundStyle(.primary)
-                                Spacer()
-                                if selectedAccounts.contains(acct.id) {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Accounts")
-                } footer: {
-                    Text("Leave empty to track all accounts.")
+                    Text("Leave empty to track all \(kind.rawValue) categories and accounts.")
                 }
 
                 if kind == .expense {
@@ -139,6 +116,15 @@ struct BudgetSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .principal) {
+                    Picker("Type", selection: $kind) {
+                        ForEach(Kind.allCases) { k in
+                            Image(systemName: TxnKindIcon.icon(for: k.rawValue)).accessibilityLabel(k.label).tag(k)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 100)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
