@@ -118,7 +118,7 @@ struct CurrenciesView: View {
             switch outcome {
             case .updated(let n): refreshNote = "Updated \(n) rates"
             case .skipped: refreshNote = "Nothing to update"
-            case .failed: errorMessage = String(localized: "Couldn't reach frankfurter.dev. Check your connection and try again.")
+            case .failed: errorMessage = String(localized: "Couldn't fetch exchange rates. Check your connection and try again.")
             }
         }
     }
