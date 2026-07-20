@@ -64,14 +64,14 @@ enum CategoryIcon {
     }
 
     static let groups: [Group] = [
-        Group(title: "Food & Drink",      names: ["fork", "cup", "cart", "wineglass", "takeout", "cake"]),
-        Group(title: "Shopping",          names: ["bag", "tshirt", "gift", "tag", "sparkles", "creditcard"]),
-        Group(title: "Transport",         names: ["car", "fuel", "plane", "tram", "bike", "parking"]),
-        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone"]),
-        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "dumbbell", "run"]),
-        Group(title: "Entertainment",     names: ["film", "music", "game", "book", "school", "ticket"]),
-        Group(title: "Personal",          names: ["pet", "child", "scissors", "person"]),
-        Group(title: "Money & Work",      names: ["briefcase", "coins", "wallet", "chart", "bank", "doc", "sync", "percent"]),
+        Group(title: "Food & Drink",      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "carrot", "leaf", "cake"]),
+        Group(title: "Shopping",          names: ["bag", "handbag", "tshirt", "gift", "giftcard", "tag", "sparkles", "creditcard", "box"]),
+        Group(title: "Transport",         names: ["car", "fuel", "plane", "tram", "bus", "ferry", "bike", "scooter", "parking"]),
+        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "sofa", "trash"]),
+        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "bandage", "stethoscope", "dumbbell", "run", "yoga"]),
+        Group(title: "Entertainment",     names: ["film", "tv", "music", "headphones", "game", "book", "school", "camera", "ticket"]),
+        Group(title: "Personal",          names: ["pet", "child", "couple", "friends", "scissors", "person", "crown"]),
+        Group(title: "Money & Work",      names: ["briefcase", "coins", "cash", "wallet", "chart", "bank", "office", "doc", "calendar", "sync", "percent"]),
     ]
 
     /// Flat union of every group's names, in display order.
@@ -80,62 +80,86 @@ enum CategoryIcon {
     static func symbol(for name: String?) -> String {
         switch name {
         // Food & Drink
-        case "fork":       "fork.knife"
-        case "cup":        "cup.and.saucer.fill"
-        case "cart":       "cart.fill"
-        case "wineglass":  "wineglass.fill"
-        case "takeout":    "takeoutbag.and.cup.and.straw.fill"
-        case "cake":       "birthday.cake.fill"
+        case "fork":        "fork.knife"
+        case "cup":         "cup.and.saucer.fill"
+        case "mug":         "mug.fill"
+        case "cart":        "cart.fill"
+        case "wineglass":   "wineglass.fill"
+        case "takeout":     "takeoutbag.and.cup.and.straw.fill"
+        case "carrot":      "carrot.fill"
+        case "leaf":        "leaf.fill"
+        case "cake":        "birthday.cake.fill"
         // Shopping
-        case "bag":        "bag.fill"
-        case "tshirt":     "tshirt.fill"
-        case "gift":       "gift.fill"
-        case "tag":        "tag.fill"
-        case "sparkles":   "sparkles"
-        case "creditcard": "creditcard.fill"
+        case "bag":         "bag.fill"
+        case "handbag":     "handbag.fill"
+        case "tshirt":      "tshirt.fill"
+        case "gift":        "gift.fill"
+        case "giftcard":    "giftcard.fill"
+        case "tag":         "tag.fill"
+        case "sparkles":    "sparkles"
+        case "creditcard":  "creditcard.fill"
+        case "box":         "shippingbox.fill"
         // Transport
-        case "car":        "car.fill"
-        case "fuel":       "fuelpump.fill"
-        case "plane":      "airplane"
-        case "tram":       "tram.fill"
-        case "bike":       "bicycle"
-        case "parking":    "parkingsign.circle.fill"
+        case "car":         "car.fill"
+        case "fuel":        "fuelpump.fill"
+        case "plane":       "airplane"
+        case "tram":        "tram.fill"
+        case "bus":         "bus.fill"
+        case "ferry":       "ferry.fill"
+        case "bike":        "bicycle"
+        case "scooter":     "scooter"
+        case "parking":     "parkingsign.circle.fill"
         // Home & Bills
-        case "home":       "house.fill"
-        case "key":        "key.fill"
-        case "bolt":       "bolt.fill"
-        case "drop":       "drop.fill"
-        case "flame":      "flame.fill"
-        case "wifi":       "wifi"
-        case "phone":      "phone.fill"
+        case "home":        "house.fill"
+        case "key":         "key.fill"
+        case "bolt":        "bolt.fill"
+        case "drop":        "drop.fill"
+        case "flame":       "flame.fill"
+        case "wifi":        "wifi"
+        case "phone":       "phone.fill"
+        case "wrench":      "wrench.and.screwdriver.fill"
+        case "sofa":        "sofa.fill"
+        case "trash":       "trash.fill"
         // Health & Fitness
-        case "heart":      "heart.fill"
-        case "pills":      "pills.fill"
-        case "cross":      "cross.case.fill"
-        case "dumbbell":   "dumbbell.fill"
-        case "run":        "figure.run"
+        case "heart":       "heart.fill"
+        case "pills":       "pills.fill"
+        case "cross":       "cross.case.fill"
+        case "bandage":     "bandage.fill"
+        case "stethoscope": "stethoscope"
+        case "dumbbell":    "dumbbell.fill"
+        case "run":         "figure.run"
+        case "yoga":        "figure.yoga"
         // Entertainment
-        case "film":       "film.fill"
-        case "music":      "music.note"
-        case "game":       "gamecontroller.fill"
-        case "book":       "book.fill"
-        case "school":     "graduationcap.fill"
-        case "ticket":     "ticket.fill"
+        case "film":        "film.fill"
+        case "tv":          "tv.fill"
+        case "music":       "music.note"
+        case "headphones":  "headphones"
+        case "game":        "gamecontroller.fill"
+        case "book":        "book.fill"
+        case "school":      "graduationcap.fill"
+        case "camera":      "camera.fill"
+        case "ticket":      "ticket.fill"
         // Personal
-        case "pet":        "pawprint.fill"
-        case "child":      "figure.and.child.holdinghands"
-        case "scissors":   "scissors"
-        case "person":     "figure.stand"
+        case "pet":         "pawprint.fill"
+        case "child":       "figure.and.child.holdinghands"
+        case "couple":      "figure.2"
+        case "friends":     "person.2.fill"
+        case "scissors":    "scissors"
+        case "person":      "figure.stand"
+        case "crown":       "crown.fill"
         // Money & Work
-        case "briefcase":  "briefcase.fill"
-        case "coins":      "dollarsign.circle.fill"
-        case "wallet":     "wallet.pass.fill"
-        case "chart":      "chart.pie.fill"
-        case "bank":       "building.columns.fill"
-        case "doc":        "doc.fill"
-        case "sync":       "arrow.triangle.2.circlepath"
-        case "percent":    "percent"
-        default:           "tag.fill"
+        case "briefcase":   "briefcase.fill"
+        case "coins":       "dollarsign.circle.fill"
+        case "cash":        "banknote.fill"
+        case "wallet":      "wallet.pass.fill"
+        case "chart":       "chart.pie.fill"
+        case "bank":        "building.columns.fill"
+        case "office":      "building.2.fill"
+        case "doc":         "doc.fill"
+        case "calendar":    "calendar"
+        case "sync":        "arrow.triangle.2.circlepath"
+        case "percent":     "percent"
+        default:            "tag.fill"
         }
     }
 }

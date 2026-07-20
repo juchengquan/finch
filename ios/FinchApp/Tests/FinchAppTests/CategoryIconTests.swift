@@ -2,9 +2,24 @@ import XCTest
 @testable import FinchApp
 
 final class CategoryIconTests: XCTestCase {
-    func test_twelve_shared_names() {
-        XCTAssertEqual(CategoryIcon.names,
-            ["fork", "home", "car", "bag", "film", "heart", "sync", "tag", "coins", "wallet", "chart", "doc"])
+    /// The original 12 web-shared names must remain present so packs authored on
+    /// the web keep rendering — native-only icons EXTEND the set, never remove.
+    func test_web_shared_names_present() {
+        let webShared = ["fork", "home", "car", "bag", "film", "heart",
+                         "sync", "tag", "coins", "wallet", "chart", "doc"]
+        for n in webShared {
+            XCTAssertTrue(CategoryIcon.names.contains(n), "missing web-shared icon \(n)")
+        }
+    }
+
+    /// `names` is exactly the flat union of the themed groups, in order.
+    func test_names_match_group_union() {
+        XCTAssertEqual(CategoryIcon.names, CategoryIcon.groups.flatMap(\.names))
+    }
+
+    /// No short-name appears twice (a dupe would render/select ambiguously).
+    func test_names_are_unique() {
+        XCTAssertEqual(CategoryIcon.names.count, Set(CategoryIcon.names).count)
     }
 
     func test_known_names_map_to_symbols() {
