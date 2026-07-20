@@ -47,11 +47,10 @@ private struct ToastOverlay: ViewModifier {
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         .background(.regularMaterial, in: Capsule())
                         .overlay(Capsule().strokeBorder(.quaternary))
-                        // Just enough to lift the capsule off scrolling content.
-                        // The material and the hairline already draw the edge, so a
-                        // heavier shadow (this was radius 8 at SwiftUI's default 33%
-                        // black) only added a halo on top of work already done.
-                        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+                        // A whisper — the material and hairline draw the edge; this
+                        // only stops the capsule reading as pasted onto a list row.
+                        // (Was radius 8 at SwiftUI's default 33% black, which halo'd.)
+                        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                         // Clear of the compact tab bar, which the overlay sits over.
                         .padding(.bottom, 92)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
