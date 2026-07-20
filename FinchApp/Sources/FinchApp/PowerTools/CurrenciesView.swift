@@ -9,7 +9,6 @@ import FinchCore
 /// setExchangeRate / deleteExchangeRate / setTrackedCurrencies chokepoints.
 struct CurrenciesView: View {
     @EnvironmentObject private var store: FinchStore
-    @State private var showingAdd = false
     @State private var errorMessage: String?
     @State private var refreshing = false
     @State private var lastUpdated: Date?
@@ -42,11 +41,14 @@ struct CurrenciesView: View {
                 }
                 .disabled(refreshing)
             } footer: {
-                Text("Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.")
+                Text("Fetches daily reference rates for your currencies from free reference-rate services. Only currency codes are sent.")
             }
 
-            Section("Currencies") {
-                ForEach(fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query), id: \.code) { row in
+            // Two groups: Active (the hub USD + tracked currencies) and Inactive
+            // (the rest). USD is always Active and can't be toggled off (isHub).
+            let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query)
+            Section("Active") {
+                ForEach(rows.filter { $0.isHub || $0.tracked }, id: \.code) { row in
                     NavigationLink {
                         ExchangeRateHistoryView(currency: row.code)
                     } label: {
@@ -54,15 +56,21 @@ struct CurrenciesView: View {
                     }
                 }
             }
+            let inactive = rows.filter { !$0.isHub && !$0.tracked }
+            if !inactive.isEmpty {
+                Section("Inactive") {
+                    ForEach(inactive, id: \.code) { row in
+                        NavigationLink {
+                            ExchangeRateHistoryView(currency: row.code)
+                        } label: {
+                            currencyRow(row)
+                        }
+                    }
+                }
+            }
         }
         .searchable(text: $query)
         .navigationTitle("Currencies")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add rate")
-            }
-        }
-        .sheet(isPresented: $showingAdd) { AddExchangeRateSheet() }
         .errorAlert($errorMessage)
         .onAppear { lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date }
     }
@@ -110,7 +118,7 @@ struct CurrenciesView: View {
             switch outcome {
             case .updated(let n): refreshNote = "Updated \(n) rates"
             case .skipped: refreshNote = "Nothing to update"
-            case .failed: errorMessage = String(localized: "Couldn't reach frankfurter.dev. Check your connection and try again.")
+            case .failed: errorMessage = String(localized: "Couldn't fetch exchange rates. Check your connection and try again.")
             }
         }
     }
@@ -143,58 +151,5 @@ struct SourceBadge: View {
             .foregroundStyle(color)
             .clipShape(Capsule())
             .accessibilityLabel("source \(label)")
-    }
-}
-
-private let fxSources = ["ECB", "Yahoo", "manual"]
-
-struct AddExchangeRateSheet: View {
-    @EnvironmentObject private var store: FinchStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var currency = ""
-    @State private var rate = ""
-    @State private var date = Date()
-    @State private var source = "manual"
-    @State private var errorMessage: String?
-
-    private var currencyOptions: [PickerOption] {
-        Currencies.iso.filter { $0 != "USD" }.map { PickerOption(id: $0, name: $0) }
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                SearchablePickerRow(title: "Currency", options: currencyOptions, selection: $currency)
-                HStack { Text("Rate (per USD)"); Spacer(); TextField("0.0000", text: $rate).numericInput($rate).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                DatePicker("As of", selection: $date, displayedComponents: .date)
-                Picker("Source", selection: $source) { ForEach(fxSources, id: \.self) { Text($0).tag($0) } }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-            }
-            .navigationTitle("Add Rate")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").confirmCheckmarkStyle()
-                }
-            }
-            .onAppear { if currency.isEmpty { currency = currencyOptions.first?.id ?? "" } }
-        }
-    }
-
-    private func save() {
-        errorMessage = nil
-        guard !currency.isEmpty else { errorMessage = "Pick a currency."; return }
-        guard let r = DecimalInput.parse(rate), r > 0 else { errorMessage = "Enter a rate > 0."; return }
-        do {
-            try store.apply(.setExchangeRate, Args([
-                "date": .string(AppDate.isoDay.string(from: date)),
-                "currency": .string(currency),
-                "rate": .double(r),
-                "source": .string(source)]))
-            dismiss()
-        } catch { errorMessage = i18nMessage(error) }
     }
 }
