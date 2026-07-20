@@ -98,4 +98,42 @@ final class DownSyncTests: XCTestCase {
         let n = try db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM accounts") }
         XCTAssertEqual(n, 0, "failed ingest rolls back")
     }
+
+    // MARK: peer schema skew
+
+    /// A peer on a different schema sends a column this build dropped
+    /// (`counterparties.ledger_id`, removed in schema 2026-07-20). It must be
+    /// ignored, not abort the seed — ingest is ONE transaction, so an unfiltered
+    /// unknown column would roll back everything and leave the device un-seedable.
+    func test_unknownColumnIsIgnored_notFatal() throws {
+        let db = try freshDB()
+        let tables: [String: [[String: String]]] = [
+            "counterparties": [[
+                "id": "cp1", "name": "Whole Foods", "is_verified": "1",
+                "ledger_id": "l1",                       // <- dropped in 2026-07-20
+                "created_at": "2026-06-15T00:00:00Z", "updated_at": "2026-06-15T00:00:00Z",
+            ]],
+        ]
+        let problems = try DownSync.ingest(into: db, tables: tables)
+        XCTAssertTrue(problems.isEmpty)
+        // The row landed, minus the unknown column.
+        let name = try db.read { try String.fetchOne($0, sql: "SELECT name FROM counterparties WHERE id='cp1'") }
+        XCTAssertEqual(name, "Whole Foods")
+        let verified = try db.read { try Int.fetchOne($0, sql: "SELECT is_verified FROM counterparties WHERE id='cp1'") }
+        XCTAssertEqual(verified, 1, "known columns still bind correctly alongside a dropped one")
+    }
+
+    /// Skew must not silently drop a row: one unknown column among known ones
+    /// keeps the row, but a row of ONLY unknown columns inserts nothing rather
+    /// than issuing an empty INSERT.
+    func test_rowOfOnlyUnknownColumnsIsSkipped() throws {
+        let db = try freshDB()
+        let tables: [String: [[String: String]]] = [
+            "counterparties": [["not_a_column": "x", "also_bogus": "y"]],
+        ]
+        let problems = try DownSync.ingest(into: db, tables: tables)
+        XCTAssertTrue(problems.isEmpty)
+        let n = try db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM counterparties") }
+        XCTAssertEqual(n, 0)
+    }
 }
