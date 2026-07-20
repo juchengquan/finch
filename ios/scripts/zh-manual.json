@@ -351,5 +351,6 @@
   "Delete group?": "删除分组？",
   "Delete transaction?": "删除该交易？",
   "Note (optional)": "备注（可选）",
-  "finch": "finch"
+  "finch": "finch",
+  "Shared": "共享"
 }

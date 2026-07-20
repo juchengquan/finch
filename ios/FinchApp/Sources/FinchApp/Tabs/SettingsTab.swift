@@ -2,9 +2,10 @@ import SwiftUI
 import FinchCore
 
 /// Settings home — grouped drill-in sections: **General** (appearance,
-/// notifications, security), **Ledger** (categories, tags, merchants,
-/// currencies), **Data** (backup & sync, advanced), an unlabeled **Experimental
-/// Labs** row (formerly "Power Tools"; holds Rules), plus an **About** footer.
+/// notifications, security), **Ledger** (categories, tags — per-ledger),
+/// **Shared** (merchants, currencies — global, one set across every ledger),
+/// **Data** (backup & sync, advanced), an unlabeled **Experimental Labs** row
+/// (formerly "Power Tools"; holds Rules), plus an **About** footer.
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
@@ -37,9 +38,16 @@ struct SettingsRootList: View {
                 NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
                 NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
             }
+            // Categories + Tags are PER-LEDGER (each ledger has its own set) —
+            // switching the active ledger changes what these show.
             Section("Ledger") {
                 NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
                 NavigationLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
+            }
+            // Merchants + Currencies are GLOBAL — one shared catalog / FX-rate set
+            // spanning every ledger — so they live in "Shared", not "Ledger", and
+            // don't change when you switch the active ledger.
+            Section("Shared") {
                 NavigationLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
                 NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
             }

@@ -4460,6 +4460,16 @@
         }
       }
     },
+    "Shared": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享"
+          }
+        }
+      }
+    },
     "See in Activity feed": {
       "localizations": {
         "zh-Hans": {
