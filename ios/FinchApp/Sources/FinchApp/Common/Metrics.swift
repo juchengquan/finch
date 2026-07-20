@@ -10,10 +10,13 @@ enum Metrics {
     /// Individual screens may still override it locally (e.g. the Add sheet's 6).
     static let sectionSpacing: CGFloat = 12
 
-    /// Gap above a section title rendered by `finchSectionHeader`.
-    static let headerTopPadding: CGFloat = 16
-    /// Gap between a section title and its group.
-    static let headerBottomPadding: CGFloat = 6
+    /// Extra gap ABOVE a `finchSectionHeader` title. This ADDS to the inset the
+    /// system already applies to a custom header view, so 0 reproduces today's
+    /// rendering — dial up from here.
+    static let headerTopPadding: CGFloat = 0
+    /// Extra gap BELOW a `finchSectionHeader` title, added on top of the system's
+    /// own spacing (see above).
+    static let headerBottomPadding: CGFloat = 0
     /// Row insets for the type-caption row (`TxnTypeToolbar.caption`).
     static let captionInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
 }
