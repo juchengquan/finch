@@ -50,10 +50,21 @@ public enum Tags {
     /// Additively copy tags from one ledger to another, dedup by name
     /// (case-insensitive). `ids` (optional) restricts to those source tags.
     static func copyTags(_ db: Database, _ args: Args) throws {
+        _ = try copyTagsReturningCount(db, args)
+    }
+
+    /// Like `copyTags`, returning how many tags were actually INSERTED. Copies
+    /// dedup against the target, so the count is what the caller needs to say
+    /// "N added" rather than a bare "done" that hides a no-op.
+    static func copyTagsReturningCount(_ db: Database, _ args: Args) throws -> Int {
         struct A: Decodable { let fromLedgerId: String; let toLedgerId: String; let ids: [String]? }
         let a = try args.to(A.self)
         let want = a.ids.map(Set.init)
-        let existing = Set(try String.fetchAll(db, sql: "SELECT lower(name) FROM tags WHERE ledger_id = ?", arguments: [a.toLedgerId]))
+        // Mutable, and updated as we insert: two SOURCE tags differing only in
+        // case ("Food"/"food") would otherwise both clear a snapshot taken before
+        // the loop and land as duplicates in the target.
+        var existing = Set(try String.fetchAll(db, sql: "SELECT lower(name) FROM tags WHERE ledger_id = ?", arguments: [a.toLedgerId]))
+        var added = 0
         for row in try Row.fetchAll(db, sql: "SELECT id, name, color FROM tags WHERE ledger_id = ?", arguments: [a.fromLedgerId]) {
             let id = row["id"] as String
             guard want?.contains(id) ?? true else { continue }
@@ -61,7 +72,10 @@ public enum Tags {
             if name.isEmpty || existing.contains(name.lowercased()) { continue }
             try db.execute(sql: "INSERT INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))",
                            arguments: [Entries.newId("tag"), a.toLedgerId, name, row["color"] as String?])
+            existing.insert(name.lowercased())
+            added += 1
         }
+        return added
     }
 
     // MARK: merge

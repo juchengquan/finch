@@ -138,6 +138,14 @@ public enum Categories {
     /// tree and dedup by (kind, target-parent, name). System rows are skipped.
     /// `ids` (optional) restricts to those categories plus their ancestors.
     static func copyCategories(_ db: Database, _ args: Args) throws {
+        _ = try copyCategoriesReturningCount(db, args)
+    }
+
+    /// Like `copyCategories`, returning how many categories were actually
+    /// INSERTED. Copies dedup against the target (an existing match is reused,
+    /// not duplicated), so the count is what the caller needs to say "N added"
+    /// rather than a bare "done" that hides a no-op.
+    static func copyCategoriesReturningCount(_ db: Database, _ args: Args) throws -> Int {
         struct A: Decodable { let fromLedgerId: String; let toLedgerId: String; let ids: [String]? }
         let a = try args.to(A.self)
         // Source user categories (skip system equity rows).
@@ -162,6 +170,7 @@ public enum Categories {
         }
         var nextOrder = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE ledger_id = ?", arguments: [a.toLedgerId])) ?? 0
         var idMap: [String: String] = [:]   // source id -> target id (existing or new)
+        var added = 0                       // NEW inserts only — reused matches don't count
         // Process parents before children.
         var pending = wanted
         while !pending.isEmpty {
@@ -184,10 +193,12 @@ public enum Categories {
                                    arguments: [newId, a.toLedgerId, targetParent, name, kind, r["icon"] as String?, r["color"] as String?, nextOrder])
                     nextOrder += 1
                     idMap[src] = newId; dedup[key] = newId
+                    added += 1
                 }
                 pending.remove(src)
             }
         }
+        return added
     }
 
     // MARK: depth / cycle guards (port of lib/db/domain/categories/_depth.ts)
