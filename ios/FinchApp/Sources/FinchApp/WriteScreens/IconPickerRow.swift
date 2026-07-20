@@ -44,6 +44,7 @@ private struct IconPickerSheet: View {
     @Binding var selection: String
     @Environment(\.dismiss) private var dismiss
     @State private var staged: String
+    @State private var query = ""
 
     private let columns = Array(repeating: GridItem(.flexible()), count: 6)
 
@@ -53,10 +54,23 @@ private struct IconPickerSheet: View {
         self._staged = State(initialValue: selection.wrappedValue)
     }
 
+    /// Groups filtered by the search query, matching each icon's friendly name
+    /// (and the group title, so "travel" surfaces the whole section). Empty
+    /// query returns every group unchanged.
+    private var filteredGroups: [CategoryIcon.Group] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return CategoryIcon.groups }
+        return CategoryIcon.groups.compactMap { g in
+            if g.title.localizedCaseInsensitiveContains(q) { return g }
+            let names = g.names.filter { CategoryIcon.label(for: $0).localizedCaseInsensitiveContains(q) }
+            return names.isEmpty ? nil : CategoryIcon.Group(title: g.title, names: names)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                ForEach(CategoryIcon.groups) { group in
+                ForEach(filteredGroups) { group in
                     Section(group.title) {
                         LazyVGrid(columns: columns, spacing: 12) {
                             ForEach(group.names, id: \.self) { n in
@@ -73,6 +87,10 @@ private struct IconPickerSheet: View {
                         .padding(.vertical, 4)
                     }
                 }
+            }
+            .searchable(text: $query, prompt: "Search icons")
+            .overlay {
+                if filteredGroups.isEmpty { ContentUnavailableView.search(text: query) }
             }
             .navigationTitle(title)
             #if os(iOS)
