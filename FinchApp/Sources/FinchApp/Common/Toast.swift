@@ -45,9 +45,16 @@ private struct ToastOverlay: ViewModifier {
                     Text(message)
                         .font(.subheadline)
                         .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(.regularMaterial, in: Capsule())
+                        // Thick, not regular: this lands over the Categories tree —
+                        // a list of coloured icons — and text you get ~2s to read
+                        // shouldn't compete with whatever scrolls behind it. Still a
+                        // material, so light/dark adapt for free.
+                        .background(.thickMaterial, in: Capsule())
                         .overlay(Capsule().strokeBorder(.quaternary))
-                        .shadow(radius: 8, y: 2)
+                        // A whisper — the material and hairline draw the edge; this
+                        // only stops the capsule reading as pasted onto a list row.
+                        // (Was radius 8 at SwiftUI's default 33% black, which halo'd.)
+                        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                         // Clear of the compact tab bar, which the overlay sits over.
                         .padding(.bottom, 92)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
