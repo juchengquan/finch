@@ -410,7 +410,7 @@ test('postEntry resolves the counterparty from the description', async () => {
   await withTestLedger(exec);
   await addAccount(exec, 'a-cp', 'SGD', 'lt');
   await exec(
-    "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES ('cp-t1','lt','Blue Bottle',1,datetime('now'),datetime('now'))",
+    "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES ('cp-t1','Blue Bottle',1,datetime('now'),datetime('now'))",
   );
   const { entryId } = await postEntry(exec, {
     ledgerId: 'lt', date: '2026-06-03', description: 'blue bottle', kind: 'expense',

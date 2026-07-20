@@ -5,14 +5,12 @@
 
 export interface Counterparty {
   id: string;
-  ledgerId: string;
   name: string;
   verified: boolean;
 }
 
 export interface NewCounterparty {
   id: string;
-  ledgerId: string;
   name: string;
 }
 

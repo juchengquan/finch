@@ -236,9 +236,8 @@ function PaletteBody({ close }: { close: () => void }) {
         });
       }
 
-      // Merchants (counterparties).
+      // Merchants (counterparties) — global, not ledger-scoped.
       const cpMatches = counterparties
-        .filter((c) => c.ledgerId === activeId)
         .filter((c) => matches(q, c.name))
         .slice(0, 5);
       for (const c of cpMatches) {

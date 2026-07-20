@@ -177,17 +177,14 @@ test('addTransaction: explicit counterpartyId links the row to that counterparty
   expect(tx.counterpartyId).toBe('cp-05');
 });
 
-test('addTransaction: explicit counterpartyId is rejected if it belongs to a different ledger', async () => {
+test('addTransaction: an explicit counterpartyId links regardless of ledger (global merchants)', async () => {
   const exec = await seededAndAudited();
-  // Spin up a second ledger + counterparty; passing its id to an
-  // addTransaction for the 'personal' ledger must not link.
+  // Merchants are global (no ledger_id) — any counterparty id links to a
+  // transaction in any ledger.
+  const cpId = 'cp-global-merchant';
   await exec(
-    "INSERT INTO ledgers (id, name, base_currency, is_default, created_at, updated_at) VALUES ('biz', 'Business', 'SGD', 0, datetime('now'), datetime('now'))",
-  );
-  const otherCpId = 'cp-other-ledger';
-  await exec(
-    "INSERT INTO counterparties (id, ledger_id, name, is_verified, created_at, updated_at) VALUES (?, 'biz', ?, 1, datetime('now'), datetime('now'))",
-    [otherCpId, 'Foreign Ledger Merchant'],
+    "INSERT INTO counterparties (id, name, is_verified, created_at, updated_at) VALUES (?, ?, 1, datetime('now'), datetime('now'))",
+    [cpId, 'Global Merchant'],
   );
   const txId = await addTransaction(exec, {
     ledgerId: 'personal',
@@ -195,10 +192,10 @@ test('addTransaction: explicit counterpartyId is rejected if it belongs to a dif
     amount: -5,
     merchant: 'Raw Merchant String',
     date: '2026-05-25',
-    counterpartyId: otherCpId,
+    counterpartyId: cpId,
   });
   const [row] = await exec('SELECT description, counterparty_id FROM entries WHERE id = ?', [txId]);
-  expect(row.counterparty_id).toBeNull();
+  expect(String(row.counterparty_id)).toBe(cpId);
   expect(String(row.description)).toBe('Raw Merchant String');
 });
 

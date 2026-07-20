@@ -86,7 +86,7 @@ export const handlers = {
       if (patch.merchant !== undefined) {
         sets.push('description = ?');
         bind.push(patch.merchant);
-        const cpId = await resolveCounterpartyIdByName(exec, rule.ledgerId, patch.merchant);
+        const cpId = await resolveCounterpartyIdByName(exec, patch.merchant);
         sets.push('counterparty_id = ?');
         bind.push(cpId);
       }

@@ -8,30 +8,24 @@ import type { Counterparty, NewCounterparty, CounterpartyPatch } from '@/lib/db/
 function rowToCp(r: Record<string, unknown>): Counterparty {
   return {
     id: String(r.id),
-    ledgerId: String(r.ledger_id),
     name: String(r.name),
     verified: !!Number(r.is_verified),
   };
 }
 
-/** List counterparties; pass a ledgerId to scope, or omit for all ledgers. */
-export async function listCounterparties(exec: Exec, ledgerId?: string): Promise<Counterparty[]> {
-  const rows = await exec(
-    ledgerId
-      ? 'SELECT * FROM counterparties WHERE ledger_id = ? ORDER BY name'
-      : 'SELECT * FROM counterparties ORDER BY ledger_id, name',
-    ledgerId ? [ledgerId] : [],
-  );
+/** List all counterparties. Merchants are global — one shared catalog. */
+export async function listCounterparties(exec: Exec): Promise<Counterparty[]> {
+  const rows = await exec('SELECT * FROM counterparties ORDER BY name');
   return rows.map(rowToCp);
 }
 
-/** Match the canonical name (case-insensitive substring). */
-export async function searchCounterparties(exec: Exec, ledgerId: string, query: string): Promise<Counterparty[]> {
+/** Match the canonical name (case-insensitive substring), globally. */
+export async function searchCounterparties(exec: Exec, query: string): Promise<Counterparty[]> {
   const rows = await exec(
     `SELECT * FROM counterparties
-      WHERE ledger_id = ? AND name LIKE ?
+      WHERE name LIKE ?
       ORDER BY name`,
-    [ledgerId, `%${query}%`],
+    [`%${query}%`],
   );
   return rows.map(rowToCp);
 }
@@ -47,8 +41,8 @@ export async function unverifyCounterparty(exec: Exec, id: string): Promise<void
 /** Insert a new (unverified) merchant. */
 export async function createCounterparty(exec: Exec, c: NewCounterparty): Promise<void> {
   await exec(
-    "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
-    [c.id, c.ledgerId, c.name],
+    "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))",
+    [c.id, c.name],
   );
 }
 
@@ -72,23 +66,22 @@ export async function deleteCounterparty(exec: Exec, id: string): Promise<void> 
 }
 
 /** Resolve a free-text merchant string to a counterparty id by case-insensitive
- *  exact match within the same ledger. Returns null when no row matches —
+ *  exact match against the global catalog. Returns null when no row matches —
  *  callers leave `transactions.counterparty_id` NULL and the description
  *  stands on its own. Auto-creating counterparties from typed names is
  *  intentionally NOT done here: the catalog stays curated. */
 export async function resolveCounterpartyIdByName(
   exec: Exec,
-  ledgerId: string,
   name: string | null | undefined,
 ): Promise<string | null> {
   if (!name) return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
   // The name column is COLLATE NOCASE, so `=` matches case-insensitively and
-  // the (ledger_id, name) index serves the lookup directly — no LOWER() needed.
+  // the name index serves the lookup directly — no LOWER() needed.
   const rows = await exec(
-    'SELECT id FROM counterparties WHERE ledger_id = ? AND name = ? LIMIT 1',
-    [ledgerId, trimmed],
+    'SELECT id FROM counterparties WHERE name = ? LIMIT 1',
+    [trimmed],
   );
   return rows.length ? String(rows[0].id) : null;
 }

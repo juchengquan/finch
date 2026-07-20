@@ -386,7 +386,7 @@ async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
     account_groups: map(await rows('SELECT * FROM account_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
     accounts: map(await rows('SELECT * FROM accounts ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, type: (r) => r.type, currency: (r) => r.currency, current_balance: (r) => num(r.current_balance), sort_order: (r) => Number(r.sort_order), include_in_net_worth: (r) => Number(r.include_in_net_worth), is_active: (r) => Number(r.is_active), archived: (r) => r.archived_at != null }),
     categories: map(await rows('SELECT * FROM categories ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, parent_id: (r) => r.parent_id ?? null, name: (r) => r.name, kind: (r) => r.kind, system: (r) => r.system ?? null, sort_order: (r) => Number(r.sort_order) }),
-    counterparties: map(await rows('SELECT * FROM counterparties ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, is_verified: (r) => Number(r.is_verified) }),
+    counterparties: map(await rows('SELECT * FROM counterparties ORDER BY id'), { id: (r) => r.id, name: (r) => r.name, is_verified: (r) => Number(r.is_verified) }),
     tags: map(await rows('SELECT * FROM tags ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, color: (r) => r.color ?? null }),
     budgets: map(await rows('SELECT * FROM budgets ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, group_id: (r) => r.group_id ?? null, name: (r) => r.name, kind: (r) => r.kind, amount: (r) => num(r.amount), saved: (r) => num(r.saved), frequency: (r) => r.frequency, start_date: (r) => r.start_date, end_date: (r) => r.end_date ?? null, is_recurring: (r) => Number(r.is_recurring), rollover: (r) => Number(r.rollover), account_ids: (r) => r.account_ids ?? null, category_ids: (r) => r.category_ids ?? null, warning_pct: (r) => num(r.warning_pct), pending_amount: (r) => num(r.pending_amount) }),
     budget_groups: map(await rows('SELECT * FROM budget_groups ORDER BY id'), { id: (r) => r.id, ledger_id: (r) => r.ledger_id, name: (r) => r.name, sort_order: (r) => Number(r.sort_order) }),
@@ -424,7 +424,7 @@ const SEED_SQL: string[] = [
  *  rule) or an entry/posting (canonicalState nests those minus ids). No action
  *  references a randomly-generated id, so web + Swift converge on one end state. */
 const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
-  { action: 'createCounterparty', args: { id: 'cp1', ledgerId: 'personal', name: 'Starbucks' } },
+  { action: 'createCounterparty', args: { id: 'cp1', name: 'Starbucks' } },
   { action: 'createTag', args: { id: 'tg1', ledgerId: 'personal', name: 'work', color: '#f00' } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -25, merchant: 'Coffee', categoryId: 'food', date: '2026-05-01', skipRules: true } },
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: 2000, merchant: 'Pay', categoryId: 'pay', date: '2026-05-02', kind: 'income', skipRules: true } },
