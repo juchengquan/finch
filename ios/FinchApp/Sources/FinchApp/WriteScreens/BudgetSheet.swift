@@ -135,14 +135,6 @@ struct BudgetSheet: View {
         }
     }
 
-    private func toggle(_ id: String) {
-        if selectedCategories.contains(id) { selectedCategories.remove(id) } else { selectedCategories.insert(id) }
-    }
-
-    private func toggleAccount(_ id: String) {
-        if selectedAccounts.contains(id) { selectedAccounts.remove(id) } else { selectedAccounts.insert(id) }
-    }
-
     private func save() {
         errorMessage = nil
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { errorMessage = "Enter a name."; return }
