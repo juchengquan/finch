@@ -13,6 +13,7 @@ struct InsightsTab: View {
     @State private var view: InsightsMode = .trends
     @State private var rangeMonths = 6   // 3M / 6M / 1Y range switcher
     @AppStorage("finch.insights.layout") private var layout = InsightsLayout.default
+    @State private var customizing = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,8 @@ struct InsightsTab: View {
                                     ForEach(InsightsTemplate.allCases) { t in
                                         Button(t.title) { layout = InsightsLayout(order: t.cardIDs, templateName: t.rawValue) }
                                     }
+                                    Divider()
+                                    Button("Customize…") { customizing = true }
                                 } label: {
                                     Label(layout.matchingTemplate()?.title ?? "Custom", systemImage: "square.grid.2x2")
                                         .font(.subheadline)
@@ -48,6 +51,13 @@ struct InsightsTab: View {
                                     if let entry = InsightsCatalog.entry(id) {
                                         entry.make(rangeMonths)
                                     }
+                                }
+                                .sheet(isPresented: $customizing) {
+                                    InsightsCustomizeSheet(layout: $layout)
+                                        #if os(iOS)
+                                        .presentationDetents([.large])
+                                        .presentationDragIndicator(.visible)
+                                        #endif
                                 }
                             } else {
                                 BreakdownView()
