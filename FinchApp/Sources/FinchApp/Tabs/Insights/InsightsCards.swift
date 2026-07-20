@@ -18,22 +18,52 @@ struct Card<Content: View>: View {
 
 struct InsightsCard: View {
     @EnvironmentObject private var store: FinchStore
+    /// Collapse state, persisted per-device. Collapsed shows the single top insight
+    /// as a teaser; expanded reveals all. Chevron-disclosure header (Insights redesign).
+    @AppStorage("finch.insights.highlightsExpanded") private var expanded = false
+
     var body: some View {
         let ctx = InsightContext(
             txns: store.txns, accounts: store.accounts, budgets: store.budgets,
             categories: store.pickableCategories, ledgerId: store.activeLedgerId,
             month: String(store.today.prefix(7)), today: store.today)
         let insights = Selectors.generateInsights(ctx, fmt: store.displayMoneyBase)
-        return Card(title: "Insights") {
+        // Custom card chrome (matches `Card`) — the header is a disclosure control,
+        // so we can't reuse `Card(title:)`.
+        return VStack(alignment: .leading, spacing: 10) {
+            Button { withAnimation(.snappy) { expanded.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Text("Highlights").font(.headline).foregroundStyle(.primary)
+                    if !expanded && insights.count > 1 {
+                        Text("\(insights.count)")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(.secondary.opacity(0.15), in: Capsule())
+                    }
+                    Spacer()
+                    if insights.count > 1 {
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(insights.count <= 1)
+
             if insights.isEmpty {
                 Text("Add a few transactions to see insights.")
                     .font(.caption).foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(Array(insights.enumerated()), id: \.offset) { _, ins in row(ins) }
-                }
+            } else if expanded {
+                ForEach(Array(insights.enumerated()), id: \.offset) { _, ins in row(ins) }
+            } else if let first = insights.first {
+                row(first)   // teaser: the top insight stays visible while collapsed
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder private func row(_ ins: Insight) -> some View {
@@ -537,7 +567,7 @@ struct InsightsCardEntry: Identifiable {
 /// The single source of truth for the dashboard's cards, in default order.
 enum InsightsCatalog {
     static let all: [InsightsCardEntry] = [
-        .init(id: "tips",              title: "Insights",           consumesRange: false, make: { _ in AnyView(InsightsCard()) }),
+        .init(id: "tips",              title: "Highlights",         consumesRange: false, make: { _ in AnyView(InsightsCard()) }),
         .init(id: "monthlySpending",   title: "Monthly spending",   consumesRange: true,  make: { AnyView(MonthlySpendingCard(months: $0)) }),
         .init(id: "netWorth",          title: "Net worth",          consumesRange: true,  make: { AnyView(NetWorthCard(months: $0)) }),
         .init(id: "cashflow",          title: "Cashflow",           consumesRange: true,  make: { AnyView(CashflowCard(months: $0)) }),
