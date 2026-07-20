@@ -41,7 +41,7 @@ struct CurrenciesView: View {
                 }
                 .disabled(refreshing)
             } footer: {
-                Text("Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.")
+                Text("Fetches daily reference rates for your currencies from free reference-rate services. Only currency codes are sent.")
             }
 
             // Two groups: Active (the hub USD + tracked currencies) and Inactive
