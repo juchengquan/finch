@@ -11,6 +11,7 @@ public enum Categories {
         .deleteCategory: delete,
         .mergeCategory: merge,
         .mergeCategories: mergeMany,
+        .copyCategories: copyCategories,
     ]
 
     static func create(_ db: Database, _ args: Args) throws {
@@ -130,6 +131,62 @@ public enum Categories {
             let fits = try categoryDepth(db, target) + subtreeDepth(db, child) <= 3
             try db.execute(sql: "UPDATE categories SET parent_id = ?, updated_at = datetime('now') WHERE id = ?",
                            arguments: [fits ? target : nil, child])
+        }
+    }
+
+    /// Additively copy user categories from one ledger to another, preserving the
+    /// tree and dedup by (kind, target-parent, name). System rows are skipped.
+    /// `ids` (optional) restricts to those categories plus their ancestors.
+    static func copyCategories(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let fromLedgerId: String; let toLedgerId: String; let ids: [String]? }
+        let a = try args.to(A.self)
+        // Source user categories (skip system equity rows).
+        var byId: [String: Row] = [:]
+        for r in try Row.fetchAll(db, sql: "SELECT id, parent_id, name, kind, icon, color FROM categories WHERE ledger_id = ? AND system IS NULL", arguments: [a.fromLedgerId]) {
+            byId[r["id"] as String] = r
+        }
+        // Wanted set: all, or the ids + their ancestors.
+        var wanted = Set(byId.keys)
+        if let ids = a.ids {
+            wanted = []
+            for start in ids {
+                var cur: String? = start
+                while let c = cur, byId[c] != nil, wanted.insert(c).inserted { cur = byId[c]?["parent_id"] as String? }
+            }
+        }
+        // Target dedup map: (kind|parentTargetId|lowerName) -> target id, over ALL target rows.
+        var dedup: [String: String] = [:]
+        for r in try Row.fetchAll(db, sql: "SELECT id, parent_id, name, kind FROM categories WHERE ledger_id = ?", arguments: [a.toLedgerId]) {
+            let key = "\(r["kind"] as String)|\(r["parent_id"] as String? ?? "")|\((r["name"] as String).lowercased())"
+            dedup[key] = r["id"] as String
+        }
+        var nextOrder = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE ledger_id = ?", arguments: [a.toLedgerId])) ?? 0
+        var idMap: [String: String] = [:]   // source id -> target id (existing or new)
+        // Process parents before children.
+        var pending = wanted
+        while !pending.isEmpty {
+            let ready = pending.filter { id in
+                let p = byId[id]?["parent_id"] as String?
+                return p == nil || !wanted.contains(p!) || idMap[p!] != nil
+            }
+            if ready.isEmpty { break }   // safety against cycles (schema prevents them)
+            for src in ready.sorted() {
+                let r = byId[src]!
+                let srcParent = r["parent_id"] as String?
+                let targetParent: String? = (srcParent != nil && wanted.contains(srcParent!)) ? idMap[srcParent!] : nil
+                let name = (r["name"] as String)
+                let kind = r["kind"] as String
+                let key = "\(kind)|\(targetParent ?? "")|\(name.lowercased())"
+                if let existing = dedup[key] { idMap[src] = existing }
+                else {
+                    let newId = Entries.newId("cat")
+                    try db.execute(sql: "INSERT INTO categories (id,ledger_id,parent_id,name,kind,icon,color,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))",
+                                   arguments: [newId, a.toLedgerId, targetParent, name, kind, r["icon"] as String?, r["color"] as String?, nextOrder])
+                    nextOrder += 1
+                    idMap[src] = newId; dedup[key] = newId
+                }
+                pending.remove(src)
+            }
         }
     }
 

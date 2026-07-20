@@ -61,19 +61,21 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case updateBudgetGroup
     case deleteBudgetGroup
 
-    // --- categories (5) ---
+    // --- categories (6) ---
     case createCategory
     case updateCategory
     case deleteCategory
     case mergeCategory
     case mergeCategories
+    case copyCategories   // native-first — no web parity (Ledger reference copy)
 
-    // --- tags (5) ---
+    // --- tags (6) ---
     case createTag
     case updateTag
     case deleteTag
     case mergeTag     // iOS-only — no web parity (native-ahead)
     case mergeTags    // iOS-only — no web parity (native-ahead)
+    case copyTags     // native-first — no web parity (Ledger reference copy)
 
     // --- rules (4) ---
     case createRule

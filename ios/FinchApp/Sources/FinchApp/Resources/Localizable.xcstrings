@@ -1,6 +1,33 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Blank": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "空白" } } }
+    },
+    "Copy %@ to…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制 %@ 到…" } } }
+    },
+    "Copy to another ledger…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制到其他账本…" } } }
+    },
+    "Create another ledger first.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "请先创建另一个账本。" } } }
+    },
+    "Import categories from…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "导入类别，来自…" } } }
+    },
+    "Import from another ledger…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "从其他账本导入…" } } }
+    },
+    "Import tags from…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "导入标签，来自…" } } }
+    },
+    "No other ledgers": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "没有其他账本" } } }
+    },
+    "Start from": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "起始账本" } } }
+    },
     "Data": {
       "localizations": {
         "zh-Hans": {
