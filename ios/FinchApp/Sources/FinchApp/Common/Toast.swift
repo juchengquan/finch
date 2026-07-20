@@ -45,7 +45,11 @@ private struct ToastOverlay: ViewModifier {
                     Text(message)
                         .font(.subheadline)
                         .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(.regularMaterial, in: Capsule())
+                        // Thick, not regular: this lands over the Categories tree —
+                        // a list of coloured icons — and text you get ~2s to read
+                        // shouldn't compete with whatever scrolls behind it. Still a
+                        // material, so light/dark adapt for free.
+                        .background(.thickMaterial, in: Capsule())
                         .overlay(Capsule().strokeBorder(.quaternary))
                         // A whisper — the material and hairline draw the edge; this
                         // only stops the capsule reading as pasted onto a list row.
