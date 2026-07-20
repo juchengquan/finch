@@ -200,11 +200,7 @@ struct BudgetsTab: View {
     /// Compact totals status pinned at the top: total spent / total budget across
     /// the active ledger (same StatusSummaryRow style as the Accounts summary).
     @ViewBuilder private var summarySection: some View {
-        Section {
-            let t = store.budgetTotalsDisplay
-            StatusSummaryRow(leadingLabel: "Spent", leadingValue: t.used,
-                             trailingLabel: "Budget", trailingValue: t.base)
-        }
+        Section { BudgetSummaryCard(summary: store.budgetSummary) }
     }
 
     /// True while the user has typed a non-empty budget search.
