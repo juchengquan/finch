@@ -1,71 +1,61 @@
 import Foundation
 
-/// Named preset card sets. "Custom" is NOT a case — it's the derived state when
-/// a layout matches no template (see `InsightsLayout.matchingTemplate`).
-enum InsightsTemplate: String, CaseIterable, Identifiable {
-    case overview, spending, wealth, everything
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .overview: return "Overview"
-        case .spending: return "Spending"
-        case .wealth: return "Wealth"
-        case .everything: return "Everything"
-        }
-    }
-
-    var cardIDs: [String] {
-        switch self {
-        case .overview:   return ["tips", "monthlySpending", "savingsRate", "netWorth", "categoryBreakdown", "forecast"]
-        case .spending:   return ["monthlySpending", "categoryBreakdown", "topMerchants", "categoryDeltas", "spendingHeatmap"]
-        case .wealth:     return ["netWorth", "netWorthByType", "cashflow", "savingsRate", "whatIf"]
-        case .everything: return InsightsCatalog.all.map(\.id)
-        }
-    }
-}
-
-/// The persisted dashboard layout: enabled card ids in display order, plus the
-/// template it currently matches (nil == "Custom"). `RawRepresentable` so it can
-/// live in `@AppStorage` as a JSON string.
+/// The persisted Insights dashboard layout. `order` holds **all** catalog card
+/// ids in the user's display order (so every card — shown or hidden — is
+/// reorderable), and `hidden` marks the ones toggled off (kept in `order`, just
+/// not rendered). There are no preset templates — the user decides via the
+/// Customize sheet. `RawRepresentable` so it lives in `@AppStorage` as JSON.
 struct InsightsLayout: Codable, Equatable, RawRepresentable {
     var order: [String]
-    /// A persisted hint for which preset this came from. NOTE: the menu label is
-    /// derived live from `matchingTemplate()` (over `order`), not this field —
-    /// keep them in sync when mutating `order` (Phase 2's Customize does via retag).
-    var templateName: String?
+    var hidden: Set<String>
 
+    /// The curated first-run / "Reset to default" set that starts *visible*;
+    /// every other catalog card starts hidden (still present + reorderable).
+    static let defaultShown = ["tips", "monthlySpending", "savingsRate", "netWorth", "categoryBreakdown", "forecast"]
+
+    // Seed the order from the curated shown set (in that order); the init below
+    // appends the remaining catalog cards after it — those are the hidden ones.
     static let `default` = InsightsLayout(
-        order: InsightsTemplate.overview.cardIDs,
-        templateName: InsightsTemplate.overview.rawValue)
+        order: defaultShown,
+        hidden: Set(InsightsCatalog.all.map(\.id)).subtracting(defaultShown))
 
-    /// The template whose `cardIDs` equal `order` exactly, else nil ("Custom").
-    func matchingTemplate() -> InsightsTemplate? {
-        InsightsTemplate.allCases.first { $0.cardIDs == order }
+    /// Shown card ids in display order — what the dashboard renders.
+    var shownOrder: [String] { order.filter { !hidden.contains($0) } }
+
+    /// Normalizes to the catalog: drops unknown ids, appends any new catalog
+    /// cards at the end (shown by default), and clamps `hidden` to known ids.
+    init(order: [String], hidden: Set<String>) {
+        let known = InsightsCatalog.all.map(\.id)
+        let knownSet = Set(known)
+        self.order = order.filter { knownSet.contains($0) } + known.filter { !order.contains($0) }
+        self.hidden = hidden.intersection(knownSet)
     }
 
-    init(order: [String], templateName: String?) { self.order = order; self.templateName = templateName }
-
-    // Explicit Codable witnesses: without these, the compiler prefers the
-    // stdlib's `Encodable` default for `RawRepresentable where RawValue:
-    // Encodable` (which encodes via `self.rawValue`) over synthesizing
-    // member-wise coding — and `rawValue` below encodes `self`, so that
-    // default recurses infinitely (verified via a stack-overflow crash).
-    // Hand-writing these gives a concrete witness that wins over the
-    // extension default, breaking the cycle.
-    private enum CodingKeys: String, CodingKey { case order, templateName }
+    // Explicit Codable witnesses (see below) — the round-trip is (order, hidden).
+    private enum CodingKeys: String, CodingKey { case order, hidden }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        order = try c.decode([String].self, forKey: .order)
-        templateName = try c.decodeIfPresent(String.self, forKey: .templateName)
+        let decodedOrder = try c.decode([String].self, forKey: .order)
+        if let h = try c.decodeIfPresent(Set<String>.self, forKey: .hidden) {
+            self.init(order: decodedOrder, hidden: h)
+        } else {
+            // Legacy layout (`order` held only the *shown* ids): everything the
+            // old order omitted was hidden.
+            self.init(order: decodedOrder,
+                      hidden: Set(InsightsCatalog.all.map(\.id)).subtracting(decodedOrder))
+        }
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(order, forKey: .order)
-        try c.encodeIfPresent(templateName, forKey: .templateName)
+        try c.encode(hidden, forKey: .hidden)
     }
 
-    // RawRepresentable (JSON) for @AppStorage
+    // RawRepresentable (JSON) for @AppStorage. NOTE: the hand-written Codable
+    // witnesses above are required — a type that is both `Codable` and
+    // `RawRepresentable where RawValue: Encodable` otherwise picks up the stdlib
+    // default that encodes via `self.rawValue`, which re-encodes `self` → infinite
+    // recursion (a real stack-overflow crash). Concrete witnesses win over it.
     init?(rawValue: String) {
         guard let data = rawValue.data(using: .utf8),
               let v = try? JSONDecoder().decode(InsightsLayout.self, from: data) else { return nil }
