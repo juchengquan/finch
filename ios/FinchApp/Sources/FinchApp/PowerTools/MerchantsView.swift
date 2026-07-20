@@ -269,7 +269,7 @@ struct CounterpartyNameSheet: View {
             if let counterparty {
                 try store.apply(.updateCounterparty, Args(["id": .string(counterparty.id), "patch": .object(["name": .string(trimmed)])]))
             } else {
-                try store.apply(.createCounterparty, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(trimmed)]))
+                try store.apply(.createCounterparty, Args(["name": .string(trimmed)]))
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
