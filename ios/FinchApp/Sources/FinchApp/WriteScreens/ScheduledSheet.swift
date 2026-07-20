@@ -79,9 +79,9 @@ struct ScheduledSheet: View {
                         Text("Amount"); Spacer()
                         TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                     }
+                } footer: {
                     if !installmentEnabled {
                         Text("Leave empty for a variable amount (entered when posting).")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
 
@@ -105,6 +105,8 @@ struct ScheduledSheet: View {
                             options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                         CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
                     }
+                } header: {
+                    finchSectionHeader("Account")
                 }
 
                 Section {
@@ -119,6 +121,8 @@ struct ScheduledSheet: View {
                     } else {
                         DatePicker("Start", selection: $startDate, displayedComponents: .date)
                     }
+                } header: {
+                    finchSectionHeader("Schedule")
                 }
 
                 Section {
@@ -129,6 +133,8 @@ struct ScheduledSheet: View {
                             TextField("12", text: $installmentTotal).numericInput($installmentTotal, allowsDecimal: false).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                         }
                     }
+                } header: {
+                    finchSectionHeader("Installment")
                 }
 
                 if let errorMessage {
