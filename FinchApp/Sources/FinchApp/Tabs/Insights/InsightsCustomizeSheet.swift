@@ -1,23 +1,25 @@
 import SwiftUI
 
-/// Show/hide + reorder the dashboard cards. Enabled cards (in `layout.order`)
-/// appear first, reorderable; disabled cards follow. Any edit that no longer
-/// matches a template clears `templateName` ("Custom").
+/// Shape the Insights dashboard — the sole control (there are no preset
+/// templates). One reorderable list of every card: the toggle shows/hides it,
+/// and drag reorders it (hidden cards included, so an activated card keeps its
+/// place). "Reset to default" restores the curated starter set.
 struct InsightsCustomizeSheet: View {
     @Binding var layout: InsightsLayout
     @Environment(\.dismiss) private var dismiss
 
-    private var disabled: [String] { InsightsCatalog.all.map(\.id).filter { !layout.order.contains($0) } }
-
     var body: some View {
         NavigationStack {
             List {
-                Section("Shown") {
+                Section {
                     ForEach(layout.order, id: \.self) { id in row(id) }
-                        .onMove { from, to in layout.order.move(fromOffsets: from, toOffset: to); retag() }
+                        .onMove { from, to in layout.order.move(fromOffsets: from, toOffset: to) }
+                } footer: {
+                    Text("Toggle a card to show or hide it; drag to reorder. Hidden cards can be reordered too.")
                 }
-                if !disabled.isEmpty {
-                    Section("Hidden") { ForEach(disabled, id: \.self) { id in row(id) } }
+                Section {
+                    Button("Reset to default") { layout = .default }
+                        .disabled(layout == .default)
                 }
             }
             #if os(iOS)
@@ -38,16 +40,13 @@ struct InsightsCustomizeSheet: View {
     @ViewBuilder private func row(_ id: String) -> some View {
         HStack {
             Text(InsightsCatalog.entry(id)?.title ?? id)
+                .foregroundStyle(layout.hidden.contains(id) ? .secondary : .primary)
             Spacer()
             Toggle("", isOn: Binding(
-                get: { layout.order.contains(id) },
-                set: { isOn in
-                    if isOn { if !layout.order.contains(id) { layout.order.append(id) } }
-                    else { layout.order.removeAll { $0 == id } }
-                    retag()
+                get: { !layout.hidden.contains(id) },
+                set: { shown in
+                    if shown { layout.hidden.remove(id) } else { layout.hidden.insert(id) }
                 })).labelsHidden()
         }
     }
-
-    private func retag() { layout.templateName = layout.matchingTemplate()?.rawValue }
 }
