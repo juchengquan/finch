@@ -37,4 +37,11 @@ final class CategoryIconTests: XCTestCase {
     func test_every_name_maps_to_nonempty_symbol() {
         for n in CategoryIcon.names { XCTAssertFalse(CategoryIcon.symbol(for: n).isEmpty) }
     }
+
+    /// Every icon has a non-empty friendly label (shown when tapped in the picker).
+    func test_every_name_has_friendly_label() {
+        for n in CategoryIcon.names {
+            XCTAssertFalse(CategoryIcon.label(for: n).isEmpty, "missing label for \(n)")
+        }
+    }
 }

@@ -79,6 +79,15 @@ private struct IconPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(title).font(.headline)
+                        Text(staged.isEmpty ? "Tap an icon" : CategoryIcon.label(for: staged))
+                            .font(.caption)
+                            .foregroundStyle(staged.isEmpty ? Color.secondary : Color.accentColor)
+                    }
+                    .animation(.default, value: staged)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
                 }

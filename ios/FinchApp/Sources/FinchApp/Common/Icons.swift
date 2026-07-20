@@ -162,4 +162,92 @@ enum CategoryIcon {
         default:            "tag.fill"
         }
     }
+
+    /// A short, human-readable name for an icon short-name, shown when the user
+    /// taps an icon in the picker. Unknown names fall back to the capitalized id.
+    static func label(for name: String) -> String {
+        switch name {
+        // Food & Drink
+        case "fork":        "Dining"
+        case "cup":         "Coffee"
+        case "mug":         "Tea"
+        case "cart":        "Groceries"
+        case "wineglass":   "Drinks"
+        case "takeout":     "Takeout"
+        case "carrot":      "Produce"
+        case "leaf":        "Organic"
+        case "cake":        "Celebration"
+        // Shopping
+        case "bag":         "Shopping"
+        case "handbag":     "Accessories"
+        case "tshirt":      "Clothing"
+        case "gift":        "Gifts"
+        case "giftcard":    "Gift Card"
+        case "tag":         "Sale"
+        case "sparkles":    "Beauty"
+        case "creditcard":  "Card"
+        case "box":         "Package"
+        // Transport
+        case "car":         "Car"
+        case "fuel":        "Fuel"
+        case "plane":       "Travel"
+        case "tram":        "Transit"
+        case "bus":         "Bus"
+        case "ferry":       "Ferry"
+        case "bike":        "Cycling"
+        case "scooter":     "Scooter"
+        case "parking":     "Parking"
+        // Home & Bills
+        case "home":        "Home"
+        case "key":         "Rent"
+        case "bolt":        "Electricity"
+        case "drop":        "Water"
+        case "flame":       "Gas"
+        case "wifi":        "Internet"
+        case "phone":       "Phone"
+        case "wrench":      "Repairs"
+        case "sofa":        "Furniture"
+        case "trash":       "Waste"
+        // Health & Fitness
+        case "heart":       "Health"
+        case "pills":       "Pharmacy"
+        case "cross":       "Medical"
+        case "bandage":     "First Aid"
+        case "stethoscope": "Doctor"
+        case "dumbbell":    "Gym"
+        case "run":         "Running"
+        case "yoga":        "Yoga"
+        // Entertainment
+        case "film":        "Movies"
+        case "tv":          "TV"
+        case "music":       "Music"
+        case "headphones":  "Audio"
+        case "game":        "Games"
+        case "book":        "Books"
+        case "school":      "Education"
+        case "camera":      "Photography"
+        case "ticket":      "Events"
+        // Personal
+        case "pet":         "Pets"
+        case "child":       "Kids"
+        case "couple":      "Family"
+        case "friends":     "Friends"
+        case "scissors":    "Grooming"
+        case "person":      "Personal"
+        case "crown":       "Luxury"
+        // Money & Work
+        case "briefcase":   "Work"
+        case "coins":       "Money"
+        case "cash":        "Cash"
+        case "wallet":      "Wallet"
+        case "chart":       "Investments"
+        case "bank":        "Bank"
+        case "office":      "Business"
+        case "doc":         "Bills"
+        case "calendar":    "Subscriptions"
+        case "sync":        "Recurring"
+        case "percent":     "Interest"
+        default:            name.capitalized
+        }
+    }
 }
