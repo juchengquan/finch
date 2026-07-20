@@ -111,13 +111,36 @@ struct CategoryPickerSheet: View {
         }
     }
 
-    /// One tree row: swatch + icon + indented name + staged checkmark, plus a
-    /// separate expand/collapse chevron for parents. Mirrors CategoriesView's
-    /// rowContent (minus the count pill and admin swipe actions).
     @ViewBuilder private func row(_ item: FlatCategory) -> some View {
+        CategoryTreeRow(
+            item: item, byId: byId,
+            isSelected: item.row.id == staged,
+            expanded: expanded.contains(item.row.id),
+            searchActive: !query.isEmpty,
+            onTap: { staged = item.row.id },
+            onToggleExpand: {
+                if expanded.contains(item.row.id) { expanded.remove(item.row.id) } else { expanded.insert(item.row.id) }
+            }
+        )
+    }
+}
+
+/// One category-tree row shared by the single- and multi-select picker sheets:
+/// swatch + icon + indented name + a trailing selection checkmark + an
+/// expand/collapse chevron for parents. Selection + expand state are caller-driven.
+struct CategoryTreeRow: View {
+    let item: FlatCategory
+    let byId: [String: CategoryRow]
+    let isSelected: Bool
+    let expanded: Bool
+    let searchActive: Bool
+    let onTap: () -> Void
+    let onToggleExpand: () -> Void
+
+    var body: some View {
         let c = item.row
         HStack(spacing: 8) {
-            Button { staged = c.id } label: {
+            Button(action: onTap) {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle().fill(Color(hex: effectiveColor(c, byId)) ?? .gray).frame(width: 26, height: 26)
@@ -126,22 +149,20 @@ struct CategoryPickerSheet: View {
                     }
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if c.id == staged { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                    if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint) }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if item.hasChildren {
-                Button {
-                    if expanded.contains(c.id) { expanded.remove(c.id) } else { expanded.insert(c.id) }
-                } label: {
-                    Image(systemName: (expanded.contains(c.id) || !query.isEmpty) ? "chevron.down" : "chevron.right")
+                Button(action: onToggleExpand) {
+                    Image(systemName: (expanded || searchActive) ? "chevron.down" : "chevron.right")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(width: 22, height: 30).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(!query.isEmpty)   // search force-expands; chevron is inert
+                .disabled(searchActive)   // search force-expands; chevron is inert
             } else {
                 // Reserve the chevron slot so checkmarks/edges line up across rows.
                 Color.clear.frame(width: 22, height: 30)
