@@ -53,6 +53,13 @@ struct BudgetSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    Text(kind.label)   // names the icon-only type control in the toolbar
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                }
+                Section {
                     TextField("Name", text: $name)
                     HStack {
                         Text("Amount"); Spacer()
