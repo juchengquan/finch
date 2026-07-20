@@ -111,12 +111,17 @@ struct AddLedgerSheet: View {
     @State private var startFrom: String? = nil
     @State private var errorMessage: String?
 
+    /// Effective activated set — the explicit tracked list, else the seeded default.
+    private var activated: [String] {
+        fxEffectiveTracked(stored: store.trackedCurrencies,
+                           fallback: RateAutoUpdater.currenciesInUse(store: store))
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
-                TextField("Base currency (e.g. USD)", text: $base)
-                    .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                CurrencyPickerRow(title: "Base currency", code: $base, activated: activated)
                 Picker("Start from", selection: $startFrom) {
                     Text("Blank").tag(String?.none)
                     ForEach(store.ledgers) { l in Text(l.name).tag(Optional(l.id)) }
@@ -144,11 +149,21 @@ struct AddLedgerSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
         let id = "ledger_" + UUID().uuidString.prefix(8).lowercased()
+        let baseCode = base.trimmingCharacters(in: .whitespaces).uppercased()
+        // Snapshot the activation BEFORE any write: createLedger reprojects, and
+        // the new base would then land in the currenciesInUse fallback and mask
+        // whether an explicit tracked-set write was still owed.
+        let activation = fxTrackedAfterActivating(baseCode, tracked: activated)
         do {
             try store.apply(.createLedger, Args([
                 "id": .string(id), "name": .string(trimmed),
-                "base": .string(base.trimmingCharacters(in: .whitespaces).uppercased()),
+                "base": .string(baseCode),
             ]))
+            // Activate the picked base (nil when it's USD or already tracked). After
+            // the ledger exists, so a failure here can't strand a half-made ledger.
+            if let codes = activation {
+                try? store.apply(.setTrackedCurrencies, Args(["codes": .array(codes.map { .string($0) })]))
+            }
             if let from = startFrom {
                 try? store.apply(.copyCategories, Args(["fromLedgerId": .string(from), "toLedgerId": .string(id)]))
                 try? store.apply(.copyTags, Args(["fromLedgerId": .string(from), "toLedgerId": .string(id)]))
@@ -179,13 +194,18 @@ struct EditLedgerSheet: View {
         base.trimmingCharacters(in: .whitespaces).uppercased() != ledger.base
     }
 
+    /// Effective activated set — the explicit tracked list, else the seeded default.
+    private var activated: [String] {
+        fxEffectiveTracked(stored: store.trackedCurrencies,
+                           fallback: RateAutoUpdater.currenciesInUse(store: store))
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     TextField("Name", text: $name)
-                    TextField("Base currency", text: $base)
-                        .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    CurrencyPickerRow(title: "Base currency", code: $base, activated: activated)
                 } footer: {
                     if baseChanged {
                         Text("Changing the base currency re-derives every entry's base amount.")
@@ -221,6 +241,11 @@ struct EditLedgerSheet: View {
         guard !trimmed.isEmpty else { errorMessage = "Enter a name."; return }
         // Changing the base re-derives every entry — a sensitive action (Phase 6.3).
         if baseChanged, await !gate.confirmSensitive() { return }
+        let newBase = base.trimmingCharacters(in: .whitespaces).uppercased()
+        // Snapshot before any write — changeLedgerBase reprojects, after which the
+        // new base sits in the currenciesInUse fallback and masks whether an
+        // explicit tracked-set write was still owed.
+        let activation = baseChanged ? fxTrackedAfterActivating(newBase, tracked: activated) : nil
         do {
             if trimmed != ledger.name {
                 try store.apply(.updateLedger, Args(["id": .string(ledger.id), "patch": .object(["name": .string(trimmed)])]))
@@ -228,8 +253,12 @@ struct EditLedgerSheet: View {
             if baseChanged {
                 try store.apply(.changeLedgerBase, Args([
                     "ledgerId": .string(ledger.id),
-                    "newBase": .string(base.trimmingCharacters(in: .whitespaces).uppercased()),
+                    "newBase": .string(newBase),
                 ]))
+                // Activate the picked base (nil when it's USD or already tracked).
+                if let codes = activation {
+                    try? store.apply(.setTrackedCurrencies, Args(["codes": .array(codes.map { .string($0) })]))
+                }
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
