@@ -93,7 +93,7 @@ struct CurrenciesView: View {
             if !row.isHub {
                 Toggle("", isOn: Binding(get: { row.tracked }, set: { setTracked(row.code, $0) }))
                     .labelsHidden()
-                    .accessibilityLabel(Text("Track \(row.code)"))
+                    .accessibilityLabel(Text("Activate \(row.code)"))
             }
         }
         .padding(.vertical, 2)

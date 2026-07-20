@@ -69,3 +69,18 @@ func fxFilterRows(_ rows: [FxCurrencyRow], query: String) -> [FxCurrencyRow] {
     guard !q.isEmpty else { return rows }
     return rows.filter { $0.code.localizedCaseInsensitiveContains(q) || $0.label.localizedCaseInsensitiveContains(q) }
 }
+
+/// The tracked set after "activating" `code`, or **nil when no write is needed** —
+/// the ledger base-currency picker calls this on save.
+///
+/// Two no-write cases: USD is the hub and is never tracked (`setTrackedCurrencies`
+/// filters it out regardless), and an already-tracked code needs nothing. Callers
+/// must pass the EFFECTIVE tracked set (`fxEffectiveTracked`), not the raw optional:
+/// when the app_state key is still unset the effective set is the seeded default, and
+/// basing the write on it materializes that default instead of wiping it to one entry.
+func fxTrackedAfterActivating(_ code: String, tracked: [String]) -> [String]? {
+    let c = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    guard !c.isEmpty, c != "USD" else { return nil }
+    guard !tracked.contains(where: { $0.caseInsensitiveCompare(c) == .orderedSame }) else { return nil }
+    return (tracked.map { $0.uppercased() } + [c]).sorted()
+}
