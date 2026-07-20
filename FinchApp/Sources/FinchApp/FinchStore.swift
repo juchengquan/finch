@@ -170,8 +170,25 @@ public final class FinchStore: ObservableObject {
     /// Like `apply`, returning the new entry id for `addTransaction` (nil otherwise).
     @discardableResult
     public func applyReturningId(_ action: ActionName, _ args: Args) throws -> String? {
+        try write(action, args) { try Apply.applyReturningId(dbQueue: $0, action: action.rawValue, args: args) }
+    }
+
+    /// Like `apply`, returning how many rows the action created — only the copy
+    /// actions report a real count (see `Apply.applyReturningCount`), which the
+    /// Categories/Tags copy affordances use to confirm "N added".
+    @discardableResult
+    public func applyReturningCount(_ action: ActionName, _ args: Args) throws -> Int {
+        try write(action, args) { try Apply.applyReturningCount(dbQueue: $0, action: action.rawValue, args: args) }
+    }
+
+    /// The one write path: run `body` through the FinchCore chokepoint, then fire
+    /// every post-write side effect. Both public variants funnel through here so a
+    /// new return flavour can't quietly skip re-projection, Spotlight, widgets,
+    /// backups, or the CloudKit outbox.
+    private func write<T>(_ action: ActionName, _ args: Args,
+                          _ body: (DatabaseQueue) throws -> T) throws -> T {
         guard let q = dbQueue else { throw I18nError("error.noDatabase", [:], "No database is open") }
-        let newId = try Apply.applyReturningId(dbQueue: q, action: action.rawValue, args: args)
+        let result = try body(q)
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
         reprojectActiveLedger()
         self.dbInfo = makeDBInfo()
@@ -189,7 +206,7 @@ public final class FinchStore: ObservableObject {
         // Phase 8: publish this write to the CloudKit mutation log (no-op when
         // sync is off or while replaying a remote mutation — the echo guard).
         CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
-        return newId
+        return result
     }
 
     // MARK: - Projection

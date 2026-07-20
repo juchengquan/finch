@@ -74,4 +74,49 @@ final class ReferenceCopyTests: XCTestCase {
             XCTAssertEqual(cp, foodId)
         }
     }
+
+    // MARK: added-count (drives the "N added" confirmation)
+
+    private func copyCount(_ q: DatabaseQueue, _ action: String, _ args: [String: JSONValue]) throws -> Int {
+        try Apply.applyReturningCount(dbQueue: q, action: action, args: Args(args))
+    }
+
+    /// The count is NEW inserts only, so a re-copy reports 0 rather than
+    /// re-reporting rows that were merely matched.
+    func test_copyTags_countsOnlyNewInserts() throws {
+        let q = try seeded()
+        try tag(q, "t1", "l1", "food"); try tag(q, "t2", "l1", "travel")
+        try tag(q, "t3", "l2", "Food")          // already there (case-insensitive match)
+        let first = try copyCount(q, "copyTags", ["fromLedgerId": .string("l1"), "toLedgerId": .string("l2")])
+        XCTAssertEqual(first, 1, "only 'travel' is new")
+        let again = try copyCount(q, "copyTags", ["fromLedgerId": .string("l1"), "toLedgerId": .string("l2")])
+        XCTAssertEqual(again, 0, "nothing new on a re-copy")
+    }
+
+    /// Two SOURCE tags differing only in case must collapse to one insert — the
+    /// dedup set is updated as we go, not snapshotted before the loop.
+    func test_copyTags_sourceCaseDuplicatesCollapse() throws {
+        let q = try seeded()
+        try tag(q, "t1", "l1", "Food"); try tag(q, "t2", "l1", "food")
+        let n = try copyCount(q, "copyTags", ["fromLedgerId": .string("l1"), "toLedgerId": .string("l2")])
+        XCTAssertEqual(n, 1)
+        XCTAssertEqual(try names(q, "tags", "l2").count, 1, "no duplicate landed in the target")
+    }
+
+    /// Categories count new inserts only; a reused ancestor doesn't inflate it.
+    func test_copyCategories_countsOnlyNewInserts() throws {
+        let q = try seeded()
+        try cat(q, "cFood", "l1", "Food"); try cat(q, "cCoffee", "l1", "Coffee", parent: "cFood")
+        let first = try copyCount(q, "copyCategories", ["fromLedgerId": .string("l1"), "toLedgerId": .string("l2")])
+        XCTAssertEqual(first, 2, "Food + Coffee")
+        let again = try copyCount(q, "copyCategories", ["fromLedgerId": .string("l1"), "toLedgerId": .string("l2")])
+        XCTAssertEqual(again, 0, "both matched on a re-copy")
+    }
+
+    /// Non-copy actions report 0 rather than a misleading number.
+    func test_applyReturningCount_isZeroForOtherActions() throws {
+        let q = try seeded()
+        let n = try copyCount(q, "createTag", ["ledgerId": .string("l1"), "name": .string("new")])
+        XCTAssertEqual(n, 0)
+    }
 }

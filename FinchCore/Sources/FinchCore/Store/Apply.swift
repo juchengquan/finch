@@ -60,4 +60,27 @@ public enum Apply {
             return nil
         }
     }
+
+    /// Like `apply`, but returns how many rows the action CREATED. Only the
+    /// native-first copy actions report a real count — they dedup against the
+    /// target, so "it worked" hides whether anything actually landed. Every other
+    /// action returns 0; callers that care about a count only ever use these.
+    public static func applyReturningCount(dbQueue: DatabaseQueue, action: String, args: Args) throws -> Int {
+        guard let name = ActionName(rawValue: action) else {
+            throw I18nError("error.unknownAction", ["action": action], "Unknown action \"\(action)\"")
+        }
+        guard let handler = registry[name] else {
+            throw I18nError("error.notImplemented", ["action": action],
+                            "Action \"\(action)\" is not implemented on iOS yet")
+        }
+        return try dbQueue.write { db in
+            switch name {
+            case .copyCategories: return try Categories.copyCategoriesReturningCount(db, args)
+            case .copyTags:       return try Tags.copyTagsReturningCount(db, args)
+            default:
+                try handler(db, args)
+                return 0
+            }
+        }
+    }
 }
