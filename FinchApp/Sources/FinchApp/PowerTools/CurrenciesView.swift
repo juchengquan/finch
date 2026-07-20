@@ -47,7 +47,7 @@ struct CurrenciesView: View {
             // Two groups: Active (the hub USD + tracked currencies) and Inactive
             // (the rest). USD is always Active and can't be toggled off (isHub).
             let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query)
-            Section("Active") {
+            Section {
                 ForEach(rows.filter { $0.isHub || $0.tracked }, id: \.code) { row in
                     NavigationLink {
                         ExchangeRateHistoryView(currency: row.code)
@@ -58,7 +58,7 @@ struct CurrenciesView: View {
             }
             let inactive = rows.filter { !$0.isHub && !$0.tracked }
             if !inactive.isEmpty {
-                Section("Inactive") {
+                Section {
                     ForEach(inactive, id: \.code) { row in
                         NavigationLink {
                             ExchangeRateHistoryView(currency: row.code)
@@ -76,12 +76,15 @@ struct CurrenciesView: View {
     }
 
     private func currencyRow(_ row: FxCurrencyRow) -> some View {
-        HStack(spacing: 10) {
+        // First row: code + symbol in brackets ("EUR (€)"); second row: name only.
+        let name = FxCurrencyInfo.name(row.code)
+        let codeLabel = FxCurrencyInfo.symbol(row.code).map { "\(row.code) (\($0))" } ?? row.code
+        return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.code).fontWeight(.medium)
+                Text(codeLabel).fontWeight(.medium)
                 // String(localized:) so the hub suffix goes through the catalog
                 // (a String ternary would render verbatim and skip localization).
-                Text(row.isHub ? String(localized: "\(row.label) · hub") : row.label)
+                Text(row.isHub ? String(localized: "\(name) · hub") : name)
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
