@@ -89,7 +89,7 @@ private struct MerchantPickerSheet: View {
                 ForEach(filtered) { cp in
                     Button { pick(cp.name) } label: {
                         HStack {
-                            Text(cp.name).foregroundStyle(.primary)
+                            MerchantLabel(name: cp.name, isVerified: cp.isVerified)
                             Spacer()
                             if cp.name.caseInsensitiveCompare(merchant) == .orderedSame {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
