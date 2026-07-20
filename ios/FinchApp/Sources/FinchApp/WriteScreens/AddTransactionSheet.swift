@@ -112,7 +112,7 @@ struct AddTransactionSheet: View {
             // the bottom safe-area inset (masked the last row) — dropping it
             // restores the system's native header + bottom behavior for free.
             formPage(kind)
-            .finchSectionSpacing()   // whole-form: every section follows the global gap
+            .finchSheetForm()   // whole-form: every section follows the global gap
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -194,7 +194,7 @@ struct AddTransactionSheet: View {
                     }
                 }
                 if k == .expense || k == .income || k == .refund {
-                    Section("Receipt") {
+                    Section {
                         #if os(macOS)
                         Button { showingFileImporter = true } label: {
                             Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
@@ -207,6 +207,8 @@ struct AddTransactionSheet: View {
                             Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
                         }
                         #endif
+                    } header: {
+                        finchSectionHeader("Receipt")
                     }
                 }
                 if k == .expense || k == .income || k == .refund {
@@ -217,13 +219,6 @@ struct AddTransactionSheet: View {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 }
             }
-            #if os(iOS)
-            // Pull the "Expense" caption close under the nav bar. A plain Form in
-            // a NavigationStack gets the system's translucent scroll-edge header +
-            // bottom safe-area inset natively (matching the Edit sheet and the
-            // main tabs) — no background/toolbar overrides needed.
-            .contentMargins(.top, 6, for: .scrollContent)
-            #endif
     }
 
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
@@ -251,13 +246,15 @@ struct AddTransactionSheet: View {
 
     /// Merchant/Source + Note — optional free-text, shown as the LAST section.
     @ViewBuilder private func detailsSection(for k: Kind) -> some View {
-        Section("Details") {
+        Section {
             MerchantPickerRow(title: k == .income ? "Source" : "Merchant",
                               counterparties: store.counterparties, merchant: $merchant)
             HStack {
                 Text("Note"); Spacer()
                 TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
             }
+        } header: {
+            finchSectionHeader("Details")
         }
     }
 

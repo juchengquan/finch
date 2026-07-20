@@ -48,6 +48,6 @@ enum TxnTypeToolbar {
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, alignment: .center)
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowInsets(Metrics.captionInsets)
     }
 }

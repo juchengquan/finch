@@ -63,23 +63,24 @@ struct AccountSheet: View {
                         Text("None").tag("")
                         ForEach(store.accountGroups) { Text($0.name).tag($0.id) }
                     }
+                    if isEdit {
+                        Toggle("Include in net worth", isOn: $includeInNetWorth)
+                    }
                 }
 
                 if !isEdit {
-                    Section("Opening balance") {
+                    Section {
                         HStack {
                             Text("Amount"); Spacer()
                             TextField("0.00", text: $openingBalance).numericInput($openingBalance)
                                 .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
+                    } header: {
+                        finchSectionHeader("Opening balance")
                     }
                 }
 
-                if isEdit {
-                    Section { Toggle("Include in net worth", isOn: $includeInNetWorth) }
-                }
-
-                Section("Color") {
+                Section {
                     HStack(spacing: 14) {
                         ForEach(Self.palette, id: \.hex) { swatch in
                             Circle().fill(swatch.color).frame(width: 26, height: 26)
@@ -88,6 +89,8 @@ struct AccountSheet: View {
                                 .accessibilityLabel("Color \(swatch.hex)")
                         }
                     }
+                } header: {
+                    finchSectionHeader("Color")
                 }
 
                 if let errorMessage {
@@ -95,7 +98,7 @@ struct AccountSheet: View {
                 }
             }
             .navigationTitle(isEdit ? "Edit Account" : "Add Account")
-            .finchSectionSpacing()
+            .finchSheetForm()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

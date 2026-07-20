@@ -38,4 +38,14 @@ extension View {
         self
         #endif
     }
+
+    /// The standard add/edit-sheet `Form` treatment: the app-wide section gap plus a
+    /// pinned top margin under the nav bar. Without the explicit margin, SwiftUI gives
+    /// these sheets different default top insets (Budget/Scheduled/Account render ~29pt
+    /// lower than the transaction sheets), which is why the family looked inconsistent.
+    /// Tune both values in `Common/Metrics.swift`.
+    func finchSheetForm() -> some View {
+        finchSectionSpacing()
+            .contentMargins(.top, Metrics.sheetTopMargin, for: .scrollContent)
+    }
 }
