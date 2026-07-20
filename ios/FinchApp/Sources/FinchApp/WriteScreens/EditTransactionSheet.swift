@@ -409,7 +409,7 @@ struct EditTransactionSheet: View {
             let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
             if !cpName.isEmpty,
                !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                try store.apply(.createCounterparty, Args(["ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
+                try store.apply(.createCounterparty, Args(["name": .string(cpName)]))
             }
             try store.apply(.updateTransaction, Args(["id": .string(txn.id), "patch": .object(patch)]))
             if selectedTags != Set(txn.tags ?? []) {

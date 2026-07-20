@@ -54,7 +54,10 @@ public enum DownSync {
         try dbQueue.write { db in
             for table in insertOrder {
                 guard let rows = tables[table], !rows.isEmpty else { continue }
-                for row in rows { try insertRow(db, table: table, row: row) }
+                // Read the local schema's columns ONCE per table (not per row) and
+                // let insertRow drop anything else — see its note on peer skew.
+                let known = Set(try db.columns(in: table).map(\.name))
+                for row in rows { try insertRow(db, table: table, row: row, known: known) }
             }
             // Phase 2 of the sealed write: seal every entry, re-running tr_entry_seal
             // (balance re-validation) on each.
@@ -65,11 +68,22 @@ public enum DownSync {
 
     // MARK: - internals
 
-    private static func insertRow(_ db: Database, table: String, row: [String: String]) throws {
+    private static func insertRow(_ db: Database, table: String, row: [String: String],
+                                  known: Set<String>) throws {
         var r = row
         if table == "entries" { r["sealed"] = "0" }            // insert unsealed (phase 1)
         if table == "accounts" { r["current_balance"] = "0" }  // balance triggers rebuild it
-        let cols = Array(r.keys)
+        // Tolerate peer schema skew: a device on a DIFFERENT schema can send columns
+        // this build no longer has (counterparties.ledger_id, dropped in schema
+        // 2026-07-20, is the live example). Unfiltered they'd raise "no such column"
+        // and — since ingest is one transaction — roll the ENTIRE seed back, so a
+        // single stale field would make a fresh device un-seedable. Dropping them is
+        // the tolerant read half of "be liberal in what you accept".
+        //
+        // Note the asymmetry: this handles columns we DON'T know. A payload MISSING
+        // a column we require still fails on its NOT NULL constraint, which is
+        // correct — we can't invent a value the sender never had.
+        let cols = r.keys.filter { known.contains($0) }
         guard !cols.isEmpty else { return }
         let placeholders = Array(repeating: "?", count: cols.count).joined(separator: ",")
         let sql = "INSERT INTO \(table) (\(cols.joined(separator: ","))) VALUES (\(placeholders))"
