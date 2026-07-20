@@ -10,6 +10,12 @@ enum Metrics {
     /// Individual screens may still override it locally (e.g. the Add sheet's 6).
     static let sectionSpacing: CGFloat = 12
 
+    /// Top margin between a sheet's nav bar and its first section. Sheets do NOT
+    /// agree on this by default — Budget/Scheduled/Account sit ~29pt lower than the
+    /// transaction sheets — so `finchSheetForm()` pins it explicitly. 6 reproduces
+    /// the transaction sheets' spacing (measured).
+    static let sheetTopMargin: CGFloat = 6
+
     /// Extra gap ABOVE a `finchSectionHeader` title. This ADDS to the inset the
     /// system already applies to a custom header view, so 0 reproduces today's
     /// rendering — dial up from here.

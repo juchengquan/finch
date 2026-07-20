@@ -98,7 +98,7 @@ struct AccountSheet: View {
                 }
             }
             .navigationTitle(isEdit ? "Edit Account" : "Add Account")
-            .finchSectionSpacing()
+            .finchSheetForm()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

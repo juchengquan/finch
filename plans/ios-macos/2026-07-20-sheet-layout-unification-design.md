@@ -133,3 +133,29 @@ standard generated-localization pass for zh-Hans.
 A matching footer helper or footer tokens; moving Accounts' type into the toolbar; renaming or
 regrouping any transaction section; per-context (sheet vs tab) `sectionSpacing` split; any
 behavior, engine, or web change.
+
+## Addendum — the sheet top-inset inconsistency (found during implementation)
+
+The most visible inconsistency turned out not to be section titles at all. Measured with
+`idb ui describe-all` (points, iPhone 402×874):
+
+| sheet | nav bar ends | caption y | gap |
+|---|---|---|---|
+| Add/Edit Transaction | 132 | 138 | 6pt |
+| Budget / Scheduled / Account | 132 | **167** | **35pt** |
+
+**Root cause:** `AddTransactionSheet` already carried a hardcoded
+`.contentMargins(.top, 6, for: .scrollContent)` (comment: *"Pull the 'Expense' caption close
+under the nav bar"*) — an ad-hoc fix that was never generalized. Every other sheet inherited
+SwiftUI's larger default inset, hence the 29pt discrepancy. It predates this branch: the
+baseline `BudgetSheet` measures the same 167.
+
+Ruled out by measurement first (each rebuilt and re-measured): `.navigationTitle`, the
+`.principal` control, `TxnTypeToolbar.caption`, `listSectionSpacing`, the Form's content
+(stripped to two sections), and the presentation site (AddTransactionSheet renders 138 even
+when presented from BudgetSheet's own `.sheet(isPresented:)`).
+
+**Fix:** `Metrics.sheetTopMargin` (= 6, measured) applied by a shared `finchSheetForm()`
+(`finchSectionSpacing()` + the pinned top margin), adopted by all five sheets; the hardcoded
+one-off in `AddTransactionSheet` is removed so the token is the single source of truth.
+Verified: Budget / Scheduled / Add-Transaction captions all at y=138.

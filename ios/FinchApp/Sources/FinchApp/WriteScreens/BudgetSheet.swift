@@ -112,7 +112,7 @@ struct BudgetSheet: View {
                 }
             }
             .navigationTitle(isEdit ? "Edit Budget" : "Add Budget")
-            .finchSectionSpacing()
+            .finchSheetForm()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -142,7 +142,7 @@ struct ScheduledSheet: View {
                 }
             }
             .navigationTitle(isEdit ? "Edit Scheduled" : "Add Scheduled")
-            .finchSectionSpacing()
+            .finchSheetForm()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

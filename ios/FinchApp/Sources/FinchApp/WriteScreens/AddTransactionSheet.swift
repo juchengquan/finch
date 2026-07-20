@@ -112,7 +112,7 @@ struct AddTransactionSheet: View {
             // the bottom safe-area inset (masked the last row) — dropping it
             // restores the system's native header + bottom behavior for free.
             formPage(kind)
-            .finchSectionSpacing()   // whole-form: every section follows the global gap
+            .finchSheetForm()   // whole-form: every section follows the global gap
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -219,13 +219,6 @@ struct AddTransactionSheet: View {
                     Section { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
                 }
             }
-            #if os(iOS)
-            // Pull the "Expense" caption close under the nav bar. A plain Form in
-            // a NavigationStack gets the system's translucent scroll-edge header +
-            // bottom safe-area inset natively (matching the Edit sheet and the
-            // main tabs) — no background/toolbar overrides needed.
-            .contentMargins(.top, 6, for: .scrollContent)
-            #endif
     }
 
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
