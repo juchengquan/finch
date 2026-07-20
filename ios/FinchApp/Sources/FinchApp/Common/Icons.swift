@@ -64,15 +64,16 @@ enum CategoryIcon {
     }
 
     static let groups: [Group] = [
-        Group(title: "Food & Drink",      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "carrot", "leaf", "water", "cake"]),
-        Group(title: "Shopping",          names: ["bag", "handbag", "tshirt", "gift", "giftcard", "tag", "sparkles", "creditcard", "laptop", "box"]),
-        Group(title: "Transport",         names: ["car", "fuel", "plane", "tram", "bus", "ferry", "bike", "scooter", "truck", "parking"]),
+        Group(title: "Food & Drink",      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "fish", "carrot", "leaf", "water", "cake"]),
+        Group(title: "Shopping",          names: ["bag", "handbag", "tshirt", "jewelry", "gift", "giftcard", "tag", "sparkles", "creditcard", "laptop", "box"]),
+        Group(title: "Transport",         names: ["car", "fuel", "charging", "plane", "tram", "bus", "ferry", "bike", "scooter", "truck", "parking"]),
         Group(title: "Travel",            names: ["hotel", "suitcase", "map", "beach", "mountain", "globe", "tent"]),
-        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "paint", "sofa", "light", "washer", "trash"]),
-        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "bandage", "stethoscope", "dumbbell", "run", "swim", "yoga", "wellness", "sports"]),
-        Group(title: "Entertainment",     names: ["film", "tv", "music", "headphones", "game", "book", "school", "camera", "art", "concert", "theater", "ticket"]),
-        Group(title: "Personal",          names: ["pet", "child", "baby", "couple", "friends", "toy", "scissors", "person", "crown"]),
-        Group(title: "Money & Work",      names: ["briefcase", "coins", "cash", "wallet", "chart", "analytics", "bank", "office", "doc", "calendar", "goal", "sync", "percent", "charity"]),
+        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "paint", "sofa", "light", "washer", "tree", "trash"]),
+        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "bandage", "stethoscope", "checkup", "vision", "dumbbell", "run", "swim", "yoga", "wellness", "mental", "sports"]),
+        Group(title: "Entertainment",     names: ["film", "tv", "streaming", "music", "headphones", "podcast", "game", "book", "school", "camera", "art", "concert", "theater", "ticket"]),
+        Group(title: "Tech & Comms",      names: ["mail", "message", "computer", "device", "cloud", "printer"]),
+        Group(title: "Personal",          names: ["pet", "child", "baby", "couple", "friends", "toy", "balloon", "scissors", "person", "crown"]),
+        Group(title: "Money & Work",      names: ["briefcase", "coins", "cash", "wallet", "chart", "analytics", "growth", "crypto", "bank", "office", "insurance", "doc", "receipt", "calendar", "goal", "sync", "percent", "charity"]),
     ]
 
     /// Flat union of every group's names, in display order.
@@ -87,6 +88,7 @@ enum CategoryIcon {
         case "cart":        "cart.fill"
         case "wineglass":   "wineglass.fill"
         case "takeout":     "takeoutbag.and.cup.and.straw.fill"
+        case "fish":        "fish.fill"
         case "carrot":      "carrot.fill"
         case "leaf":        "leaf.fill"
         case "water":       "waterbottle.fill"
@@ -94,6 +96,7 @@ enum CategoryIcon {
         // Shopping
         case "bag":         "bag.fill"
         case "handbag":     "handbag.fill"
+        case "jewelry":     "diamond.fill"
         case "tshirt":      "tshirt.fill"
         case "gift":        "gift.fill"
         case "giftcard":    "giftcard.fill"
@@ -105,6 +108,7 @@ enum CategoryIcon {
         // Transport
         case "car":         "car.fill"
         case "fuel":        "fuelpump.fill"
+        case "charging":    "bolt.car.fill"
         case "plane":       "airplane"
         case "tram":        "tram.fill"
         case "bus":         "bus.fill"
@@ -134,6 +138,7 @@ enum CategoryIcon {
         case "sofa":        "sofa.fill"
         case "light":       "lightbulb.fill"
         case "washer":      "washer.fill"
+        case "tree":        "tree.fill"
         case "trash":       "trash.fill"
         // Health & Fitness
         case "heart":       "heart.fill"
@@ -141,6 +146,9 @@ enum CategoryIcon {
         case "cross":       "cross.case.fill"
         case "bandage":     "bandage.fill"
         case "stethoscope": "stethoscope"
+        case "checkup":     "heart.text.square.fill"
+        case "vision":      "eye.fill"
+        case "mental":      "brain.head.profile"
         case "dumbbell":    "dumbbell.fill"
         case "run":         "figure.run"
         case "swim":        "figure.pool.swim"
@@ -150,8 +158,10 @@ enum CategoryIcon {
         // Entertainment
         case "film":        "film.fill"
         case "tv":          "tv.fill"
+        case "streaming":   "play.rectangle.fill"
         case "music":       "music.note"
         case "headphones":  "headphones"
+        case "podcast":     "mic.fill"
         case "game":        "gamecontroller.fill"
         case "book":        "book.fill"
         case "school":      "graduationcap.fill"
@@ -160,6 +170,13 @@ enum CategoryIcon {
         case "concert":     "music.mic"
         case "theater":     "theatermasks.fill"
         case "ticket":      "ticket.fill"
+        // Tech & Comms
+        case "mail":        "envelope.fill"
+        case "message":     "bubble.left.fill"
+        case "computer":    "desktopcomputer"
+        case "device":      "iphone"
+        case "cloud":       "icloud.fill"
+        case "printer":     "printer.fill"
         // Personal
         case "pet":         "pawprint.fill"
         case "child":       "figure.and.child.holdinghands"
@@ -167,6 +184,7 @@ enum CategoryIcon {
         case "couple":      "figure.2"
         case "friends":     "person.2.fill"
         case "toy":         "teddybear.fill"
+        case "balloon":     "balloon.fill"
         case "scissors":    "scissors"
         case "person":      "figure.stand"
         case "crown":       "crown.fill"
@@ -177,9 +195,13 @@ enum CategoryIcon {
         case "wallet":      "wallet.pass.fill"
         case "chart":       "chart.pie.fill"
         case "analytics":   "chart.bar.fill"
+        case "growth":      "chart.line.uptrend.xyaxis"
+        case "crypto":      "bitcoinsign.circle.fill"
         case "bank":        "building.columns.fill"
         case "office":      "building.2.fill"
+        case "insurance":   "checkmark.shield.fill"
         case "doc":         "doc.fill"
+        case "receipt":     "doc.plaintext.fill"
         case "calendar":    "calendar"
         case "goal":        "target"
         case "sync":        "arrow.triangle.2.circlepath"
@@ -200,6 +222,7 @@ enum CategoryIcon {
         case "cart":        "Groceries"
         case "wineglass":   "Drinks"
         case "takeout":     "Takeout"
+        case "fish":        "Seafood"
         case "carrot":      "Produce"
         case "leaf":        "Organic"
         case "water":       "Water"
@@ -207,6 +230,7 @@ enum CategoryIcon {
         // Shopping
         case "bag":         "Shopping"
         case "handbag":     "Accessories"
+        case "jewelry":     "Jewelry"
         case "tshirt":      "Clothing"
         case "gift":        "Gifts"
         case "giftcard":    "Gift Card"
@@ -218,6 +242,7 @@ enum CategoryIcon {
         // Transport
         case "car":         "Car"
         case "fuel":        "Fuel"
+        case "charging":    "Charging"
         case "plane":       "Travel"
         case "tram":        "Transit"
         case "bus":         "Bus"
@@ -247,6 +272,7 @@ enum CategoryIcon {
         case "sofa":        "Furniture"
         case "light":       "Lighting"
         case "washer":      "Laundry"
+        case "tree":        "Garden"
         case "trash":       "Waste"
         // Health & Fitness
         case "heart":       "Health"
@@ -254,6 +280,9 @@ enum CategoryIcon {
         case "cross":       "Medical"
         case "bandage":     "First Aid"
         case "stethoscope": "Doctor"
+        case "checkup":     "Checkup"
+        case "vision":      "Vision"
+        case "mental":      "Mental Health"
         case "dumbbell":    "Gym"
         case "run":         "Running"
         case "swim":        "Swimming"
@@ -263,8 +292,10 @@ enum CategoryIcon {
         // Entertainment
         case "film":        "Movies"
         case "tv":          "TV"
+        case "streaming":   "Streaming"
         case "music":       "Music"
         case "headphones":  "Audio"
+        case "podcast":     "Podcasts"
         case "game":        "Games"
         case "book":        "Books"
         case "school":      "Education"
@@ -273,6 +304,13 @@ enum CategoryIcon {
         case "concert":     "Concerts"
         case "theater":     "Theater"
         case "ticket":      "Events"
+        // Tech & Comms
+        case "mail":        "Mail"
+        case "message":     "Messages"
+        case "computer":    "Computer"
+        case "device":      "Devices"
+        case "cloud":       "Cloud"
+        case "printer":     "Printing"
         // Personal
         case "pet":         "Pets"
         case "child":       "Kids"
@@ -280,6 +318,7 @@ enum CategoryIcon {
         case "couple":      "Family"
         case "friends":     "Friends"
         case "toy":         "Toys"
+        case "balloon":     "Party"
         case "scissors":    "Grooming"
         case "person":      "Personal"
         case "crown":       "Luxury"
@@ -290,9 +329,13 @@ enum CategoryIcon {
         case "wallet":      "Wallet"
         case "chart":       "Investments"
         case "analytics":   "Analytics"
+        case "growth":      "Growth"
+        case "crypto":      "Crypto"
         case "bank":        "Bank"
         case "office":      "Business"
+        case "insurance":   "Insurance"
         case "doc":         "Bills"
+        case "receipt":     "Receipts"
         case "calendar":    "Subscriptions"
         case "goal":        "Goals"
         case "sync":        "Recurring"
