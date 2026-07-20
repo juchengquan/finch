@@ -123,7 +123,7 @@ struct AddLedgerSheet: View {
                 TextField("Name", text: $name)
                 CurrencyPickerRow(title: "Base currency", code: $base, activated: activated)
                 Picker("Start from", selection: $startFrom) {
-                    Text("Blank").tag(String?.none)
+                    Text("None").tag(String?.none)
                     ForEach(store.ledgers) { l in Text(l.name).tag(Optional(l.id)) }
                 }
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }

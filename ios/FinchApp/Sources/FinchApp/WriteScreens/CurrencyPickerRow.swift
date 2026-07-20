@@ -79,7 +79,7 @@ private struct CurrencyPickerSheet: View {
                 // the headers are what tell the two groups apart.
                 let active = rows.filter { $0.isHub || $0.tracked }
                 if !active.isEmpty {
-                    Section("Activated") {
+                    Section("Active") {
                         ForEach(active, id: \.code) { row in
                             Button { pick(row.code) } label: { rowLabel(row) }.buttonStyle(.plain)
                         }
@@ -92,7 +92,7 @@ private struct CurrencyPickerSheet: View {
                             Button { pick(row.code) } label: { rowLabel(row) }.buttonStyle(.plain)
                         }
                     } header: {
-                        Text("Not activated")
+                        Text("Inactive")
                     } footer: {
                         Text("Picking one of these activates it when you save.")
                     }

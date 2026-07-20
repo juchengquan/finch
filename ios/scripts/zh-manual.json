@@ -354,8 +354,8 @@
   "finch": "finch",
   "Shared": "共享",
   "Search or activate": "搜索或启用",
-  "Activated": "已启用",
   "%@ · will be activated": "%@ · 将被启用",
-  "Not activated": "未启用",
+  "Inactive": "未启用",
+  "Activate %@": "启用 %@",
   "Picking one of these activates it when you save.": "选择其中一项将在保存时启用它。"
 }
