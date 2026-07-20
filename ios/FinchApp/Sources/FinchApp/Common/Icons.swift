@@ -49,28 +49,93 @@ enum TxnKindIcon {
     }
 }
 
-/// SF Symbol for a category `icon` short-name. The 12 names mirror the web's
-/// shared set (stored verbatim in the pack for cross-platform parity); we map to
-/// SF Symbols only at render. Unknown / nil → "tag.fill" (web's 'tag' fallback).
+/// SF Symbol for a category `icon` short-name. Short-names are stored verbatim in
+/// the `.finch` pack; we map to SF Symbols only at render. The original 12 mirror
+/// the web's shared set — the rest are **native-only** additions (the web renders
+/// an unknown name as its 'tag' fallback, exactly as we do here for nil/unknown).
+/// The picker presents them in themed `groups`; `names` is the flat union.
+/// Unknown / nil → "tag.fill" (web's 'tag' fallback).
 enum CategoryIcon {
-    static let names = ["fork", "home", "car", "bag", "film", "heart",
-                        "sync", "tag", "coins", "wallet", "chart", "doc"]
+    /// One themed section of the icon picker (see `CategoryEditSheet`).
+    struct Group: Identifiable {
+        let title: String
+        let names: [String]
+        var id: String { title }
+    }
+
+    static let groups: [Group] = [
+        Group(title: "Food & Drink",      names: ["fork", "cup", "cart", "wineglass", "takeout", "cake"]),
+        Group(title: "Shopping",          names: ["bag", "tshirt", "gift", "tag", "sparkles", "creditcard"]),
+        Group(title: "Transport",         names: ["car", "fuel", "plane", "tram", "bike", "parking"]),
+        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone"]),
+        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "dumbbell", "run"]),
+        Group(title: "Entertainment",     names: ["film", "music", "game", "book", "school", "ticket"]),
+        Group(title: "Personal",          names: ["pet", "child", "scissors", "person"]),
+        Group(title: "Money & Work",      names: ["briefcase", "coins", "wallet", "chart", "bank", "doc", "sync", "percent"]),
+    ]
+
+    /// Flat union of every group's names, in display order.
+    static let names = groups.flatMap(\.names)
 
     static func symbol(for name: String?) -> String {
         switch name {
-        case "fork":   "fork.knife"
-        case "home":   "house.fill"
-        case "car":    "car.fill"
-        case "bag":    "bag.fill"
-        case "film":   "film.fill"
-        case "heart":  "heart.fill"
-        case "sync":   "arrow.triangle.2.circlepath"
-        case "tag":    "tag.fill"
-        case "coins":  "dollarsign.circle.fill"
-        case "wallet": "wallet.pass.fill"
-        case "chart":  "chart.pie.fill"
-        case "doc":    "doc.fill"
-        default:       "tag.fill"
+        // Food & Drink
+        case "fork":       "fork.knife"
+        case "cup":        "cup.and.saucer.fill"
+        case "cart":       "cart.fill"
+        case "wineglass":  "wineglass.fill"
+        case "takeout":    "takeoutbag.and.cup.and.straw.fill"
+        case "cake":       "birthday.cake.fill"
+        // Shopping
+        case "bag":        "bag.fill"
+        case "tshirt":     "tshirt.fill"
+        case "gift":       "gift.fill"
+        case "tag":        "tag.fill"
+        case "sparkles":   "sparkles"
+        case "creditcard": "creditcard.fill"
+        // Transport
+        case "car":        "car.fill"
+        case "fuel":       "fuelpump.fill"
+        case "plane":      "airplane"
+        case "tram":       "tram.fill"
+        case "bike":       "bicycle"
+        case "parking":    "parkingsign.circle.fill"
+        // Home & Bills
+        case "home":       "house.fill"
+        case "key":        "key.fill"
+        case "bolt":       "bolt.fill"
+        case "drop":       "drop.fill"
+        case "flame":      "flame.fill"
+        case "wifi":       "wifi"
+        case "phone":      "phone.fill"
+        // Health & Fitness
+        case "heart":      "heart.fill"
+        case "pills":      "pills.fill"
+        case "cross":      "cross.case.fill"
+        case "dumbbell":   "dumbbell.fill"
+        case "run":        "figure.run"
+        // Entertainment
+        case "film":       "film.fill"
+        case "music":      "music.note"
+        case "game":       "gamecontroller.fill"
+        case "book":       "book.fill"
+        case "school":     "graduationcap.fill"
+        case "ticket":     "ticket.fill"
+        // Personal
+        case "pet":        "pawprint.fill"
+        case "child":      "figure.and.child.holdinghands"
+        case "scissors":   "scissors"
+        case "person":     "figure.stand"
+        // Money & Work
+        case "briefcase":  "briefcase.fill"
+        case "coins":      "dollarsign.circle.fill"
+        case "wallet":     "wallet.pass.fill"
+        case "chart":      "chart.pie.fill"
+        case "bank":       "building.columns.fill"
+        case "doc":        "doc.fill"
+        case "sync":       "arrow.triangle.2.circlepath"
+        case "percent":    "percent"
+        default:           "tag.fill"
         }
     }
 }

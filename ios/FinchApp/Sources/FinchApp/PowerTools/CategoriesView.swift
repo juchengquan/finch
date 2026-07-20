@@ -506,20 +506,22 @@ struct CategoryEditSheet: View {
                 }
                 TextField("Name", text: $name)
                 SearchablePickerRow(title: "Parent", options: parentPickerOptions, selection: parentBinding)
-                Section("Icon") {
-                    LazyVGrid(columns: iconColumns, spacing: 12) {
-                        ForEach(CategoryIcon.names, id: \.self) { n in
-                            Image(systemName: CategoryIcon.symbol(for: n))
-                                .font(.system(size: 18))
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(icon == n ? Color.accentColor.opacity(0.2) : .clear))
-                                .overlay(Circle().stroke(Color.accentColor, lineWidth: icon == n ? 2 : 0))
-                                .contentShape(Circle())
-                                .onTapGesture { icon = (icon == n ? "" : n) }
-                                .accessibilityLabel("Icon \(n)")
+                ForEach(CategoryIcon.groups) { group in
+                    Section(group.title) {
+                        LazyVGrid(columns: iconColumns, spacing: 12) {
+                            ForEach(group.names, id: \.self) { n in
+                                Image(systemName: CategoryIcon.symbol(for: n))
+                                    .font(.system(size: 18))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(icon == n ? Color.accentColor.opacity(0.2) : .clear))
+                                    .overlay(Circle().stroke(Color.accentColor, lineWidth: icon == n ? 2 : 0))
+                                    .contentShape(Circle())
+                                    .onTapGesture { icon = (icon == n ? "" : n) }
+                                    .accessibilityLabel("Icon \(n)")
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
                 Section("Color") {
                     HStack(spacing: 10) {
