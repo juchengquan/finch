@@ -449,24 +449,18 @@ struct BudgetRowView: View {
                 // Amounts read as data (primary), matching account rows; group
                 // headers keep the secondary summary style on both pages.
                 Text("\(store.displayMoneyBase(progress.used)) / \(store.displayMoneyBase(progress.base))")
-                    .font(.caption)
+                    .font(.body)
             }
             ProgressView(value: min(Double(progress.pct) / 100, 1.0))
                 .tint(isGoal ? .green : BudgetThreshold.color(pct: progress.pct))   // native enhancement
             HStack(spacing: 0) {
+                // Percentage on every item (red when an expense is over budget); the
+                // day-countdown only where there's a cycle — goals have none.
+                Text("\(progress.pct)%")
+                    .foregroundStyle(progress.over ? .red : .secondary)
                 if isGoal {
-                    if progress.remaining <= 0 {
-                        Text("Goal reached").foregroundStyle(.green)
-                    } else {
-                        Text("\(store.displayMoneyBase(progress.remaining)) to go").foregroundStyle(.secondary)
-                    }
-                    Text(" · \(progress.pct)% saved").foregroundStyle(.secondary)
+                    Text(" saved").foregroundStyle(.secondary)
                 } else {
-                    if progress.over {
-                        Text("\(store.displayMoneyBase(-progress.remaining)) over").foregroundStyle(.red)
-                    } else {
-                        Text("\(store.displayMoneyBase(progress.remaining)) left").foregroundStyle(.secondary)
-                    }
                     Text(" · \(store.daysLeft(until: progress.to)) days left").foregroundStyle(.secondary)
                 }
             }
