@@ -442,7 +442,7 @@ struct CategoryEditSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     let category: CategoryRow?       // nil = create
-    let kind: String                 // fixed kind for this sheet
+    @State private var kindSel: String   // editable on create; fixed (read-only) on edit
     @State private var name: String
     @State private var parentId: String?    // nil = top level
     @State private var icon: String     // "" = none (inherit at render)
@@ -450,13 +450,15 @@ struct CategoryEditSheet: View {
     @State private var errorMessage: String?
 
     init(createIn kind: String, parentId: String? = nil) {
-        self.category = nil; self.kind = kind
+        self.category = nil
+        _kindSel = State(initialValue: kind)
         _name = State(initialValue: "")
         _parentId = State(initialValue: parentId)
         _icon = State(initialValue: ""); _color = State(initialValue: "")
     }
     init(category: CategoryRow) {
-        self.category = category; self.kind = category.kind ?? "expense"
+        self.category = category
+        _kindSel = State(initialValue: category.kind ?? "expense")
         _name = State(initialValue: category.name)
         _parentId = State(initialValue: category.parentId)
         _icon = State(initialValue: category.icon ?? "")
@@ -469,7 +471,7 @@ struct CategoryEditSheet: View {
     /// within the 3-level cap) and, when editing, excluding the category itself
     /// and its descendants. Tree-ordered for an indented menu.
     private var parentOptions: [FlatCategory] {
-        let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+        let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kindSel }
         let flat = flattenCategories(categoryForest(all), expanded: Set(all.map(\.id)), search: "")
         var excluded = Set<String>()
         if let c = category {
@@ -482,6 +484,15 @@ struct CategoryEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if category == nil {
+                    Picker("Type", selection: $kindSel) {
+                        Text("Expense").tag("expense")
+                        Text("Income").tag("income")
+                    }
+                    .pickerStyle(.segmented)
+                } else {
+                    LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
+                }
                 TextField("Name", text: $name)
                 Picker("Parent", selection: $parentId) {
                     Text("None (top level)").tag(String?.none)
@@ -522,6 +533,7 @@ struct CategoryEditSheet: View {
                 }
             }
             .navigationTitle(category == nil ? "New Category" : "Edit Category")
+            .onChange(of: kindSel) { _, _ in parentId = nil }   // parents are kind-specific
             .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -548,7 +560,7 @@ struct CategoryEditSheet: View {
                 ]
                 if parentId != c.parentId {
                     // Reparent: place last in the new parent's group (same math as drag).
-                    let kinRows = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+                    let kinRows = store.pickableCategories.filter { ($0.kind ?? "expense") == kindSel }
                     let sortOrder = CategoryReorder.reparent(c.id, under: parentId, in: kinRows)?.sortOrder ?? 0
                     patch["parentId"] = parentId.map(JSONValue.string) ?? .null
                     patch["sortOrder"] = .int(sortOrder)
@@ -557,7 +569,7 @@ struct CategoryEditSheet: View {
             } else {
                 var args: [String: JSONValue] = [
                     "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
-                    "type": .string(kind),
+                    "type": .string(kindSel),
                 ]
                 if !icon.isEmpty { args["icon"] = .string(icon) }
                 if !color.isEmpty { args["color"] = .string(color) }
