@@ -9,6 +9,7 @@ public enum Tags {
         .deleteTag: deleteTag,
         .mergeTag: mergeTag,
         .mergeTags: mergeTags,
+        .copyTags: copyTags,
     ]
 
     static func createTag(_ db: Database, _ args: Args) throws {
@@ -44,6 +45,23 @@ public enum Tags {
     static func deleteTag(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
         try db.execute(sql: "DELETE FROM tags WHERE id = ?", arguments: [try args.to(A.self).id])
+    }
+
+    /// Additively copy tags from one ledger to another, dedup by name
+    /// (case-insensitive). `ids` (optional) restricts to those source tags.
+    static func copyTags(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let fromLedgerId: String; let toLedgerId: String; let ids: [String]? }
+        let a = try args.to(A.self)
+        let want = a.ids.map(Set.init)
+        let existing = Set(try String.fetchAll(db, sql: "SELECT lower(name) FROM tags WHERE ledger_id = ?", arguments: [a.toLedgerId]))
+        for row in try Row.fetchAll(db, sql: "SELECT id, name, color FROM tags WHERE ledger_id = ?", arguments: [a.fromLedgerId]) {
+            let id = row["id"] as String
+            guard want?.contains(id) ?? true else { continue }
+            let name = (row["name"] as String).trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty || existing.contains(name.lowercased()) { continue }
+            try db.execute(sql: "INSERT INTO tags (id,ledger_id,name,color,created_at,updated_at) VALUES (?,?,?,?,datetime('now'),datetime('now'))",
+                           arguments: [Entries.newId("tag"), a.toLedgerId, name, row["color"] as String?])
+        }
     }
 
     // MARK: merge

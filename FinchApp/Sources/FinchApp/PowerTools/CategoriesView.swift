@@ -38,6 +38,8 @@ struct CategoriesView: View {
     @State private var isSelecting = false                  // ⋯ → Merge multi-select mode
     @State private var selected: Set<String> = []           // ids ticked in select mode
     @State private var mergeManySurvivorChoice: [CategoryRow]?   // → keep-which-name dialog
+    @State private var importing = false                    // ⋯ → Import-from-ledger sheet
+    @State private var copyingCategory: CategoryRow?          // row → Copy-to-ledger sheet
 
     @State private var dropTargetId: String?      // row currently targeted by a drag
     @State private var topLevelTargeted = false
@@ -144,6 +146,18 @@ struct CategoriesView: View {
         .onChange(of: kind) { _, _ in selected = [] }
         .sheet(isPresented: $creating) { CategoryEditSheet(createIn: kind.rawValue) }
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
+        .sheet(isPresented: $importing) {
+            LedgerPickerSheet(title: "Import categories from…") { from in
+                do { try store.apply(.copyCategories, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)])) }
+                catch { errorMessage = i18nMessage(error) }
+            }
+        }
+        .sheet(item: $copyingCategory) { c in
+            LedgerPickerSheet(title: "Copy \(c.name) to…") { to in
+                do { try store.apply(.copyCategories, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(c.id)])])) }
+                catch { errorMessage = i18nMessage(error) }
+            }
+        }
         // A centered ALERT, not a row-anchored confirmationDialog — see
         // ActivityTab (window-level survives swipe collapse / recycling).
         .alert("Delete \(deleting?.name ?? "")?", isPresented: Binding(
@@ -207,6 +221,7 @@ struct CategoriesView: View {
                 Menu {
                     Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
                     Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
+                    Button { importing = true } label: { Label("Import from another ledger…", systemImage: "square.and.arrow.down.on.square") }
                 } label: { Image(systemName: "ellipsis") }
                 .accessibilityLabel("More")
             }
@@ -275,6 +290,7 @@ struct CategoriesView: View {
                 .contextMenu {
                     Button { editing = c } label: { Label("Edit", systemImage: "pencil") }
                     Button { mergingFrom = c } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
+                    Button { copyingCategory = c } label: { Label("Copy to another ledger…", systemImage: "square.and.arrow.up.on.square") }
                     Button(role: .destructive) { deleting = c } label: { Label("Delete", systemImage: "trash") }
                 }
         }

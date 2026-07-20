@@ -28,6 +28,8 @@ struct TagsView: View {
     @State private var isSelecting = false               // ⋯ → Merge multi-select mode
     @State private var selected: Set<String> = []        // ids ticked in select mode
     @State private var mergeManySurvivorChoice: [TagRow]? // → keep-which-name dialog
+    @State private var importing = false                 // ⋯ → Import-from-ledger sheet
+    @State private var copyingTag: TagRow?                // row → Copy-to-ledger sheet
 
     private var rows: [TagRow] {
         guard !search.isEmpty else { return store.tags }
@@ -67,6 +69,7 @@ struct TagsView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
+                        Button { importing = true } label: { Label("Import from another ledger…", systemImage: "square.and.arrow.down.on.square") }
                     } label: { Image(systemName: "ellipsis") }
                     .accessibilityLabel("More")
                 }
@@ -77,6 +80,18 @@ struct TagsView: View {
         }
         .sheet(isPresented: $creating) { TagEditSheet(tag: nil) }
         .sheet(item: $editing) { TagEditSheet(tag: $0) }
+        .sheet(isPresented: $importing) {
+            LedgerPickerSheet(title: "Import tags from…") { from in
+                do { try store.apply(.copyTags, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)])) }
+                catch { errorMessage = i18nMessage(error) }
+            }
+        }
+        .sheet(item: $copyingTag) { t in
+            LedgerPickerSheet(title: "Copy \(t.name) to…") { to in
+                do { try store.apply(.copyTags, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(t.id)])])) }
+                catch { errorMessage = i18nMessage(error) }
+            }
+        }
         // Centered window-level alert (matches Categories/Activity deletes).
         .alert("Delete \(deleting?.name ?? "")?", isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -187,6 +202,7 @@ struct TagsView: View {
         .contextMenu {
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }
             Button { mergingFrom = tag } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
+            Button { copyingTag = tag } label: { Label("Copy to another ledger…", systemImage: "square.and.arrow.up.on.square") }
             Button(role: .destructive) { deleting = tag } label: { Label("Delete", systemImage: "trash") }
         }
     }
