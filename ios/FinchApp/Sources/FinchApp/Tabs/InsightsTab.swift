@@ -36,7 +36,7 @@ struct InsightsTab: View {
                                     Text("3M").tag(3); Text("6M").tag(6); Text("1Y").tag(12)
                                 }
                                 .pickerStyle(.segmented)
-                                ForEach(layout.order, id: \.self) { id in
+                                ForEach(layout.shownOrder, id: \.self) { id in
                                     if let entry = InsightsCatalog.entry(id) {
                                         entry.make(rangeMonths)
                                     }
