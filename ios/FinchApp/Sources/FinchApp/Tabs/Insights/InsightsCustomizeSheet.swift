@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Show/hide + reorder the dashboard cards. Enabled cards (in `layout.order`)
-/// appear first, reorderable; disabled cards follow. Any edit that no longer
-/// matches a template clears `templateName` ("Custom").
+/// Show/hide + reorder the dashboard cards — the sole way the user shapes the
+/// Insights dashboard (there are no preset templates). Enabled cards
+/// (`layout.order`) appear first, reorderable; disabled cards follow. "Reset to
+/// default" restores the curated starter set.
 struct InsightsCustomizeSheet: View {
     @Binding var layout: InsightsLayout
     @Environment(\.dismiss) private var dismiss
@@ -14,10 +15,14 @@ struct InsightsCustomizeSheet: View {
             List {
                 Section("Shown") {
                     ForEach(layout.order, id: \.self) { id in row(id) }
-                        .onMove { from, to in layout.order.move(fromOffsets: from, toOffset: to); retag() }
+                        .onMove { from, to in layout.order.move(fromOffsets: from, toOffset: to) }
                 }
                 if !disabled.isEmpty {
                     Section("Hidden") { ForEach(disabled, id: \.self) { id in row(id) } }
+                }
+                Section {
+                    Button("Reset to default") { layout.order = InsightsLayout.defaultOrder }
+                        .disabled(layout.order == InsightsLayout.defaultOrder)
                 }
             }
             #if os(iOS)
@@ -44,10 +49,7 @@ struct InsightsCustomizeSheet: View {
                 set: { isOn in
                     if isOn { if !layout.order.contains(id) { layout.order.append(id) } }
                     else { layout.order.removeAll { $0 == id } }
-                    retag()
                 })).labelsHidden()
         }
     }
-
-    private func retag() { layout.templateName = layout.matchingTemplate()?.rawValue }
 }

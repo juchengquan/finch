@@ -1,50 +1,19 @@
 import Foundation
 
-/// Named preset card sets. "Custom" is NOT a case — it's the derived state when
-/// a layout matches no template (see `InsightsLayout.matchingTemplate`).
-enum InsightsTemplate: String, CaseIterable, Identifiable {
-    case overview, spending, wealth, everything
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .overview: return "Overview"
-        case .spending: return "Spending"
-        case .wealth: return "Wealth"
-        case .everything: return "Everything"
-        }
-    }
-
-    var cardIDs: [String] {
-        switch self {
-        case .overview:   return ["tips", "monthlySpending", "savingsRate", "netWorth", "categoryBreakdown", "forecast"]
-        case .spending:   return ["monthlySpending", "categoryBreakdown", "topMerchants", "categoryDeltas", "spendingHeatmap"]
-        case .wealth:     return ["netWorth", "netWorthByType", "cashflow", "savingsRate", "whatIf"]
-        case .everything: return InsightsCatalog.all.map(\.id)
-        }
-    }
-}
-
-/// The persisted dashboard layout: enabled card ids in display order, plus the
-/// template it currently matches (nil == "Custom"). `RawRepresentable` so it can
-/// live in `@AppStorage` as a JSON string.
+/// The persisted Insights dashboard layout: the enabled card ids, in display
+/// order. There are no preset "templates" — the user decides via the Customize
+/// sheet; this is their choice. `RawRepresentable` so it can live in
+/// `@AppStorage` as a JSON string.
 struct InsightsLayout: Codable, Equatable, RawRepresentable {
     var order: [String]
-    /// A persisted hint for which preset this came from. NOTE: the menu label is
-    /// derived live from `matchingTemplate()` (over `order`), not this field —
-    /// keep them in sync when mutating `order` (Phase 2's Customize does via retag).
-    var templateName: String?
 
-    static let `default` = InsightsLayout(
-        order: InsightsTemplate.overview.cardIDs,
-        templateName: InsightsTemplate.overview.rawValue)
+    /// The curated first-run / "Reset to default" set — a focused starter, not
+    /// every card (avoids the old 14-card firehose).
+    static let defaultOrder = ["tips", "monthlySpending", "savingsRate", "netWorth", "categoryBreakdown", "forecast"]
 
-    /// The template whose `cardIDs` equal `order` exactly, else nil ("Custom").
-    func matchingTemplate() -> InsightsTemplate? {
-        InsightsTemplate.allCases.first { $0.cardIDs == order }
-    }
+    static let `default` = InsightsLayout(order: defaultOrder)
 
-    init(order: [String], templateName: String?) { self.order = order; self.templateName = templateName }
+    init(order: [String]) { self.order = order }
 
     // Explicit Codable witnesses: without these, the compiler prefers the
     // stdlib's `Encodable` default for `RawRepresentable where RawValue:
@@ -53,16 +22,14 @@ struct InsightsLayout: Codable, Equatable, RawRepresentable {
     // default recurses infinitely (verified via a stack-overflow crash).
     // Hand-writing these gives a concrete witness that wins over the
     // extension default, breaking the cycle.
-    private enum CodingKeys: String, CodingKey { case order, templateName }
+    private enum CodingKeys: String, CodingKey { case order }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         order = try c.decode([String].self, forKey: .order)
-        templateName = try c.decodeIfPresent(String.self, forKey: .templateName)
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(order, forKey: .order)
-        try c.encodeIfPresent(templateName, forKey: .templateName)
     }
 
     // RawRepresentable (JSON) for @AppStorage

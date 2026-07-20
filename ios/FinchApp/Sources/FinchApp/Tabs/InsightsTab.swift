@@ -32,17 +32,6 @@ struct InsightsTab: View {
                             }
                             .pickerStyle(.segmented)
                             if view == .trends {
-                                Menu {
-                                    ForEach(InsightsTemplate.allCases) { t in
-                                        Button(t.title) { layout = InsightsLayout(order: t.cardIDs, templateName: t.rawValue) }
-                                    }
-                                    Divider()
-                                    Button("Customize…") { customizing = true }
-                                } label: {
-                                    Label(layout.matchingTemplate()?.title ?? "Custom", systemImage: "square.grid.2x2")
-                                        .font(.subheadline)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
                                 Picker("Range", selection: $rangeMonths) {
                                     Text("3M").tag(3); Text("6M").tag(6); Text("1Y").tag(12)
                                 }
@@ -51,13 +40,6 @@ struct InsightsTab: View {
                                     if let entry = InsightsCatalog.entry(id) {
                                         entry.make(rangeMonths)
                                     }
-                                }
-                                .sheet(isPresented: $customizing) {
-                                    InsightsCustomizeSheet(layout: $layout)
-                                        #if os(iOS)
-                                        .presentationDetents([.large])
-                                        .presentationDragIndicator(.visible)
-                                        #endif
                                 }
                             } else {
                                 BreakdownView()
@@ -73,7 +55,21 @@ struct InsightsTab: View {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
                 #endif
+                // Customize the Trends dashboard (show/hide + reorder). Trends-only.
+                ToolbarItem(placement: .primaryAction) {
+                    if view == .trends {
+                        Button { customizing = true } label: { Image(systemName: "slider.horizontal.3") }
+                            .accessibilityLabel("Customize")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+            }
+            .sheet(isPresented: $customizing) {
+                InsightsCustomizeSheet(layout: $layout)
+                    #if os(iOS)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    #endif
             }
         }
     }
