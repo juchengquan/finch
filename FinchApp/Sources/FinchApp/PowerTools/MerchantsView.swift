@@ -147,13 +147,13 @@ struct MerchantsView: View {
         HStack(spacing: 8) {
             MerchantLabel(name: cp.name, isVerified: cp.isVerified)
             Spacer(minLength: 8)
-            if let n = counts[cp.id], n > 0 {
-                Text("\(n)")
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .padding(.horizontal, 12).padding(.vertical, 3)
-                    .background(.quaternary, in: Capsule())
-                    .accessibilityLabel("\(n) transactions")
-            }
+            // Always shown, including 0 — mirrors Categories/Tags.
+            let n = counts[cp.id] ?? 0
+            Text("\(n)")
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                .padding(.horizontal, 12).padding(.vertical, 3)
+                .background(.quaternary, in: Capsule())
+                .accessibilityLabel("\(n) transactions")
             if chevron { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
         }
         .contentShape(Rectangle())
