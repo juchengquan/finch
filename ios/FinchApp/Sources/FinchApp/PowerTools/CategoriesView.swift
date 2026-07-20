@@ -481,6 +481,17 @@ struct CategoryEditSheet: View {
         return flat.filter { $0.depth < 2 && !excluded.contains($0.row.id) }
     }
 
+    /// Parent options for the bottom-sheet picker: "None (top level)" (empty id)
+    /// plus the eligible parents, indented by depth.
+    private var parentPickerOptions: [PickerOption] {
+        [PickerOption(id: "", name: "None (top level)")]
+            + parentOptions.map { PickerOption(id: $0.row.id, name: String(repeating: "   ", count: $0.depth) + $0.row.name) }
+    }
+    /// Bridges the `String?` parentId to SearchablePickerRow's `String` (empty == top level).
+    private var parentBinding: Binding<String> {
+        Binding(get: { parentId ?? "" }, set: { parentId = $0.isEmpty ? nil : $0 })
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -494,12 +505,7 @@ struct CategoryEditSheet: View {
                     LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
                 }
                 TextField("Name", text: $name)
-                Picker("Parent", selection: $parentId) {
-                    Text("None (top level)").tag(String?.none)
-                    ForEach(parentOptions) { f in
-                        Text(String(repeating: "   ", count: f.depth) + f.row.name).tag(Optional(f.row.id))
-                    }
-                }
+                SearchablePickerRow(title: "Parent", options: parentPickerOptions, selection: parentBinding)
                 Section("Icon") {
                     LazyVGrid(columns: iconColumns, spacing: 12) {
                         ForEach(CategoryIcon.names, id: \.self) { n in
