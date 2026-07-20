@@ -52,13 +52,7 @@ struct BudgetSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Text(kind.label)   // names the icon-only type control in the toolbar
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                }
+                Section { TxnTypeToolbar.caption(kind.label) }   // names the toolbar type control above
                 Section {
                     TextField("Name", text: $name)
                     HStack {
@@ -73,6 +67,10 @@ struct BudgetSheet: View {
                         Text("None").tag("")
                         ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
                     }
+                } footer: {
+                    if isEdit, budget?.isRecurring == 1 {
+                        Text("Changing the start date or frequency re-bases the cycle and clears any staged amount and rolled-over balance.")
+                    }
                 }
 
                 Section {
@@ -86,6 +84,8 @@ struct BudgetSheet: View {
                         options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
                         selection: $selectedAccounts,
                         emptyLabel: "All accounts")
+                } header: {
+                    finchSectionHeader("Tracking")
                 } footer: {
                     Text("Leave empty to track all \(kind.rawValue) categories and accounts.")
                 }
@@ -100,15 +100,10 @@ struct BudgetSheet: View {
                                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                             }
                         }
+                    } header: {
+                        finchSectionHeader("Rollover")
                     } footer: {
                         Text("Unspent budget carries into the next period. Set a cap to limit how much.")
-                    }
-                }
-
-                if isEdit, budget?.isRecurring == 1 {
-                    Section {
-                        Text("Changing the start date or frequency re-bases the cycle and clears any staged amount and rolled-over balance.")
-                            .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
 
@@ -125,13 +120,8 @@ struct BudgetSheet: View {
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .principal) {
-                    Picker("Type", selection: $kind) {
-                        ForEach(Kind.allCases) { k in
-                            Image(systemName: TxnKindIcon.icon(for: k.rawValue)).accessibilityLabel(k.label).tag(k)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 100)
+                    TxnTypeToolbar.segmented(Kind.allCases, selection: $kind,
+                        icon: { TxnKindIcon.icon(for: $0.rawValue) }, label: { $0.label })
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
