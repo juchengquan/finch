@@ -420,6 +420,7 @@ struct AddTransactionSheet: View {
         if kind != .transfer, !dupConfirmed,
            let m = Selectors.findDuplicate(store.txns, store.activeLedgerId,
                DuplicateDraft(merchant: merchant, amount: abs(value), accountId: accountId, date: ymd, excludeId: nil)) {
+            Haptics.warning()
             pendingDuplicate = m
             return
         }
@@ -480,8 +481,10 @@ struct AddTransactionSheet: View {
                     Task { try? await AttachmentWriter.writeFile(url: url, entryId: eid, store: store) }
                 }
             }
+            Haptics.success()
             dismiss()
         } catch {
+            Haptics.warning()
             errorMessage = i18nMessage(error)   // localizes I18nError (incl. zh), like every other write screen
         }
     }
