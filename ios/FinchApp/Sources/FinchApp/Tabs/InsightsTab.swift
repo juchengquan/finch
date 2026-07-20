@@ -10,6 +10,7 @@ struct InsightsTab: View {
     private enum InsightsMode: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
     @State private var view: InsightsMode = .trends
     @State private var rangeMonths = 6   // 3M / 6M / 1Y range switcher
+    @AppStorage("finch.insights.layout") private var layout = InsightsLayout.default
 
     var body: some View {
         NavigationStack {
@@ -28,24 +29,24 @@ struct InsightsTab: View {
                             }
                             .pickerStyle(.segmented)
                             if view == .trends {
+                                Menu {
+                                    ForEach(InsightsTemplate.allCases) { t in
+                                        Button(t.title) { layout = InsightsLayout(order: t.cardIDs, templateName: t.rawValue) }
+                                    }
+                                } label: {
+                                    Label(layout.matchingTemplate()?.title ?? "Custom", systemImage: "square.grid.2x2")
+                                        .font(.subheadline)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                                 Picker("Range", selection: $rangeMonths) {
                                     Text("3M").tag(3); Text("6M").tag(6); Text("1Y").tag(12)
                                 }
                                 .pickerStyle(.segmented)
-                                InsightsCard()
-                                MonthlySpendingCard(months: rangeMonths)
-                                NetWorthCard(months: rangeMonths)
-                                CashflowCard(months: rangeMonths)
-                                SavingsRateCard()
-                                WhatIfCard()
-                                CategoryDeltasCard()
-                                WeeklyDigestCard()
-                                IncomeSankeyCard()
-                                SpendingHeatmapCard()
-                                NetWorthByTypeCard()
-                                CategoryBreakdownCard()
-                                TopMerchantsCard()
-                                ForecastCard()
+                                ForEach(layout.order, id: \.self) { id in
+                                    if let entry = InsightsCatalog.entry(id) {
+                                        entry.make(rangeMonths)
+                                    }
+                                }
                             } else {
                                 BreakdownView()
                             }
