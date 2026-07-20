@@ -55,14 +55,19 @@ struct InsightsTab: View {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
                 #endif
-                // Customize the Trends dashboard (show/hide + reorder). Trends-only.
+                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+                // Customize the Trends dashboard (show/hide + reorder), in a ⋯ menu
+                // to the right of the privacy (eye) toggle. Trends-only.
                 ToolbarItem(placement: .primaryAction) {
                     if view == .trends {
-                        Button { customizing = true } label: { Image(systemName: "slider.horizontal.3") }
-                            .accessibilityLabel("Customize")
+                        Menu {
+                            Button { customizing = true } label: { Label("Customize…", systemImage: "slider.horizontal.3") }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .accessibilityLabel("More")
                     }
                 }
-                ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
             }
             .sheet(isPresented: $customizing) {
                 InsightsCustomizeSheet(layout: $layout)
