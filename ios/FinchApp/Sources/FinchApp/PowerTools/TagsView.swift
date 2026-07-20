@@ -82,13 +82,13 @@ struct TagsView: View {
         .sheet(item: $editing) { TagEditSheet(tag: $0) }
         .sheet(isPresented: $importing) {
             LedgerPickerSheet(title: "Import tags from…") { from in
-                do { try store.apply(.copyTags, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)])) }
+                do { copyDone(try store.applyReturningCount(.copyTags, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)]))) }
                 catch { errorMessage = i18nMessage(error) }
             }
         }
         .sheet(item: $copyingTag) { t in
             LedgerPickerSheet(title: "Copy \(t.name) to…") { to in
-                do { try store.apply(.copyTags, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(t.id)])])) }
+                do { copyDone(try store.applyReturningCount(.copyTags, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(t.id)])]))) }
                 catch { errorMessage = i18nMessage(error) }
             }
         }
@@ -217,6 +217,15 @@ struct TagsView: View {
         .padding(.vertical, 48)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+    }
+
+    /// Confirm a copy: these actions dedup against the target, so a bare "done"
+    /// would look identical whether 12 rows landed or none did. Also the ONLY
+    /// feedback for the copy-OUT direction, where the target isn't the ledger on
+    /// screen and nothing visibly changes.
+    private func copyDone(_ added: Int) {
+        Haptics.success()
+        ToastCenter.shared.show(added > 0 ? "\(added) added" : "Nothing new to copy")
     }
 
     private func delete(_ t: TagRow) {

@@ -148,13 +148,13 @@ struct CategoriesView: View {
         .sheet(item: $editing) { CategoryEditSheet(category: $0) }
         .sheet(isPresented: $importing) {
             LedgerPickerSheet(title: "Import categories from…") { from in
-                do { try store.apply(.copyCategories, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)])) }
+                do { copyDone(try store.applyReturningCount(.copyCategories, Args(["fromLedgerId": .string(from), "toLedgerId": .string(store.activeLedgerId)]))) }
                 catch { errorMessage = i18nMessage(error) }
             }
         }
         .sheet(item: $copyingCategory) { c in
             LedgerPickerSheet(title: "Copy \(c.name) to…") { to in
-                do { try store.apply(.copyCategories, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(c.id)])])) }
+                do { copyDone(try store.applyReturningCount(.copyCategories, Args(["fromLedgerId": .string(store.activeLedgerId), "toLedgerId": .string(to), "ids": .array([.string(c.id)])]))) }
                 catch { errorMessage = i18nMessage(error) }
             }
         }
@@ -366,6 +366,15 @@ struct CategoriesView: View {
     /// Apply one or more category moves (parentId + sortOrder) through the
     /// chokepoint, in order. The engine rejects self/descendant/depth>3 with a
     /// localized error; on the first throw we stop and surface it.
+    /// Confirm a copy: these actions dedup against the target, so a bare "done"
+    /// would look identical whether 12 rows landed or none did. Also the ONLY
+    /// feedback for the copy-OUT direction, where the target isn't the ledger on
+    /// screen and nothing visibly changes.
+    private func copyDone(_ added: Int) {
+        Haptics.success()
+        ToastCenter.shared.show(added > 0 ? "\(added) added" : "Nothing new to copy")
+    }
+
     private func applyMoves(_ moves: [CategoryMove]) {
         errorMessage = nil
         do {

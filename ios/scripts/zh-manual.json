@@ -353,6 +353,8 @@
   "Note (optional)": "备注（可选）",
   "finch": "finch",
   "Shared": "共享",
+  "%lld added": "已添加 %lld 项",
+  "Nothing new to copy": "没有可复制的新内容",
   "Search or activate": "搜索或启用",
   "%@ · will be activated": "%@ · 将被启用",
   "Inactive": "未启用",

@@ -130,6 +130,8 @@ struct FinchApp: App {
                 AddTransactionSheet(defaultAccountId: router.pendingAddAccountId)
                     .environmentObject(store).environmentObject(router)
             }
+            // App-wide transient confirmations (ToastCenter). Hosted once, here.
+            .toastOverlay()
         }
         #if os(macOS)
         .defaultSize(width: 1100, height: 720)
