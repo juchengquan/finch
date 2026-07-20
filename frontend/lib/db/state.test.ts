@@ -103,10 +103,10 @@ test('counterparty verify + alias edits write the table (no app_state shim)', as
   const exec = await seededAndAudited();
   // cp-04 (Don Don Donki) is seeded unverified; flip it.
   await applyMutation(exec, 'verifyCounterparty', { id: 'cp-04' });
-  let donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
+  let donki = (await listCounterparties(exec)).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(true);
   await applyMutation(exec, 'unverifyCounterparty', { id: 'cp-04' });
-  donki = (await listCounterparties(exec, 'personal')).find((c) => c.id === 'cp-04')!;
+  donki = (await listCounterparties(exec)).find((c) => c.id === 'cp-04')!;
   expect(donki.verified).toBe(false);
 });
 

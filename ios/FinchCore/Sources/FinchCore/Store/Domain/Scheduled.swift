@@ -111,7 +111,7 @@ public enum Scheduled {
             }
             let signed = (type == "income" ? 1.0 : -1.0) * amount
             let categoryId: String? = r["category_id"]
-            let cpId = try Entries.resolveCounterpartyIdByName(db, ledgerId, description)
+            let cpId = try Entries.resolveCounterpartyIdByName(db, description)
             for date in dates {
                 try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
                     description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,

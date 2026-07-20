@@ -132,7 +132,7 @@ export async function deleteLedger(exec: Exec, id: string): Promise<{ relPaths: 
     await exec('DELETE FROM account_groups WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM categories WHERE ledger_id = ?', [id]);
     await exec('DELETE FROM tags WHERE ledger_id = ?', [id]);
-    await exec('DELETE FROM counterparties WHERE ledger_id = ?', [id]);
+    // Merchants are global (no ledger_id) — they survive a ledger deletion.
 
     // Default reassignment: promote the first remaining ledger by name.
     let newDefaultId: string | null = null;

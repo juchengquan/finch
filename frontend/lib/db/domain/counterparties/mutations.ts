@@ -21,7 +21,6 @@ export const handlers = {
     if (!name) throw new I18nError('error.required.merchantName', {}, 'Merchant name is required');
     return qCreateCounterparty(exec, {
       id: str(args.id || newId('cp')),
-      ledgerId: str(args.ledgerId || 'personal'),
       name,
     });
   },

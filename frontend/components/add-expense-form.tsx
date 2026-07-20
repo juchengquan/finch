@@ -143,10 +143,10 @@ export function AddExpenseForm({
   const counterpartyId = useMemo(() => {
     if (!merchantTerm) return null;
     const hit = storeCps.find(
-      (c) => c.ledgerId === activeId && c.name.trim().toLowerCase() === merchantTerm,
+      (c) => c.name.trim().toLowerCase() === merchantTerm,
     );
     return hit ? hit.id : null;
-  }, [storeCps, activeId, merchantTerm]);
+  }, [storeCps, merchantTerm]);
   const suggestion = useMemo(() => {
     if (type !== 'expense') return null;
     return suggestCategory(storeTxns, activeId, merchant, counterpartyId);

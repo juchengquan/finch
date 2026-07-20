@@ -3,8 +3,8 @@ import XCTest
 
 final class MerchantTransactionsTests: XCTestCase {
     private let cps = [
-        Counterparty(id: "cp1", ledgerId: "l1", name: "Starbucks", isVerified: false),
-        Counterparty(id: "cp2", ledgerId: "l1", name: "Other", isVerified: false),
+        Counterparty(id: "cp1", name: "Starbucks", isVerified: false),
+        Counterparty(id: "cp2", name: "Other", isVerified: false),
     ]
     private let txns = [
         Tx(id: "a", merchant: "Starbucks", amount: -5, account: "a1", date: "2026-06-01", ledgerId: "l1", counterpartyId: "cp1"), // linked

@@ -16,7 +16,6 @@
       "action": "createCounterparty",
       "args": {
         "id": "cp1",
-        "ledgerId": "personal",
         "name": "Starbucks"
       }
     },
@@ -1108,7 +1107,6 @@
     "counterparties": [
       {
         "id": "cp1",
-        "ledger_id": "personal",
         "name": "Starbucks",
         "is_verified": 1
       }

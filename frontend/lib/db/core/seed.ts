@@ -127,8 +127,8 @@ export async function seedReference(exec: Exec): Promise<void> {
 
   for (const cp of counterpartiesData as CounterpartyRow[]) {
     await exec(
-      'INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,?,?,?)',
-      [cp.id, 'personal', cp.name, cp.verified ? 1 : 0, SEED_TS, SEED_TS],
+      'INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,?,?,?)',
+      [cp.id, cp.name, cp.verified ? 1 : 0, SEED_TS, SEED_TS],
     );
   }
 
@@ -314,7 +314,7 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
           const entryNotes = legTxs.map((x) => x.note ?? null).find((x) => x != null) ?? null;
 
           // Counterparty: resolved from merchant of first leg.
-          const cpId = await resolveCounterpartyIdByName(exec, ledgerId, legTxs[0].merchant);
+          const cpId = await resolveCounterpartyIdByName(exec, legTxs[0].merchant);
 
           // Build account legs — keep each leg's tx id as the POSTING id.
           const legs: MoveLeg[] = [];
@@ -370,7 +370,7 @@ export async function insertTransactions(exec: Exec, txs: Tx[]): Promise<void> {
       const base = baseOf(ledgerId);
       const sys = await getSys(ledgerId);
 
-      const cpId = await resolveCounterpartyIdByName(exec, ledgerId, t.merchant);
+      const cpId = await resolveCounterpartyIdByName(exec, t.merchant);
 
       // F3 fix: if the tx's native currency differs from the account's currency,
       // re-denominate the account leg into the account's own currency.

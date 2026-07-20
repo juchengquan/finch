@@ -3,7 +3,7 @@ import XCTest
 
 final class CounterpartyTxCountsTests: XCTestCase {
     private func cp(_ id: String, _ name: String) -> Counterparty {
-        Counterparty(id: id, ledgerId: "l1", name: name)
+        Counterparty(id: id, name: name)
     }
     private func tx(_ id: String, merchant: String = "", cp: String? = nil,
                     pending: Bool = false, ledger: String = "l1") -> Tx {

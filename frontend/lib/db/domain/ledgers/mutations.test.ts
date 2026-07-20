@@ -242,14 +242,17 @@ test('deleteLedger removes every ledger-scoped row and leaves siblings untouched
   const beforePersonal = Number((await exec(
     "SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal'",
   ))[0].n);
+  // Merchants are global (no ledger_id) — they must NOT be wiped by a ledger delete.
+  const cpBefore = Number((await exec('SELECT COUNT(*) AS n FROM counterparties'))[0].n);
 
   await applyMutation(exec, 'deleteLedger', { id: 'family' });
 
   // Every per-ledger table is empty for family. §2: entries/postings replace
-  // transactions/transfer_groups/transaction_attachments.
+  // transactions/transfer_groups/transaction_attachments. counterparties are
+  // GLOBAL now, so they are intentionally not in this list.
   const tables = [
     'entries','scheduled_templates','budgets','budget_groups',
-    'accounts','account_groups','categories','tags','counterparties',
+    'accounts','account_groups','categories','tags',
     'rules','holdings',
   ];
   for (const t of tables) {
@@ -268,6 +271,9 @@ test('deleteLedger removes every ledger-scoped row and leaves siblings untouched
     "SELECT COUNT(*) AS n FROM entries WHERE ledger_id = 'personal'",
   ))[0].n);
   expect(afterPersonal).toBe(beforePersonal);
+  // Global merchants survive the ledger deletion.
+  const cpAfter = Number((await exec('SELECT COUNT(*) AS n FROM counterparties'))[0].n);
+  expect(cpAfter).toBe(cpBefore);
   // The ledger row itself is gone.
   const ledgerLeft = await exec('SELECT id FROM ledgers WHERE id = ?', ['family']);
   expect(ledgerLeft.length).toBe(0);

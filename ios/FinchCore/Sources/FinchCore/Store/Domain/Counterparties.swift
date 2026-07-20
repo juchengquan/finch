@@ -14,12 +14,12 @@ public enum Counterparties {
     ]
 
     static func createCounterparty(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let id: String?; let ledgerId: String?; let name: String }
+        struct A: Decodable { let id: String?; let name: String }
         let a = try args.to(A.self)
         let name = a.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { throw I18nError("error.required.merchantName", [:], "Merchant name is required") }
-        try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
-                       arguments: [a.id ?? Entries.newId("cp"), a.ledgerId ?? "personal", name])
+        try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))",
+                       arguments: [a.id ?? Entries.newId("cp"), name])
     }
 
     static func updateCounterparty(_ db: Database, _ args: Args) throws {
@@ -73,17 +73,15 @@ public enum Counterparties {
         try db.execute(sql: "UPDATE entries SET counterparty_id = ? WHERE counterparty_id = ?", arguments: [target, source])
     }
 
-    /// Guards for a single source→target merge: not-self, both exist, same ledger.
+    /// Guards for a single source→target merge: not-self, both exist. Merchants are
+    /// global (no ledger_id), so there is no same-ledger guard.
     private static func validateMerge(_ db: Database, source: String, target: String) throws {
         if source == target {
             throw I18nError("error.counterparty.mergeSelf", [:], "Cannot merge a merchant into itself")
         }
-        guard let sLedger = try String.fetchOne(db, sql: "SELECT ledger_id FROM counterparties WHERE id = ?", arguments: [source]),
-              let tLedger = try String.fetchOne(db, sql: "SELECT ledger_id FROM counterparties WHERE id = ?", arguments: [target]) else {
+        guard try String.fetchOne(db, sql: "SELECT id FROM counterparties WHERE id = ?", arguments: [source]) != nil,
+              try String.fetchOne(db, sql: "SELECT id FROM counterparties WHERE id = ?", arguments: [target]) != nil else {
             throw I18nError("error.notFound.counterparty", [:], "Merchant does not exist")
-        }
-        if sLedger != tLedger {
-            throw I18nError("error.counterparty.mergeLedger", [:], "Merchants must be in the same ledger to merge")
         }
     }
 }
