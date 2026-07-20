@@ -450,8 +450,7 @@ struct AddTransactionSheet: View {
                 let cpName = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !cpName.isEmpty,
                    !store.counterparties.contains(where: { $0.name.caseInsensitiveCompare(cpName) == .orderedSame }) {
-                    try store.apply(.createCounterparty, Args([
-                        "ledgerId": .string(store.activeLedgerId), "name": .string(cpName)]))
+                    try store.apply(.createCounterparty, Args(["name": .string(cpName)]))
                 }
                 if kind == .refund {
                     args["kind"] = .string("refund")

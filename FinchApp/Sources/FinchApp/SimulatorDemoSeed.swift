@@ -202,7 +202,7 @@ enum SimulatorDemoSeed {
             ("cp-sainsburys", "Sainsbury's",        false),
         ]
         for m in merchants {
-            try apply("createCounterparty", ["id": .string(m.id), "ledgerId": .string("personal"), "name": .string(m.name)])
+            try apply("createCounterparty", ["id": .string(m.id), "name": .string(m.name)])
             if m.verified { try apply("verifyCounterparty", ["id": .string(m.id)]) }
         }
 
