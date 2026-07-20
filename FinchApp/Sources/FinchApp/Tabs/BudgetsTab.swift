@@ -197,14 +197,10 @@ struct BudgetsTab: View {
         }
     }
 
-    /// Compact totals status pinned at the top: total spent / total budget across
-    /// the active ledger (same StatusSummaryRow style as the Accounts summary).
+    /// Budget health pinned at the top: remaining-to-spend, an overall banded bar,
+    /// an "N over" badge, and a separate goals line (see BudgetSummaryCard).
     @ViewBuilder private var summarySection: some View {
-        Section {
-            let t = store.budgetTotalsDisplay
-            StatusSummaryRow(leadingLabel: "Spent", leadingValue: t.used,
-                             trailingLabel: "Budget", trailingValue: t.base)
-        }
+        Section { BudgetSummaryCard(summary: store.budgetSummary) }
     }
 
     /// True while the user has typed a non-empty budget search.
@@ -456,25 +452,26 @@ struct BudgetRowView: View {
                     .font(.caption)
             }
             ProgressView(value: min(Double(progress.pct) / 100, 1.0))
-                .tint(isGoal ? .green : thresholdColor(progress.pct))   // native enhancement
-            HStack {
+                .tint(isGoal ? .green : BudgetThreshold.color(pct: progress.pct))   // native enhancement
+            HStack(spacing: 0) {
                 if isGoal {
-                    Text("\(progress.pct)% saved")
-                        .font(.caption2).foregroundStyle(.secondary)
-                } else {
-                    Text("\(store.daysLeft(until: progress.to)) days left")
-                        .font(.caption2).foregroundStyle(.secondary)
-                    if progress.over {
-                        Spacer()
-                        Text("Over").font(.caption2).foregroundStyle(.red)
+                    if progress.remaining <= 0 {
+                        Text("Goal reached").foregroundStyle(.green)
+                    } else {
+                        Text("\(store.displayMoneyBase(progress.remaining)) to go").foregroundStyle(.secondary)
                     }
+                    Text(" · \(progress.pct)% saved").foregroundStyle(.secondary)
+                } else {
+                    if progress.over {
+                        Text("\(store.displayMoneyBase(-progress.remaining)) over").foregroundStyle(.red)
+                    } else {
+                        Text("\(store.displayMoneyBase(progress.remaining)) left").foregroundStyle(.secondary)
+                    }
+                    Text(" · \(store.daysLeft(until: progress.to)) days left").foregroundStyle(.secondary)
                 }
             }
+            .font(.caption2)
         }
-    }
-    /// Native 3-color banding (NOT web parity). pct is an INTEGER 0–100.
-    private func thresholdColor(_ pct: Int) -> Color {
-        pct > 90 ? .red : (pct >= 70 ? .yellow : .green)
     }
 }
 

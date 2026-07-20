@@ -222,13 +222,14 @@ extension FinchStore {
             $0 + Selectors.budgetProgress($1, txns, today, categoryNodes).base
         })
     }
-    public var budgetTotalsDisplay: (used: String, base: String) {
-        var used = 0.0, base = 0.0
-        for b in budgets {
+    /// Ledger-wide budget health for the Budgets summary card — spend totals with
+    /// savings goals split out (see BudgetSummary). Raw base-currency doubles; the
+    /// card formats via the privacy-aware displayMoneyBase.
+    var budgetSummary: BudgetSummary {
+        BudgetSummary.compute(budgets) { b in
             let p = Selectors.budgetProgress(b, txns, today, categoryNodes)
-            used += p.used; base += p.base
+            return (p.used, p.base, p.over)
         }
-        return (displayMoneyBase(used), displayMoneyBase(base))
     }
 
     /// Whole days from `today` to `ymd` (UTC), floored at 0.
