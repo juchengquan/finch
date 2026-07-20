@@ -28,8 +28,11 @@ struct BudgetDetailView: View {
                     Section { progress(budget, p) }
                     historySection(budget)
                     if budget.type == "income" {
-                        Section("Goal") {
+                        Section("Income") {
                             LabeledContent("Saved", value: store.displayMoneyBase(budget.saved))
+                            if let end = budget.endDate, let d = AppDate.isoDay.date(from: end) {
+                                LabeledContent("Target date", value: d.formatted(date: .abbreviated, time: .omitted))
+                            }
                             Button("Contribute…") { showingContribute = true }
                         }
                     }
