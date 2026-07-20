@@ -119,18 +119,13 @@ struct AddTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
-                // Transaction type — the shared glass control (sliding glass thumb).
-                // Native segmented Picker — same control as the Theme toggle in
-                // Settings › Appearance, so it gets the system's crystal Liquid
-                // Glass selection (a custom View can't reproduce that).
+                // Transaction type — the shared glass control (TxnTypeToolbar): a
+                // native segmented Picker gets the system's crystal Liquid Glass
+                // selection a custom View can't reproduce. `iconName` maps adjust →
+                // the "adjustment" icon, so the sheet supplies its own icon closure.
                 ToolbarItem(placement: .principal) {
-                    Picker("Type", selection: $kind) {
-                        ForEach(availableKinds) { k in
-                            Image(systemName: k.iconName).accessibilityLabel(k.label).tag(k)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: CGFloat(availableKinds.count) * 50)
+                    TxnTypeToolbar.segmented(availableKinds, selection: $kind,
+                        icon: { $0.iconName }, label: { $0.label })
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
@@ -176,13 +171,7 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private func formPage(_ k: Kind) -> some View {
             Form {
-                Section {
-                    Text(k.label)   // names the icon-only type control above
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                }
+                Section { TxnTypeToolbar.caption(k.label) }   // names the icon-only type control above
                 if k == .transfer {
                     transferFields
                 } else if k == .adjust {

@@ -302,26 +302,15 @@ struct EditTransactionSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
-                // Native segmented Picker (system crystal glass) — same control as
-                // Settings' Theme toggle. Line items reclassify across the 3 kinds;
-                // a transfer shows a locked single segment; adjustment/opening none.
+                // Shared glass type control (TxnTypeToolbar). Line items reclassify
+                // across the 3 kinds; a transfer shows a locked single segment;
+                // adjustment/opening show none.
                 ToolbarItem(placement: .principal) {
                     if canReclassify {
-                        Picker("Type", selection: $selectedKind) {
-                            ForEach(EditKind.allCases) { k in
-                                Image(systemName: TxnKindIcon.icon(for: k.rawValue))
-                                    .accessibilityLabel(k.label).tag(k)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 150)
+                        TxnTypeToolbar.segmented(EditKind.allCases, selection: $selectedKind,
+                            icon: { TxnKindIcon.icon(for: $0.rawValue) }, label: { $0.label })
                     } else if txn.kind == "transfer" {
-                        Picker("Type", selection: .constant(0)) {
-                            Image(systemName: TxnKindIcon.icon(for: "transfer")).tag(0)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 52)
-                        .disabled(true)
+                        TxnTypeToolbar.locked(icon: TxnKindIcon.icon(for: "transfer"), label: "Transfer")
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {

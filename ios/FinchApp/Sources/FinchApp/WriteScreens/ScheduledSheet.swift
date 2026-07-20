@@ -72,14 +72,9 @@ struct ScheduledSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section { TxnTypeToolbar.caption(kind.label) }   // names the toolbar type control above
                 Section {
                     TextField("Name", text: $name)
-                    if isEdit {
-                        LabeledContent("Type", value: kind.label)
-                    } else {
-                        Picker("Type", selection: $kind) { ForEach(Kind.allCases) { Text($0.label).tag($0) } }
-                            .pickerStyle(.segmented)
-                    }
                     HStack {
                         Text("Amount"); Spacer()
                         TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
@@ -92,20 +87,23 @@ struct ScheduledSheet: View {
 
                 Section {
                     if isEdit {
-                        // account is not patchable — show it read-only.
+                        // account / from / to are not patchable — show them read-only.
                         if kind == .transfer {
                             LabeledContent("From", value: accountName(fromAccountId))
                             LabeledContent("To", value: accountName(accountId))
                         } else {
                             LabeledContent("Account", value: accountName(accountId))
-                            Picker("Category", selection: $categoryId) { ForEach(categories) { Text($0.name).tag($0.id) } }
+                            CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
                         }
                     } else if kind == .transfer {
-                        Picker("From", selection: $fromAccountId) { ForEach(accounts) { Text($0.name ?? "—").tag($0.id) } }
-                        Picker("To", selection: $accountId) { ForEach(accounts) { Text($0.name ?? "—").tag($0.id) } }
+                        SearchablePickerRow(title: "From",
+                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
+                        SearchablePickerRow(title: "To",
+                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                     } else {
-                        Picker("Account", selection: $accountId) { ForEach(accounts) { Text($0.name ?? "—").tag($0.id) } }
-                        Picker("Category", selection: $categoryId) { ForEach(categories) { Text($0.name).tag($0.id) } }
+                        SearchablePickerRow(title: "Account",
+                            options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                        CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
                     }
                 }
 
@@ -144,6 +142,16 @@ struct ScheduledSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
+                }
+                // Type — the shared glass control (TxnTypeToolbar). Editable on add;
+                // immutable on edit (the engine omits type), so a locked segment.
+                ToolbarItem(placement: .principal) {
+                    if isEdit {
+                        TxnTypeToolbar.locked(icon: TxnKindIcon.icon(for: kind.rawValue), label: kind.label)
+                    } else {
+                        TxnTypeToolbar.segmented(Kind.allCases, selection: $kind,
+                            icon: { TxnKindIcon.icon(for: $0.rawValue) }, label: { $0.label })
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }
