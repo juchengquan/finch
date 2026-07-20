@@ -44,12 +44,27 @@ struct CurrenciesView: View {
                 Text("Fetches daily reference rates for your currencies from Frankfurter (frankfurter.dev, central-bank data). Only currency codes are sent.")
             }
 
-            Section("Currencies") {
-                ForEach(fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query), id: \.code) { row in
+            // Two groups: Active (the hub USD + tracked currencies) and Inactive
+            // (the rest). USD is always Active and can't be toggled off (isHub).
+            let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query)
+            Section("Active") {
+                ForEach(rows.filter { $0.isHub || $0.tracked }, id: \.code) { row in
                     NavigationLink {
                         ExchangeRateHistoryView(currency: row.code)
                     } label: {
                         currencyRow(row)
+                    }
+                }
+            }
+            let inactive = rows.filter { !$0.isHub && !$0.tracked }
+            if !inactive.isEmpty {
+                Section("Inactive") {
+                    ForEach(inactive, id: \.code) { row in
+                        NavigationLink {
+                            ExchangeRateHistoryView(currency: row.code)
+                        } label: {
+                            currencyRow(row)
+                        }
                     }
                 }
             }
