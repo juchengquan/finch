@@ -74,4 +74,28 @@ final class FxCurrencyRowsTests: XCTestCase {
         XCTAssertEqual(fxFilterRows(rows, query: "yen").map(\.code), ["JPY"])   // matches localized name
         XCTAssertTrue(fxFilterRows(rows, query: "zzzzz").isEmpty)
     }
+
+    // MARK: activating a picked ledger base currency
+
+    func test_activating_newCode_appendsSorted() {
+        XCTAssertEqual(fxTrackedAfterActivating("CHF", tracked: ["EUR", "JPY"]), ["CHF", "EUR", "JPY"])
+    }
+
+    func test_activating_hubOrAlreadyTracked_needsNoWrite() {
+        XCTAssertNil(fxTrackedAfterActivating("USD", tracked: ["EUR"]))          // hub is never tracked
+        XCTAssertNil(fxTrackedAfterActivating("usd", tracked: []))               // …case-insensitively
+        XCTAssertNil(fxTrackedAfterActivating("EUR", tracked: ["EUR", "JPY"]))   // already activated
+        XCTAssertNil(fxTrackedAfterActivating("eur", tracked: ["EUR"]))          // …case-insensitively
+        XCTAssertNil(fxTrackedAfterActivating("   ", tracked: ["EUR"]))          // nothing picked
+    }
+
+    func test_activating_normalizesCaseAndWhitespace() {
+        XCTAssertEqual(fxTrackedAfterActivating("  chf ", tracked: ["eur"]), ["CHF", "EUR"])
+    }
+
+    /// The empty-but-explicit tracked set must still take the write — that is what
+    /// distinguishes "user untracked everything" from "no key yet" upstream.
+    func test_activating_fromEmptyTrackedSet_writes() {
+        XCTAssertEqual(fxTrackedAfterActivating("GBP", tracked: []), ["GBP"])
+    }
 }
