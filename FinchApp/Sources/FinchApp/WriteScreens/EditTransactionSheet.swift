@@ -284,7 +284,7 @@ struct EditTransactionSheet: View {
                         // Anchored on the button (iOS 26 positions popouts at their source).
                         .confirmationDialog("Delete this transaction?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                             Button("Delete", role: .destructive) {
-                                do { try store.deleteTransaction(txn.id); dismiss() }   // also unlinks receipt files
+                                do { try store.deleteTransaction(txn.id); Haptics.warning(); dismiss() }   // also unlinks receipt files
                                 catch { errorMessage = i18nMessage(error) }
                             }
                         }
@@ -427,8 +427,9 @@ struct EditTransactionSheet: View {
                 try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
                     "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
             }
+            Haptics.success()
             dismiss()
-        } catch { errorMessage = i18nMessage(error) }
+        } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
     }
 
     /// Transfer legs save through the engine's updateTransfer (entry-level:
@@ -465,8 +466,9 @@ struct EditTransactionSheet: View {
                     try store.apply(.setTransactionTags, Args(["id": .string(txn.id),
                         "tagIds": .array(selectedTags.sorted().map { .string($0) })]))
                 }
+                Haptics.success()
                 dismiss()
-            } catch { errorMessage = i18nMessage(error) }
+            } catch { Haptics.warning(); errorMessage = i18nMessage(error) }
         }
     }
 

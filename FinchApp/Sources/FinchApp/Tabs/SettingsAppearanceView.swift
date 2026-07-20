@@ -29,6 +29,7 @@ struct SettingsAppearanceView: View {
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
     @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
     @AppStorage("finch.addSheet.showAdjustBalance") private var showAdjustInAddSheet = false
+    @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
     @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
     @State private var showRelaunchNote = false
@@ -84,6 +85,13 @@ struct SettingsAppearanceView: View {
             Section("Accounts") {
                 Toggle("Show opening balance", isOn: $showOpeningBalance)
             }
+            #if os(iOS)
+            Section {
+                Toggle("Haptic feedback", isOn: $hapticsEnabled)
+            } footer: {
+                Text("A gentle tap on saves, errors, and deletes. Also respects your device's System Haptics setting.")
+            }
+            #endif
             Section {
                 Toggle("Adjust Balance in Add sheet", isOn: $showAdjustInAddSheet)
             } footer: {

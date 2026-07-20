@@ -199,7 +199,7 @@ struct AccountDetailView: View {
         if let first = store.attachments(for: txn.id).first { previewURL = store.attachmentURL(for: first) }
     }
     private func deleteTxn(_ txn: Tx) {
-        do { try store.deleteTransaction(txn.id) } catch { errorMessage = i18nMessage(error) }
+        do { try store.deleteTransaction(txn.id); Haptics.warning() } catch { errorMessage = i18nMessage(error) }
     }
     private func confirmTxn(_ txn: Tx) {
         do { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
@@ -215,7 +215,7 @@ struct AccountDetailView: View {
     }
 
     private func delete(_ a: AccountRow) {
-        do { try store.apply(.deleteAccount, Args(["id": .string(a.id)])) }
+        do { try store.apply(.deleteAccount, Args(["id": .string(a.id)])); Haptics.warning() }
         catch { errorMessage = i18nMessage(error) }   // engine rejects if it has transactions
     }
 }
