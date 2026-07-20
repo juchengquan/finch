@@ -194,7 +194,7 @@ struct AddTransactionSheet: View {
                     }
                 }
                 if k == .expense || k == .income || k == .refund {
-                    Section("Receipt") {
+                    Section {
                         #if os(macOS)
                         Button { showingFileImporter = true } label: {
                             Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
@@ -207,6 +207,8 @@ struct AddTransactionSheet: View {
                             Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
                         }
                         #endif
+                    } header: {
+                        finchSectionHeader("Receipt")
                     }
                 }
                 if k == .expense || k == .income || k == .refund {
@@ -251,13 +253,15 @@ struct AddTransactionSheet: View {
 
     /// Merchant/Source + Note — optional free-text, shown as the LAST section.
     @ViewBuilder private func detailsSection(for k: Kind) -> some View {
-        Section("Details") {
+        Section {
             MerchantPickerRow(title: k == .income ? "Source" : "Merchant",
                               counterparties: store.counterparties, merchant: $merchant)
             HStack {
                 Text("Note"); Spacer()
                 TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
             }
+        } header: {
+            finchSectionHeader("Details")
         }
     }
 

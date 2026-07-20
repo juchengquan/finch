@@ -156,7 +156,7 @@ struct EditTransactionSheet: View {
                     // Transfer legs: a real transfer editor (spec §2). Accounts are
                     // immutable in updateTransfer → read-only; no Category row for
                     // transfers.
-                    Section("Transfer") {
+                    Section {
                         LabeledContent("From", value: accountName(legs.from.account))
                         LabeledContent("To", value: accountName(legs.to.account))
                         // Always TWO amount rows, each in its leg's own currency.
@@ -171,6 +171,8 @@ struct EditTransactionSheet: View {
                             transferAmountRow("To amount", text: $toAmountText,
                                               currency: legs.to.currency ?? "")
                         }
+                    } header: {
+                        finchSectionHeader("Transfer")
                     }
                 } else {
                     Section {
@@ -205,9 +207,11 @@ struct EditTransactionSheet: View {
 
                 // Split still needs an Account row (line items have it above; transfer doesn't).
                 if isSplit {
-                    Section("Account") {
+                    Section {
                         SearchablePickerRow(title: "Account",
                             options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
+                    } header: {
+                        finchSectionHeader("Account")
                     }
                 }
                 // Status directly after the primary/split rows (matches the Add sheet).
@@ -222,7 +226,7 @@ struct EditTransactionSheet: View {
                     }
                 }
 
-                Section("Receipt") {
+                Section {
                     ForEach(attachments) { att in
                         Button { previewURL = store.attachmentURL(for: att) } label: {
                             HStack {
@@ -252,26 +256,32 @@ struct EditTransactionSheet: View {
                         Label("Add receipt photo", systemImage: "camera")
                     }
                     #endif
+                } header: {
+                    finchSectionHeader("Receipt")
                 }
 
                 if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
-                    Section("Details") {
+                    Section {
                         MerchantPickerRow(title: effectiveKind == "income" ? "Source" : "Merchant",
                                           counterparties: store.counterparties, merchant: $merchant)
                         HStack {
                             Text("Note"); Spacer()
                             TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
                         }
+                    } header: {
+                        finchSectionHeader("Details")
                     }
                 }
                 // Adjustment/opening entries have no payee, so no Merchant row —
                 // but keep an editable Note (e.g. "year-end reconciliation").
                 if txn.kind == "adjustment" || txn.kind == "opening" {
-                    Section("Details") {
+                    Section {
                         HStack {
                             Text("Note"); Spacer()
                             TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
                         }
+                    } header: {
+                        finchSectionHeader("Details")
                     }
                 }
 
