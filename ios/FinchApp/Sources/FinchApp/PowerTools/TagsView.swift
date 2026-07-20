@@ -176,13 +176,13 @@ struct TagsView: View {
                     TagSwatch(hex: tag.color)
                     Text(tag.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if let n = counts[tag.id], n > 0 {
-                        Text("\(n)")
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                            .padding(.horizontal, 12).padding(.vertical, 3)
-                            .background(.quaternary, in: Capsule())
-                            .accessibilityLabel("\(n) transactions")
-                    }
+                    // Always shown, including 0 — mirrors Categories/Merchants.
+                    let n = counts[tag.id] ?? 0
+                    Text("\(n)")
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .padding(.horizontal, 12).padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                        .accessibilityLabel("\(n) transactions")
                     if !isSelecting {
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     }

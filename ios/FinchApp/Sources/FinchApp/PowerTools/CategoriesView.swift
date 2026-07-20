@@ -326,14 +326,16 @@ struct CategoriesView: View {
                     }
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if let n = counts[c.id], n > 0 {
-                        Text("\(n)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12).padding(.vertical, 3)
-                            .background(.quaternary, in: Capsule())
-                            .accessibilityLabel("\(n) transactions")
-                    }
+                    // Always shown, including 0 — a category with no transactions
+                    // reads as an explicit "0" rather than a blank the eye has to
+                    // interpret, and the pills stay aligned down the column.
+                    let n = counts[c.id] ?? 0
+                    Text("\(n)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12).padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                        .accessibilityLabel("\(n) transactions")
                 }
                 .contentShape(Rectangle())
             }
