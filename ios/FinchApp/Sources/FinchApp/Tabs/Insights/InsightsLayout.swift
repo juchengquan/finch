@@ -30,6 +30,9 @@ enum InsightsTemplate: String, CaseIterable, Identifiable {
 /// live in `@AppStorage` as a JSON string.
 struct InsightsLayout: Codable, Equatable, RawRepresentable {
     var order: [String]
+    /// A persisted hint for which preset this came from. NOTE: the menu label is
+    /// derived live from `matchingTemplate()` (over `order`), not this field —
+    /// keep them in sync when mutating `order` (Phase 2's Customize does via retag).
     var templateName: String?
 
     static let `default` = InsightsLayout(

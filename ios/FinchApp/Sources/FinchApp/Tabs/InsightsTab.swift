@@ -1,8 +1,10 @@
 import SwiftUI
 import FinchCore
 
-/// The 5th tab (Phase 1.5). Six cards, each driven by a selector over the
-/// projected store. All money goes through `Money` / the store helpers.
+/// The 5th tab. Trends renders a customizable set of cards driven by the saved
+/// `InsightsLayout` (template presets, per-device via `@AppStorage`) through the
+/// `InsightsCatalog` registry; Breakdown is the per-category monthly report +
+/// export. All money goes through `Money` / the store helpers.
 struct InsightsTab: View {
     @EnvironmentObject private var store: FinchStore
     /// Trends (charts) vs Breakdown (the former Reports page: per-category
