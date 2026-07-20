@@ -11,7 +11,7 @@ final class CounterpartyMergeTests: XCTestCase {
             try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l1','L','USD',1,datetime('now'),datetime('now'))")
             try db.execute(sql: "INSERT INTO accounts (id,ledger_id,name,type,currency,current_balance,sort_order,include_in_net_worth,is_active,created_at,updated_at) VALUES ('a1','l1','a1','cash','USD',0,0,1,1,datetime('now'),datetime('now'))")
             for c in ["cpSource", "cpTarget"] {
-                try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,'l1',?,0,datetime('now'),datetime('now'))", arguments: [c, c])
+                try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))", arguments: [c, c])
             }
         }
         return q
@@ -47,7 +47,7 @@ final class CounterpartyMergeTests: XCTestCase {
     func test_merge_many_folds_all_sources() throws {
         let q = try seeded()
         try q.write { db in
-            try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES ('cpSource2','l1','cpSource2',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES ('cpSource2','cpSource2',0,datetime('now'),datetime('now'))")
         }
         try addLinkedTx(q, merchant: "x", cp: "cpSource")
         try addLinkedTx(q, merchant: "y", cp: "cpSource2")
@@ -71,12 +71,31 @@ final class CounterpartyMergeTests: XCTestCase {
         XCTAssertThrowsError(try merge(q, "cpSource", "nope"))
     }
 
-    func test_cross_ledger_merge_rejected() throws {
+    /// Merchants are GLOBAL now: a merge that once spanned two ledgers just folds
+    /// two global rows, so it succeeds and repoints entries onto the survivor.
+    func test_global_merge_across_former_ledgers_succeeds() throws {
         let q = try seeded()
         try q.write { db in
             try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l2','L2','USD',0,datetime('now'),datetime('now'))")
-            try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES ('cpOther','l2','cpOther',0,datetime('now'),datetime('now'))")
+            try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES ('cpOther','cpOther',0,datetime('now'),datetime('now'))")
         }
-        XCTAssertThrowsError(try merge(q, "cpSource", "cpOther"))
+        try addLinkedTx(q, merchant: "x", cp: "cpSource")
+        XCTAssertNoThrow(try merge(q, "cpSource", "cpOther"))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM counterparties WHERE id = 'cpSource'"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE counterparty_id = 'cpOther'"), 1)
+        }
+    }
+
+    /// A global merchant is untouched by a ledger delete (no per-ledger cascade).
+    func test_merchant_survives_ledger_delete() throws {
+        let q = try seeded()
+        try q.write { db in
+            try db.execute(sql: "INSERT INTO ledgers (id,name,base_currency,is_default,created_at,updated_at) VALUES ('l2','L2','USD',0,datetime('now'),datetime('now'))")
+        }
+        try Apply.apply(dbQueue: q, action: "deleteLedger", args: Args(["id": .string("l1")]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM counterparties"), 2)
+        }
     }
 }

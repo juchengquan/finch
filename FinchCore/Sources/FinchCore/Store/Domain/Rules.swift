@@ -76,7 +76,7 @@ public enum Rules {
             if case .set(let cp) = patch.counterpartyId { sets.append("counterparty_id = ?"); bind.append(cp) }
             if let m = patch.merchant {
                 sets.append("description = ?"); bind.append(m)
-                sets.append("counterparty_id = ?"); bind.append(try Entries.resolveCounterpartyIdByName(db, rule.ledgerId, m))
+                sets.append("counterparty_id = ?"); bind.append(try Entries.resolveCounterpartyIdByName(db, m))
             }
             if let n = patch.note { sets.append("notes = ?"); bind.append(n) }
             if let k = patch.kind { sets.append("kind = ?"); bind.append(k) }

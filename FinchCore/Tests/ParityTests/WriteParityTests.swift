@@ -105,7 +105,7 @@ final class WriteParityTests: XCTestCase {
                 ("id", { str($0["id"]) }), ("ledger_id", { str($0["ledger_id"]) }), ("parent_id", { str($0["parent_id"]) }),
                 ("name", { str($0["name"]) }), ("kind", { str($0["kind"]) }), ("system", { str($0["system"]) }), ("sort_order", { .int($0["sort_order"]) })]),
             "counterparties": try table("SELECT * FROM counterparties ORDER BY id", [
-                ("id", { str($0["id"]) }), ("ledger_id", { str($0["ledger_id"]) }), ("name", { str($0["name"]) }), ("is_verified", { .int($0["is_verified"]) })]),
+                ("id", { str($0["id"]) }), ("name", { str($0["name"]) }), ("is_verified", { .int($0["is_verified"]) })]),
             "tags": try table("SELECT * FROM tags ORDER BY id", [
                 ("id", { str($0["id"]) }), ("ledger_id", { str($0["ledger_id"]) }), ("name", { str($0["name"]) }), ("color", { str($0["color"]) })]),
             "budgets": try table("SELECT * FROM budgets ORDER BY id", [

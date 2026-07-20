@@ -167,19 +167,18 @@ public enum Transactions {
         struct A: Decodable { let id: String; let counterpartyId: String?; let newCounterpartyName: String? }
         let a = try args.to(A.self)
         guard let ref = try Entries.resolveEntryRef(db, a.id) else { return }
-        guard let row = try Row.fetchOne(db, sql: "SELECT description, ledger_id FROM entries WHERE id = ?", arguments: [ref.entryId]) else { return }
-        let ledgerId: String = row["ledger_id"] ?? ""
+        guard let row = try Row.fetchOne(db, sql: "SELECT description FROM entries WHERE id = ?", arguments: [ref.entryId]) else { return }
         var counterpartyId: String?
         var description: String = row["description"] ?? ""
         if let cpId = a.counterpartyId {
-            if let cp = try Row.fetchOne(db, sql: "SELECT name FROM counterparties WHERE id = ? AND ledger_id = ?", arguments: [cpId, ledgerId]) {
+            if let cp = try Row.fetchOne(db, sql: "SELECT name FROM counterparties WHERE id = ?", arguments: [cpId]) {
                 counterpartyId = cpId
                 description = cp["name"]
             }
         } else if let newName = a.newCounterpartyName?.trimmingCharacters(in: .whitespacesAndNewlines), !newName.isEmpty {
             let newCpId = Entries.newId("cp")
-            try db.execute(sql: "INSERT INTO counterparties (id,ledger_id,name,is_verified,created_at,updated_at) VALUES (?,?,?,0,datetime('now'),datetime('now'))",
-                           arguments: [newCpId, ledgerId, newName])
+            try db.execute(sql: "INSERT INTO counterparties (id,name,is_verified,created_at,updated_at) VALUES (?,?,0,datetime('now'),datetime('now'))",
+                           arguments: [newCpId, newName])
             counterpartyId = newCpId
             description = newName
         }
@@ -221,12 +220,8 @@ public enum Transactions {
       try Dedup.wrap {
         let a = try args.to(AddInput.self)
         let refundedEntryId = try a.refundedTransactionId.flatMap { try Entries.resolveEntryRef(db, $0)?.entryId }
-        // Cross-ledger counterparty guard: drop a counterparty from another ledger.
-        var counterpartyId = a.counterpartyId
-        if let cp = counterpartyId {
-            let cpLedger = try String.fetchOne(db, sql: "SELECT ledger_id FROM counterparties WHERE id = ?", arguments: [cp])
-            if cpLedger != a.ledgerId { counterpartyId = nil }
-        }
+        // Merchants are global — no cross-ledger counterparty guard.
+        let counterpartyId = a.counterpartyId
         let kind = a.kind.flatMap(Entries.Kind.init(rawValue:)) ?? (a.amount > 0 ? Entries.Kind.income : .expense)
 
         let acctCcy = try String.fetchOne(db, sql: "SELECT currency FROM accounts WHERE id = ?", arguments: [a.accountId]) ?? "USD"
@@ -334,7 +329,7 @@ public enum Transactions {
         if has("time") { ep.time = .set(strOrNil(patch["time"])) }
         if case .string(let s)? = patch["merchant"] {
             ep.description = .set(s)
-            ep.counterpartyId = .set(ledgerId.isEmpty ? nil : (try Entries.resolveCounterpartyIdByName(db, ledgerId, s)))
+            ep.counterpartyId = .set(try Entries.resolveCounterpartyIdByName(db, s))
         }
         if has("note") { ep.notes = .set(strOrNil(patch["note"])) }
         if case .string(let s)? = patch["kind"], let k = Entries.Kind(rawValue: s) { ep.kind = .set(k) }

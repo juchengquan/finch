@@ -9,7 +9,7 @@ import GRDB
 ///   cd frontend && bun -e 'import {SCHEMA} from "@/lib/db/core/schema"; process.stdout.write(SCHEMA)'
 public enum Schema {
     /// Matches the web's `SCHEMA_VERSION` (`schema.ts:435`).
-    public static let version = "2026-07-17T00:00:00Z"
+    public static let version = "2026-07-20T00:00:00Z"
     /// Matches the web's `APP_NAME` (`schema.ts:436`).
     public static let appName = "finch"
 
@@ -132,11 +132,11 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE TABLE IF NOT EXISTS counterparties (
   id                TEXT PRIMARY KEY,
-  ledger_id         TEXT NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
-  -- COLLATE NOCASE makes "=" and the (ledger_id, name) index case-insensitive
+  -- Merchants are GLOBAL — one shared catalog across every ledger, so there is
+  -- no ledger_id. COLLATE NOCASE makes "=" and the name index case-insensitive
   -- without needing LOWER() in the WHERE clause. resolveCounterpartyIdByName
   -- runs on every transaction write, so the index actually getting used here
-  -- matters.
+  -- matters. Names are intentionally NOT unique — two merchants may share one.
   name              TEXT NOT NULL COLLATE NOCASE,
   is_verified       INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL,
@@ -506,11 +506,10 @@ CREATE INDEX IF NOT EXISTS idx_acc_ledger ON accounts(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_acc_group ON accounts(group_id);
 CREATE INDEX IF NOT EXISTS idx_cat_ledger ON categories(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_tags_ledger ON tags(ledger_id);
-CREATE INDEX IF NOT EXISTS idx_counterparty_ledger ON counterparties(ledger_id);
--- Resolver index: (ledger_id, name) under the column's NOCASE collation lets
--- "WHERE ledger_id = ? AND name = ?" short-circuit to an index seek for the
--- per-write counterparty lookup. Without it the resolver scans every row.
-CREATE INDEX IF NOT EXISTS idx_counterparty_ledger_name ON counterparties(ledger_id, name);
+-- Resolver index: name under the column's NOCASE collation lets "WHERE name = ?"
+-- short-circuit to an index seek for the per-write counterparty lookup. Without
+-- it the resolver scans every row.
+CREATE INDEX IF NOT EXISTS idx_counterparty_name ON counterparties(name);
 CREATE INDEX IF NOT EXISTS idx_budget_ledger_freq ON budgets(ledger_id, frequency, start_date);
 CREATE INDEX IF NOT EXISTS idx_budget_last_rolled ON budgets(last_rolled_period);
 CREATE INDEX IF NOT EXISTS idx_scheduled_ledger_active ON scheduled_templates(ledger_id, is_active) WHERE is_active = 1;
