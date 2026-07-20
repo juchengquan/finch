@@ -442,7 +442,7 @@ struct CategoryEditSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     let category: CategoryRow?       // nil = create
-    let kind: String                 // fixed kind for this sheet
+    @State private var kindSel: String   // editable on create; fixed (read-only) on edit
     @State private var name: String
     @State private var parentId: String?    // nil = top level
     @State private var icon: String     // "" = none (inherit at render)
@@ -450,13 +450,15 @@ struct CategoryEditSheet: View {
     @State private var errorMessage: String?
 
     init(createIn kind: String, parentId: String? = nil) {
-        self.category = nil; self.kind = kind
+        self.category = nil
+        _kindSel = State(initialValue: kind)
         _name = State(initialValue: "")
         _parentId = State(initialValue: parentId)
         _icon = State(initialValue: ""); _color = State(initialValue: "")
     }
     init(category: CategoryRow) {
-        self.category = category; self.kind = category.kind ?? "expense"
+        self.category = category
+        _kindSel = State(initialValue: category.kind ?? "expense")
         _name = State(initialValue: category.name)
         _parentId = State(initialValue: category.parentId)
         _icon = State(initialValue: category.icon ?? "")
@@ -469,7 +471,7 @@ struct CategoryEditSheet: View {
     /// within the 3-level cap) and, when editing, excluding the category itself
     /// and its descendants. Tree-ordered for an indented menu.
     private var parentOptions: [FlatCategory] {
-        let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+        let all = store.pickableCategories.filter { ($0.kind ?? "expense") == kindSel }
         let flat = flattenCategories(categoryForest(all), expanded: Set(all.map(\.id)), search: "")
         var excluded = Set<String>()
         if let c = category {
@@ -479,16 +481,31 @@ struct CategoryEditSheet: View {
         return flat.filter { $0.depth < 2 && !excluded.contains($0.row.id) }
     }
 
+    /// Parent options for the bottom-sheet picker: "None (top level)" (empty id)
+    /// plus the eligible parents, indented by depth.
+    private var parentPickerOptions: [PickerOption] {
+        [PickerOption(id: "", name: "None (top level)")]
+            + parentOptions.map { PickerOption(id: $0.row.id, name: String(repeating: "   ", count: $0.depth) + $0.row.name) }
+    }
+    /// Bridges the `String?` parentId to SearchablePickerRow's `String` (empty == top level).
+    private var parentBinding: Binding<String> {
+        Binding(get: { parentId ?? "" }, set: { parentId = $0.isEmpty ? nil : $0 })
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Name", text: $name)
-                Picker("Parent", selection: $parentId) {
-                    Text("None (top level)").tag(String?.none)
-                    ForEach(parentOptions) { f in
-                        Text(String(repeating: "   ", count: f.depth) + f.row.name).tag(Optional(f.row.id))
+                if category == nil {
+                    Picker("Type", selection: $kindSel) {
+                        Text("Expense").tag("expense")
+                        Text("Income").tag("income")
                     }
+                    .pickerStyle(.segmented)
+                } else {
+                    LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
                 }
+                TextField("Name", text: $name)
+                SearchablePickerRow(title: "Parent", options: parentPickerOptions, selection: parentBinding)
                 Section("Icon") {
                     LazyVGrid(columns: iconColumns, spacing: 12) {
                         ForEach(CategoryIcon.names, id: \.self) { n in
@@ -522,6 +539,7 @@ struct CategoryEditSheet: View {
                 }
             }
             .navigationTitle(category == nil ? "New Category" : "Edit Category")
+            .onChange(of: kindSel) { _, _ in parentId = nil }   // parents are kind-specific
             .finchSectionSpacing()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -548,7 +566,7 @@ struct CategoryEditSheet: View {
                 ]
                 if parentId != c.parentId {
                     // Reparent: place last in the new parent's group (same math as drag).
-                    let kinRows = store.pickableCategories.filter { ($0.kind ?? "expense") == kind }
+                    let kinRows = store.pickableCategories.filter { ($0.kind ?? "expense") == kindSel }
                     let sortOrder = CategoryReorder.reparent(c.id, under: parentId, in: kinRows)?.sortOrder ?? 0
                     patch["parentId"] = parentId.map(JSONValue.string) ?? .null
                     patch["sortOrder"] = .int(sortOrder)
@@ -557,7 +575,7 @@ struct CategoryEditSheet: View {
             } else {
                 var args: [String: JSONValue] = [
                     "ledgerId": .string(store.activeLedgerId), "name": .string(trimmed),
-                    "type": .string(kind),
+                    "type": .string(kindSel),
                 ]
                 if !icon.isEmpty { args["icon"] = .string(icon) }
                 if !color.isEmpty { args["color"] = .string(color) }
