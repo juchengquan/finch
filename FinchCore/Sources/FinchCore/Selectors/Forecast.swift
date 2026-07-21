@@ -245,13 +245,17 @@ extension Selectors {
         return out.sorted { $0.date < $1.date }
     }
 
-    /// "templateId|date" → isPending, for every posted occurrence (txns whose
-    /// sourceTemplateId is set). true ⇒ pending; false ⇒ done. An absent key means
-    /// only **not posted** — callers must compare the date against today to tell
-    /// `upcoming` (still ahead) from `missed` (past, and nobody posted it).
+    /// "templateId|occurrenceDate" → isPending, for every posted occurrence (txns
+    /// whose sourceTemplateId is set). true ⇒ pending; false ⇒ done. An absent key
+    /// means only **not posted** — callers must compare the date against today to
+    /// tell `upcoming` (still ahead) from `missed` (past, and nobody posted it).
     public static func scheduledPostedMap(_ txns: [Tx]) -> [String: Bool] {
         var out: [String: Bool] = [:]
-        for t in txns { if let s = t.sourceTemplateId { out["\(s)|\(t.date)"] = (t.pending ?? false) } }
+        // Key on the occurrence the entry FULFILS, not the day it was recorded —
+        // they differ when the user posts a missed item on a later date. NULL
+        // falls back to `date`, which is the pre-2026-07-22 behaviour, so
+        // historical generateDue postings still resolve with no backfill.
+        for t in txns { if let s = t.sourceTemplateId { out["\(s)|\(t.occurrenceDate ?? t.date)"] = (t.pending ?? false) } }
         return out
     }
 }
