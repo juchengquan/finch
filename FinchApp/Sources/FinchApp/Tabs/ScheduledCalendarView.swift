@@ -264,17 +264,33 @@ struct ScheduledCalendarView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
-            if st == .upcoming { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            // Unposted either way — a missed occurrence needs this more than an upcoming one.
+            if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
         }
     }
 
-    private enum OccStatus { case upcoming, pending, done }
+    private enum OccStatus { case upcoming, missed, pending, done }
+    /// No posting record means "nobody posted this yet" — which is only `upcoming`
+    /// while the date is still ahead. A past occurrence nobody posted is `missed`,
+    /// and it's the state that most needs action. Both are ISO `yyyy-MM-dd`, so a
+    /// string compare is a date compare. `wallToday`, not `today`: this is a literal
+    /// "has it happened yet" question, not a data-anchored one.
     private func status(_ id: String, _ date: String, _ posted: [String: Bool]) -> OccStatus {
-        switch posted["\(id)|\(date)"] { case .none: return .upcoming; case .some(true): return .pending; case .some(false): return .done }
+        switch posted["\(id)|\(date)"] {
+        case .some(true): return .pending
+        case .some(false): return .done
+        case .none: return date < store.wallToday ? .missed : .upcoming
+        }
     }
     @ViewBuilder private func statusBadge(_ s: OccStatus) -> some View {
-        let (label, color): (String, Color) = {
-            switch s { case .upcoming: return ("upcoming", .secondary); case .pending: return ("pending", .orange); case .done: return ("done", .green) }
+        // LocalizedStringKey, not String — a String binds Text's non-localizing init.
+        let (label, color): (LocalizedStringKey, Color) = {
+            switch s {
+            case .upcoming: return ("upcoming", .secondary)
+            case .missed:   return ("missed", .red)
+            case .pending:  return ("pending", .orange)
+            case .done:     return ("done", .green)
+            }
         }()
         Text(label).font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.15)).foregroundStyle(color).clipShape(Capsule())
