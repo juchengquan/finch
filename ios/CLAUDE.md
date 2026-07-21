@@ -132,6 +132,18 @@ the SQLite DB is authoritative.
 - **`store.today` is data-anchored (`max(tx.date)`), not the wall clock** — used for budget
   windows / forecasts (demo determinism). Literal "today" surfaces (calendar, Today/Yesterday
   labels, next-run dates) must use **`store.wallToday`**. Mixing them is a real bug source.
+- **`yyyy-MM-dd` values are civil dates, not instants** — a day on the *user's* calendar. Every
+  `Date` ↔ string conversion must use the **device** timezone on both ends: parse/format with
+  **`AppDate.isoDay`** and do component math with **`AppDate.civil`** (Gregorian, device zone).
+  **Never hand-roll a hardcoded-UTC `Calendar` in the app layer.** Parsing locally and then
+  doing UTC component math shifts the day for every user offset from UTC: at UTC+8
+  `"2026-07-15"` parses to local midnight = `2026-07-14T16:00Z`, so UTC components read Jul 14.
+  That shipped twice — the Scheduled day header rendered a day early, and a second UTC-pinned
+  formatter made `wallToday` a day behind between 00:00 and 08:00 local (#570). `FinchCore` and
+  `scheduledNextRun` *are* internally UTC and that's fine — they parse, compute, and format
+  inside one calendar and return strings, so the zone is unobservable. The bug is only ever at
+  the boundary. `FinchAppTests/CivilDateTests` guards this and fails in any non-UTC zone if a
+  UTC-pinned converter returns.
 - Per-device view prefs (active ledger, privacy mode, saved searches, appearance) live in
   **UserDefaults, never in the DB or exports** (iOS analogue of web localStorage).
 
