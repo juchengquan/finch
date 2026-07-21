@@ -2,9 +2,10 @@ import SwiftUI
 import FinchCore
 
 /// Budget drill-in: cycle progress (used/base/remaining + bar), this cycle's
-/// matched transactions, contribute (income/goal budgets), and edit / clear-
-/// pending / delete. Re-resolves from the store; pops when deleted. (Cycle edits
-/// — frequency + start date — live in the Edit sheet, BudgetSheet.)
+/// matched transactions, and edit / clear-pending / delete. Income goals fund
+/// from real matched inflows (no Contribute). Re-resolves from the store; pops
+/// when deleted. (Cycle edits — frequency + start date — live in the Edit sheet,
+/// BudgetSheet.)
 struct BudgetDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -12,7 +13,6 @@ struct BudgetDetailView: View {
     let budgetId: String
 
     @State private var showingEdit = false
-    @State private var showingContribute = false
     @State private var confirmingDelete = false
     @State private var showingAddTx = false   // budget-aware add (pre-filled category/account)
     @State private var editing: Tx?           // tapped cycle transaction → edit sheet
@@ -33,7 +33,6 @@ struct BudgetDetailView: View {
                             if let end = budget.endDate, let d = AppDate.isoDay.date(from: end) {
                                 LabeledContent("Target date", value: d.formatted(date: .abbreviated, time: .omitted))
                             }
-                            Button("Contribute…") { showingContribute = true }
                         }
                     }
                     if let pending = budget.pendingAmount {
@@ -68,7 +67,6 @@ struct BudgetDetailView: View {
                     }
                 }
                 .sheet(isPresented: $showingEdit) { BudgetSheet(budget: budget) }
-                .sheet(isPresented: $showingContribute) { ContributeSheet(budgetId: budget.id) }
                 .sheet(isPresented: $showingAddTx) {
                     AddTransactionSheet(defaultAccountId: budget.accountIds.first,
                                         defaultCategoryId: budget.categoryIds.first)
@@ -113,7 +111,7 @@ struct BudgetDetailView: View {
         let txns = Selectors.budgetMatchedTransactions(b, store.txns, store.today, store.categoryNodes)
         Section("This cycle") {
             if txns.isEmpty {
-                Text(b.type == "income" && b.isRecurring == 0 ? "Tracked via contributions" : "No matching transactions")
+                Text("No matching transactions")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 ForEach(txns, id: \.id) { t in
@@ -175,47 +173,6 @@ struct BudgetDetailView: View {
     }
     private func delete(_ b: BudgetRow) {
         do { try store.apply(.removeBudget, Args(["id": .string(b.id)])) } catch { errorMessage = i18nMessage(error) }
-    }
-}
-
-/// Add to a goal/income budget's saved total (`contributeBudget`).
-struct ContributeSheet: View {
-    @EnvironmentObject private var store: FinchStore
-    @Environment(\.dismiss) private var dismiss
-    let budgetId: String
-    @State private var amount = ""
-    @State private var errorMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                HStack {
-                    Text("Amount"); Spacer()
-                    TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                }
-                if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
-            }
-            .navigationTitle("Contribute")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: save) { Image(systemName: "checkmark") }
-                        .accessibilityLabel("Add")
-                        .confirmCheckmarkStyle()
-                }
-            }
-        }
-    }
-
-    private func save() {
-        errorMessage = nil
-        guard let v = DecimalInput.parse(amount), v > 0 else { errorMessage = "Enter an amount greater than 0."; return }   // web guards amt > 0
-        do { try store.apply(.contributeBudget, Args(["id": .string(budgetId), "amount": .double(v)])); dismiss() }
-        catch { errorMessage = i18nMessage(error) }
     }
 }
 
