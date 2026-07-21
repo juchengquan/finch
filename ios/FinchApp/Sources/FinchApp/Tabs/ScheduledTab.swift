@@ -211,12 +211,36 @@ struct ScheduledRow: View {
     }
     private var nextRunDisplay: String { scheduledNextRun(template, today: store.wallToday) }
 
+    /// Leading stripe color by template type — mirrors TxRow's kind stripe so
+    /// Scheduled reads the same as the transaction feeds (expense red, income
+    /// green, transfer blue, refund purple, adjustment gray).
+    private var typeColor: Color {
+        switch template.type {
+        case "income": .green
+        case "refund": .purple
+        case "transfer": .blue
+        case "adjustment": Color.gray
+        default: .red
+        }
+    }
+    private var typeA11yLabel: Text {
+        switch template.type {
+        case "income": Text("Income")
+        case "refund": Text("Refund")
+        case "transfer": Text("Transfer")
+        case "adjustment": Text("Adjustment")
+        default: Text("Expense")
+        }
+    }
+
     var body: some View {
-        HStack {
-            Image(systemName: template.type == "transfer" ? "arrow.left.arrow.right"
-                  : template.type == "income" ? "arrow.down.circle" : "arrow.up.circle")
-                .foregroundStyle(template.type == "income" ? .green
-                                 : template.type == "transfer" ? .blue : .red)
+        HStack(spacing: 8) {
+            // Thin type stripe — matches TxRow's leading kind stripe (the icon's
+            // replacement) so Scheduled scans the same as the transaction lists.
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(typeColor)
+                .frame(width: 3)
+                .accessibilityLabel(typeA11yLabel)
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).fontWeight(.medium)
                 Text("\(template.frequency.capitalized) · next \(nextRunDisplay)")
