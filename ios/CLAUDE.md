@@ -132,6 +132,18 @@ the SQLite DB is authoritative.
 - **`store.today` is data-anchored (`max(tx.date)`), not the wall clock** — used for budget
   windows / forecasts (demo determinism). Literal "today" surfaces (calendar, Today/Yesterday
   labels, next-run dates) must use **`store.wallToday`**. Mixing them is a real bug source.
+- **`yyyy-MM-dd` values are civil dates, not instants** — a day on the *user's* calendar. Every
+  `Date` ↔ string conversion must use the **device** timezone on both ends: parse/format with
+  **`AppDate.isoDay`** and do component math with **`AppDate.civil`** (Gregorian, device zone).
+  **Never hand-roll a hardcoded-UTC `Calendar` in the app layer.** Parsing locally and then
+  doing UTC component math shifts the day for every user offset from UTC: at UTC+8
+  `"2026-07-15"` parses to local midnight = `2026-07-14T16:00Z`, so UTC components read Jul 14.
+  That shipped twice — the Scheduled day header rendered a day early, and a second UTC-pinned
+  formatter made `wallToday` a day behind between 00:00 and 08:00 local (#570). `FinchCore` and
+  `scheduledNextRun` *are* internally UTC and that's fine — they parse, compute, and format
+  inside one calendar and return strings, so the zone is unobservable. The bug is only ever at
+  the boundary. `FinchAppTests/CivilDateTests` guards this and fails in any non-UTC zone if a
+  UTC-pinned converter returns.
 - Per-device view prefs (active ledger, privacy mode, saved searches, appearance) live in
   **UserDefaults, never in the DB or exports** (iOS analogue of web localStorage).
 
@@ -165,7 +177,28 @@ tap-to-open full-height sheets: `SearchablePickerRow` (generic, stage-then-Confi
 deliberate workaround because `.searchable` collapses the nav bar and hides Confirm),
 `TagChipFlow`/`TagField` (multi-select chips via custom `FlowLayout`). `AddTransactionSheet` is
 the flagship (expense/income/transfer/refund + opt-in adjust; amount is in the **account's own
-currency**).
+currency**) — it is also the **layout blueprint** for the whole add/edit family.
+
+**Sheet layout is tokenized — don't hand-tune insets.** Apply **`finchSheetForm()`**
+(`Common/ViewModifiers.swift`) to the `Form`: it sets the app-wide section gap plus the pinned
+top margin under the nav bar, both from `Common/Metrics.swift` (`sectionSpacing`,
+`sheetTopMargin`). Without the explicit margin SwiftUI hands these sheets *different* default
+top insets, which is what made the family look inconsistent. Section headers go through
+**`finchSectionHeader(_:)`** — it takes a **`LocalizedStringKey`**, not a `String`; a `String`
+binds `Text`'s non-localizing init and silently ships English to zh-Hans.
+
+**The first section after the type caption carries NO header.** Every sheet
+(`AddTransaction`, `EditTransaction`, `Scheduled`, `Account`, `Budget`) opens straight into
+fields and only labels *later* groups, where the split needs explaining. A header on the first
+section stacks two lines of grey chrome — the type caption, then the header — before the user
+reaches a single field, and costs ~36pt for no information (`BudgetSheet` drifted into a
+`"Details"` header this way; fixed in #563). Resist "Details"/"General"/"Info" openers.
+
+**Measure layout, don't eyeball it.** `idb ui describe-all` returns frames in points, so two
+sheets can be diffed numerically — the correct top-of-form reading is type caption `y=138 h=52`
+with the first content row at `y=202`. Pixel-squinting at screenshots produced two confidently
+wrong "fixes" before one `describe-all` settled #554, and again mistook #563's *structural*
+extra header for a *spacing* regression. See the sim-driving bullet under Conventions.
 
 ### Money & currency (easy to get wrong — mirror of the web gotcha)
 
