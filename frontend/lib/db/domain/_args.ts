@@ -1,10 +1,10 @@
 // lib/db/domain/_args.ts — the central per-action Args map.
 //
-// This is the wire contract for /api/mutate: each of the 74 action names
+// This is the wire contract for /api/mutate: each of the 73 action names
 // has a typed args shape. The dispatcher in lib/db/mutate.ts (PR 4) and
 // the route handler in app/api/mutate/route.ts both consume this type.
 //
-// All 74 actions. Sourced from each domain's types.ts + the mutation cases
+// All 73 actions. Sourced from each domain's types.ts + the mutation cases
 // in lib/db/mutations.ts. The mapping is a one-to-one mirror of those
 // cases; any drift surfaces as a tsc error when the dispatcher is added
 // in PR 4.
@@ -86,7 +86,7 @@ export type Args = {
   updateAccountGroup: { id: string; patch: AccountGroupPatch };
   deleteAccountGroup: { id: string };
 
-  // --- budgets (6) ---
+  // --- budgets (5) ---
   createBudget: {
     id?: string;
     ledgerId?: string;
@@ -111,7 +111,6 @@ export type Args = {
   updateBudgetCycle: { id: string; patch: BudgetCyclePatch };
   clearPendingAmount: { id: string };
   removeBudget: { id: string };
-  contributeBudget: { id: string; amount: number };
 
   // --- budget groups (3) ---
   createBudgetGroup: { id?: string; ledgerId?: string; name: string; color?: string | null };

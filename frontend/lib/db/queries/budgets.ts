@@ -183,14 +183,6 @@ export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyc
   );
 }
 
-/** Add to (or subtract from) an income/goal budget's manual `saved`, clamped at 0. */
-export async function contributeBudget(exec: Exec, id: string, amount: number): Promise<void> {
-  await exec(
-    "UPDATE budgets SET saved = MAX(0, saved + ?), updated_at = datetime('now') WHERE id = ?",
-    [amount, id],
-  );
-}
-
 /** Hard-delete a named budget. */
 export async function deleteBudget(exec: Exec, id: string): Promise<void> {
   await exec('DELETE FROM budgets WHERE id = ?', [id]);

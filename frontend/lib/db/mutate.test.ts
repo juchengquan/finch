@@ -602,7 +602,7 @@ test('applyMutation throws I18nError for unknown action', async () => {
   await expect(applyMutation(exec, 'nonexistentAction', {})).rejects.toThrow(I18nError);
 });
 
-test('applyMutation dispatches all 74 actions (smoke)', async () => {
+test('applyMutation dispatches all 73 actions (smoke)', async () => {
   // Pin the action-name list. The Args map smoke test
   // (lib/db/domain/_args.test.ts) already does this at tsc level; this is the
   // runtime-level version — every name must resolve to a handler so a missing
@@ -619,7 +619,6 @@ test('applyMutation dispatches all 74 actions (smoke)', async () => {
     'confirmAllPending',
     'confirmPendingWithMerchant',
     'confirmTransaction',
-    'contributeBudget',
     'createAccount',
     'createAccountGroup',
     'createBudget',
@@ -683,9 +682,9 @@ test('applyMutation dispatches all 74 actions (smoke)', async () => {
     'updateTransfer',
     'verifyCounterparty',
   ];
-  expect(actions.length).toBe(74);
+  expect(actions.length).toBe(73);
 
-  // The dispatcher should NOT throw 'Unknown action' for any of the 74 names.
+  // The dispatcher should NOT throw 'Unknown action' for any of the 73 names.
   // It MAY throw a different I18nError (per-action arg validation), or a
   // plain Error (invariants), or succeed silently — the test doesn't care
   // about success/failure of the per-action logic, just that the dispatcher

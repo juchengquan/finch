@@ -1,7 +1,6 @@
 // frontend/lib/store/budgets/actions.ts — budget action creators.
 // Extracted from lib/store.ts:706-808 (createBudget, updateBudget,
-// updateBudgetCycle, clearPendingAmount, removeBudget,
-// contributeBudget).
+// updateBudgetCycle, clearPendingAmount, removeBudget).
 //
 // `NewBudgetInput` is the client-side shape (booleans here, normalised
 // to the DB's 0/1 ints on the way out).
@@ -129,12 +128,5 @@ export const budgetActions = (set: SetState, get: GetState) => ({
   removeBudget: (id: string): void => {
     set((s) => ({ budgets: s.budgets.filter((b) => b.id !== id) }));
     syncMutation('removeBudget', { id });
-  },
-
-  contributeBudget: (id: string, amount: number): void => {
-    set((s) => ({
-      budgets: s.budgets.map((b) => (b.id === id ? { ...b, saved: Math.max(0, b.saved + amount) } : b)),
-    }));
-    syncMutation('contributeBudget', { id, amount });
   },
 });
