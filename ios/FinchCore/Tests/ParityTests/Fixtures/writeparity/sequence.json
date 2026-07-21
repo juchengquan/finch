@@ -399,6 +399,35 @@
       }
     },
     {
+      "action": "createScheduled",
+      "args": {
+        "id": "s2",
+        "ledgerId": "personal",
+        "name": "Gym",
+        "type": "expense",
+        "amount": 45,
+        "frequency": "monthly",
+        "dayOfMonth": 15,
+        "accountId": "a2",
+        "startDate": "2026-05-01"
+      }
+    },
+    {
+      "action": "postScheduled",
+      "args": {
+        "templateId": "s2",
+        "date": "2026-05-20"
+      }
+    },
+    {
+      "action": "postScheduled",
+      "args": {
+        "templateId": "s2",
+        "date": "2026-05-21",
+        "occurrenceDate": "2026-05-18"
+      }
+    },
+    {
       "action": "createAccountGroup",
       "args": {
         "id": "ag1",
@@ -940,6 +969,92 @@
       },
       {
         "ledger_id": "personal",
+        "date": "2026-05-20",
+        "time": null,
+        "description": "Gym",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": "s2",
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "-45.000000",
+            "currency": "USD",
+            "amount_base": "-40.910000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": null,
+            "amount": "40.910000",
+            "currency": "EUR",
+            "amount_base": "40.910000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
+        "date": "2026-05-21",
+        "time": null,
+        "description": "Gym",
+        "kind": "expense",
+        "status": "confirmed",
+        "counterparty_id": null,
+        "refunded_entry_id": null,
+        "source_template_id": "s2",
+        "notes": null,
+        "applied_rule_ids": null,
+        "reviewed": false,
+        "sealed": 1,
+        "postings": [
+          {
+            "account_id": "a2",
+            "category_id": null,
+            "amount": "-45.000000",
+            "currency": "USD",
+            "amount_base": "-40.910000",
+            "exchange_rate": "0.909091",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 0
+          },
+          {
+            "account_id": null,
+            "category_id": null,
+            "amount": "40.910000",
+            "currency": "EUR",
+            "amount_base": "40.910000",
+            "exchange_rate": "1.000000",
+            "orig_amount": null,
+            "orig_currency": null,
+            "memo": null,
+            "cleared": false,
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "ledger_id": "personal",
         "date": "2026-05-31",
         "time": null,
         "description": "Reconciliation adjustment",
@@ -1021,7 +1136,7 @@
         "name": "Savings",
         "type": "savings",
         "currency": "USD",
-        "current_balance": "1100.000000",
+        "current_balance": "1010.000000",
         "sort_order": 1,
         "include_in_net_worth": 1,
         "is_active": 1,
@@ -1237,6 +1352,18 @@
         "source": "derived"
       },
       {
+        "date": "2026-05-20",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
+        "date": "2026-05-21",
+        "currency": "EUR",
+        "rate": "1.100000",
+        "source": "derived"
+      },
+      {
         "date": "2026-05-31",
         "currency": "EUR",
         "rate": "1.100000",
@@ -1257,6 +1384,20 @@
         "start_date": "2026-01-01",
         "is_active": 1,
         "splits_enabled": 1
+      },
+      {
+        "id": "s2",
+        "ledger_id": "personal",
+        "name": "Gym",
+        "kind": "expense",
+        "amount": "45.000000",
+        "frequency": "monthly",
+        "day_of_month": 15,
+        "account_id": "a2",
+        "from_account_id": null,
+        "start_date": "2026-05-01",
+        "is_active": 1,
+        "splits_enabled": 0
       }
     ],
     "rules": [
