@@ -214,14 +214,14 @@ struct MerchantsView: View {
     /// Choice-independent union of transactions referencing either merchant.
     private func mergeTxCount(_ a: Counterparty, _ b: Counterparty) -> Int {
         let ledger = store.activeLedgerId
-        let ids = Set(Selectors.merchantTransactions(store.txns, store.merchants, a.id, ledger).map(\.id))
-            .union(Selectors.merchantTransactions(store.txns, store.merchants, b.id, ledger).map(\.id))
+        let ids = Set(Selectors.merchantTransactions(store.txns, store.merchants, a.id, ledger, includePending: true).map(\.id))
+            .union(Selectors.merchantTransactions(store.txns, store.merchants, b.id, ledger, includePending: true).map(\.id))
         return ids.count
     }
     private func mergeManyTxCount(_ cps: [Counterparty]) -> Int {
         let ledger = store.activeLedgerId
         var ids = Set<String>()
-        for c in cps { ids.formUnion(Selectors.merchantTransactions(store.txns, store.merchants, c.id, ledger).map(\.id)) }
+        for c in cps { ids.formUnion(Selectors.merchantTransactions(store.txns, store.merchants, c.id, ledger, includePending: true).map(\.id)) }
         return ids.count
     }
 }
