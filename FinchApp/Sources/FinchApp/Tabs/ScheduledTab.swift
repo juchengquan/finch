@@ -226,6 +226,17 @@ struct ScheduledTab: View {
                                                  "\"\(t.name)\" has finished its \(total)-payment plan"))
             return
         }
+        // A transfer template with no from-account is malformed. The sheet's
+        // account fallbacks would otherwise silently fill From/To with the
+        // first two accounts — a complete, valid-looking form that fails on
+        // Save forever with no way to fix it. Catch it here, before
+        // presenting, with the same engine error the silent path throws.
+        if t.type == "transfer", t.fromAccountId == nil {
+            errorMessage = i18nMessage(I18nError("error.scheduled.missingAccount",
+                                                 ["name": t.name],
+                                                 "\"\(t.name)\" is missing an account"))
+            return
+        }
         switch ScheduledPostRouting.routeForPost(t, store: store) {
         case .sheet:
             postPrefill = PostPrefill(template: t, occurrence: occurrence)
