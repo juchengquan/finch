@@ -92,7 +92,11 @@ export const handlers = {
         `"${t.name}" has finished its ${t.installmentTotal}-payment plan`,
       );
     }
-    const date = new Date().toISOString().slice(0, 10);
+    // Explicit date wins; otherwise today (unchanged legacy behaviour). The
+    // occurrence defaults to the posting date, so a plain post still resolves
+    // its own cell.
+    const date = args.date ? str(args.date) : new Date().toISOString().slice(0, 10);
+    const occurrenceDate = args.occurrenceDate ? str(args.occurrenceDate) : date;
     const desc = t.description || t.name;
 
     if (t.type === 'transfer') {
@@ -104,6 +108,7 @@ export const handlers = {
         date,
         note: desc,
         sourceTemplateId: t.id,
+        occurrenceDate,
       });
       return;
     }
@@ -116,14 +121,14 @@ export const handlers = {
       for (const sp of t.splits) {
         const portion = sp.abs != null ? sp.abs : (t.amount * (sp.pct ?? 0)) / 100;
         if (!portion) continue;
-        await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null);
+        await postSingle(exec, ledgerId, sp.accountId, portion, `${desc} · ${sp.label}`, date, t.id, t.category ?? null, occurrenceDate);
         posted++;
       }
       if (!posted) throw new I18nError('error.scheduled.noSplits', { name: t.name }, `No split amounts to post for "${t.name}"`);
       return;
     }
 
-    await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null);
+    await postSingle(exec, ledgerId, t.accountId, sign * t.amount, desc, date, t.id, t.category ?? null, occurrenceDate);
   },
   generateDueScheduled: async (exec, args: Args['generateDueScheduled']) => {
     const today = args.today ? str(args.today) : new Date().toISOString().slice(0, 10);
@@ -167,7 +172,7 @@ export const handlers = {
         for (const date of dates) {
           await postTransfer(exec, {
             fromAccountId, toAccountId: acctId, fromAmount, date,
-            note: description || null, sourceTemplateId, timestamp: ts,
+            note: description || null, sourceTemplateId, occurrenceDate: date, timestamp: ts,
           });
         }
         continue;
@@ -183,6 +188,7 @@ export const handlers = {
           kind: type === 'income' ? 'income' : 'expense',
           status: 'pending',
           sourceTemplateId: String(r.id),
+          occurrenceDate: date,
           counterpartyId: cpId,
           timestamp: ts,
         });

@@ -12,11 +12,12 @@ export async function postSingle(
   date: string,
   sourceTemplateId: string | null = null,
   categoryId: string | null = null,
+  occurrenceDate: string | null = null,
 ): Promise<void> {
   await postSimple(exec, {
     ledgerId, accountId, date,
     amount, description, categoryId,
     kind: amount > 0 ? 'income' : 'expense',
-    sourceTemplateId,
+    sourceTemplateId, occurrenceDate,
   });
 }

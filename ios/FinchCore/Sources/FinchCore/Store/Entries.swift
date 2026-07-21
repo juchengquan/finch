@@ -484,7 +484,8 @@ public enum Entries {
     public static func postTransfer(_ db: Database, ledgerId: String? = nil, fromAccountId: String,
                                     toAccountId: String, fromAmount: Double, toAmount: Double? = nil,
                                     date: String, time: String? = nil, note: String? = nil,
-                                    sourceTemplateId: String? = nil, id: String? = nil,
+                                    sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
+                                    id: String? = nil,
                                     timestamp: String? = nil,
                                     status: Status? = nil, tagIds: [String]? = nil) throws -> String {
         let fromAmt = abs(fromAmount)
@@ -512,7 +513,8 @@ public enum Entries {
             status: status,
             legs: [.account(AccountLeg(accountId: fromAccountId, amount: -fromAmt, memo: "Transfer to \(toName)")),
                    .account(AccountLeg(accountId: toAccountId, amount: toAmt, memo: "Transfer from \(fromName)"))],
-            notes: note, sourceTemplateId: sourceTemplateId, timestamp: timestamp, skipRules: true))
+            notes: note, sourceTemplateId: sourceTemplateId, occurrenceDate: occurrenceDate,
+            timestamp: timestamp, skipRules: true))
         for tagId in (tagIds ?? []) {
             try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [eid, tagId])
         }

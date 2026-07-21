@@ -104,6 +104,10 @@ export interface NewEntry {
   counterpartyId?: string | null;
   refundedEntryId?: string | null;
   sourceTemplateId?: string | null;
+  /** The scheduled occurrence this entry fulfils (yyyy-MM-dd), when posted from
+   *  a template. NULL for everything else. Lets a transaction dated "when I
+   *  actually paid" still resolve the occurrence it was due on. */
+  occurrenceDate?: string | null;
   timestamp?: string;
   skipRules?: boolean;
 }
@@ -338,11 +342,11 @@ export async function postEntry(exec: Exec, e: NewEntry): Promise<{ entryId: str
   await exec(`SAVEPOINT ${sp}`);
   try {
     await exec(
-      `INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)`,
+      `INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)`,
       [entryId, e.ledgerId, e.date, e.time ?? null, description, kind, status,
        status === 'confirmed' ? ts : null, counterpartyId ?? null,
-       e.refundedEntryId ?? null, e.sourceTemplateId ?? null, notes,
+       e.refundedEntryId ?? null, e.sourceTemplateId ?? null, e.occurrenceDate ?? null, notes,
        appliedRuleIds ? JSON.stringify(appliedRuleIds) : null, reviewedAt,
        dedupHash(e.date, e.time, description, legs), ts, ts],
     );
@@ -381,6 +385,9 @@ export interface SimpleEntryInput {
   status?: EntryStatus;
   refundedEntryId?: string | null;
   sourceTemplateId?: string | null;
+  /** The scheduled occurrence this entry fulfils (yyyy-MM-dd). NULL unless
+   *  posted from a template. */
+  occurrenceDate?: string | null;
   counterpartyId?: string | null;
   skipRules?: boolean;
   id?: string;
@@ -395,7 +402,8 @@ export async function postSimple(exec: Exec, s: SimpleEntryInput): Promise<{ ent
     id: s.id, ledgerId: s.ledgerId, date: s.date, time: s.time ?? null,
     description: s.description, kind, status: s.status, notes: s.notes ?? null,
     counterpartyId: s.counterpartyId, refundedEntryId: s.refundedEntryId ?? null,
-    sourceTemplateId: s.sourceTemplateId ?? null, skipRules: s.skipRules, timestamp: s.timestamp,
+    sourceTemplateId: s.sourceTemplateId ?? null, occurrenceDate: s.occurrenceDate ?? null,
+    skipRules: s.skipRules, timestamp: s.timestamp,
     legs: [{ accountId: s.accountId, amount: s.amount }],
     autoBalanceCategoryId: s.categoryId ?? null,
   });
@@ -407,7 +415,8 @@ export async function postSimple(exec: Exec, s: SimpleEntryInput): Promise<{ ent
 export async function postTransfer(exec: Exec, a: {
   ledgerId?: string; fromAccountId: string; toAccountId: string;
   fromAmount: number; toAmount?: number | null; date: string; time?: string | null;
-  note?: string | null; sourceTemplateId?: string | null; id?: string; timestamp?: string;
+  note?: string | null; sourceTemplateId?: string | null; occurrenceDate?: string | null;
+  id?: string; timestamp?: string;
 }): Promise<{ entryId: string }> {
   const fromAmount = Math.abs(Number(a.fromAmount));
   if (!fromAmount) throw new Error('Transfer amount must be greater than 0');
@@ -434,7 +443,8 @@ export async function postTransfer(exec: Exec, a: {
     id: a.id, ledgerId, date: a.date, time: a.time ?? null,
     description: 'Transfer', kind: 'transfer', notes: a.note ?? null,
     counterpartyId: null, skipRules: true,
-    sourceTemplateId: a.sourceTemplateId ?? null, timestamp: a.timestamp,
+    sourceTemplateId: a.sourceTemplateId ?? null, occurrenceDate: a.occurrenceDate ?? null,
+    timestamp: a.timestamp,
     legs: [
       { accountId: a.fromAccountId, amount: -fromAmount, memo: `Transfer to ${String(to.name)}` },
       { accountId: a.toAccountId, amount: toAmount, memo: `Transfer from ${String(from.name)}` },
