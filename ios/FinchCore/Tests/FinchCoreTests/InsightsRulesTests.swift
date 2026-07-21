@@ -64,7 +64,7 @@ final class InsightsRulesTests: XCTestCase {
         try Apply.apply(dbQueue: q, action: "createBudget", args: Args([
             "id": .string("g1"), "ledgerId": .string("l1"), "name": .string("Savings"),
             "type": .string("income"), "amount": .double(1000)]))
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("g1"), "amount": .double(250)]))
+        try Apply.apply(dbQueue: q, action: "updateBudget", args: Args(["id": .string("g1"), "patch": .object(["saved": .double(250)])]))
         let ins = Selectors.generateInsights(try ctx(q), fmt: fmt)
         XCTAssertTrue(ins.contains { $0.title == "Savings is 25% funded" && $0.tone == .pos })
     }

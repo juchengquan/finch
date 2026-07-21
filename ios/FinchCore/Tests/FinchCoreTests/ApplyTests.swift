@@ -27,7 +27,7 @@ final class ApplyTests: XCTestCase {
             XCTAssertNotNil(registry[action], "\(action.rawValue) has no registered handler")
         }
         XCTAssertEqual(registry.count, ActionName.allCases.count,
-                       "registry size must equal the action enum (75)")
+                       "registry size must equal the action enum (84)")
     }
 
     /// End-to-end: addTransaction through the chokepoint posts a balanced entry

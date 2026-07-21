@@ -1,13 +1,14 @@
 import Foundation
 
-/// The write chokepoint catalogue — the web's 74 `lib/db/domain/_args.ts` action
-/// keys (the wire contract) PLUS Phase 6.5's native-only `setEntryAttachment`
-/// (the 75th). Raw values are the camelCase action names sent to `/api/mutate`.
+/// The write chokepoint catalogue — the web's 73 `lib/db/domain/_args.ts` action
+/// keys (the wire contract; `contributeBudget` was removed — goal progress is
+/// transaction-derived) PLUS Phase 6.5's native-only `setEntryAttachment`. Raw
+/// values are the camelCase action names sent to `/api/mutate`.
 ///
 /// `setEntryAttachment` has no web counterpart — the web adds attachments via the
 /// multipart `POST /api/attachments` route, not a `mutate` action. The native app
 /// has no HTTP server, so it dispatches this local chokepoint write instead. It
-/// is NOT part of the 74-action web-parity fixtures.
+/// is NOT part of the web-parity fixtures.
 public enum ActionName: String, Codable, Sendable, CaseIterable {
     // --- transactions (15) ---
     case addTransaction
@@ -48,13 +49,12 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case updateAccountGroup
     case deleteAccountGroup
 
-    // --- budgets (6) ---
+    // --- budgets (5) ---
     case createBudget
     case updateBudget
     case updateBudgetCycle
     case clearPendingAmount
     case removeBudget
-    case contributeBudget
 
     // --- budget groups (3) ---
     case createBudgetGroup

@@ -118,7 +118,8 @@ extension Projection {
             try Row.fetchAll(db, sql: """
                 SELECT id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
                        frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
-                       pending_amount, last_rolled_period, account_ids, category_ids, warning_pct
+                       pending_amount, last_rolled_period, account_ids, category_ids,
+                       tag_ids, counterparty_ids, warning_pct
                   FROM budgets WHERE ledger_id = ? ORDER BY created_at
                 """, arguments: [ledgerId]).map { r in
                 let kind: String = r["kind"]
@@ -131,6 +132,7 @@ extension Projection {
                     rolloverLimit: r["rollover_limit"], pendingAmount: r["pending_amount"],
                     lastRolledPeriod: r["last_rolled_period"],
                     accountIds: parseIds(r["account_ids"]), categoryIds: parseIds(r["category_ids"]),
+                    tagIds: parseIds(r["tag_ids"]), counterpartyIds: parseIds(r["counterparty_ids"]),
                     warningPct: r["warning_pct"] ?? 80)
             }
         }

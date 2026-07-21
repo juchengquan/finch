@@ -2,7 +2,7 @@ import XCTest
 import GRDB
 @testable import FinchCore
 
-/// Coverage for the budget actions the iOS UI now exposes (edit / contribute /
+/// Coverage for the budget actions the iOS UI now exposes (edit / saved-patch /
 /// cycle / clear-pending / groups) + the budget-detail transactions selector.
 final class BudgetCrudTests: XCTestCase {
     private func seeded() throws -> DatabaseQueue {
@@ -58,16 +58,17 @@ final class BudgetCrudTests: XCTestCase {
         }
     }
 
-    func test_contributeBudget_clampsAtZero() throws {
+    func test_saved_isPatchable() throws {
+        // contributeBudget was removed; the pre-tracking `saved` offset on an
+        // income goal is now a plain `updateBudget` patch field (a direct set).
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createBudget", args: Args([
             "id": .string("g1"), "ledgerId": .string("l1"), "name": .string("Vacation"),
             "type": .string("income"), "amount": .double(2000), "frequency": .string("monthly"), "startDate": .string("2026-01-01"),
         ]))
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("g1"), "amount": .double(500)]))
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("g1"), "amount": .double(-100)]))
+        try Apply.apply(dbQueue: q, action: "updateBudget", args: Args(["id": .string("g1"), "patch": .object(["saved": .double(400)])]))
         try q.read { db in XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT saved FROM budgets WHERE id='g1'") ?? 0, 400, accuracy: 0.001) }
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("g1"), "amount": .double(-9999)]))
+        try Apply.apply(dbQueue: q, action: "updateBudget", args: Args(["id": .string("g1"), "patch": .object(["saved": .double(0)])]))
         try q.read { db in XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT saved FROM budgets WHERE id='g1'") ?? -1, 0, accuracy: 0.001) }
     }
 

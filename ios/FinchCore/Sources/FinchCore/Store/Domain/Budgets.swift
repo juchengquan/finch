@@ -50,7 +50,6 @@ public enum Budgets {
         .updateBudgetCycle: updateCycle,
         .clearPendingAmount: clearPending,
         .removeBudget: remove,
-        .contributeBudget: contribute,
     ]
 
     /// JSON array text, or nil for an empty list — matches the web `idsToJson`
@@ -65,7 +64,8 @@ public enum Budgets {
             let id: String?; let ledgerId: String?; let groupId: String?; let name: String; let type: String?
             let amount: Double; let saved: Double?; let frequency: String?; let startDate: String?; let endDate: String?
             let isRecurring: Double?; let rolloverLimit: Double?
-            let accountIds: [String]?; let categoryIds: [String]?; let warningPct: Double?
+            let accountIds: [String]?; let categoryIds: [String]?
+            let tagIds: [String]?; let counterpartyIds: [String]?; let warningPct: Double?
         }
         let a = try args.to(A.self)
         let name = a.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -80,11 +80,12 @@ public enum Budgets {
             try db.execute(sql: """
                 INSERT INTO budgets (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
                     frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
-                    account_ids, category_ids, warning_pct, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+                    account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
                 """, arguments: [a.id ?? Entries.newId("bgt"), a.ledgerId ?? "personal", a.groupId, name, type,
                                  a.amount, a.saved ?? 0, a.frequency ?? "monthly", startDate, a.endDate, isRecurring,
                                  rollover, a.rolloverLimit, idsToJson(a.accountIds ?? []), idsToJson(a.categoryIds ?? []),
+                                 idsToJson(a.tagIds ?? []), idsToJson(a.counterpartyIds ?? []),
                                  a.warningPct ?? 80])
         }
     }
@@ -92,7 +93,8 @@ public enum Budgets {
     private static let cols: [String: String] = [
         "groupId": "group_id", "name": "name", "type": "kind", "amount": "amount", "frequency": "frequency",
         "startDate": "start_date", "endDate": "end_date", "isRecurring": "is_recurring", "rollover": "rollover",
-        "rolloverLimit": "rollover_limit", "accountIds": "account_ids", "categoryIds": "category_ids", "warningPct": "warning_pct",
+        "rolloverLimit": "rollover_limit", "accountIds": "account_ids", "categoryIds": "category_ids",
+        "tagIds": "tag_ids", "counterpartyIds": "counterparty_ids", "saved": "saved", "warningPct": "warning_pct",
     ]
 
     static func update(_ db: Database, _ args: Args) throws {
@@ -113,8 +115,9 @@ public enum Budgets {
         var bind: [DatabaseValueConvertible?] = []
         for (key, col) in cols where patch.keys.contains(key) {
             sets.append("\(col) = ?")
-            if key == "accountIds" || key == "categoryIds" { bind.append(idsToJson(patch[key]!.asStringArray)) }
-            else { bind.append(patch[key]!.sqlBind) }
+            if key == "accountIds" || key == "categoryIds" || key == "tagIds" || key == "counterpartyIds" {
+                bind.append(idsToJson(patch[key]!.asStringArray))
+            } else { bind.append(patch[key]!.sqlBind) }
         }
         if sets.isEmpty { return }
         sets.append("updated_at = datetime('now')")
@@ -154,12 +157,5 @@ public enum Budgets {
     static func remove(_ db: Database, _ args: Args) throws {
         struct A: Decodable { let id: String }
         try db.execute(sql: "DELETE FROM budgets WHERE id = ?", arguments: [try args.to(A.self).id])
-    }
-
-    static func contribute(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let id: String; let amount: Double }
-        let a = try args.to(A.self)
-        if !a.amount.isFinite { throw I18nError("error.budget.invalidContribution", [:], "Invalid contribution amount") }
-        try db.execute(sql: "UPDATE budgets SET saved = MAX(0, saved + ?), updated_at = datetime('now') WHERE id = ?", arguments: [a.amount, a.id])
     }
 }
