@@ -3,16 +3,24 @@ name: CI
 on:
   push:
     branches: [main, feat/frontend]
-    # Skip CI for docs-only pushes (specs/plans/markdown). A mixed commit that
-    # also touches code still runs (paths-ignore only skips when ALL changed
-    # files match). Safe here: neither branch has required status checks.
+    # Skip CI for docs-only PUSHES (specs/plans/markdown). A mixed commit that
+    # also touches code still runs — paths-ignore only skips when ALL changed
+    # files match. Safe on push: branch protection gates pull requests, not
+    # pushes, so skipping here can't leave a required check unreported.
     paths-ignore:
       - "**/*.md"
       - "plans/**"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "plans/**"
+    # NO paths-ignore here, deliberately. The iOS job is a REQUIRED status check
+    # on feat/frontend, and a required check that never runs is never reported —
+    # GitHub then blocks the PR forever waiting for a status that will not
+    # arrive. A docs-only PR (#579) hit exactly that: `checks: []`, state
+    # BLOCKED, mergeable only via admin override.
+    #
+    # So docs-only PRs now pay a full iOS run. If that cost becomes annoying,
+    # the fix is an always-running aggregate job that reports the required
+    # check name and gates the real jobs beneath it — NOT re-adding
+    # paths-ignore, which reintroduces the deadlock.
 
 # Cancel superseded runs on the same ref
 concurrency:
