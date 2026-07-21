@@ -60,12 +60,19 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         self.store = store; self.router = router
         center.delegate = self
         registerCategories()
+        // Clear any badge left by an earlier build. Removing the code that SETS a
+        // badge does not unset one already on the springboard icon — without this,
+        // anyone who ran the badging build keeps a stale number forever, with
+        // nothing in the app able to clear it.
+        Task { try? await center.setBadgeCount(0) }
     }
 
     public func requestPermissionIfNeeded() async {
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
-            _ = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
+            // No .badge: the app has no notification centre, so a badge would point at
+            // something with no destination — see refresh().
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
         authorizationDenied = await center.notificationSettings().authorizationStatus == .denied
     }
@@ -114,17 +121,17 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             // would suppress every future week.
             if p.kind != .weeklyDigest { NotificationState.fired.insert(p.id) }
         }
-
-        await updateBadge(planned: planned)
     }
 
-    /// Badge = things still awaiting action. The digest is informational, so it
-    /// doesn't count — otherwise the badge would never clear. `.badge` was being
-    /// requested at authorization but never set, so this makes the permission honest.
-    private func updateBadge(planned: [PlannedNotification]) async {
-        let actionable = planned.filter { $0.kind != .weeklyDigest }.count
-        try? await center.setBadgeCount(actionable)
-    }
+    // NO app-icon badge, deliberately. One was added alongside these fixes to
+    // justify the .badge authorization option, which was being requested and never
+    // used — but the app has no notification centre and PlannedNotification never
+    // reaches the UI, so the number pointed at nothing the user could open. Worse,
+    // it counted LIVE conditions rather than unread items, so it could not be
+    // cleared by looking: it sat until the budget dropped back under its threshold.
+    // Every condition it counted is already surfaced with context on its own tab
+    // (Budgets shows "N over" in the summary card). If a real notification centre
+    // ever lands, a badge over THAT is worth revisiting.
 
     private static func content(for p: PlannedNotification) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
