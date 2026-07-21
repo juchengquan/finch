@@ -285,6 +285,46 @@ test('§10.4 categoryId filter matches split entries where one leg has that cate
   expect(otherResults.some((t) => t.id === acctPostingId)).toBe(false);
 });
 
+test('addTransaction: forwards sourceTemplateId/occurrenceDate on the same-currency (postSimple) path', async () => {
+  const exec = await seeded();
+  const entryId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    amount: -40,
+    merchant: 'Gym',
+    date: '2026-07-21',
+    sourceTemplateId: 's1',
+    occurrenceDate: '2026-07-15',
+  });
+  const [row] = await exec(
+    'SELECT source_template_id, occurrence_date FROM entries WHERE id = ?',
+    [entryId],
+  );
+  expect(String(row.source_template_id)).toBe('s1');
+  expect(String(row.occurrence_date)).toBe('2026-07-15');
+});
+
+test('addTransaction: forwards sourceTemplateId/occurrenceDate on the foreign-currency (postEntry) path', async () => {
+  const exec = await seeded();
+  // 'chk' is a USD account; passing currency: 'EUR' forces the foreign-currency branch.
+  const entryId = await addTransaction(exec, {
+    ledgerId: 'personal',
+    accountId: 'chk',
+    currency: 'EUR',
+    amount: -40,
+    merchant: 'Gym EUR',
+    date: '2026-07-21',
+    sourceTemplateId: 's1',
+    occurrenceDate: '2026-07-15',
+  });
+  const [row] = await exec(
+    'SELECT source_template_id, occurrence_date FROM entries WHERE id = ?',
+    [entryId],
+  );
+  expect(String(row.source_template_id)).toBe('s1');
+  expect(String(row.occurrence_date)).toBe('2026-07-15');
+});
+
 test("FTS5 search matches tokens with internal punctuation (O'Reilly, AT&T)", async () => {
   const exec = await seeded();
   // FTS5's unicode61 tokenizer splits "O'Reilly" into `o` + `reilly`; our

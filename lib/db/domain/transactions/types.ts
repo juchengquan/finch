@@ -48,6 +48,14 @@ export interface AddInput {
   counterpartyId?: string | null;
   /** Bypass the rules engine for this insert. */
   skipRules?: boolean;
+  /** Links this entry to the scheduled template it fulfils (posting a
+   *  scheduled occurrence through the normal add-transaction flow). Optional
+   *  — omitted/undefined behaves exactly as before. */
+  sourceTemplateId?: string | null;
+  /** The scheduled occurrence this entry fulfils (yyyy-MM-dd), when posted
+   *  from a template via sourceTemplateId. Optional, no behaviour change when
+   *  absent. */
+  occurrenceDate?: string | null;
 }
 
 export interface NewTxRow {
