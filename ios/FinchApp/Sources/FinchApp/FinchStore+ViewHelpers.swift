@@ -314,17 +314,14 @@ extension FinchStore {
         try? apply(.setDisplayCurrency, Args(["ledgerId": .string(ledgerId), "currency": .string(currency)]))
     }
 
-    // MARK: - UTC day helpers
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-    static func isoDay(_ d: Date) -> String { dayFormatter.string(from: d) }
-    static func parseDay(_ s: String) -> Date? { dayFormatter.date(from: String(s.prefix(10))) }
+    // MARK: - Day helpers
+    // These delegate to `AppDate.isoDay` rather than owning a second formatter. They
+    // used to keep their own, pinned to UTC, which made this the app's *other*
+    // yyyy-MM-dd converter — disagreeing with `AppDate` by up to a day. That is what
+    // put `wallToday` (below) a day behind between 00:00 and 08:00 at UTC+8, so
+    // "today" comparisons and the Scheduled "missed" badge were wrong every morning.
+    static func isoDay(_ d: Date) -> String { AppDate.isoDay.string(from: d) }
+    static func parseDay(_ s: String) -> Date? { AppDate.isoDay.date(from: String(s.prefix(10))) }
 }
 
 /// Settings › Database info. Amounts/dates formatted for the rows.
