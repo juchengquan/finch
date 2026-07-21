@@ -677,6 +677,10 @@
       "rolloverDailyHint": "(每日周期不可用)",
       "categories": "类别",
       "accounts": "账户",
+      "tags": "标签",
+      "merchants": "商家",
+      "savedSoFar": "已存金额",
+      "savedSoFarHelp": "开始跟踪之前你已经存下的金额。匹配的交易会在此基础上累加。",
       "chip": {
         "summary": "· {count}",
         "all": "· 全部",
@@ -691,7 +695,8 @@
       "errors": {
         "name": "请输入预算名称",
         "targetGt0": "请输入大于 0 的目标",
-        "limitGt0": "请输入大于 0 的上限"
+        "limitGt0": "请输入大于 0 的上限",
+        "needDimension": "请至少选择一个类别、账户、标签或商家来跟踪。"
       },
       "toasts": {
         "created": "预算已创建",

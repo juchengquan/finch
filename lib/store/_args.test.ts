@@ -22,7 +22,6 @@ test('useFinanceStore exposes all expected action names', () => {
     'confirmAllPending',
     'confirmPending',
     'confirmPendingWithMatch',
-    'contributeBudget',
     'createAccount',
     'createAccountGroup',
     'createBudget',
@@ -88,5 +87,5 @@ test('useFinanceStore exposes all expected action names', () => {
   for (const name of expected) {
     expect(typeof stateAsRecord[name]).toBe('function');
   }
-  expect(expected.length).toBe(73);
+  expect(expected.length).toBe(72);
 });

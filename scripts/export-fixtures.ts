@@ -431,7 +431,6 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 500, date: '2026-05-03' } },
   { action: 'createBudget', args: { id: 'b1', ledgerId: 'personal', name: 'Food', type: 'expense', amount: 300, categoryIds: ['food'], startDate: '2026-01-01' } },
   { action: 'createBudgetGroup', args: { id: 'bg1', ledgerId: 'personal', name: 'Essentials' } },
-  { action: 'contributeBudget', args: { id: 'b1', amount: 50 } },
   { action: 'setExchangeRate', args: { date: '2026-05-01', currency: 'EUR', rate: 1.1 } },
   { action: 'setDisplayCurrency', args: { ledgerId: 'personal', currency: 'USD' } },
   { action: 'createScheduled', args: { id: 's1', ledgerId: 'personal', name: 'Rent', type: 'expense', amount: 1500, frequency: 'monthly', dayOfMonth: 1, accountId: 'a1', startDate: '2026-01-01' } },

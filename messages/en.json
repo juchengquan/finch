@@ -676,6 +676,10 @@
       "rolloverDailyHint": " (not available for daily)",
       "categories": "Categories",
       "accounts": "Accounts",
+      "tags": "Tags",
+      "merchants": "Merchants",
+      "savedSoFar": "Saved so far",
+      "savedSoFarHelp": "Money you'd already saved before tracking began. Matching transactions are counted on top of this.",
       "chip": {
         "summary": "· {count}",
         "all": "· all",
@@ -690,7 +694,8 @@
       "errors": {
         "name": "Enter a budget name",
         "targetGt0": "Enter a target greater than 0",
-        "limitGt0": "Enter a limit greater than 0"
+        "limitGt0": "Enter a limit greater than 0",
+        "needDimension": "Pick at least one category, account, tag, or merchant to track."
       },
       "toasts": {
         "created": "Budget created",

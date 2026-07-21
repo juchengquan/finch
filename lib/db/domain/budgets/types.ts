@@ -28,6 +28,8 @@ export interface BudgetRow {
   lastRolledPeriod: string | null;
   accountIds: string[];
   categoryIds: string[];
+  tagIds?: string[];
+  counterpartyIds?: string[];
   warningPct: number;
 }
 
@@ -47,6 +49,8 @@ export interface NewBudget {
   rolloverLimit?: number | null;
   accountIds?: string[];
   categoryIds?: string[];
+  tagIds?: string[];
+  counterpartyIds?: string[];
   warningPct?: number;
 }
 
@@ -55,6 +59,7 @@ export interface BudgetPatch {
   name?: string;
   type?: BudgetType;
   amount?: number;
+  saved?: number;
   frequency?: string;
   startDate?: string;
   endDate?: string | null;
@@ -63,6 +68,8 @@ export interface BudgetPatch {
   rolloverLimit?: number | null;
   accountIds?: string[];
   categoryIds?: string[];
+  tagIds?: string[];
+  counterpartyIds?: string[];
   warningPct?: number;
 }
 

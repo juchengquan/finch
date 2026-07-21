@@ -43,26 +43,6 @@ test('createBudgetGroup + createBudget round-trips through projection', async ()
   expect(state.budgetGroups).toHaveLength(1);
 });
 
-test('contributeBudget accumulates and clamps a one-shot income budget', async () => {
-  const exec = await seeded();
-  await applyMutation(exec, 'createBudget', {
-    id: 'bgt-goal',
-    ledgerId: 'personal',
-    name: 'New car',
-    type: 'income',
-    amount: 30000,
-    isRecurring: 0,
-    frequency: 'monthly',
-    startDate: '2026-01-15',
-  });
-  await applyMutation(exec, 'contributeBudget', { id: 'bgt-goal', amount: 1200 });
-  await applyMutation(exec, 'contributeBudget', { id: 'bgt-goal', amount: -99999 }); // clamps at 0
-  const b = (await projectState(exec)).budgets.find((x) => x.id === 'bgt-goal')!;
-  expect(b.type).toBe('income');
-  expect(b.isRecurring).toBe(0);
-  expect(b.saved).toBe(0);
-});
-
 test('updateBudget patches fields; removeBudget deletes', async () => {
   const exec = await seeded();
   await applyMutation(exec, 'createBudget', {

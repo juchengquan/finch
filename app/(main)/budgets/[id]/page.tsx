@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useAppLocale } from '@/components/i18n-provider';
 import { CatBar } from '@/components/ui/cat-bar';
 import { Money, Ring } from '@/components/primitives';
-import { Chev, Clock, Edit, Plus, X } from '@/components/icons';
+import { Chev, Clock, Edit, X } from '@/components/icons';
 import { RefundBadge } from '@/components/ui/refund-badge';
 import { MobilePage } from '@/components/mobile-page';
 import { ScreenHeader } from '@/components/ui/screen-header';
@@ -21,7 +21,6 @@ import { periodLabel, nextPeriod, type Frequency } from '@/lib/budgets/period';
 import type { BudgetRow } from '@/lib/db/domain/budgets/queries';
 import { useTransactionDialog } from '@/components/transaction-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogClose,
@@ -42,18 +41,14 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const allTxns = useFinanceStore((s) => s.transactions);
   const allCategories = useFinanceStore((s) => s.categories);
   const removeBudget = useFinanceStore((s) => s.removeBudget);
-  const contributeBudget = useFinanceStore((s) => s.contributeBudget);
   const { openTransaction } = useTransactionDialog();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [contribOpen, setContribOpen] = useState(false);
-  const [contrib, setContrib] = useState('');
 
   const ledgerTxns = allTxns.filter((tx) => (tx.ledgerId ?? 'personal') === budget.ledgerId);
   const today = ledgerTxns.reduce((m, tx) => (tx.date > m ? tx.date : m), '') || '2026-05-30';
   const p = budgetProgress(budget, ledgerTxns, today, allCategories);
   const isIncome = budget.type === 'income';
-  const oneShot = isIncome && budget.isRecurring === 0;
   // Ported from iOS: 3-color banding for expense budgets (matches the budgets
   // list card) — green < 70, amber 70–90, red > 90 / over. Income stays success.
   const ringColor = isIncome
@@ -66,12 +61,22 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
 
   const accountSet = new Set(budget.accountIds);
   const categorySet = new Set(budget.categoryIds);
-  // Transactions inside the cycle window that match the budget's filters.
-  const matched = ledgerTxns
-    .filter((tx) => !tx.pending && kindOf(tx) !== 'transfer' && kindOf(tx) !== 'adjustment')
+  const tagSet = new Set(budget.tagIds ?? []);
+  const cpSet = new Set(budget.counterpartyIds ?? []);
+  // An unscoped one-shot goal matches nothing (mirrors budgetProgress) — else it
+  // would list all income; its progress is the saved offset alone.
+  const incomeUnscoped =
+    isIncome && budget.isRecurring === 0 && !accountSet.size && !categorySet.size && !tagSet.size && !cpSet.size;
+  // Transactions inside the cycle window that match the budget's filters. Mirrors
+  // budgetProgress: transfers are excluded for expense budgets only (income goals
+  // count incoming transfer legs); tags/merchants are AND'd across dimensions.
+  const matched = incomeUnscoped ? [] : ledgerTxns
+    .filter((tx) => !tx.pending && kindOf(tx) !== 'adjustment' && !(!isIncome && kindOf(tx) === 'transfer'))
     .filter((tx) => tx.date >= p.from && tx.date <= p.to)
     .filter((tx) => (accountSet.size ? accountSet.has(tx.account) : true))
     .filter((tx) => (categorySet.size ? tx.category != null && categorySet.has(tx.category) : true))
+    .filter((tx) => (tagSet.size ? (tx.tags ?? []).some((x) => tagSet.has(x)) : true))
+    .filter((tx) => (cpSet.size ? tx.counterpartyId != null && cpSet.has(tx.counterpartyId) : true))
     .filter((tx) => (isIncome ? tx.amount > 0 : tx.amount < 0))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
@@ -80,17 +85,6 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
       {label}
     </span>
   );
-
-  const submitContribution = () => {
-    const amt = parseFloat(contrib);
-    if (!(amt > 0)) return void toast.error(t('contributeDialog.amountError'));
-    contributeBudget(budget.id, amt);
-    toast.success(t('contributeDialog.addedToast'), {
-      description: t('contributeDialog.addedDescription', { name: budget.name, amount: fmt(amt) }),
-    });
-    setContrib('');
-    setContribOpen(false);
-  };
 
   return (
     <MobilePage header={<ScreenHeader title={budget.name} back backHref="/budgets" />}>
@@ -160,11 +154,6 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
                 <Edit size={14} />{t('editButton')}
               </Button>
-              {oneShot && (
-                <Button variant="outline" size="sm" onClick={() => { setContrib(''); setContribOpen(true); }}>
-                  <Plus size={14} />{t('contributeButton')}
-                </Button>
-              )}
               <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
                 <X size={14} />{t('deleteButton')}
               </Button>
@@ -186,7 +175,7 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
         <div className="bg-card border-border overflow-hidden rounded-xl border">
           {matched.length === 0 && (
             <div className="text-muted-foreground p-4 text-center text-sm">
-              {oneShot ? t('manualOnly') : t('noneInCycle')}
+              {t('noneInCycle')}
             </div>
           )}
           {matched.map((tx, i) => (
@@ -213,30 +202,6 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
       </div>
 
       <BudgetFormDialog open={editOpen} onOpenChange={setEditOpen} budget={budget} />
-
-      <Dialog open={contribOpen} onOpenChange={setContribOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('contributeDialog.title', { name: budget.name })}</DialogTitle>
-            <DialogDescription>{t('contributeDialog.description')}</DialogDescription>
-          </DialogHeader>
-          <Input
-            type="number"
-            inputMode="decimal"
-            value={contrib}
-            onChange={(e) => setContrib(e.target.value)}
-            placeholder="0.00"
-            autoFocus
-            onKeyDown={(e) => e.key === 'Enter' && submitContribution()}
-          />
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">{tCommon('cancel')}</Button>
-            </DialogClose>
-            <Button onClick={submitContribution}>{t('contributeDialog.submit')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>

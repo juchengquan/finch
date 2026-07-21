@@ -3,6 +3,7 @@ import { migrate, SCHEMA_VERSION } from './core/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
 import { applyMutation } from '@/lib/db/mutate';
 import { listTransfers } from '@/lib/db/queries/transfers';
+import { listBudgets } from '@/lib/db/queries/budgets';
 import { seededAndAudited } from './core/test-utils';
 import type { Exec } from './core/repo';
 import { I18nError } from '@/lib/i18n-error';
@@ -258,10 +259,13 @@ test('migrate stamps the schema version in db_metadata', async () => {
   expect(meta!.appName).toBe('finch');
 });
 
-test('schema shape: budgets no longer carries tag_ids; new indexes present', async () => {
+test('schema shape: budgets carries tag_ids + counterparty_ids; new indexes present', async () => {
   const exec = await seededAndAudited();
   const budgetCols = (await exec('PRAGMA table_info(budgets)')).map((r) => String(r.name));
-  expect(budgetCols).not.toContain('tag_ids');
+  // Re-added (tag_ids was dropped 2026-06-06) + counterparty_ids: income goals
+  // now match real transactions by tag/merchant.
+  expect(budgetCols).toContain('tag_ids');
+  expect(budgetCols).toContain('counterparty_ids');
 
   const indexNames = async (table: string) =>
     (await exec(`PRAGMA index_list(${table})`)).map((r) => String(r.name));
@@ -557,12 +561,48 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
 // does this at tsc level; this is the runtime-level version).
 // ---------------------------------------------------------------------------
 
+test('createBudget persists tagIds/counterpartyIds/saved; updateBudget patches saved + tagIds', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createBudget', {
+    id: 'bgt-inc',
+    ledgerId: 'personal',
+    name: 'Vacation fund',
+    type: 'income',
+    amount: 3000,
+    isRecurring: 0,
+    saved: 100,
+    tagIds: ['t1'],
+    counterpartyIds: ['c1'],
+    frequency: 'monthly',
+    startDate: '2026-01-01',
+  });
+
+  // Raw row: the JSON columns + saved round-trip through the create insert.
+  const [row] = await exec("SELECT kind, tag_ids, counterparty_ids, saved FROM budgets WHERE id = 'bgt-inc'");
+  expect(String(row.kind)).toBe('income');
+  expect(JSON.parse(String(row.tag_ids))).toEqual(['t1']);
+  expect(JSON.parse(String(row.counterparty_ids))).toEqual(['c1']);
+  expect(Number(row.saved)).toBe(100);
+
+  // Projected row: rowToBudget parses the JSON columns back into string arrays.
+  const b = (await listBudgets(exec, 'personal')).find((x) => x.id === 'bgt-inc')!;
+  expect(b.tagIds).toEqual(['t1']);
+  expect(b.counterpartyIds).toEqual(['c1']);
+  expect(b.saved).toBe(100);
+
+  // updateBudget can patch `saved` and the array columns.
+  await applyMutation(exec, 'updateBudget', { id: 'bgt-inc', patch: { saved: 250, tagIds: ['t2'] } });
+  const [row2] = await exec("SELECT tag_ids, saved FROM budgets WHERE id = 'bgt-inc'");
+  expect(Number(row2.saved)).toBe(250);
+  expect(JSON.parse(String(row2.tag_ids))).toEqual(['t2']);
+});
+
 test('applyMutation throws I18nError for unknown action', async () => {
   const exec = await seededAndAudited();
   await expect(applyMutation(exec, 'nonexistentAction', {})).rejects.toThrow(I18nError);
 });
 
-test('applyMutation dispatches all 74 actions (smoke)', async () => {
+test('applyMutation dispatches all 73 actions (smoke)', async () => {
   // Pin the action-name list. The Args map smoke test
   // (lib/db/domain/_args.test.ts) already does this at tsc level; this is the
   // runtime-level version — every name must resolve to a handler so a missing
@@ -579,7 +619,6 @@ test('applyMutation dispatches all 74 actions (smoke)', async () => {
     'confirmAllPending',
     'confirmPendingWithMerchant',
     'confirmTransaction',
-    'contributeBudget',
     'createAccount',
     'createAccountGroup',
     'createBudget',
@@ -643,9 +682,9 @@ test('applyMutation dispatches all 74 actions (smoke)', async () => {
     'updateTransfer',
     'verifyCounterparty',
   ];
-  expect(actions.length).toBe(74);
+  expect(actions.length).toBe(73);
 
-  // The dispatcher should NOT throw 'Unknown action' for any of the 74 names.
+  // The dispatcher should NOT throw 'Unknown action' for any of the 73 names.
   // It MAY throw a different I18nError (per-action arg validation), or a
   // plain Error (invariants), or succeed silently — the test doesn't care
   // about success/failure of the per-action logic, just that the dispatcher
