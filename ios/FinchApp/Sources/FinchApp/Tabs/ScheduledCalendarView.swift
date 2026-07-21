@@ -9,7 +9,9 @@ struct ScheduledCalendarView: View {
     /// Templates to plot — already narrowed by the Scheduled tab's search query.
     var templates: [ScheduledTemplate]
     var onEdit: (ScheduledTemplate) -> Void
-    var onPost: (ScheduledTemplate) -> Void
+    /// (template, occurrence date) — the tapped CELL's date, not today. Posting
+    /// has to record which occurrence it fulfils or the badge never flips.
+    var onPost: (ScheduledTemplate, String) -> Void
     var onDelete: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
@@ -273,12 +275,15 @@ struct ScheduledCalendarView: View {
         }
         .swipeActions(edge: .leading) {
             // Unposted either way — a missed occurrence needs Post more than an upcoming one.
-            if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green) }
+            // Same occurrence-aware call as the context menu: this row IS a cell, so
+            // `date` is the occurrence being posted — passing the template alone would
+            // stamp today and leave the badge unchanged (the bug this branch fixes).
+            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green) }
         }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
-            if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") } }
             Button(role: .destructive) { onDelete(t) } label: { Label("Delete", systemImage: "trash") }
         }
     }

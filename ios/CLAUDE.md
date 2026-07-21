@@ -68,9 +68,10 @@ sources** as `FinchApp` + `Shared/`; iOS-only modifiers are shimmed behind `#if 
   - After changing `WRITE_SEQUENCE`, keep only `writeparity/sequence.json`; the audit /
     projection / round-trip fixtures otherwise change by `datetime('now')` noise alone —
     **revert them**.
-  - **No wall-clock-dated actions in `WRITE_SEQUENCE`** (`postScheduled`, `createAccount`
-    with `openingBalance`) — their entries stamp "today", so the oracle passes the day it's
-    generated and fails the next.
+  - **No wall-clock-dated actions in `WRITE_SEQUENCE`** (`createAccount` with `openingBalance`)
+    — its opening-equity entry stamps "today", so the oracle passes the day it's generated and
+    fails the next. (`postScheduled` is fine now — it takes an explicit `date`/`occurrenceDate`,
+    so it's reproducible and covered by the gate like everything else.)
 
 ### Run CI locally before pushing — `ios/scripts/ci-local.sh`
 
@@ -126,7 +127,7 @@ side generates (`frontend/scripts/export-fixtures.ts`). Modules under `FinchCore
 
 - **`Storage/`** — `Schema.swift` is the web's interpolated `SCHEMA` DDL copied **byte-for-byte**
   (double-entry `entries`/`postings`, two-phase `sealed` write, balance/currency-guard triggers,
-  FTS5). `Schema.version` must equal the web `SCHEMA_VERSION` (currently `2026-07-17T00:00:00Z`).
+  FTS5). `Schema.version` must equal the web `SCHEMA_VERSION` (currently `2026-07-22T00:00:00Z`).
   Also `Migrations.swift` (fresh-DB `DatabaseMigrator`, the standard init path via
   `Migrations.runAll`), `Pack.swift` (the `.finch` ZIP format — snake_case manifest via explicit
   `CodingKeys`, **never** `.convertFromSnakeCase`), `Audit.swift` (the 10-code ledger sweep,

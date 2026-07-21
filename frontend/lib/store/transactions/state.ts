@@ -36,6 +36,11 @@ export interface Tx {
   transferGroupId?: string;
   /** The scheduled template this row was auto-generated from (if any). */
   sourceTemplateId?: string;
+  /** The scheduled occurrence this row fulfils (`entries.occurrence_date`).
+   *  Undefined on rows written before this column existed, and on any entry
+   *  not linked to a schedule — callers resolving `sourceTemplateId|date`
+   *  keys must fall back to `date` in that case, so no backfill is required. */
+  occurrenceDate?: string;
   /** For `kind='refund'` rows: the original expense this refund offsets. */
   refundedTransactionId?: string;
   /** Set when the description matches a row in `counterparties`. Resolved

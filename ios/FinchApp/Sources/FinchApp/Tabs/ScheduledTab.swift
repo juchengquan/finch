@@ -17,12 +17,23 @@ struct ScheduledTab: View {
     @State private var addFromCharge: RecurringCharge?
     @State private var searchQuery = ""                // filters the list view by name
     @State private var kbSel: String?            // macOS keyboard-open selection
+    @State private var postPrefill: PostPrefill?
     /// Non-nil → three-column selection mode (rows/occurrences select and the
     /// shell renders the detail column); nil → taps open the edit sheet. Same
     /// convention as AccountsTab/BudgetsTab/ActivityFeedView (#414/#23).
     var selection: Binding<String?>? = nil
     // Calendar first (default); List second.
     private enum Mode: String, CaseIterable { case calendar = "Calendar", list = "List" }
+
+    /// One calendar occurrence awaiting its prefilled Add sheet. `.sheet(item:)`
+    /// needs Identifiable and a tuple can't conform. The id deliberately combines
+    /// template AND occurrence: posting two occurrences of the same template in
+    /// one sitting must re-present the sheet, which a template-only id would suppress.
+    struct PostPrefill: Identifiable {
+        let template: ScheduledTemplate
+        let occurrence: String
+        var id: String { "\(template.id)|\(occurrence)" }
+    }
 
     private var detected: [RecurringCharge] {
         Selectors.detectRecurring(store.txns, store.activeLedgerId, store.wallToday, store.scheduled).filter { !$0.isScheduled }
@@ -137,7 +148,8 @@ struct ScheduledTab: View {
                             // menu's "Edit" keeps opening the editor (onEdit).
                             ScheduledCalendarView(templates: filteredScheduled,
                                                   onEdit: { editing = $0 },
-                                                  onPost: postNow, onDelete: { pendingDelete = $0 },
+                                                  onPost: { postNow($0, occurrence: $1) },
+                                                  onDelete: { pendingDelete = $0 },
                                                   onAdd: { addPrefill = $0; showingAdd = true },
                                                   onSelect: selection.map { sel in { sel.wrappedValue = $0.id } },
                                                   topRow: AnyView(modePickerRow))
@@ -168,6 +180,10 @@ struct ScheduledTab: View {
             .sheet(isPresented: $showingAdd, onDismiss: { addPrefill = nil }) { ScheduledSheet(prefillStart: addPrefill) }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
             .sheet(item: $addFromCharge) { ScheduledSheet(fromCharge: $0) }
+            .sheet(item: $postPrefill) { p in
+                AddTransactionSheet(prefill: store.txPrefill(for: p.template, occurrence: p.occurrence),
+                                    postsScheduledOccurrence: true)
+            }
             // Centered ALERT (window-level) — see ActivityTab's delete alert.
             .alert("Delete scheduled item?", isPresented: Binding(
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -193,9 +209,48 @@ struct ScheduledTab: View {
         .listRowSeparator(.hidden)
     }
 
+    /// The list rows' Post — no occurrence in hand, so the engine stamps today
+    /// (unchanged legacy behaviour; the calendar is the occurrence-aware path).
     private func postNow(_ t: ScheduledTemplate) {
         do { try store.apply(.postScheduled, Args(["templateId": .string(t.id)])) } catch { errorMessage = i18nMessage(error) }
     }
+
+    /// Post ONE calendar occurrence. Most templates open a prefilled sheet so the
+    /// user confirms the date/amount before it lands; split-income templates stay
+    /// on the silent engine path (see `ScheduledPostRouting`).
+    private func postNow(_ t: ScheduledTemplate, occurrence: String) {
+        // The installment cap lives in `Scheduled.post`, which the sheet path
+        // bypasses — re-check it here, with the ENGINE's message key so the copy
+        // (and its zh translation) is the same wherever the user hits the cap.
+        if let total = t.installmentTotal, (t.installmentPaid ?? 0) >= total {
+            errorMessage = i18nMessage(I18nError("error.scheduled.installmentDone",
+                                                 ["name": t.name, "total": String(total)],
+                                                 "\"\(t.name)\" has finished its \(total)-payment plan"))
+            return
+        }
+        // A transfer template with no from-account is malformed. The sheet's
+        // account fallbacks would otherwise silently fill From/To with the
+        // first two accounts — a complete, valid-looking form that fails on
+        // Save forever with no way to fix it. Catch it here, before
+        // presenting, with the same engine error the silent path throws.
+        if t.type == "transfer", t.fromAccountId == nil {
+            errorMessage = i18nMessage(I18nError("error.scheduled.missingAccount",
+                                                 ["name": t.name],
+                                                 "\"\(t.name)\" is missing an account"))
+            return
+        }
+        switch ScheduledPostRouting.routeForPost(t, store: store) {
+        case .sheet:
+            postPrefill = PostPrefill(template: t, occurrence: occurrence)
+        case .silent:
+            do {
+                try store.apply(.postScheduled, Args([
+                    "templateId": .string(t.id), "date": .string(occurrence),
+                ]))
+            } catch { errorMessage = i18nMessage(error) }
+        }
+    }
+
     private func delete(_ t: ScheduledTemplate) {
         do { try store.apply(.deleteScheduled, Args(["id": .string(t.id)])) } catch { errorMessage = i18nMessage(error) }
     }

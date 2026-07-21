@@ -17,17 +17,19 @@ public enum Scheduled {
     ]
 
     private static func postSingle(_ db: Database, ledgerId: String, accountId: String, amount: Double,
-                                   description: String, date: String, sourceTemplateId: String, categoryId: String?) throws {
+                                   description: String, date: String, sourceTemplateId: String, categoryId: String?,
+                                   occurrenceDate: String? = nil) throws {
         try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: accountId, amount: amount, date: date,
             description: description, categoryId: categoryId, kind: amount > 0 ? .income : .expense,
-            sourceTemplateId: sourceTemplateId))
+            sourceTemplateId: sourceTemplateId, occurrenceDate: occurrenceDate))
     }
 
     /// Post one transaction/transfer NOW from a template (confirmed). Honours the
     /// installment cap and income splits.
     static func post(_ db: Database, _ args: Args) throws {
-        struct A: Decodable { let templateId: String }
-        let templateId = try args.to(A.self).templateId
+        struct A: Decodable { let templateId: String; let date: String?; let occurrenceDate: String? }
+        let a = try args.to(A.self)
+        let templateId = a.templateId
         guard let t = try Row.fetchOne(db, sql: "SELECT * FROM scheduled_templates WHERE id = ?", arguments: [templateId]) else {
             throw I18nError("error.notFound.template", [:], "Template not found")
         }
@@ -37,7 +39,11 @@ public enum Scheduled {
             let paid = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id = ? AND status = 'confirmed'", arguments: [templateId]) ?? 0
             if paid >= total { throw I18nError("error.scheduled.installmentDone", ["name": name, "total": String(total)], "\"\(name)\" has finished its \(total)-payment plan") }
         }
-        let date = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        // Explicit date wins; otherwise today (unchanged legacy behaviour). The
+        // occurrence defaults to the posting date, so a plain post still resolves
+        // its own cell.
+        let date = a.date ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        let occurrenceDate = a.occurrenceDate ?? date
         let desc = (t["description"] as String?) ?? name
         let type: String = t["kind"]
         let accountId: String = t["account_id"]
@@ -45,7 +51,7 @@ public enum Scheduled {
         if type == "transfer" {
             guard let from = t["from_account_id"] as String? else { throw I18nError("error.scheduled.missingAccount", ["name": name], "\"\(name)\" is missing an account") }
             try Entries.postTransfer(db, fromAccountId: from, toAccountId: accountId, fromAmount: abs((t["amount"] as Double?) ?? 0),
-                                     date: date, note: desc, sourceTemplateId: templateId)
+                                     date: date, note: desc, sourceTemplateId: templateId, occurrenceDate: occurrenceDate)
             return
         }
         guard let amount = t["amount"] as Double? else { throw I18nError("error.scheduled.variableAmount", ["name": name], "\"\(name)\" has a variable amount — add it manually") }
@@ -60,7 +66,7 @@ public enum Scheduled {
                     if portion == 0 { continue }
                     try postSingle(db, ledgerId: ledgerId, accountId: sp["account_id"], amount: portion,
                                    description: "\(desc) · \((sp["description"] as String?) ?? "")", date: date,
-                                   sourceTemplateId: templateId, categoryId: categoryId)
+                                   sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
                     posted += 1
                 }
                 if posted == 0 { throw I18nError("error.scheduled.noSplits", ["name": name], "No split amounts to post for \"\(name)\"") }
@@ -68,7 +74,7 @@ public enum Scheduled {
             }
         }
         try postSingle(db, ledgerId: ledgerId, accountId: accountId, amount: (type == "income" ? 1 : -1) * amount,
-                       description: desc, date: date, sourceTemplateId: templateId, categoryId: categoryId)
+                       description: desc, date: date, sourceTemplateId: templateId, categoryId: categoryId, occurrenceDate: occurrenceDate)
     }
 
     /// Post every due (not-yet-generated) occurrence of each active template as a
@@ -92,7 +98,12 @@ public enum Scheduled {
                 maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
             var dates = Selectors.occurrencesUpTo(template, today)
             if dates.isEmpty { continue }
-            let have = Set(try String.fetchAll(db, sql: "SELECT date FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
+            // Resolution keys on occurrenceDate ?? date (see Selectors), so
+            // "already posted" must key on the same coalesce — not the raw
+            // posting date — or an occurrence posted under a different
+            // transaction date (e.g. paid late) is not recognised and gets
+            // regenerated as a duplicate.
+            let have = Set(try String.fetchAll(db, sql: "SELECT COALESCE(occurrence_date, date) FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
             dates = dates.filter { !have.contains($0) }
             if let maxEx = r["max_executions"] as Int? { dates = Array(dates.prefix(Swift.max(0, maxEx - have.count))) }
             if let instTotal = r["installment_total"] as Int? { dates = Array(dates.prefix(Swift.max(0, instTotal - have.count))) }
@@ -105,7 +116,8 @@ public enum Scheduled {
                 let fromAccountId: String = r["from_account_id"]
                 for date in dates {
                     try Entries.postTransfer(db, fromAccountId: fromAccountId, toAccountId: acctId, fromAmount: abs(amount),
-                                             date: date, note: description.isEmpty ? nil : description, sourceTemplateId: r["id"], timestamp: ts)
+                                             date: date, note: description.isEmpty ? nil : description, sourceTemplateId: r["id"],
+                                             occurrenceDate: date, timestamp: ts)
                 }
                 continue
             }
@@ -115,7 +127,7 @@ public enum Scheduled {
             for date in dates {
                 try Entries.postSimple(db, .init(ledgerId: ledgerId, accountId: acctId, amount: signed, date: date,
                     description: description, categoryId: categoryId, kind: type == "income" ? .income : .expense,
-                    status: .pending, counterpartyId: cpId, id: nil, sourceTemplateId: r["id"]))
+                    status: .pending, counterpartyId: cpId, id: nil, sourceTemplateId: r["id"], occurrenceDate: date))
             }
         }
     }

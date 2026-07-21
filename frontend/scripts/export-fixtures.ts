@@ -360,6 +360,7 @@ async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
       ledger_id: e.ledger_id, date: e.date, time: e.time ?? null, description: e.description ?? null,
       kind: e.kind, status: e.status, counterparty_id: e.counterparty_id ?? null,
       refunded_entry_id: e.refunded_entry_id ?? null, source_template_id: e.source_template_id ?? null,
+      occurrence_date: e.occurrence_date ?? null,
       notes: e.notes ?? null, applied_rule_ids: e.applied_rule_ids ?? null,
       reviewed: e.reviewed_at != null, sealed: Number(e.sealed),
       postings: ps.map((p) => ({
@@ -480,8 +481,8 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // --- Parity expansion: high-risk actions the oracle didn't cover (2026-06-20) ---
   // NOTE: createAccount-with-openingBalance is intentionally NOT here — its
   // opening-equity entry is stamped with the wall-clock date (no date arg), so it
-  // makes the fixture non-reproducible across days (like postScheduled). Pinning
-  // it would need an engine change (an opening-date arg).
+  // makes the fixture non-reproducible across days. Pinning it would need an
+  // engine change (an opening-date arg).
   // updateCategory reparenting: food > fun > pay — exercises the cycle + depth-cap
   // math (pay lands at depth 3, the limit). No kind enforcement on reparent.
   { action: 'updateCategory', args: { id: 'fun', patch: { parentId: 'food' } } },
@@ -490,15 +491,36 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // re-deriving amount_base via an FX lookup at the new date.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
-  // scheduled split CRUD (add/update/remove → leaves one split on s1). postScheduled
-  // itself is excluded: it stamps `new Date()`, so it can't be reproduced offline.
+  // A second template (s2), created BEFORE the split CRUD below so it is still
+  // active — and NOT split-enabled — when the generateDueScheduled sweep runs.
+  // (s1 becomes splits_enabled=1 in that block, so it's skipped by generateDue;
+  // s2 is what actually produces rows below.)
+  { action: 'createScheduled', args: { id: 's2', ledgerId: 'personal', name: 'Gym', type: 'expense', amount: 45, frequency: 'monthly', dayOfMonth: 15, accountId: 'a2', startDate: '2026-01-15' } },
+  // scheduled split CRUD (add/update/remove → leaves one split on s1).
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
   { action: 'updateScheduledSplit', args: { templateId: 's1', index: 0, pct: 30 } },
   { action: 'removeScheduledSplit', args: { templateId: 's1', index: 1 } },
-  // generateDueScheduled with an explicit `today` (deterministic): posts s1's
-  // Jan–Apr monthly occurrences, exercising the date-dedup + occurrence math.
+  // generateDueScheduled with an explicit `today` (deterministic). s1 is
+  // skipped entirely — generateDue skips split-enabled templates, and s1 just
+  // became one above — so this is NOT "s1's Jan–Apr occurrences" (the old
+  // comment here claimed that; it stopped being true the moment the split CRUD
+  // above was added). It's s2 (monthly, dayOfMonth 15, startDate 2026-01-15)
+  // that actually generates rows: Jan–Apr occurrences, exercising the
+  // date-dedup + occurrence math end to end.
   { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
+  // postScheduled with a PINNED date — reproducible offline now that the action
+  // takes an explicit date, so it finally gets a parity gate (it was excluded
+  // before: it used to stamp `new Date()`, making it non-reproducible offline).
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20' } },
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', occurrenceDate: '2026-05-18' } },
+  // addTransaction/createTransfer carrying sourceTemplateId + occurrenceDate —
+  // the write path the shipped UI actually uses ("Post now" on the Scheduled
+  // calendar opens a prefilled edit sheet; saving it calls addTransaction /
+  // createTransfer with the link), as opposed to the silent postScheduled path
+  // exercised above.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -45, merchant: 'Gym', categoryId: 'fun', date: '2026-05-25', sourceTemplateId: 's2', occurrenceDate: '2026-05-22', skipRules: true } },
+  { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 1500, date: '2026-06-03', sourceTemplateId: 's1', occurrenceDate: '2026-06-01' } },
   // Reorder support (drag-to-reorder): the new sortOrder patch fields on
   // updateAccount + updateAccountGroup (and createAccountGroup, prior uncovered).
   { action: 'createAccountGroup', args: { id: 'ag1', ledgerId: 'personal', name: 'Cash Group' } },

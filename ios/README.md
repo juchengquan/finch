@@ -32,9 +32,10 @@ cd ../frontend && bun scripts/export-fixtures.ts
 
 After changing `WRITE_SEQUENCE`, keep only `sequence.json`; the audit / projection
 / round-trip fixtures change only by `datetime('now')` noise — revert them. Avoid
-adding wall-clock-dated actions to the sequence (e.g. `postScheduled`, or
-`createAccount` with `openingBalance`) — their entries are stamped "today", so the
-oracle would pass the day it's generated and fail the next.
+adding wall-clock-dated actions to the sequence (e.g. `createAccount` with
+`openingBalance`) — its entry is stamped "today", so the oracle would pass the
+day it's generated and fail the next. (`postScheduled` is fine — it takes an
+explicit `date`/`occurrenceDate`, so it's reproducible and covered by the gate.)
 
 ## Build & run the apps
 

@@ -14,7 +14,7 @@ public enum Projection {
         SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
                p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
                e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
-               e.refunded_entry_id, e.source_template_id, e.notes, e.applied_rule_ids, e.reviewed_at,
+               e.refunded_entry_id, e.source_template_id, e.occurrence_date, e.notes, e.applied_rule_ids, e.reviewed_at,
                e.created_at AS e_created_at
           FROM postings p JOIN entries e ON e.id = p.entry_id
          WHERE p.account_id IS NOT NULL AND e.kind != 'opening'
@@ -81,7 +81,8 @@ public enum Projection {
             currency: origCcy ?? pCcy, nativeAmount: origAmount ?? pAmount, time: r["time"],
             kind: r["kind"], transferGroupId: nil, counterpartyId: r["counterparty_id"],
             splits: nil, tags: nil, note: r["notes"],
-            sourceTemplateId: r["source_template_id"], refundedTransactionId: r["refunded_entry_id"],
+            sourceTemplateId: r["source_template_id"], occurrenceDate: r["occurrence_date"],
+            refundedTransactionId: r["refunded_entry_id"],
             clearedAt: r["p_cleared"], appliedRuleIds: appliedRuleIds, reviewedAt: r["reviewed_at"])
     }
 

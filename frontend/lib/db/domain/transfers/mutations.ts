@@ -22,6 +22,7 @@ export const handlers = {
     const time = args.time ? str(args.time) : null;
     const note = args.note ? str(args.note) : null;
     const sourceTemplateId = args.sourceTemplateId ? str(args.sourceTemplateId) : null;
+    const occurrenceDate = args.occurrenceDate ? str(args.occurrenceDate) : null;
 
     if (!fromAmount) throw new I18nError('error.transfer.amountGt0', {}, 'Transfer amount must be greater than 0');
     if (fromId === toId) throw new I18nError('error.transfer.sameAccount', {}, 'Pick two different accounts');
@@ -48,6 +49,7 @@ export const handlers = {
       time,
       note,
       sourceTemplateId,
+      occurrenceDate,
     });
   },
   updateTransfer: (exec, args: Args['updateTransfer']) =>

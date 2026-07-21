@@ -117,17 +117,22 @@ public enum Entries {
         public var counterpartyId: String?
         public var refundedEntryId: String?
         public var sourceTemplateId: String?
+        /// The scheduled occurrence this entry fulfils (yyyy-MM-dd). NULL unless posted
+        /// from a template. Lets the occurrence resolve even when `date` differs.
+        public var occurrenceDate: String?
         public var timestamp: String?
         public var skipRules: Bool
         public init(id: String? = nil, ledgerId: String, date: String, time: String? = nil,
                     description: String, kind: Kind, status: Status? = nil, legs: [Leg],
                     autoBalance: AutoBalance = .none, notes: String? = nil, counterpartyId: String? = nil,
                     refundedEntryId: String? = nil, sourceTemplateId: String? = nil,
+                    occurrenceDate: String? = nil,
                     timestamp: String? = nil, skipRules: Bool = false) {
             self.id = id; self.ledgerId = ledgerId; self.date = date; self.time = time
             self.description = description; self.kind = kind; self.status = status; self.legs = legs
             self.autoBalance = autoBalance; self.notes = notes; self.counterpartyId = counterpartyId
             self.refundedEntryId = refundedEntryId; self.sourceTemplateId = sourceTemplateId
+            self.occurrenceDate = occurrenceDate
             self.timestamp = timestamp; self.skipRules = skipRules
         }
     }
@@ -392,10 +397,10 @@ public enum Entries {
         do {
             let appliedJson = appliedRuleIds.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) } ?? nil
             try db.execute(sql: """
-                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
+                INSERT INTO entries (id,ledger_id,date,time,description,kind,status,confirmed_at,counterparty_id,refunded_entry_id,source_template_id,occurrence_date,notes,applied_rule_ids,reviewed_at,dedup_hash,sealed,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
                 """, arguments: [entryId, e.ledgerId, e.date, e.time, description, kind.rawValue, status.rawValue,
-                                 status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId,
+                                 status == .confirmed ? ts : nil, counterpartyId, e.refundedEntryId, e.sourceTemplateId, e.occurrenceDate,
                                  notes, appliedJson, reviewedAt, dedupHash(e.date, e.time, description, legs), ts, ts])
             try insertPostings(db, entryId, legs)
             // Rule-added tags land inside the same SAVEPOINT (the entry row exists).
@@ -429,15 +434,19 @@ public enum Entries {
         public var skipRules: Bool
         public var id: String?
         public var sourceTemplateId: String?
+        /// The scheduled occurrence this entry fulfils (yyyy-MM-dd). NULL unless posted
+        /// from a template. Lets the occurrence resolve even when `date` differs.
+        public var occurrenceDate: String?
         public var refundedEntryId: String?
         public init(ledgerId: String, accountId: String, amount: Double, date: String, description: String,
                     categoryId: String? = nil, kind: Kind? = nil, time: String? = nil, notes: String? = nil,
                     status: Status? = nil, counterpartyId: String? = nil, skipRules: Bool = false, id: String? = nil,
-                    sourceTemplateId: String? = nil, refundedEntryId: String? = nil) {
+                    sourceTemplateId: String? = nil, occurrenceDate: String? = nil, refundedEntryId: String? = nil) {
             self.ledgerId = ledgerId; self.accountId = accountId; self.amount = amount; self.date = date
             self.description = description; self.categoryId = categoryId; self.kind = kind; self.time = time
             self.notes = notes; self.status = status; self.counterpartyId = counterpartyId
             self.skipRules = skipRules; self.id = id; self.sourceTemplateId = sourceTemplateId
+            self.occurrenceDate = occurrenceDate
             self.refundedEntryId = refundedEntryId
         }
     }
@@ -451,7 +460,8 @@ public enum Entries {
             id: s.id, ledgerId: s.ledgerId, date: s.date, time: s.time, description: s.description,
             kind: kind, status: s.status, legs: [.account(AccountLeg(accountId: s.accountId, amount: s.amount))],
             autoBalance: .category(s.categoryId), notes: s.notes, counterpartyId: s.counterpartyId,
-            refundedEntryId: s.refundedEntryId, sourceTemplateId: s.sourceTemplateId, skipRules: s.skipRules))
+            refundedEntryId: s.refundedEntryId, sourceTemplateId: s.sourceTemplateId,
+            occurrenceDate: s.occurrenceDate, skipRules: s.skipRules))
     }
 
     /// Resolve a client Tx id (a posting id) — or an entry id — to its entry +
@@ -474,7 +484,8 @@ public enum Entries {
     public static func postTransfer(_ db: Database, ledgerId: String? = nil, fromAccountId: String,
                                     toAccountId: String, fromAmount: Double, toAmount: Double? = nil,
                                     date: String, time: String? = nil, note: String? = nil,
-                                    sourceTemplateId: String? = nil, id: String? = nil,
+                                    sourceTemplateId: String? = nil, occurrenceDate: String? = nil,
+                                    id: String? = nil,
                                     timestamp: String? = nil,
                                     status: Status? = nil, tagIds: [String]? = nil) throws -> String {
         let fromAmt = abs(fromAmount)
@@ -502,7 +513,8 @@ public enum Entries {
             status: status,
             legs: [.account(AccountLeg(accountId: fromAccountId, amount: -fromAmt, memo: "Transfer to \(toName)")),
                    .account(AccountLeg(accountId: toAccountId, amount: toAmt, memo: "Transfer from \(fromName)"))],
-            notes: note, sourceTemplateId: sourceTemplateId, timestamp: timestamp, skipRules: true))
+            notes: note, sourceTemplateId: sourceTemplateId, occurrenceDate: occurrenceDate,
+            timestamp: timestamp, skipRules: true))
         for tagId in (tagIds ?? []) {
             try db.execute(sql: "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)", arguments: [eid, tagId])
         }

@@ -175,7 +175,7 @@ export type Args = {
   addScheduledSplit: { templateId: string; accountId: string; pct: number };
   removeScheduledSplit: { templateId: string; index: number };
   updateScheduledSplit: { templateId: string; index: number; pct: number };
-  postScheduled: { templateId: string };
+  postScheduled: { templateId: string; date?: string; occurrenceDate?: string };
   generateDueScheduled: { today?: string };
 
   // --- transfers (3) ---
@@ -188,6 +188,7 @@ export type Args = {
     time?: string;
     note?: string | null;
     sourceTemplateId?: string;
+    occurrenceDate?: string;
   };
   updateTransfer: { id: string; patch: TransferPatch };
   deleteTransfer: { id: string };

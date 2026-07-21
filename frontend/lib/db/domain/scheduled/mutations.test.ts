@@ -27,6 +27,67 @@ test('postScheduled posts a resolvable expense template as a transaction', async
   expect(String(rows[0].kind)).toBe('expense');
 });
 
+test('postScheduled with an explicit date uses it for both date and occurrence_date', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-spotify', date: '2026-07-15' });
+  const [row] = await exec(
+    "SELECT date, occurrence_date FROM entries WHERE source_template_id = 'rt-spotify'",
+  );
+  expect(String(row.date)).toBe('2026-07-15');
+  expect(String(row.occurrence_date)).toBe('2026-07-15');
+});
+
+test('postScheduled with a separate occurrenceDate keeps date and occurrence_date distinct', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'postScheduled', {
+    templateId: 'rt-spotify', date: '2026-07-21', occurrenceDate: '2026-07-15',
+  });
+  const [row] = await exec(
+    "SELECT date, occurrence_date FROM entries WHERE source_template_id = 'rt-spotify'",
+  );
+  expect(String(row.date)).toBe('2026-07-21');
+  expect(String(row.occurrence_date)).toBe('2026-07-15');
+});
+
+// Parity guard: no date argument must behave exactly as before — stamp the
+// wall clock — with occurrence_date resolving to that same value.
+test('postScheduled without a date argument stamps today for both date and occurrence_date', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'postScheduled', { templateId: 'rt-spotify' });
+  const [row] = await exec(
+    "SELECT date, occurrence_date FROM entries WHERE source_template_id = 'rt-spotify'",
+  );
+  expect(String(row.date)).toBe(String(row.occurrence_date));
+});
+
+test('generateDueScheduled stamps occurrence_date to the generated occurrence date', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  const rows = await exec(
+    "SELECT date, occurrence_date FROM entries WHERE source_template_id IS NOT NULL",
+  );
+  expect(rows.length).toBeGreaterThan(0);
+  for (const r of rows) expect(String(r.occurrence_date)).toBe(String(r.date));
+});
+
+test('generateDueScheduled does not regenerate an occurrence posted under a different transaction date', async () => {
+  const exec = await seededAndAudited();
+  // rt-spotify is monthly on day 22; pay the 2026-05-22 occurrence late, on
+  // 2026-05-25, exactly as a user would from the "Post now" sheet.
+  await applyMutation(exec, 'postScheduled', {
+    templateId: 'rt-spotify', date: '2026-05-25', occurrenceDate: '2026-05-22',
+  });
+  await applyMutation(exec, 'generateDueScheduled', { today: '2026-05-30' });
+  const rows = await exec(
+    "SELECT date, occurrence_date FROM entries WHERE source_template_id = 'rt-spotify'",
+  );
+  // Resolution keys on occurrence_date ?? date, so the "already posted" set
+  // must too — otherwise this regenerates a duplicate 2026-05-22 entry.
+  expect(rows.length).toBe(1);
+  expect(String(rows[0].date)).toBe('2026-05-25');
+  expect(String(rows[0].occurrence_date)).toBe('2026-05-22');
+});
+
 test('postScheduled stamps the template category onto the posted transaction', async () => {
   const exec = await seededAndAudited();
   // Build a template that has a category set, then post it manually. The
