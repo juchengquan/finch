@@ -132,4 +132,10 @@ final class BackupHistoryTests: XCTestCase {
         XCTAssertLessThan(BackupFrequency.daily.interval, BackupFrequency.weekly.interval)
         XCTAssertLessThan(BackupFrequency.weekly.interval, BackupFrequency.monthly.interval)
     }
+
+    func test_deviceIdFromName() {
+        XCTAssertEqual(BackupHistory.deviceId(fromName: "finch-20260721-131200-ab3f9c.finch"), "ab3f9c")
+        XCTAssertNil(BackupHistory.deviceId(fromName: "finch-20260721-131200.finch"))   // old suffix-less
+        XCTAssertNil(BackupHistory.deviceId(fromName: "garbage.finch"))
+    }
 }

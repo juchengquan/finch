@@ -120,7 +120,7 @@ struct SettingsBackupSyncView: View {
             } header: {
                 Text("Backups")
             } footer: {
-                Text("Open Backups to enable/configure backups (folder, count, frequency), browse the history, and restore an earlier version.")
+                Text("finch always keeps your latest backup on this device. Open Backups to add a folder history (count, frequency), browse backups, and restore an earlier version.")
             }
 
             Section {

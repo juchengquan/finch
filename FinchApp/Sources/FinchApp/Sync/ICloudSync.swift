@@ -139,11 +139,25 @@ public final class ICloudSync: ObservableObject {
         return try? Data(contentsOf: file)
     }
 
-    /// Delete a named pack from the designated folder (lockstep prune — own names only).
+    /// Delete a named pack from the designated folder.
     public func delete(name: String) {
         guard let url = resolveFolder() else { return }
         let scope = url.startAccessingSecurityScopedResource()
         defer { if scope { url.stopAccessingSecurityScopedResource() } }
         try? FileManager.default.removeItem(at: url.appendingPathComponent(name))
+    }
+
+    /// Prune the designated folder to this device's own newest `keep` snapshots
+    /// (matched by the device-id in the filename) — never another device's.
+    public func pruneOwn(deviceId: String, keep: Int) {
+        guard let url = resolveFolder() else { return }
+        let scope = url.startAccessingSecurityScopedResource()
+        defer { if scope { url.stopAccessingSecurityScopedResource() } }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: url.path))?
+            .filter { $0.hasPrefix("finch-") && $0.hasSuffix(".finch") } ?? []
+        for name in BackupPruner.toPruneOwn(names, deviceId: deviceId, keep: keep) {
+            try? FileManager.default.removeItem(at: url.appendingPathComponent(name))
+        }
+        refresh()
     }
 }

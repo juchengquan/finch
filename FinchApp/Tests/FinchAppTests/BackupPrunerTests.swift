@@ -23,4 +23,21 @@ final class BackupPrunerTests: XCTestCase {
     func test_keepZeroPrunesAll() {
         XCTAssertEqual(BackupPruner.toPrune(files, keep: 0).count, 4)
     }
+
+    // toPruneOwn: in a SHARED folder, a device prunes only ITS OWN newest N —
+    // never another device's, never the old suffix-less names.
+    func test_toPruneOwn_onlyPrunesOwnNewestN() {
+        let shared = [
+            "finch-20260101-090000-me0001.finch",   // own, oldest
+            "finch-20260102-090000-me0001.finch",   // own
+            "finch-20260103-090000-me0001.finch",   // own, newest
+            "finch-20260104-090000-other9.finch",   // another device — never pruned
+            "finch-20260105-090000.finch",           // old format (no id) — never pruned
+        ]
+        XCTAssertEqual(Set(BackupPruner.toPruneOwn(shared, deviceId: "me0001", keep: 1)),
+                       ["finch-20260101-090000-me0001.finch", "finch-20260102-090000-me0001.finch"])
+        XCTAssertEqual(BackupPruner.toPruneOwn(shared, deviceId: "me0001", keep: 2),
+                       ["finch-20260101-090000-me0001.finch"])
+        XCTAssertTrue(BackupPruner.toPruneOwn(shared, deviceId: "nobody", keep: 1).isEmpty)  // no own files
+    }
 }
