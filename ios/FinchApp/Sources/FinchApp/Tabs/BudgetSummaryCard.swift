@@ -43,7 +43,7 @@ struct BudgetSummaryCard: View {
             }
             if summary.hasGoals {
                 if summary.hasSpend { Divider() }
-                Text("Goals · \(store.displayMoneyBase(summary.goalSavedBase)) of \(store.displayMoneyBase(summary.goalTargetBase)) saved")
+                Text("Income · \(store.displayMoneyBase(summary.goalSavedBase)) of \(store.displayMoneyBase(summary.goalTargetBase)) saved")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
