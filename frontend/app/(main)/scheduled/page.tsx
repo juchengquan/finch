@@ -213,12 +213,17 @@ export default function ScheduledPage() {
   const afterSelectedDay = selectedDay != null ? monthItems.filter((i) => i.day > selectedDay) : [];
 
   // Status of an occurrence = the status of its auto-generated transaction
-  // (linked by sourceTemplateId + date). Not-yet-generated → "upcoming".
+  // (linked by sourceTemplateId + occurrenceDate). Not-yet-generated →
+  // "upcoming". Key on the occurrence the transaction FULFILS, not the day
+  // it was recorded — they differ when the user posts a missed item on a
+  // later date. `occurrenceDate` is undefined on rows written before that
+  // column existed, so falling back to `date` there reproduces the
+  // pre-2026-07-22 behaviour with no backfill needed.
   const pad = (n: number) => String(n).padStart(2, '0');
   const isoOf = (day: number) => `${view.y}-${pad(view.m + 1)}-${pad(day)}`;
   const occPending = new Map<string, boolean>();
   for (const t of allTxns) {
-    if (t.sourceTemplateId) occPending.set(`${t.sourceTemplateId}|${t.date}`, !!t.pending);
+    if (t.sourceTemplateId) occPending.set(`${t.sourceTemplateId}|${t.occurrenceDate ?? t.date}`, !!t.pending);
   }
   const occStatus = (templateId: string, day: number): 'pending' | 'done' | 'upcoming' => {
     const v = occPending.get(`${templateId}|${isoOf(day)}`);
