@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS entries (
   counterparty_id    TEXT REFERENCES counterparties(id) ON DELETE SET NULL,
   refunded_entry_id  TEXT REFERENCES entries(id) ON DELETE SET NULL,
   source_template_id TEXT,
+  -- The scheduled occurrence this entry fulfils (yyyy-MM-dd), when it was posted
+  -- from a template. NULL for everything else. Lets a transaction dated "when I
+  -- actually paid" still resolve the occurrence it was due on.
+  occurrence_date    TEXT,
   notes              TEXT,
   applied_rule_ids   TEXT,
   reviewed_at        TEXT,

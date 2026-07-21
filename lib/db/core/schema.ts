@@ -435,7 +435,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-07-21T00:00:00Z';
+export const SCHEMA_VERSION = '2026-07-22T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -628,6 +628,11 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
   '2026-07-21T00:00:00Z': [
     'ALTER TABLE budgets ADD COLUMN tag_ids TEXT',
     'ALTER TABLE budgets ADD COLUMN counterparty_ids TEXT',
+  ],
+  // Link a posted transaction to the scheduled occurrence it fulfils, so the
+  // occurrence resolves even when the transaction carries a different date.
+  '2026-07-22T00:00:00Z': [
+    'ALTER TABLE entries ADD COLUMN occurrence_date TEXT',
   ],
 };
 
