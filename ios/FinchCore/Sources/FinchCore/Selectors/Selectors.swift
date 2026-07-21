@@ -344,12 +344,21 @@ public enum Selectors {
     /// budgetProgress (current cycle) and budgetCycleHistory (each past cycle).
     static func usedInWindow(_ budget: BudgetRow, _ txns: [Tx], _ matchSet: Set<String>,
                              _ accountSet: Set<String>?, from: String, to: String) -> Double {
+        // Extra match dimensions (AND across, OR within, empty = unconstrained —
+        // same rule as account/category).
+        let tagSet = budget.tagIds.isEmpty ? nil : Set(budget.tagIds)
+        let cpSet = budget.counterpartyIds.isEmpty ? nil : Set(budget.counterpartyIds)
         var used = 0.0
         for t in txns {
             if ledgerOf(t) != budget.ledgerId { continue }
-            if (t.pending ?? false) || kindOf(t) == "transfer" || kindOf(t) == "adjustment" { continue }
+            if (t.pending ?? false) || kindOf(t) == "adjustment" { continue }
+            // Transfers are excluded for expense budgets only; income goals count
+            // incoming transfer legs (positive amount) landing in a matched account.
+            if budget.type == "expense" && kindOf(t) == "transfer" { continue }
             if t.date < from || t.date > to { continue }
             if let accountSet, !accountSet.contains(t.account) { continue }
+            if let tagSet, !(t.tags ?? []).contains(where: { tagSet.contains($0) }) { continue }
+            if let cpSet, t.counterpartyId == nil || !cpSet.contains(t.counterpartyId!) { continue }
             let amt = matchedAmount(t, matchSet)
             if budget.type == "expense" { if amt < 0 { used += -amt } }
             else if amt > 0 { used += amt }
@@ -363,13 +372,17 @@ public enum Selectors {
         let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
 
-        var used = 0.0
+        // One-shot income goals seed `used` with the pre-tracking `saved` offset
+        // and then accumulate real matched inflows on top. Recurring income and
+        // expense budgets start at 0 and sum matched flows only.
         let oneShotIncome = budget.type == "income" && budget.isRecurring == 0
-        if oneShotIncome {
-            used = budget.saved
-        } else {
-            used = usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
-        }
+        let seed = oneShotIncome ? budget.saved : 0.0
+        // A one-shot goal with NO scope matches nothing — progress is the saved
+        // offset alone (else an unconstrained goal counts all income; new goals
+        // must set ≥1 dimension). Scoped goals + expense/recurring run the sum.
+        let incomeUnscoped = oneShotIncome && accountSet == nil && matchSet.isEmpty
+            && budget.tagIds.isEmpty && budget.counterpartyIds.isEmpty
+        var used = incomeUnscoped ? seed : seed + usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
         let base = r2(budget.amount + (budget.type == "expense" ? budget.carryForward : 0))
         used = r2(used)
         let remaining = r2(base - used)
@@ -379,20 +392,28 @@ public enum Selectors {
     }
 
     /// The transactions `budgetProgress` counts for the current cycle (same
-    /// predicate), newest first — for the budget detail screen. Empty for a
-    /// one-shot income goal (tracked via `saved`, not transactions).
+    /// predicate), newest first — for the budget detail screen. One-shot income
+    /// goals now surface their matched inflows too (the `saved` offset is added
+    /// separately by `budgetProgress`, not represented here).
     public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
                                                  _ categories: [CategoryNode] = []) -> [Tx] {
-        if budget.type == "income" && budget.isRecurring == 0 { return [] }
         let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
         let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
+        let tagSet = budget.tagIds.isEmpty ? nil : Set(budget.tagIds)
+        let cpSet = budget.counterpartyIds.isEmpty ? nil : Set(budget.counterpartyIds)
+        // Unscoped one-shot goal matches nothing (mirrors budgetProgress).
+        if budget.type == "income" && budget.isRecurring == 0
+            && accountSet == nil && matchSet.isEmpty && tagSet == nil && cpSet == nil { return [] }
         var out: [Tx] = []
         for t in txns {
             if ledgerOf(t) != budget.ledgerId { continue }
-            if (t.pending ?? false) || kindOf(t) == "transfer" || kindOf(t) == "adjustment" { continue }
+            if (t.pending ?? false) || kindOf(t) == "adjustment" { continue }
+            if budget.type == "expense" && kindOf(t) == "transfer" { continue }
             if t.date < win.from || t.date > win.to { continue }
             if let accountSet, !accountSet.contains(t.account) { continue }
+            if let tagSet, !(t.tags ?? []).contains(where: { tagSet.contains($0) }) { continue }
+            if let cpSet, t.counterpartyId == nil || !cpSet.contains(t.counterpartyId!) { continue }
             let amt = matchedAmount(t, matchSet)
             if budget.type == "expense" ? (amt < 0) : (amt > 0) { out.append(t) }
         }

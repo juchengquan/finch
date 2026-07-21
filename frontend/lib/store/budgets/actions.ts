@@ -1,7 +1,6 @@
 // frontend/lib/store/budgets/actions.ts — budget action creators.
 // Extracted from lib/store.ts:706-808 (createBudget, updateBudget,
-// updateBudgetCycle, clearPendingAmount, removeBudget,
-// contributeBudget).
+// updateBudgetCycle, clearPendingAmount, removeBudget).
 //
 // `NewBudgetInput` is the client-side shape (booleans here, normalised
 // to the DB's 0/1 ints on the way out).
@@ -25,6 +24,7 @@ export interface NewBudgetInput {
   accountIds?: string[];
   categoryIds?: string[];
   tagIds?: string[];
+  counterpartyIds?: string[];
   warningPct?: number;
   saved?: number;
   ledgerId?: string;
@@ -54,6 +54,8 @@ export const budgetActions = (set: SetState, get: GetState) => ({
       lastRolledPeriod: null,
       accountIds: input.accountIds ?? [],
       categoryIds: input.categoryIds ?? [],
+      tagIds: input.tagIds ?? [],
+      counterpartyIds: input.counterpartyIds ?? [],
       warningPct: input.warningPct ?? 80,
     };
     set((s) => ({ budgets: [...s.budgets, row] }));
@@ -73,6 +75,8 @@ export const budgetActions = (set: SetState, get: GetState) => ({
       rolloverLimit: row.rolloverLimit,
       accountIds: row.accountIds,
       categoryIds: row.categoryIds,
+      tagIds: row.tagIds,
+      counterpartyIds: row.counterpartyIds,
       warningPct: row.warningPct,
     });
     return id;
@@ -129,12 +133,5 @@ export const budgetActions = (set: SetState, get: GetState) => ({
   removeBudget: (id: string): void => {
     set((s) => ({ budgets: s.budgets.filter((b) => b.id !== id) }));
     syncMutation('removeBudget', { id });
-  },
-
-  contributeBudget: (id: string, amount: number): void => {
-    set((s) => ({
-      budgets: s.budgets.map((b) => (b.id === id ? { ...b, saved: Math.max(0, b.saved + amount) } : b)),
-    }));
-    syncMutation('contributeBudget', { id, amount });
   },
 });

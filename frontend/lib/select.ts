@@ -1406,7 +1406,10 @@ function matchedAmount(t: Tx, matchSet: Set<string>): number {
 /**
  * Progress for one named budget over its active cycle. Expense budgets sum
  * matching outflows; recurring income budgets sum matching inflows; one-shot
- * income/goal budgets use the manual `saved` accumulator (hybrid model).
+ * income/goal budgets seed `used` with the `saved` offset and add matching
+ * inflows on top (`used = saved + Σ matched inflows`). Matching spans
+ * account · category · tags · merchants (AND across, OR within, empty =
+ * unconstrained); income goals also count incoming transfer legs.
  *
  * `categories` (optional) enables **recursive category matching** — a
  * budget on `food` also catches transactions in `food › restaurants ›
@@ -1429,22 +1432,36 @@ export function budgetProgress(
     ? expandDescendants(budget.categoryIds, categories)
     : new Set(budget.categoryIds);
 
-  let used = 0;
+  // Extra match dimensions (AND across dimensions, OR within, empty =
+  // unconstrained — same rule as account/category).
+  const tagSet = budget.tagIds?.length ? new Set(budget.tagIds) : null;
+  const cpSet = budget.counterpartyIds?.length ? new Set(budget.counterpartyIds) : null;
+
+  // One-shot income goals seed `used` with the pre-tracking `saved` offset and
+  // then accumulate real matched inflows on top. Recurring income and expense
+  // budgets start at 0 and sum matched flows only.
   const oneShotIncome = budget.type === 'income' && budget.isRecurring === 0;
-  if (oneShotIncome) {
-    used = budget.saved;
-  } else {
-    for (const t of txns) {
-      if (ledgerOf(t) !== budget.ledgerId) continue;
-      if (t.pending || kindOf(t) === 'transfer' || kindOf(t) === 'adjustment') continue;
-      if (t.date < win.from || t.date > win.to) continue;
-      if (accountSet && !accountSet.has(t.account)) continue;
-      const amt = matchedAmount(t, matchSet);
-      if (budget.type === 'expense') {
-        if (amt < 0) used += -amt;
-      } else if (amt > 0) {
-        used += amt;
-      }
+  let used = oneShotIncome ? budget.saved : 0;
+  // A one-shot goal with NO scope matches nothing — its progress is the `saved`
+  // offset alone. Without this, an unconstrained goal would count ALL income
+  // (new goals must set ≥1 dimension; this keeps migrated/unscoped goals from
+  // ballooning). Scoped goals and expense/recurring budgets run the loop.
+  const incomeUnscoped = oneShotIncome && !accountSet && matchSet.size === 0 && !tagSet && !cpSet;
+  if (!incomeUnscoped) for (const t of txns) {
+    if (ledgerOf(t) !== budget.ledgerId) continue;
+    if (t.pending || kindOf(t) === 'adjustment') continue;
+    // Transfers are excluded for expense budgets only; income goals count
+    // incoming transfer legs (positive amount) landing in a matched account.
+    if (budget.type === 'expense' && kindOf(t) === 'transfer') continue;
+    if (t.date < win.from || t.date > win.to) continue;
+    if (accountSet && !accountSet.has(t.account)) continue;
+    if (tagSet && !(t.tags ?? []).some((x) => tagSet.has(x))) continue;
+    if (cpSet && (t.counterpartyId == null || !cpSet.has(t.counterpartyId))) continue;
+    const amt = matchedAmount(t, matchSet);
+    if (budget.type === 'expense') {
+      if (amt < 0) used += -amt;
+    } else if (amt > 0) {
+      used += amt;
     }
   }
 

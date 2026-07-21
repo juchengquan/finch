@@ -20,8 +20,7 @@ struct BudgetsTab: View {
     @State private var showingAdd = false
     @State private var addingGroup = false
     @State private var editing: BudgetRow?
-    @State private var quickAddFor: BudgetRow?     // leading swipe (expense) → Add sheet, category prefilled
-    @State private var contributeFor: BudgetRow?   // leading swipe (goal) → Contribute sheet
+    @State private var quickAddFor: BudgetRow?     // leading swipe → Add sheet, category prefilled
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
@@ -70,7 +69,6 @@ struct BudgetsTab: View {
             .sheet(isPresented: $showingAdd) { BudgetSheet() }
             .sheet(item: $editing) { BudgetSheet(budget: $0) }
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
-            .sheet(item: $contributeFor) { ContributeSheet(budgetId: $0.id) }
             .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
             // Centered ALERTS, not row-anchored confirmationDialogs — see
@@ -364,15 +362,12 @@ struct BudgetsTab: View {
         BudgetGroupCollapse.setCollapsed(group, nowCollapsed, ledger: store.activeLedgerId)
     }
 
-    /// Leading swipe: the budget's quick verb — expense budgets quick-add a
-    /// transaction in their (first) category; goal budgets contribute. Both open
-    /// sheets (confirm-first). Also merged into the context menu for macOS.
+    /// Leading swipe: quick-add a transaction scoped to this budget — expense
+    /// budgets and income goals alike are funded by real transactions (goals no
+    /// longer contribute), prefilled with the budget's (first) category. Opens a
+    /// confirm-first sheet; also merged into the context menu for macOS.
     @ViewBuilder private func leadingActions(_ budget: BudgetRow) -> some View {
-        if budget.type == "income" {
-            Button { contributeFor = budget } label: { Label("Contribute", systemImage: "dollarsign.circle") }.tint(.green)
-        } else {
-            Button { quickAddFor = budget } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
-        }
+        Button { quickAddFor = budget } label: { Label("Add Transaction", systemImage: "plus") }.tint(.green)
     }
 
     /// Context-menu manage cluster (role stays destructive there).
@@ -437,7 +432,7 @@ struct BudgetRowView: View {
     let budget: BudgetRow
     var body: some View {
         let progress = Selectors.budgetProgress(budget, store.txns, store.today, store.categoryNodes)
-        // Goals (income, non-recurring — "tracked via contributions") have no
+        // Goals (income, non-recurring — funded by real matched inflows) have no
         // cycle: no days-left countdown, no Over flag, and MORE saved is better
         // (so the 3-color spend banding would read backwards) — show % saved
         // with a green bar instead.

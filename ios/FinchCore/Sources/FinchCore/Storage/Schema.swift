@@ -9,7 +9,7 @@ import GRDB
 ///   cd frontend && bun -e 'import {SCHEMA} from "@/lib/db/core/schema"; process.stdout.write(SCHEMA)'
 public enum Schema {
     /// Matches the web's `SCHEMA_VERSION` (`schema.ts:435`).
-    public static let version = "2026-07-20T00:00:00Z"
+    public static let version = "2026-07-21T00:00:00Z"
     /// Matches the web's `APP_NAME` (`schema.ts:436`).
     public static let appName = "finch"
 
@@ -167,6 +167,8 @@ CREATE TABLE IF NOT EXISTS budgets (
   pending_amount     REAL,
   account_ids        TEXT,
   category_ids       TEXT,
+  tag_ids            TEXT,
+  counterparty_ids   TEXT,
   warning_pct        REAL NOT NULL DEFAULT 80,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL

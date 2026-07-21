@@ -6,8 +6,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertFalse(Schema.version.isEmpty)
         // The current web `SCHEMA_VERSION` (lib/db/core/schema.ts:435). Phase 1.0
         // ships the post-DE schema; the version string is shared cross-app.
-        // 2026-07-20: global merchants (counterparties.ledger_id dropped).
-        XCTAssertEqual(Schema.version, "2026-07-20T00:00:00Z")
+        // 2026-07-21: budgets gain tag_ids/counterparty_ids (income-goal matching).
+        XCTAssertEqual(Schema.version, "2026-07-21T00:00:00Z")
         XCTAssertEqual(Schema.appName, "finch")
     }
 }

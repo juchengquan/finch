@@ -123,13 +123,17 @@ test('budgetProgress (recurring income) sums matching inflows', () => {
   expect(p.pct).toBe(100);
 });
 
-test('budgetProgress (one-shot income/goal) uses the manual saved accumulator', () => {
-  const b = budget({ type: 'income', isRecurring: 0, amount: 30000, saved: 12000, startDate: '2026-01-15' });
-  const txns: Tx[] = [tx({ amount: 9999, date: '2026-05-01', category: 'salary' })]; // ignored
+test('budgetProgress (one-shot income/goal) = saved offset + matched inflows', () => {
+  const b = budget({ type: 'income', isRecurring: 0, amount: 30000, saved: 12000, startDate: '2026-01-15', categoryIds: ['salary'] });
+  const txns: Tx[] = [
+    tx({ amount: 3000, date: '2026-05-01', category: 'salary' }),  // matched inflow
+    tx({ amount: 500, date: '2026-05-02', category: 'other' }),    // wrong category, ignored
+    tx({ amount: -400, date: '2026-05-03', category: 'salary' }),  // outflow ignored for income
+  ];
   const p = budgetProgress(b, txns, '2026-05-20');
-  expect(p.used).toBe(12000);
+  expect(p.used).toBe(15000); // 12000 saved offset + 3000 matched inflow
   expect(p.base).toBe(30000);
-  expect(p.pct).toBe(40);
+  expect(p.pct).toBe(50);
 });
 
 // CATEGORIES_LEVEL3_PLAN §4.2: a budget on a parent category catches

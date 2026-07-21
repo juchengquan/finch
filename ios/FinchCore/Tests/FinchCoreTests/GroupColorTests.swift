@@ -61,7 +61,7 @@ final class GroupColorTests: XCTestCase {
             }
             // The migration re-stamps db_metadata to the new shared version.
             XCTAssertEqual(try String.fetchOne(db, sql: "SELECT schema_version FROM db_metadata WHERE id = 1"),
-                           "2026-07-20T00:00:00Z")
+                           "2026-07-21T00:00:00Z")
         }
         // Running the tolerant ALTER again (the migration's exact idiom) must not throw.
         try q.write { db in

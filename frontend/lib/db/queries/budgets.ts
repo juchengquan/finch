@@ -43,6 +43,8 @@ function rowToBudget(r: Record<string, unknown>): BudgetRow {
     lastRolledPeriod: r.last_rolled_period == null ? null : String(r.last_rolled_period),
     accountIds: parseIds(r.account_ids),
     categoryIds: parseIds(r.category_ids),
+    tagIds: parseIds(r.tag_ids),
+    counterpartyIds: parseIds(r.counterparty_ids),
     warningPct: Number(r.warning_pct ?? 80),
   };
 }
@@ -66,8 +68,8 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
     `INSERT INTO budgets
        (id, ledger_id, group_id, name, kind, amount, saved, carry_forward,
         frequency, start_date, end_date, is_recurring, rollover, rollover_limit,
-        account_ids, category_ids, warning_pct, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+        account_ids, category_ids, tag_ids, counterparty_ids, warning_pct, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
     [
       b.id,
       b.ledgerId,
@@ -84,6 +86,8 @@ export async function createBudget(exec: Exec, b: NewBudget): Promise<void> {
       b.rolloverLimit ?? null,
       idsToJson(b.accountIds),
       idsToJson(b.categoryIds),
+      idsToJson(b.tagIds),
+      idsToJson(b.counterpartyIds),
       b.warningPct ?? 80,
     ],
   );
@@ -94,6 +98,7 @@ const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   name: 'name',
   type: 'kind',
   amount: 'amount',
+  saved: 'saved',
   frequency: 'frequency',
   startDate: 'start_date',
   endDate: 'end_date',
@@ -102,10 +107,17 @@ const BUDGET_PATCH_COLUMNS: Record<keyof BudgetPatch, string> = {
   rolloverLimit: 'rollover_limit',
   accountIds: 'account_ids',
   categoryIds: 'category_ids',
+  tagIds: 'tag_ids',
+  counterpartyIds: 'counterparty_ids',
   warningPct: 'warning_pct',
 };
 
-const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set(['accountIds', 'categoryIds']);
+const ARRAY_PATCH_KEYS: ReadonlySet<keyof BudgetPatch> = new Set([
+  'accountIds',
+  'categoryIds',
+  'tagIds',
+  'counterpartyIds',
+]);
 
 export async function updateBudget(exec: Exec, id: string, patch: BudgetPatch): Promise<void> {
   const sets: string[] = [];
@@ -168,14 +180,6 @@ export async function updateBudgetCycle(exec: Exec, id: string, patch: BudgetCyc
            updated_at = datetime('now')
      WHERE id = ?`,
     [amount, patch.frequency, patch.startDate, endDate, id],
-  );
-}
-
-/** Add to (or subtract from) an income/goal budget's manual `saved`, clamped at 0. */
-export async function contributeBudget(exec: Exec, id: string, amount: number): Promise<void> {
-  await exec(
-    "UPDATE budgets SET saved = MAX(0, saved + ?), updated_at = datetime('now') WHERE id = ?",
-    [amount, id],
   );
 }
 

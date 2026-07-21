@@ -28,6 +28,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
     public let lastRolledPeriod: String?
     public let accountIds: [String]
     public let categoryIds: [String]
+    public let tagIds: [String]            // extra match dimension (OR-within, AND-across); [] = unconstrained
+    public let counterpartyIds: [String]   // ditto — matches by merchant id
     public let warningPct: Double       // default 80 on the web
 
     public init(
@@ -35,7 +37,8 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         amount: Double, saved: Double, carryForward: Double, frequency: String,
         startDate: String, endDate: String?, isRecurring: Int, rollover: Int,
         rolloverLimit: Double?, pendingAmount: Double?, lastRolledPeriod: String?,
-        accountIds: [String], categoryIds: [String], warningPct: Double
+        accountIds: [String], categoryIds: [String],
+        tagIds: [String] = [], counterpartyIds: [String] = [], warningPct: Double
     ) {
         self.id = id; self.ledgerId = ledgerId; self.groupId = groupId; self.name = name
         self.type = type; self.amount = amount; self.saved = saved
@@ -43,6 +46,36 @@ public struct BudgetRow: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.startDate = startDate; self.endDate = endDate; self.isRecurring = isRecurring
         self.rollover = rollover; self.rolloverLimit = rolloverLimit
         self.pendingAmount = pendingAmount; self.lastRolledPeriod = lastRolledPeriod
-        self.accountIds = accountIds; self.categoryIds = categoryIds; self.warningPct = warningPct
+        self.accountIds = accountIds; self.categoryIds = categoryIds
+        self.tagIds = tagIds; self.counterpartyIds = counterpartyIds; self.warningPct = warningPct
+    }
+
+    // Hand-rolled decode so the new `tagIds`/`counterpartyIds` (and the array/
+    // warningPct dims) default when a key is absent — the older selector parity
+    // fixtures (pre-tag/merchant) omit them. `encode(to:)`/`CodingKeys` stay
+    // synthesized. Mirrors the web `BudgetRow`'s `?? []` / `?? 80` fallbacks.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        ledgerId = try c.decode(String.self, forKey: .ledgerId)
+        groupId = try c.decodeIfPresent(String.self, forKey: .groupId)
+        name = try c.decode(String.self, forKey: .name)
+        type = try c.decode(String.self, forKey: .type)
+        amount = try c.decode(Double.self, forKey: .amount)
+        saved = try c.decodeIfPresent(Double.self, forKey: .saved) ?? 0
+        carryForward = try c.decodeIfPresent(Double.self, forKey: .carryForward) ?? 0
+        frequency = try c.decode(String.self, forKey: .frequency)
+        startDate = try c.decode(String.self, forKey: .startDate)
+        endDate = try c.decodeIfPresent(String.self, forKey: .endDate)
+        isRecurring = try c.decodeIfPresent(Int.self, forKey: .isRecurring) ?? 1
+        rollover = try c.decodeIfPresent(Int.self, forKey: .rollover) ?? 0
+        rolloverLimit = try c.decodeIfPresent(Double.self, forKey: .rolloverLimit)
+        pendingAmount = try c.decodeIfPresent(Double.self, forKey: .pendingAmount)
+        lastRolledPeriod = try c.decodeIfPresent(String.self, forKey: .lastRolledPeriod)
+        accountIds = try c.decodeIfPresent([String].self, forKey: .accountIds) ?? []
+        categoryIds = try c.decodeIfPresent([String].self, forKey: .categoryIds) ?? []
+        tagIds = try c.decodeIfPresent([String].self, forKey: .tagIds) ?? []
+        counterpartyIds = try c.decodeIfPresent([String].self, forKey: .counterpartyIds) ?? []
+        warningPct = try c.decodeIfPresent(Double.self, forKey: .warningPct) ?? 80
     }
 }

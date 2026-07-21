@@ -10,7 +10,6 @@ import {
   stageBudgetAmount,
   clearPendingAmount as qClearPendingAmount,
   deleteBudget as qDeleteBudget,
-  contributeBudget as qContributeBudget,
   type BudgetPatch,
   type BudgetCyclePatch,
   type BudgetType,
@@ -51,6 +50,8 @@ export const handlers = {
       rolloverLimit: args.rolloverLimit == null ? null : Number(args.rolloverLimit),
       accountIds: strList(args.accountIds),
       categoryIds: strList(args.categoryIds),
+      tagIds: strList(args.tagIds),
+      counterpartyIds: strList(args.counterpartyIds),
       warningPct: args.warningPct != null ? Number(args.warningPct) : 80,
     }));
   },
@@ -82,11 +83,6 @@ export const handlers = {
     qClearPendingAmount(exec, str(args.id)),
   removeBudget: (exec, args: Args['removeBudget']) =>
     qDeleteBudget(exec, str(args.id)),
-  contributeBudget: async (exec, args: Args['contributeBudget']) => {
-    const amount = Number(args.amount);
-    if (!Number.isFinite(amount)) throw new I18nError('error.budget.invalidContribution', {}, 'Invalid contribution amount');
-    await qContributeBudget(exec, str(args.id), amount);
-  },
   createBudgetGroup: async (exec, args: Args['createBudgetGroup']) => {
     const name = str(args.name).trim();
     if (!name) throw new I18nError('error.required.groupName', {}, 'Group name is required');

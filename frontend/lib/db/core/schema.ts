@@ -204,6 +204,8 @@ CREATE TABLE IF NOT EXISTS budgets (
   pending_amount     REAL,
   account_ids        TEXT,
   category_ids       TEXT,
+  tag_ids            TEXT,
+  counterparty_ids   TEXT,
   warning_pct        REAL NOT NULL DEFAULT 80,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL
@@ -433,7 +435,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-07-20T00:00:00Z';
+export const SCHEMA_VERSION = '2026-07-21T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -619,6 +621,13 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
   '2026-07-17T00:00:00Z': [
     'ALTER TABLE budget_groups ADD COLUMN color TEXT',
     'ALTER TABLE account_groups ADD COLUMN color TEXT',
+  ],
+  // Income budgets (goals) now track progress from real transactions matched by
+  // account/category/tag/merchant. Re-add tag_ids (dropped 2026-06-06) + add
+  // counterparty_ids. Additive + nullable (NULL = unconstrained).
+  '2026-07-21T00:00:00Z': [
+    'ALTER TABLE budgets ADD COLUMN tag_ids TEXT',
+    'ALTER TABLE budgets ADD COLUMN counterparty_ids TEXT',
   ],
 };
 

@@ -5,10 +5,11 @@ import FinchCore
 /// (`updateBudget`). Two shapes behind one `[Expense | Income]` toggle:
 /// - **Expense** tracks spend against categories/accounts over a cycle (limit,
 ///   frequency, start, rollover).
-/// - **Income** is a savings target tracked via contributions (`saved`) toward a
-///   target `amount`, with an optional target date (`endDate`). It has no cycle,
-///   category/account matching, or rollover — those don't apply — so its form
-///   drops them and creates a one-shot budget (`isRecurring = 0`).
+/// - **Income** is a savings target (goal) funded by real matched transactions
+///   across category/account/tag/merchant scopes, with `saved` as a pre-tracking
+///   starting offset and an optional target date (`endDate`). It has no cycle or
+///   rollover — those don't apply — so its form drops them and creates a one-shot
+///   budget (`isRecurring = 0`).
 /// Routes through FinchStore.apply.
 struct BudgetSheet: View {
     @EnvironmentObject private var store: FinchStore
@@ -31,6 +32,8 @@ struct BudgetSheet: View {
     @State private var groupId: String              // "" = none
     @State private var selectedCategories: Set<String>
     @State private var selectedAccounts: Set<String>
+    @State private var selectedTags: Set<String>            // income: match dimension (tags)
+    @State private var selectedCounterparties: Set<String>  // income: match dimension (merchants)
     @State private var rollover: Bool
     @State private var rolloverCap: String
     @State private var savedText: String            // income: "saved so far" toward the target
@@ -50,6 +53,8 @@ struct BudgetSheet: View {
         _groupId = State(initialValue: budget?.groupId ?? "")
         _selectedCategories = State(initialValue: Set(budget?.categoryIds ?? []))
         _selectedAccounts = State(initialValue: Set(budget?.accountIds ?? []))
+        _selectedTags = State(initialValue: Set(budget?.tagIds ?? []))
+        _selectedCounterparties = State(initialValue: Set(budget?.counterpartyIds ?? []))
         _rollover = State(initialValue: (budget?.rollover ?? 0) != 0)
         _rolloverCap = State(initialValue: budget?.rolloverLimit.map { String(format: "%g", $0) } ?? "")
         // Income "saved so far": pre-fill on edit (a goal you've already partly funded).
@@ -96,8 +101,9 @@ struct BudgetSheet: View {
 
     // MARK: field sets
 
-    /// Income (savings target): name + target + group, then progress-so-far and an
-    /// optional target date. No cycle, matching, or rollover.
+    /// Income (savings goal): name + target + group, a pre-tracking "saved so far"
+    /// offset and optional target date, then the transaction-matching scope
+    /// (categories/accounts/tags/merchants) that funds progress. No cycle or rollover.
     @ViewBuilder private var incomeFields: some View {
         Section {
             TextField("Name", text: $name)
@@ -120,7 +126,33 @@ struct BudgetSheet: View {
                 DatePicker("Target date", selection: $targetDate, displayedComponents: .date)
             }
         } footer: {
-            Text("Track progress toward your target. Add more from the budget's Contribute action.")
+            Text("\"Saved so far\" is money set aside before tracking began. Matching transactions add on top of it.")
+        }
+        Section {
+            CategoryMultiPickerRow(
+                title: "Categories",
+                categories: categories,
+                selection: $selectedCategories,
+                emptyLabel: "Any category")
+            MultiSelectPickerRow(
+                title: "Accounts",
+                options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
+                selection: $selectedAccounts,
+                emptyLabel: "Any account")
+            MultiSelectPickerRow(
+                title: "Tags",
+                options: store.tags.map { PickerOption(id: $0.id, name: $0.name) },
+                selection: $selectedTags,
+                emptyLabel: "Any tag")
+            MultiSelectPickerRow(
+                title: "Merchants",
+                options: store.counterparties.map { PickerOption(id: $0.id, name: $0.name) },
+                selection: $selectedCounterparties,
+                emptyLabel: "Any merchant")
+        } header: {
+            finchSectionHeader("Matching")
+        } footer: {
+            Text("Real inflows matching these scopes fund the goal. Set at least one category, account, tag, or merchant.")
         }
     }
 
@@ -196,35 +228,46 @@ struct BudgetSheet: View {
         if kind == .income { saveIncome(target: value) } else { saveExpense(limit: value) }
     }
 
-    /// Income = a savings target. `saved` is not patchable via updateBudget (parity
-    /// with the web — it only moves via `contributeBudget`), so on edit we apply the
-    /// difference from the current saved as a contribution (which clamps at 0).
+    /// Income = a savings goal funded by real matched transactions. `saved` is a
+    /// pre-tracking offset, now set directly (patchable via updateBudget — the old
+    /// contribute action is gone). Progress = saved + Σ matched inflows across the
+    /// category/account/tag/merchant scopes, so require ≥1 scope (else it counts
+    /// ALL income).
     private func saveIncome(target: Double) {
+        guard !selectedCategories.isEmpty || !selectedAccounts.isEmpty
+            || !selectedTags.isEmpty || !selectedCounterparties.isEmpty else {
+            errorMessage = "Pick at least one category, account, tag, or merchant to match."
+            return
+        }
         let endDate: JSONValue = hasTargetDate ? .string(AppDate.isoDay.string(from: targetDate)) : .null
         let savedVal = max(0, DecimalInput.parse(savedText) ?? 0)
+        let categoryIds: JSONValue = .array(selectedCategories.sorted().map { .string($0) })
+        let accountIds: JSONValue = .array(selectedAccounts.sorted().map { .string($0) })
+        let tagIds: JSONValue = .array(selectedTags.sorted().map { .string($0) })
+        let counterpartyIds: JSONValue = .array(selectedCounterparties.sorted().map { .string($0) })
 
         if let budget {
             let patch: [String: JSONValue] = [
                 "name": .string(name), "type": .string("income"),
-                "amount": .double(target),
+                "amount": .double(target), "saved": .double(savedVal),
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
                 "endDate": endDate,
+                "categoryIds": categoryIds, "accountIds": accountIds,
+                "tagIds": tagIds, "counterpartyIds": counterpartyIds,
             ]
             do {
                 try store.apply(.updateBudget, Args(["id": .string(budget.id), "patch": .object(patch)]))
-                let delta = savedVal - budget.saved
-                if abs(delta) > 0.005 {
-                    try store.apply(.contributeBudget, Args(["id": .string(budget.id), "amount": .double(delta)]))
-                }
                 dismiss()
             } catch { errorMessage = i18nMessage(error) }
         } else {
-            // A one-shot savings target: isRecurring defaults to 0 for income, and
+            // A one-shot savings goal: isRecurring defaults to 0 for income, and
             // frequency/startDate are inert but the columns are NOT NULL, so pass sane values.
             var args: [String: JSONValue] = [
                 "ledgerId": .string(store.activeLedgerId), "name": .string(name),
                 "type": .string("income"), "amount": .double(target),
                 "startDate": .string(AppDate.isoDay.string(from: Date())),
+                "categoryIds": categoryIds, "accountIds": accountIds,
+                "tagIds": tagIds, "counterpartyIds": counterpartyIds,
             ]
             if !groupId.isEmpty { args["groupId"] = .string(groupId) }
             if savedVal > 0 { args["saved"] = .double(savedVal) }
