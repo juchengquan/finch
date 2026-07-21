@@ -93,7 +93,7 @@ struct FinchApp: App {
                 switch phase {
                 case .background:
                     gate.didEnterBackground()
-                    Task { await AutoBackupManager.shared.flush() }   // Phase 5: flush before kill
+                    Task { await AutoBackupManager.shared.backupIfDue() }   // Phase 5: throttled backup before kill (respects enable + frequency)
                 case .active:
                     gate.didBecomeActive()
                     // Daily FX refresh (Frankfurter) — lock-gated like Spotlight below.

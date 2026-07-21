@@ -102,4 +102,40 @@ final class BackupHistoryTests: XCTestCase {
         XCTAssertEqual(m.count, 2)
         XCTAssertEqual(Set(m.map(\.name)), [a, b])
     }
+
+    // BackupSchedule — the auto-backup throttle (min interval per frequency).
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)   // a fixed instant
+
+    func test_schedule_neverBackedUp_isAlwaysDue() {
+        for f in BackupFrequency.allCases {
+            XCTAssertTrue(BackupSchedule.shouldAutoBackup(lastBackupAt: nil, frequency: f, now: now))
+        }
+    }
+
+    func test_schedule_dueOnlyAfterTheInterval() {
+        // daily: not due at 2h, due at 25h.
+        XCTAssertFalse(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-7_200), frequency: .daily, now: now))
+        XCTAssertTrue(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-90_000), frequency: .daily, now: now))
+        // hourly: not due at 30m, due at 61m.
+        XCTAssertFalse(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-1_800), frequency: .hourly, now: now))
+        XCTAssertTrue(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-3_660), frequency: .hourly, now: now))
+        // weekly: not due at 3d, due at 8d.
+        XCTAssertFalse(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-259_200), frequency: .weekly, now: now))
+        XCTAssertTrue(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-691_200), frequency: .weekly, now: now))
+        // monthly: not due at 20d, due at 31d.
+        XCTAssertFalse(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-1_728_000), frequency: .monthly, now: now))
+        XCTAssertTrue(BackupSchedule.shouldAutoBackup(lastBackupAt: now.addingTimeInterval(-2_678_400), frequency: .monthly, now: now))
+    }
+
+    func test_frequency_intervalsAreOrdered() {
+        XCTAssertLessThan(BackupFrequency.hourly.interval, BackupFrequency.daily.interval)
+        XCTAssertLessThan(BackupFrequency.daily.interval, BackupFrequency.weekly.interval)
+        XCTAssertLessThan(BackupFrequency.weekly.interval, BackupFrequency.monthly.interval)
+    }
+
+    func test_deviceIdFromName() {
+        XCTAssertEqual(BackupHistory.deviceId(fromName: "finch-20260721-131200-ab3f9c.finch"), "ab3f9c")
+        XCTAssertNil(BackupHistory.deviceId(fromName: "finch-20260721-131200.finch"))   // old suffix-less
+        XCTAssertNil(BackupHistory.deviceId(fromName: "garbage.finch"))
+    }
 }

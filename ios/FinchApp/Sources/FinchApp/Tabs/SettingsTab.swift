@@ -80,7 +80,6 @@ struct SettingsBackupSyncView: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
     @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
-    @State private var pickingFolder = false
 
     var body: some View {
         List {
@@ -113,24 +112,6 @@ struct SettingsBackupSyncView: View {
 
             Section {
                 LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
-                Button("Back up now") { Task { await backups.flush() } }
-                    .disabled(store.ledgers.isEmpty)
-                if let err = backups.lastError {
-                    Text(err).foregroundStyle(.red).font(.caption)
-                }
-                if icloud.mirrorFailing {
-                    Label("Backup folder unavailable — re-select it. Backups are still saved on this device.", systemImage: "exclamationmark.icloud")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-                Button { pickingFolder = true } label: {
-                    LabeledContent("Backup folder", value: icloud.designatedFolderName ?? "None — local only")
-                }
-                .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
-                    if case .success(let url) = result { icloud.setFolder(url) }
-                }
-                if icloud.designatedFolderName != nil {
-                    Button("Use local only", role: .destructive) { icloud.clearFolder() }
-                }
                 NavigationLink {
                     SettingsBackupsView()
                 } label: {
@@ -139,7 +120,7 @@ struct SettingsBackupSyncView: View {
             } header: {
                 Text("Backups")
             } footer: {
-                Text("Automatic .finch backups after edits (kept: last 14) on this device, plus a backup folder you choose (pick an iCloud Drive folder to keep an off-device copy and sync across devices). Open Backups to browse and restore.")
+                Text("finch always keeps your latest backup on this device. Open Backups to add a folder history (count, frequency), browse backups, and restore an earlier version.")
             }
 
             Section {
