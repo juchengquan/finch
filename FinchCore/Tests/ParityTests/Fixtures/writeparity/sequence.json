@@ -85,13 +85,6 @@
       }
     },
     {
-      "action": "contributeBudget",
-      "args": {
-        "id": "b1",
-        "amount": 50
-      }
-    },
-    {
       "action": "setExchangeRate",
       "args": {
         "date": "2026-05-01",
@@ -1127,7 +1120,7 @@
         "name": "Food",
         "kind": "expense",
         "amount": "300.000000",
-        "saved": "50.000000",
+        "saved": "0.000000",
         "frequency": "monthly",
         "start_date": "2026-01-01",
         "end_date": null,

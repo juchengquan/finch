@@ -2,14 +2,15 @@ import XCTest
 @testable import FinchCore
 
 final class ArgsTests: XCTestCase {
-    /// The web's 74 actions + Phase 6.5's native-only `setEntryAttachment`
+    /// The web's 73 actions (was 74; `contributeBudget` removed — goal progress is
+    /// transaction-derived) + Phase 6.5's native-only `setEntryAttachment`
     /// + the native-first `setBudgetOrder` + `setTrackedCurrencies`
-    /// + `mergeCategory` + `mergeCategories` (native-only) = 79
-    /// + `mergeCounterparty` + `mergeCounterparties` (native-only) = 81
-    /// + `mergeTag` + `mergeTags` (native-only, tag merge) = 83
-    /// + `copyCategories` + `copyTags` (native-first, ledger reference copy) = 85.
+    /// + `mergeCategory` + `mergeCategories` (native-only) = 78
+    /// + `mergeCounterparty` + `mergeCounterparties` (native-only) = 80
+    /// + `mergeTag` + `mergeTags` (native-only, tag merge) = 82
+    /// + `copyCategories` + `copyTags` (native-first, ledger reference copy) = 84.
     func test_actionCount() {
-        XCTAssertEqual(ActionName.allCases.count, 85)
+        XCTAssertEqual(ActionName.allCases.count, 84)
     }
 
     func test_actionNameRawValues() {

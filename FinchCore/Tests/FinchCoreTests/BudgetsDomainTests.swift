@@ -38,11 +38,12 @@ final class BudgetsDomainTests: XCTestCase {
         }
     }
 
-    func test_contributeAndCycleAndRemove() throws {
+    func test_savedPatchCycleAndRemove() throws {
         let q = try ledgerDB()
         try Apply.apply(dbQueue: q, action: "createBudget", args: Args(["id": .string("b1"), "ledgerId": .string("l1"), "name": .string("Save"), "type": .string("income"), "amount": .double(1000)]))
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("b1"), "amount": .double(250)]))
-        try Apply.apply(dbQueue: q, action: "contributeBudget", args: Args(["id": .string("b1"), "amount": .double(-100)]))
+        // `saved` is a plain patch field now (contributeBudget was removed): a
+        // direct set, not additive.
+        try Apply.apply(dbQueue: q, action: "updateBudget", args: Args(["id": .string("b1"), "patch": .object(["saved": .double(150)])]))
         XCTAssertEqual(try q.read { db in try Double.fetchOne(db, sql: "SELECT saved FROM budgets WHERE id='b1'") ?? 0 }, 150, accuracy: 0.001)
         try Apply.apply(dbQueue: q, action: "updateBudgetCycle", args: Args(["id": .string("b1"), "patch": .object(["frequency": .string("weekly"), "startDate": .string("2026-01-01"), "amount": .double(1200)])]))
         try q.read { db in

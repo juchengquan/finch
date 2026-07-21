@@ -28,6 +28,17 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Budget match columns (web migration 2026-07-21): income budgets (goals)
+        // track real transactions by tag/merchant. Additive + nullable; tolerant
+        // of duplicate columns (imported web packs may already carry them).
+        migrator.registerMigration("2026-07-21-budget-match-columns") { db in
+            for col in ["tag_ids", "counterparty_ids"] {
+                do { try db.execute(sql: "ALTER TABLE budgets ADD COLUMN \(col) TEXT") }
+                catch { if !"\(error)".contains("duplicate column") { throw error } }
+            }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 
