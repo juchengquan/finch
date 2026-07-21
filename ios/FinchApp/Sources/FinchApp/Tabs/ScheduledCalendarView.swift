@@ -10,6 +10,7 @@ struct ScheduledCalendarView: View {
     var templates: [ScheduledTemplate]
     var onEdit: (ScheduledTemplate) -> Void
     var onPost: (ScheduledTemplate) -> Void
+    var onDelete: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
     /// the context menu's "Edit" still edits; nil → taps edit (compact behavior).
@@ -261,10 +262,21 @@ struct ScheduledCalendarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Swipe actions mirror the List view: trailing Delete + Edit (Edit at the
+        // trailing edge), leading Post (only while the occurrence is still upcoming).
+        .swipeActions(edge: .trailing) {
+            Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+            Button { onDelete(t) } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+        }
+        .swipeActions(edge: .leading) {
+            // Unposted either way — a missed occurrence needs Post more than an upcoming one.
+            if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green) }
+        }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
             if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            Button(role: .destructive) { onDelete(t) } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
