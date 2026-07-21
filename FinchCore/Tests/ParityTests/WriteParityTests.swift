@@ -77,7 +77,8 @@ final class WriteParityTests: XCTestCase {
                 "ledger_id": str(e["ledger_id"]), "date": .string(date), "time": str(e["time"]),
                 "description": str(desc), "kind": .string(kind), "status": str(e["status"]),
                 "counterparty_id": str(e["counterparty_id"]), "refunded_entry_id": str(e["refunded_entry_id"]),
-                "source_template_id": str(e["source_template_id"]), "notes": str(e["notes"]),
+                "source_template_id": str(e["source_template_id"]), "occurrence_date": str(e["occurrence_date"]),
+                "notes": str(e["notes"]),
                 "applied_rule_ids": str(e["applied_rule_ids"]), "reviewed": .bool((e["reviewed_at"] as String?) != nil),
                 "sealed": .int(e["sealed"]), "postings": .array(postings),
             ])))
