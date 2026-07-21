@@ -103,6 +103,8 @@ export type Args = {
     rolloverLimit?: number | null;
     accountIds?: string[];
     categoryIds?: string[];
+    tagIds?: string[];
+    counterpartyIds?: string[];
     warningPct?: number;
   };
   updateBudget: { id: string; patch: BudgetPatch };

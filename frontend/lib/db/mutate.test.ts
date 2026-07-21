@@ -3,6 +3,7 @@ import { migrate, SCHEMA_VERSION } from './core/schema';
 import { readMetadata } from '@/lib/db/queries/metadata';
 import { applyMutation } from '@/lib/db/mutate';
 import { listTransfers } from '@/lib/db/queries/transfers';
+import { listBudgets } from '@/lib/db/queries/budgets';
 import { seededAndAudited } from './core/test-utils';
 import type { Exec } from './core/repo';
 import { I18nError } from '@/lib/i18n-error';
@@ -559,6 +560,42 @@ test('removeAttachment deletes the row + unlinks the file (best-effort)', async 
 // resolves to a handler (the Args map smoke test in lib/db/domain/_args.test.ts
 // does this at tsc level; this is the runtime-level version).
 // ---------------------------------------------------------------------------
+
+test('createBudget persists tagIds/counterpartyIds/saved; updateBudget patches saved + tagIds', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createBudget', {
+    id: 'bgt-inc',
+    ledgerId: 'personal',
+    name: 'Vacation fund',
+    type: 'income',
+    amount: 3000,
+    isRecurring: 0,
+    saved: 100,
+    tagIds: ['t1'],
+    counterpartyIds: ['c1'],
+    frequency: 'monthly',
+    startDate: '2026-01-01',
+  });
+
+  // Raw row: the JSON columns + saved round-trip through the create insert.
+  const [row] = await exec("SELECT kind, tag_ids, counterparty_ids, saved FROM budgets WHERE id = 'bgt-inc'");
+  expect(String(row.kind)).toBe('income');
+  expect(JSON.parse(String(row.tag_ids))).toEqual(['t1']);
+  expect(JSON.parse(String(row.counterparty_ids))).toEqual(['c1']);
+  expect(Number(row.saved)).toBe(100);
+
+  // Projected row: rowToBudget parses the JSON columns back into string arrays.
+  const b = (await listBudgets(exec, 'personal')).find((x) => x.id === 'bgt-inc')!;
+  expect(b.tagIds).toEqual(['t1']);
+  expect(b.counterpartyIds).toEqual(['c1']);
+  expect(b.saved).toBe(100);
+
+  // updateBudget can patch `saved` and the array columns.
+  await applyMutation(exec, 'updateBudget', { id: 'bgt-inc', patch: { saved: 250, tagIds: ['t2'] } });
+  const [row2] = await exec("SELECT tag_ids, saved FROM budgets WHERE id = 'bgt-inc'");
+  expect(Number(row2.saved)).toBe(250);
+  expect(JSON.parse(String(row2.tag_ids))).toEqual(['t2']);
+});
 
 test('applyMutation throws I18nError for unknown action', async () => {
   const exec = await seededAndAudited();

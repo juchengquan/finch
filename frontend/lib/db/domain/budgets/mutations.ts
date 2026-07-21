@@ -51,6 +51,8 @@ export const handlers = {
       rolloverLimit: args.rolloverLimit == null ? null : Number(args.rolloverLimit),
       accountIds: strList(args.accountIds),
       categoryIds: strList(args.categoryIds),
+      tagIds: strList(args.tagIds),
+      counterpartyIds: strList(args.counterpartyIds),
       warningPct: args.warningPct != null ? Number(args.warningPct) : 80,
     }));
   },
