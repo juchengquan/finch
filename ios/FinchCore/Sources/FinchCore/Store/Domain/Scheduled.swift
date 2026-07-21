@@ -98,7 +98,12 @@ public enum Scheduled {
                 maxExecutions: nil, installmentTotal: nil, installmentPaid: nil)
             var dates = Selectors.occurrencesUpTo(template, today)
             if dates.isEmpty { continue }
-            let have = Set(try String.fetchAll(db, sql: "SELECT date FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
+            // Resolution keys on occurrenceDate ?? date (see Selectors), so
+            // "already posted" must key on the same coalesce — not the raw
+            // posting date — or an occurrence posted under a different
+            // transaction date (e.g. paid late) is not recognised and gets
+            // regenerated as a duplicate.
+            let have = Set(try String.fetchAll(db, sql: "SELECT COALESCE(occurrence_date, date) FROM entries WHERE source_template_id = ?", arguments: [r["id"] as String]))
             dates = dates.filter { !have.contains($0) }
             if let maxEx = r["max_executions"] as Int? { dates = Array(dates.prefix(Swift.max(0, maxEx - have.count))) }
             if let instTotal = r["installment_total"] as Int? { dates = Array(dates.prefix(Swift.max(0, instTotal - have.count))) }

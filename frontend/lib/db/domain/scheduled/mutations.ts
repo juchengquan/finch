@@ -152,7 +152,14 @@ export const handlers = {
       let dates = occurrencesUpTo(template, today);
       if (!dates.length) continue;
 
-      const existing = await exec('SELECT date FROM entries WHERE source_template_id = ?', [String(r.id)]);
+      // Resolution keys on occurrenceDate ?? date (see Resolvers), so "already
+      // posted" must key on the same coalesce — not the raw posting date —
+      // or an occurrence posted under a different transaction date (e.g. paid
+      // late) is not recognised and gets regenerated as a duplicate.
+      const existing = await exec(
+        'SELECT COALESCE(occurrence_date, date) AS date FROM entries WHERE source_template_id = ?',
+        [String(r.id)],
+      );
       const have = new Set(existing.map((e) => String(e.date)));
       dates = dates.filter((d) => !have.has(d));
       const max = r.max_executions == null ? null : Number(r.max_executions);
