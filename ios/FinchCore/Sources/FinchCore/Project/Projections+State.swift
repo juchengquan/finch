@@ -275,6 +275,17 @@ extension Projection {
         }
     }
 
+    /// How many `scheduled_splits` rows a template has. Split-income templates fan
+    /// one posting out across MULTIPLE ACCOUNTS, which the single-transaction edit
+    /// sheet cannot represent — the count is what tells the app to keep the silent
+    /// `postScheduled` path for them (see `ScheduledPostRouting`).
+    public static func scheduledSplitCount(dbQueue: DatabaseQueue, templateId: String) throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM scheduled_splits WHERE template_id = ?",
+                             arguments: [templateId]) ?? 0
+        }
+    }
+
     /// JSON-array text column → `[String]` (empty on null/malformed) — mirrors
     /// the web `parseIds` helper (budgets.ts:16).
     private static func parseIds(_ raw: String?) -> [String] {
