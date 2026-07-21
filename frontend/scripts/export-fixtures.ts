@@ -360,6 +360,7 @@ async function canonicalState(x: Exec): Promise<Record<string, unknown>> {
       ledger_id: e.ledger_id, date: e.date, time: e.time ?? null, description: e.description ?? null,
       kind: e.kind, status: e.status, counterparty_id: e.counterparty_id ?? null,
       refunded_entry_id: e.refunded_entry_id ?? null, source_template_id: e.source_template_id ?? null,
+      occurrence_date: e.occurrence_date ?? null,
       notes: e.notes ?? null, applied_rule_ids: e.applied_rule_ids ?? null,
       reviewed: e.reviewed_at != null, sealed: Number(e.sealed),
       postings: ps.map((p) => ({
@@ -480,8 +481,8 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // --- Parity expansion: high-risk actions the oracle didn't cover (2026-06-20) ---
   // NOTE: createAccount-with-openingBalance is intentionally NOT here — its
   // opening-equity entry is stamped with the wall-clock date (no date arg), so it
-  // makes the fixture non-reproducible across days (like postScheduled). Pinning
-  // it would need an engine change (an opening-date arg).
+  // makes the fixture non-reproducible across days. Pinning it would need an
+  // engine change (an opening-date arg).
   // updateCategory reparenting: food > fun > pay — exercises the cycle + depth-cap
   // math (pay lands at depth 3, the limit). No kind enforcement on reparent.
   { action: 'updateCategory', args: { id: 'fun', patch: { parentId: 'food' } } },
