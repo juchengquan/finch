@@ -490,8 +490,7 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // re-deriving amount_base via an FX lookup at the new date.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
-  // scheduled split CRUD (add/update/remove → leaves one split on s1). postScheduled
-  // itself is excluded: it stamps `new Date()`, so it can't be reproduced offline.
+  // scheduled split CRUD (add/update/remove → leaves one split on s1).
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
   { action: 'updateScheduledSplit', args: { templateId: 's1', index: 0, pct: 30 } },
@@ -499,6 +498,16 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // generateDueScheduled with an explicit `today` (deterministic): posts s1's
   // Jan–Apr monthly occurrences, exercising the date-dedup + occurrence math.
   { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
+  // A second template (s2, untouched by the split CRUD above) created AFTER the
+  // generateDueScheduled sweep — its startDate is past that call's `today`, so
+  // occurrencesUpTo() would've yielded nothing for it anyway, but creating it
+  // afterwards keeps it out of the sweep entirely, deterministically.
+  { action: 'createScheduled', args: { id: 's2', ledgerId: 'personal', name: 'Gym', type: 'expense', amount: 45, frequency: 'monthly', dayOfMonth: 15, accountId: 'a2', startDate: '2026-05-01' } },
+  // postScheduled with a PINNED date — reproducible offline now that the action
+  // takes an explicit date, so it finally gets a parity gate (it was excluded
+  // before: it used to stamp `new Date()`, making it non-reproducible offline).
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20' } },
+  { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', occurrenceDate: '2026-05-18' } },
   // Reorder support (drag-to-reorder): the new sortOrder patch fields on
   // updateAccount + updateAccountGroup (and createAccountGroup, prior uncovered).
   { action: 'createAccountGroup', args: { id: 'ag1', ledgerId: 'personal', name: 'Cash Group' } },
