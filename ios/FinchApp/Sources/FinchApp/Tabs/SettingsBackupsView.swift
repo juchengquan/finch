@@ -35,7 +35,7 @@ struct SettingsBackupsView: View {
                         row(e, isLatest: idx == 0)
                     }
                 } footer: {
-                    Text("Tap a backup to restore it — this replaces all current data, and your current data is backed up first. Backups live on this device and in iCloud Drive (Files › iCloud Drive › finch).")
+                    Text("Tap a backup to restore it — this replaces all current data, and your current data is backed up first. Backups live on this device and in your chosen backup folder (when set).")
                 }
             }
         }
@@ -91,10 +91,10 @@ struct SettingsBackupsView: View {
     @ViewBuilder private func locationBadges(_ e: BackupEntry) -> some View {
         HStack(spacing: 4) {
             if e.onDevice { Image(systemName: "iphone").foregroundStyle(.secondary) }
-            if e.inICloud { Image(systemName: e.downloaded ? "icloud" : "icloud.and.arrow.down").foregroundStyle(.secondary) }
+            if e.inICloud { Image(systemName: e.downloaded ? "folder" : "icloud.and.arrow.down").foregroundStyle(.secondary) }
         }
         .font(.caption)
-        .accessibilityLabel(e.onDevice && e.inICloud ? "On device and iCloud" : e.onDevice ? "On device" : "iCloud")
+        .accessibilityLabel(e.onDevice && e.inICloud ? "On device and in backup folder" : e.onDevice ? "On device" : "In backup folder")
     }
 
     /// Restore: confirm (done) → Face-ID → auto-backup current → fetch bytes →
@@ -104,7 +104,9 @@ struct SettingsBackupsView: View {
         guard await gate.confirmSensitive() else { return }
         restoring = e
         defer { restoring = nil }
-        await backups.flush()   // reversible: snapshot the current state first
+        // Read the target's bytes BEFORE snapshotting the current state — flush()
+        // prunes to the 14 retention ceiling (lockstep local+folder) and could
+        // evict this very snapshot if it's the oldest. Read first, then flush.
         let data: Data?
         if e.onDevice {
             data = try? Data(contentsOf: backups.url(forName: e.name))
@@ -112,6 +114,7 @@ struct SettingsBackupsView: View {
             data = await icloud.download(name: e.name)
         }
         guard let data else { errorMessage = "Couldn't read that backup — it may still be downloading from iCloud."; return }
+        await backups.flush()   // reversible: snapshot the current state (now safe — bytes are in hand)
         do {
             try await store.loadPack(from: data)
             Haptics.success()
