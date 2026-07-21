@@ -210,6 +210,40 @@ are single-render "one view, two layouts"**: each takes an optional `selection: 
   menu bar / iPad keys: ⌘N add, ⌘1–6 tabs, ⌘⇧E export, ⌘⇧H hide amounts). The palette and add
   sheets are presented at **app root**, and force-dismissed when the biometric lock engages.
 
+### List rows & swipe actions — the 60pt rule
+
+iOS renders swipe actions **two different ways depending on the row's height**, and the
+switch is undocumented private behaviour:
+
+| row height | swipe action style |
+|---|---|
+| **≤ 59pt** | wide capsule, icon **and** label *inside* the colour |
+| **≥ 60pt** | circular glyph, label in grey *outside/below* it |
+
+Bisected on-device (59 capsule / 60 circle) and re-verified at **extra-small and default text
+size** and on **two screen widths** (390pt / 402pt) — the boundary does not move. Text size
+changes row *heights*, not the rule.
+
+Consequences worth knowing before you touch a row:
+
+- **It is height-driven, not label-driven.** `Label(_:systemImage:)` is correct in both cases.
+  Identical code renders differently on different pages purely because of row height — don't go
+  looking at the label when the styles disagree.
+- **`listRowInsets` is usually the lever.** SwiftUI's default insets (~11pt/side) vs the
+  transaction feed's `top: 2, bottom: 2` is a ~13pt swing — that alone was why Scheduled/Ledger/
+  Tags sat on the wrong side (#578). Check insets before changing content.
+- **It's a default-text-size feature.** At accessibility sizes the smallest natural row is ~63pt,
+  so *everything* is circles regardless. The circle+caption layout is the accessible fallback,
+  not a regression.
+- **Don't pay real costs to get under 60.** Budgets stays 3 lines / 75pt and Categories stays at
+  60pt deliberately: the only levers were truncating the row's name (`lineLimit(1)`) and shrinking
+  an already-sub-44pt chevron tap target. Both cost information or usability at *every* text size
+  to buy a rendering detail that exists at only some of them. Row content wins.
+
+Current heights: Accounts · `TxRow` · Merchants · Tags · Scheduled · Ledger = 52pt (capsule);
+Categories = 60pt, Budgets = 75pt (circle, by choice). Measure with
+`idb ui describe-all` rather than eyeballing screenshots.
+
 ### Write screens (`WriteScreens/`)
 
 Standard sheet = `NavigationStack { Form }`, `.inline` title, toolbar with **icon buttons not
