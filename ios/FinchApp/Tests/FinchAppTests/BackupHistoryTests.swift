@@ -60,4 +60,26 @@ final class BackupHistoryTests: XCTestCase {
             iCloud: [ICloudBackup(name: "also-bad", size: 1, downloaded: true)])
         XCTAssertEqual(m.map(\.name), [newer])
     }
+
+    // MirrorAlert — alert once per failure episode; persistent banner via `failing`.
+    func test_mirrorAlert_alertsOnceOnEntryThenBannerOnly() {
+        // ok → fail: alert + start the banner.
+        let a = MirrorAlert.next(wasFailing: false, failed: true)
+        XCTAssertTrue(a.failing); XCTAssertTrue(a.shouldAlert)
+        // fail → fail: banner stays, no new alert (no nagging).
+        let b = MirrorAlert.next(wasFailing: true, failed: true)
+        XCTAssertTrue(b.failing); XCTAssertFalse(b.shouldAlert)
+    }
+
+    func test_mirrorAlert_recoveryClearsAndReArmsForNextEpisode() {
+        // fail → ok: banner clears, no alert.
+        let r = MirrorAlert.next(wasFailing: true, failed: false)
+        XCTAssertFalse(r.failing); XCTAssertFalse(r.shouldAlert)
+        // ok → ok: nothing.
+        let s = MirrorAlert.next(wasFailing: false, failed: false)
+        XCTAssertFalse(s.failing); XCTAssertFalse(s.shouldAlert)
+        // a fresh failure after recovery alerts again (new episode).
+        let t = MirrorAlert.next(wasFailing: false, failed: true)
+        XCTAssertTrue(t.failing); XCTAssertTrue(t.shouldAlert)
+    }
 }

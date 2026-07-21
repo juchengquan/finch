@@ -72,3 +72,22 @@ public enum BackupHistory {
         return out.sorted { $0.date != $1.date ? $0.date > $1.date : $0.name > $1.name }
     }
 }
+
+/// Pure failure-episode logic for the designated-backup-folder mirror. The
+/// debounced auto-backup fires constantly, so we alert **once** when the mirror
+/// STARTS failing (an ok→fail transition), never on the subsequent failures of
+/// the same episode; a persistent banner tracks `failing` meanwhile, and a
+/// recovery (fail→ok) clears it so the next failure is a fresh episode that
+/// alerts again. Local backups are unaffected — this is only about the mirror.
+public enum MirrorAlert {
+    public struct Decision: Equatable {
+        public let failing: Bool        // drives the persistent "unavailable" banner
+        public let shouldAlert: Bool    // raise the one-shot alert this round?
+    }
+
+    /// Given the prior failing state and whether THIS mirror attempt failed,
+    /// return the new failing state + whether to raise a one-shot alert.
+    public static func next(wasFailing: Bool, failed: Bool) -> Decision {
+        Decision(failing: failed, shouldAlert: failed && !wasFailing)
+    }
+}
