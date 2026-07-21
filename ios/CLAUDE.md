@@ -271,5 +271,5 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
   changes nothing — you'd have to grant the tmux binary and restart the server, killing the session.
   Fastest jumps use **DEBUG-only launch args** `-initialTab <tab>` and `-openAdd YES`
   (`FinchApp.swift init()`), or the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
-  (`ios/docs/simulator-ui-driving.md` has the longer recipe, but note `ios/docs/` is swallowed by the
-  root `docs/` gitignore rule, so it is **local-only** and does not reach a fresh clone.)
+  (`ios/docs/simulator-ui-driving.md` has the longer recipe: install steps, the `describe-all`
+  measuring snippet, and the full AppleScript/TCC post-mortem.)
