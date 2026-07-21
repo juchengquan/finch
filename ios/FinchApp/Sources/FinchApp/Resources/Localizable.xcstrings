@@ -23,6 +23,16 @@
         }
       }
     },
+    "\"Saved so far\" is money set aside before tracking began. Matching transactions add on top of it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“已存金额”是开始跟踪前预留的金额。匹配的交易会在此基础上累加。"
+          }
+        }
+      }
+    },
     "%1$@ (%2$@) looks higher than usual.": {
       "localizations": {
         "zh-Hans": {
@@ -3514,6 +3524,16 @@
         }
       }
     },
+    "Matching": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配"
+          }
+        }
+      }
+    },
     "Max": {
       "localizations": {
         "zh-Hans": {
@@ -4590,6 +4610,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "汇率（每 USD）"
+          }
+        }
+      }
+    },
+    "Real inflows matching these scopes fund the goal. Set at least one category, account, tag, or merchant.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符合这些范围的实际流入将计入目标。请至少设置一个类别、账户、标签或商户。"
           }
         }
       }
@@ -6444,6 +6474,16 @@
         }
       }
     },
+    "done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
+          }
+        }
+      }
+    },
     "entry: %@": {
       "localizations": {
         "zh-Hans": {
@@ -6505,6 +6545,16 @@
         }
       }
     },
+    "missed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已错过"
+          }
+        }
+      }
+    },
     "of income saved this month": {
       "localizations": {
         "zh-Hans": {
@@ -6523,6 +6573,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "超支"
+          }
+        }
+      }
+    },
+    "pending": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待处理"
           }
         }
       }
@@ -6583,6 +6643,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "上升趋势"
+          }
+        }
+      }
+    },
+    "upcoming": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即将到来"
           }
         }
       }

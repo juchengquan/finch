@@ -660,5 +660,12 @@
   "%@ is due. Confirm now?": "%@ 已到期。立即确认？",
   "Your weekly digest": "本周摘要",
   "You spent %1$@ across %2$lld transactions this week.": "本周你在 %2$lld 笔交易中花费了 %1$@。",
-  "%1$@ used — %2$@ of %3$@.": "已使用 %1$@ —— %2$@ / %3$@。"
+  "%1$@ used — %2$@ of %3$@.": "已使用 %1$@ —— %2$@ / %3$@。",
+  "Matching": "匹配",
+  "Real inflows matching these scopes fund the goal. Set at least one category, account, tag, or merchant.": "符合这些范围的实际流入将计入目标。请至少设置一个类别、账户、标签或商户。",
+  "\"Saved so far\" is money set aside before tracking began. Matching transactions add on top of it.": "“已存金额”是开始跟踪前预留的金额。匹配的交易会在此基础上累加。",
+  "done": "已完成",
+  "missed": "已错过",
+  "pending": "待处理",
+  "upcoming": "即将到来"
 }
