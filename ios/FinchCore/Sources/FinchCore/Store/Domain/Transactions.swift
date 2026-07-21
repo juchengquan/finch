@@ -207,6 +207,8 @@ public enum Transactions {
         let counterpartyId: String?
         let skipRules: Bool?
         let tagIds: [String]?
+        let sourceTemplateId: String?
+        let occurrenceDate: String?
     }
 
     static func addTransaction(_ db: Database, _ args: Args) throws {
@@ -242,6 +244,7 @@ public enum Transactions {
                 autoBalance: .category(a.categoryId),
                 notes: (a.note?.isEmpty ?? true) ? nil : a.note,
                 counterpartyId: counterpartyId, refundedEntryId: refundedEntryId,
+                sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
                 skipRules: a.skipRules ?? false))
             try Budgets.invalidateForEntry(db, eid)
             try insertTags(db, entryId: eid, tagIds: a.tagIds)
@@ -254,6 +257,7 @@ public enum Transactions {
             notes: (a.note?.isEmpty ?? true) ? nil : a.note,
             status: a.status.flatMap(Entries.Status.init(rawValue:)),
             counterpartyId: counterpartyId, skipRules: a.skipRules ?? false,
+            sourceTemplateId: a.sourceTemplateId, occurrenceDate: a.occurrenceDate,
             refundedEntryId: refundedEntryId))
         try Budgets.invalidateForEntry(db, eid)
         try insertTags(db, entryId: eid, tagIds: a.tagIds)

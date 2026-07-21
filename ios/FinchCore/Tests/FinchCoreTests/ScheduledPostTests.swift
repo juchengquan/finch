@@ -47,4 +47,40 @@ final class ScheduledPostTests: XCTestCase {
             XCTAssertEqual(r?["date"] as String?, r?["occurrence_date"] as String?)
         }
     }
+
+    /// The add-transaction sheet needs to be able to post a scheduled occurrence
+    /// directly, carrying the template link through so the badge/progress can
+    /// update. Covers the same-currency (postSimple) path.
+    func test_addTransaction_canCarryTheTemplateLink() throws {
+        let q = try TestSeed.base()   // l1 / a1 / c1
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"),
+            "amount": .double(-40), "merchant": .string("Gym"),
+            "date": .string("2026-07-21"),
+            "sourceTemplateId": .string("s1"), "occurrenceDate": .string("2026-07-15"),
+        ]))
+        try q.read { db in
+            let r = try Row.fetchOne(db, sql: "SELECT source_template_id, occurrence_date FROM entries WHERE description = 'Gym'")
+            XCTAssertEqual(r?["source_template_id"], "s1")
+            XCTAssertEqual(r?["occurrence_date"], "2026-07-15")
+        }
+    }
+
+    /// Same as above but forces the foreign-currency branch of
+    /// addTransactionReturningId (account currency USD, input currency EUR) —
+    /// this is the branch most likely to silently drop the new fields.
+    func test_addTransaction_canCarryTheTemplateLink_foreignCurrencyBranch() throws {
+        let q = try TestSeed.base()   // l1 / a1(USD) / c1
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a1"), "currency": .string("EUR"),
+            "amount": .double(-40), "merchant": .string("Gym EUR"),
+            "date": .string("2026-07-21"),
+            "sourceTemplateId": .string("s1"), "occurrenceDate": .string("2026-07-15"),
+        ]))
+        try q.read { db in
+            let r = try Row.fetchOne(db, sql: "SELECT source_template_id, occurrence_date FROM entries WHERE description = 'Gym EUR'")
+            XCTAssertEqual(r?["source_template_id"], "s1")
+            XCTAssertEqual(r?["occurrence_date"], "2026-07-15")
+        }
+    }
 }

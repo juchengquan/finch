@@ -335,6 +335,8 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
       counterpartyId,
       refundedEntryId: input.refundedTransactionId ?? null,
       skipRules: input.skipRules,
+      sourceTemplateId: input.sourceTemplateId ?? null,
+      occurrenceDate: input.occurrenceDate ?? null,
       legs: [{
         accountId: input.accountId,
         amount: convToAcct.amountBase,  // account-native
@@ -363,6 +365,8 @@ export async function addTransaction(exec: Exec, input: AddInput): Promise<strin
     counterpartyId,
     refundedEntryId: input.refundedTransactionId ?? null,
     skipRules: input.skipRules,
+    sourceTemplateId: input.sourceTemplateId ?? null,
+    occurrenceDate: input.occurrenceDate ?? null,
   });
   return entryId;
 }
