@@ -258,7 +258,18 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
 - **The encapsulation boundary is the module, not the type.** `FinchStore` members shared with its
   `+Sync` / `+ImportExport` / `+ViewHelpers` extensions are intentionally `internal`, not `private`
   — don't "tighten" them.
-- **Driving the simulator** (`ios/docs/simulator-ui-driving.md`): `simctl` has no tap/swipe — use
-  `idb ui tap` / `idb ui describe-all`, or AppleScript via Accessibility. Fastest jumps use
-  **DEBUG-only launch args** `-initialTab <tab>` and `-openAdd YES` (`FinchApp.swift init()`), or
-  the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
+- **Driving the simulator** — `simctl` has no tap/swipe. **Use `idb`**: it drives the sim over its
+  own companion socket and needs **no Accessibility permission**.
+  `~/.local/idb-venv/bin/idb ui tap <x> <y> --udid <UDID>` (also `ui swipe`, `ui describe-all`).
+  Installed via `brew install facebook/fb/idb-companion` + `fb-idb` in a **Python 3.11** venv —
+  `fb-idb` calls `asyncio.get_event_loop()`, which raises on 3.12+, so a default-Python venv fails
+  at startup. `ui describe-all` returns the accessibility tree with frames **in points** — use it to
+  *measure* layout rather than eyeballing screenshots (this is how the #554 sheet-inset bug was
+  found after several wrong guesses from pixel-squinting).
+  **AppleScript/AX is a dead end in this setup:** under `tmux`, TCC attributes `osascript` to the
+  detached tmux server (PPID 1), so granting Accessibility to the terminal *or* to ClaudeCode.app
+  changes nothing — you'd have to grant the tmux binary and restart the server, killing the session.
+  Fastest jumps use **DEBUG-only launch args** `-initialTab <tab>` and `-openAdd YES`
+  (`FinchApp.swift init()`), or the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
+  (`ios/docs/simulator-ui-driving.md` has the longer recipe, but note `ios/docs/` is swallowed by the
+  root `docs/` gitignore rule, so it is **local-only** and does not reach a fresh clone.)
