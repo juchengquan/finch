@@ -554,6 +554,12 @@ CREATE TABLE entries (
   -- refunds (partial returns).
   refunded_entry_id  TEXT REFERENCES entries(id) ON DELETE SET NULL,
   source_template_id TEXT,
+  -- The scheduled occurrence this entry fulfils (yyyy-MM-dd), when it was
+  -- posted from a template. NULL for everything else (no backfill on
+  -- existing rows). Resolution keys on `occurrence_date ?? date`, so a
+  -- transaction dated "when I actually paid" still resolves the occurrence
+  -- it was due on.
+  occurrence_date    TEXT,
   notes              TEXT,
   applied_rule_ids   TEXT,
   reviewed_at        TEXT,
@@ -585,6 +591,7 @@ CREATE TABLE entries (
 | `counterparty_id` | TEXT FK → `counterparties.id` · SET NULL | Set when `description` matches a row in `counterparties` (case-insensitive exact match within the same ledger). Resolved at insert/update by `resolveCounterpartyIdByName`. NULL when no catalog row matches — `description` stands on its own. Renames on the catalog row follow history automatically because the projection swaps `merchant` for the canonical name when this FK is set. SET NULL on delete preserves the row's plain description text. |
 | `refunded_entry_id` | TEXT FK → `entries.id` · SET NULL | Set on `kind='refund'` rows; points at the original expense being refunded. NULL on every other kind. |
 | `source_template_id` | TEXT | Link back to `scheduled_templates.id` for auto-posted occurrences (no FK — soft link). |
+| `occurrence_date` | TEXT | The scheduled occurrence (`YYYY-MM-DD`) this entry fulfils, when posted from a template via `source_template_id`. NULL otherwise, and NULL on every pre-existing row (no backfill). Resolution keys on `occurrence_date ?? date`, so posting a late/early occurrence under a different transaction date still resolves back to the occurrence it was due on. |
 | `notes` | TEXT | User memo. |
 | `applied_rule_ids` | TEXT | JSON array of rule ids that fired against this entry (for the reviewed-pane UI). |
 | `reviewed_at` | TEXT | ISO 8601 UTC; set when the user reviews an auto-classified entry. Entry-level (not leg-level — a transfer's two legs share the same reviewed state, decision #3). |
