@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest, whatIfBaseline, budgetProgress } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, scheduledPostedMap, merchantStats, anomalyScore, weeklyDigest, whatIfBaseline, budgetProgress } from "@/lib/select";
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
@@ -850,6 +850,36 @@ test('accountForecast: installment_total caps future occurrences', () => {
   });
   const f = accountForecast(a, [plan], '2026-06-10', 365);
   expect(f.events.length).toBe(4);
+});
+
+// ---------------------------------------------------------------------------
+// scheduledPostedMap — mirrors FinchCore's Selectors.scheduledPostedMap
+// (ios/FinchCore/Tests/FinchCoreTests/ScheduledPostedMapTests.swift). Keep
+// these cases in lockstep with that file.
+// ---------------------------------------------------------------------------
+
+test('scheduledPostedMap: prefers occurrenceDate over the transaction date', () => {
+  // The bug: a transaction dated later must resolve the occurrence it fulfils.
+  const map = scheduledPostedMap([
+    tx({ id: 'e1', date: '2026-07-21', occurrenceDate: '2026-07-15', sourceTemplateId: 'gym' }),
+  ]);
+  expect(map.get('gym|2026-07-15')).not.toBeUndefined();
+  expect(map.get('gym|2026-07-21')).toBeUndefined();
+});
+
+test('scheduledPostedMap: falls back to the transaction date when occurrenceDate is absent', () => {
+  // No backfill: historical rows have no link and must behave exactly as before.
+  const map = scheduledPostedMap([
+    tx({ id: 'e1', date: '2026-07-15', occurrenceDate: undefined, sourceTemplateId: 'gym' }),
+  ]);
+  expect(map.get('gym|2026-07-15')).not.toBeUndefined();
+});
+
+test('scheduledPostedMap: ignores transactions with no sourceTemplateId', () => {
+  const map = scheduledPostedMap([
+    tx({ id: 'e1', date: '2026-07-15', occurrenceDate: undefined, sourceTemplateId: undefined }),
+  ]);
+  expect(map.size).toBe(0);
 });
 
 // ---------------------------------------------------------------------------
