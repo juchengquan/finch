@@ -1186,6 +1186,27 @@ export function accountForecast(
   };
 }
 
+/**
+ * "templateId|occurrenceDate" → isPending, for every posted occurrence (txns
+ * whose sourceTemplateId is set). true => pending; false => done. An absent
+ * key means only **not posted** — callers must compare the date against
+ * today to tell `upcoming` (still ahead) from `missed` (past, and nobody
+ * posted it). Mirrors FinchCore's `Selectors.scheduledPostedMap`
+ * (ios/FinchCore/Sources/FinchCore/Selectors/Forecast.swift) — keep the two
+ * in lockstep.
+ */
+export function scheduledPostedMap(txns: Tx[]): Map<string, boolean> {
+  const out = new Map<string, boolean>();
+  // Key on the occurrence the entry FULFILS, not the day it was recorded —
+  // they differ when the user posts a missed item on a later date. Undefined
+  // falls back to `date`, which is the pre-2026-07-22 behaviour, so
+  // historical generateDue postings still resolve with no backfill.
+  for (const t of txns) {
+    if (t.sourceTemplateId) out.set(`${t.sourceTemplateId}|${t.occurrenceDate ?? t.date}`, !!t.pending);
+  }
+  return out;
+}
+
 const byDateAsc = (a: Tx, b: Tx) => {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
   const at = a.time ?? '';
