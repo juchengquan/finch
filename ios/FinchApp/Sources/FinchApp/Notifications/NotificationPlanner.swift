@@ -5,12 +5,16 @@ import FinchCore
 /// `UNNotificationCategory` identifiers.
 public enum NotificationKind: String, CaseIterable, Sendable {
     case scheduledDue, budgetWarning, anomaly, weeklyDigest
+    /// String(localized:) — NOT a bare literal. Call sites pass this straight to
+    /// `Toggle(_:isOn:)`, and a plain String selects SwiftUI's StringProtocol
+    /// overload, which does no lookup: the Settings toggles rendered English in
+    /// every language.
     public var title: String {
         switch self {
-        case .scheduledDue: return "Scheduled reminders"
-        case .budgetWarning: return "Budget warnings"
-        case .anomaly: return "Unusual transactions"
-        case .weeklyDigest: return "Weekly digest"
+        case .scheduledDue: return String(localized: "Scheduled reminders")
+        case .budgetWarning: return String(localized: "Budget warnings")
+        case .anomaly: return String(localized: "Unusual transactions")
+        case .weeklyDigest: return String(localized: "Weekly digest")
         }
     }
 }
@@ -56,10 +60,15 @@ public enum NotificationPlanner {
             for b in budgets {
                 let p = Selectors.budgetProgress(b, txns, today, categories)
                 if Double(p.pct) >= b.warningPct {
+                    // Pre-formatted so the localized string carries NO literal `%`.
+                    // A bare `%` beside interpolation must round-trip as `%%` through
+                    // extraction, and this body was the one notification string still
+                    // rendering English on-device while its sibling title localized.
+                    let pctText = "\(p.pct)%"
                     out.append(PlannedNotification(
                         id: "budget:\(b.id)", kind: .budgetWarning,
-                        title: "Budget alert: \(b.name)",
-                        body: "\(p.pct)% used — \(money(p.used)) of \(money(p.base)).",
+                        title: String(localized: "Budget alert: \(b.name)"),
+                        body: String(localized: "\(pctText) used — \(money(p.used)) of \(money(p.base))."),
                         tab: .budgets, focusId: b.id))
                 }
             }
@@ -71,8 +80,8 @@ public enum NotificationPlanner {
                 guard let a = Selectors.anomalyScore(t, stats), a.isAnomaly else { continue }
                 out.append(PlannedNotification(
                     id: "anomaly:\(t.id)", kind: .anomaly,
-                    title: "Unusual transaction",
-                    body: "\(t.merchant) (\(money(t.amount))) looks higher than usual.",
+                    title: String(localized: "Unusual transaction"),
+                    body: String(localized: "\(t.merchant) (\(money(t.amount))) looks higher than usual."),
                     tab: .activity, focusId: t.id))
             }
         }
@@ -81,8 +90,8 @@ public enum NotificationPlanner {
             for s in scheduled where !s.nextRun.isEmpty && s.nextRun <= wallToday {
                 out.append(PlannedNotification(
                     id: "scheduled:\(s.id)", kind: .scheduledDue,
-                    title: "Scheduled: \(s.name)",
-                    body: "\(s.name) is due. Confirm now?",
+                    title: String(localized: "Scheduled: \(s.name)"),
+                    body: String(localized: "\(s.name) is due. Confirm now?"),
                     tab: .scheduled, focusId: s.id))
             }
         }
@@ -90,8 +99,8 @@ public enum NotificationPlanner {
         if enabled.contains(.weeklyDigest), let d = Selectors.weeklyDigest(txns, ledgerId, wallToday) {
             out.append(PlannedNotification(
                 id: "digest:\(d.weekStart)", kind: .weeklyDigest,
-                title: "Your weekly digest",
-                body: "You spent \(money(d.spent)) across \(d.txCount) transactions this week.",
+                title: String(localized: "Your weekly digest"),
+                body: String(localized: "You spent \(money(d.spent)) across \(d.txCount) transactions this week."),
                 tab: .insights, focusId: nil))
         }
 

@@ -143,16 +143,19 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         var c = DateComponents(); c.weekday = 1; c.hour = 9; c.minute = 0; return c   // Sun 09:00
     }
 
+    /// Action titles use String(localized:) — UNNotificationAction takes a plain
+    /// String, so these buttons showed English in every language. Registered once
+    /// at configure(); a language change needs the relaunch the app already asks for.
     private func registerCategories() {
         let scheduled = UNNotificationCategory(identifier: NotificationKind.scheduledDue.rawValue, actions: [
-            UNNotificationAction(identifier: "confirmNow", title: "Confirm now", options: [.foreground]),
-            UNNotificationAction(identifier: "snooze1h", title: "Snooze 1 hour", options: []),
+            UNNotificationAction(identifier: "confirmNow", title: String(localized: "Confirm now"), options: [.foreground]),
+            UNNotificationAction(identifier: "snooze1h", title: String(localized: "Snooze 1 hour"), options: []),
         ], intentIdentifiers: [], options: [])
         let budget = UNNotificationCategory(identifier: NotificationKind.budgetWarning.rawValue, actions: [
-            UNNotificationAction(identifier: "viewBudgets", title: "View budgets", options: [.foreground]),
+            UNNotificationAction(identifier: "viewBudgets", title: String(localized: "View budgets"), options: [.foreground]),
         ], intentIdentifiers: [], options: [])
         let anomaly = UNNotificationCategory(identifier: NotificationKind.anomaly.rawValue, actions: [
-            UNNotificationAction(identifier: "viewTransaction", title: "View transaction", options: [.foreground]),
+            UNNotificationAction(identifier: "viewTransaction", title: String(localized: "View transaction"), options: [.foreground]),
         ], intentIdentifiers: [], options: [])
         let digest = UNNotificationCategory(identifier: NotificationKind.weeklyDigest.rawValue, actions: [],
                                             intentIdentifiers: [], options: [])

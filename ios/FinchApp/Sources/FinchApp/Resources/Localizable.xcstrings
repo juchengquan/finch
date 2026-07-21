@@ -23,6 +23,16 @@
         }
       }
     },
+    "%1$@ (%2$@) looks higher than usual.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（%2$@）高于平常。"
+          }
+        }
+      }
+    },
     "%1$@ / %2$@": {},
     "%1$@ is %2$@.": {
       "localizations": {
@@ -60,6 +70,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "已花费 %1$@ · 共 %2$@"
+          }
+        }
+      }
+    },
+    "%1$@ used — %2$@ of %3$@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已使用 %1$@ —— %2$@ / %3$@。"
           }
         }
       }
@@ -129,6 +149,16 @@
       }
     },
     "%@": {},
+    "%@ is due. Confirm now?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 已到期。立即确认？"
+          }
+        }
+      }
+    },
     "%@ is removed from all transactions.": {
       "localizations": {
         "zh-Hans": {
@@ -1334,6 +1364,26 @@
         }
       }
     },
+    "Budget alert: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预算提醒：%@"
+          }
+        }
+      }
+    },
+    "Budget warnings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预算提醒"
+          }
+        }
+      }
+    },
     "Budgets": {
       "localizations": {
         "zh-Hans": {
@@ -1620,6 +1670,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "确认全部 %lld 笔待处理"
+          }
+        }
+      }
+    },
+    "Confirm now": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即确认"
           }
         }
       }
@@ -4954,6 +5014,26 @@
         }
       }
     },
+    "Scheduled reminders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划提醒"
+          }
+        }
+      }
+    },
+    "Scheduled: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划：%@"
+          }
+        }
+      }
+    },
     "Schema version": {
       "localizations": {
         "zh-Hans": {
@@ -5260,6 +5340,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "大小"
+          }
+        }
+      }
+    },
+    "Snooze 1 hour": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推迟 1 小时"
           }
         }
       }
@@ -6054,6 +6144,26 @@
         }
       }
     },
+    "Unusual transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异常交易"
+          }
+        }
+      }
+    },
+    "Unusual transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异常交易"
+          }
+        }
+      }
+    },
     "Unverify": {
       "localizations": {
         "zh-Hans": {
@@ -6184,12 +6294,42 @@
         }
       }
     },
+    "View budgets": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看预算"
+          }
+        }
+      }
+    },
+    "View transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看交易"
+          }
+        }
+      }
+    },
     "Weekday": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "星期"
+          }
+        }
+      }
+    },
+    "Weekly digest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每周摘要"
           }
         }
       }
@@ -6230,6 +6370,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "昨天"
+          }
+        }
+      }
+    },
+    "You spent %1$@ across %2$lld transactions this week.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本周你在 %2$lld 笔交易中花费了 %1$@。"
+          }
+        }
+      }
+    },
+    "Your weekly digest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本周摘要"
           }
         }
       }
