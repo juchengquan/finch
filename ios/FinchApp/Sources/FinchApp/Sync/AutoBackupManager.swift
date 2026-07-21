@@ -27,7 +27,16 @@ public final class AutoBackupManager: ObservableObject {
     private weak var store: FinchStore?
     private var pending: Task<Void, Never>?
     private let debounceSeconds: TimeInterval = 5
-    private let retention = 14
+
+    // Per-device backup prefs (UserDefaults; the Backups settings UI binds the same
+    // keys via @AppStorage). Defaults: enabled, keep 14, daily.
+    public static let enabledKey = "finch.backupsEnabled"
+    public static let retentionKey = "finch.backupRetention"
+    public static let frequencyKey = "finch.backupFrequency"
+    public static let defaultRetention = 14
+    private var enabled: Bool { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true }
+    private var retention: Int { let v = UserDefaults.standard.integer(forKey: Self.retentionKey); return v == 0 ? Self.defaultRetention : v }
+    private var frequency: BackupFrequency { BackupFrequency(rawValue: UserDefaults.standard.string(forKey: Self.frequencyKey) ?? "") ?? .daily }
 
     public var backupsDir: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -41,21 +50,37 @@ public final class AutoBackupManager: ObservableObject {
             .flatMap { name in (try? FileManager.default.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)[.modificationDate]) as? Date }
     }
 
-    /// Coalesce a burst of writes into one pack a short interval later.
+    /// Coalesce a burst of writes into one pack a short interval later — gated by
+    /// the enable toggle and throttled by the chosen frequency.
     public func schedule() {
+        guard enabled else { return }
         pending?.cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(for: .seconds(self?.debounceSeconds ?? 5))
-            if Task.isCancelled { return }
-            await self?.writeBackup()
+            guard let self, !Task.isCancelled, self.enabled,
+                  BackupSchedule.shouldAutoBackup(lastBackupAt: self.lastBackupAt, frequency: self.frequency, now: Date())
+            else { return }
+            await self.writeBackup()
         }
     }
 
-    /// Immediate pack (manual "Back up now" / app backgrounding).
+    /// Forced immediate pack — manual "Back up now" and the pre-restore safety
+    /// backup. Always runs (bypasses the enable toggle + frequency throttle).
     public func flush() async {
         pending?.cancel()
         await writeBackup()
     }
+
+    /// Throttled immediate pack for app-backgrounding: respects the enable toggle
+    /// + frequency (unlike the forced flush()).
+    public func backupIfDue() async {
+        guard enabled, BackupSchedule.shouldAutoBackup(lastBackupAt: lastBackupAt, frequency: frequency, now: Date()) else { return }
+        pending?.cancel()
+        await writeBackup()
+    }
+
+    /// Re-prune to the current retention now (when the user lowers the count).
+    public func pruneNow() { prune() }
 
     private func writeBackup() async {
         guard let store, !store.ledgers.isEmpty else { return }

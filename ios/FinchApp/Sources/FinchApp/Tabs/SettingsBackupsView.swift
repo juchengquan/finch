@@ -1,5 +1,6 @@
 import SwiftUI
 import FinchCore
+import UniformTypeIdentifiers
 
 /// Settings › Backup & Sync › Backups — the merged on-device + iCloud Drive
 /// backup history. Tap a snapshot to restore it: **replaces all current data**,
@@ -12,6 +13,10 @@ struct SettingsBackupsView: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
 
+    @AppStorage(AutoBackupManager.enabledKey) private var backupsEnabled = true
+    @AppStorage(AutoBackupManager.retentionKey) private var retention = AutoBackupManager.defaultRetention
+    @AppStorage(AutoBackupManager.frequencyKey) private var frequencyRaw = BackupFrequency.daily.rawValue
+    @State private var pickingFolder = false
     @State private var pendingRestore: BackupEntry?
     @State private var restoring: BackupEntry?     // in-flight (download + loadPack)
     @State private var errorMessage: String?
@@ -23,22 +28,55 @@ struct SettingsBackupsView: View {
 
     var body: some View {
         List {
+            Section {
+                Toggle("Enable backups", isOn: $backupsEnabled)
+                if icloud.mirrorFailing {
+                    Label("Backup folder unavailable — re-select it. Backups are still saved on this device.", systemImage: "exclamationmark.icloud")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                Button { pickingFolder = true } label: {
+                    LabeledContent("Backup folder", value: icloud.designatedFolderName ?? "None — local only")
+                }
+                .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
+                    if case .success(let url) = result { icloud.setFolder(url) }
+                }
+                if icloud.designatedFolderName != nil {
+                    Button("Use local only", role: .destructive) { icloud.clearFolder() }
+                }
+                Stepper(value: $retention, in: 3...50) {
+                    LabeledContent("Number of backups", value: "\(retention)")
+                }
+                Picker("Frequency", selection: $frequencyRaw) {
+                    ForEach(BackupFrequency.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                Button("Back up now") { Task { await backups.flush() } }
+                    .disabled(store.ledgers.isEmpty)
+                if let err = backups.lastError {
+                    Text(err).foregroundStyle(.red).font(.caption)
+                }
+            } header: {
+                Text("Backup")
+            } footer: {
+                Text("Automatic backups keep the newest \(retention) on this device, mirrored to your backup folder when set. Frequency is a minimum interval — at most once per that period, the next time you make a change. “Back up now” always runs.")
+            }
+
             if entries.isEmpty {
-                ContentUnavailableView {
-                    Label("No backups yet", systemImage: "clock.arrow.circlepath")
-                } description: {
-                    Text("Backups are taken automatically after you make changes.")
+                Section("History") {
+                    Text("No backups yet.").foregroundStyle(.secondary).font(.callout)
                 }
             } else {
                 Section {
                     ForEach(Array(entries.enumerated()), id: \.element.id) { idx, e in
                         row(e, isLatest: idx == 0)
                     }
+                } header: {
+                    Text("History")
                 } footer: {
-                    Text("Tap a backup to restore it — this replaces all current data, and your current data is backed up first. Backups live on this device and in your chosen backup folder (when set).")
+                    Text("Tap a backup to restore it — this replaces all current data, and your current data is backed up first.")
                 }
             }
         }
+        .onChange(of: retention) { _, _ in backups.pruneNow() }
         .navigationTitle("Backups")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
