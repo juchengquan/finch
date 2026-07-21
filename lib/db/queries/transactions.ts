@@ -60,6 +60,7 @@ function legRowToTx(r: Record<string, unknown>): Tx {
     ledgerId: String(r.ledger_id),
     // transferGroupId filled by enrichLegTxs (multi-account-leg entries)
     sourceTemplateId: r.source_template_id == null ? undefined : String(r.source_template_id),
+    occurrenceDate: r.occurrence_date == null ? undefined : String(r.occurrence_date),
     // refundedTransactionId filled by enrichLegTxs
     counterpartyId: r.counterparty_id == null ? undefined : String(r.counterparty_id),
     clearedAt: r.p_cleared == null ? null : String(r.p_cleared),
@@ -88,7 +89,7 @@ const BASE_SELECT = `
   SELECT p.id AS pid, p.account_id AS p_account, p.amount AS p_amount, p.amount_base AS p_base,
          p.currency AS p_ccy, p.orig_amount, p.orig_currency, p.cleared_at AS p_cleared, p.memo AS p_memo,
          e.id AS eid, e.ledger_id, e.date, e.time, e.description, e.kind, e.status, e.counterparty_id,
-         e.refunded_entry_id, e.source_template_id, e.notes, e.applied_rule_ids, e.reviewed_at,
+         e.refunded_entry_id, e.source_template_id, e.occurrence_date, e.notes, e.applied_rule_ids, e.reviewed_at,
          e.created_at AS e_created_at
     FROM postings p JOIN entries e ON e.id = p.entry_id
    WHERE p.account_id IS NOT NULL AND e.kind != 'opening'

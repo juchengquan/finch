@@ -2,7 +2,8 @@ import { test, expect } from 'bun:test';
 import { buildState, projectState } from '@/lib/db/state';
 import { applyMutation } from '@/lib/db/mutate';
 import { listCounterparties } from '@/lib/db/queries/counterparties';
-import { freshDb, seededAndAudited } from './core/test-utils';
+import { addTransaction } from '@/lib/db/domain/transactions/queries';
+import { freshDb, seededDb, seededAndAudited } from './core/test-utils';
 import type { PersistState } from './core/repo';
 
 const sample: PersistState = {
@@ -123,6 +124,27 @@ test('mobile bottom-bar tab ids round-trip through app_state', async () => {
   // Overwrite replaces the prior value (single app_state row).
   await applyMutation(exec, 'setMobileTabIds', { ids: ['activity'] });
   expect((await projectState(exec)).mobileTabIds).toEqual(['activity']);
+});
+
+test('projectState carries occurrenceDate to the client Tx, falling back to undefined when absent (no backfill)', async () => {
+  const { exec } = await seededDb();
+  // Posted late against an earlier occurrence — the read path must expose
+  // the explicit link, not just the entry's own date.
+  await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -40, merchant: 'Gym',
+    date: '2026-07-21', sourceTemplateId: 's1', occurrenceDate: '2026-07-15',
+  });
+  // A plain manual entry (no schedule link) — occurrenceDate must stay
+  // undefined, matching every pre-existing row (NULL in the DB).
+  await addTransaction(exec, {
+    ledgerId: 'personal', accountId: 'chk', amount: -40, merchant: 'Gym',
+    date: '2026-07-21', sourceTemplateId: 's2',
+  });
+  const { transactions } = await projectState(exec);
+  const linked = transactions.find((t) => t.sourceTemplateId === 's1')!;
+  expect(linked.occurrenceDate).toBe('2026-07-15');
+  const plain = transactions.find((t) => t.sourceTemplateId === 's2')!;
+  expect(plain.occurrenceDate).toBeUndefined();
 });
 
 test('per-ledger display currency round-trips through app_state', async () => {
