@@ -262,6 +262,9 @@ struct ScheduledCalendarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // TxRow density: default insets made this two-line row 65pt, over the 60pt
+        // point where iOS renders swipe actions as circles with the label outside.
+        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
         // Swipe actions mirror the List view: trailing Delete + Edit (Edit at the
         // trailing edge), leading Post (only while the occurrence is still upcoming).
         .swipeActions(edge: .trailing) {
