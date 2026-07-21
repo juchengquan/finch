@@ -246,7 +246,9 @@ extension Selectors {
     }
 
     /// "templateId|date" → isPending, for every posted occurrence (txns whose
-    /// sourceTemplateId is set). Absent key ⇒ upcoming; true ⇒ pending; false ⇒ done.
+    /// sourceTemplateId is set). true ⇒ pending; false ⇒ done. An absent key means
+    /// only **not posted** — callers must compare the date against today to tell
+    /// `upcoming` (still ahead) from `missed` (past, and nobody posted it).
     public static func scheduledPostedMap(_ txns: [Tx]) -> [String: Bool] {
         var out: [String: Bool] = [:]
         for t in txns { if let s = t.sourceTemplateId { out["\(s)|\(t.date)"] = (t.pending ?? false) } }
