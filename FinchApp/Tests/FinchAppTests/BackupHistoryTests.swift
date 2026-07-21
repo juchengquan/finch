@@ -82,4 +82,24 @@ final class BackupHistoryTests: XCTestCase {
         let t = MirrorAlert.next(wasFailing: false, failed: true)
         XCTAssertTrue(t.failing); XCTAssertTrue(t.shouldAlert)
     }
+
+    // Device-id suffix: filenames are `finch-<stamp>-<deviceId>.finch` so two
+    // devices never collide in a shared folder. Parsing ignores the suffix, and
+    // the old suffix-less format still parses.
+    func test_dateFromName_ignoresDeviceIdSuffix_andBackCompat() {
+        let old = "finch-20260721-131200.finch"
+        let withId = "finch-20260721-131200-ab3f9c.finch"
+        XCTAssertNotNil(BackupHistory.date(fromName: withId))
+        XCTAssertEqual(BackupHistory.date(fromName: withId), BackupHistory.date(fromName: old))
+    }
+
+    func test_merge_sameSecondDifferentDevices_noFalseCollision() {
+        // Same second, two devices → different filenames → two entries (not deduped).
+        let a = "finch-20260721-131200-aaaa11.finch"
+        let b = "finch-20260721-131200-bbbb22.finch"
+        let m = BackupHistory.merge(local: [LocalBackup(name: a, size: 1)],
+                                    iCloud: [ICloudBackup(name: b, size: 2, downloaded: false)])
+        XCTAssertEqual(m.count, 2)
+        XCTAssertEqual(Set(m.map(\.name)), [a, b])
+    }
 }
