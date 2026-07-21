@@ -1,5 +1,6 @@
 import SwiftUI
 import FinchCore
+import UniformTypeIdentifiers
 
 /// Settings home — grouped drill-in sections: **General** (appearance,
 /// notifications, security), **Ledger** (categories, tags — per-ledger),
@@ -79,7 +80,7 @@ struct SettingsBackupSyncView: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
     @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
-    @State private var importError: String?
+    @State private var pickingFolder = false
 
     var body: some View {
         List {
@@ -117,21 +118,28 @@ struct SettingsBackupSyncView: View {
                 if let err = backups.lastError {
                     Text(err).foregroundStyle(.red).font(.caption)
                 }
-                LabeledContent("iCloud Drive", value: icloud.available ? "On" : "Unavailable")
-                if icloud.newerRemotePack != nil {
-                    Button("Import newer version from iCloud") {
-                        if let data = icloud.dataForImport() {
-                            Task {
-                                do { try await store.loadPack(from: data); icloud.clearPendingImport() }
-                                catch { importError = i18nMessage(error) }
-                            }
-                        }
-                    }
+                if icloud.mirrorFailing {
+                    Label("Backup folder unavailable — re-select it. Backups are still saved on this device.", systemImage: "exclamationmark.icloud")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                Button { pickingFolder = true } label: {
+                    LabeledContent("Backup folder", value: icloud.designatedFolderName ?? "None — local only")
+                }
+                .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
+                    if case .success(let url) = result { icloud.setFolder(url) }
+                }
+                if icloud.designatedFolderName != nil {
+                    Button("Use local only", role: .destructive) { icloud.clearFolder() }
+                }
+                NavigationLink {
+                    SettingsBackupsView()
+                } label: {
+                    LabeledContent("Backups", value: "\(BackupHistory.merge(local: backups.localBackups(), iCloud: icloud.remoteBackups).count)")
                 }
             } header: {
                 Text("Backups")
             } footer: {
-                Text("Automatic local .finch backups after edits (kept: last 14), mirrored to iCloud Drive when signed in. Newer versions from other devices are offered for import (never auto-replaced).")
+                Text("Automatic .finch backups after edits (kept: last 14) on this device, plus a backup folder you choose (pick an iCloud Drive folder to keep an off-device copy and sync across devices). Open Backups to browse and restore.")
             }
 
             Section {
@@ -145,7 +153,6 @@ struct SettingsBackupSyncView: View {
             }
         }
         .navigationTitle("Backup & Sync")
-        .errorAlert($importError, title: "Import failed")
     }
 }
 

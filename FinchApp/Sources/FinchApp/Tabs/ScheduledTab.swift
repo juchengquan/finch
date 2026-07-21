@@ -87,9 +87,10 @@ struct ScheduledTab: View {
                                     } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
                                         .buttonStyle(.plain)
                                         .swipeActions(edge: .trailing) {
+                                            // Edit declared first → sits at the trailing edge (rightmost); Delete to its left.
                                             // Not role: .destructive — the role plays a fake row-removal animation before the confirm.
-                                            Button { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                                             Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+                                            Button { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
                                         }
                                         .swipeActions(edge: .leading) {
                                             Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
@@ -148,6 +149,7 @@ struct ScheduledTab: View {
                             ScheduledCalendarView(templates: filteredScheduled,
                                                   onEdit: { editing = $0 },
                                                   onPost: { postNow($0, occurrence: $1) },
+                                                  onDelete: { pendingDelete = $0 },
                                                   onAdd: { addPrefill = $0; showingAdd = true },
                                                   onSelect: selection.map { sel in { sel.wrappedValue = $0.id } },
                                                   topRow: AnyView(modePickerRow))

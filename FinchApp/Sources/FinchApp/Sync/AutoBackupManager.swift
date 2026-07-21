@@ -62,7 +62,7 @@ public final class AutoBackupManager: ObservableObject {
         do {
             let data = try await store.buildPack()
             try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
-            let url = backupsDir.appendingPathComponent("finch-\(Self.stamp()).finch")
+            let url = backupsDir.appendingPathComponent("finch-\(Self.stamp())-\(Self.deviceId).finch")
             try data.write(to: url)
             prune()
             WidgetSnapshotWriter.write(from: store)   // Phase 7: refresh the widget data
@@ -79,6 +79,24 @@ public final class AutoBackupManager: ObservableObject {
             .filter { $0.hasPrefix("finch-") && $0.hasSuffix(".finch") } ?? []
         for name in BackupPruner.toPrune(names, keep: retention) {
             try? FileManager.default.removeItem(at: backupsDir.appendingPathComponent(name))
+            // Lockstep: drop this device's OWN snapshot from iCloud too (same
+            // filename we pushed). Only ever prunes our own — other devices' names
+            // aren't in our local dir, so they're never touched.
+            ICloudSync.shared.delete(name: name)
+        }
+    }
+
+    /// URL of a named local backup pack.
+    public func url(forName name: String) -> URL { backupsDir.appendingPathComponent(name) }
+
+    /// The on-device backup snapshots (name + size), for the merged history.
+    public func localBackups() -> [LocalBackup] {
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: backupsDir.path))?
+            .filter { $0.hasPrefix("finch-") && $0.hasSuffix(".finch") } ?? []
+        return names.map { name in
+            let attrs = try? fm.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)
+            return LocalBackup(name: name, size: (attrs?[.size] as? NSNumber)?.int64Value ?? 0)
         }
     }
 
@@ -86,4 +104,16 @@ public final class AutoBackupManager: ObservableObject {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
         return f.string(from: Date())
     }
+
+    /// A short, stable per-device id appended to backup filenames so two devices
+    /// backing up in the same second never write the SAME filename into a shared
+    /// backup folder (which would overwrite one and let a lockstep prune delete the
+    /// other). Random hex, generated once, persisted per-device.
+    static let deviceId: String = {
+        let key = "finch.backupDeviceId"
+        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+        let id = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(6)).lowercased()
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }()
 }
