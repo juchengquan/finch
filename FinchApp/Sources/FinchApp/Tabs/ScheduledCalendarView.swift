@@ -9,7 +9,9 @@ struct ScheduledCalendarView: View {
     /// Templates to plot — already narrowed by the Scheduled tab's search query.
     var templates: [ScheduledTemplate]
     var onEdit: (ScheduledTemplate) -> Void
-    var onPost: (ScheduledTemplate) -> Void
+    /// (template, occurrence date) — the tapped CELL's date, not today. Posting
+    /// has to record which occurrence it fulfils or the badge never flips.
+    var onPost: (ScheduledTemplate, String) -> Void
     var onAdd: (Date) -> Void
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
     /// the context menu's "Edit" still edits; nil → taps edit (compact behavior).
@@ -264,7 +266,7 @@ struct ScheduledCalendarView: View {
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
-            if st == .upcoming || st == .missed { Button { onPost(t) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") } }
         }
     }
 

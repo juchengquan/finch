@@ -23,6 +23,15 @@ struct AddTransactionSheet: View {
     /// merchant, category, account, currency, tags). Date stays today and the
     /// note stays blank — a duplicate is a new event; the user confirms via Save.
     var prefill: Tx? = nil
+    /// Set when the prefill is a scheduled OCCURRENCE ("Post now" on the calendar):
+    /// the saved transaction then carries the template link and the occurrence it
+    /// fulfils, which is what flips the calendar badge.
+    ///
+    /// Not inferred from `prefill.sourceTemplateId` — DUPLICATING a scheduled
+    /// posting hands over a Tx with that field already set, and a duplicate is an
+    /// independent event: re-claiming the source's occurrence would flip that
+    /// cell's badge and eat an installment slot.
+    var postsScheduledOccurrence = false
 
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer, refund, adjust
@@ -373,8 +382,20 @@ struct AddTransactionSheet: View {
         if let p = prefill, !prefillApplied {
             prefillApplied = true
             kind = Self.prefillKind(p)
-            amount = String(format: "%g", abs(p.nativeAmount ?? p.amount))
+            // 0 leaves the field EMPTY rather than showing a literal "0": that's
+            // the variable-amount scheduled template, whose whole point is that
+            // the user types the figure. (A zero-amount duplicate was never
+            // savable either — `save()` rejects it.)
+            let magnitude = abs(p.nativeAmount ?? p.amount)
+            amount = magnitude == 0 ? "" : String(format: "%g", magnitude)
             merchant = p.merchant
+            // A duplicate is a NEW event, so it keeps today's date — but a
+            // scheduled-occurrence prefill must land on the occurrence it
+            // fulfils, note included (a transfer has nowhere else to carry it).
+            if postsScheduledOccurrence {
+                if let d = AppDate.isoDay.date(from: p.date) { date = d }
+                if let n = p.note { note = n }
+            }
             if let c = p.category { categoryId = c }
             accountId = p.account
             if let cur = p.currency { currencyCode = cur }
@@ -396,6 +417,13 @@ struct AddTransactionSheet: View {
                     if let t = to, currency(of: fromAccountId) != currency(of: toAccountId) {
                         received = String(format: "%g", abs(t.nativeAmount ?? t.amount))
                     }
+                } else if let tid = p.sourceTemplateId,
+                          let tpl = store.scheduled.first(where: { $0.id == tid }) {
+                    // A scheduled-occurrence prefill has no posted legs to pair —
+                    // read both accounts off the template instead. (Same direction
+                    // the engine posts: from_account_id → account_id.)
+                    fromAccountId = tpl.fromAccountId ?? p.account
+                    toAccountId = tpl.accountId
                 }
             case .refund:
                 // Kept, not dropped: the sheet shows it and nothing is written until
@@ -478,6 +506,7 @@ struct AddTransactionSheet: View {
                 }
                 args["status"] = .string(status.rawValue)
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
+                applyScheduledLink(to: &args)
                 try store.apply(.createTransfer, Args(args))
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
@@ -505,6 +534,7 @@ struct AddTransactionSheet: View {
                     args["kind"] = .string("refund")
                     if let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
                 }
+                applyScheduledLink(to: &args)
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 if let eid, let splits = pendingSplits {
                     let payload: [JSONValue] = splits.map { .object([
@@ -524,6 +554,16 @@ struct AddTransactionSheet: View {
             Haptics.warning()
             errorMessage = i18nMessage(error)   // localizes I18nError (incl. zh), like every other write screen
         }
+    }
+
+    /// Carry the scheduled link through when this sheet was opened from a calendar
+    /// occurrence. `occurrenceDate` is what makes the badge flip: it names the cell
+    /// being fulfilled, so `Selectors.scheduledPostedMap` resolves it even when the
+    /// user moved the transaction's own date before saving.
+    private func applyScheduledLink(to args: inout [String: JSONValue]) {
+        guard postsScheduledOccurrence, let tid = prefill?.sourceTemplateId else { return }
+        args["sourceTemplateId"] = .string(tid)
+        if let occ = prefill?.occurrenceDate { args["occurrenceDate"] = .string(occ) }
     }
 
     // MARK: date/time formatting (local wall clock → stored columns)
