@@ -149,6 +149,42 @@ extension FinchStore {
         return runningBalanceCache?[tx.id] ?? 0
     }
 
+    // MARK: - Scheduled
+
+    /// How many split rows a scheduled template has. Non-zero on an income
+    /// template means the posting fans out across several ACCOUNTS — see
+    /// `ScheduledPostRouting`, which keeps those on the silent engine path.
+    public func scheduledSplitCount(templateId: String) -> Int {
+        guard let q = dbQueue else { return 0 }
+        return (try? Projection.scheduledSplitCount(dbQueue: q, templateId: templateId)) ?? 0
+    }
+
+    /// A draft `Tx` seeding the Add sheet from ONE occurrence of a scheduled
+    /// template — the same posting `postScheduled` would make, but presented for
+    /// confirmation instead of written silently.
+    ///
+    /// `date` and `occurrenceDate` are BOTH the occurrence: the date is what the
+    /// user sees and may still move, the occurrence is the calendar cell being
+    /// fulfilled, and keeping them separate is what lets the badge flip even when
+    /// the user re-dates the transaction (`Selectors.scheduledPostedMap`).
+    ///
+    /// A variable-amount template (`amount == nil`) yields 0, which the sheet
+    /// renders as an EMPTY amount field — that case used to be refused outright
+    /// by the engine (`error.scheduled.variableAmount`).
+    public func txPrefill(for template: ScheduledTemplate, occurrence: String) -> Tx {
+        let magnitude = template.amount.map(abs) ?? 0
+        let isInflow = template.type == "income" || template.type == "refund"
+        let description = template.description ?? template.name
+        return Tx(id: "", merchant: description, category: template.categoryId,
+                  amount: isInflow ? magnitude : -magnitude,
+                  account: template.accountId, date: occurrence,
+                  kind: template.type,
+                  // A transfer has no merchant field in the sheet, so its
+                  // description rides along as the note instead.
+                  note: template.type == "transfer" ? description : nil,
+                  sourceTemplateId: template.id, occurrenceDate: occurrence)
+    }
+
     // MARK: - Accounts grouping
 
     /// Group names in `account_groups.sort_order` (store.accountGroups is projected
