@@ -53,11 +53,6 @@ struct AddTransactionSheet: View {
     @State private var note = ""
     @State private var currencyCode = ""
     @State private var errorMessage: String?
-    /// Set during `seedDefaults` when a scheduled-occurrence transfer prefill's
-    /// template has no from-account — surfaces the engine's specific
-    /// `error.scheduled.missingAccount` on Save instead of the generic
-    /// "different accounts" message (see Save's transfer branch).
-    @State private var scheduledTransferMissingAccountName: String?
     @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
     @State private var dupConfirmed = false
     @State private var status: Entries.Status = .confirmed
@@ -456,15 +451,16 @@ struct AddTransactionSheet: View {
                     // Duplicate's Tx never drives this branch) is visible here,
                     // not just three files away in Projection's transferGroupId
                     // invariant.
+                    //
+                    // A template with no from-account is malformed and never
+                    // reaches here: ScheduledTab detects that before presenting
+                    // this sheet at all (surfacing the engine's
+                    // error.scheduled.missingAccount there), rather than this
+                    // sheet quietly falling back to "the first two accounts" and
+                    // failing on Save with no way to fix it.
                     if let from = tpl.fromAccountId {
                         fromAccountId = from
                         toAccountId = tpl.accountId
-                    } else {
-                        // A malformed template (no from-account) would otherwise
-                        // silently collapse both fields to the same account,
-                        // masking the engine's specific missingAccount error
-                        // behind the generic "different accounts" one on Save.
-                        scheduledTransferMissingAccountName = tpl.name
                     }
                 }
             case .refund:
@@ -534,11 +530,6 @@ struct AddTransactionSheet: View {
         }
         do {
             if kind == .transfer {
-                if let name = scheduledTransferMissingAccountName {
-                    errorMessage = i18nMessage(I18nError("error.scheduled.missingAccount", ["name": name],
-                                                          "\"\(name)\" is missing an account"))
-                    return
-                }
                 guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
                 var args: [String: JSONValue] = [
                     "fromAccountId": .string(fromAccountId), "toAccountId": .string(toAccountId),
