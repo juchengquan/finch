@@ -53,6 +53,11 @@ struct AddTransactionSheet: View {
     @State private var note = ""
     @State private var currencyCode = ""
     @State private var errorMessage: String?
+    /// Set during `seedDefaults` when a scheduled-occurrence transfer prefill's
+    /// template has no from-account — surfaces the engine's specific
+    /// `error.scheduled.missingAccount` on Save instead of the generic
+    /// "different accounts" message (see Save's transfer branch).
+    @State private var scheduledTransferMissingAccountName: String?
     @State private var pendingDuplicate: DuplicateMatch?   // soft duplicate nudge
     @State private var dupConfirmed = false
     @State private var status: Entries.Status = .confirmed
@@ -95,6 +100,21 @@ struct AddTransactionSheet: View {
         case "adjustment": return .adjust
         default:           return .expense
         }
+    }
+
+    /// The sourceTemplateId/occurrenceDate link args for a scheduled-occurrence
+    /// prefill — empty unless `posts` is true. DUPLICATING a scheduled posting
+    /// hands the sheet a real `Tx` that already carries these fields from ITS
+    /// OWN template; without this gate, re-linking here would claim that Tx's
+    /// occurrence — flipping its calendar badge and consuming an installment
+    /// slot the duplicate never earned. A `static` pure function so that
+    /// property is machine-checked (`ScheduledLinkArgsTests`), not just
+    /// reasoned about in a comment.
+    static func scheduledLinkArgs(prefill: Tx?, posts: Bool) -> [String: JSONValue] {
+        guard posts, let tid = prefill?.sourceTemplateId else { return [:] }
+        var args: [String: JSONValue] = ["sourceTemplateId": .string(tid)]
+        if let occ = prefill?.occurrenceDate { args["occurrenceDate"] = .string(occ) }
+        return args
     }
 
     /// Expense / income / refund all post a single account leg + category — they
@@ -393,7 +413,17 @@ struct AddTransactionSheet: View {
             // scheduled-occurrence prefill must land on the occurrence it
             // fulfils, note included (a transfer has nowhere else to carry it).
             if postsScheduledOccurrence {
-                if let d = AppDate.isoDay.date(from: p.date) { date = d }
+                // Seed the OCCURRENCE's calendar day but the CURRENT
+                // time-of-day — the silent `postScheduled` path posts at
+                // "now", so matching that keeps same-day activity-feed
+                // ordering consistent between the two paths (stamping the
+                // occurrence at local midnight would otherwise sink it to
+                // the bottom of today's list).
+                if let occDay = AppDate.isoDay.date(from: p.date) {
+                    let now = AppDate.civil.dateComponents([.hour, .minute, .second], from: Date())
+                    date = AppDate.civil.date(bySettingHour: now.hour ?? 0, minute: now.minute ?? 0,
+                                               second: now.second ?? 0, of: occDay) ?? occDay
+                }
                 if let n = p.note { note = n }
             }
             if let c = p.category { categoryId = c }
@@ -417,13 +447,25 @@ struct AddTransactionSheet: View {
                     if let t = to, currency(of: fromAccountId) != currency(of: toAccountId) {
                         received = String(format: "%g", abs(t.nativeAmount ?? t.amount))
                     }
-                } else if let tid = p.sourceTemplateId,
-                          let tpl = store.scheduled.first(where: { $0.id == tid }) {
+                } else if postsScheduledOccurrence,
+                          let tpl = store.scheduled.first(where: { $0.id == p.sourceTemplateId }) {
                     // A scheduled-occurrence prefill has no posted legs to pair —
                     // read both accounts off the template instead. (Same direction
-                    // the engine posts: from_account_id → account_id.)
-                    fromAccountId = tpl.fromAccountId ?? p.account
-                    toAccountId = tpl.accountId
+                    // the engine posts: from_account_id → account_id.) Gated on
+                    // postsScheduledOccurrence so the safety property (a
+                    // Duplicate's Tx never drives this branch) is visible here,
+                    // not just three files away in Projection's transferGroupId
+                    // invariant.
+                    if let from = tpl.fromAccountId {
+                        fromAccountId = from
+                        toAccountId = tpl.accountId
+                    } else {
+                        // A malformed template (no from-account) would otherwise
+                        // silently collapse both fields to the same account,
+                        // masking the engine's specific missingAccount error
+                        // behind the generic "different accounts" one on Save.
+                        scheduledTransferMissingAccountName = tpl.name
+                    }
                 }
             case .refund:
                 // Kept, not dropped: the sheet shows it and nothing is written until
@@ -492,6 +534,11 @@ struct AddTransactionSheet: View {
         }
         do {
             if kind == .transfer {
+                if let name = scheduledTransferMissingAccountName {
+                    errorMessage = i18nMessage(I18nError("error.scheduled.missingAccount", ["name": name],
+                                                          "\"\(name)\" is missing an account"))
+                    return
+                }
                 guard fromAccountId != toAccountId else { errorMessage = "Pick two different accounts."; return }
                 var args: [String: JSONValue] = [
                     "fromAccountId": .string(fromAccountId), "toAccountId": .string(toAccountId),
@@ -506,7 +553,7 @@ struct AddTransactionSheet: View {
                 }
                 args["status"] = .string(status.rawValue)
                 if !selectedTags.isEmpty { args["tagIds"] = .array(selectedTags.map { .string($0) }) }
-                applyScheduledLink(to: &args)
+                for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
                 try store.apply(.createTransfer, Args(args))
             } else {
                 let signed = (kind == .income || kind == .refund) ? abs(value) : -abs(value)
@@ -534,7 +581,7 @@ struct AddTransactionSheet: View {
                     args["kind"] = .string("refund")
                     if let refundedTxId { args["refundedTransactionId"] = .string(refundedTxId) }
                 }
-                applyScheduledLink(to: &args)
+                for (k, v) in Self.scheduledLinkArgs(prefill: prefill, posts: postsScheduledOccurrence) { args[k] = v }
                 let eid = try store.applyReturningId(.addTransaction, Args(args))
                 if let eid, let splits = pendingSplits {
                     let payload: [JSONValue] = splits.map { .object([
@@ -554,16 +601,6 @@ struct AddTransactionSheet: View {
             Haptics.warning()
             errorMessage = i18nMessage(error)   // localizes I18nError (incl. zh), like every other write screen
         }
-    }
-
-    /// Carry the scheduled link through when this sheet was opened from a calendar
-    /// occurrence. `occurrenceDate` is what makes the badge flip: it names the cell
-    /// being fulfilled, so `Selectors.scheduledPostedMap` resolves it even when the
-    /// user moved the transaction's own date before saving.
-    private func applyScheduledLink(to args: inout [String: JSONValue]) {
-        guard postsScheduledOccurrence, let tid = prefill?.sourceTemplateId else { return }
-        args["sourceTemplateId"] = .string(tid)
-        if let occ = prefill?.occurrenceDate { args["occurrenceDate"] = .string(occ) }
     }
 
     // MARK: date/time formatting (local wall clock → stored columns)

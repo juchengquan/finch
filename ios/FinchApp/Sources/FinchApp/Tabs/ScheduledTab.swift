@@ -226,7 +226,7 @@ struct ScheduledTab: View {
                                                  "\"\(t.name)\" has finished its \(total)-payment plan"))
             return
         }
-        switch ScheduledPostRouting.route(t, splitCount: store.scheduledSplitCount(templateId: t.id)) {
+        switch ScheduledPostRouting.routeForPost(t, store: store) {
         case .sheet:
             postPrefill = PostPrefill(template: t, occurrence: occurrence)
         case .silent:
