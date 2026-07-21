@@ -27,21 +27,20 @@ struct ScheduledCalendarView: View {
     @State private var selectedDay: String?
     @State private var showingMonthYearPicker = false
 
-    private static let utc: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()
     private static let weekdaySymbols = ["S", "M", "T", "W", "T", "F", "S"]
 
     static func firstOfMonth(forISO iso: String?) -> Date {
         let base = iso.flatMap { AppDate.isoDay.date(from: $0) } ?? Date()
-        let c = utc.dateComponents([.year, .month], from: base)
-        return utc.date(from: c) ?? base
+        let c = AppDate.civil.dateComponents([.year, .month], from: base)
+        return AppDate.civil.date(from: c) ?? base
     }
 
-    private var year: Int { Self.utc.component(.year, from: monthAnchor) }
-    private var month: Int { Self.utc.component(.month, from: monthAnchor) }
-    private var daysInMonth: Int { Self.utc.range(of: .day, in: .month, for: monthAnchor)?.count ?? 30 }
-    private var firstWeekday: Int { Self.utc.component(.weekday, from: monthAnchor) - 1 }  // 0=Sun
+    private var year: Int { AppDate.civil.component(.year, from: monthAnchor) }
+    private var month: Int { AppDate.civil.component(.month, from: monthAnchor) }
+    private var daysInMonth: Int { AppDate.civil.range(of: .day, in: .month, for: monthAnchor)?.count ?? 30 }
+    private var firstWeekday: Int { AppDate.civil.component(.weekday, from: monthAnchor) - 1 }  // 0=Sun
     private func iso(_ day: Int) -> String { String(format: "%04d-%02d-%02d", year, month, day) }
-    private var monthLabel: String { let f = DateFormatter(); f.calendar = Self.utc; f.timeZone = Self.utc.timeZone; f.dateFormat = "LLLL yyyy"; return f.string(from: monthAnchor) }
+    private var monthLabel: String { let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "LLLL yyyy"; return f.string(from: monthAnchor) }
 
     var body: some View {
         let monthStart = iso(1), monthEnd = iso(daysInMonth)
@@ -69,7 +68,7 @@ struct ScheduledCalendarView: View {
                     .frame(height: Self.gridHeight)
                     .onChange(of: pagerIndex) { _, idx in
                         guard idx != 0 else { return }
-                        monthAnchor = Self.utc.date(byAdding: .month, value: idx, to: monthAnchor) ?? monthAnchor
+                        monthAnchor = AppDate.civil.date(byAdding: .month, value: idx, to: monthAnchor) ?? monthAnchor
                         var t = Transaction()
                         t.disablesAnimations = true
                         withTransaction(t) { pagerIndex = 0 }
@@ -153,12 +152,12 @@ struct ScheduledCalendarView: View {
         return Array(min(base - 10, year)...max(base + 10, year))
     }
     private func monthName(_ m: Int) -> String {
-        let f = DateFormatter(); f.calendar = Self.utc
+        let f = DateFormatter(); f.calendar = AppDate.civil
         return f.standaloneMonthSymbols[m - 1]
     }
     private func setMonthYear(month m: Int, year y: Int) {
         var c = DateComponents(); c.year = y; c.month = m; c.day = 1
-        if let d = Self.utc.date(from: c) { monthAnchor = d }
+        if let d = AppDate.civil.date(from: c) { monthAnchor = d }
     }
 
     private var weekdayRow: some View {
@@ -176,11 +175,11 @@ struct ScheduledCalendarView: View {
     /// One month's grid, self-contained (computes its own occurrence map) so the
     /// carousel's prev/next pages render their own real content.
     private func monthPage(offsetFromAnchor: Int) -> some View {
-        let m = Self.utc.date(byAdding: .month, value: offsetFromAnchor, to: monthAnchor) ?? monthAnchor
-        let year = Self.utc.component(.year, from: m)
-        let month = Self.utc.component(.month, from: m)
-        let days = Self.utc.range(of: .day, in: .month, for: m)?.count ?? 30
-        let firstWeekday = Self.utc.component(.weekday, from: m) - 1
+        let m = AppDate.civil.date(byAdding: .month, value: offsetFromAnchor, to: monthAnchor) ?? monthAnchor
+        let year = AppDate.civil.component(.year, from: m)
+        let month = AppDate.civil.component(.month, from: m)
+        let days = AppDate.civil.range(of: .day, in: .month, for: m)?.count ?? 30
+        let firstWeekday = AppDate.civil.component(.weekday, from: m) - 1
         func iso(_ day: Int) -> String { String(format: "%04d-%02d-%02d", year, month, day) }
         let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: iso(1), through: iso(days)), by: { $0.date })
         // One ordered cell list (leading nils pad to the 1st's weekday, then the
@@ -235,7 +234,7 @@ struct ScheduledCalendarView: View {
             else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
         } else {
             Text("Upcoming").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-            let end = Self.utc.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.wallToday) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.wallToday
+            let end = AppDate.civil.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.wallToday) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.wallToday
             let up = Array(Selectors.occurrencesInRange(templates, from: store.wallToday, through: end).prefix(20))
             if up.isEmpty { Text("No upcoming items.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             else { ForEach(Array(up.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
@@ -302,12 +301,12 @@ struct ScheduledCalendarView: View {
         // and recenters. (Chevrons get the same slide as a swipe.)
         withAnimation(.easeInOut(duration: 0.25)) { pagerIndex = n }
         #else
-        guard let d = Self.utc.date(byAdding: .month, value: n, to: monthAnchor) else { return }
+        guard let d = AppDate.civil.date(byAdding: .month, value: n, to: monthAnchor) else { return }
         monthAnchor = d
         #endif
     }
     private func pretty(_ iso: String) -> String {
         guard let d = AppDate.isoDay.date(from: iso) else { return iso }
-        let f = DateFormatter(); f.calendar = Self.utc; f.timeZone = Self.utc.timeZone; f.dateFormat = "EEE, MMM d"; return f.string(from: d)
+        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "EEE, MMM d"; return f.string(from: d)
     }
 }
