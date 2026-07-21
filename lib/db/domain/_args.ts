@@ -188,6 +188,7 @@ export type Args = {
     time?: string;
     note?: string | null;
     sourceTemplateId?: string;
+    occurrenceDate?: string;
   };
   updateTransfer: { id: string; patch: TransferPatch };
   deleteTransfer: { id: string };

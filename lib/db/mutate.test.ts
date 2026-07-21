@@ -59,6 +59,26 @@ test('createTransfer makes paired rows that move both balances', async () => {
   expect(transfers[0].amount).toBeCloseTo(200, 2);
 });
 
+test('createTransfer forwards sourceTemplateId/occurrenceDate to the persisted entry', async () => {
+  const exec = await seededAndAudited();
+  await applyMutation(exec, 'createTransfer', {
+    fromAccountId: 'chk',
+    toAccountId: 'sav',
+    fromAmount: 200,
+    date: '2026-05-27',
+    sourceTemplateId: 's1',
+    occurrenceDate: '2026-05-15',
+  });
+
+  const transfers = await listTransfers(exec, 'personal');
+  const [row] = await exec(
+    'SELECT source_template_id, occurrence_date FROM entries WHERE id = ?',
+    [transfers[0].id],
+  );
+  expect(String(row.source_template_id)).toBe('s1');
+  expect(String(row.occurrence_date)).toBe('2026-05-15');
+});
+
 test('createTransfer rejects same-account and zero amount', async () => {
   const exec = await seededAndAudited();
   await expect(
