@@ -25,13 +25,13 @@ final class NotificationPlannerTests: XCTestCase {
         let b = budget(id: "b1", cat: "food", amount: 100, warn: 80)
         let txns = [expense("t1", -90, cat: "food", date: "2026-05-10")]   // 90% > 80%
         let warned = NotificationPlanner.plan(
-            budgets: [b], txns: txns, scheduled: [], categories: [], today: "2026-05-15",
+            budgets: [b], txns: txns, scheduled: [], categories: [], today: "2026-05-15", wallToday: "2026-05-15",
             ledgerId: "l1", enabled: all, money: money)
         XCTAssertEqual(warned.filter { $0.kind == .budgetWarning }.map(\.focusId), ["b1"])
 
         let under = NotificationPlanner.plan(
             budgets: [budget(id: "b1", cat: "food", amount: 100, warn: 95)], txns: txns,
-            scheduled: [], categories: [], today: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
+            scheduled: [], categories: [], today: "2026-05-15", wallToday: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
         XCTAssertTrue(under.filter { $0.kind == .budgetWarning }.isEmpty)
     }
 
@@ -42,7 +42,7 @@ final class NotificationPlannerTests: XCTestCase {
         let future = ScheduledTemplate(id: "s2", name: "Gym", type: "expense", amount: 30,
             frequency: "monthly", dayOfMonth: 20, accountId: "a1", nextRun: "2026-06-20")
         let planned = NotificationPlanner.plan(
-            budgets: [], txns: [], scheduled: [due, future], categories: [], today: "2026-05-15",
+            budgets: [], txns: [], scheduled: [due, future], categories: [], today: "2026-05-15", wallToday: "2026-05-15",
             ledgerId: "l1", enabled: all, money: money)
         XCTAssertEqual(planned.filter { $0.kind == .scheduledDue }.map(\.focusId), ["s1"])
     }
@@ -52,7 +52,7 @@ final class NotificationPlannerTests: XCTestCase {
         let b = budget(id: "b1", cat: "food", amount: 100)
         let txns = [expense("t1", -95, cat: "food", date: "2026-05-10")]
         let planned = NotificationPlanner.plan(
-            budgets: [b], txns: txns, scheduled: [], categories: [], today: "2026-05-15",
+            budgets: [b], txns: txns, scheduled: [], categories: [], today: "2026-05-15", wallToday: "2026-05-15",
             ledgerId: "l1", enabled: [], money: money)
         XCTAssertTrue(planned.isEmpty)
     }
@@ -62,9 +62,9 @@ final class NotificationPlannerTests: XCTestCase {
         let b = budget(id: "b1", cat: "food", amount: 100)
         let txns = [expense("t1", -90, cat: "food", date: "2026-05-10")]
         let a = NotificationPlanner.plan(budgets: [b], txns: txns, scheduled: [], categories: [],
-            today: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
+            today: "2026-05-15", wallToday: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
         let b2 = NotificationPlanner.plan(budgets: [b], txns: txns, scheduled: [], categories: [],
-            today: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
+            today: "2026-05-15", wallToday: "2026-05-15", ledgerId: "l1", enabled: all, money: money)
         XCTAssertEqual(a.map(\.id), b2.map(\.id))                       // stable
         XCTAssertEqual(Set(a.map(\.id)).count, a.count)                 // unique
     }

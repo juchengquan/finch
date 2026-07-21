@@ -34,9 +34,20 @@ public enum NotificationPlanner {
     /// `money` formats a base-currency amount for display (injected so the
     /// planner stays pure/testable). `recentLimit` bounds the anomaly scan to the
     /// most-recent N (txns arrive date-descending).
+    ///
+    /// TWO dates, deliberately, because they answer different questions:
+    /// - `today` is DATA-ANCHORED (`max(tx.date)`) and drives budget windows, so
+    ///   a warning matches what the Budgets screen shows.
+    /// - `wallToday` is the real calendar day and drives anything asking "is it
+    ///   due *now*" — scheduled next-runs and the weekly digest.
+    ///
+    /// Passing the data-anchored date to the due test was a real bug: `nextRun <=
+    /// today` never became true until the user recorded a transaction dated on or
+    /// after the due date, so the reminder meant to PROMPT that recording only
+    /// arrived once it was already done.
     public static func plan(
         budgets: [BudgetRow], txns: [Tx], scheduled: [ScheduledTemplate],
-        categories: [CategoryNode], today: String, ledgerId: String,
+        categories: [CategoryNode], today: String, wallToday: String, ledgerId: String,
         enabled: Set<NotificationKind>, money: (Double) -> String, recentLimit: Int = 50
     ) -> [PlannedNotification] {
         var out: [PlannedNotification] = []
@@ -67,7 +78,7 @@ public enum NotificationPlanner {
         }
 
         if enabled.contains(.scheduledDue) {
-            for s in scheduled where !s.nextRun.isEmpty && s.nextRun <= today {
+            for s in scheduled where !s.nextRun.isEmpty && s.nextRun <= wallToday {
                 out.append(PlannedNotification(
                     id: "scheduled:\(s.id)", kind: .scheduledDue,
                     title: "Scheduled: \(s.name)",
@@ -76,7 +87,7 @@ public enum NotificationPlanner {
             }
         }
 
-        if enabled.contains(.weeklyDigest), let d = Selectors.weeklyDigest(txns, ledgerId, today) {
+        if enabled.contains(.weeklyDigest), let d = Selectors.weeklyDigest(txns, ledgerId, wallToday) {
             out.append(PlannedNotification(
                 id: "digest:\(d.weekStart)", kind: .weeklyDigest,
                 title: "Your weekly digest",
@@ -93,5 +104,42 @@ public enum NotificationPlanner {
     public static func cancelIDs(planned: [PlannedNotification], existing: Set<String>) -> [String] {
         let keep = Set(planned.map(\.id))
         return existing.subtracting(keep).sorted()
+    }
+
+    /// Which planned notifications should actually be scheduled right now.
+    ///
+    /// Suppression used to rely solely on the id being in pending ∪ delivered,
+    /// which meant DISMISSING an alert un-suppressed it: clearing it from
+    /// Notification Center removed it from `delivered`, so the next write
+    /// re-scheduled it and it fired again. The only escape was to resolve the
+    /// underlying condition. `fired` is a durable record of "this episode has
+    /// already been shown", so a dismissal stays dismissed.
+    ///
+    /// `snoozedUntil` holds real deadlines (see `snoozeDeadline`), so a snoozed
+    /// item stays quiet for its window even across launches.
+    public static func toSchedule(planned: [PlannedNotification],
+                                  existing: Set<String>,
+                                  fired: Set<String>,
+                                  snoozedUntil: [String: Date],
+                                  now: Date) -> [PlannedNotification] {
+        planned.filter { p in
+            if existing.contains(p.id) { return false }        // already pending/delivered
+            if fired.contains(p.id) { return false }           // shown once; dismissal doesn't revive it
+            if let until = snoozedUntil[p.id], until > now { return false }
+            return true
+        }
+    }
+
+    /// Drop remembered ids whose condition no longer holds, so a budget that dips
+    /// under its threshold and later crosses it again alerts a SECOND time. Without
+    /// this the once-only record would silence it permanently.
+    public static func retained<T>(_ byId: [String: T], planned: [PlannedNotification]) -> [String: T] {
+        let keep = Set(planned.map(\.id))
+        return byId.filter { keep.contains($0.key) }
+    }
+
+    /// Same pruning for the plain id set.
+    public static func retainedFired(_ fired: Set<String>, planned: [PlannedNotification]) -> Set<String> {
+        fired.intersection(planned.map(\.id))
     }
 }
