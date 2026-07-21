@@ -79,6 +79,23 @@ struct AddTransactionSheet: View {
     /// opt-in defaults OFF, so without this the picker would hold a selection that
     /// isn't among its options — a broken control on the default configuration.
     private var availableKinds: [Kind] {
+        Self.availableKinds(postsScheduledOccurrence: postsScheduledOccurrence,
+                            showAdjustInAddSheet: showAdjustInAddSheet, prefill: prefill)
+    }
+
+    /// Pure — pulled out of the computed property above so it's directly
+    /// testable (see `AvailableKindsTests`).
+    ///
+    /// Posting a scheduled occurrence must never offer Adjust: save()'s .adjust
+    /// branch returns early via adjustAccountBalance, which never receives
+    /// sourceTemplateId/occurrenceDate — the transaction would post, the sheet
+    /// would dismiss, and the calendar badge would silently never flip, with no
+    /// feedback that the link was dropped. That check wins over everything else,
+    /// including the Duplicate-an-adjustment exception below (moot in practice —
+    /// a scheduled template's kind is never "adjustment" — but this keeps the
+    /// precedence explicit rather than relying on that fact).
+    static func availableKinds(postsScheduledOccurrence: Bool, showAdjustInAddSheet: Bool, prefill: Tx?) -> [Kind] {
+        if postsScheduledOccurrence { return Kind.allCases.filter { $0 != .adjust } }
         let showAdjust = showAdjustInAddSheet || prefill.map { Self.prefillKind($0) == .adjust } ?? false
         return showAdjust ? Kind.allCases : Kind.allCases.filter { $0 != .adjust }
     }
