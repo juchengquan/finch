@@ -73,6 +73,49 @@ sources** as `FinchApp` + `Shared/`; iOS-only modifiers are shimmed behind `#if 
     fails the next. (`postScheduled` is fine now — it takes an explicit `date`/`occurrenceDate`,
     so it's reproducible and covered by the gate like everything else.)
 
+### Run CI locally before pushing — `ios/scripts/ci-local.sh`
+
+```bash
+ios/scripts/ci-local.sh                        # the iOS job (what actually breaks)
+ios/scripts/ci-local.sh --all                  # + the frontend job
+ios/scripts/ci-local.sh --sim "iPhone 17 Pro"  # pin the simulator
+```
+
+Mirrors the CI iOS job step-for-step — the two i18n guards, `swift test`, `xcodegen`,
+FinchApp build+test, FinchMac, FinchWatch — but **fail-fast ordered**: the guards cost
+seconds and catch the drift behind most recent CI failures, the Xcode builds cost minutes.
+(`act` is no help here: it runs Actions in Docker, and there is no macOS container.)
+
+> **The one thing that makes local runs lie.** CI triggers on `pull_request`, so it builds
+> the **merge commit** — your branch merged into `feat/frontend` — not your branch. A branch
+> that is behind the base passes locally and fails in CI on strings and code it doesn't own.
+> The script's step 0 refuses to run when you're behind, for exactly this reason; `git rebase
+> origin/feat/frontend` first. Don't diagnose a CI failure as "environmental" until you've
+> ruled this out — that misdiagnosis has cost real time.
+
+**The two i18n guards** (also enforced in CI) exist because `Localizable.xcstrings` is
+GENERATED and hand-editing it silently destroys work:
+
+| Guard | Catches | Fix |
+|---|---|---|
+| catalog is reproducible from its inputs | someone edited the generated catalog | put the translation in `scripts/zh-manual.json`, re-run `build-xcstrings.ts` |
+| extracted keys are current | a new UI string never reached `extracted-keys.json`, so it's absent from the catalog and renders English | re-run the pipeline in the header of `scripts/build-xcstrings.ts`, commit **both** the key set and the rebuilt catalog |
+
+Guard 2 compares the **key set**, not file bytes, and names the offending keys. Regenerate
+`extracted-keys.json` only via `bun run scripts/xliff-keys.ts > scripts/extracted-keys.json`
+— writing it by hand (even with identical content) changes the formatting and fails the guard.
+
+**What the guards cannot see:** strings that were never localizable in the first place.
+`UNNotificationAction(title:)`, `Toggle(someString, …)` and any plain `String` bypass
+extraction entirely, so they render English in every language and no check notices. Use
+`String(localized:)` at those call sites. Also avoid a literal `%` inside an interpolated
+localized string — it has to round-trip as `%%` through extraction; pre-format the value and
+interpolate it instead.
+
+**CI is not a required status check**, so a red run does not block merge and drift
+re-accumulates silently. If `ci-local.sh` fails on strings you didn't touch, the base is
+probably already red — check `feat/frontend` before assuming it's yours.
+
 ## Architecture
 
 Two layers: the **`FinchCore` engine** (SwiftPM) and the **`FinchApp` SwiftUI shell**.
@@ -167,6 +210,40 @@ are single-render "one view, two layouts"**: each takes an optional `selection: 
 - **Command palette (⌘K):** `Shell/CommandPalette.swift` + `Shell/FinchCommands.swift` (macOS
   menu bar / iPad keys: ⌘N add, ⌘1–6 tabs, ⌘⇧E export, ⌘⇧H hide amounts). The palette and add
   sheets are presented at **app root**, and force-dismissed when the biometric lock engages.
+
+### List rows & swipe actions — the 60pt rule
+
+iOS renders swipe actions **two different ways depending on the row's height**, and the
+switch is undocumented private behaviour:
+
+| row height | swipe action style |
+|---|---|
+| **≤ 59pt** | wide capsule, icon **and** label *inside* the colour |
+| **≥ 60pt** | circular glyph, label in grey *outside/below* it |
+
+Bisected on-device (59 capsule / 60 circle) and re-verified at **extra-small and default text
+size** and on **two screen widths** (390pt / 402pt) — the boundary does not move. Text size
+changes row *heights*, not the rule.
+
+Consequences worth knowing before you touch a row:
+
+- **It is height-driven, not label-driven.** `Label(_:systemImage:)` is correct in both cases.
+  Identical code renders differently on different pages purely because of row height — don't go
+  looking at the label when the styles disagree.
+- **`listRowInsets` is usually the lever.** SwiftUI's default insets (~11pt/side) vs the
+  transaction feed's `top: 2, bottom: 2` is a ~13pt swing — that alone was why Scheduled/Ledger/
+  Tags sat on the wrong side (#578). Check insets before changing content.
+- **It's a default-text-size feature.** At accessibility sizes the smallest natural row is ~63pt,
+  so *everything* is circles regardless. The circle+caption layout is the accessible fallback,
+  not a regression.
+- **Don't pay real costs to get under 60.** Budgets stays 3 lines / 75pt and Categories stays at
+  60pt deliberately: the only levers were truncating the row's name (`lineLimit(1)`) and shrinking
+  an already-sub-44pt chevron tap target. Both cost information or usability at *every* text size
+  to buy a rendering detail that exists at only some of them. Row content wins.
+
+Current heights: Accounts · `TxRow` · Merchants · Tags · Scheduled · Ledger = 52pt (capsule);
+Categories = 60pt, Budgets = 75pt (circle, by choice). Measure with
+`idb ui describe-all` rather than eyeballing screenshots.
 
 ### Write screens (`WriteScreens/`)
 

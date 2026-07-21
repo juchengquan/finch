@@ -59,6 +59,7 @@ struct LedgerListView: View {
                     // homogeneous path"), so a value link would resolve against the
                     // TAB's String destination and push a blank page.
                     NavigationLink { LedgerDetailView(ledgerId: ledger.id) } label: { rowContent(ledger) }
+                        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))   // TxRow density
                 }
             }
             .swipeActions(edge: .trailing) {

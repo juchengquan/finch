@@ -192,6 +192,7 @@ struct TagsView: View {
             .buttonStyle(.plain)
         }
         .accessibilityAddTraits(isSelecting && selected.contains(tag.id) ? [.isSelected] : [])
+        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))   // match Categories density
         .swipeActions(edge: .trailing) {
             // Edit declared first ⇒ outer edge / full-swipe default (never delete).
             Button { editing = tag } label: { Label("Edit", systemImage: "pencil") }.tint(.accentColor)

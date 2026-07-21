@@ -12,6 +12,7 @@ struct ScheduledCalendarView: View {
     /// (template, occurrence date) — the tapped CELL's date, not today. Posting
     /// has to record which occurrence it fulfils or the badge never flips.
     var onPost: (ScheduledTemplate, String) -> Void
+    var onDelete: (ScheduledTemplate) -> Void
     var onAdd: (Date) -> Void
     /// Non-nil → a row TAP selects the template (iPad three-column mode) while
     /// the context menu's "Edit" still edits; nil → taps edit (compact behavior).
@@ -263,10 +264,27 @@ struct ScheduledCalendarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // TxRow density: default insets made this two-line row 65pt, over the 60pt
+        // point where iOS renders swipe actions as circles with the label outside.
+        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+        // Swipe actions mirror the List view: trailing Delete + Edit (Edit at the
+        // trailing edge), leading Post (only while the occurrence is still upcoming).
+        .swipeActions(edge: .trailing) {
+            Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+            Button { onDelete(t) } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+        }
+        .swipeActions(edge: .leading) {
+            // Unposted either way — a missed occurrence needs Post more than an upcoming one.
+            // Same occurrence-aware call as the context menu: this row IS a cell, so
+            // `date` is the occurrence being posted — passing the template alone would
+            // stamp today and leave the badge unchanged (the bug this branch fixes).
+            if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green) }
+        }
         .contextMenu {
             Button { onEdit(t) } label: { Label("Edit", systemImage: "pencil") }
             // Unposted either way — a missed occurrence needs this more than an upcoming one.
             if st == .upcoming || st == .missed { Button { onPost(t, date) } label: { Label("Post now", systemImage: "checkmark.circle") } }
+            Button(role: .destructive) { onDelete(t) } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
