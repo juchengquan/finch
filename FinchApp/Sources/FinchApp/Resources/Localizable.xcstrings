@@ -1234,7 +1234,7 @@
         }
       }
     },
-    "Automatic .finch backups after edits (kept: last 14) on this device, plus a backup folder you choose (pick an iCloud Drive folder to keep an off-device copy and sync across devices). Open Backups to browse and restore.": {},
+    "Automatic backups keep the newest %lld on this device, mirrored to your backup folder when set. Frequency is a minimum interval — at most once per that period, the next time you make a change. “Back up now” always runs.": {},
     "Automatic local .finch backups after edits (kept: last 14), mirrored to iCloud Drive when signed in. Newer versions from other devices are offered for import (never auto-replaced).": {
       "localizations": {
         "zh-Hans": {
@@ -1275,6 +1275,7 @@
         }
       }
     },
+    "Backup": {},
     "Backup & Sync": {
       "localizations": {
         "zh-Hans": {
@@ -1299,7 +1300,6 @@
         }
       }
     },
-    "Backups are taken automatically after you make changes.": {},
     "Balance": {
       "localizations": {
         "zh-Hans": {
@@ -2500,6 +2500,7 @@
         }
       }
     },
+    "Enable backups": {},
     "Enable them in iOS Settings to receive budget and scheduled alerts.": {
       "localizations": {
         "zh-Hans": {
@@ -3872,6 +3873,16 @@
         }
       }
     },
+    "No backups yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无备份"
+          }
+        }
+      }
+    },
     "No budgets yet": {
       "localizations": {
         "zh-Hans": {
@@ -4272,6 +4283,7 @@
         }
       }
     },
+    "Number of backups": {},
     "Number of payments": {
       "localizations": {
         "zh-Hans": {
@@ -4294,6 +4306,7 @@
     },
     "On device": {},
     "On device and in backup folder": {},
+    "Open Backups to enable/configure backups (folder, count, frequency), browse the history, and restore an earlier version.": {},
     "Open Screen": {
       "localizations": {
         "zh-Hans": {
@@ -5776,7 +5789,7 @@
         }
       }
     },
-    "Tap a backup to restore it — this replaces all current data, and your current data is backed up first. Backups live on this device and in your chosen backup folder (when set).": {},
+    "Tap a backup to restore it — this replaces all current data, and your current data is backed up first.": {},
     "Target": {
       "localizations": {
         "zh-Hans": {
