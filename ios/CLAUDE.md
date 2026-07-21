@@ -72,6 +72,49 @@ sources** as `FinchApp` + `Shared/`; iOS-only modifiers are shimmed behind `#if 
     with `openingBalance`) — their entries stamp "today", so the oracle passes the day it's
     generated and fails the next.
 
+### Run CI locally before pushing — `ios/scripts/ci-local.sh`
+
+```bash
+ios/scripts/ci-local.sh                        # the iOS job (what actually breaks)
+ios/scripts/ci-local.sh --all                  # + the frontend job
+ios/scripts/ci-local.sh --sim "iPhone 17 Pro"  # pin the simulator
+```
+
+Mirrors the CI iOS job step-for-step — the two i18n guards, `swift test`, `xcodegen`,
+FinchApp build+test, FinchMac, FinchWatch — but **fail-fast ordered**: the guards cost
+seconds and catch the drift behind most recent CI failures, the Xcode builds cost minutes.
+(`act` is no help here: it runs Actions in Docker, and there is no macOS container.)
+
+> **The one thing that makes local runs lie.** CI triggers on `pull_request`, so it builds
+> the **merge commit** — your branch merged into `feat/frontend` — not your branch. A branch
+> that is behind the base passes locally and fails in CI on strings and code it doesn't own.
+> The script's step 0 refuses to run when you're behind, for exactly this reason; `git rebase
+> origin/feat/frontend` first. Don't diagnose a CI failure as "environmental" until you've
+> ruled this out — that misdiagnosis has cost real time.
+
+**The two i18n guards** (also enforced in CI) exist because `Localizable.xcstrings` is
+GENERATED and hand-editing it silently destroys work:
+
+| Guard | Catches | Fix |
+|---|---|---|
+| catalog is reproducible from its inputs | someone edited the generated catalog | put the translation in `scripts/zh-manual.json`, re-run `build-xcstrings.ts` |
+| extracted keys are current | a new UI string never reached `extracted-keys.json`, so it's absent from the catalog and renders English | re-run the pipeline in the header of `scripts/build-xcstrings.ts`, commit **both** the key set and the rebuilt catalog |
+
+Guard 2 compares the **key set**, not file bytes, and names the offending keys. Regenerate
+`extracted-keys.json` only via `bun run scripts/xliff-keys.ts > scripts/extracted-keys.json`
+— writing it by hand (even with identical content) changes the formatting and fails the guard.
+
+**What the guards cannot see:** strings that were never localizable in the first place.
+`UNNotificationAction(title:)`, `Toggle(someString, …)` and any plain `String` bypass
+extraction entirely, so they render English in every language and no check notices. Use
+`String(localized:)` at those call sites. Also avoid a literal `%` inside an interpolated
+localized string — it has to round-trip as `%%` through extraction; pre-format the value and
+interpolate it instead.
+
+**CI is not a required status check**, so a red run does not block merge and drift
+re-accumulates silently. If `ci-local.sh` fails on strings you didn't touch, the base is
+probably already red — check `feat/frontend` before assuming it's yours.
+
 ## Architecture
 
 Two layers: the **`FinchCore` engine** (SwiftPM) and the **`FinchApp` SwiftUI shell**.
