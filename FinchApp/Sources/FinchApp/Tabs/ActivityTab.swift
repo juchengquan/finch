@@ -405,7 +405,8 @@ struct ActivityFeedView: View {
     /// applies the stable date-desc sort).
     private func filteredTxns() -> [Tx] {
         let base = filter.counterpartyId.map {
-            Selectors.merchantTransactions(store.txns, store.merchants, $0, store.activeLedgerId)
+            Selectors.merchantTransactions(store.txns, store.merchants, $0, store.activeLedgerId,
+                                           includePending: true)   // the feed shows pending rows
         } ?? store.txns
         let opts = ListOptions(
             ledgerId: store.activeLedgerId,

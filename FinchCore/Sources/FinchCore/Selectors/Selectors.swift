@@ -177,9 +177,13 @@ public enum Selectors {
 
     /// A merchant's transactions: linked by counterpartyId, or matched by normalized
     /// merchant name (mirrors `counterpartyTxCounts`' resolution). Active-ledger,
-    /// newest-first, INCLUDES pending.
+    /// newest-first. Excludes pending by default, matching `counterpartyTxCounts`
+    /// (the Merchants page pill) — these used to disagree, so the detail list and
+    /// its Total counted pending while the pill did not. Callers that genuinely
+    /// want pending (feed filtering, merge impact) opt in.
     public static func merchantTransactions(_ txns: [Tx], _ counterparties: [Counterparty],
-                                            _ counterpartyId: String, _ ledgerId: String) -> [Tx] {
+                                            _ counterpartyId: String, _ ledgerId: String,
+                                            includePending: Bool = false) -> [Tx] {
         let idSet = Set(counterparties.map(\.id))
         var byName: [String: String] = [:]
         for c in counterparties {
@@ -188,6 +192,7 @@ public enum Selectors {
         }
         let matched = txns.filter { t in
             guard ledgerOf(t) == ledgerId else { return false }
+            if !includePending, (t.pending ?? false) { return false }
             let resolved: String?
             if let cid = t.counterpartyId, idSet.contains(cid) {
                 resolved = cid
@@ -236,10 +241,11 @@ public enum Selectors {
     /// way as `categoryTxCounts` — a split txn by its split legs' categoryIds,
     /// otherwise by `tx.category` — and excluding pending, so this list agrees
     /// with the count badge. Date-desc sorted (time-desc tiebreak).
-    public static func categoryTransactions(_ txns: [Tx], _ categoryId: String, _ ledgerId: String) -> [Tx] {
+    public static func categoryTransactions(_ txns: [Tx], _ categoryId: String, _ ledgerId: String,
+                                            includePending: Bool = false) -> [Tx] {
         let matched = txns.filter { t in
             guard ledgerOf(t) == ledgerId else { return false }
-            if (t.pending ?? false) { return false }
+            if !includePending, (t.pending ?? false) { return false }
             if let splits = t.splits, !splits.isEmpty {
                 return splits.contains { $0.categoryId == categoryId }
             }
@@ -251,10 +257,11 @@ public enum Selectors {
     /// Transactions in `ledgerId` tagged with `tagId`, matched the SAME way as
     /// `tagTxCounts` (non-pending; `tx.tags` holds tag ids), so this list agrees
     /// with the count badge. Date-desc sorted (time-desc tiebreak).
-    public static func tagTransactions(_ txns: [Tx], _ tagId: String, _ ledgerId: String) -> [Tx] {
+    public static func tagTransactions(_ txns: [Tx], _ tagId: String, _ ledgerId: String,
+                                       includePending: Bool = false) -> [Tx] {
         let matched = txns.filter { t in
             guard ledgerOf(t) == ledgerId else { return false }
-            if (t.pending ?? false) { return false }
+            if !includePending, (t.pending ?? false) { return false }
             return (t.tags ?? []).contains(tagId)
         }
         return matched.sorted { $0.date != $1.date ? $0.date > $1.date : ($0.time ?? "") > ($1.time ?? "") }

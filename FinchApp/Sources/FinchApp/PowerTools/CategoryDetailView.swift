@@ -17,6 +17,14 @@ struct CategoryDetailView: View {
         Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId)
     }
     private var total: Double { txns.reduce(0) { $0 + $1.amount } }
+    /// Pending items are excluded from `txns` (and so from the summary + the count
+    /// pill on the parent page). Queried separately so they can be surfaced on top
+    /// rather than silently omitted — the same "To confirm" treatment
+    /// AccountDetailView gives them.
+    private var pendingTxns: [Tx] {
+        Selectors.categoryTransactions(store.txns, category.id, store.activeLedgerId, includePending: true)
+            .filter { $0.pending == true }
+    }
 
     var body: some View {
         List {
@@ -27,18 +35,14 @@ struct CategoryDetailView: View {
                     LabeledContent("Average", value: store.displayMoneyBase(total / Double(txns.count)))
                 }
             }
+            if !pendingTxns.isEmpty {
+                Section("To confirm (\(pendingTxns.count))") {
+                    ForEach(pendingTxns) { row($0) }
+                }
+            }
             if !txns.isEmpty {
                 Section("Transactions") {
-                    ForEach(txns) { tx in
-                        Button { editing = tx } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
-                            .buttonStyle(.plain)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
-                            .txnSwipeActions(tx,
-                                             duplicate: { duplicating = $0 },
-                                             requestDelete: { pendingDelete = $0 },
-                                             toggleStatus: { toggleStatus($0) },
-                                             edit: { editing = $0 })
-                    }
+                    ForEach(txns) { row($0) }
                 }
             }
         }
@@ -65,5 +69,16 @@ struct CategoryDetailView: View {
     private func delete(_ tx: Tx) {
         do { try store.deleteTransaction(tx.id); Haptics.warning() }   // also unlinks receipts
         catch { errorMessage = i18nMessage(error) }
+    }
+
+    @ViewBuilder private func row(_ tx: Tx) -> some View {
+        Button { editing = tx } label: { TxRow(txn: tx, showRunningBalance: false).contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
+            .txnSwipeActions(tx,
+                             duplicate: { duplicating = $0 },
+                             requestDelete: { pendingDelete = $0 },
+                             toggleStatus: { toggleStatus($0) },
+                             edit: { editing = $0 })
     }
 }
