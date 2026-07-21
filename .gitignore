@@ -152,7 +152,12 @@ vite.config.ts.timestamp-*
 # Local agent / tooling workspaces (per-user, never committed):
 #   .worktrees/  — git worktrees created via `git worktree add .worktrees/...`
 #   .claude/     — Claude Code settings + its managed worktrees dir
-#   docs/        — opencode / superpowers brainstorming + plan artifacts
+#   /docs/       — opencode / superpowers brainstorming + plan artifacts.
+#                  Leading slash = repo root ONLY. A bare `docs/` matches at
+#                  every level, which also swallowed ios/docs/ — that one is
+#                  real documentation and IS tracked.
+#   .superpowers/brainstorm/ — visual-companion mockups (sdd/ stays tracked)
 .worktrees/
 .claude/
-docs/
+/docs/
+.superpowers/brainstorm/
