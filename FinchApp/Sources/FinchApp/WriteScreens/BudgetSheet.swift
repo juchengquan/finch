@@ -109,8 +109,6 @@ struct BudgetSheet: View {
                 Text("None").tag("")
                 ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
             }
-        } header: {
-            finchSectionHeader("Details")
         }
         Section {
             HStack {
@@ -138,8 +136,6 @@ struct BudgetSheet: View {
                 Text("None").tag("")
                 ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
             }
-        } header: {
-            finchSectionHeader("Details")
         }
 
         Section {
