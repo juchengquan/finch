@@ -1,6 +1,10 @@
 # macOS
 .DS_Store
 
+# Scratch screenshots at repo root (real image assets live under subdirs, never here)
+/*.png
+/*.jpg
+
 # Logs
 logs
 *.log
