@@ -83,4 +83,25 @@ final class ScheduledPostTests: XCTestCase {
             XCTAssertEqual(r?["occurrence_date"], "2026-07-15")
         }
     }
+
+    /// Web-parity guard: createTransfer must forward sourceTemplateId/occurrenceDate
+    /// through to Entries.postTransfer just like addTransaction does — a reviewer
+    /// found the two fields decoded but not yet checked at this layer.
+    func test_createTransfer_canCarryTheTemplateLink() throws {
+        let q = try TestSeed.base()   // l1 / a1 / c1
+        try Apply.apply(dbQueue: q, action: "createAccount", args: Args([
+            "id": .string("a2"), "ledgerId": .string("l1"), "name": .string("Savings"),
+            "type": .string("cash"), "currency": .string("USD"),
+        ]))
+        try Apply.apply(dbQueue: q, action: "createTransfer", args: Args([
+            "fromAccountId": .string("a1"), "toAccountId": .string("a2"), "fromAmount": .double(50),
+            "date": .string("2026-07-21"),
+            "sourceTemplateId": .string("s1"), "occurrenceDate": .string("2026-07-15"),
+        ]))
+        try q.read { db in
+            let r = try Row.fetchOne(db, sql: "SELECT source_template_id, occurrence_date FROM entries WHERE kind = 'transfer'")
+            XCTAssertEqual(r?["source_template_id"], "s1")
+            XCTAssertEqual(r?["occurrence_date"], "2026-07-15")
+        }
+    }
 }
