@@ -80,6 +80,21 @@ jobs:
         with:
           bun-version: "1.3.11"
 
+      # i18n guard 1 of 2 — the CHEAP one (no Xcode, seconds).
+      # Localizable.xcstrings is GENERATED. Hand-editing it is what let 214
+      # translations end up living only in the generated file, where a routine
+      # regenerate silently destroyed 69 of them. Rebuild from the committed
+      # inputs and fail if the result differs from what's checked in.
+      - name: i18n — catalog is reproducible from its inputs
+        working-directory: ios
+        run: |
+          bun run scripts/build-xcstrings.ts
+          if ! git diff --quiet -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings; then
+            git diff --stat -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings
+            echo "::error file=ios/FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
+            exit 1
+          fi
+
       - name: Install web deps + generate fixtures (Task 0 oracle)
         working-directory: frontend
         run: |
@@ -156,6 +171,27 @@ jobs:
             -derivedDataPath /tmp/dd \
             -skipPackagePluginValidation -skipMacroValidation \
             COMPILER_INDEX_STORE_ENABLE=NO
+
+      # i18n guard 2 of 2 — needs a compile, so it runs here where /tmp/dd is
+      # already warm from the build above. Catches the OTHER failure mode: a new
+      # UI string that never reaches extracted-keys.json is absent from the
+      # catalog entirely and silently renders English. That is how a 70-string
+      # backlog accumulated before anyone noticed.
+      - name: i18n — extracted keys are current
+        working-directory: ios
+        run: |
+          rm -rf /tmp/finch-loc
+          xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
+            -localizationPath /tmp/finch-loc -exportLanguage zh-Hans \
+            -derivedDataPath /tmp/dd -quiet \
+            -skipPackagePluginValidation -skipMacroValidation \
+            COMPILER_INDEX_STORE_ENABLE=NO
+          bun run scripts/xliff-keys.ts > scripts/extracted-keys.json
+          if ! git diff --quiet -- scripts/extracted-keys.json; then
+            git diff --stat -- scripts/extracted-keys.json
+            echo "::error file=ios/scripts/extracted-keys.json::UI strings changed but scripts/extracted-keys.json wasn't regenerated, so the catalog is missing them (they fall back to English). Re-run the pipeline in the header of ios/scripts/build-xcstrings.ts, then commit extracted-keys.json AND the rebuilt catalog."
+            exit 1
+          fi
 
       # Compile the native macOS app too — the iOS app build won't catch
       # macOS-only breaks (e.g. .topBarTrailing is unavailable on macOS).
