@@ -43,12 +43,16 @@ public enum BackupHistory {
         return f
     }()
 
-    /// Parse the timestamp from a backup filename ("finch-YYYYMMDD-HHmmss.finch"),
-    /// or nil if it isn't a well-formed backup name.
+    /// Parse the timestamp from a backup filename — "finch-YYYYMMDD-HHmmss.finch"
+    /// or "finch-YYYYMMDD-HHmmss-<deviceId>.finch" — or nil if malformed. The
+    /// device-id suffix (added so two devices never collide on a filename in a
+    /// shared folder) is ignored; the old suffix-less format still parses.
     public static func date(fromName name: String) -> Date? {
         guard name.hasPrefix("finch-"), name.hasSuffix(".finch") else { return nil }
-        let stamp = name.dropFirst("finch-".count).dropLast(".finch".count)
-        return stampFormatter.date(from: String(stamp))
+        let middle = name.dropFirst("finch-".count).dropLast(".finch".count)
+        let parts = middle.split(separator: "-")
+        guard parts.count >= 2 else { return nil }   // date + time; a 3rd part is the device id
+        return stampFormatter.date(from: "\(parts[0])-\(parts[1])")
     }
 
     /// Merge on-device + iCloud descriptors into one deduped (by filename),
