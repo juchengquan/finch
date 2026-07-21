@@ -13,7 +13,6 @@ struct SettingsBackupsView: View {
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
 
-    @AppStorage(AutoBackupManager.enabledKey) private var backupsEnabled = true
     @AppStorage(AutoBackupManager.retentionKey) private var retention = AutoBackupManager.defaultRetention
     @AppStorage(AutoBackupManager.frequencyKey) private var frequencyRaw = BackupFrequency.daily.rawValue
     @State private var pickingFolder = false
@@ -28,36 +27,52 @@ struct SettingsBackupsView: View {
 
     var body: some View {
         List {
+            // On this device — the always-on single latest snapshot: a quick,
+            // offline restore point, refreshed after every change.
             Section {
-                Toggle("Enable backups", isOn: $backupsEnabled)
-                if icloud.mirrorFailing {
-                    Label("Backup folder unavailable — re-select it. Backups are still saved on this device.", systemImage: "exclamationmark.icloud")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-                Button { pickingFolder = true } label: {
-                    LabeledContent("Backup folder", value: icloud.designatedFolderName ?? "None — local only")
-                }
-                .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
-                    if case .success(let url) = result { icloud.setFolder(url) }
-                }
-                if icloud.designatedFolderName != nil {
-                    Button("Use local only", role: .destructive) { icloud.clearFolder() }
-                }
-                Stepper(value: $retention, in: 3...50) {
-                    LabeledContent("Number of backups", value: "\(retention)")
-                }
-                Picker("Frequency", selection: $frequencyRaw) {
-                    ForEach(BackupFrequency.allCases) { Text($0.title).tag($0.rawValue) }
-                }
+                LabeledContent("Latest on this device",
+                               value: backups.lastBackupAt.map(Self.full) ?? "None yet")
                 Button("Back up now") { Task { await backups.flush() } }
                     .disabled(store.ledgers.isEmpty)
                 if let err = backups.lastError {
                     Text(err).foregroundStyle(.red).font(.caption)
                 }
             } header: {
-                Text("Backup")
+                Text("On this device")
             } footer: {
-                Text("Automatic backups keep the newest \(retention) on this device, mirrored to your backup folder when set. Frequency is a minimum interval — at most once per that period, the next time you make a change. “Back up now” always runs.")
+                Text("finch always keeps the latest backup on this device — a quick, offline restore point. Turn on a backup folder to keep a browsable history off-device.")
+            }
+
+            // Folder backup — opt-in browsable history in an iCloud Drive folder,
+            // synced across devices. Count + frequency scope this folder only.
+            Section {
+                Toggle("Back up to a folder", isOn: Binding(
+                    get: { icloud.designatedFolderName != nil },
+                    set: { on in if on { pickingFolder = true } else { icloud.clearFolder() } }))
+                .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { result in
+                    if case .success(let url) = result { icloud.setFolder(url) }
+                }
+                if icloud.mirrorFailing {
+                    Label("Backup folder unavailable — re-select it. Your latest backup is still saved on this device.", systemImage: "exclamationmark.icloud")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if icloud.designatedFolderName != nil {
+                    Button { pickingFolder = true } label: {
+                        LabeledContent("Folder", value: icloud.designatedFolderName ?? "")
+                    }
+                    Stepper(value: $retention, in: 3...50) {
+                        LabeledContent("Number of backups", value: "\(retention)")
+                    }
+                    Picker("Frequency", selection: $frequencyRaw) {
+                        ForEach(BackupFrequency.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                }
+            } header: {
+                Text("Folder backup")
+            } footer: {
+                Text(icloud.designatedFolderName != nil
+                     ? "Keeps this device's newest \(retention) backups in the folder. Frequency is a minimum interval — at most once per that period, the next time you make a change. “Back up now” always writes."
+                     : "Pick an iCloud Drive folder to keep a browsable history off-device and share it across your devices.")
             }
 
             if entries.isEmpty {
@@ -143,8 +158,9 @@ struct SettingsBackupsView: View {
         restoring = e
         defer { restoring = nil }
         // Read the target's bytes BEFORE snapshotting the current state — flush()
-        // prunes to the 14 retention ceiling (lockstep local+folder) and could
-        // evict this very snapshot if it's the oldest. Read first, then flush.
+        // refreshes the single local latest (pruning the previous on-device copy)
+        // and re-prunes the folder to its retention, either of which could evict
+        // this very snapshot. Read first, then flush.
         let data: Data?
         if e.onDevice {
             data = try? Data(contentsOf: backups.url(forName: e.name))

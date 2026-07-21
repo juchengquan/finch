@@ -55,6 +55,15 @@ public enum BackupHistory {
         return stampFormatter.date(from: "\(parts[0])-\(parts[1])")
     }
 
+    /// The device id embedded in a backup filename ("finch-YYYYMMDD-HHmmss-<id>.finch"),
+    /// or nil for the old suffix-less format. Used to prune only a device's OWN
+    /// snapshots from a shared folder.
+    public static func deviceId(fromName name: String) -> String? {
+        guard name.hasPrefix("finch-"), name.hasSuffix(".finch") else { return nil }
+        let parts = name.dropFirst("finch-".count).dropLast(".finch".count).split(separator: "-")
+        return parts.count >= 3 ? String(parts[2]) : nil
+    }
+
     /// Merge on-device + iCloud descriptors into one deduped (by filename),
     /// newest-first history. Names that don't parse to a date are dropped. Size
     /// prefers the local value; `downloaded` is true when on-device or the iCloud
