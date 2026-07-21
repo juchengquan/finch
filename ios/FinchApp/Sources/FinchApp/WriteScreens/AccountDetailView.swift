@@ -166,33 +166,12 @@ struct AccountDetailView: View {
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            // Reveal a Delete button; tapping it asks for confirmation first.
-            // Not role: .destructive — see ActivityTab (fake removal animation
-            // kills the row-anchored popout).
-            Button { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
-        }
-        .swipeActions(edge: .leading) {
-            if t.pending == true {
-                Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
-            }
-            if ["expense", "income"].contains(t.kind ?? "") {
-                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
-            }
-        }
-        .contextMenu {
-            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
-            if ["expense", "income"].contains(t.kind ?? "") {
-                Button { duplicateTxn(t) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            }
-            if !store.attachments(for: t.id).isEmpty {
-                Button { previewReceipt(t) } label: { Label("Preview receipt", systemImage: "paperclip") }
-            }
-            if t.pending == true {
-                Button { confirmTxn(t) } label: { Label("Confirm", systemImage: "checkmark.circle") }
-            }
-            Button(role: .destructive) { pendingTxDelete = t } label: { Label("Delete", systemImage: "trash") }
-        }
+        .txnSwipeActions(t,
+                         duplicate: { duplicateTxn($0) },
+                         requestDelete: { pendingTxDelete = $0 },
+                         toggleStatus: { toggleStatusTxn($0) },
+                         edit: { editing = $0 },
+                         previewReceipt: store.attachments(for: t.id).isEmpty ? nil : { previewReceipt($0) })
     }
 
     private func previewReceipt(_ txn: Tx) {
@@ -201,8 +180,8 @@ struct AccountDetailView: View {
     private func deleteTxn(_ txn: Tx) {
         do { try store.deleteTransaction(txn.id); Haptics.warning() } catch { errorMessage = i18nMessage(error) }
     }
-    private func confirmTxn(_ txn: Tx) {
-        do { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
+    private func toggleStatusTxn(_ txn: Tx) {
+        do { try txnToggleStatus(txn, store: store) }
         catch { errorMessage = i18nMessage(error) }
     }
     private func duplicateTxn(_ t: Tx) {

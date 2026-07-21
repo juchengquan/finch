@@ -324,43 +324,20 @@ struct ActivityFeedView: View {
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))   // denser rows
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            // Reveal a Delete button; tapping it asks for confirmation (no
-            // delete-on-full-swipe — destructive actions get a confirm step).
-            // Deliberately NOT role: .destructive — that role plays a fake
-            // row-removal animation on tap, which both looks like a premature
-            // delete and tears down the row-anchored confirmation popout.
-            Button { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }.tint(.red)
-        }
-        .swipeActions(edge: .leading) {
-            if txn.pending == true {
-                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }.tint(.green)
-            }
-            if ["expense", "income"].contains(txn.kind ?? "") {
-                Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }.tint(.indigo)
-            }
-        }
-        .contextMenu {   // right-click parity on Mac/iPad (swipe is touch-only)
-            Button { editing = txn } label: { Label("Edit", systemImage: "pencil") }
-            if ["expense", "income"].contains(txn.kind ?? "") {
-                Button { duplicate(txn) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            }
-            if !store.attachments(for: txn.id).isEmpty {
-                Button { previewReceipt(txn) } label: { Label("Preview receipt", systemImage: "paperclip") }
-            }
-            if txn.pending == true {
-                Button { confirm(txn) } label: { Label("Confirm", systemImage: "checkmark.circle") }
-            }
-            Button(role: .destructive) { pendingDelete = txn } label: { Label("Delete", systemImage: "trash") }
-        }
+        .txnSwipeActions(txn,
+                         duplicate: { duplicate($0) },
+                         requestDelete: { pendingDelete = $0 },
+                         toggleStatus: { toggleStatus($0) },
+                         edit: { editing = $0 },
+                         previewReceipt: store.attachments(for: txn.id).isEmpty ? nil : { previewReceipt($0) })
         .tag(txn.id)
     }
 
     private func delete(_ txn: Tx) {
         run { try store.deleteTransaction(txn.id) }   // also unlinks receipt files
     }
-    private func confirm(_ txn: Tx) {
-        run { try store.apply(.confirmTransaction, Args(["id": .string(txn.id)])) }
+    private func toggleStatus(_ txn: Tx) {
+        run { try txnToggleStatus(txn, store: store) }
     }
     /// Duplicate opens the Add sheet pre-filled from the source row — the
     /// user tweaks/confirms via Save (no silent write).
