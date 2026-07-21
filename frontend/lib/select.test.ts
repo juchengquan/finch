@@ -1128,6 +1128,17 @@ test('budgetProgress: one-shot income goal = saved offset + matched inflows', ()
   expect(p.used).toBe(100); // 50 + 30 + 20
 });
 
+test('budgetProgress: unscoped one-shot goal counts saved only, not all income', () => {
+  const txns = [
+    tx({ amount: 4200, account: 'chk', category: 'salary', kind: 'income', date: '2026-03-01' }),
+    tx({ amount: 500, account: 'chk', kind: 'income', date: '2026-03-02' }),
+  ];
+  // No account/category/tag/merchant → matches nothing; progress is the saved offset.
+  expect(budgetProgress(bgt({ saved: 650 }), txns, '2026-06-01').used).toBe(650);
+  // Any one dimension flips matching on.
+  expect(budgetProgress(bgt({ saved: 650, accountIds: ['chk'] }), txns, '2026-06-01').used).toBe(5350);
+});
+
 test('budgetProgress: tag filter is OR-within, AND-across dimensions; empty dims unconstrained', () => {
   // tagIds OR-within: a tx with either tag matches; AND-across: account must also match.
   const budget = bgt({ type: 'income', isRecurring: 0, saved: 0, tagIds: ['work', 'bonus'], accountIds: ['chk'] });

@@ -63,10 +63,14 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
   const categorySet = new Set(budget.categoryIds);
   const tagSet = new Set(budget.tagIds ?? []);
   const cpSet = new Set(budget.counterpartyIds ?? []);
+  // An unscoped one-shot goal matches nothing (mirrors budgetProgress) — else it
+  // would list all income; its progress is the saved offset alone.
+  const incomeUnscoped =
+    isIncome && budget.isRecurring === 0 && !accountSet.size && !categorySet.size && !tagSet.size && !cpSet.size;
   // Transactions inside the cycle window that match the budget's filters. Mirrors
   // budgetProgress: transfers are excluded for expense budgets only (income goals
   // count incoming transfer legs); tags/merchants are AND'd across dimensions.
-  const matched = ledgerTxns
+  const matched = incomeUnscoped ? [] : ledgerTxns
     .filter((tx) => !tx.pending && kindOf(tx) !== 'adjustment' && !(!isIncome && kindOf(tx) === 'transfer'))
     .filter((tx) => tx.date >= p.from && tx.date <= p.to)
     .filter((tx) => (accountSet.size ? accountSet.has(tx.account) : true))

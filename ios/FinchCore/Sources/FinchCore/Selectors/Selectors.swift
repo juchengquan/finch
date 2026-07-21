@@ -370,7 +370,12 @@ public enum Selectors {
         // expense budgets start at 0 and sum matched flows only.
         let oneShotIncome = budget.type == "income" && budget.isRecurring == 0
         let seed = oneShotIncome ? budget.saved : 0.0
-        var used = seed + usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
+        // A one-shot goal with NO scope matches nothing — progress is the saved
+        // offset alone (else an unconstrained goal counts all income; new goals
+        // must set ≥1 dimension). Scoped goals + expense/recurring run the sum.
+        let incomeUnscoped = oneShotIncome && accountSet == nil && matchSet.isEmpty
+            && budget.tagIds.isEmpty && budget.counterpartyIds.isEmpty
+        var used = incomeUnscoped ? seed : seed + usedInWindow(budget, txns, matchSet, accountSet, from: win.from, to: win.to)
         let base = r2(budget.amount + (budget.type == "expense" ? budget.carryForward : 0))
         used = r2(used)
         let remaining = r2(base - used)
@@ -390,6 +395,9 @@ public enum Selectors {
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
         let tagSet = budget.tagIds.isEmpty ? nil : Set(budget.tagIds)
         let cpSet = budget.counterpartyIds.isEmpty ? nil : Set(budget.counterpartyIds)
+        // Unscoped one-shot goal matches nothing (mirrors budgetProgress).
+        if budget.type == "income" && budget.isRecurring == 0
+            && accountSet == nil && matchSet.isEmpty && tagSet == nil && cpSet == nil { return [] }
         var out: [Tx] = []
         for t in txns {
             if ledgerOf(t) != budget.ledgerId { continue }

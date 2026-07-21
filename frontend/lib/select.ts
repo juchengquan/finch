@@ -1442,7 +1442,12 @@ export function budgetProgress(
   // budgets start at 0 and sum matched flows only.
   const oneShotIncome = budget.type === 'income' && budget.isRecurring === 0;
   let used = oneShotIncome ? budget.saved : 0;
-  for (const t of txns) {
+  // A one-shot goal with NO scope matches nothing — its progress is the `saved`
+  // offset alone. Without this, an unconstrained goal would count ALL income
+  // (new goals must set ≥1 dimension; this keeps migrated/unscoped goals from
+  // ballooning). Scoped goals and expense/recurring budgets run the loop.
+  const incomeUnscoped = oneShotIncome && !accountSet && matchSet.size === 0 && !tagSet && !cpSet;
+  if (!incomeUnscoped) for (const t of txns) {
     if (ledgerOf(t) !== budget.ledgerId) continue;
     if (t.pending || kindOf(t) === 'adjustment') continue;
     // Transfers are excluded for expense budgets only; income goals count

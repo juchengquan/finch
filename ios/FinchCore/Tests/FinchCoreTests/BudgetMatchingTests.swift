@@ -88,6 +88,22 @@ final class BudgetMatchingTests: XCTestCase {
         XCTAssertEqual(Selectors.budgetMatchedTransactions(expense, [transfer, spend], "2026-03-15").map(\.amount), [-40])
     }
 
+    // (e) an UNSCOPED one-shot goal matches nothing — progress is the saved offset
+    // alone (else it would count all income); its matched list is empty. Adding any
+    // one dimension flips matching back on.
+    func test_unscopedOneShotGoal_countsSavedOnly() {
+        let txns = [
+            tx(4200, "2026-03-01", category: "salary", kind: "income"),
+            tx(500, "2026-03-02", kind: "income"),
+        ]
+        let unscoped = bgt(type: "income", isRecurring: 0, saved: 650)   // no account/category/tag/merchant
+        XCTAssertEqual(Selectors.budgetProgress(unscoped, txns, "2026-06-01").used, 650, accuracy: 0.001)
+        XCTAssertTrue(Selectors.budgetMatchedTransactions(unscoped, txns, "2026-06-01").isEmpty)
+
+        let scoped = bgt(type: "income", isRecurring: 0, saved: 650, accountIds: ["chk"])
+        XCTAssertEqual(Selectors.budgetProgress(scoped, txns, "2026-06-01").used, 5350, accuracy: 0.001) // 650+4200+500
+    }
+
     // End-to-end: createBudget persists tag_ids/counterparty_ids, the projection
     // parses them back, and updateBudget patches them (mirrors the web columns).
     func test_createAndPatch_tagAndCounterpartyIds_roundTrip() throws {
