@@ -476,8 +476,6 @@ struct CategoryEditSheet: View {
         _color = State(initialValue: category.color ?? "")
     }
 
-    private let iconColumns = Array(repeating: GridItem(.flexible()), count: 6)
-
     /// Same-kind categories eligible as a parent: depth < 2 (so the child stays
     /// within the 3-level cap) and, when editing, excluding the category itself
     /// and its descendants. Tree-ordered for an indented menu.
@@ -517,21 +515,7 @@ struct CategoryEditSheet: View {
                 }
                 TextField("Name", text: $name)
                 SearchablePickerRow(title: "Parent", options: parentPickerOptions, selection: parentBinding)
-                Section("Icon") {
-                    LazyVGrid(columns: iconColumns, spacing: 12) {
-                        ForEach(CategoryIcon.names, id: \.self) { n in
-                            Image(systemName: CategoryIcon.symbol(for: n))
-                                .font(.system(size: 18))
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(icon == n ? Color.accentColor.opacity(0.2) : .clear))
-                                .overlay(Circle().stroke(Color.accentColor, lineWidth: icon == n ? 2 : 0))
-                                .contentShape(Circle())
-                                .onTapGesture { icon = (icon == n ? "" : n) }
-                                .accessibilityLabel("Icon \(n)")
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
+                IconPickerRow(title: "Icon", selection: $icon)
                 Section("Color") {
                     HStack(spacing: 10) {
                         ForEach(CategoryPalette.hexes, id: \.self) { hex in

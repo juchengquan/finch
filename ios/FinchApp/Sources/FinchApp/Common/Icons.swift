@@ -49,28 +49,299 @@ enum TxnKindIcon {
     }
 }
 
-/// SF Symbol for a category `icon` short-name. The 12 names mirror the web's
-/// shared set (stored verbatim in the pack for cross-platform parity); we map to
-/// SF Symbols only at render. Unknown / nil → "tag.fill" (web's 'tag' fallback).
+/// SF Symbol for a category `icon` short-name. Short-names are stored verbatim in
+/// the `.finch` pack; we map to SF Symbols only at render. The original 12 mirror
+/// the web's shared set — the rest are **native-only** additions (the web renders
+/// an unknown name as its 'tag' fallback, exactly as we do here for nil/unknown).
+/// The picker presents them in themed `groups`; `names` is the flat union.
+/// Unknown / nil → "tag.fill" (web's 'tag' fallback).
 enum CategoryIcon {
-    static let names = ["fork", "home", "car", "bag", "film", "heart",
-                        "sync", "tag", "coins", "wallet", "chart", "doc"]
+    /// One themed section of the icon picker (see `CategoryEditSheet`).
+    struct Group: Identifiable {
+        let title: String
+        let names: [String]
+        var id: String { title }
+    }
+
+    static let groups: [Group] = [
+        Group(title: "Food & Drink",      names: ["fork", "cup", "mug", "cart", "wineglass", "takeout", "fish", "carrot", "leaf", "water", "cake"]),
+        Group(title: "Shopping",          names: ["bag", "handbag", "tshirt", "jewelry", "gift", "giftcard", "tag", "sparkles", "creditcard", "laptop", "box"]),
+        Group(title: "Transport",         names: ["car", "fuel", "charging", "plane", "tram", "bus", "ferry", "bike", "scooter", "truck", "parking"]),
+        Group(title: "Travel",            names: ["hotel", "suitcase", "map", "beach", "mountain", "globe", "tent"]),
+        Group(title: "Home & Bills",      names: ["home", "key", "bolt", "drop", "flame", "wifi", "phone", "wrench", "paint", "sofa", "light", "washer", "tree", "trash"]),
+        Group(title: "Health & Fitness",  names: ["heart", "pills", "cross", "bandage", "stethoscope", "checkup", "vision", "dumbbell", "run", "swim", "yoga", "wellness", "mental", "sports"]),
+        Group(title: "Entertainment",     names: ["film", "tv", "streaming", "music", "headphones", "podcast", "game", "book", "school", "camera", "art", "concert", "theater", "ticket"]),
+        Group(title: "Tech & Comms",      names: ["mail", "message", "computer", "device", "cloud", "printer"]),
+        Group(title: "Personal",          names: ["pet", "child", "baby", "couple", "friends", "toy", "balloon", "scissors", "person", "crown"]),
+        Group(title: "Money & Work",      names: ["briefcase", "coins", "cash", "wallet", "chart", "analytics", "growth", "crypto", "bank", "office", "insurance", "doc", "receipt", "calendar", "goal", "sync", "percent", "charity"]),
+    ]
+
+    /// Flat union of every group's names, in display order.
+    static let names = groups.flatMap(\.names)
 
     static func symbol(for name: String?) -> String {
         switch name {
-        case "fork":   "fork.knife"
-        case "home":   "house.fill"
-        case "car":    "car.fill"
-        case "bag":    "bag.fill"
-        case "film":   "film.fill"
-        case "heart":  "heart.fill"
-        case "sync":   "arrow.triangle.2.circlepath"
-        case "tag":    "tag.fill"
-        case "coins":  "dollarsign.circle.fill"
-        case "wallet": "wallet.pass.fill"
-        case "chart":  "chart.pie.fill"
-        case "doc":    "doc.fill"
-        default:       "tag.fill"
+        // Food & Drink
+        case "fork":        "fork.knife"
+        case "cup":         "cup.and.saucer.fill"
+        case "mug":         "mug.fill"
+        case "cart":        "cart.fill"
+        case "wineglass":   "wineglass.fill"
+        case "takeout":     "takeoutbag.and.cup.and.straw.fill"
+        case "fish":        "fish.fill"
+        case "carrot":      "carrot.fill"
+        case "leaf":        "leaf.fill"
+        case "water":       "waterbottle.fill"
+        case "cake":        "birthday.cake.fill"
+        // Shopping
+        case "bag":         "bag.fill"
+        case "handbag":     "handbag.fill"
+        case "jewelry":     "diamond.fill"
+        case "tshirt":      "tshirt.fill"
+        case "gift":        "gift.fill"
+        case "giftcard":    "giftcard.fill"
+        case "tag":         "tag.fill"
+        case "sparkles":    "sparkles"
+        case "creditcard":  "creditcard.fill"
+        case "laptop":      "laptopcomputer"
+        case "box":         "shippingbox.fill"
+        // Transport
+        case "car":         "car.fill"
+        case "fuel":        "fuelpump.fill"
+        case "charging":    "bolt.car.fill"
+        case "plane":       "airplane"
+        case "tram":        "tram.fill"
+        case "bus":         "bus.fill"
+        case "ferry":       "ferry.fill"
+        case "bike":        "bicycle"
+        case "scooter":     "scooter"
+        case "truck":       "truck.box.fill"
+        case "parking":     "parkingsign.circle.fill"
+        // Travel
+        case "hotel":       "bed.double.fill"
+        case "suitcase":    "suitcase.fill"
+        case "map":         "map.fill"
+        case "beach":       "beach.umbrella.fill"
+        case "mountain":    "mountain.2.fill"
+        case "globe":       "globe.americas.fill"
+        case "tent":        "tent.fill"
+        // Home & Bills
+        case "home":        "house.fill"
+        case "key":         "key.fill"
+        case "bolt":        "bolt.fill"
+        case "drop":        "drop.fill"
+        case "flame":       "flame.fill"
+        case "wifi":        "wifi"
+        case "phone":       "phone.fill"
+        case "wrench":      "wrench.and.screwdriver.fill"
+        case "paint":       "paintbrush.fill"
+        case "sofa":        "sofa.fill"
+        case "light":       "lightbulb.fill"
+        case "washer":      "washer.fill"
+        case "tree":        "tree.fill"
+        case "trash":       "trash.fill"
+        // Health & Fitness
+        case "heart":       "heart.fill"
+        case "pills":       "pills.fill"
+        case "cross":       "cross.case.fill"
+        case "bandage":     "bandage.fill"
+        case "stethoscope": "stethoscope"
+        case "checkup":     "heart.text.square.fill"
+        case "vision":      "eye.fill"
+        case "mental":      "brain.head.profile"
+        case "dumbbell":    "dumbbell.fill"
+        case "run":         "figure.run"
+        case "swim":        "figure.pool.swim"
+        case "yoga":        "figure.yoga"
+        case "wellness":    "figure.mind.and.body"
+        case "sports":      "sportscourt.fill"
+        // Entertainment
+        case "film":        "film.fill"
+        case "tv":          "tv.fill"
+        case "streaming":   "play.rectangle.fill"
+        case "music":       "music.note"
+        case "headphones":  "headphones"
+        case "podcast":     "mic.fill"
+        case "game":        "gamecontroller.fill"
+        case "book":        "book.fill"
+        case "school":      "graduationcap.fill"
+        case "camera":      "camera.fill"
+        case "art":         "paintpalette.fill"
+        case "concert":     "music.mic"
+        case "theater":     "theatermasks.fill"
+        case "ticket":      "ticket.fill"
+        // Tech & Comms
+        case "mail":        "envelope.fill"
+        case "message":     "bubble.left.fill"
+        case "computer":    "desktopcomputer"
+        case "device":      "iphone"
+        case "cloud":       "icloud.fill"
+        case "printer":     "printer.fill"
+        // Personal
+        case "pet":         "pawprint.fill"
+        case "child":       "figure.and.child.holdinghands"
+        case "baby":        "figure.child"
+        case "couple":      "figure.2"
+        case "friends":     "person.2.fill"
+        case "toy":         "teddybear.fill"
+        case "balloon":     "balloon.fill"
+        case "scissors":    "scissors"
+        case "person":      "figure.stand"
+        case "crown":       "crown.fill"
+        // Money & Work
+        case "briefcase":   "briefcase.fill"
+        case "coins":       "dollarsign.circle.fill"
+        case "cash":        "banknote.fill"
+        case "wallet":      "wallet.pass.fill"
+        case "chart":       "chart.pie.fill"
+        case "analytics":   "chart.bar.fill"
+        case "growth":      "chart.line.uptrend.xyaxis"
+        case "crypto":      "bitcoinsign.circle.fill"
+        case "bank":        "building.columns.fill"
+        case "office":      "building.2.fill"
+        case "insurance":   "checkmark.shield.fill"
+        case "doc":         "doc.fill"
+        case "receipt":     "doc.plaintext.fill"
+        case "calendar":    "calendar"
+        case "goal":        "target"
+        case "sync":        "arrow.triangle.2.circlepath"
+        case "percent":     "percent"
+        case "charity":     "hand.raised.fill"
+        default:            "tag.fill"
+        }
+    }
+
+    /// A short, human-readable name for an icon short-name, shown when the user
+    /// taps an icon in the picker. Unknown names fall back to the capitalized id.
+    static func label(for name: String) -> String {
+        switch name {
+        // Food & Drink
+        case "fork":        "Dining"
+        case "cup":         "Coffee"
+        case "mug":         "Tea"
+        case "cart":        "Groceries"
+        case "wineglass":   "Drinks"
+        case "takeout":     "Takeout"
+        case "fish":        "Seafood"
+        case "carrot":      "Produce"
+        case "leaf":        "Organic"
+        case "water":       "Water"
+        case "cake":        "Celebration"
+        // Shopping
+        case "bag":         "Shopping"
+        case "handbag":     "Accessories"
+        case "jewelry":     "Jewelry"
+        case "tshirt":      "Clothing"
+        case "gift":        "Gifts"
+        case "giftcard":    "Gift Card"
+        case "tag":         "Sale"
+        case "sparkles":    "Beauty"
+        case "creditcard":  "Card"
+        case "laptop":      "Electronics"
+        case "box":         "Package"
+        // Transport
+        case "car":         "Car"
+        case "fuel":        "Fuel"
+        case "charging":    "Charging"
+        case "plane":       "Travel"
+        case "tram":        "Transit"
+        case "bus":         "Bus"
+        case "ferry":       "Ferry"
+        case "bike":        "Cycling"
+        case "scooter":     "Scooter"
+        case "truck":       "Moving"
+        case "parking":     "Parking"
+        // Travel
+        case "hotel":       "Hotel"
+        case "suitcase":    "Luggage"
+        case "map":         "Map"
+        case "beach":       "Beach"
+        case "mountain":    "Outdoors"
+        case "globe":       "Abroad"
+        case "tent":        "Camping"
+        // Home & Bills
+        case "home":        "Home"
+        case "key":         "Rent"
+        case "bolt":        "Electricity"
+        case "drop":        "Water"
+        case "flame":       "Gas"
+        case "wifi":        "Internet"
+        case "phone":       "Phone"
+        case "wrench":      "Repairs"
+        case "paint":       "Improvement"
+        case "sofa":        "Furniture"
+        case "light":       "Lighting"
+        case "washer":      "Laundry"
+        case "tree":        "Garden"
+        case "trash":       "Waste"
+        // Health & Fitness
+        case "heart":       "Health"
+        case "pills":       "Pharmacy"
+        case "cross":       "Medical"
+        case "bandage":     "First Aid"
+        case "stethoscope": "Doctor"
+        case "checkup":     "Checkup"
+        case "vision":      "Vision"
+        case "mental":      "Mental Health"
+        case "dumbbell":    "Gym"
+        case "run":         "Running"
+        case "swim":        "Swimming"
+        case "yoga":        "Yoga"
+        case "wellness":    "Wellness"
+        case "sports":      "Sports"
+        // Entertainment
+        case "film":        "Movies"
+        case "tv":          "TV"
+        case "streaming":   "Streaming"
+        case "music":       "Music"
+        case "headphones":  "Audio"
+        case "podcast":     "Podcasts"
+        case "game":        "Games"
+        case "book":        "Books"
+        case "school":      "Education"
+        case "camera":      "Photography"
+        case "art":         "Art"
+        case "concert":     "Concerts"
+        case "theater":     "Theater"
+        case "ticket":      "Events"
+        // Tech & Comms
+        case "mail":        "Mail"
+        case "message":     "Messages"
+        case "computer":    "Computer"
+        case "device":      "Devices"
+        case "cloud":       "Cloud"
+        case "printer":     "Printing"
+        // Personal
+        case "pet":         "Pets"
+        case "child":       "Kids"
+        case "baby":        "Baby"
+        case "couple":      "Family"
+        case "friends":     "Friends"
+        case "toy":         "Toys"
+        case "balloon":     "Party"
+        case "scissors":    "Grooming"
+        case "person":      "Personal"
+        case "crown":       "Luxury"
+        // Money & Work
+        case "briefcase":   "Work"
+        case "coins":       "Money"
+        case "cash":        "Cash"
+        case "wallet":      "Wallet"
+        case "chart":       "Investments"
+        case "analytics":   "Analytics"
+        case "growth":      "Growth"
+        case "crypto":      "Crypto"
+        case "bank":        "Bank"
+        case "office":      "Business"
+        case "insurance":   "Insurance"
+        case "doc":         "Bills"
+        case "receipt":     "Receipts"
+        case "calendar":    "Subscriptions"
+        case "goal":        "Goals"
+        case "sync":        "Recurring"
+        case "percent":     "Interest"
+        case "charity":     "Donations"
+        default:            name.capitalized
         }
     }
 }
