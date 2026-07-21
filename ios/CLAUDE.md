@@ -165,7 +165,28 @@ tap-to-open full-height sheets: `SearchablePickerRow` (generic, stage-then-Confi
 deliberate workaround because `.searchable` collapses the nav bar and hides Confirm),
 `TagChipFlow`/`TagField` (multi-select chips via custom `FlowLayout`). `AddTransactionSheet` is
 the flagship (expense/income/transfer/refund + opt-in adjust; amount is in the **account's own
-currency**).
+currency**) — it is also the **layout blueprint** for the whole add/edit family.
+
+**Sheet layout is tokenized — don't hand-tune insets.** Apply **`finchSheetForm()`**
+(`Common/ViewModifiers.swift`) to the `Form`: it sets the app-wide section gap plus the pinned
+top margin under the nav bar, both from `Common/Metrics.swift` (`sectionSpacing`,
+`sheetTopMargin`). Without the explicit margin SwiftUI hands these sheets *different* default
+top insets, which is what made the family look inconsistent. Section headers go through
+**`finchSectionHeader(_:)`** — it takes a **`LocalizedStringKey`**, not a `String`; a `String`
+binds `Text`'s non-localizing init and silently ships English to zh-Hans.
+
+**The first section after the type caption carries NO header.** Every sheet
+(`AddTransaction`, `EditTransaction`, `Scheduled`, `Account`, `Budget`) opens straight into
+fields and only labels *later* groups, where the split needs explaining. A header on the first
+section stacks two lines of grey chrome — the type caption, then the header — before the user
+reaches a single field, and costs ~36pt for no information (`BudgetSheet` drifted into a
+`"Details"` header this way; fixed in #563). Resist "Details"/"General"/"Info" openers.
+
+**Measure layout, don't eyeball it.** `idb ui describe-all` returns frames in points, so two
+sheets can be diffed numerically — the correct top-of-form reading is type caption `y=138 h=52`
+with the first content row at `y=202`. Pixel-squinting at screenshots produced two confidently
+wrong "fixes" before one `describe-all` settled #554, and again mistook #563's *structural*
+extra header for a *spacing* regression. See the sim-driving bullet under Conventions.
 
 ### Money & currency (easy to get wrong — mirror of the web gotcha)
 
