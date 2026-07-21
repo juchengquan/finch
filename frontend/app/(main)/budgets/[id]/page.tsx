@@ -66,12 +66,18 @@ function NamedBudgetDetail({ budget }: { budget: BudgetRow }) {
 
   const accountSet = new Set(budget.accountIds);
   const categorySet = new Set(budget.categoryIds);
-  // Transactions inside the cycle window that match the budget's filters.
+  const tagSet = new Set(budget.tagIds ?? []);
+  const cpSet = new Set(budget.counterpartyIds ?? []);
+  // Transactions inside the cycle window that match the budget's filters. Mirrors
+  // budgetProgress: transfers are excluded for expense budgets only (income goals
+  // count incoming transfer legs); tags/merchants are AND'd across dimensions.
   const matched = ledgerTxns
-    .filter((tx) => !tx.pending && kindOf(tx) !== 'transfer' && kindOf(tx) !== 'adjustment')
+    .filter((tx) => !tx.pending && kindOf(tx) !== 'adjustment' && !(!isIncome && kindOf(tx) === 'transfer'))
     .filter((tx) => tx.date >= p.from && tx.date <= p.to)
     .filter((tx) => (accountSet.size ? accountSet.has(tx.account) : true))
     .filter((tx) => (categorySet.size ? tx.category != null && categorySet.has(tx.category) : true))
+    .filter((tx) => (tagSet.size ? (tx.tags ?? []).some((x) => tagSet.has(x)) : true))
+    .filter((tx) => (cpSet.size ? tx.counterpartyId != null && cpSet.has(tx.counterpartyId) : true))
     .filter((tx) => (isIncome ? tx.amount > 0 : tx.amount < 0))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 

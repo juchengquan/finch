@@ -1,8 +1,9 @@
 import { test, expect } from 'bun:test';
-import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest, whatIfBaseline } from "@/lib/select";
+import { balanceSeries, netWorthSeries, categorySpend, monthlySpending, monthlyCashflow, topCategoryDeltas, dailySpending, netWorthByMonth, netWorthByAccountType, netWorthExplained, selectTransactions, monthForecast, incomeCategoryFlow, unrealizedFx, holdingValue, holdingGainLoss, holdingsForAccount, holdingsValueForAccount, investmentAccountTotal, suggestCategory, recentExpenses, findDuplicate, accountForecast, merchantStats, anomalyScore, weeklyDigest, whatIfBaseline, budgetProgress } from "@/lib/select";
 import type { Holding } from '@/lib/db/domain/holdings/types';
 import type { Tx, ScheduledTemplate } from '@/lib/store';
 import type { AccountRow } from '@/lib/db/domain/accounts/types';
+import type { BudgetRow } from '@/lib/db/domain/budgets/types';
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: Math.random().toString(36).slice(2),
@@ -1086,4 +1087,88 @@ test('findDuplicate flags a same-account same-merchant same-amount row within th
   // Pending rows are ignored.
   const pend = [tx({ id: 'p', merchant: 'Starbucks', amount: -6.5, account: 'cc', date: '2026-05-10', pending: true })];
   expect(findDuplicate(pend, 'personal', { merchant: 'Starbucks', amount: -6.5, accountId: 'cc', date: '2026-05-10' })).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// budgetProgress — income-goal matching (tags/merchants), saved offset, and
+// income transfer-leg inclusion (INCOME_BUDGET_MATCHING design §3).
+// ---------------------------------------------------------------------------
+
+const bgt = (over: Partial<BudgetRow>): BudgetRow => ({
+  id: 'b1',
+  ledgerId: 'personal',
+  groupId: null,
+  name: 'Goal',
+  type: 'income',
+  amount: 1000,
+  saved: 0,
+  carryForward: 0,
+  frequency: 'monthly',
+  startDate: '2026-01-01',
+  endDate: null,
+  isRecurring: 0,
+  rollover: 0,
+  rolloverLimit: null,
+  pendingAmount: null,
+  lastRolledPeriod: null,
+  accountIds: [],
+  categoryIds: [],
+  warningPct: 80,
+  ...over,
+});
+
+test('budgetProgress: one-shot income goal = saved offset + matched inflows', () => {
+  const budget = bgt({ type: 'income', isRecurring: 0, saved: 50, categoryIds: ['salary'] });
+  const txns = [
+    tx({ amount: 30, category: 'salary', kind: 'income', date: '2026-03-01' }),
+    tx({ amount: 20, category: 'salary', kind: 'income', date: '2026-04-01' }),
+    tx({ amount: 999, category: 'other', kind: 'income', date: '2026-04-02' }), // wrong category
+  ];
+  const p = budgetProgress(budget, txns, '2026-06-01');
+  expect(p.used).toBe(100); // 50 + 30 + 20
+});
+
+test('budgetProgress: tag filter is OR-within, AND-across dimensions; empty dims unconstrained', () => {
+  // tagIds OR-within: a tx with either tag matches; AND-across: account must also match.
+  const budget = bgt({ type: 'income', isRecurring: 0, saved: 0, tagIds: ['work', 'bonus'], accountIds: ['chk'] });
+  const txns = [
+    tx({ amount: 40, account: 'chk', tags: ['work'], kind: 'income', date: '2026-03-01' }),   // tag ok, acct ok
+    tx({ amount: 15, account: 'chk', tags: ['bonus'], kind: 'income', date: '2026-03-02' }),  // OR-within
+    tx({ amount: 70, account: 'sav', tags: ['work'], kind: 'income', date: '2026-03-03' }),   // wrong account (AND-across)
+    tx({ amount: 60, account: 'chk', tags: ['misc'], kind: 'income', date: '2026-03-04' }),   // no matching tag
+    tx({ amount: 25, account: 'chk', kind: 'income', date: '2026-03-05' }),                    // no tags at all
+  ];
+  const p = budgetProgress(budget, txns, '2026-06-01');
+  expect(p.used).toBe(55); // 40 + 15 only
+
+  // Empty tag/category dims are unconstrained: an account-only goal counts every
+  // inflow into that account regardless of tags/merchant.
+  const acctOnly = bgt({ type: 'income', isRecurring: 0, saved: 0, accountIds: ['chk'] });
+  const p2 = budgetProgress(acctOnly, txns, '2026-06-01');
+  expect(p2.used).toBe(140); // 40 + 15 + 60 + 25 (all chk inflows)
+});
+
+test('budgetProgress: counterparty filter matches only listed merchants', () => {
+  const budget = bgt({ type: 'income', isRecurring: 0, saved: 0, counterpartyIds: ['c1'] });
+  const txns = [
+    tx({ amount: 50, counterpartyId: 'c1', kind: 'income', date: '2026-03-01' }),
+    tx({ amount: 80, counterpartyId: 'c2', kind: 'income', date: '2026-03-02' }), // wrong merchant
+    tx({ amount: 30, kind: 'income', date: '2026-03-03' }),                        // no merchant
+  ];
+  const p = budgetProgress(budget, txns, '2026-06-01');
+  expect(p.used).toBe(50);
+});
+
+test('budgetProgress: income goals count incoming transfer legs; expense budgets exclude transfers', () => {
+  const transfer = tx({ amount: 200, account: 'sav', category: null, kind: 'transfer', date: '2026-03-10' });
+  const spend = tx({ amount: -40, account: 'sav', category: 'food', kind: 'expense', date: '2026-03-11' });
+
+  // Income goal scoped to the destination account: the incoming transfer leg counts.
+  const goal = bgt({ type: 'income', isRecurring: 0, saved: 0, accountIds: ['sav'] });
+  expect(budgetProgress(goal, [transfer, spend], '2026-03-15').used).toBe(200);
+
+  // Expense budget over the same account: the transfer is excluded, only the spend
+  // counts. `today` sits inside the recurring monthly window that holds the txns.
+  const expense = bgt({ type: 'expense', isRecurring: 1, amount: 500, accountIds: ['sav'] });
+  expect(budgetProgress(expense, [transfer, spend], '2026-03-15').used).toBe(40);
 });
