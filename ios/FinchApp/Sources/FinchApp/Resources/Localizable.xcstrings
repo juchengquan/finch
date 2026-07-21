@@ -23,6 +23,26 @@
         }
       }
     },
+    "\"Saved so far\" is money set aside before tracking began. Matching transactions add on top of it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“已存金额”是开始跟踪前预留的金额。匹配的交易会在此基础上累加。"
+          }
+        }
+      }
+    },
+    "%1$@ (%2$@) looks higher than usual.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（%2$@）高于平常。"
+          }
+        }
+      }
+    },
     "%1$@ / %2$@": {},
     "%1$@ is %2$@.": {
       "localizations": {
@@ -60,6 +80,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "已花费 %1$@ · 共 %2$@"
+          }
+        }
+      }
+    },
+    "%1$@ used — %2$@ of %3$@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已使用 %1$@ —— %2$@ / %3$@。"
           }
         }
       }
@@ -129,6 +159,16 @@
       }
     },
     "%@": {},
+    "%@ is due. Confirm now?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 已到期。立即确认？"
+          }
+        }
+      }
+    },
     "%@ is removed from all transactions.": {
       "localizations": {
         "zh-Hans": {
@@ -1334,6 +1374,26 @@
         }
       }
     },
+    "Budget alert: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预算提醒：%@"
+          }
+        }
+      }
+    },
+    "Budget warnings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预算提醒"
+          }
+        }
+      }
+    },
     "Budgets": {
       "localizations": {
         "zh-Hans": {
@@ -1620,6 +1680,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "确认全部 %lld 笔待处理"
+          }
+        }
+      }
+    },
+    "Confirm now": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即确认"
           }
         }
       }
@@ -3454,6 +3524,16 @@
         }
       }
     },
+    "Matching": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配"
+          }
+        }
+      }
+    },
     "Max": {
       "localizations": {
         "zh-Hans": {
@@ -4534,6 +4614,16 @@
         }
       }
     },
+    "Real inflows matching these scopes fund the goal. Set at least one category, account, tag, or merchant.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符合这些范围的实际流入将计入目标。请至少设置一个类别、账户、标签或商户。"
+          }
+        }
+      }
+    },
     "Recategorize": {
       "localizations": {
         "zh-Hans": {
@@ -4954,6 +5044,26 @@
         }
       }
     },
+    "Scheduled reminders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划提醒"
+          }
+        }
+      }
+    },
+    "Scheduled: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划：%@"
+          }
+        }
+      }
+    },
     "Schema version": {
       "localizations": {
         "zh-Hans": {
@@ -5260,6 +5370,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "大小"
+          }
+        }
+      }
+    },
+    "Snooze 1 hour": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推迟 1 小时"
           }
         }
       }
@@ -6054,6 +6174,26 @@
         }
       }
     },
+    "Unusual transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异常交易"
+          }
+        }
+      }
+    },
+    "Unusual transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异常交易"
+          }
+        }
+      }
+    },
     "Unverify": {
       "localizations": {
         "zh-Hans": {
@@ -6184,12 +6324,42 @@
         }
       }
     },
+    "View budgets": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看预算"
+          }
+        }
+      }
+    },
+    "View transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看交易"
+          }
+        }
+      }
+    },
     "Weekday": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "星期"
+          }
+        }
+      }
+    },
+    "Weekly digest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每周摘要"
           }
         }
       }
@@ -6230,6 +6400,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "昨天"
+          }
+        }
+      }
+    },
+    "You spent %1$@ across %2$lld transactions this week.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本周你在 %2$lld 笔交易中花费了 %1$@。"
+          }
+        }
+      }
+    },
+    "Your weekly digest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本周摘要"
           }
         }
       }
@@ -6280,6 +6470,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "减少 %1$lld%% → 每月约省 %2$@"
+          }
+        }
+      }
+    },
+    "done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
           }
         }
       }
@@ -6345,6 +6545,16 @@
         }
       }
     },
+    "missed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已错过"
+          }
+        }
+      }
+    },
     "of income saved this month": {
       "localizations": {
         "zh-Hans": {
@@ -6363,6 +6573,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "超支"
+          }
+        }
+      }
+    },
+    "pending": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待处理"
           }
         }
       }
@@ -6423,6 +6643,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "上升趋势"
+          }
+        }
+      }
+    },
+    "upcoming": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即将到来"
           }
         }
       }

@@ -186,12 +186,28 @@ jobs:
             -derivedDataPath /tmp/dd -quiet \
             -skipPackagePluginValidation -skipMacroValidation \
             COMPILER_INDEX_STORE_ENABLE=NO
-          bun run scripts/xliff-keys.ts > scripts/extracted-keys.json
-          if ! git diff --quiet -- scripts/extracted-keys.json; then
-            git diff --stat -- scripts/extracted-keys.json
-            echo "::error file=ios/scripts/extracted-keys.json::UI strings changed but scripts/extracted-keys.json wasn't regenerated, so the catalog is missing them (they fall back to English). Re-run the pipeline in the header of ios/scripts/build-xcstrings.ts, then commit extracted-keys.json AND the rebuilt catalog."
-            exit 1
-          fi
+          bun run scripts/xliff-keys.ts > /tmp/keys-fresh.json
+          # Compare the KEY SET, not the file bytes: what matters is whether any
+          # UI string is missing from the catalog, and a set diff also names the
+          # offenders instead of printing "N insertions" and leaving you guessing.
+          python3 - <<'PYEOF'
+          import json, sys
+          fresh = set(json.load(open("/tmp/keys-fresh.json")))
+          committed = set(json.load(open("scripts/extracted-keys.json")))
+          missing = sorted(fresh - committed)   # in the app, absent from the catalog
+          stale   = sorted(committed - fresh)   # in the catalog, gone from the app
+          if not missing and not stale:
+              sys.exit(0)
+          for k in missing:
+              print(f"  + {k!r}  (in the app, NOT in the catalog -> renders English)")
+          for k in stale:
+              print(f"  - {k!r}  (in the catalog, no longer in the app)")
+          print("::error file=ios/scripts/extracted-keys.json::extracted-keys.json is out of "
+                "date with the app's strings (see the +/- list above). Re-run the pipeline in "
+                "the header of ios/scripts/build-xcstrings.ts, then commit extracted-keys.json "
+                "AND the rebuilt catalog.")
+          sys.exit(1)
+          PYEOF
 
       # Compile the native macOS app too — the iOS app build won't catch
       # macOS-only breaks (e.g. .topBarTrailing is unavailable on macOS).
