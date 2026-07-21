@@ -491,24 +491,36 @@ const WRITE_SEQUENCE: { action: string; args: Record<string, unknown> }[] = [
   // re-deriving amount_base via an FX lookup at the new date.
   { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a1', amount: -2000, currency: 'JPY', merchant: 'Relock', categoryId: 'food', date: '2026-05-12', skipRules: true } },
   { action: 'updateTransaction', args: { id: '$lastAccountPosting', patch: { amount: -5000, date: '2026-05-13' } } },
+  // A second template (s2), created BEFORE the split CRUD below so it is still
+  // active — and NOT split-enabled — when the generateDueScheduled sweep runs.
+  // (s1 becomes splits_enabled=1 in that block, so it's skipped by generateDue;
+  // s2 is what actually produces rows below.)
+  { action: 'createScheduled', args: { id: 's2', ledgerId: 'personal', name: 'Gym', type: 'expense', amount: 45, frequency: 'monthly', dayOfMonth: 15, accountId: 'a2', startDate: '2026-01-15' } },
   // scheduled split CRUD (add/update/remove → leaves one split on s1).
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a2', pct: 40 } },
   { action: 'addScheduledSplit', args: { templateId: 's1', accountId: 'a3', pct: 25 } },
   { action: 'updateScheduledSplit', args: { templateId: 's1', index: 0, pct: 30 } },
   { action: 'removeScheduledSplit', args: { templateId: 's1', index: 1 } },
-  // generateDueScheduled with an explicit `today` (deterministic): posts s1's
-  // Jan–Apr monthly occurrences, exercising the date-dedup + occurrence math.
+  // generateDueScheduled with an explicit `today` (deterministic). s1 is
+  // skipped entirely — generateDue skips split-enabled templates, and s1 just
+  // became one above — so this is NOT "s1's Jan–Apr occurrences" (the old
+  // comment here claimed that; it stopped being true the moment the split CRUD
+  // above was added). It's s2 (monthly, dayOfMonth 15, startDate 2026-01-15)
+  // that actually generates rows: Jan–Apr occurrences, exercising the
+  // date-dedup + occurrence math end to end.
   { action: 'generateDueScheduled', args: { today: '2026-04-15' } },
-  // A second template (s2, untouched by the split CRUD above) created AFTER the
-  // generateDueScheduled sweep — its startDate is past that call's `today`, so
-  // occurrencesUpTo() would've yielded nothing for it anyway, but creating it
-  // afterwards keeps it out of the sweep entirely, deterministically.
-  { action: 'createScheduled', args: { id: 's2', ledgerId: 'personal', name: 'Gym', type: 'expense', amount: 45, frequency: 'monthly', dayOfMonth: 15, accountId: 'a2', startDate: '2026-05-01' } },
   // postScheduled with a PINNED date — reproducible offline now that the action
   // takes an explicit date, so it finally gets a parity gate (it was excluded
   // before: it used to stamp `new Date()`, making it non-reproducible offline).
   { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-20' } },
   { action: 'postScheduled', args: { templateId: 's2', date: '2026-05-21', occurrenceDate: '2026-05-18' } },
+  // addTransaction/createTransfer carrying sourceTemplateId + occurrenceDate —
+  // the write path the shipped UI actually uses ("Post now" on the Scheduled
+  // calendar opens a prefilled edit sheet; saving it calls addTransaction /
+  // createTransfer with the link), as opposed to the silent postScheduled path
+  // exercised above.
+  { action: 'addTransaction', args: { ledgerId: 'personal', accountId: 'a2', amount: -45, merchant: 'Gym', categoryId: 'fun', date: '2026-05-25', sourceTemplateId: 's2', occurrenceDate: '2026-05-22', skipRules: true } },
+  { action: 'createTransfer', args: { fromAccountId: 'a1', toAccountId: 'a2', fromAmount: 1500, date: '2026-06-03', sourceTemplateId: 's1', occurrenceDate: '2026-06-01' } },
   // Reorder support (drag-to-reorder): the new sortOrder patch fields on
   // updateAccount + updateAccountGroup (and createAccountGroup, prior uncovered).
   { action: 'createAccountGroup', args: { id: 'ag1', ledgerId: 'personal', name: 'Cash Group' } },
