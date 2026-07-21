@@ -95,3 +95,32 @@ public enum MirrorAlert {
         Decision(failing: failed, shouldAlert: failed && !wasFailing)
     }
 }
+
+/// How often automatic backups may run (a minimum interval, not a guaranteed
+/// wakeup — iOS can't back up while the app isn't running, so it's "at most once
+/// per interval, next time you change something in-app").
+public enum BackupFrequency: String, CaseIterable, Identifiable, Sendable {
+    case hourly, daily, weekly, monthly
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
+    /// Minimum seconds between automatic backups.
+    public var interval: TimeInterval {
+        switch self {
+        case .hourly:  return 3_600
+        case .daily:   return 86_400
+        case .weekly:  return 604_800
+        case .monthly: return 2_592_000   // 30 days
+        }
+    }
+}
+
+/// Pure throttle decision for automatic backups. Manual "Back up now" and the
+/// pre-restore safety backup bypass this (they always run).
+public enum BackupSchedule {
+    /// Whether an automatic backup is due: yes if none has ever run, or at least
+    /// `frequency.interval` has elapsed since the last one.
+    public static func shouldAutoBackup(lastBackupAt: Date?, frequency: BackupFrequency, now: Date) -> Bool {
+        guard let last = lastBackupAt else { return true }
+        return now.timeIntervalSince(last) >= frequency.interval
+    }
+}
