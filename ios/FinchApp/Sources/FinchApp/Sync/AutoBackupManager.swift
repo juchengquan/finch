@@ -62,7 +62,7 @@ public final class AutoBackupManager: ObservableObject {
         do {
             let data = try await store.buildPack()
             try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
-            let url = backupsDir.appendingPathComponent("finch-\(Self.stamp()).finch")
+            let url = backupsDir.appendingPathComponent("finch-\(Self.stamp())-\(Self.deviceId).finch")
             try data.write(to: url)
             prune()
             WidgetSnapshotWriter.write(from: store)   // Phase 7: refresh the widget data
@@ -104,4 +104,16 @@ public final class AutoBackupManager: ObservableObject {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyyMMdd-HHmmss"
         return f.string(from: Date())
     }
+
+    /// A short, stable per-device id appended to backup filenames so two devices
+    /// backing up in the same second never write the SAME filename into a shared
+    /// backup folder (which would overwrite one and let a lockstep prune delete the
+    /// other). Random hex, generated once, persisted per-device.
+    static let deviceId: String = {
+        let key = "finch.backupDeviceId"
+        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+        let id = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(6)).lowercased()
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }()
 }
