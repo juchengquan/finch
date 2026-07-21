@@ -258,10 +258,13 @@ test('migrate stamps the schema version in db_metadata', async () => {
   expect(meta!.appName).toBe('finch');
 });
 
-test('schema shape: budgets no longer carries tag_ids; new indexes present', async () => {
+test('schema shape: budgets carries tag_ids + counterparty_ids; new indexes present', async () => {
   const exec = await seededAndAudited();
   const budgetCols = (await exec('PRAGMA table_info(budgets)')).map((r) => String(r.name));
-  expect(budgetCols).not.toContain('tag_ids');
+  // Re-added (tag_ids was dropped 2026-06-06) + counterparty_ids: income goals
+  // now match real transactions by tag/merchant.
+  expect(budgetCols).toContain('tag_ids');
+  expect(budgetCols).toContain('counterparty_ids');
 
   const indexNames = async (table: string) =>
     (await exec(`PRAGMA index_list(${table})`)).map((r) => String(r.name));
