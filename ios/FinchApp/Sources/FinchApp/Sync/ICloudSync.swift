@@ -13,6 +13,10 @@ public final class ICloudSync: ObservableObject {
 
     @Published public private(set) var available = false
     @Published public private(set) var newerRemotePack: URL?
+    /// Every `.finch` pack in iCloud Drive (for the merged backup history) — name +
+    /// size + whether the bytes are already downloaded. Size/date come from
+    /// metadata, so browsing the history needs no download.
+    @Published public private(set) var remoteBackups: [ICloudBackup] = []
 
     private let containerId = "iCloud.com.juchengquan.finch"
     private var query: NSMetadataQuery?
@@ -49,6 +53,30 @@ public final class ICloudSync: ObservableObject {
 
     public func clearPendingImport() { newerRemotePack = nil }
 
+    /// URL of a named pack in iCloud Drive (may be metadata-only until downloaded).
+    public func url(forName name: String) -> URL? { documentsDir?.appendingPathComponent(name) }
+
+    /// Download a named pack's bytes, waiting for iCloud to materialize it (30s
+    /// ceiling); nil if unavailable. For restoring an iCloud-only snapshot.
+    public func download(name: String) async -> Data? {
+        guard let url = url(forName: name) else { return nil }
+        func isDownloaded() -> Bool {
+            (try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?.ubiquitousItemDownloadingStatus == .current
+        }
+        if !isDownloaded() {
+            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            for _ in 0..<60 where !isDownloaded() { try? await Task.sleep(for: .milliseconds(500)) }
+        }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Delete a named pack from iCloud Drive. Used by the lockstep prune — a device
+    /// only prunes names it wrote locally (its own backups), never another device's.
+    public func delete(name: String) {
+        guard let url = url(forName: name) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     private func startWatch() {
         let q = NSMetadataQuery()
         q.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
@@ -66,14 +94,23 @@ public final class ICloudSync: ObservableObject {
         q.disableUpdates()
         defer { q.enableUpdates() }
         var newest: (URL, Date)?
+        var all: [ICloudBackup] = []
         for i in 0..<q.resultCount {
             guard let item = q.result(at: i) as? NSMetadataItem,
-                  let url = item.value(forAttribute: NSMetadataItemURLKey) as? URL,
-                  let date = item.value(forAttribute: NSMetadataItemFSContentChangeDateKey) as? Date else { continue }
-            if url.lastPathComponent == lastPushedName { continue }   // skip our own push
-            if newest == nil || date > newest!.1 { newest = (url, date) }
+                  let url = item.value(forAttribute: NSMetadataItemURLKey) as? URL else { continue }
+            let name = url.lastPathComponent
+            let size = (item.value(forAttribute: NSMetadataItemFSSizeKey) as? NSNumber)?.int64Value ?? 0
+            let downloaded = (item.value(forAttribute: NSMetadataUbiquitousItemDownloadingStatusKey) as? String)
+                == NSMetadataUbiquitousItemDownloadingStatusCurrent
+            all.append(ICloudBackup(name: name, size: size, downloaded: downloaded))
+            if let date = item.value(forAttribute: NSMetadataItemFSContentChangeDateKey) as? Date,
+               name != lastPushedName, newest == nil || date > newest!.1 { newest = (url, date) }
         }
-        // Surface a remote pack newer than anything we pushed this session.
-        Task { @MainActor in self.newerRemotePack = newest?.0 }
+        // Surface a remote pack newer than anything we pushed this session + the
+        // full list for the merged backup history.
+        Task { @MainActor in
+            self.newerRemotePack = newest?.0
+            self.remoteBackups = all
+        }
     }
 }

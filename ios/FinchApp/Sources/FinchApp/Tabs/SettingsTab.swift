@@ -118,20 +118,15 @@ struct SettingsBackupSyncView: View {
                     Text(err).foregroundStyle(.red).font(.caption)
                 }
                 LabeledContent("iCloud Drive", value: icloud.available ? "On" : "Unavailable")
-                if icloud.newerRemotePack != nil {
-                    Button("Import newer version from iCloud") {
-                        if let data = icloud.dataForImport() {
-                            Task {
-                                do { try await store.loadPack(from: data); icloud.clearPendingImport() }
-                                catch { importError = i18nMessage(error) }
-                            }
-                        }
-                    }
+                NavigationLink {
+                    SettingsBackupsView()
+                } label: {
+                    LabeledContent("Backups", value: "\(BackupHistory.merge(local: backups.localBackups(), iCloud: icloud.remoteBackups).count)")
                 }
             } header: {
                 Text("Backups")
             } footer: {
-                Text("Automatic local .finch backups after edits (kept: last 14), mirrored to iCloud Drive when signed in. Newer versions from other devices are offered for import (never auto-replaced).")
+                Text("Automatic .finch backups after edits (kept: last 14) on this device, mirrored to iCloud Drive when signed in. Open Backups to browse the history and restore an earlier version.")
             }
 
             Section {
