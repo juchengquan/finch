@@ -353,6 +353,7 @@
   "Note (optional)": "备注（可选）",
   "finch": "finch",
   "Shared": "共享",
+  "Set pending": "设为待处理",
   "%lld added": "已添加 %lld 项",
   "Nothing new to copy": "没有可复制的新内容",
   "Search or activate": "搜索或启用",

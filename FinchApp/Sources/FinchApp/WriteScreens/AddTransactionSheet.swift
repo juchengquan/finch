@@ -65,8 +65,27 @@ struct AddTransactionSheet: View {
 
     /// Types shown in the segmented control — Adjust Balance only when opted in,
     /// so the default control stays four roomy segments.
+    ///
+    /// Exception: duplicating an adjustment forces the segment in regardless. The
+    /// opt-in defaults OFF, so without this the picker would hold a selection that
+    /// isn't among its options — a broken control on the default configuration.
     private var availableKinds: [Kind] {
-        showAdjustInAddSheet ? Kind.allCases : Kind.allCases.filter { $0 != .adjust }
+        let showAdjust = showAdjustInAddSheet || prefill.map { Self.prefillKind($0) == .adjust } ?? false
+        return showAdjust ? Kind.allCases : Kind.allCases.filter { $0 != .adjust }
+    }
+
+    /// Map a source transaction's engine kind onto a sheet segment. Previously this
+    /// collapsed everything non-income to `.expense`, which is why Duplicate had to
+    /// be hidden on transfers/refunds/adjustments — it would silently have turned a
+    /// transfer into an expense.
+    static func prefillKind(_ p: Tx) -> Kind {
+        switch p.kind {
+        case "income":     return .income
+        case "transfer":   return .transfer
+        case "refund":     return .refund
+        case "adjustment": return .adjust
+        default:           return .expense
+        }
     }
 
     /// Expense / income / refund all post a single account leg + category — they
@@ -353,13 +372,46 @@ struct AddTransactionSheet: View {
         // fallback logic below fill anything still empty.
         if let p = prefill, !prefillApplied {
             prefillApplied = true
-            kind = p.kind == "income" ? .income : .expense
+            kind = Self.prefillKind(p)
             amount = String(format: "%g", abs(p.nativeAmount ?? p.amount))
             merchant = p.merchant
             if let c = p.category { categoryId = c }
             accountId = p.account
             if let cur = p.currency { currencyCode = cur }
             if let tags = p.tags { selectedTags = Set(tags) }
+            switch kind {
+            case .transfer:
+                // A transfer spans two account legs; the projection is per-leg, so
+                // either row can be the one swiped. Pair them by transferGroupId and
+                // let the SIGN decide direction (from = the negative leg) — the same
+                // rule EditTransactionSheet uses.
+                if let gid = p.transferGroupId {
+                    let legs = store.txns.filter { $0.transferGroupId == gid }
+                    let from = legs.first { ($0.nativeAmount ?? $0.amount) < 0 }
+                    let to = legs.first { ($0.nativeAmount ?? $0.amount) > 0 }
+                    fromAccountId = from?.account ?? p.account
+                    toAccountId = to?.account ?? ""
+                    if let f = from { amount = String(format: "%g", abs(f.nativeAmount ?? f.amount)) }
+                    // Cross-currency transfers carry a second, independent amount.
+                    if let t = to, currency(of: fromAccountId) != currency(of: toAccountId) {
+                        received = String(format: "%g", abs(t.nativeAmount ?? t.amount))
+                    }
+                }
+            case .refund:
+                // Kept, not dropped: the sheet shows it and nothing is written until
+                // Save, so the user can re-point or clear it deliberately.
+                refundedTxId = p.refundedTransactionId
+            case .adjust:
+                // The sheet asks for a TARGET balance but a Tx only carries the delta,
+                // so reproduce the original's EFFECT: apply the same delta again from
+                // wherever the balance sits now.
+                // account.balance and the target field are both in the ACCOUNT's own
+                // currency, so use the native delta rather than the base one.
+                let current = store.accounts.first { $0.id == p.account }?.balance ?? 0
+                targetBalance = String(format: "%g", current + (p.nativeAmount ?? p.amount))
+            case .expense, .income:
+                break
+            }
         }
         if accountId.isEmpty {
             let preferred = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
