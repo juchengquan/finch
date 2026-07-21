@@ -24,6 +24,7 @@ export interface NewBudgetInput {
   accountIds?: string[];
   categoryIds?: string[];
   tagIds?: string[];
+  counterpartyIds?: string[];
   warningPct?: number;
   saved?: number;
   ledgerId?: string;
@@ -53,6 +54,8 @@ export const budgetActions = (set: SetState, get: GetState) => ({
       lastRolledPeriod: null,
       accountIds: input.accountIds ?? [],
       categoryIds: input.categoryIds ?? [],
+      tagIds: input.tagIds ?? [],
+      counterpartyIds: input.counterpartyIds ?? [],
       warningPct: input.warningPct ?? 80,
     };
     set((s) => ({ budgets: [...s.budgets, row] }));
@@ -72,6 +75,8 @@ export const budgetActions = (set: SetState, get: GetState) => ({
       rolloverLimit: row.rolloverLimit,
       accountIds: row.accountIds,
       categoryIds: row.categoryIds,
+      tagIds: row.tagIds,
+      counterpartyIds: row.counterpartyIds,
       warningPct: row.warningPct,
     });
     return id;

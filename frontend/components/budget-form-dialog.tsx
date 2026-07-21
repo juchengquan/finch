@@ -94,6 +94,8 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const { locale } = useAppLocale();
   const accounts = useFinanceStore((s) => s.accounts);
   const storeCats = useFinanceStore((s) => s.categories);
+  const storeTags = useFinanceStore((s) => s.tags);
+  const storeCps = useFinanceStore((s) => s.counterparties);
   const budgetGroups = useFinanceStore((s) => s.budgetGroups);
   const createBudget = useFinanceStore((s) => s.createBudget);
   const updateBudget = useFinanceStore((s) => s.updateBudget);
@@ -111,10 +113,22 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
   const [rollover, setRollover] = useState(budget ? budget.rollover === 1 : false);
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set(budget?.accountIds ?? []));
   const [categoryIds, setCategoryIds] = useState<Set<string>>(new Set(budget?.categoryIds ?? []));
+  const [tagIds, setTagIds] = useState<Set<string>>(new Set(budget?.tagIds ?? []));
+  const [counterpartyIds, setCounterpartyIds] = useState<Set<string>>(new Set(budget?.counterpartyIds ?? []));
+  const [saved, setSaved] = useState(budget ? String(budget.saved) : '');
 
   const ledgerAccounts = accounts
     .filter((a) => a.ledgerId === activeId)
     .map((a) => ({ id: a.id, name: a.name }));
+  // Tags are ledger-scoped; merchants (counterparties) are global. Empty
+  // selection means "all" (unconstrained), like the Categories/Accounts chips.
+  const ledgerTags = storeTags
+    .filter((t) => t.ledgerId === activeId)
+    .map((t) => ({ id: t.id, name: t.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const merchants = storeCps
+    .map((c) => ({ id: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const ledgerGroups = budgetGroups.filter((g) => g.ledgerId === activeId);
   // Labels render as `Parent › Child › Leaf` so descendants are
   // unambiguous in the filter chip multiselect (CATEGORIES_LEVEL3_PLAN
@@ -177,14 +191,29 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
           ? t('hint.saveImmediate')
           : t('hint.saveChanges');
 
+  // Income goals track real matched transactions, so they need at least one
+  // scope dimension (category/account/tag/merchant); an all-empty goal would
+  // silently count *all* income (design §9-Q5).
+  const incomeNoDimension =
+    type === 'income' &&
+    categoryIds.size === 0 &&
+    accountIds.size === 0 &&
+    tagIds.size === 0 &&
+    counterpartyIds.size === 0;
+  const savedParsed = parseFloat(saved);
+  const savedNum = Number.isFinite(savedParsed) ? savedParsed : 0;
+
   const submit = () => {
     const n = name.trim();
     const amt = parseFloat(amount);
     if (!n) return void toast.error(t('errors.name'));
     if (!(amt > 0)) return void toast.error(type === 'income' ? t('errors.targetGt0') : t('errors.limitGt0'));
+    if (incomeNoDimension) return void toast.error(t('errors.needDimension'));
     const group = groupId === 'none' ? null : groupId;
     const cats = [...categoryIds];
     const accts = [...accountIds];
+    const tags = [...tagIds];
+    const cps = [...counterpartyIds];
     const rolloverInt = type === 'expense' && rollover && frequency !== 'daily' ? 1 : 0;
 
     if (editing && budget) {
@@ -217,10 +246,14 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
           type,
           amount: amt,
           groupId: group,
-          isRecurring: recurring ? 1 : 0,
+          // Income goals are always one-shot (no cycle).
+          isRecurring: type === 'income' ? 0 : recurring ? 1 : 0,
           rollover: rolloverInt,
           accountIds: accts,
           categoryIds: cats,
+          ...(type === 'income'
+            ? { tagIds: tags, counterpartyIds: cps, saved: savedNum }
+            : {}),
         });
         toast.success(
           stagingPath ? t('toasts.amountStaged') : t('toasts.updated'),
@@ -235,10 +268,14 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
         groupId: group,
         frequency,
         startDate,
-        isRecurring: recurring,
+        // Income goals are always one-shot (no cycle).
+        isRecurring: type === 'income' ? false : recurring,
         rollover: type === 'expense' && rollover && frequency !== 'daily',
         accountIds: accts,
         categoryIds: cats,
+        ...(type === 'income'
+          ? { tagIds: tags, counterpartyIds: cps, saved: savedNum }
+          : {}),
         ledgerId: activeId,
       };
       createBudget(input);
@@ -317,29 +354,35 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="b-freq">{t('cycle')}</Label>
-              <Select value={frequency} onValueChange={setFrequency}>
-                <SelectTrigger id="b-freq" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{t(`frequencies.${f}`)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          {/* Cycle / start-date / recurring only apply to expense budgets;
+              income goals are one-shot and have no cycle. */}
+          {type === 'expense' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="b-freq">{t('cycle')}</Label>
+                <Select value={frequency} onValueChange={setFrequency}>
+                  <SelectTrigger id="b-freq" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCIES.map((f) => <SelectItem key={f} value={f}>{t(`frequencies.${f}`)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="b-start">{t('startDate')}</Label>
+                <Input id="b-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="b-start">{t('startDate')}</Label>
-              <Input id="b-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-          </div>
+          )}
 
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <Label htmlFor="b-recurring" className="cursor-pointer font-normal">
-              {t('recurring')}
-              <span className="text-muted-foreground">{t('recurringSuffix', { hint: recurring ? t('recurringRepeats') : type === 'income' ? t('recurringOneShotGoal') : t('recurringOneTime') })}</span>
-            </Label>
-            <Switch id="b-recurring" checked={recurring} onCheckedChange={setRecurring} />
-          </div>
+          {type === 'expense' && (
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <Label htmlFor="b-recurring" className="cursor-pointer font-normal">
+                {t('recurring')}
+                <span className="text-muted-foreground">{t('recurringSuffix', { hint: recurring ? t('recurringRepeats') : t('recurringOneTime') })}</span>
+              </Label>
+              <Switch id="b-recurring" checked={recurring} onCheckedChange={setRecurring} />
+            </div>
+          )}
 
           {type === 'expense' && (
             <div className={cn('flex items-center justify-between gap-3 text-sm', frequency === 'daily' && 'opacity-50')}>
@@ -363,6 +406,23 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
 
           <ChipMultiSelect label={t('categories')} options={ledgerCats} selected={categoryIds} onToggle={(id) => toggle(categoryIds, setCategoryIds, id)} />
           <ChipMultiSelect label={t('accounts')} options={ledgerAccounts} selected={accountIds} onToggle={(id) => toggle(accountIds, setAccountIds, id)} />
+
+          {type === 'income' && (
+            <>
+              <ChipMultiSelect label={t('tags')} options={ledgerTags} selected={tagIds} onToggle={(id) => toggle(tagIds, setTagIds, id)} />
+              <ChipMultiSelect label={t('merchants')} options={merchants} selected={counterpartyIds} onToggle={(id) => toggle(counterpartyIds, setCounterpartyIds, id)} />
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="b-saved">{t('savedSoFar')}</Label>
+                <Input id="b-saved" type="number" inputMode="decimal" value={saved} onChange={(e) => setSaved(e.target.value)} placeholder="0.00" />
+                <span className="text-muted-foreground text-[11px]">{t('savedSoFarHelp')}</span>
+              </div>
+
+              {incomeNoDimension && (
+                <div className="text-warning text-[11px]">{t('errors.needDimension')}</div>
+              )}
+            </>
+          )}
         </div>
 
         {submitHint && (
@@ -373,7 +433,7 @@ export function BudgetFormDialog({ open, onOpenChange, budget, defaultType = 'ex
           <DialogClose asChild>
             <Button variant="outline">{tCommon('cancel')}</Button>
           </DialogClose>
-          <Button onClick={submit}>
+          <Button onClick={submit} disabled={incomeNoDimension}>
             {editing ? <Edit size={14} /> : <Plus size={14} />}
             {editing ? tCommon('save') : tCommon('create')}
           </Button>
