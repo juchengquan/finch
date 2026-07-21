@@ -79,6 +79,24 @@ public final class AutoBackupManager: ObservableObject {
             .filter { $0.hasPrefix("finch-") && $0.hasSuffix(".finch") } ?? []
         for name in BackupPruner.toPrune(names, keep: retention) {
             try? FileManager.default.removeItem(at: backupsDir.appendingPathComponent(name))
+            // Lockstep: drop this device's OWN snapshot from iCloud too (same
+            // filename we pushed). Only ever prunes our own — other devices' names
+            // aren't in our local dir, so they're never touched.
+            ICloudSync.shared.delete(name: name)
+        }
+    }
+
+    /// URL of a named local backup pack.
+    public func url(forName name: String) -> URL { backupsDir.appendingPathComponent(name) }
+
+    /// The on-device backup snapshots (name + size), for the merged history.
+    public func localBackups() -> [LocalBackup] {
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: backupsDir.path))?
+            .filter { $0.hasPrefix("finch-") && $0.hasSuffix(".finch") } ?? []
+        return names.map { name in
+            let attrs = try? fm.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)
+            return LocalBackup(name: name, size: (attrs?[.size] as? NSNumber)?.int64Value ?? 0)
         }
     }
 
