@@ -39,6 +39,15 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Scheduled occurrence link (web migration 2026-07-22). Additive +
+        // nullable; tolerant of duplicate columns (imported web packs may already
+        // carry it).
+        migrator.registerMigration("2026-07-22-entry-occurrence-date") { db in
+            do { try db.execute(sql: "ALTER TABLE entries ADD COLUMN occurrence_date TEXT") }
+            catch { if !"\(error)".contains("duplicate column") { throw error } }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 

@@ -31,4 +31,14 @@ final class MigrationsTests: XCTestCase {
             XCTAssertTrue(try db.tableExists("entries_fts"))
         }
     }
+
+    func test_occurrenceDateColumn_isAddedAndIdempotent() throws {
+        let dbQueue = try DatabaseQueue()  // in-memory
+        try Migrations.runAll(on: dbQueue)
+        try Migrations.runAll(on: dbQueue)  // replay must not throw
+        try dbQueue.read { db in
+            let cols = try Row.fetchAll(db, sql: "PRAGMA table_info(entries)").map { $0["name"] as String }
+            XCTAssertTrue(cols.contains("occurrence_date"))
+        }
+    }
 }
