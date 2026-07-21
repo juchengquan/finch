@@ -35,6 +35,31 @@ final class GenerateDueTests: XCTestCase {
         XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id='s1'") }, 3)
     }
 
+    /// An occurrence posted under a different transaction date (e.g. paid
+    /// late) must be recognised as already-posted via occurrence_date, not
+    /// regenerated as a duplicate. Resolution keys on occurrenceDate ?? date,
+    /// so the "already posted" set must key on the same coalesce.
+    func test_generateDueScheduled_doesNotRegenerateOccurrencePostedUnderDifferentDate() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createScheduled", args: Args([
+            "id": .string("s1"), "ledgerId": .string("l1"), "name": .string("Rent"), "type": .string("expense"),
+            "amount": .double(100), "frequency": .string("monthly"), "dayOfMonth": .int(15),
+            "accountId": .string("a1"), "startDate": .string("2026-01-15"),
+        ]))
+        // Post the 2026-03-15 occurrence late, dated 2026-03-18.
+        try Apply.apply(dbQueue: q, action: "postScheduled", args: Args([
+            "templateId": .string("s1"), "date": .string("2026-03-18"), "occurrenceDate": .string("2026-03-15"),
+        ]))
+        try Apply.apply(dbQueue: q, action: "generateDueScheduled", args: Args(["today": .string("2026-03-20")]))
+        try q.read { db in
+            // 2026-01-15, 02-15 generated fresh; 03-15 must NOT be regenerated
+            // because it was already posted (late) — 3 entries total, not 4.
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE source_template_id='s1'"), 3)
+            let dates = try String.fetchAll(db, sql: "SELECT date FROM entries WHERE source_template_id='s1' ORDER BY date")
+            XCTAssertEqual(dates, ["2026-01-15", "2026-02-15", "2026-03-18"])
+        }
+    }
+
     func test_removeAttachment() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "createScheduled", args: Args(["id": .string("s1"), "ledgerId": .string("l1"), "name": .string("X"), "type": .string("expense"), "amount": .double(10), "accountId": .string("a1"), "startDate": .string("2026-01-01")]))
