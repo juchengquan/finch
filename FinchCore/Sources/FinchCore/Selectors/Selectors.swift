@@ -34,11 +34,32 @@ public enum Selectors {
 
     // MARK: selectTransactions
 
-    public static func selectTransactions(_ txns: [Tx], _ opts: ListOptions) -> [Tx] {
+    /// Case-insensitive query match over what a feed row displays: the merchant
+    /// text, the category title (incl. split categories), and tag names — the
+    /// id→name lookups come from the caller. Mirror of the web's `txMatchesQuery`.
+    public static func txMatchesQuery(_ t: Tx, _ query: String,
+                                      categoryNames: [String: String] = [:],
+                                      tagNames: [String: String] = [:]) -> Bool {
+        let q = query.lowercased()
+        func catHit(_ id: String?) -> Bool {
+            guard let id else { return false }
+            return (categoryNames[id] ?? "").lowercased().contains(q)
+        }
+        return t.merchant.lowercased().contains(q)
+            || catHit(t.category)
+            || (t.splits ?? []).contains { catHit($0.categoryId) }
+            || (t.tags ?? []).contains { (tagNames[$0] ?? "").lowercased().contains(q) }
+    }
+
+    public static func selectTransactions(_ txns: [Tx], _ opts: ListOptions,
+                                          categoryNames: [String: String] = [:],
+                                          tagNames: [String: String] = [:]) -> [Tx] {
         var out = txns.filter { ledgerOf($0) == opts.ledgerId }
         if opts.direction == "in" { out = out.filter { $0.amount > 0 } }
         if opts.direction == "out" { out = out.filter { $0.amount < 0 } }
-        if let q = opts.query?.lowercased() { out = out.filter { $0.merchant.lowercased().contains(q) } }
+        if let q = opts.query {
+            out = out.filter { txMatchesQuery($0, q, categoryNames: categoryNames, tagNames: tagNames) }
+        }
         if let a = opts.accountId { out = out.filter { $0.account == a } }
         if let c = opts.categoryId { out = out.filter { $0.category == c } }
         if let s = opts.status { out = out.filter { ($0.pending ?? false) == (s == "pending") } }
