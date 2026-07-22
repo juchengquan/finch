@@ -435,7 +435,7 @@ type ExecFn = (sql: string, bind?: (string | number | null)[]) => Promise<Record
 // compat machinery — fresh databases are created directly from the canonical
 // SCHEMA above. A future shape change bumps SCHEMA_VERSION and adds a MIGRATIONS
 // entry to carry forward databases created after this baseline.
-export const SCHEMA_VERSION = '2026-07-22T00:00:00Z';
+export const SCHEMA_VERSION = '2026-07-23T00:00:00Z';
 export const APP_NAME = 'finch';
 
 // Schema changes made after the baseline, keyed by the version they upgrade TO.
@@ -634,6 +634,37 @@ const MIGRATIONS: Record<string, string[] | ((exec: ExecFn) => Promise<void>)> =
   '2026-07-22T00:00:00Z': [
     'ALTER TABLE entries ADD COLUMN occurrence_date TEXT',
   ],
+  // #533 ("global merchants", schema 2026-07-20) dropped counterparties.ledger_id
+  // from the baseline DDL but shipped NO migration — databases created before it
+  // still carry the per-ledger table, and every NEW-merchant insert fails its
+  // NOT NULL constraint ("SQLite error 19"). Existing merchants resolve by name
+  // without inserting, which is how this hid. Guarded rebuild via the standard
+  // recreation dance; a no-op on databases that are already global. Keyed AFTER
+  // 07-22 because affected files were already re-stamped to 2026-07-22 by the
+  // later entries, and this runner only replays versions strictly greater than
+  // the recorded one.
+  '2026-07-23T00:00:00Z': async (exec) => {
+    const cols = await exec(`PRAGMA table_info(counterparties)`);
+    if (!cols.some((r) => String(r.name) === 'ledger_id')) return;
+    for (const sql of [
+      'PRAGMA foreign_keys = OFF',
+      'DROP TABLE IF EXISTS counterparties_new',
+      `CREATE TABLE counterparties_new (
+         id                TEXT PRIMARY KEY,
+         name              TEXT NOT NULL COLLATE NOCASE,
+         is_verified       INTEGER NOT NULL DEFAULT 0,
+         created_at        TEXT NOT NULL,
+         updated_at        TEXT NOT NULL
+       )`,
+      `INSERT INTO counterparties_new (id,name,is_verified,created_at,updated_at)
+         SELECT id,name,is_verified,created_at,updated_at FROM counterparties`,
+      'DROP TABLE counterparties',
+      'ALTER TABLE counterparties_new RENAME TO counterparties',
+      'CREATE INDEX IF NOT EXISTS idx_counterparty_name ON counterparties(name)',
+      'PRAGMA foreign_keys = ON',
+    ])
+      await exec(sql);
+  },
 };
 
 // Additive migrations (ALTER TABLE ADD COLUMN, CREATE ... IF NOT EXISTS) must be

@@ -127,7 +127,7 @@ side generates (`frontend/scripts/export-fixtures.ts`). Modules under `FinchCore
 
 - **`Storage/`** — `Schema.swift` is the web's interpolated `SCHEMA` DDL copied **byte-for-byte**
   (double-entry `entries`/`postings`, two-phase `sealed` write, balance/currency-guard triggers,
-  FTS5). `Schema.version` must equal the web `SCHEMA_VERSION` (currently `2026-07-22T00:00:00Z`).
+  FTS5). `Schema.version` must equal the web `SCHEMA_VERSION` (currently `2026-07-23T00:00:00Z`).
   Also `Migrations.swift` (fresh-DB `DatabaseMigrator`, the standard init path via
   `Migrations.runAll`), `Pack.swift` (the `.finch` ZIP format — snake_case manifest via explicit
   `CodingKeys`, **never** `.convertFromSnakeCase`), `Audit.swift` (the 10-code ledger sweep,

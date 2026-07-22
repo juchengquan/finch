@@ -48,6 +48,40 @@ public enum Migrations {
             try Self.ensureMetadataRow(db)   // re-stamp schema_version
         }
 
+        // Global merchants, healed (web migration 2026-07-23). #533 (schema
+        // 2026-07-20) dropped counterparties.ledger_id from the baseline DDL but
+        // shipped NO migration — databases created before it still carry the
+        // per-ledger table, and every NEW-merchant insert fails its NOT NULL
+        // constraint ("SQLite error 19"). Guarded rebuild via the standard
+        // recreation dance; a no-op when the table is already global. GRDB runs
+        // this with deferred foreign-key checks, so the parent-table swap is safe
+        // (entries.counterparty_id re-resolves after the RENAME) and integrity is
+        // verified at the end of the migration.
+        migrator.registerMigration("2026-07-23-counterparties-global") { db in
+            let hasLedgerId = try Row.fetchAll(db, sql: "PRAGMA table_info(counterparties)")
+                .contains { ($0["name"] as? String) == "ledger_id" }
+            if hasLedgerId {
+                try db.execute(sql: "DROP TABLE IF EXISTS counterparties_new")
+                try db.execute(sql: """
+                    CREATE TABLE counterparties_new (
+                      id                TEXT PRIMARY KEY,
+                      name              TEXT NOT NULL COLLATE NOCASE,
+                      is_verified       INTEGER NOT NULL DEFAULT 0,
+                      created_at        TEXT NOT NULL,
+                      updated_at        TEXT NOT NULL
+                    )
+                    """)
+                try db.execute(sql: """
+                    INSERT INTO counterparties_new (id,name,is_verified,created_at,updated_at)
+                      SELECT id,name,is_verified,created_at,updated_at FROM counterparties
+                    """)
+                try db.execute(sql: "DROP TABLE counterparties")
+                try db.execute(sql: "ALTER TABLE counterparties_new RENAME TO counterparties")
+                try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_counterparty_name ON counterparties(name)")
+            }
+            try Self.ensureMetadataRow(db)   // re-stamp schema_version
+        }
+
         return migrator
     }
 
