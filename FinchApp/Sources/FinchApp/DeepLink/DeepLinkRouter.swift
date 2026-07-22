@@ -40,7 +40,8 @@ public final class DeepLinkRouter: ObservableObject {
     @Published var pendingFilter: TxFilter?   // one-shot: consumed by the Activity feed
     @Published public var showCommandPalette = false   // ⌘K (Phase 3 / Mac)
     @Published public var showAddTransaction = false    // ⌘N
-    @Published public var pendingAddAccountId: String? = nil   // widget quick-add pre-fill (finch://add?account=<id>)
+    @Published public var pendingAddAccountId: String? = nil   // Add-sheet pre-fill: widget deep link (finch://add?account=<id>) or the FAB's page context
+    @Published public var pendingAddCategoryId: String? = nil  // Add-sheet pre-fill: the FAB's page context (budget detail)
     @Published public var exportRequested = false       // File ▸ Export .finch… (⌘⇧E)
     @Published public var showLedger = false            // top-left corner control → push the two-layer Ledger (compact)
 
@@ -73,6 +74,7 @@ public final class DeepLinkRouter: ObservableObject {
         case "add":
             pendingAddAccountId = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "account" })?.value
+            pendingAddCategoryId = nil   // deep links never carry a category
             showAddTransaction = true
         default: break
         }

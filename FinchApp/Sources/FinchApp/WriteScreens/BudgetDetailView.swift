@@ -78,6 +78,11 @@ struct BudgetDetailView: View {
                                         defaultCategoryId: budget.categoryIds.first)
                 }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
+                // Tell the floating add button this budget's subject, so it
+                // seeds the sheet the same way the budget-aware toolbar `+` does.
+                .preference(key: AddTxContextKey.self,
+                            value: AddTxContext(accountId: budget.accountIds.first,
+                                                categoryId: budget.categoryIds.first))
             } else {
                 Color.clear.onAppear { dismiss() }
             }
