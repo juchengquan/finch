@@ -3313,6 +3313,16 @@
         }
       }
     },
+    "Last reconciled on %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次对账：%@"
+          }
+        }
+      }
+    },
     "Last sync": {
       "localizations": {
         "zh-Hans": {
@@ -4816,16 +4826,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "当上次对账早于该时长时，已对账账户会显示橙色标记。选择「关闭」则始终保持绿色。"
-          }
-        }
-      }
-    },
-    "Reconciled on %@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已于 %@ 对账"
           }
         }
       }
