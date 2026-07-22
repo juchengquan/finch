@@ -18,6 +18,7 @@ struct BudgetDetailView: View {
     @State private var showingAddTx = false   // budget-aware add (pre-filled category/account)
     @State private var editing: Tx?           // tapped cycle transaction → edit sheet
     @State private var errorMessage: String?
+    @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     // Tapped History bar → that past cycle's numbers + transactions (keyed by
     // the cycle's `from` so it survives reprojection; current cycle never
     // selects — its details are already on the page).
@@ -114,12 +115,34 @@ struct BudgetDetailView: View {
 
     @ViewBuilder private func transactionsSection(_ b: BudgetRow) -> some View {
         let txns = Selectors.budgetMatchedTransactions(b, store.txns, store.today, store.categoryNodes)
-        Section("This cycle") {
-            if txns.isEmpty {
-                Text("No matching transactions")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
+        let secs = MonthGrouping.sections(txns)
+        if txns.isEmpty {
+            Section("This cycle") {
+                Text("No matching transactions").font(.caption).foregroundStyle(.secondary)
+            }
+        } else if groupByMonth && secs.count > 1 {
+            // Only a multi-month cycle (quarterly/yearly, or off-calendar) benefits from
+            // sectioning; a monthly cycle is one month, so it stays a flat "This cycle".
+            ForEach(secs) { monthSection($0) }
+        } else {
+            Section("This cycle") {
                 ForEach(txns, id: \.id) { t in txnRow(t) }
+            }
+        }
+    }
+
+    /// One month bucket of budget-matched transactions, headed by the month label and
+    /// the month's net change (no running balance — a budget has none). Shared by the
+    /// current-cycle and drill-in past-cycle lists.
+    @ViewBuilder private func monthSection(_ section: MonthGrouping.Section) -> some View {
+        Section {
+            ForEach(section.txns, id: \.id) { t in txnRow(t) }
+        } header: {
+            HStack {
+                Text(MonthGrouping.label(section.id)).textCase(nil)
+                Spacer()
+                Text(store.displayMoneyBase(MonthGrouping.net(section.txns)))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -184,6 +207,8 @@ struct BudgetDetailView: View {
     /// the header (windowed), then that cycle's matched transactions.
     @ViewBuilder private func cycleSection(_ b: BudgetRow, _ c: Selectors.BudgetCyclePoint) -> some View {
         let txns = Selectors.budgetMatchedTransactions(b, store.txns, from: c.from, to: c.to, store.categoryNodes)
+        let secs = MonthGrouping.sections(txns)
+        let sectioned = groupByMonth && secs.count > 1
         let pct = c.base != 0 ? Int((c.used / c.base * 100).rounded()) : 0
         Section("Selected cycle") {
             VStack(alignment: .leading, spacing: 8) {
@@ -201,12 +226,18 @@ struct BudgetDetailView: View {
                     Text("\(c.from) – \(c.to)").font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            if txns.isEmpty {
-                Text("No matching transactions")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                ForEach(txns, id: \.id) { t in txnRow(t) }
+            // When the cycle spans >1 month, its transactions render as month sections
+            // BELOW this summary; otherwise they stay flat inside it.
+            if !sectioned {
+                if txns.isEmpty {
+                    Text("No matching transactions").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(txns, id: \.id) { t in txnRow(t) }
+                }
             }
+        }
+        if sectioned {
+            ForEach(secs) { monthSection($0) }
         }
     }
 
