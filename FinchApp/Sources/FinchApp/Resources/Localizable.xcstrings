@@ -250,6 +250,16 @@
         }
       }
     },
+    "%lld days": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 天"
+          }
+        }
+      }
+    },
     "%lld days left": {
       "localizations": {
         "zh-Hans": {
@@ -4316,6 +4326,16 @@
         }
       }
     },
+    "Off": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
     "On device": {},
     "On device and in backup folder": {},
     "On this device": {},
@@ -4760,12 +4780,52 @@
         }
       }
     },
-    "Reconciled to %@ · %@": {
+    "Reconcile overdue": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已对账至 %1$@ · %2$@"
+            "value": "对账已逾期"
+          }
+        }
+      }
+    },
+    "Reconcile reminder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对账提醒"
+          }
+        }
+      }
+    },
+    "Reconciled": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已对账"
+          }
+        }
+      }
+    },
+    "Reconciled accounts show an orange badge once the last reconcile is older than this. Off keeps them green forever.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当上次对账早于该时长时，已对账账户会显示橙色标记。选择「关闭」则始终保持绿色。"
+          }
+        }
+      }
+    },
+    "Reconciled on %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已于 %@ 对账"
           }
         }
       }

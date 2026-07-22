@@ -674,5 +674,12 @@
   "Selected cycle": "所选周期",
   "Tap a bar to view a past cycle": "轻点柱形查看过往周期",
   "The balance before finch started tracking, in the account's currency. Changing it adjusts the account's balance.": "finch 开始记账前的余额，以账户自身币种计。修改会相应调整账户余额。",
-  "Income %@ · Spent %@": "收入 %1$@ · 支出 %2$@"
+  "Income %@ · Spent %@": "收入 %1$@ · 支出 %2$@",
+  "Reconcile reminder": "对账提醒",
+  "Off": "关闭",
+  "%lld days": "%lld 天",
+  "Reconciled on %@": "已于 %@ 对账",
+  "Reconciled accounts show an orange badge once the last reconcile is older than this. Off keeps them green forever.": "当上次对账早于该时长时，已对账账户会显示橙色标记。选择「关闭」则始终保持绿色。",
+  "Reconciled": "已对账",
+  "Reconcile overdue": "对账已逾期"
 }
