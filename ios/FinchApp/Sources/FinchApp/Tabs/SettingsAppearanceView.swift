@@ -77,9 +77,13 @@ struct SettingsAppearanceView: View {
                                       : "Switches the app's language. Takes effect after relaunch.")
                     .foregroundStyle(showRelaunchNote ? .orange : .secondary)
             }
-            Section("Activity feed") {
+            Section {
                 Toggle("Group by month", isOn: $groupByMonth)
                 Toggle("Relative dates", isOn: $relativeDates)
+            } header: {
+                Text("Activity feed")
+            } footer: {
+                Text("Group by month also applies to an account's transaction list.")
             }
             #if os(iOS)
             Section {
