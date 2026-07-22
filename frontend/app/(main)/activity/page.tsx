@@ -22,7 +22,7 @@ import { useTransactionDialog } from '@/components/transaction-dialog';
 import { RefundBadge } from '@/components/ui/refund-badge';
 import { AnomalyBadge } from '@/components/anomaly-badge';
 import { EmptyState } from '@/components/empty-state';
-import { merchantStats, anomalyScore } from '@/lib/select';
+import { merchantStats, anomalyScore, txMatchesQuery } from '@/lib/select';
 import { cn } from '@/lib/utils';
 
 const FILTER_IDS = ['all', 'out', 'in'] as const;
@@ -94,6 +94,16 @@ export default function ActivityPage() {
   // so we don't recompute on every render.
   const stats = useMemo(() => merchantStats(allTxns, activeId), [allTxns, activeId]);
 
+  // Search matches what a row displays (merchant, category title, tags), not
+  // just the merchant text — id→name lookups for txMatchesQuery.
+  const searchNames = useMemo(
+    () => ({
+      categories: Object.fromEntries(allCategories.map((c) => [c.id, c.name])),
+      tags: Object.fromEntries(allTags.map((t) => [t.id, t.name])),
+    }),
+    [allCategories, allTags],
+  );
+
   const minA = minAmt.trim() === '' ? null : Number(minAmt);
   const maxA = maxAmt.trim() === '' ? null : Number(maxAmt);
   const activeRangeCount =
@@ -103,7 +113,7 @@ export default function ActivityPage() {
     if ((t.ledgerId ?? 'personal') !== activeId) return false;
     if (filter === 'in' && t.amount <= 0) return false;
     if (filter === 'out' && t.amount >= 0) return false;
-    if (query && !t.merchant.toLowerCase().includes(query.toLowerCase())) return false;
+    if (query && !txMatchesQuery(t, query, searchNames)) return false;
     if (tagFilter && !(t.tags ?? []).includes(tagFilter)) return false;
     if (fromDate && t.date < fromDate) return false;
     if (toDate && t.date > toDate) return false;
