@@ -51,4 +51,17 @@ enum MonthGrouping {
     static func expense(_ txns: [Tx]) -> Double {
         txns.reduce(0) { $1.amount < 0 ? $0 - $1.amount : $0 }
     }
+
+    /// Per-day inflow/outflow (ledger-base, same pure sign-split as the month
+    /// headers), keyed by the full ISO date — the Scheduled calendar's daily
+    /// "income / expense" cell lines. Days with no transactions are absent.
+    static func dailyIncomeExpense(_ txns: [Tx]) -> [String: (income: Double, expense: Double)] {
+        var out: [String: (income: Double, expense: Double)] = [:]
+        for t in txns {
+            var day = out[t.date] ?? (0, 0)
+            if t.amount > 0 { day.income += t.amount } else { day.expense -= t.amount }
+            out[t.date] = day
+        }
+        return out
+    }
 }

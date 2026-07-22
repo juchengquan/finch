@@ -116,6 +116,29 @@ extension FinchStore {
     public func displayMoney(_ amount: Double, from currency: String?) -> String {
         displayMoneyBase(toBase(amount, from: currency))
     }
+    /// ledger base → display value, exact (no symbol; the cell adds sign and
+    /// color) — the calendar cells' formatter. Cents show only when non-zero
+    /// ("19.99", "1,850"), so the cell figure always corroborates the amounts
+    /// in the occurrence rows and the List view instead of rounding 19.99 into
+    /// a contradictory 20. Nil in privacy mode: the cells drop their amount
+    /// lines entirely rather than render a grid of masks.
+    public func displayExactBase(_ baseAmount: Double) -> String? {
+        if privacyMode { return nil }
+        let v = Money.convert(baseAmount, from: baseCurrency, to: displayCurrency, rates: rateMap) ?? baseAmount
+        let cents = (abs(v) * 100).rounded() / 100
+        let f = cents == cents.rounded() ? Self.wholeAmountFormatter : Self.centsAmountFormatter
+        return f.string(from: cents as NSNumber)
+    }
+    private static let wholeAmountFormatter: NumberFormatter = {
+        let f = NumberFormatter(); f.numberStyle = .decimal; f.maximumFractionDigits = 0
+        return f
+    }()
+    private static let centsAmountFormatter: NumberFormatter = {
+        let f = NumberFormatter(); f.numberStyle = .decimal
+        f.minimumFractionDigits = 2; f.maximumFractionDigits = 2
+        return f
+    }()
+
     /// Format an amount already denominated in its own currency — no conversion,
     /// just format-or-mask. The privacy-aware replacement for calling
     /// Money.format directly in a view (web's `native` formatter).
