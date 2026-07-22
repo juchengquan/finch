@@ -299,7 +299,9 @@ struct CategoriesView: View {
     /// The shared row visual. In select mode it shows a leading checkmark and taps
     /// toggle selection (relatives of a selected row are dimmed + inert); otherwise
     /// the swatch/name/count opens the category's transactions, with a trailing
-    /// disclosure chevron for parents.
+    /// disclosure chevron for parents. The trailing chevron here means "expands
+    /// children" (unlike Tags/Merchants' nav chevron) — kept trailing-only so the
+    /// leading edge stays a clean, aligned icon column.
     @ViewBuilder private func rowContent(_ item: FlatCategory, _ counts: [String: Int]) -> some View {
         let c = item.row
         let selectDisabled = isSelecting && mergeSelectionDisabled(c.id, selected: selected, byId: byId)
@@ -326,16 +328,7 @@ struct CategoriesView: View {
                     }
                     Text(c.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    // Always shown, including 0 — a category with no transactions
-                    // reads as an explicit "0" rather than a blank the eye has to
-                    // interpret, and the pills stay aligned down the column.
-                    let n = counts[c.id] ?? 0
-                    Text("\(n)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12).padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
-                        .accessibilityLabel("\(n) transactions")
+                    CountPill(count: counts[c.id] ?? 0)
                 }
                 .contentShape(Rectangle())
             }
@@ -345,16 +338,14 @@ struct CategoriesView: View {
                 Button {
                     if expanded.contains(c.id) { expanded.remove(c.id) } else { expanded.insert(c.id) }
                 } label: {
-                    Image(systemName: (expanded.contains(c.id) || !search.isEmpty) ? "chevron.down" : "chevron.right")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(width: 22, height: 30).contentShape(Rectangle())
+                    ExpandChevron(expanded: expanded.contains(c.id) || !search.isEmpty)
                 }
                 .buttonStyle(.plain)
                 .disabled(!search.isEmpty)   // search force-expands; chevron is inert
             } else {
                 // Reserve the chevron slot on leaf rows so count pills / trailing
                 // edges line up across parent and leaf rows.
-                Color.clear.frame(width: 22, height: 30)
+                ExpandChevron.slot
             }
         }
         .padding(.leading, CGFloat(item.depth) * 14)
