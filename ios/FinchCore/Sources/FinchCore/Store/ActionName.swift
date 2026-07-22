@@ -37,12 +37,13 @@ public enum ActionName: String, Codable, Sendable, CaseIterable {
     case mergeCounterparty
     case mergeCounterparties
 
-    // --- accounts (5) ---
+    // --- accounts (6) ---
     case createAccount
     case updateAccount
     case archiveAccount
     case unarchiveAccount
     case deleteAccount
+    case setOpeningBalance    // native-first (rewrites the open-<id> entry; the web has no post-creation edit path)
 
     // --- account groups (3) ---
     case createAccountGroup

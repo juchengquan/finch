@@ -27,7 +27,6 @@ struct SettingsAppearanceView: View {
     @AppStorage(TextSize.stepKey) private var textSizeStep = TextSize.defaultStep
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
-    @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
     @AppStorage("finch.addSheet.showAdjustBalance") private var showAdjustInAddSheet = false
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
@@ -81,9 +80,6 @@ struct SettingsAppearanceView: View {
             Section("Activity feed") {
                 Toggle("Group by month", isOn: $groupByMonth)
                 Toggle("Relative dates", isOn: $relativeDates)
-            }
-            Section("Accounts") {
-                Toggle("Show opening balance", isOn: $showOpeningBalance)
             }
             #if os(iOS)
             Section {

@@ -5422,16 +5422,6 @@
         }
       }
     },
-    "Show opening balance": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示期初余额"
-          }
-        }
-      }
-    },
     "Size": {
       "localizations": {
         "zh-Hans": {
@@ -5864,6 +5854,16 @@
       }
     },
     "The backup from %@ will be removed everywhere it’s saved. This can’t be undone.": {},
+    "The balance before finch started tracking, in the account's currency. Changing it adjusts the account's balance.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "finch 开始记账前的余额，以账户自身币种计。修改会相应调整账户余额。"
+          }
+        }
+      }
+    },
     "The file is deleted permanently.": {
       "localizations": {
         "zh-Hans": {
