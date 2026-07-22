@@ -227,7 +227,7 @@ struct SettingsBackupsView: View {
             try await store.loadPack(from: data)
             Haptics.success()
         } catch PackError.auditFailed(let problems) {
-            auditMessage = "\(problems.count) integrity problem(s). Use Settings › Advanced › Force import to override (iOS only)."
+            auditMessage = "\(problems.count) integrity problem(s). Use Settings › About › Force import to override (iOS only)."
         } catch {
             Haptics.warning()
             errorMessage = i18nMessage(error)

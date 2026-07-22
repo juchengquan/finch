@@ -5,9 +5,9 @@ import UniformTypeIdentifiers
 /// Settings home — grouped drill-in sections: **General** (appearance,
 /// notifications, security), **Ledger** (categories, tags — per-ledger),
 /// **Shared** (merchants, currencies — global, one set across every ledger),
-/// **Data** (backup & sync, advanced), an unlabeled **Experimental Labs** row
-/// (formerly "Power Tools"; holds Rules + the CloudKit sync scaffold), plus an
-/// **About** footer.
+/// **Data** (backup & sync), an unlabeled **Experimental Labs** row (formerly
+/// "Power Tools"; holds Rules + the CloudKit sync scaffold), plus an **About**
+/// drill-in (version info + the former Advanced diagnostics).
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
@@ -55,7 +55,6 @@ struct SettingsRootList: View {
             }
             Section("Data") {
                 NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
-                NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
             }
             // "Experimental Labs" (formerly "Power Tools") — power-user / beta
             // features; holds Rules + the CloudKit sync scaffold. Its own
@@ -63,9 +62,10 @@ struct SettingsRootList: View {
             Section {
                 NavigationLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
             }
-            Section("About") {
-                LabeledContent("App version", value: FinchCore.version)
-                LabeledContent("Pack format", value: FinchCore.packFormatVersion)
+            // About absorbs the former Advanced page: version info up top, then
+            // the DB diagnostics / audit / force-import that used to live there.
+            Section {
+                NavigationLink { SettingsAboutView() } label: { Label("About", systemImage: "info.circle") }
             }
         }
         .navigationTitle("Settings")
@@ -223,9 +223,9 @@ struct SettingsSecurityView: View {
     }
 }
 
-/// Settings › Advanced — diagnostics (DB info, audit) and the iOS-only
-/// "Force import" override.
-struct SettingsAdvancedView: View {
+/// Settings › About (formerly "Advanced") — version info, plus diagnostics
+/// (DB info, audit) and the iOS-only "Force import" override.
+struct SettingsAboutView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
     @State private var importError: String?
@@ -233,6 +233,11 @@ struct SettingsAdvancedView: View {
 
     var body: some View {
         List {
+            Section {
+                LabeledContent("App version", value: FinchCore.version)
+                LabeledContent("Pack format", value: FinchCore.packFormatVersion)
+            }
+
             Section("Database") {
                 LabeledContent("Filename", value: store.dbInfo.filename)
                 LabeledContent("Size", value: store.dbInfo.formattedSize)
@@ -266,7 +271,7 @@ struct SettingsAdvancedView: View {
                 }
             }
         }
-        .navigationTitle("Advanced")
+        .navigationTitle("About")
         .errorAlert($importError, title: "Import failed")
         .alert("Force import?", isPresented: $showForceImportConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -284,7 +289,7 @@ struct SettingsAdvancedView: View {
 
 }
 
-/// The audit-problem list (reached from Settings › Advanced › Audit when not
+/// The audit-problem list (reached from Settings › About › Audit when not
 /// clean, or after a Force import surfaces the overridden problems).
 struct AuditDetailView: View {
     let problems: [Audit.AuditProblem]
