@@ -11,6 +11,7 @@ struct AccountDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
+    @AppStorage(ReconcileReminder.key) private var reconcileStaleDays = ReconcileReminder.defaultDays
 
     let accountId: String
 
@@ -116,21 +117,25 @@ struct AccountDetailView: View {
     // The badge appears only once the account HAS been reconciled — a
     // "Never reconciled" row said nothing actionable, so the never state
     // renders no row at all (Reconcile stays reachable from the ⋯ menu).
+    // Shows the absolute statement date (that's all the engine stores — no
+    // time of day); color carries fresh vs overdue per the user's reminder
+    // cutoff (Settings › Appearance › Accounts).
     @ViewBuilder private func reconcileBadge(_ a: AccountRow) -> some View {
-        let status = Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday)
+        let status = Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday,
+                                               staleDays: ReconcileReminder.staleDays(reconcileStaleDays))
         if case .never = status {
         } else {
-            let bal = store.displayNative(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
+            let date = reconciledOnLabel(a.lastReconciledAt)
             HStack(spacing: 6) {
                 switch status {
                 case .never:
                     EmptyView()
-                case .fresh(let d):
+                case .fresh:
                     Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                    Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.green)
-                case .stale(let d):
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.orange)
+                    Text("Reconciled on \(date)").foregroundStyle(.green)
+                case .stale:
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.orange)
+                    Text("Reconciled on \(date)").foregroundStyle(.orange)
                 }
                 Spacer(minLength: 0)
             }
@@ -138,7 +143,11 @@ struct AccountDetailView: View {
         }
     }
 
-    private func agoLabel(_ d: Int) -> String { d == 0 ? "today" : d == 1 ? "1 day ago" : "\(d) days ago" }
+    /// "2026-06-07" → "Jun 7, 2026" (device locale); falls back to the raw string.
+    private func reconciledOnLabel(_ iso: String?) -> String {
+        guard let iso, let d = AppDate.isoDay.date(from: String(iso.prefix(10))) else { return iso ?? "—" }
+        return d.formatted(date: .abbreviated, time: .omitted)
+    }
 
     @ViewBuilder private func holdingsSection(_ a: AccountRow) -> some View {
         let holdings = Selectors.holdingsForAccount(store.holdings, a.id)

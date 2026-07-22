@@ -268,6 +268,13 @@ enum SimulatorDemoSeed {
             "fromAccountId": .string("everyday"), "toAccountId": .string("savings"),
             "fromAmount": .double(500), "date": .string(ymd(15)), "time": .string("12:00")])
 
+        // Reconcile showcase — both looks of the badge/seal: Everyday was checked
+        // against its statement a few days ago (fresh/green, everything cleared);
+        // Savings' last check is ~45 days old (stale/orange with the default
+        // reminder cutoff), cleared + checkpointed only through that date.
+        try seedReconcile(q, accountId: "everyday", asOf: ymd(2), clearThrough: nil)
+        try seedReconcile(q, accountId: "savings", asOf: ymd(45), clearThrough: ymd(45))
+
         // Recurring scheduled templates (bills, subscriptions, salary, a transfer)
         // so the Scheduled tab is populated. Amounts are positive magnitudes —
         // `kind` drives the sign when posted. Transfers carry `from` (source);
@@ -449,5 +456,35 @@ enum SimulatorDemoSeed {
                 "amount": .double(t.amt), "merchant": .string(t.merchant),
                 "categoryId": .string(t.cat), "date": .string(ymd(t.d)), "time": .string("12:00")])
         }
+    }
+
+    /// Clear the account's confirmed postings (optionally only those dated
+    /// through `clearThrough`) and stamp a reconcile checkpoint at the cleared
+    /// sum — the same `setCleared` / `reconcileAccount` actions the Reconcile
+    /// sheet applies, so the seeded state is exactly what a real reconcile
+    /// leaves behind. The opening leg is already pre-cleared by the engine.
+    private static func seedReconcile(_ q: DatabaseQueue, accountId: String,
+                                      asOf statementDate: String, clearThrough: String?) throws {
+        let postingIds = try q.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT p.id FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE p.account_id = ? AND e.status = 'confirmed'
+                   AND e.date <= ? AND p.cleared_at IS NULL
+                """, arguments: [accountId, clearThrough ?? "9999-12-31"])
+        }
+        for id in postingIds {
+            try Apply.apply(dbQueue: q, action: "setCleared",
+                            args: Args(["id": .string(id), "cleared": .bool(true)]))
+        }
+        let cleared = try q.read { db in
+            try Double.fetchOne(db, sql: """
+                SELECT COALESCE(SUM(p.amount), 0) FROM postings p JOIN entries e ON e.id = p.entry_id
+                 WHERE p.account_id = ? AND e.status = 'confirmed' AND p.cleared_at IS NOT NULL
+                """, arguments: [accountId]) ?? 0
+        }
+        try Apply.apply(dbQueue: q, action: "reconcileAccount", args: Args([
+            "accountId": .string(accountId),
+            "statementBalance": .double((cleared * 100).rounded() / 100),
+            "statementDate": .string(statementDate)]))
     }
 }
