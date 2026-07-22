@@ -39,16 +39,36 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          # `code` = any changed file that is NOT markdown and NOT under plans/.
-          # dorny/paths-filter resolves the PR base / push before automatically.
-          filters: |
-            code:
-              - '**'
-              - '!**/*.md'
-              - '!plans/**'
+          fetch-depth: 0   # need the PR base commit present to diff against it
+      - id: filter
+        # `code=true` iff the PR changes at least one file that is NOT markdown and
+        # NOT under plans/ (both are docs). A plain git diff, not dorny/paths-filter:
+        # that action's `'**' + '!...'` negation does NOT exclude — every file still
+        # matches `**`, so `code` was always true and docs-only PRs ran the full
+        # macOS build anyway (the bug this fixes).
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            # Pushes: docs-only pushes are already dropped by on.push.paths-ignore,
+            # so anything that reaches here is a code push — run everything.
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          echo "diffing $base...$head"
+          changed="$(git diff --name-only "$base...$head")"
+          echo "changed files:"; echo "$changed"
+          # Non-empty list of files that are neither *.md nor under plans/ ⇒ code changed.
+          # `|| true` so an all-docs diff (grep exits 1) doesn't fail the step under set -e.
+          noncode="$(printf '%s\n' "$changed" | grep -vE '(\.md$|^plans/)' || true)"
+          if [ -n "$noncode" ]; then
+            echo "→ non-doc files changed; running full CI"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "→ docs-only; skipping frontend + iOS build"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
 
   frontend:
     name: Frontend (typecheck · lint · test · build)
