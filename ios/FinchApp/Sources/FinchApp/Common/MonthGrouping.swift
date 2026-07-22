@@ -10,9 +10,12 @@ enum MonthGrouping {
         let txns: [Tx]
     }
 
-    /// Group `txns` into month sections, preserving input order (callers pass
-    /// date-descending, so newest month comes first). Key is the `yyyy-MM` prefix
-    /// of the ISO date string — no calendar math, so it's timezone-independent.
+    /// Group `txns` into month sections. Sections appear in the order each month's
+    /// FIRST transaction appears in the input — the grouping never sorts. A
+    /// date-descending caller (e.g. account detail) therefore gets newest-month-first;
+    /// other input orderings (e.g. the Activity feed, whose sort menu can be
+    /// Oldest/Largest/etc.) get a correspondingly-ordered result. Key is the `yyyy-MM`
+    /// prefix of the ISO date string — no calendar math, so it's timezone-independent.
     static func sections(_ txns: [Tx]) -> [Section] {
         var order: [String] = []
         var byMonth: [String: [Tx]] = [:]

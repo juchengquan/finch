@@ -16,6 +16,16 @@ final class MonthGroupingTests: XCTestCase {
         XCTAssertEqual(s[1].txns.map(\.id), ["3"])
     }
 
+    func test_sections_interleavedMonths_firstOccurrenceOrder_andAppends() {
+        // interleaved input: a wrong "sort section keys descending" impl would still
+        // pass the date-monotonic test above, but would fail this one.
+        let input = [tx("1", "2026-09-20"), tx("2", "2026-08-15"),
+                     tx("3", "2026-09-05"), tx("4", "2026-07-30")]
+        let s = MonthGrouping.sections(input)
+        XCTAssertEqual(s.map(\.id), ["2026-09", "2026-08", "2026-07"])   // first-occurrence order, not sorted
+        XCTAssertEqual(s[0].txns.map(\.id), ["1", "3"])                  // both Sep txns, appended in order
+    }
+
     func test_sections_singleMonth_oneSection() {
         let s = MonthGrouping.sections([tx("1", "2026-09-20"), tx("2", "2026-09-01")])
         XCTAssertEqual(s.count, 1)
