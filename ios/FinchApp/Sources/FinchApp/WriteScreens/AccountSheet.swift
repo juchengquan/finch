@@ -3,7 +3,9 @@ import FinchCore
 
 /// Add or edit an account. `nil` account = add (`createAccount`); otherwise edit
 /// (`updateAccount`). Currency is **add-only** (the engine intentionally doesn't
-/// patch it); opening balance is add-only. Routes through FinchStore.apply.
+/// patch it); opening balance is editable — changes go through the native-first
+/// `setOpeningBalance` action (rewrites the open-<id> entry). Routes through
+/// FinchStore.apply.
 struct AccountSheet: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -42,6 +44,9 @@ struct AccountSheet: View {
         _currency = State(initialValue: account?.currency ?? defaultCurrency)
         _groupId = State(initialValue: account?.groupId ?? "")
         _includeInNetWorth = State(initialValue: (account?.includeInNetWorth ?? 1) == 1)
+        if let ob = account?.openingBalance, ob != 0 {
+            _openingBalance = State(initialValue: String(format: "%g", ob))
+        }
     }
 
     var body: some View {
@@ -68,15 +73,17 @@ struct AccountSheet: View {
                     }
                 }
 
-                if !isEdit {
-                    Section {
-                        HStack {
-                            Text("Amount"); Spacer()
-                            TextField("0.00", text: $openingBalance).numericInput($openingBalance)
-                                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                        }
-                    } header: {
-                        finchSectionHeader("Opening balance")
+                Section {
+                    HStack {
+                        Text("Amount"); Spacer()
+                        TextField("0.00", text: $openingBalance).numericInput($openingBalance)
+                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    }
+                } header: {
+                    finchSectionHeader("Opening balance")
+                } footer: {
+                    if isEdit {
+                        Text("The balance before finch started tracking, in the account's currency. Changing it adjusts the account's balance.")
                     }
                 }
 
@@ -130,7 +137,17 @@ struct AccountSheet: View {
                 "groupId": groupId.isEmpty ? .null : .string(groupId),
             ]
             if !colorHex.isEmpty { patch["color"] = .string(colorHex) }
-            do { try store.apply(.updateAccount, Args(["id": .string(account.id), "patch": .object(patch)])); dismiss() }
+            do {
+                try store.apply(.updateAccount, Args(["id": .string(account.id), "patch": .object(patch)]))
+                // Opening balance rides along only when it actually changed —
+                // its own action, since it rewrites the open-<id> entry.
+                let newOpening = DecimalInput.parse(openingBalance) ?? 0
+                if newOpening != (account.openingBalance ?? 0) {
+                    try store.apply(.setOpeningBalance,
+                                    Args(["id": .string(account.id), "amount": .double(newOpening)]))
+                }
+                dismiss()
+            }
             catch { errorMessage = i18nMessage(error) }
         } else {
             var args: [String: JSONValue] = [
