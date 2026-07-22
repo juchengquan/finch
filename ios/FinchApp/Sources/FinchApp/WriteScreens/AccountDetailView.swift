@@ -33,10 +33,7 @@ struct AccountDetailView: View {
         Group {
             if let account {
                 List {
-                    Section {
-                        header(account)
-                        reconcileBadge(account)
-                    }
+                    reconcileSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
                 }
@@ -107,27 +104,24 @@ struct AccountDetailView: View {
         }
     }
 
-    // Name and balance live in the nav-bar title now — the card keeps only
-    // what's unique to it: the type and the reconcile status below.
-    @ViewBuilder private func header(_ a: AccountRow) -> some View {
-        HStack {
-            Image(systemName: AccountTypeIcon.icon(for: a.type)).foregroundStyle(.secondary)
-            Text(AccountSheetTypeLabel.label(a.type))
-            Spacer()
-        }
-    }
-
-    // The badge appears only once the account HAS been reconciled — a
-    // "Never reconciled" row said nothing actionable, so the never state
-    // renders no row at all (Reconcile stays reachable from the ⋯ menu).
-    // Shows the absolute statement date (that's all the engine stores — no
-    // time of day); color carries fresh vs overdue per the user's reminder
-    // cutoff (Settings › Appearance › Accounts).
-    @ViewBuilder private func reconcileBadge(_ a: AccountRow) -> some View {
+    // The card appears only once the account HAS been reconciled (a "Never
+    // reconciled" row said nothing actionable, and the type row is gone too —
+    // name/balance live in the title, the type in the Edit sheet). Shows the
+    // absolute statement date (that's all the engine stores — no time of
+    // day); color carries fresh vs overdue per the user's reminder cutoff
+    // (Settings › Appearance › Accounts). Hoisting the `.never` check here
+    // keeps SwiftUI from rendering an empty first card.
+    @ViewBuilder private func reconcileSection(_ a: AccountRow) -> some View {
         let status = Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday,
                                                staleDays: ReconcileReminder.staleDays(reconcileStaleDays))
         if case .never = status {
         } else {
+            Section { reconcileBadge(a, status) }
+        }
+    }
+
+    @ViewBuilder private func reconcileBadge(_ a: AccountRow, _ status: ReconcileStatus) -> some View {
+        Group {
             let date = reconciledOnLabel(a.lastReconciledAt)
             HStack(spacing: 6) {
                 switch status {
