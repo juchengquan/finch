@@ -23,14 +23,38 @@ export const kindOf = (t: Tx): 'income' | 'expense' | 'transfer' | 'adjustment' 
  *  amount is positive, so `-amount` nets it back against its category. */
 const isSpend = (t: Tx): boolean => kindOf(t) === 'expense' || kindOf(t) === 'refund';
 
+/** Optional id→name lookups that widen `query` matching beyond the merchant
+ *  text to what the feed row actually displays (category title, tag chips).
+ *  Omitted maps fall back to merchant-only matching. */
+export interface SearchNames {
+  categories?: Record<string, string>;
+  tags?: Record<string, string>;
+}
+
+/** Case-insensitive query match over what a feed row displays: the merchant
+ *  text, the category title (incl. split categories), and tag names — the
+ *  name lookups come from `SearchNames`. Shared by `selectTransactions` and
+ *  the activity page's inline filter so the two can't drift. */
+export function txMatchesQuery(t: Tx, query: string, names?: SearchNames): boolean {
+  const q = query.toLowerCase();
+  const catHit = (id: string | null | undefined) =>
+    !!id && (names?.categories?.[id] ?? '').toLowerCase().includes(q);
+  return (
+    t.merchant.toLowerCase().includes(q) ||
+    catHit(t.category) ||
+    (t.splits ?? []).some((s) => catHit(s.categoryId)) ||
+    (t.tags ?? []).some((id) => (names?.tags?.[id] ?? '').toLowerCase().includes(q))
+  );
+}
+
 /** Mirrors listTransactions(): filter + sort an in-memory Tx list. */
-export function selectTransactions(txns: Tx[], opts: ListOptions): Tx[] {
+export function selectTransactions(txns: Tx[], opts: ListOptions, names?: SearchNames): Tx[] {
   let out = txns.filter((t) => ledgerOf(t) === opts.ledgerId);
   if (opts.direction === 'in') out = out.filter((t) => t.amount > 0);
   if (opts.direction === 'out') out = out.filter((t) => t.amount < 0);
   if (opts.query) {
-    const q = opts.query.toLowerCase();
-    out = out.filter((t) => t.merchant.toLowerCase().includes(q));
+    const q = opts.query;
+    out = out.filter((t) => txMatchesQuery(t, q, names));
   }
   if (opts.accountId) out = out.filter((t) => t.account === opts.accountId);
   if (opts.categoryId) out = out.filter((t) => t.category === opts.categoryId);

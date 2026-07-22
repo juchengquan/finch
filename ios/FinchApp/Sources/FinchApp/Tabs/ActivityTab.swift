@@ -429,7 +429,13 @@ struct ActivityFeedView: View {
             maxAmount: filter.maxAmount,
             tagIds: filter.tagIds.isEmpty ? nil : Array(filter.tagIds),
             tagsMatchAll: filter.tagsMatchAll)
-        return sort.sorted(Selectors.selectTransactions(base, opts))
+        // Search matches what a row displays — the category title (TxRow's
+        // title line) and tag chips, not just the merchant text — so the
+        // id→name lookups ride along with the query.
+        return sort.sorted(Selectors.selectTransactions(
+            base, opts,
+            categoryNames: Dictionary(uniqueKeysWithValues: store.categories.map { ($0.id, $0.name) }),
+            tagNames: Dictionary(uniqueKeysWithValues: store.tags.map { ($0.id, $0.name) })))
     }
 }
 
