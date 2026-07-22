@@ -35,6 +35,13 @@ struct ReconcileSheet: View {
                             TextField("0.00", text: $statementBalance).numericInput($statementBalance).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
                         }
                         DatePicker("Statement date", selection: $date, displayedComponents: .date)
+                    } footer: {
+                        // The detail page shows only the seal; the checkpoint's
+                        // date lives here, where the next reconcile happens.
+                        if let last = a.lastReconciledAt,
+                           let d = AppDate.isoDay.date(from: String(last.prefix(10))) {
+                            Text("Last reconciled on \(d.formatted(date: .abbreviated, time: .omitted))")
+                        }
                     }
                     trackerSection(a)
                     quickAddSection(a)
