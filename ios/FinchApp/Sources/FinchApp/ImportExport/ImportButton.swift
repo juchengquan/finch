@@ -41,7 +41,7 @@ struct ImportButton: View {
                 do { try await store.loadPack(from: data) }
                 catch PackError.auditFailed(let problems) {
                     importError = ImportError(
-                        message: "\(problems.count) audit problem(s). Use Settings › Advanced › Force import to override (iOS only).")
+                        message: "\(problems.count) audit problem(s). Use Settings › About › Force import to override (iOS only).")
                 } catch let e as PackError {
                     importError = ImportError(message: String(describing: e))
                 } catch {
