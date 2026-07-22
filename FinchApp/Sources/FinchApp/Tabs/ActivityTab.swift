@@ -68,14 +68,12 @@ struct ActivityFeedView: View {
     // Memoized derived state: recomputed only when txns / query / visibleCount
     // change (via .onReceive/.onChange), not on every body render — the search
     // field re-rendered the whole list on each keystroke before.
-    @State private var sections: [DaySection] = []
+    @State private var sections: [MonthGrouping.Section] = []
     @State private var dateShownIds: Set<String> = []
     @State private var hasMore = false
     @State private var filteredCount = 0
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
-
-    struct DaySection: Identifiable { let id: String; let txns: [Tx] }
 
     var body: some View {
         Group {
@@ -109,8 +107,15 @@ struct ActivityFeedView: View {
                     }
                     if groupByMonth {
                         ForEach(sections) { section in
-                            Section(monthLabel(section.id)) {
+                            Section {
                                 ForEach(section.txns) { txn in row(txn) }
+                            } header: {
+                                HStack {
+                                    Text(MonthGrouping.label(section.id)).textCase(nil)
+                                    Spacer()
+                                    Text(store.displayMoneyBase(MonthGrouping.net(section.txns)))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     } else {
@@ -239,25 +244,13 @@ struct ActivityFeedView: View {
         .onReceive(store.$txns) { _ in DispatchQueue.main.async { recompute() } }
     }
 
-    private func monthLabel(_ key: String) -> String {
-        guard let d = AppDate.isoDay.date(from: "\(key)-01") else { return key }
-        return d.formatted(.dateTime.month(.wide).year())
-    }
-
     /// Recompute the cached day-sections. Cheap to call; runs only on the inputs
     /// that actually affect the list (txns, query, page size).
     private func recompute() {
         let f = filteredTxns()
         filteredCount = f.count
         hasMore = f.count > visibleCount
-        var order: [String] = []
-        var byMonth: [String: [Tx]] = [:]
-        for txn in f.prefix(visibleCount) {
-            let key = String(txn.date.prefix(7))           // "yyyy-MM"
-            if byMonth[key] == nil { order.append(key) }
-            byMonth[key, default: []].append(txn)
-        }
-        sections = order.map { DaySection(id: $0, txns: byMonth[$0] ?? []) }
+        sections = MonthGrouping.sections(Array(f.prefix(visibleCount)))
         var shown = Set<String>(); var last: String?
         for txn in sections.flatMap({ $0.txns }) {
             if txn.date != last { shown.insert(txn.id); last = txn.date }
