@@ -11,6 +11,7 @@ public enum Accounts {
         .archiveAccount: archive,
         .unarchiveAccount: unarchive,
         .deleteAccount: delete,
+        .setOpeningBalance: setOpening,
     ]
 
     static func create(_ db: Database, _ args: Args) throws {
@@ -66,6 +67,34 @@ public enum Accounts {
         sets.append("updated_at = datetime('now')")
         bind.append(id)
         try db.execute(sql: "UPDATE accounts SET \(sets.joined(separator: ", ")) WHERE id = ?", arguments: StatementArguments(bind))
+    }
+
+    /// Native-first (no web counterpart): set/replace/remove the account's
+    /// opening balance post-creation. `amount` is in the ACCOUNT's currency,
+    /// mirroring createAccount's `openingBalance` arg. Implemented as
+    /// delete + repost of the `open-<id>` entry through the existing
+    /// primitives, so double-entry balance, FX conversion, balance recompute,
+    /// and the pre-cleared reconcile anchor all hold by construction. The
+    /// entry keeps its original date when it already exists (repricing at
+    /// that date's FX), and lands on "today" when added for the first time —
+    /// the same date createAccount would have stamped.
+    static func setOpening(_ db: Database, _ args: Args) throws {
+        struct A: Decodable { let id: String; let amount: Double }
+        let a = try args.to(A.self)
+        guard let ledgerId = try String.fetchOne(
+            db, sql: "SELECT ledger_id FROM accounts WHERE id = ?", arguments: [a.id]) else {
+            throw I18nError("error.notFound.account", [:], "Account not found")
+        }
+        let entryId = "open-\(a.id)"
+        let existingDate = try String.fetchOne(
+            db, sql: "SELECT date FROM entries WHERE id = ?", arguments: [entryId])
+        if existingDate != nil { try Entries.deleteEntry(db, entryId) }
+        if Entries.r2(a.amount) != 0 {
+            let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+            try Entries.postOpening(db, ledgerId: ledgerId, accountId: a.id,
+                                    amount: a.amount, date: existingDate ?? today)
+        }
+        try db.execute(sql: "UPDATE accounts SET updated_at = datetime('now') WHERE id = ?", arguments: [a.id])
     }
 
     static func archive(_ db: Database, _ args: Args) throws {

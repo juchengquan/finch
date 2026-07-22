@@ -33,6 +33,48 @@ final class AccountCrudTests: XCTestCase {
         }
     }
 
+    func test_setOpeningBalance_addChangeRemove() throws {
+        let q = try seeded()
+        try Apply.apply(dbQueue: q, action: "createAccount", args: Args([
+            "id": .string("a2"), "ledgerId": .string("l1"), "name": .string("Savings"),
+            "type": .string("savings"), "currency": .string("USD"), "openingBalance": .double(1000),
+        ]))
+        // Post a real transaction on top so recompute has more than the opening.
+        try Apply.apply(dbQueue: q, action: "addTransaction", args: Args([
+            "ledgerId": .string("l1"), "accountId": .string("a2"), "amount": .double(-100),
+            "merchant": .string("x"), "categoryId": .string("c1"), "date": .string("2026-05-01"), "skipRules": .bool(true)]))
+        let originalDate = try q.read { db in try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id='open-a2'") }
+
+        // Change: balance follows (1000-100 → 250-100), entry keeps its date and
+        // stays the pre-cleared reconcile anchor; double-entry stays balanced.
+        try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("a2"), "amount": .double(250)]))
+        try q.read { db in
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a2'") ?? 0, 150, accuracy: 0.001)
+            XCTAssertEqual(try String.fetchOne(db, sql: "SELECT date FROM entries WHERE id='open-a2'"), originalDate)
+            XCTAssertNotNil(try String.fetchOne(db, sql: "SELECT cleared_at FROM postings WHERE entry_id='open-a2' AND account_id='a2'"))
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT SUM(amount_base) FROM postings WHERE entry_id='open-a2'") ?? -1, 0, accuracy: 0.001)
+        }
+        XCTAssertEqual(try Projection.accounts(dbQueue: q, ledgerId: "l1").first { $0.id == "a2" }?.openingBalance ?? 0, 250, accuracy: 0.001)
+
+        // Remove (0): entry gone, balance is transactions only.
+        try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("a2"), "amount": .double(0)]))
+        try q.read { db in
+            XCTAssertNil(try String.fetchOne(db, sql: "SELECT id FROM entries WHERE id='open-a2'"))
+            XCTAssertEqual(try Double.fetchOne(db, sql: "SELECT current_balance FROM accounts WHERE id='a2'") ?? 0, -100, accuracy: 0.001)
+        }
+
+        // Add to an account that never had one (a1) — entry appears, balance seeds.
+        try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("a1"), "amount": .double(75)]))
+        try q.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE id='open-a1' AND kind='opening'"), 1)
+        }
+
+        // Unknown account rejects.
+        XCTAssertThrowsError(try Apply.apply(dbQueue: q, action: "setOpeningBalance", args: Args(["id": .string("nope"), "amount": .double(1)]))) { err in
+            XCTAssertEqual((err as? I18nError)?.code, "error.notFound.account")
+        }
+    }
+
     func test_updateAccount_patches() throws {
         let q = try seeded()
         try Apply.apply(dbQueue: q, action: "updateAccount", args: Args([
