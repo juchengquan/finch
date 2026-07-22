@@ -27,6 +27,7 @@ struct SettingsAppearanceView: View {
     @AppStorage(TextSize.stepKey) private var textSizeStep = TextSize.defaultStep
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     @AppStorage("finch.feed.relativeDates") private var relativeDates = true
+    @AppStorage(ReconcileReminder.key) private var reconcileStaleDays = ReconcileReminder.defaultDays
     @AppStorage("finch.addSheet.showAdjustBalance") private var showAdjustInAddSheet = false
     @AppStorage(Haptics.enabledKey) private var hapticsEnabled = true
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
@@ -84,6 +85,20 @@ struct SettingsAppearanceView: View {
                 Text("Activity feed")
             } footer: {
                 Text("Group by month also applies to an account's transaction list.")
+            }
+            Section {
+                Picker("Reconcile reminder", selection: $reconcileStaleDays) {
+                    ForEach(ReconcileReminder.options, id: \.self) { d in
+                        (d == 0 ? Text("Off") : Text("\(d) days")).tag(d)
+                    }
+                }
+                #if os(iOS)
+                .pickerStyle(.wheel)
+                #endif
+            } header: {
+                Text("Accounts")
+            } footer: {
+                Text("Reconciled accounts show an orange badge once the last reconcile is older than this. Off keeps them green forever.")
             }
             #if os(iOS)
             Section {

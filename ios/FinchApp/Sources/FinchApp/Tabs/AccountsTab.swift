@@ -499,6 +499,7 @@ struct StatusSummaryRow: View {
 
 struct AccountRowView: View {
     @EnvironmentObject private var store: FinchStore
+    @AppStorage(ReconcileReminder.key) private var reconcileStaleDays = ReconcileReminder.defaultDays
     let account: AccountRow
     var body: some View {
         HStack {
@@ -510,6 +511,19 @@ struct AccountRowView: View {
                 // edge — starts at a different x per account type.
                 .frame(width: 28)
             Text(account.name ?? "—")
+            // Reconcile seal — same glyph + colors as the detail badge: green
+            // when checked within the reminder cutoff, orange when overdue,
+            // nothing when the account was never reconciled.
+            switch Selectors.reconcileStatus(account.lastReconciledAt, store.wallToday,
+                                             staleDays: ReconcileReminder.staleDays(reconcileStaleDays)) {
+            case .never: EmptyView()
+            case .fresh:
+                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
+                    .accessibilityLabel("Reconciled")
+            case .stale:
+                Image(systemName: "checkmark.seal.fill").font(.caption).foregroundStyle(.orange)
+                    .accessibilityLabel("Reconcile overdue")
+            }
             Spacer()
             Text(store.displayMoney(account.balance, from: account.currency))
                 .fontWeight(.semibold)
