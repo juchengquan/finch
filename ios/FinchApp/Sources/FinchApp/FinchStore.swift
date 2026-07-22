@@ -189,6 +189,37 @@ public final class FinchStore: ObservableObject {
                           _ body: (DatabaseQueue) throws -> T) throws -> T {
         guard let q = dbQueue else { throw I18nError("error.noDatabase", [:], "No database is open") }
         let result = try body(q)
+        fireWriteSideEffects(q, mutations: [(action, args)])
+        return result
+    }
+
+    /// Apply several actions as ONE write: each runs through the FinchCore
+    /// chokepoint in order, then the side-effect train fires once for the whole
+    /// batch instead of once per action. Exists because the daily FX refresh
+    /// applied each fetched rate individually — N currencies × (16 projections +
+    /// full Spotlight re-index + widget/notification replans) stacked on the
+    /// MainActor and jammed the UI for seconds right after foregrounding
+    /// (audit 2026-07-22). A failing op is skipped (matching the FX path's old
+    /// per-row `try?`), so one bad row can't sink the rest; returns how many
+    /// applied. No ops applied → no side effects at all.
+    @discardableResult
+    public func applyBatch(_ ops: [(action: ActionName, args: Args)]) -> Int {
+        guard let q = dbQueue, !ops.isEmpty else { return 0 }
+        var applied: [(ActionName, Args)] = []
+        for op in ops {
+            do {
+                _ = try Apply.applyReturningId(dbQueue: q, action: op.action.rawValue, args: op.args)
+                applied.append((op.action, op.args))
+            } catch { continue }   // skip the bad row, keep the rest
+        }
+        if !applied.isEmpty { fireWriteSideEffects(q, mutations: applied) }
+        return applied.count
+    }
+
+    /// Every post-write side effect, fired exactly once per user-visible write
+    /// (single action or a whole batch). `mutations` lists what was applied —
+    /// the CloudKit outbox logs each one individually.
+    private func fireWriteSideEffects(_ q: DatabaseQueue, mutations: [(ActionName, Args)]) {
         self.ledgers = (try? Projection.ledgers(dbQueue: q)) ?? ledgers
         reprojectActiveLedger()
         self.dbInfo = makeDBInfo()
@@ -203,10 +234,11 @@ public final class FinchStore: ObservableObject {
         WidgetCenter.shared.reloadAllTimelines()
         // Phase 5: debounce an auto-backup pack.
         AutoBackupManager.shared.schedule()
-        // Phase 8: publish this write to the CloudKit mutation log (no-op when
+        // Phase 8: publish each write to the CloudKit mutation log (no-op when
         // sync is off or while replaying a remote mutation — the echo guard).
-        CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
-        return result
+        for (action, args) in mutations {
+            CloudKitSyncCoordinator.shared.noteLocalMutation(action: action, args: args, ledgerId: activeLedgerId)
+        }
     }
 
     // MARK: - Projection

@@ -45,11 +45,15 @@ enum RateAutoUpdater {
                   (resp as? HTTPURLResponse)?.statusCode == 200 else { continue }
             let rows = provider.parse(data, codes)
             guard !rows.isEmpty else { continue }
-            for r in rows {
-                try? store.apply(.setExchangeRate, Args([
+            // One batched write, NOT one apply per rate: per-rate applies fired
+            // the full side-effect train (16 projections + Spotlight re-index +
+            // widget/notification replans) N times on the MainActor and froze
+            // the UI for seconds right after foregrounding (audit 2026-07-22).
+            store.applyBatch(rows.map { r in
+                (ActionName.setExchangeRate, Args([
                     "date": .string(r.date), "currency": .string(r.currency),
                     "rate": .double(r.ratePerUSD), "source": .string(provider.source)]))
-            }
+            })
             UserDefaults.standard.set(Date(), forKey: stampKey)
             return .updated(rows.count)
         }
