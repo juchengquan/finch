@@ -245,6 +245,39 @@ extension Selectors {
         return out.sorted { $0.date < $1.date }
     }
 
+    /// `today` (`yyyy-MM-dd`) advanced by `days` calendar days, computed inside
+    /// ONE calendar (UTC) — parsed and formatted within that same calendar, so
+    /// the timezone is unobservable; do not "fix" it to local (ios/CLAUDE.md,
+    /// civil-date convention). Single source of truth for the ~400-day
+    /// lookahead horizon shared by `resumeOccurrence` below and
+    /// `scheduledNextRun` (FinchApp/Tabs/ScheduledTab.swift) — both need a
+    /// horizon long enough that a yearly template still resolves.
+    public static func horizonDay(from today: String, addingDays days: Int) -> String {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let base = utc.date(from: DateComponents(
+            year: Int(today.prefix(4)), month: Int(today.dropFirst(5).prefix(2)),
+            day: Int(today.dropFirst(8).prefix(2)))) ?? Date()
+        let h = utc.dateComponents([.year, .month, .day],
+                                   from: utc.date(byAdding: .day, value: days, to: base) ?? base)
+        return String(format: "%04d-%02d-%02d", h.year ?? 0, h.month ?? 1, h.day ?? 1)
+    }
+
+    /// The occurrence a bare "Post now" (no occurrence already in hand) should
+    /// act on: catch up oldest-first — the same order `generateDue` uses — then
+    /// fall forward to the next due occurrence once nothing is missed. Scans from
+    /// the template's anchor (so an old unposted occurrence is still caught) up to a
+    /// ~400-day forward horizon, enough that a yearly template still resolves.
+    public static func resumeOccurrence(template: ScheduledTemplate, posted: [String: Bool],
+                                        today: String) -> String? {
+        let horizon = horizonDay(from: today, addingDays: 400)
+        let all = occurrencesUpTo(template, horizon)
+        if let missed = all.first(where: { $0 < today && posted["\(template.id)|\($0)"] == nil }) {
+            return missed
+        }
+        return all.first { $0 >= today && posted["\(template.id)|\($0)"] == nil }
+    }
+
     /// "templateId|occurrenceDate" → isPending, for every posted occurrence (txns
     /// whose sourceTemplateId is set). true ⇒ pending; false ⇒ done. An absent key
     /// means only **not posted** — callers must compare the date against today to

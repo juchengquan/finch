@@ -3,13 +3,17 @@ import FinchCore
 
 /// Read-only scheduled-template detail for the iPad/macOS third column (#414
 /// CP2). Resolves the template live from the store so posts/edits reflect
-/// immediately. Post now performs the same one-line engine call the tab's rows
-/// use; Edit opens the existing ScheduledSheet — the sheet stays the write path.
+/// immediately. Post now resolves an occurrence and posts through the same
+/// shared flow the tab's list/calendar use (`ScheduledPoster`) — no occurrence
+/// is in hand here either, so it goes through occurrence resolution just like
+/// the list's swipe/context-menu entry points; Edit opens the existing
+/// ScheduledSheet — the sheet stays the write path.
 struct ScheduledDetailView: View {
     @EnvironmentObject private var store: FinchStore
     let templateId: String
     @State private var editing: ScheduledTemplate?
     @State private var errorMessage: String?
+    @State private var postPrefill: PostPrefill?
 
     private var template: ScheduledTemplate? { store.scheduled.first { $0.id == templateId } }
     private func account(_ id: String) -> AccountRow? { store.accounts.first { $0.id == id } }
@@ -38,6 +42,7 @@ struct ScheduledDetailView: View {
                 }
             }
             .sheet(item: $editing) { ScheduledSheet(template: $0) }
+            .scheduledPostSheet($postPrefill)
             .errorAlert($errorMessage)
         } else {
             DetailPlaceholder(systemImage: "calendar", label: "Select a scheduled item")
@@ -107,8 +112,9 @@ struct ScheduledDetailView: View {
         }
     }
 
+    /// No occurrence in hand here either (this is the toolbar, not a calendar
+    /// tap) — resolve one and post through the same shared flow the tab uses.
     private func postNow(_ t: ScheduledTemplate) {
-        do { try store.apply(.postScheduled, Args(["templateId": .string(t.id)])) }
-        catch { errorMessage = i18nMessage(error) }
+        ScheduledPoster.postNow(t, store: store, prefill: $postPrefill, errorMessage: $errorMessage)
     }
 }

@@ -201,7 +201,20 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
         await MainActor.run {
             switch action {
             case "confirmNow":
-                if let id = focusId { try? store?.apply(.postScheduled, Args(["templateId": .string(id)])) }
+                // Headless — no sheet to confirm a date, so resolve the occurrence
+                // ourselves the same way ScheduledPoster.postNow does (oldest
+                // unresolved, else next >= today) and post it silently. The bug this
+                // fixes was posting WITHOUT resolving an occurrence when one existed;
+                // resolving above closes that. This branch only omits `date` when
+                // nothing resolves, where stamping today is the correct fallback.
+                if let id = focusId, let store {
+                    let posted = Selectors.scheduledPostedMap(store.txns)
+                    let t = store.scheduled.first { $0.id == id }
+                    let occ = t.flatMap { Selectors.resumeOccurrence(template: $0, posted: posted, today: store.wallToday) }
+                    var args: [String: JSONValue] = ["templateId": .string(id)]
+                    if let occ { args["date"] = .string(occ) }
+                    try? store.apply(.postScheduled, Args(args))
+                }
                 router?.open(.scheduled)
             case "viewBudgets": router?.open(.budgets)
             case "viewTransaction":
