@@ -133,3 +133,24 @@ public enum BackupSchedule {
         return now.timeIntervalSince(last) >= frequency.interval
     }
 }
+
+/// Pure per-write targeting: which stores get this snapshot. The LOCAL latest is
+/// on a fixed **daily** cadence (the pack is a pure archive — nothing reads it at
+/// runtime — so per-change rewriting was wasted I/O); the folder archive follows
+/// the user's frequency. The two throttles are independent, so an hourly folder
+/// cadence still fires on days the local latest is already fresh. Forced writes
+/// ("Back up now", the pre-restore safety copy) hit both.
+public enum BackupDecision {
+    public struct Targets: Equatable {
+        public let local: Bool
+        public let folder: Bool
+        public init(local: Bool, folder: Bool) { self.local = local; self.folder = folder }
+    }
+
+    public static func compute(force: Bool, lastLocalAt: Date?, folderAvailable: Bool,
+                               lastFolderAt: Date?, frequency: BackupFrequency, now: Date) -> Targets {
+        Targets(
+            local: force || BackupSchedule.shouldAutoBackup(lastBackupAt: lastLocalAt, frequency: .daily, now: now),
+            folder: folderAvailable && (force || BackupSchedule.shouldAutoBackup(lastBackupAt: lastFolderAt, frequency: frequency, now: now)))
+    }
+}
