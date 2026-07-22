@@ -34,7 +34,7 @@ final class ScheduledPostRoutingTests: XCTestCase {
         XCTAssertEqual(ScheduledPostRouting.route(t(amount: 4200, type: "income"), splitCount: 0), .sheet)
     }
 
-    /// `route` alone doesn't prove the WIRING: `ScheduledTab.postNow` must feed
+    /// `route` alone doesn't prove the WIRING: `ScheduledPoster.postNow` must feed
     /// it the real split count from `store.scheduledSplitCount(templateId:)`,
     /// not a stray literal — a regression hardcoding `splitCount: 0` at that
     /// call site would silently collapse split-income postings back to one,

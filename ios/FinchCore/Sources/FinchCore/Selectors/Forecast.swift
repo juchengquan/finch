@@ -265,8 +265,9 @@ extension Selectors {
 
     /// The occurrence a bare "Post now" (no occurrence already in hand) should
     /// act on: catch up oldest-first — the same order `generateDue` uses — then
-    /// fall forward to the next due occurrence once nothing is missed. Bounded
-    /// by a ~400-day lookback/horizon so a yearly template still resolves.
+    /// fall forward to the next due occurrence once nothing is missed. Scans from
+    /// the template's anchor (so an old unposted occurrence is still caught) up to a
+    /// ~400-day forward horizon, enough that a yearly template still resolves.
     public static func resumeOccurrence(template: ScheduledTemplate, posted: [String: Bool],
                                         today: String) -> String? {
         let horizon = horizonDay(from: today, addingDays: 400)
