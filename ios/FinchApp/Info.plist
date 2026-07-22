@@ -88,5 +88,10 @@
          edited in place, so declare in-place opening as unsupported. -->
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <false/>
+    <!-- Required for Face ID: without this key iOS silently degrades the app
+         lock's LAPolicy.deviceOwnerAuthentication to passcode-only on device
+         (invisible on the simulator, where the gate fails open). -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>finch uses Face ID to unlock the app and to confirm exports and destructive actions.</string>
 </dict>
 </plist>
