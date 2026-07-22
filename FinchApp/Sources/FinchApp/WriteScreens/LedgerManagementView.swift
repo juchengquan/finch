@@ -19,8 +19,10 @@ struct LedgerListView: View {
         Group {
             if let selection {
                 List(selection: selection) { rows }
+                    .resetsSwipeOnNavigation(enabled: selection.wrappedValue == nil)
             } else {
                 List { rows }
+                    .resetsSwipeOnNavigation()
             }
         }
         .navigationTitle("Ledgers")
