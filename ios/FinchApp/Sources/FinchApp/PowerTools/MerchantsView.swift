@@ -121,12 +121,12 @@ struct MerchantsView: View {
                     Image(systemName: selected.contains(cp.id) ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 18))
                         .foregroundStyle(selected.contains(cp.id) ? Color.accentColor : .secondary)
-                    rowLabel(cp, counts, chevron: false)
+                    rowLabel(cp, counts)
                 }
             }
             .buttonStyle(.plain)
         } else {
-            Button { selectedMerchantId = cp.id } label: { rowLabel(cp, counts, chevron: true) }
+            Button { selectedMerchantId = cp.id } label: { rowLabel(cp, counts) }
                 .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
                     // Rename first ⇒ outer edge / full-swipe default (never delete).
@@ -143,18 +143,11 @@ struct MerchantsView: View {
         }
     }
 
-    @ViewBuilder private func rowLabel(_ cp: Counterparty, _ counts: [String: Int], chevron: Bool) -> some View {
+    @ViewBuilder private func rowLabel(_ cp: Counterparty, _ counts: [String: Int]) -> some View {
         HStack(spacing: 8) {
             MerchantLabel(name: cp.name, isVerified: cp.isVerified)
             Spacer(minLength: 8)
-            // Always shown, including 0 — mirrors Categories/Tags.
-            let n = counts[cp.id] ?? 0
-            Text("\(n)")
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                .padding(.horizontal, 12).padding(.vertical, 3)
-                .background(.quaternary, in: Capsule())
-                .accessibilityLabel("\(n) transactions")
-            if chevron { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary) }
+            CountPill(count: counts[cp.id] ?? 0)
         }
         .contentShape(Rectangle())
     }
