@@ -86,6 +86,9 @@ struct AccountDetailView: View {
                 .sheet(isPresented: $showingAddTx) { AddTransactionSheet(defaultAccountId: account.id) }
                 .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
                 .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
+                // Tell the floating add button which account this page shows,
+                // so it seeds the sheet the same way the toolbar `+` above does.
+                .preference(key: AddTxContextKey.self, value: AddTxContext(accountId: account.id))
                 .quickLookPreview($previewURL)
                 // A centered ALERT, not a row-anchored confirmationDialog — see
                 // ActivityTab (window-level survives swipe collapse / recycling).
