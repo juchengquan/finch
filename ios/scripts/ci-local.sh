@@ -160,6 +160,16 @@ fi
 
 # --- summary -----------------------------------------------------------------
 printf '\n\033[1m-- summary --\033[0m\n'
+
+# The FinchApp build/test step can re-serialize the string catalogs in place
+# (Xcode's formatting, zero content change) AFTER the reproducibility guard
+# already passed. Committing that churn makes the NEXT run's guard fail — a
+# blanket `git add ios` has shipped it before. Warn while it's still cheap.
+if ! git -C "$REPO" diff --quiet -- 'ios/**/*.xcstrings' 2>/dev/null; then
+  printf '\033[33mNOTE: xcodebuild churned the .xcstrings catalogs during this run (formatting only).\n'
+  printf 'Discard before committing:  git checkout -- "ios/FinchApp/Sources/FinchApp/Resources/*.xcstrings"\033[0m\n'
+fi
+
 if [ ${#FAILED[@]} -eq 0 ]; then
   printf '\033[32mall checks passed\033[0m\n'
   exit 0
