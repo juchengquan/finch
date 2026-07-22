@@ -203,9 +203,10 @@ public final class NotificationService: NSObject, ObservableObject, UNUserNotifi
             case "confirmNow":
                 // Headless — no sheet to confirm a date, so resolve the occurrence
                 // ourselves the same way ScheduledPoster.postNow does (oldest
-                // unresolved, else next >= today) and post it silently. Omitting
-                // `date` when nothing resolves preserves the prior (buggy) behaviour
-                // of stamping today, which is the correct fallback here.
+                // unresolved, else next >= today) and post it silently. The bug this
+                // fixes was posting WITHOUT resolving an occurrence when one existed;
+                // resolving above closes that. This branch only omits `date` when
+                // nothing resolves, where stamping today is the correct fallback.
                 if let id = focusId, let store {
                     let posted = Selectors.scheduledPostedMap(store.txns)
                     let t = store.scheduled.first { $0.id == id }
