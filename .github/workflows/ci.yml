@@ -11,16 +11,16 @@ on:
       - "**/*.md"
       - "plans/**"
   pull_request:
-    # NO paths-ignore here, deliberately. The iOS job is a REQUIRED status check
-    # on feat/frontend, and a required check that never runs is never reported —
-    # GitHub then blocks the PR forever waiting for a status that will not
-    # arrive. A docs-only PR (#579) hit exactly that: `checks: []`, state
-    # BLOCKED, mergeable only via admin override.
+    # NO paths-ignore here, deliberately — the workflow must ALWAYS trigger so the
+    # required status check gets reported. Docs-only PRs are made cheap a different
+    # way: the `changes` job (below) detects whether any non-docs file changed, and
+    # the expensive `frontend` / `ios` jobs are gated on it. The required check
+    # (`iOS + macOS (…)`) is carried by the always-running `ios-required` aggregate,
+    # so a docs-only PR gets a green required check in seconds without a macOS run.
     #
-    # So docs-only PRs now pay a full iOS run. If that cost becomes annoying,
-    # the fix is an always-running aggregate job that reports the required
-    # check name and gates the real jobs beneath it — NOT re-adding
-    # paths-ignore, which reintroduces the deadlock.
+    # Do NOT re-add paths-ignore here: it skips the whole workflow, the required
+    # check never reports, and the PR blocks forever (a docs-only PR, #579, hit
+    # exactly that — `checks: []`, state BLOCKED, admin-override only).
 
 # Cancel superseded runs on the same ref
 concurrency:
@@ -28,8 +28,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Cheap gate: did this change touch anything other than docs (**/*.md, plans/**)?
+  # The expensive jobs below run only when it did. This is what makes a docs-only
+  # PR skip the full frontend + macOS build without re-introducing the
+  # required-check deadlock (see the pull_request comment above).
+  changes:
+    name: Detect non-docs changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # `code` = any changed file that is NOT markdown and NOT under plans/.
+          # dorny/paths-filter resolves the PR base / push before automatically.
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!plans/**'
+
   frontend:
     name: Frontend (typecheck · lint · test · build)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,7 +85,12 @@ jobs:
         run: bun run build
 
   ios:
-    name: iOS + macOS (FinchCore + ParityTests + FinchApp + FinchMac)
+    # The real work. Renamed off the required-check context — the always-running
+    # `ios-required` aggregate below carries that name now, so this job can be
+    # skipped on docs-only PRs without leaving the required check unreported.
+    name: iOS + macOS build & test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # iOS 26 SDK requires Xcode 26.x — use a runner image that ships it. Adjust
     # the image / Xcode selection here if the hosted images change.
     runs-on: macos-26
@@ -242,3 +271,33 @@ jobs:
             -derivedDataPath /tmp/dd \
             -skipPackagePluginValidation -skipMacroValidation -quiet \
             COMPILER_INDEX_STORE_ENABLE=NO
+
+  # The REQUIRED status check on feat/frontend. Its NAME is what branch protection
+  # requires, so it must ALWAYS run and always report — hence `if: always()` and a
+  # cheap ubuntu runner. It passes iff the real `ios` job SUCCEEDED (code changed
+  # and the build/tests were green) or was SKIPPED (docs-only PR, nothing to run).
+  # This is the piece that lets docs-only PRs skip the macOS build while keeping
+  # the required check reported in seconds — no #579-style deadlock.
+  #
+  # KEEP THIS JOB'S `name:` EXACTLY EQUAL to the required-check context configured
+  # in branch protection. If you rename it, update branch protection in lockstep,
+  # or every PR blocks forever waiting on a status that no longer reports.
+  ios-required:
+    name: iOS + macOS (FinchCore + ParityTests + FinchApp + FinchMac)
+    needs: [changes, ios]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on the iOS build result
+        run: |
+          echo "changes=${{ needs.changes.result }} (code=${{ needs.changes.outputs.code }}), ios=${{ needs.ios.result }}"
+          # If change-detection itself failed, don't green the required check.
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "::error::change detection ${{ needs.changes.result }} — refusing to pass"
+            exit 1
+          fi
+          case "${{ needs.ios.result }}" in
+            success)  echo "iOS build & test passed." ;;
+            skipped)  echo "Docs-only change — iOS build skipped, required check satisfied." ;;
+            *)        echo "::error::iOS build & test ${{ needs.ios.result }}"; exit 1 ;;
+          esac
