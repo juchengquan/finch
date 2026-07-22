@@ -87,14 +87,13 @@ struct SettingsAppearanceView: View {
                 Text("Group by month also applies to an account's transaction list.")
             }
             Section {
+                // Default (menu) style — a single row like Language above;
+                // the inline wheel dwarfed the page for a six-item choice.
                 Picker("Reconcile reminder", selection: $reconcileStaleDays) {
                     ForEach(ReconcileReminder.options, id: \.self) { d in
                         (d == 0 ? Text("Off") : Text("\(d) days")).tag(d)
                     }
                 }
-                #if os(iOS)
-                .pickerStyle(.wheel)
-                #endif
             } header: {
                 Text("Accounts")
             } footer: {
