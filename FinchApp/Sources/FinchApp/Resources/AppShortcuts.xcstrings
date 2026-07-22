@@ -2,36 +2,66 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Add a transaction to ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Add a transaction to ${applicationName}",
+              "Log an expense in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中记一笔交易"
           }
         }
       }
     },
     "Check my balance in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Check my balance in ${applicationName}",
+              "What's my balance in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中查看余额"
           }
         }
       }
     },
     "Create a budget in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Create a budget in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中创建预算"
           }
         }
       }
     },
     "Log an expense in ${applicationName}" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -42,46 +72,83 @@
       }
     },
     "Mark my transactions cleared in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Mark my transactions cleared in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中将交易标记为已清算"
           }
         }
       }
     },
     "Open a screen in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Open a screen in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中打开一个页面"
           }
         }
       }
     },
     "Show my insights in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Show my insights in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中显示我的洞察"
           }
         }
       }
     },
     "Switch ledger in ${applicationName}" : {
+      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Switch ledger in ${applicationName}"
+            ]
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "在 ${applicationName} 中切换账本"
           }
         }
       }
     },
     "What's my balance in ${applicationName}" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
