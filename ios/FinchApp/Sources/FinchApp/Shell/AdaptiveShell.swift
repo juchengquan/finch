@@ -108,6 +108,27 @@ struct SelectionActiveKey: PreferenceKey {
     static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }
 
+/// The subject of the page currently under the floating add button. Published
+/// upward (same mechanism as `SelectionActiveKey`) by detail pages — Account
+/// detail seeds its account, Budget detail its account + category — so the FAB
+/// opens the Add-transaction sheet pre-filled the same way the page's own
+/// toolbar `+` does. Empty (the default) everywhere else → an unseeded sheet.
+struct AddTxContext: Equatable {
+    var accountId: String? = nil
+    var categoryId: String? = nil
+    var isEmpty: Bool { accountId == nil && categoryId == nil }
+}
+
+struct AddTxContextKey: PreferenceKey {
+    static let defaultValue = AddTxContext()
+    // The innermost publisher wins: a pushed detail page's context replaces
+    // the (empty) value from the rest of the tab's tree.
+    static func reduce(value: inout AddTxContext, nextValue: () -> AddTxContext) {
+        let next = nextValue()
+        if !next.isEmpty { value = next }
+    }
+}
+
 /// A floating "add transaction" button for the compact primary tabs — quick
 /// capture from anywhere (it replaces the prominent `+` the removed Activity tab
 /// used to provide). Triggers the same app-root sheet as ⌘N / the command
@@ -128,6 +149,7 @@ private struct AddTransactionFAB: ViewModifier {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
     @State private var selecting = false
+    @State private var context = AddTxContext()
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
     @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
     private var fabLeft: Bool { fabPositionRaw == FabPosition.left.rawValue }
@@ -136,7 +158,13 @@ private struct AddTransactionFAB: ViewModifier {
             // Hidden while the corner-pushed Ledger is up so that screen has the
             // same (FAB-free) chrome no matter which tab it was opened from.
             if fabEnabled, !store.accounts.isEmpty, !selecting, !router.showLedger {
-                Button { router.showAddTransaction = true } label: {
+                Button {
+                    // Seed the sheet with the page's subject (account/budget
+                    // detail) so the FAB matches the page's own toolbar `+`.
+                    router.pendingAddAccountId = context.accountId
+                    router.pendingAddCategoryId = context.categoryId
+                    router.showAddTransaction = true
+                } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(.white)
@@ -150,6 +178,7 @@ private struct AddTransactionFAB: ViewModifier {
             }
         }
         .onPreferenceChange(SelectionActiveKey.self) { selecting = $0 }
+        .onPreferenceChange(AddTxContextKey.self) { context = $0 }
     }
 }
 

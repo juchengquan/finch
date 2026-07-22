@@ -107,7 +107,10 @@ struct FinchApp: App {
             // When the biometric lock engages, dismiss the global sheets so they
             // can't sit on top of the lock cover (the cover is a ZStack sibling).
             .onChange(of: gate.isLocked) { _, locked in
-                if locked { router.showCommandPalette = false; router.showAddTransaction = false; router.pendingAddAccountId = nil }
+                if locked {
+                    router.showCommandPalette = false; router.showAddTransaction = false
+                    router.pendingAddAccountId = nil; router.pendingAddCategoryId = nil
+                }
                 // Privacy: drop the Spotlight index while locked; rebuild it on unlock.
                 Task {
                     if locked { await SpotlightIndexer.shared.clearAll() }
@@ -126,8 +129,11 @@ struct FinchApp: App {
             .sheet(isPresented: $router.showCommandPalette) {
                 CommandPalette().environmentObject(router)
             }
-            .sheet(isPresented: $router.showAddTransaction, onDismiss: { router.pendingAddAccountId = nil }) {
-                AddTransactionSheet(defaultAccountId: router.pendingAddAccountId)
+            .sheet(isPresented: $router.showAddTransaction, onDismiss: {
+                router.pendingAddAccountId = nil; router.pendingAddCategoryId = nil
+            }) {
+                AddTransactionSheet(defaultAccountId: router.pendingAddAccountId,
+                                    defaultCategoryId: router.pendingAddCategoryId)
                     .environmentObject(store).environmentObject(router)
             }
             // App-wide transient confirmations (ToastCenter). Hosted once, here.
