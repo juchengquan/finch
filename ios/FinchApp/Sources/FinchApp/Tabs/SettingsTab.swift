@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
 /// notifications, security), **Ledger** (categories, tags — per-ledger),
 /// **Shared** (merchants, currencies — global, one set across every ledger),
 /// **Data** (backup & sync, advanced), an unlabeled **Experimental Labs** row
-/// (formerly "Power Tools"; holds Rules), plus an **About** footer.
+/// (formerly "Power Tools"; holds Rules + the CloudKit sync scaffold), plus an
+/// **About** footer.
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
@@ -57,8 +58,8 @@ struct SettingsRootList: View {
                 NavigationLink { SettingsAdvancedView() } label: { Label("Advanced", systemImage: "gearshape.2") }
             }
             // "Experimental Labs" (formerly "Power Tools") — power-user / beta
-            // features; currently holds Rules. Its own unlabeled section so it
-            // isn't miscategorised under Ledger and can grow beyond Rules.
+            // features; holds Rules + the CloudKit sync scaffold. Its own
+            // unlabeled section so it isn't miscategorised under Ledger.
             Section {
                 NavigationLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
             }
@@ -72,44 +73,18 @@ struct SettingsRootList: View {
 }
 
 /// Settings › Backup & Sync — everything about keeping your data safe and
-/// portable: iCloud (CloudKit) live sync, local/iCloud-Drive backups, and the
-/// `.finch` pack / CSV import-export buttons (merged from the former
-/// Import & Export page).
+/// portable: local/iCloud-Drive backups and the `.finch` pack / CSV
+/// import-export buttons (merged from the former Import & Export page).
+/// CloudKit live sync moved to Experimental Labs — it's inert scaffold
+/// (unprovisioned container) and under reconsideration, so it shouldn't sit
+/// beside the always-working backups.
 struct SettingsBackupSyncView: View {
     @EnvironmentObject private var store: FinchStore
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
-    @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
 
     var body: some View {
         List {
-            Section {
-                Toggle("Sync across devices (iCloud)", isOn: Binding(
-                    get: { cloudSync.enabled },
-                    set: { on in Task { await cloudSync.setEnabled(on, store: store) } }))
-                if cloudSync.isBootstrapping {
-                    HStack { ProgressView(); Text("Setting up iCloud sync…").foregroundStyle(.secondary) }
-                } else if cloudSync.isSyncing {
-                    HStack { ProgressView(); Text("Syncing…").foregroundStyle(.secondary) }
-                }
-                if cloudSync.enabled {
-                    LabeledContent("Status", value: cloudSync.status.accountAvailable
-                                   ? "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers"
-                                   : "iCloud account required")
-                    LabeledContent("Pending changes", value: "\(cloudSync.status.pendingChanges)")
-                    LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
-                    if let err = cloudSync.status.lastError {
-                        Text(err).foregroundStyle(.red).font(.caption)
-                    }
-                    Button("Resync ledger") { Task { await cloudSync.resync(store: store) } }
-                        .disabled(!cloudSync.status.accountAvailable)
-                }
-            } header: {
-                Text("Sync")
-            } footer: {
-                Text("Row-level live sync over iCloud (CloudKit). Scaffold — the network layer activates once the CloudKit container is provisioned; without an iCloud account it stays inactive. Your data is always exportable as a .finch file.")
-            }
-
             Section {
                 LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
                 NavigationLink {
@@ -138,11 +113,44 @@ struct SettingsBackupSyncView: View {
 }
 
 /// Settings › Experimental Labs (formerly "Power Tools") — power-user / beta
-/// features; currently just Rules.
+/// features: Rules, plus the CloudKit sync scaffold (moved out of Backup &
+/// Sync while it's inert/under reconsideration).
 struct SettingsPowerToolsView: View {
+    @EnvironmentObject private var store: FinchStore
+    @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
+
     var body: some View {
         List {
-            NavigationLink("Rules") { RulesManagerView() }
+            Section {
+                NavigationLink("Rules") { RulesManagerView() }
+            }
+
+            Section {
+                Toggle("Sync across devices (iCloud)", isOn: Binding(
+                    get: { cloudSync.enabled },
+                    set: { on in Task { await cloudSync.setEnabled(on, store: store) } }))
+                if cloudSync.isBootstrapping {
+                    HStack { ProgressView(); Text("Setting up iCloud sync…").foregroundStyle(.secondary) }
+                } else if cloudSync.isSyncing {
+                    HStack { ProgressView(); Text("Syncing…").foregroundStyle(.secondary) }
+                }
+                if cloudSync.enabled {
+                    LabeledContent("Status", value: cloudSync.status.accountAvailable
+                                   ? "Subscribed to \(cloudSync.status.subscribedLedgers) ledgers"
+                                   : "iCloud account required")
+                    LabeledContent("Pending changes", value: "\(cloudSync.status.pendingChanges)")
+                    LabeledContent("Last sync", value: cloudSync.status.lastSyncAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
+                    if let err = cloudSync.status.lastError {
+                        Text(err).foregroundStyle(.red).font(.caption)
+                    }
+                    Button("Resync ledger") { Task { await cloudSync.resync(store: store) } }
+                        .disabled(!cloudSync.status.accountAvailable)
+                }
+            } header: {
+                Text("Sync")
+            } footer: {
+                Text("Row-level live sync over iCloud (CloudKit). Scaffold — the network layer activates once the CloudKit container is provisioned; without an iCloud account it stays inactive. Your data is always exportable as a .finch file.")
+            }
         }
         .navigationTitle("Experimental Labs")
     }
