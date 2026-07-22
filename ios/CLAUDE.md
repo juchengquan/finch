@@ -312,8 +312,9 @@ Privacy mode masks every `display*` helper with `"••••"`.
 - **iCloud Drive pack sync (`Sync/ICloudSync.swift`)** — the older Phase-5 mechanism, still alive:
   pushes each auto-backup `.finch` to iCloud Drive; watches for newer packs and surfaces them for
   **manual** import (never silently swaps the live DB). Nil-safe when no ubiquity container.
-- **`Sync/AutoBackupManager.swift`** — debounced (~5s) `.finch` snapshot to
-  `Application Support/Backups/` (retention 14), then hands to `ICloudSync`.
+- **`Sync/AutoBackupManager.swift`** — debounced (~5s) `.finch` snapshots: the single
+  local latest in `Application Support/Backups/` on a fixed daily cadence, plus the
+  designated-folder archive (`ICloudSync`, keep-N per the user's frequency).
 - **`Sync/RateAutoUpdater.swift`** — the app's **only third-party network call**: daily ECB FX
   refresh from `api.frankfurter.dev` (no key, ~20h throttle, fails silently offline). Stores the
   **inverse** of the API quote (USD-per-unit).

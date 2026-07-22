@@ -145,6 +145,7 @@ public final class ICloudSync: ObservableObject {
         let scope = url.startAccessingSecurityScopedResource()
         defer { if scope { url.stopAccessingSecurityScopedResource() } }
         try? FileManager.default.removeItem(at: url.appendingPathComponent(name))
+        refresh()
     }
 
     /// Prune the designated folder to this device's own newest `keep` snapshots

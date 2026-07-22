@@ -20,8 +20,9 @@ public enum BackupPruner {
 }
 
 /// Phase 5 — auto-pack debounce: after each write, wait a short idle window then
-/// write a `.finch` pack to a local Backups directory, pruning to a retention
-/// count. Flush immediately on backgrounding / "Back up now". iCloud Drive sync
+/// write a `.finch` pack wherever one is due — the single LOCAL latest on a fixed
+/// daily cadence, the designated-folder archive per the user's frequency. Manual
+/// "Back up now" and the pre-restore safety copy force both. iCloud Drive sync
 /// (NSMetadataQuery folder-watch + conflict resolution + the iCloud entitlement)
 /// is deferred infra — see _PHASES_3_TO_8_OPEN_QUESTIONS.md; this writes locally.
 @MainActor
@@ -36,13 +37,19 @@ public final class AutoBackupManager: ObservableObject {
     private let debounceSeconds: TimeInterval = 5
 
     // Folder-archive prefs (UserDefaults; the Backups settings UI binds the same
-    // keys via @AppStorage). Local always keeps just the latest (1); these govern
-    // the OPT-IN folder archive only. Defaults: keep 14, daily.
+    // keys via @AppStorage). Local always keeps just the latest (1), on a fixed
+    // daily cadence; these govern the OPT-IN folder archive only. Defaults:
+    // keep 3, daily. Stored counts are clamped to the wheel's 1–20 range (older
+    // builds allowed up to 50).
     public static let retentionKey = "finch.backupRetention"
     public static let frequencyKey = "finch.backupFrequency"
-    public static let defaultRetention = 14
+    public static let defaultRetention = 3
+    public static let retentionRange = 1...20
     private static let lastFolderBackupKey = "finch.lastFolderBackupAt"
-    private var retention: Int { let v = UserDefaults.standard.integer(forKey: Self.retentionKey); return v == 0 ? Self.defaultRetention : v }
+    private var retention: Int {
+        let v = UserDefaults.standard.integer(forKey: Self.retentionKey)
+        return v == 0 ? Self.defaultRetention : min(max(v, Self.retentionRange.lowerBound), Self.retentionRange.upperBound)
+    }
     private var frequency: BackupFrequency { BackupFrequency(rawValue: UserDefaults.standard.string(forKey: Self.frequencyKey) ?? "") ?? .daily }
     /// When the folder archive was last written — persisted so the frequency
     /// throttle survives relaunch.
@@ -58,13 +65,11 @@ public final class AutoBackupManager: ObservableObject {
 
     public func configure(store: FinchStore) {
         self.store = store
-        lastBackupAt = (try? FileManager.default.contentsOfDirectory(atPath: backupsDir.path))?
-            .filter { $0.hasSuffix(".finch") }.max()
-            .flatMap { name in (try? FileManager.default.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)[.modificationDate]) as? Date }
+        lastBackupAt = newestLocalDate()
     }
 
-    /// After each change (debounced): refresh the always-on LOCAL latest, and
-    /// archive to the folder when synced + the frequency throttle allows.
+    /// After each change (debounced): evaluate BOTH throttles — refresh the local
+    /// latest if a day has passed, archive to the folder if its frequency allows.
     public func schedule() {
         pending?.cancel()
         pending = Task { [weak self] in
@@ -75,14 +80,14 @@ public final class AutoBackupManager: ObservableObject {
     }
 
     /// Forced immediate pack — manual "Back up now" and the pre-restore safety
-    /// backup. Refreshes the local latest AND writes the folder (bypasses the throttle).
+    /// backup. Refreshes the local latest AND writes the folder (bypasses both throttles).
     public func flush() async {
         pending?.cancel()
-        await writeBackup(forceFolder: true)
+        await writeBackup(force: true)
     }
 
-    /// App-backgrounding: refresh the local latest (always) + archive to the folder
-    /// if the frequency throttle allows.
+    /// App-backgrounding: same throttled evaluation as a debounced change — the
+    /// local latest refreshes at most daily, the folder per its frequency.
     public func backupIfDue() async {
         pending?.cancel()
         await writeBackup()
@@ -92,23 +97,28 @@ public final class AutoBackupManager: ObservableObject {
     /// the count). Local is always 1, so it's unaffected.
     public func pruneNow() { ICloudSync.shared.pruneOwn(deviceId: Self.deviceId, keep: retention) }
 
-    /// Write a pack. ALWAYS refreshes the single local latest; also archives to the
-    /// designated folder when synced AND (forced OR the frequency throttle allows).
-    private func writeBackup(forceFolder: Bool = false) async {
+    /// Write a pack to whichever stores are due (`BackupDecision`): the single
+    /// local latest on its fixed daily cadence, the designated folder per the
+    /// user's frequency, both when forced. The pack is only built when at least
+    /// one target needs it — the backup file is a pure archive (restore/import
+    /// are its only readers), so idle rewrites are pointless I/O.
+    private func writeBackup(force: Bool = false) async {
         guard let store, !store.ledgers.isEmpty else { return }
+        let targets = BackupDecision.compute(
+            force: force, lastLocalAt: lastBackupAt,
+            folderAvailable: ICloudSync.shared.available,
+            lastFolderAt: lastFolderBackupAt, frequency: frequency, now: Date())
+        guard targets.local || targets.folder else { return }
         do {
             let data = try await store.buildPack()
             let name = "finch-\(Self.stamp())-\(Self.deviceId).finch"
-            // Local: always keep just the newest one (the always-on safety copy).
-            try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
-            try data.write(to: backupsDir.appendingPathComponent(name))
-            pruneLocal()
-            WidgetSnapshotWriter.write(from: store)   // Phase 7: refresh the widget data
-            lastBackupAt = Date()
-            // Folder archive (opt-in): keep this device's newest `retention`,
-            // throttled by frequency. Manual/pre-restore force it.
-            if ICloudSync.shared.available,
-               forceFolder || BackupSchedule.shouldAutoBackup(lastBackupAt: lastFolderBackupAt, frequency: frequency, now: Date()) {
+            if targets.local {
+                try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+                try data.write(to: backupsDir.appendingPathComponent(name))
+                pruneLocal()
+                lastBackupAt = Date()
+            }
+            if targets.folder {
                 ICloudSync.shared.push(data, name: name)
                 ICloudSync.shared.pruneOwn(deviceId: Self.deviceId, keep: retention)
                 lastFolderBackupAt = Date()
@@ -117,6 +127,20 @@ public final class AutoBackupManager: ObservableObject {
         } catch {
             lastError = String(describing: error)
         }
+    }
+
+    /// Delete a named on-device snapshot (user-initiated from the history) and
+    /// recompute the latest-backup timestamp from what remains.
+    public func deleteLocal(name: String) {
+        try? FileManager.default.removeItem(at: backupsDir.appendingPathComponent(name))
+        lastBackupAt = newestLocalDate()
+    }
+
+    /// Modification date of the newest on-device snapshot, or nil if none.
+    private func newestLocalDate() -> Date? {
+        (try? FileManager.default.contentsOfDirectory(atPath: backupsDir.path))?
+            .filter { $0.hasSuffix(".finch") }.max()
+            .flatMap { name in (try? FileManager.default.attributesOfItem(atPath: backupsDir.appendingPathComponent(name).path)[.modificationDate]) as? Date }
     }
 
     /// Keep only the newest local snapshot (the always-on safety copy).

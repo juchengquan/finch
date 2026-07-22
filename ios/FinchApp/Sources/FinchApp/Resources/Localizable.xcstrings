@@ -2248,6 +2248,7 @@
         }
       }
     },
+    "Delete this backup?": {},
     "Delete this budget?": {
       "localizations": {
         "zh-Hans": {
@@ -5631,6 +5632,7 @@
         }
       }
     },
+    "Swipe right on a backup to restore it, left to delete it. Restoring replaces all current data — your current data is backed up first.": {},
     "Switch Ledger": {
       "localizations": {
         "zh-Hans": {
@@ -5801,7 +5803,6 @@
         }
       }
     },
-    "Tap a backup to restore it — this replaces all current data, and your current data is backed up first.": {},
     "Tap a bar to view a past cycle": {
       "localizations": {
         "zh-Hans": {
@@ -5862,6 +5863,7 @@
         }
       }
     },
+    "The backup from %@ will be removed everywhere it’s saved. This can’t be undone.": {},
     "The file is deleted permanently.": {
       "localizations": {
         "zh-Hans": {
@@ -6583,7 +6585,6 @@
         }
       }
     },
-    "finch always keeps the latest backup on this device — a quick, offline restore point. Turn on a backup folder to keep a browsable history off-device.": {},
     "finch always keeps your latest backup on this device. Open Backups to add a folder history (count, frequency), browse backups, and restore an earlier version.": {},
     "finch is locked": {
       "localizations": {
@@ -6595,6 +6596,7 @@
         }
       }
     },
+    "finch keeps its latest backup on this device, refreshed at most once a day — a quick, offline restore point. “Back up now” always writes a fresh one. Turn on a backup folder to keep a browsable history off-device.": {},
     "finch pack": {
       "localizations": {
         "zh-Hans": {
