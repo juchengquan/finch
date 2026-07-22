@@ -4195,6 +4195,16 @@
         }
       }
     },
+    "None (top level)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无（一级）"
+          }
+        }
+      }
+    },
     "Not enough history": {
       "localizations": {
         "zh-Hans": {
@@ -4415,6 +4425,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "数据包格式"
+          }
+        }
+      }
+    },
+    "Parent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "父级"
           }
         }
       }

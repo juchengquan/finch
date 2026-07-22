@@ -490,13 +490,7 @@ struct CategoryEditSheet: View {
         return flat.filter { $0.depth < 2 && !excluded.contains($0.row.id) }
     }
 
-    /// Parent options for the bottom-sheet picker: "None (top level)" (empty id)
-    /// plus the eligible parents, indented by depth.
-    private var parentPickerOptions: [PickerOption] {
-        [PickerOption(id: "", name: "None (top level)")]
-            + parentOptions.map { PickerOption(id: $0.row.id, name: String(repeating: "   ", count: $0.depth) + $0.row.name) }
-    }
-    /// Bridges the `String?` parentId to SearchablePickerRow's `String` (empty == top level).
+    /// Bridges the `String?` parentId to CategoryPickerRow's `String` (empty == top level).
     private var parentBinding: Binding<String> {
         Binding(get: { parentId ?? "" }, set: { parentId = $0.isEmpty ? nil : $0 })
     }
@@ -514,7 +508,13 @@ struct CategoryEditSheet: View {
                     LabeledContent("Type", value: kindSel == "income" ? "Income" : "Expense")
                 }
                 TextField("Name", text: $name)
-                SearchablePickerRow(title: "Parent", options: parentPickerOptions, selection: parentBinding)
+                // The same swatch+icon tree the transaction Category field uses
+                // (and the Categories page renders), restricted to eligible
+                // parents, with "None (top level)" as the empty choice.
+                // String(localized:) because both params are plain Strings —
+                // literals would bypass extraction and ship English in zh-Hans.
+                CategoryPickerRow(title: String(localized: "Parent"), categories: parentOptions.map(\.row),
+                                  selection: parentBinding, noneLabel: String(localized: "None (top level)"))
                 IconPickerRow(title: "Icon", selection: $icon)
                 Section("Color") {
                     HStack(spacing: 10) {
