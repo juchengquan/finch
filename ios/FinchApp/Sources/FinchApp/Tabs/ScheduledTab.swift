@@ -67,6 +67,12 @@ struct ScheduledTab: View {
                         if mode == .list {
                             List(selection: selection ?? $kbSel) {
                                 modePickerRow
+                                // Explicit Section: with the clear-background toggle as
+                                // the same (implicit) section's first row, the rows'
+                                // card lost its top corner rounding once scrolled under
+                                // the pinned search drawer — the rounding belonged to
+                                // the invisible toggle row.
+                                Section {
                                 if filteredScheduled.isEmpty && filteredDetected.isEmpty && !searchActive {
                                     Text("Tap + or a calendar day to add a recurring transaction.")
                                         .foregroundStyle(.secondary)
@@ -96,6 +102,7 @@ struct ScheduledTab: View {
                                             Button(role: .destructive) { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }
                                         }
                                         .tag(t.id)
+                                }
                                 }
                                 if !filteredDetected.isEmpty {
                                     Section {
