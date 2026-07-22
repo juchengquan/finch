@@ -17,6 +17,10 @@ struct CategoryPickerRow: View {
     let title: String
     let categories: [CategoryRow]         // kind-filtered rows (sort_order order)
     @Binding var selection: String
+    /// Non-nil ⇒ an empty selection ("") is a legal choice shown under this label
+    /// (e.g. "None (top level)" for a category's Parent field), offered as the
+    /// first row of the sheet. nil ⇒ empty renders as the "—" placeholder.
+    var noneLabel: String? = nil
     /// Non-nil ⇒ the transaction is split: the row shows this summary instead of the
     /// picked category name, and tapping the row (or icon) reopens the split editor.
     var splitSummary: String? = nil
@@ -26,7 +30,9 @@ struct CategoryPickerRow: View {
     var onSplit: (() -> Void)? = nil
     @State private var presented = false
 
-    private var selectedName: String { categories.first { $0.id == selection }?.name ?? "—" }
+    private var selectedName: String {
+        categories.first { $0.id == selection }?.name ?? (selection.isEmpty ? noneLabel : nil) ?? "—"
+    }
 
     var body: some View {
         HStack {
@@ -58,7 +64,7 @@ struct CategoryPickerRow: View {
             }
         }
         .sheet(isPresented: $presented) {
-            CategoryPickerSheet(title: title, categories: categories, selection: $selection)
+            CategoryPickerSheet(title: title, categories: categories, selection: $selection, noneLabel: noneLabel)
                 #if os(iOS)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -75,15 +81,19 @@ struct CategoryPickerSheet: View {
     let title: String
     let categories: [CategoryRow]
     @Binding var selection: String
+    /// Non-nil ⇒ offer "" as a first, icon-less choice under this label
+    /// (used by the Parent field's "None (top level)").
+    let noneLabel: String?
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var expanded: Set<String> = []
     @State private var staged: String
 
-    init(title: String, categories: [CategoryRow], selection: Binding<String>) {
+    init(title: String, categories: [CategoryRow], selection: Binding<String>, noneLabel: String? = nil) {
         self.title = title
         self.categories = categories
         self._selection = selection
+        self.noneLabel = noneLabel
         self._staged = State(initialValue: selection.wrappedValue)
     }
 
@@ -95,6 +105,9 @@ struct CategoryPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // The "none" choice isn't a searchable category — hide it while
+                // a query filters the tree.
+                if let noneLabel, query.isEmpty { noneRow(noneLabel) }
                 ForEach(visible) { item in row(item) }
             }
             .searchable(text: $query, prompt: "Search")
@@ -108,6 +121,26 @@ struct CategoryPickerSheet: View {
                     Button { selection = staged; dismiss() } label: { Image(systemName: "checkmark") }.accessibilityLabel("Confirm").confirmCheckmarkStyle()
                 }
             }
+        }
+    }
+
+    /// The empty-selection row: same geometry as `CategoryTreeRow` (26pt glyph
+    /// slot, reserved chevron column) so the list reads as one aligned tree.
+    @ViewBuilder private func noneRow(_ label: String) -> some View {
+        HStack(spacing: 8) {
+            Button { staged = "" } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "circle.slash")
+                        .font(.system(size: 20)).foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                    Text(label).foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if staged.isEmpty { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Color.clear.frame(width: 22, height: 30)
         }
     }
 
