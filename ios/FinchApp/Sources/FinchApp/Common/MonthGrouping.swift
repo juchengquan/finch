@@ -39,4 +39,16 @@ enum MonthGrouping {
     static func net(_ txns: [Tx]) -> Double {
         txns.reduce(0) { $0 + $1.amount }
     }
+
+    /// Inflows (sum of positive amounts) and outflows (magnitude of negative
+    /// amounts) — the header's "Income · Spent" line. Split purely by sign, so
+    /// transfer/refund legs count on the side they move money: the identities
+    /// `income - expense == net` and header-vs-rows agreement hold on every
+    /// surface without kind-based carve-outs.
+    static func income(_ txns: [Tx]) -> Double {
+        txns.reduce(0) { $1.amount > 0 ? $0 + $1.amount : $0 }
+    }
+    static func expense(_ txns: [Tx]) -> Double {
+        txns.reduce(0) { $1.amount < 0 ? $0 - $1.amount : $0 }
+    }
 }
