@@ -69,6 +69,7 @@ struct ActivityFeedView: View {
     // change (via .onReceive/.onChange), not on every body render — the search
     // field re-rendered the whole list on each keystroke before.
     @State private var sections: [MonthGrouping.Section] = []
+    @State private var pendingTxns: [Tx] = []   // pinned "To confirm" bucket (filtered)
     @State private var dateShownIds: Set<String> = []
     @State private var hasMore = false
     @State private var filteredCount = 0
@@ -86,7 +87,7 @@ struct ActivityFeedView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                         .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
                         .listRowBackground(Color.clear)
-                    if sections.isEmpty {
+                    if sections.isEmpty && pendingTxns.isEmpty {
                         ContentUnavailableView {
                             Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
                         } description: {
@@ -96,8 +97,13 @@ struct ActivityFeedView: View {
                         }
                         .listRowBackground(Color.clear)
                     }
-                    if pendingCount > 0 {
-                        Section {
+                    // Pending pins above the months regardless of the sort menu —
+                    // the same "To confirm" bucket the account detail shows.
+                    // Search/filters apply (the bucket shows only matching rows);
+                    // "Confirm all" still clears every pending row store-wide.
+                    if !pendingTxns.isEmpty {
+                        Section("To confirm (\(pendingTxns.count))") {
+                            ForEach(pendingTxns) { txn in row(txn) }
                             Button {
                                 run { try store.apply(.confirmAllPending, Args([:])) }
                             } label: {
@@ -110,11 +116,15 @@ struct ActivityFeedView: View {
                             Section {
                                 ForEach(section.txns) { txn in row(txn) }
                             } header: {
-                                HStack {
-                                    Text(MonthGrouping.label(section.id)).textCase(nil)
-                                    Spacer()
-                                    Text(store.displayMoneyBase(MonthGrouping.net(section.txns)))
-                                        .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack {
+                                        Text(MonthGrouping.label(section.id)).textCase(nil)
+                                        Spacer()
+                                        Text(store.displayMoneyBase(MonthGrouping.net(section.txns)))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
+                                        .font(.caption2).textCase(nil).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -130,7 +140,7 @@ struct ActivityFeedView: View {
                     // In three-column selection mode the selection already drives
                     // the detail column — ↵ falls through (kbSel is unused there).
                     if !isSelecting, selection == nil, let id = kbSel,
-                       let txn = sections.flatMap({ $0.txns }).first(where: { $0.id == id }) { editing = txn; return .handled }
+                       let txn = (pendingTxns + sections.flatMap({ $0.txns })).first(where: { $0.id == id }) { editing = txn; return .handled }
                     return .ignored
                 }
                 #endif
@@ -249,9 +259,14 @@ struct ActivityFeedView: View {
     private func recompute() {
         let f = filteredTxns()
         filteredCount = f.count
-        hasMore = f.count > visibleCount
-        sections = MonthGrouping.sections(Array(f.prefix(visibleCount)))
-        var shown = Set<String>(); var last: String?
+        // Pending splits into its pinned bucket (newest first, whatever the sort
+        // menu says); the month sections cover confirmed rows only.
+        pendingTxns = TxSort.dateDesc.sorted(f.filter { $0.pending == true })
+        let confirmed = f.filter { $0.pending != true }
+        hasMore = confirmed.count > visibleCount
+        sections = MonthGrouping.sections(Array(confirmed.prefix(visibleCount)))
+        // Bucket rows always carry their date (no day-de-dup context up there).
+        var shown = Set<String>(pendingTxns.map(\.id)); var last: String?
         for txn in sections.flatMap({ $0.txns }) {
             if txn.date != last { shown.insert(txn.id); last = txn.date }
         }

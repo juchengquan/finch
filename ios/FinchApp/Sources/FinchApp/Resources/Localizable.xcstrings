@@ -3132,6 +3132,16 @@
         }
       }
     },
+    "Income %@ · Spent %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收入 %1$@ · 支出 %2$@"
+          }
+        }
+      }
+    },
     "Income categories": {
       "localizations": {
         "zh-Hans": {

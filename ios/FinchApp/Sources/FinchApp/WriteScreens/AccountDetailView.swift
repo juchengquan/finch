@@ -1,9 +1,11 @@
 import SwiftUI
 import FinchCore
 
-/// Account drill-in: header (name/type/balance), balance sparkline, holdings
-/// (investment accounts), the account's transactions, and edit/reconcile/
-/// archive/delete actions. Re-resolves the account from the store by id so edits
+/// Account drill-in: name + balance in the nav-bar title (visible while
+/// scrolled), a type/reconcile card, holdings (investment accounts), and the
+/// account's transactions — searchable, month-sectioned behind the shared
+/// group-by-month toggle, pending pinned on top. Edit/reconcile/archive/delete
+/// via the toolbar. Re-resolves the account from the store by id so edits
 /// reflect live; pops when the account is archived or deleted.
 struct AccountDetailView: View {
     @EnvironmentObject private var store: FinchStore
@@ -22,6 +24,7 @@ struct AccountDetailView: View {
     @State private var editing: Tx?
     @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var previewURL: URL?
+    @State private var searchQuery = ""
 
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
 
@@ -39,7 +42,21 @@ struct AccountDetailView: View {
                 .errorAlert($errorMessage)
                 .navigationTitle(account.name ?? "Account")
                 .navigationBarTitleDisplayMode(.inline)
+                #if os(iOS)
+                .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
+                #else
+                .searchable(text: $searchQuery, prompt: "Search transactions")
+                #endif
                 .toolbar {
+                    // Name over balance — the balance stays visible while the
+                    // header card is scrolled away. Privacy-aware via displayMoney.
+                    ToolbarItem(placement: .principal) {
+                        VStack(spacing: 0) {
+                            Text(account.name ?? "—").font(.headline)
+                            Text(store.displayMoney(account.balance, from: account.currency))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button { showingAddTx = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("Add Transaction")
@@ -86,15 +103,13 @@ struct AccountDetailView: View {
         }
     }
 
+    // Name and balance live in the nav-bar title now — the card keeps only
+    // what's unique to it: the type and the reconcile status below.
     @ViewBuilder private func header(_ a: AccountRow) -> some View {
         HStack {
             Image(systemName: AccountTypeIcon.icon(for: a.type)).foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(a.name ?? "—").fontWeight(.medium)
-                Text(AccountSheetTypeLabel.label(a.type)).font(.caption).foregroundStyle(.secondary)
-            }
+            Text(AccountSheetTypeLabel.label(a.type))
             Spacer()
-            Text(store.displayMoney(a.balance, from: a.currency)).fontWeight(.semibold)
         }
     }
 
@@ -137,7 +152,12 @@ struct AccountDetailView: View {
     }
 
     @ViewBuilder private func transactionsSection(_ a: AccountRow) -> some View {
-        let txns = store.transactions(for: a.id)
+        // Search runs through the same engine matcher as the Activity feed
+        // (merchant/note/category), scoped to this account's rows. Sections and
+        // the pending bucket both filter; sections stay month-grouped.
+        let all = store.transactions(for: a.id)
+        let txns = searchQuery.isEmpty ? all
+            : Selectors.selectTransactions(all, ListOptions(ledgerId: store.activeLedgerId, query: searchQuery))
         let pending = txns.filter { $0.pending == true }
         let confirmed = txns.filter { $0.pending != true }
         if !pending.isEmpty {
@@ -147,24 +167,29 @@ struct AccountDetailView: View {
         }
         if confirmed.isEmpty {
             Section("Transactions") {
-                Text("No transactions").font(.caption).foregroundStyle(.secondary)
+                Text(searchQuery.isEmpty ? "No transactions" : "No matching transactions")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         } else if groupByMonth {
             ForEach(MonthGrouping.sections(confirmed)) { section in
                 Section {
                     ForEach(section.txns, id: \.id) { t in txRow(t) }
                 } header: {
-                    HStack {
-                        Text(MonthGrouping.label(section.id)).textCase(nil)
-                        Spacer()
-                        // net change · this account's balance at the end of the month.
-                        // The section is date-descending, so its first (newest) row's
-                        // running balance IS the end-of-month balance — same cache the
-                        // row shows, so header and row agree exactly.
-                        Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
-                             + "  ·  "
-                             + store.displayMoneyBase(store.runningBalanceBase(for: section.txns.first!)))
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(MonthGrouping.label(section.id)).textCase(nil)
+                            Spacer()
+                            // net change · this account's balance at the end of the month.
+                            // The section is date-descending, so its first (newest) row's
+                            // running balance IS the end-of-month balance — same cache the
+                            // row shows, so header and row agree exactly.
+                            Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
+                                 + "  ·  "
+                                 + store.displayMoneyBase(store.runningBalanceBase(for: section.txns.first!)))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
+                            .font(.caption2).textCase(nil).foregroundStyle(.secondary)
                     }
                 }
             }
