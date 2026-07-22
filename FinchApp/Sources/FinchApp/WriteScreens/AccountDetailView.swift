@@ -113,24 +113,29 @@ struct AccountDetailView: View {
         }
     }
 
+    // The badge appears only once the account HAS been reconciled — a
+    // "Never reconciled" row said nothing actionable, so the never state
+    // renders no row at all (Reconcile stays reachable from the ⋯ menu).
     @ViewBuilder private func reconcileBadge(_ a: AccountRow) -> some View {
         let status = Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday)
-        let bal = store.displayNative(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
-        HStack(spacing: 6) {
-            switch status {
-            case .never:
-                Image(systemName: "checkmark.seal").foregroundStyle(.secondary)
-                Text("Never reconciled").foregroundStyle(.secondary)
-            case .fresh(let d):
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.green)
-            case .stale(let d):
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.orange)
+        if case .never = status {
+        } else {
+            let bal = store.displayNative(a.lastReconciledBalance ?? 0, currency: a.currency ?? store.baseCurrency)
+            HStack(spacing: 6) {
+                switch status {
+                case .never:
+                    EmptyView()
+                case .fresh(let d):
+                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                    Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.green)
+                case .stale(let d):
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text("Reconciled to \(bal) · \(agoLabel(d))").foregroundStyle(.orange)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .font(.caption)
         }
-        .font(.caption)
     }
 
     private func agoLabel(_ d: Int) -> String { d == 0 ? "today" : d == 1 ? "1 day ago" : "\(d) days ago" }
