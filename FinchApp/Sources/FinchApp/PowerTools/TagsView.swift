@@ -155,8 +155,9 @@ struct TagsView: View {
         }
     }
 
-    /// A tag row: color swatch + name + count pill + a trailing chevron (every
-    /// row navigates to its detail). Tap opens transactions; Edit/Delete are on
+    /// A tag row: color swatch + name + count pill. Tap opens the tag's
+    /// transactions (no chevron — on the Settings lists a chevron always means
+    /// "expandable parent", and only Categories has those); Edit/Delete are on
     /// the swipe (Edit is the full-swipe default) and context menu.
     @ViewBuilder private func row(_ tag: TagRow, _ counts: [String: Int]) -> some View {
         HStack(spacing: 8) {
@@ -176,16 +177,7 @@ struct TagsView: View {
                     TagSwatch(hex: tag.color)
                     Text(tag.name).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    // Always shown, including 0 — mirrors Categories/Merchants.
-                    let n = counts[tag.id] ?? 0
-                    Text("\(n)")
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        .padding(.horizontal, 12).padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
-                        .accessibilityLabel("\(n) transactions")
-                    if !isSelecting {
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                    }
+                    CountPill(count: counts[tag.id] ?? 0)
                 }
                 .contentShape(Rectangle())
             }
