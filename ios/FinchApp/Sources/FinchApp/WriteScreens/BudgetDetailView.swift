@@ -1,11 +1,12 @@
 import SwiftUI
 import FinchCore
 
-/// Budget drill-in: cycle progress (used/base/remaining + bar), this cycle's
-/// matched transactions, and edit / clear-pending / delete. Income goals fund
-/// from real matched inflows (no Contribute). Re-resolves from the store; pops
-/// when deleted. (Cycle edits — frequency + start date — live in the Edit sheet,
-/// BudgetSheet.)
+/// Budget drill-in: cycle progress (used/base/remaining + bar), a History chart
+/// whose past-cycle bars tap through to that cycle's numbers + transactions,
+/// this cycle's matched transactions, and edit / clear-pending / delete. Income
+/// goals fund from real matched inflows (no Contribute). Re-resolves from the
+/// store; pops when deleted. (Cycle edits — frequency + start date — live in
+/// the Edit sheet, BudgetSheet.)
 struct BudgetDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -17,6 +18,10 @@ struct BudgetDetailView: View {
     @State private var showingAddTx = false   // budget-aware add (pre-filled category/account)
     @State private var editing: Tx?           // tapped cycle transaction → edit sheet
     @State private var errorMessage: String?
+    // Tapped History bar → that past cycle's numbers + transactions (keyed by
+    // the cycle's `from` so it survives reprojection; current cycle never
+    // selects — its details are already on the page).
+    @State private var selectedCycleFrom: String?
 
     private var budget: BudgetRow? { store.budgets.first { $0.id == budgetId } }
 
@@ -114,41 +119,93 @@ struct BudgetDetailView: View {
                 Text("No matching transactions")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                ForEach(txns, id: \.id) { t in
-                    // Tap opens the editor — same behavior as the account
-                    // detail's transaction rows.
-                    Button { editing = t } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(t.merchant).lineLimit(1)
-                                Text(t.date).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(store.displayMoneyBase(t.amount))
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+                ForEach(txns, id: \.id) { t in txnRow(t) }
             }
         }
     }
 
+    /// One matched-transaction row — tap opens the editor (same behavior as the
+    /// account detail's transaction rows).
+    @ViewBuilder private func txnRow(_ t: Tx) -> some View {
+        Button { editing = t } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.merchant).lineLimit(1)
+                    Text(t.date).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(store.displayMoneyBase(t.amount))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Spent-vs-budget bars across the trailing cycles (hidden for one-shots and
     /// when there's under 2 cycles of history — one bar answers nothing).
+    /// Tapping a past-cycle bar opens that cycle's drill-in section below;
+    /// tapping it again (or the current bar) clears it.
     @ViewBuilder private func historySection(_ b: BudgetRow) -> some View {
         let pts = Selectors.budgetCycleHistory(b, store.txns, store.today, store.categoryNodes)
         if pts.count >= 2 {
+            let selected = pts.first { $0.from == selectedCycleFrom && !$0.isCurrent }
             Section("History") {
                 BarChart(data: pts.map { p in
                     BarChart.DataPoint(label: cycleLabel(p.from, b.frequency),
                                        value: p.used,
                                        color: (p.over ? Color.red : Color.green)
-                                           .opacity(p.isCurrent ? 0.45 : 1))
-                }, xLabel: "Cycle", yLabel: "Spent", referenceLine: b.amount)
+                                           .opacity(barOpacity(p, selected: selected)))
+                }, xLabel: "Cycle", yLabel: "Spent", referenceLine: b.amount,
+                   onBarTap: { i in
+                    guard i < pts.count else { return }
+                    let p = pts[i]
+                    selectedCycleFrom = (p.isCurrent || p.from == selectedCycleFrom) ? nil : p.from
+                })
                 .frame(height: 140)
                 Text("Last \(pts.count) cycles · budget \(store.displayMoneyBase(b.amount))")
                     .font(.caption).foregroundStyle(.secondary)
+                if selected == nil {
+                    Text("Tap a bar to view a past cycle")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            if let selected { cycleSection(b, selected) }
+        }
+    }
+
+    /// Selected bar stays full-strength and the rest recede; with no selection,
+    /// the current cycle is the muted one (it's provisional — still filling).
+    private func barOpacity(_ p: Selectors.BudgetCyclePoint, selected: Selectors.BudgetCyclePoint?) -> Double {
+        if let selected { return p.from == selected.from ? 1 : 0.3 }
+        return p.isCurrent ? 0.45 : 1
+    }
+
+    /// Drill-in for a tapped past cycle: the same used/base/remaining block as
+    /// the header (windowed), then that cycle's matched transactions.
+    @ViewBuilder private func cycleSection(_ b: BudgetRow, _ c: Selectors.BudgetCyclePoint) -> some View {
+        let txns = Selectors.budgetMatchedTransactions(b, store.txns, from: c.from, to: c.to, store.categoryNodes)
+        let pct = c.base != 0 ? Int((c.used / c.base * 100).rounded()) : 0
+        Section("Selected cycle") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("\(store.displayMoneyBase(c.used)) of \(store.displayMoneyBase(c.base))")
+                        .fontWeight(.medium)
+                    Spacer()
+                    if c.over { Text("Over").font(.caption).foregroundStyle(.red) }
+                }
+                ProgressView(value: min(Double(pct) / 100, 1.0))
+                    .tint(c.over ? .red : (pct >= 70 ? .yellow : .green))
+                HStack {
+                    Text("\(store.displayMoneyBase(c.base - c.used)) left").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(c.from) – \(c.to)").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            if txns.isEmpty {
+                Text("No matching transactions")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(txns, id: \.id) { t in txnRow(t) }
             }
         }
     }

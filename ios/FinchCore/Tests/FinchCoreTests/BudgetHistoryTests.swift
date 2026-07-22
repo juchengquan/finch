@@ -66,4 +66,16 @@ final class BudgetHistoryTests: XCTestCase {
         XCTAssertEqual(pts[0].base, 100)    // past: plain amount
         XCTAssertEqual(pts[1].base, 125)    // current: amount + carryForward (expense)
     }
+    func test_windowedMatchedTransactions_pastCycle() {
+        let txns = [
+            tx("1", -50, "2026-03-10"),
+            tx("2", -120, "2026-04-05"),
+            tx("3", -10, "2026-05-02"),
+        ]
+        // Explicit window pulls the past cycle's transactions...
+        XCTAssertEqual(Selectors.budgetMatchedTransactions(budget(), txns, from: "2026-04-01", to: "2026-04-30").map(\.id), ["2"])
+        // ...while the today-based variant (which now delegates to it) still
+        // returns only the current cycle.
+        XCTAssertEqual(Selectors.budgetMatchedTransactions(budget(), txns, "2026-05-15").map(\.id), ["3"])
+    }
 }
