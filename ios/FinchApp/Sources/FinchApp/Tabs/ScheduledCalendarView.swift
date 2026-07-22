@@ -1,9 +1,11 @@
 import SwiftUI
 import FinchCore
 
-/// Month-grid calendar lens for the Scheduled tab: per-day occurrence dots + a
-/// selected-day detail (status + post/edit) with an "Upcoming" fallback.
-/// Mutations route through the parent's closures; expansion via Selectors.
+/// Month-grid calendar lens for the Scheduled tab: per-day daily cash lines
+/// (past/today = actual income/expense, future = scheduled totals), + a
+/// selected-day detail (status + post/edit) that falls back to the untitled
+/// upcoming list. Mutations route through the parent's closures; expansion
+/// via Selectors.
 struct ScheduledCalendarView: View {
     @EnvironmentObject private var store: FinchStore
     /// Templates to plot — already narrowed by the Scheduled tab's search query.
@@ -54,7 +56,7 @@ struct ScheduledCalendarView: View {
             // The month grid sits in its own section card (one row, so no internal
             // separators); the day-detail / upcoming list follows as a second section.
             Section {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     header
                     weekdayRow
                     #if os(iOS)
@@ -63,21 +65,27 @@ struct ScheduledCalendarView: View {
                     // (an after-the-fact .transition can't do that). On settle,
                     // commit the month and snap back to center animation-free.
                     TabView(selection: $pagerIndex) {
-                        monthPage(offsetFromAnchor: -1).tag(-1)
-                        monthPage(offsetFromAnchor: 0).tag(0)
-                        monthPage(offsetFromAnchor: 1).tag(1)
+                        monthPage(for: month(-1)).tag(-1)
+                        monthPage(for: monthAnchor).tag(0)
+                        monthPage(for: month(1)).tag(1)
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .frame(height: Self.gridHeight)
+                    // Recreate the pager after every commit: the settle's snap-back
+                    // left the old pager's in-flight completion alive, and it would
+                    // re-emit the selection write on top of the recentered state —
+                    // advancing TWO months per swipe/chevron. A fresh pager (new
+                    // identity per anchored month) has nothing in flight.
+                    .id(Self.monthIndex(monthAnchor))
                     .onChange(of: pagerIndex) { _, idx in
                         guard idx != 0 else { return }
-                        monthAnchor = AppDate.civil.date(byAdding: .month, value: idx, to: monthAnchor) ?? monthAnchor
+                        monthAnchor = month(idx)
                         var t = Transaction()
                         t.disablesAnimations = true
                         withTransaction(t) { pagerIndex = 0 }
                     }
                     #else
-                    monthPage(offsetFromAnchor: 0)
+                    monthPage(for: monthAnchor)
                     #endif
                 }
             }
@@ -171,57 +179,119 @@ struct ScheduledCalendarView: View {
         }
     }
 
-    /// Constant grid height: always 6 padded weeks (44pt cells, 4pt spacing) so
-    /// the three carousel pages align and paging never jumps vertically.
-    static let gridHeight: CGFloat = 6 * 44 + 5 * 4
+    /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
+    static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
+    /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every
+    /// month — and all three carousel pages — render the same height: no layout
+    /// jump when paging. Months with fewer weeks stretch their rows to fill
+    /// (`cellHeight(rows:)`) instead of carrying an empty padded week.
+    static let gridHeight: CGFloat = 6 * 62 + 5 * 4
+    static func cellHeight(rows: Int) -> CGFloat { (gridHeight - 4 * CGFloat(rows - 1)) / CGFloat(rows) }
+
+    /// Absolute month index (year*12+month, civil calendar) — the pager's
+    /// per-month identity for the `.id` recreation above.
+    static func monthIndex(_ d: Date) -> Int {
+        let c = AppDate.civil.dateComponents([.year, .month], from: d)
+        return (c.year ?? 2000) * 12 + (c.month ?? 1) - 1
+    }
+    /// The anchor month shifted by `off` months.
+    private func month(_ off: Int) -> Date {
+        AppDate.civil.date(byAdding: .month, value: off, to: monthAnchor) ?? monthAnchor
+    }
 
     /// One month's grid, self-contained (computes its own occurrence map) so the
     /// carousel's prev/next pages render their own real content.
-    private func monthPage(offsetFromAnchor: Int) -> some View {
-        let m = AppDate.civil.date(byAdding: .month, value: offsetFromAnchor, to: monthAnchor) ?? monthAnchor
+    private func monthPage(for m: Date) -> some View {
         let year = AppDate.civil.component(.year, from: m)
         let month = AppDate.civil.component(.month, from: m)
         let days = AppDate.civil.range(of: .day, in: .month, for: m)?.count ?? 30
         let firstWeekday = AppDate.civil.component(.weekday, from: m) - 1
         func iso(_ day: Int) -> String { String(format: "%04d-%02d-%02d", year, month, day) }
         let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: iso(1), through: iso(days)), by: { $0.date })
+        // Daily cash lines: past/today cells show the day's ACTUAL inflow/outflow
+        // (same sign-split as the Activity month headers); future cells show the
+        // day's SCHEDULED totals — facts behind, plan ahead.
+        let actualByDay = MonthGrouping.dailyIncomeExpense(store.txns.filter { $0.date >= iso(1) && $0.date <= iso(days) })
+        var schedByDay: [String: (income: Double, expense: Double)] = [:]
+        for (d, occs) in byDay where d > store.wallToday {
+            var inc = 0.0, exp = 0.0
+            for o in occs {
+                // Template amounts are unsigned magnitudes; `type` carries the
+                // direction (unlike Tx.amount, which is signed). Transfers move
+                // between the user's own accounts — neither income nor expense.
+                guard let amt = o.template.amount else { continue }
+                let base = abs(store.toBase(amt, from: store.accounts.first { $0.id == o.template.accountId }?.currency))
+                switch o.template.type {
+                case "income":  inc += base
+                case "expense": exp += base
+                default: break
+                }
+            }
+            if inc > 0 || exp > 0 { schedByDay[d] = (inc, exp) }
+        }
         // One ordered cell list (leading nils pad to the 1st's weekday, then the
-        // days, then trailing nils to a constant 42 cells) rendered by a single
-        // ForEach — keeps blanks and days in lockstep so the columns stay aligned.
+        // days, then trailing nils to fill the month's own last week) rendered by
+        // a single ForEach — keeps blanks and days in lockstep, columns aligned.
+        let rows = Self.weekRows(firstWeekday: firstWeekday, days: days)
+        let cellH = Self.cellHeight(rows: rows)
         var cells: [Int?] = Array(repeating: nil, count: firstWeekday) + (1...days).map(Optional.init)
-        cells += Array(repeating: nil, count: 42 - cells.count)
+        cells += Array(repeating: nil, count: rows * 7 - cells.count)
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
                 if let day {
-                    dayCell(day, iso: iso(day), occ: byDay[iso(day)] ?? [])
+                    let d = iso(day)
+                    let future = d > store.wallToday
+                    dayCell(day, iso: d,
+                            amounts: future ? schedByDay[d] : actualByDay[d],
+                            height: cellH)
                 } else {
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: cellH)
                 }
             }
         }
     }
 
-    private func dayCell(_ day: Int, iso d: String, occ: [(date: String, template: ScheduledTemplate)]) -> some View {
+    private func dayCell(_ day: Int, iso d: String,
+                         amounts: (income: Double, expense: Double)?, height: CGFloat) -> some View {
         let isSel = d == selectedDay, isToday = d == store.wallToday
-        return VStack(spacing: 3) {
+        return VStack(spacing: 2) {
             // Today gets a filled accent circle (white number); other days plain.
             Text("\(day)")
                 .font(.callout).fontWeight(isToday ? .semibold : .regular)
                 .foregroundStyle(isToday ? Color.white : .primary)
                 .frame(width: 26, height: 26)
                 .background(isToday ? Color.accentColor : Color.clear, in: Circle())
-            HStack(spacing: 2) {
-                ForEach(Array(occ.prefix(3).enumerated()), id: \.offset) { _, o in
-                    Circle().fill(Color(hex: o.template.color ?? "") ?? .accentColor).frame(width: 6, height: 6)
+            // Fixed-height two-line slot (rows align whether or not a day has
+            // amounts). Exact figures (cents only when non-zero), sign-prefixed;
+            // nil from displayExactBase (privacy mode) drops the lines. Future days use
+            // the SAME standard green/red as actuals — the dimmed variant read
+            // as extra colors, and the today circle already splits fact from plan.
+            VStack(spacing: 0) {
+                if let a = amounts {
+                    if a.income > 0, let s = store.displayExactBase(a.income) { amountLine("+" + s, .green) }
+                    if a.expense > 0, let s = store.displayExactBase(a.expense) { amountLine("−" + s, .red) }
                 }
-                if occ.count > 3 { Text("+\(occ.count - 3)").font(.system(size: 8)).foregroundStyle(.secondary) }
-            }.frame(height: 8)
+            }
+            .frame(height: 32)
         }
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .frame(maxWidth: .infinity, minHeight: height)
         .background(isSel ? Color.accentColor.opacity(0.15) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
         .onTapGesture { selectedDay = (selectedDay == d ? nil : d) }
+    }
+
+    /// One amount line, in a uniform full-cell-width box: every cell's amount
+    /// gets the same maximum width, and a number that exceeds it shrinks its
+    /// font to fit instead of spilling into the neighboring column.
+    private func amountLine(_ s: String, _ color: Color) -> some View {
+        Text(s)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.55)
+            .padding(.horizontal, 1)
+            .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder private func detail(byDay: [String: [(date: String, template: ScheduledTemplate)]], posted: [String: Bool]) -> some View {
@@ -236,7 +306,6 @@ struct ScheduledCalendarView: View {
             if occ.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
         } else {
-            Text("Upcoming").font(.headline).frame(maxWidth: .infinity, alignment: .leading)
             let end = AppDate.civil.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.wallToday) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.wallToday
             let up = Array(Selectors.occurrencesInRange(templates, from: store.wallToday, through: end).prefix(20))
             if up.isEmpty { Text("No upcoming items.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
@@ -258,8 +327,12 @@ struct ScheduledCalendarView: View {
                     Text("\(date) · \(acct?.name ?? "—")").font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if let amt = t.amount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
+                // Badge BEFORE the amount: the amount owns the trailing edge, so
+                // rows align with each other and with the List view — a trailing
+                // badge's variable width ("upcoming" vs "missed") shifted every
+                // amount a different distance from the edge.
                 statusBadge(st)
+                if let amt = t.amount { Text(store.displayMoney(amt, from: acct?.currency ?? store.displayCurrency)).font(.callout) }
             }
             .contentShape(Rectangle())
         }
@@ -318,7 +391,7 @@ struct ScheduledCalendarView: View {
     private func step(_ n: Int) {
         #if os(iOS)
         // Animate the carousel to the neighbor; its onChange commits the month
-        // and recenters. (Chevrons get the same slide as a swipe.)
+        // and recreates the pager. (Chevrons get the same slide as a swipe.)
         withAnimation(.easeInOut(duration: 0.25)) { pagerIndex = n }
         #else
         guard let d = AppDate.civil.date(byAdding: .month, value: n, to: monthAnchor) else { return }

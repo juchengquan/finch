@@ -6365,16 +6365,6 @@
         }
       }
     },
-    "Upcoming": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "即将到期"
-          }
-        }
-      }
-    },
     "Upcoming scheduled": {
       "localizations": {
         "zh-Hans": {
