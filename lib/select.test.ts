@@ -1213,3 +1213,33 @@ test('budgetProgress: income goals count incoming transfer legs; expense budgets
   const expense = bgt({ type: 'expense', isRecurring: 1, amount: 500, accountIds: ['sav'] });
   expect(budgetProgress(expense, [transfer, spend], '2026-03-15').used).toBe(40);
 });
+
+test('selectTransactions query matches merchant, category name, split categories, and tag names', () => {
+  const names = {
+    categories: { food: 'Groceries', fun: 'Entertainment' },
+    tags: { t1: 'vacation' },
+  };
+  const split = { id: 's1', categoryId: 'food', amount: -5, amountBase: -5, description: null };
+  const txns = [
+    tx({ id: 'byMerchant', merchant: 'Grocer Joe', category: null }),
+    tx({ id: 'byCategory', merchant: '', category: 'food' }),
+    tx({ id: 'bySplit', merchant: '', category: null, splits: [split] }),
+    tx({ id: 'byTag', merchant: '', category: 'fun', tags: ['t1'] }),
+    tx({ id: 'noMatch', merchant: 'Cafe', category: 'fun' }),
+  ];
+  const gro = selectTransactions(txns, { ledgerId: 'personal', query: 'gro' }, names);
+  expect(gro.map((t) => t.id).sort()).toEqual(['byCategory', 'byMerchant', 'bySplit']);
+  const vac = selectTransactions(txns, { ledgerId: 'personal', query: 'vac' }, names);
+  expect(vac.map((t) => t.id)).toEqual(['byTag']);
+  const upper = selectTransactions(txns, { ledgerId: 'personal', query: 'GROCERIES' }, names);
+  expect(upper.map((t) => t.id).sort()).toEqual(['byCategory', 'bySplit']);
+});
+
+test('selectTransactions query without a names map stays merchant-only (back-compat)', () => {
+  const txns = [
+    tx({ id: 'byMerchant', merchant: 'Grocer Joe' }),
+    tx({ id: 'byCategory', merchant: '', category: 'food' }),
+  ];
+  const out = selectTransactions(txns, { ledgerId: 'personal', query: 'gro' });
+  expect(out.map((t) => t.id)).toEqual(['byMerchant']);
+});
