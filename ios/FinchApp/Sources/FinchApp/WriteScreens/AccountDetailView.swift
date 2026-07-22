@@ -9,6 +9,7 @@ struct AccountDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
     @AppStorage("finch.account.showOpeningBalance") private var showOpeningBalance = true
+    @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
 
     let accountId: String
 
@@ -148,10 +149,31 @@ struct AccountDetailView: View {
                 ForEach(pending, id: \.id) { t in txRow(t) }
             }
         }
-        Section("Transactions") {
-            if confirmed.isEmpty {
+        if confirmed.isEmpty {
+            Section("Transactions") {
                 Text("No transactions").font(.caption).foregroundStyle(.secondary)
-            } else {
+            }
+        } else if groupByMonth {
+            ForEach(MonthGrouping.sections(confirmed)) { section in
+                Section {
+                    ForEach(section.txns, id: \.id) { t in txRow(t) }
+                } header: {
+                    HStack {
+                        Text(MonthGrouping.label(section.id)).textCase(nil)
+                        Spacer()
+                        // net change · this account's balance at the end of the month.
+                        // The section is date-descending, so its first (newest) row's
+                        // running balance IS the end-of-month balance — same cache the
+                        // row shows, so header and row agree exactly.
+                        Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
+                             + "  ·  "
+                             + store.displayMoneyBase(store.runningBalanceBase(for: section.txns.first!)))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } else {
+            Section("Transactions") {
                 ForEach(confirmed, id: \.id) { t in txRow(t) }
             }
         }
