@@ -42,6 +42,7 @@ struct MerchantsView: View {
                                        description: Text("Merchants appear as you add transactions, or add one with +."))
             } else {
                 List { ForEach(filtered) { cp in row(cp, counts) } }
+                    .resetsSwipeOnNavigation(enabled: !isSelecting)
                     .modifier(SearchableModifier(text: $search))
             }
         }

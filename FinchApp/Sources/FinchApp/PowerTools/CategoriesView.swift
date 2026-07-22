@@ -74,6 +74,7 @@ struct CategoriesView: View {
                 ForEach(visible) { item in row(item, counts) }
             }
         }
+        .resetsSwipeOnNavigation(enabled: !isSelecting)
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Categories")
         .errorAlert($errorMessage)
