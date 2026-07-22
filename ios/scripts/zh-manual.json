@@ -667,5 +667,7 @@
   "done": "已完成",
   "missed": "已错过",
   "pending": "待处理",
-  "upcoming": "即将到来"
+  "upcoming": "即将到来",
+  "Selected cycle": "所选周期",
+  "Tap a bar to view a past cycle": "轻点柱形查看过往周期"
 }

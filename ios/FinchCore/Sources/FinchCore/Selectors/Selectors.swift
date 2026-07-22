@@ -398,6 +398,14 @@ public enum Selectors {
     public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx], _ today: String,
                                                  _ categories: [CategoryNode] = []) -> [Tx] {
         let win = cycleWindow(budget.frequency, budget.startDate, today, budget.endDate, budget.isRecurring)
+        return budgetMatchedTransactions(budget, txns, from: win.from, to: win.to, categories)
+    }
+
+    /// Same predicate over an explicit [from, to] window — the budget detail's
+    /// past-cycle drill-in (windows come from `budgetCycleHistory`).
+    public static func budgetMatchedTransactions(_ budget: BudgetRow, _ txns: [Tx],
+                                                 from: String, to: String,
+                                                 _ categories: [CategoryNode] = []) -> [Tx] {
         let accountSet = budget.accountIds.isEmpty ? nil : Set(budget.accountIds)
         let matchSet = categories.isEmpty ? Set(budget.categoryIds) : expandDescendants(budget.categoryIds, categories)
         let tagSet = budget.tagIds.isEmpty ? nil : Set(budget.tagIds)
@@ -410,7 +418,7 @@ public enum Selectors {
             if ledgerOf(t) != budget.ledgerId { continue }
             if (t.pending ?? false) || kindOf(t) == "adjustment" { continue }
             if budget.type == "expense" && kindOf(t) == "transfer" { continue }
-            if t.date < win.from || t.date > win.to { continue }
+            if t.date < from || t.date > to { continue }
             if let accountSet, !accountSet.contains(t.account) { continue }
             if let tagSet, !(t.tags ?? []).contains(where: { tagSet.contains($0) }) { continue }
             if let cpSet, t.counterpartyId == nil || !cpSet.contains(t.counterpartyId!) { continue }
