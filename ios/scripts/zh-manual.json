@@ -331,6 +331,7 @@
   "6M": "6个月",
   "Activity feed": "动态",
   "Group by month": "按月分组",
+  "Group by month also applies to an account's transaction list.": "按月分组同样适用于账户的交易列表。",
   "Relative dates": "相对日期",
   "Detected · not scheduled": "检测到 · 未加入计划",
   "%@ · next ~%@": "%1$@ · 下次 ~%2$@",

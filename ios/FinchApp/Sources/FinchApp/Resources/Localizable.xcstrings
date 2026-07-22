@@ -2851,6 +2851,16 @@
         }
       }
     },
+    "Group by month also applies to an account's transaction list.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按月分组同样适用于账户的交易列表。"
+          }
+        }
+      }
+    },
     "Group name": {
       "localizations": {
         "zh-Hans": {
