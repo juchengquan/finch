@@ -8,7 +8,7 @@ final class SchemaTests: XCTestCase {
         // ships the post-DE schema; the version string is shared cross-app.
         // 2026-07-21: budgets gain tag_ids/counterparty_ids (income-goal matching).
         // 2026-07-22: entries gain occurrence_date (scheduled occurrence link).
-        XCTAssertEqual(Schema.version, "2026-07-22T00:00:00Z")
+        XCTAssertEqual(Schema.version, "2026-07-23T00:00:00Z")
         XCTAssertEqual(Schema.appName, "finch")
     }
 }

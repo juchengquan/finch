@@ -9,7 +9,7 @@ import GRDB
 ///   cd frontend && bun -e 'import {SCHEMA} from "@/lib/db/core/schema"; process.stdout.write(SCHEMA)'
 public enum Schema {
     /// Matches the web's `SCHEMA_VERSION` (`schema.ts:435`).
-    public static let version = "2026-07-22T00:00:00Z"
+    public static let version = "2026-07-23T00:00:00Z"
     /// Matches the web's `APP_NAME` (`schema.ts:436`).
     public static let appName = "finch"
 
