@@ -31,18 +31,38 @@ public enum Money {
         "CHF": Cur(sym: "CHF ", decimals: 2),
     ]
 
+    /// NumberFormatter is expensive to construct, and `format` used to build a
+    /// fresh one per call — the dominant cost of bulk formatting (e.g. the
+    /// Spotlight indexer formats every transaction). The configuration only
+    /// varies by fraction-digit count, so keep one formatter per decimals value.
+    /// NumberFormatter isn't thread-safe, so the lock is held across the
+    /// `string(from:)` call too (formatting runs off-main in the indexer).
+    private static var formatters: [Int: NumberFormatter] = [:]
+    private static let formatterLock = NSLock()
+
+    private static func groupedAbs(_ amount: Double, decimals: Int) -> String {
+        formatterLock.lock(); defer { formatterLock.unlock() }
+        let nf: NumberFormatter
+        if let cached = formatters[decimals] {
+            nf = cached
+        } else {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.minimumFractionDigits = decimals
+            f.maximumFractionDigits = decimals
+            f.locale = Locale(identifier: "en_US")
+            formatters[decimals] = f
+            nf = f
+        }
+        return nf.string(from: NSNumber(value: abs(amount))) ?? "0"
+    }
+
     /// Format an amount already denominated in `currency` (no conversion).
     /// Mirrors `fmtNative`: `sign + symbol + grouped-abs`, U+2212 minus.
     public static func format(_ amount: Double, currency: String, signed: Bool = false) -> String {
         let c = currencies[currency] ?? Cur(sym: currency + " ", decimals: 2)
-        let nf = NumberFormatter()
-        nf.numberStyle = .decimal
-        nf.minimumFractionDigits = c.decimals
-        nf.maximumFractionDigits = c.decimals
-        nf.locale = Locale(identifier: "en_US")
-        let absStr = nf.string(from: NSNumber(value: abs(amount))) ?? "0"
         let sign = amount < 0 ? "\u{2212}" : (signed ? "+" : "")
-        return sign + c.sym + absStr
+        return sign + c.sym + groupedAbs(amount, decimals: c.decimals)
     }
 
     /// The display symbol for `currency` — the same prefix `format` uses (e.g. "$",
