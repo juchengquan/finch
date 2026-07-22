@@ -142,4 +142,29 @@ final class ScheduledPostRoutingTests: XCTestCase {
         XCTAssertNil(prefill)
         XCTAssertEqual(store.txns.count, txCountBefore + 2, "both 50/50 splits should have posted")
     }
+
+    /// The future-date guard applies only to the AUTO-RESOLVE path (bare "Post now",
+    /// no cell in hand). The calendar calls the occurrence-taking overload directly
+    /// with a cell the user TAPPED — that explicit choice IS the date confirmation,
+    /// so a future occurrence must still post silently there, not be refused.
+    @MainActor
+    func test_postNow_splitIncome_explicitFutureOccurrence_stillPostsSilently() async throws {
+        let today = FinchStore.isoDay(Date())
+        let future = Selectors.horizonDay(from: today, addingDays: 5)
+        let (store, template) = try await makeSplitIncomeTemplate(startDate: future)
+        let txCountBefore = store.txns.count
+
+        var prefill: PostPrefill?
+        var errorMessage: String?
+        let prefillBinding = Binding<PostPrefill?>(get: { prefill }, set: { prefill = $0 })
+        let errorBinding = Binding<String?>(get: { errorMessage }, set: { errorMessage = $0 })
+
+        // Occurrence passed explicitly = the calendar tap. Must post, not suppress.
+        ScheduledPoster.postNow(template, occurrence: future, store: store,
+                                prefill: prefillBinding, errorMessage: errorBinding)
+
+        XCTAssertNil(errorMessage, "an explicitly-tapped future occurrence must still post")
+        XCTAssertNil(prefill, "split-income posts silently, no sheet")
+        XCTAssertEqual(store.txns.count, txCountBefore + 2, "both 50/50 splits should have posted")
+    }
 }

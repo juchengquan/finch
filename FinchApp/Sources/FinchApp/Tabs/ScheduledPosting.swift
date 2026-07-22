@@ -58,6 +58,17 @@ enum ScheduledPoster {
             errorMessage.wrappedValue = nothingToPostMessage(t)
             return
         }
+        // A bare "Post now" with no cell in hand that resolves to a FUTURE occurrence
+        // on the SILENT path has no sheet to confirm the date in — refuse it rather
+        // than silently book unconfirmed future-dated income (a fully-caught-up
+        // split-income template falls forward this way). Strictly `>`: an occurrence
+        // dated exactly today is due and still posts. The calendar is deliberately
+        // exempt — it calls the occurrence-taking overload directly with a cell the
+        // user TAPPED, which is itself the date confirmation.
+        if occ > store.wallToday, ScheduledPostRouting.routeForPost(t, store: store) == .silent {
+            errorMessage.wrappedValue = nothingToPostMessage(t)
+            return
+        }
         postNow(t, occurrence: occ, store: store, prefill: prefill, errorMessage: errorMessage)
     }
 
@@ -67,10 +78,13 @@ enum ScheduledPoster {
                               "Nothing left to post for \"\(t.name)\"."))
     }
 
-    /// Post ONE calendar occurrence. Most templates open a prefilled sheet so the
-    /// user confirms the date/amount before it lands; split-income templates stay
-    /// on the silent engine path (see `ScheduledPostRouting`), which refuses a
-    /// future-dated occurrence outright rather than book unconfirmed future income.
+    /// Post ONE explicitly-chosen occurrence (a calendar cell the user tapped, or the
+    /// occurrence `resumeOccurrence` picked for a bare "Post now"). Most templates open
+    /// a prefilled sheet so the user confirms the date/amount before it lands;
+    /// split-income templates stay on the silent engine path (see `ScheduledPostRouting`).
+    /// This overload posts whatever `occurrence` it is given — the future-date guard for
+    /// auto-resolved posts lives in the resolving overload above, so an explicit calendar
+    /// tap of a future cell still posts.
     static func postNow(_ t: ScheduledTemplate, occurrence: String, store: FinchStore,
                         prefill: Binding<PostPrefill?>, errorMessage: Binding<String?>) {
         // The installment cap lives in `Scheduled.post`, which the sheet path
@@ -97,18 +111,6 @@ enum ScheduledPoster {
         case .sheet:
             prefill.wrappedValue = PostPrefill(template: t, occurrence: occurrence)
         case .silent:
-            // The silent path never shows the user the date it's about to post —
-            // there's no sheet to confirm it in. A fully-caught-up split-income
-            // template makes `resumeOccurrence` fall forward to a FUTURE
-            // occurrence (nothing missed, nothing due today); posting that
-            // unconfirmed would silently book future-dated income and inflate
-            // forecasts. Refuse it here with the same "nothing to post" message
-            // used when nothing resolves at all. Strictly `>`: an occurrence
-            // dated exactly today is due and must still post.
-            if occurrence > store.wallToday {
-                errorMessage.wrappedValue = nothingToPostMessage(t)
-                return
-            }
             do {
                 try store.apply(.postScheduled, Args([
                     "templateId": .string(t.id), "date": .string(occurrence),
