@@ -319,16 +319,11 @@ struct ScheduledRow: View {
 
 /// The template's next occurrence date. next_run is never persisted (NULL on
 /// insert), so derive it from the recurrence — a ~400-day horizon covers yearly
-/// templates. Shared by ScheduledRow and ScheduledDetailView.
+/// templates. Shared by ScheduledRow and ScheduledDetailView. The horizon math
+/// itself lives in FinchCore (`Selectors.horizonDay`) — shared with
+/// `resumeOccurrence`, which needs the same lookahead.
 func scheduledNextRun(_ template: ScheduledTemplate, today: String) -> String {
-    var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(identifier: "UTC")!
-    let base = cal.date(from: DateComponents(
-        year: Int(today.prefix(4)), month: Int(today.dropFirst(5).prefix(2)),
-        day: Int(today.dropFirst(8).prefix(2)))) ?? Date()
-    let h = cal.dateComponents([.year, .month, .day],
-                               from: cal.date(byAdding: .day, value: 400, to: base) ?? base)
-    let horizon = String(format: "%04d-%02d-%02d", h.year ?? 0, h.month ?? 1, h.day ?? 1)
+    let horizon = Selectors.horizonDay(from: today, addingDays: 400)
     return Selectors.occurrencesInRange([template], from: today, through: horizon).first?.date
         ?? (template.nextRun.isEmpty ? "—" : template.nextRun)
 }
