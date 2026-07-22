@@ -458,7 +458,7 @@ cd /tmp/finch-swipe-reset && git add ios/FinchApp/Sources/FinchApp/Common/SwipeR
 ## Task 6: Apply Component 2 to Account detail (the clean feed — no selection)
 
 **Files:**
-- Modify: `ios/FinchApp/Sources/FinchApp/WriteScreens/AccountDetailView.swift` (List opens 35, closes 42; `txRow` at 219; `transactionsSection` 168-215)
+- Modify: `ios/FinchApp/Sources/FinchApp/WriteScreens/AccountDetailView.swift` (List opens 37, closes just before `.errorAlert` at line 41; `txRow` at 195; `transactionsSection(_ a: AccountRow)` 144-191). NOTE: line numbers re-verified after a rebase; the parameter type is `AccountRow` (not `Account`).
 
 **Interfaces:**
 - Consumes: `tracksTopRow(...)`, `resetsSwipeAndRestoresScroll(...)` from Task 5.
@@ -476,17 +476,17 @@ Add these `@State` properties to `AccountDetailView` (near the existing `@State`
 
 - [ ] **Step 2: Thread display order into the row builder**
 
-`txRow` is `@ViewBuilder private func txRow(_ t: Tx) -> some View` at line 219. Give it an `order` parameter and attach the tracking hook. Change the signature and its body's outer modifier:
+`txRow` is `@ViewBuilder private func txRow(_ t: Tx) -> some View` at line 195. Give it an `order` parameter and attach the tracking hook. Change the signature and its body's outer modifier:
 
 ```swift
     @ViewBuilder private func txRow(_ t: Tx, order: [String]) -> some View {
-        // ... existing row content, unchanged, ending with .txnSwipeActions(t, …) at line 226 ...
-        // append this to the returned view:
+        // ... existing row content, unchanged, ending with the .txnSwipeActions(t, …) call at lines 202-207 ...
+        // append this to the returned view (after the .txnSwipeActions(...) call):
             .tracksTopRow(id: t.id, order: order, visible: $visibleTxns, anchor: $scrollAnchor)
     }
 ```
 
-In `transactionsSection(_ a: Account)`, after `let confirmed = ...` (line 176) compute the display order once, and pass it to every `txRow(...)` call:
+In `transactionsSection(_ a: AccountRow)`, after `let confirmed = txns.filter { $0.pending != true }` (line 152) compute the display order once, and pass it to every `txRow(...)` call:
 
 ```swift
         let order: [String] = groupByMonth
@@ -495,13 +495,13 @@ In `transactionsSection(_ a: Account)`, after `let confirmed = ...` (line 176) c
 ```
 
 Then update the three call sites:
-- line 179 `ForEach(pending, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
-- line 190 `ForEach(section.txns, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
-- line 212 `ForEach(confirmed, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
+- line 155 `ForEach(pending, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
+- line 166 `ForEach(section.txns, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
+- line 188 `ForEach(confirmed, id: \.id) { t in txRow(t) }` → `txRow(t, order: order)`
 
 - [ ] **Step 3: Wrap the List in a ScrollViewReader and attach the reset+restore modifier**
 
-The List opens at line 35 inside `if let account {`, closes at line 42, with `.errorAlert`/`.navigationTitle` trailing at 43-44. Wrap just the List:
+The List opens at line 37 inside `if let account {`; its closing brace sits just before `.errorAlert($errorMessage)` (line 41) and `.navigationTitle(account.name ?? "Account")` (line 42). Wrap just the List:
 
 ```swift
                 ScrollViewReader { proxy in
