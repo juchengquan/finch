@@ -55,6 +55,7 @@ enum ErrorL10n {
         "error.scheduled.installmentDone": "\"{name}\" 的 {total} 期分期付款已完成",
         "error.scheduled.missingAccount": "\"{name}\" 缺少账户",
         "error.scheduled.noSplits": "\"{name}\" 没有可发布的拆分金额",
+        "error.scheduled.nothingToPost": "\"{name}\" 没有可发布的项目",
         "error.scheduled.variableAmount": "\"{name}\" 金额可变 — 请手动添加",
         "error.transfer.amountGt0": "转账金额必须大于 0",
         "error.transfer.receivedGt0": "收到金额必须大于 0",
