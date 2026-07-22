@@ -36,6 +36,20 @@ final class MonthGroupingTests: XCTestCase {
         XCTAssertTrue(MonthGrouping.sections([]).isEmpty)
     }
 
+    func test_dailyIncomeExpense_splitsBySign_perDay() {
+        let d = MonthGrouping.dailyIncomeExpense([
+            tx("1", "2026-09-20", amount: -42.18),
+            tx("2", "2026-09-20", amount: 4_200),
+            tx("3", "2026-09-20", amount: -10),
+            tx("4", "2026-09-05", amount: -53.20),
+        ])
+        XCTAssertEqual(d["2026-09-20"]?.income, 4_200)
+        XCTAssertEqual(d["2026-09-20"]?.expense ?? 0, 52.18, accuracy: 0.001)
+        XCTAssertEqual(d["2026-09-05"]?.income, 0)
+        XCTAssertEqual(d["2026-09-05"]?.expense ?? 0, 53.20, accuracy: 0.001)
+        XCTAssertNil(d["2026-09-01"])           // no txns → absent, not zero
+    }
+
     func test_label_wideMonthAndYear() {
         // en locale renders the wide month + year; assert the year is present and it isn't the raw key
         let out = MonthGrouping.label("2026-09")
