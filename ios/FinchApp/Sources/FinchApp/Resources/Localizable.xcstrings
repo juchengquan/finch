@@ -33,7 +33,8 @@
         }
       }
     },
-    "%1$@ (%2$@) looks higher than usual.": {
+    "%@": {},
+    "%@ (%@) looks higher than usual.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -43,8 +44,8 @@
         }
       }
     },
-    "%1$@ / %2$@": {},
-    "%1$@ is %2$@.": {
+    "%@ / %@": {},
+    "%@ is %@.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -54,117 +55,22 @@
         }
       }
     },
-    "%1$@ is removed from %2$lld transactions.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ 将从 %2$lld 笔交易中移除。"
-          }
-        }
-      }
-    },
-    "%1$@ of %2$@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@"
-          }
-        }
-      }
-    },
-    "%1$@ spent · of %2$@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已花费 %1$@ · 共 %2$@"
-          }
-        }
-      }
-    },
-    "%1$@ used — %2$@ of %3$@.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已使用 %1$@ —— %2$@ / %3$@。"
-          }
-        }
-      }
-    },
-    "%1$@ · %2$@": {},
-    "%1$@ · next %2$@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · 下次 %2$@"
-          }
-        }
-      }
-    },
-    "%1$@ · next ~%2$@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · 下次 ~%2$@"
-          }
-        }
-      }
-    },
-    "%1$@ – %2$@": {},
-    "%1$@ — %2$@": {},
-    "%1$@%2$lld%%": {},
-    "%1$@%2$lld%% vs %3$lld-week average": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@%2$lld%% 较 %3$lld 周均值"
-          }
-        }
-      }
-    },
-    "%1$@: %2$lf": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@：%2$lf"
-          }
-        }
-      }
-    },
-    "%1$lld matched · %2$lld new": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 已匹配 · %2$lld 新增"
-          }
-        }
-      }
-    },
-    "%1$lld transaction%2$@": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 笔交易"
-          }
-        }
-      }
-    },
-    "%@": {},
     "%@ is due. Confirm now?": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ 已到期。立即确认？"
+          }
+        }
+      }
+    },
+    "%@ is removed from %lld transactions.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 将从 %2$lld 笔交易中移除。"
           }
         }
       }
@@ -199,6 +105,16 @@
         }
       }
     },
+    "%@ of %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        }
+      }
+    },
     "%@ shares": {
       "localizations": {
         "zh-Hans": {
@@ -209,12 +125,53 @@
         }
       }
     },
+    "%@ spent · of %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已花费 %1$@ · 共 %2$@"
+          }
+        }
+      }
+    },
+    "%@ used — %@ of %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已使用 %1$@ —— %2$@ / %3$@。"
+          }
+        }
+      }
+    },
+    "%@ · %@": {},
     "%@ · hub": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ · 中心货币"
+          }
+        }
+      }
+    },
+    "%@ · next %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · 下次 %2$@"
+          }
+        }
+      }
+    },
+    "%@ · next ~%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · 下次 ~%2$@"
           }
         }
       }
@@ -229,6 +186,8 @@
         }
       }
     },
+    "%@ – %@": {},
+    "%@ — %@": {},
     "%@ — %lld transactions keep the name but lose the merchant link.": {
       "localizations": {
         "zh-Hans": {
@@ -249,12 +208,33 @@
         }
       }
     },
+    "%@%lld%%": {},
+    "%@%lld%% vs %lld-week average": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@%2$lld%% 较 %3$lld 周均值"
+          }
+        }
+      }
+    },
     "%@/mo": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "%@/月"
+          }
+        }
+      }
+    },
+    "%@: %lf": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：%2$lf"
           }
         }
       }
@@ -276,6 +256,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "剩余 %lld 天"
+          }
+        }
+      }
+    },
+    "%lld matched · %lld new": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 已匹配 · %2$lld 新增"
           }
         }
       }
@@ -346,6 +336,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld 个子类别将上移到顶级"
+          }
+        }
+      }
+    },
+    "%lld transaction%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 笔交易"
           }
         }
       }
@@ -1154,7 +1154,7 @@
         }
       }
     },
-    "Applies to %1$lld selected transaction%2$@.": {
+    "Applies to %lld selected transaction%@.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -1338,7 +1338,7 @@
         }
       }
     },
-    "Based on your last %1$lld month%2$@": {
+    "Based on your last %lld month%@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -1578,7 +1578,7 @@
         }
       }
     },
-    "Cleared %1$lld · To review %2$lld": {
+    "Cleared %lld · To review %lld": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -2078,16 +2078,6 @@
         }
       }
     },
-    "Delete %1$lld transaction%2$@?": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除 %1$lld 笔交易？"
-          }
-        }
-      }
-    },
     "Delete %@": {
       "localizations": {
         "zh-Hans": {
@@ -2124,6 +2114,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除 %lld 条汇率"
+          }
+        }
+      }
+    },
+    "Delete %lld transaction%@?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %1$lld 笔交易？"
           }
         }
       }
@@ -3131,7 +3131,7 @@
         }
       }
     },
-    "Income · %1$@ of %2$@ saved": {
+    "Income · %@ of %@ saved": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -3161,7 +3161,7 @@
         }
       }
     },
-    "Installment %1$lld/%2$lld · %3$@": {
+    "Installment %lld/%lld · %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -3252,7 +3252,7 @@
         }
       }
     },
-    "Last %1$lld cycles · budget %2$@": {
+    "Last %lld cycles · budget %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -3424,7 +3424,7 @@
         }
       }
     },
-    "Looks like “%1$@” on %2$@ already exists.": {
+    "Looks like “%@” on %@ already exists.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -3494,7 +3494,7 @@
         }
       }
     },
-    "Marked %1$lld transaction%2$@ as cleared.": {
+    "Marked %lld transaction%@ as cleared.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -3714,7 +3714,7 @@
         }
       }
     },
-    "Net: %1$@ → %2$@": {
+    "Net: %@ → %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -4739,7 +4739,7 @@
         }
       }
     },
-    "Reconciled to %1$@ · %2$@": {
+    "Reconciled to %@ · %@": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -6483,7 +6483,7 @@
         }
       }
     },
-    "You spent %1$@ across %2$lld transactions this week.": {
+    "You spent %@ across %lld transactions this week.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -6543,7 +6543,7 @@
         }
       }
     },
-    "cut %1$lld%% → saves ~%2$@/mo": {
+    "cut %lld%% → saves ~%@/mo": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
@@ -6739,7 +6739,7 @@
       }
     },
     "v": {},
-    "~%1$@/mo · %2$lld": {
+    "~%@/mo · %lld": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
