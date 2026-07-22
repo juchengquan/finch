@@ -3735,16 +3735,6 @@
         }
       }
     },
-    "Never reconciled": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "从未对账"
-          }
-        }
-      }
-    },
     "New Category": {
       "localizations": {
         "zh-Hans": {
