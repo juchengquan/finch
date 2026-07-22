@@ -56,4 +56,20 @@ final class MonthGroupingTests: XCTestCase {
     func test_net_empty_isZero() {
         XCTAssertEqual(MonthGrouping.net([]), 0)
     }
+
+    func test_incomeAndExpense_splitBySign_identityWithNet() {
+        let txns = [tx("1", "2026-09-01", amount: -54.20),
+                    tx("2", "2026-09-02", amount: 3200),
+                    tx("3", "2026-09-03", amount: -145.80),
+                    tx("4", "2026-09-04", amount: 500)]
+        XCTAssertEqual(MonthGrouping.income(txns), 3700, accuracy: 0.001)
+        XCTAssertEqual(MonthGrouping.expense(txns), 200, accuracy: 0.001)   // positive magnitude
+        XCTAssertEqual(MonthGrouping.income(txns) - MonthGrouping.expense(txns),
+                       MonthGrouping.net(txns), accuracy: 0.001)            // in − out == net
+    }
+
+    func test_incomeAndExpense_empty_areZero() {
+        XCTAssertEqual(MonthGrouping.income([]), 0)
+        XCTAssertEqual(MonthGrouping.expense([]), 0)
+    }
 }
