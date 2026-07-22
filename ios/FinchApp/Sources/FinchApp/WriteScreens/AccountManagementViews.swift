@@ -18,7 +18,9 @@ struct ArchivedAccountsView: View {
                 List {
                     ForEach(archived) { a in
                         HStack {
-                            Image(systemName: AccountTypeIcon.icon(for: a.type)).foregroundStyle(.secondary)
+                            Image(systemName: AccountTypeIcon.icon(for: a.type))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28)   // align names/separators across type glyphs
                             Text(a.name ?? "—")
                             Spacer()
                             Button("Unarchive") { unarchive(a) }

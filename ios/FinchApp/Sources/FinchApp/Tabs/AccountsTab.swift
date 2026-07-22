@@ -504,6 +504,11 @@ struct AccountRowView: View {
         HStack {
             Image(systemName: AccountTypeIcon.icon(for: account.type))
                 .foregroundStyle(AccountTypeColor.color(for: account.type))
+                // Fixed width: the type glyphs differ in intrinsic width
+                // (banknote vs building.columns), and without this the name —
+                // and the row separator, which insets to the text's leading
+                // edge — starts at a different x per account type.
+                .frame(width: 28)
             Text(account.name ?? "—")
             Spacer()
             Text(store.displayMoney(account.balance, from: account.currency))

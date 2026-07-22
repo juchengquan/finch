@@ -13,6 +13,13 @@
 //     -localizationPath /tmp/finch-loc -exportLanguage zh-Hans
 //   bun run scripts/xliff-keys.ts > scripts/extracted-keys.json
 //   bun run scripts/build-xcstrings.ts
+//
+// REMOVING a UI string? The export can't see deletions — it emits the union of
+// source strings AND existing catalog entries, so a dead key round-trips
+// through the catalog forever. Delete it from extracted-keys.json by hand and
+// re-run this script (the rebuilt catalog then drops it, which also removes it
+// from future exports). Keep extracted-keys.json in JSON.stringify(_, null, 2)
+// format — python's json escapes non-ASCII and churns the whole file.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
