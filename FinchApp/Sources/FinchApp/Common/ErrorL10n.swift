@@ -2,7 +2,8 @@ import Foundation
 
 /// Chinese (zh) translations for I18nError codes (runtime-data path). i18nMessage
 /// uses these when the device language is zh; codes without an entry fall back to
-/// the English `I18nError.message`. Covers all 79 engine codes. Static UI strings
+/// the English `I18nError.message`. Covers the 79 engine codes plus app-raised
+/// codes (e.g. `error.scheduled.nothingToPost`). Static UI strings
 /// are localized separately by the String Catalog (Resources/Localizable.xcstrings).
 enum ErrorL10n {
     static let zh: [String: String] = [
