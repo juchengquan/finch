@@ -1,12 +1,14 @@
 import SwiftUI
 import FinchCore
 
-/// Account drill-in: name + balance in the nav-bar title (visible while
-/// scrolled), a type/reconcile card, holdings (investment accounts), and the
-/// account's transactions — searchable, month-sectioned behind the shared
-/// group-by-month toggle, pending pinned on top. Edit/reconcile/archive/delete
-/// via the toolbar. Re-resolves the account from the store by id so edits
-/// reflect live; pops when the account is archived or deleted.
+/// Account drill-in: name + balance (+ reconcile seal) in the nav-bar title —
+/// always visible while scrolled — then straight into holdings (investment
+/// accounts) and the account's transactions: searchable, month-sectioned
+/// behind the shared group-by-month toggle, pending pinned on top. No header
+/// cards — the type lives in the Edit sheet, the reconcile date in the
+/// Reconcile sheet. Edit/reconcile/archive/delete via the toolbar.
+/// Re-resolves the account from the store by id so edits reflect live; pops
+/// when the account is archived or deleted.
 struct AccountDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @Environment(\.dismiss) private var dismiss
@@ -33,7 +35,6 @@ struct AccountDetailView: View {
         Group {
             if let account {
                 List {
-                    reconcileSection(account)
                     holdingsSection(account)
                     transactionsSection(account)
                 }
@@ -46,13 +47,22 @@ struct AccountDetailView: View {
                 .searchable(text: $searchQuery, prompt: "Search transactions")
                 #endif
                 .toolbar {
-                    // Name over balance — the balance stays visible while the
-                    // header card is scrolled away. Privacy-aware via displayMoney.
+                    // Name over balance — always visible while scrolled;
+                    // privacy-aware via displayMoney. The reconcile seal sits
+                    // beside the balance (same glyph/colors as the Accounts
+                    // list rows); the absolute date lives in the Reconcile
+                    // sheet, where you'd act on it.
                     ToolbarItem(placement: .principal) {
                         VStack(spacing: 0) {
                             Text(account.name ?? "—").font(.headline)
-                            Text(store.displayMoney(account.balance, from: account.currency))
-                                .font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                Text(store.displayMoney(account.balance, from: account.currency))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if let seal = titleSeal(account) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.caption2).foregroundStyle(seal)
+                                }
+                            }
                         }
                     }
                     ToolbarItem(placement: .primaryAction) {
@@ -104,46 +114,15 @@ struct AccountDetailView: View {
         }
     }
 
-    // The card appears only once the account HAS been reconciled (a "Never
-    // reconciled" row said nothing actionable, and the type row is gone too —
-    // name/balance live in the title, the type in the Edit sheet). Shows the
-    // absolute statement date (that's all the engine stores — no time of
-    // day); color carries fresh vs overdue per the user's reminder cutoff
-    // (Settings › Appearance › Accounts). Hoisting the `.never` check here
-    // keeps SwiftUI from rendering an empty first card.
-    @ViewBuilder private func reconcileSection(_ a: AccountRow) -> some View {
-        let status = Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday,
-                                               staleDays: ReconcileReminder.staleDays(reconcileStaleDays))
-        if case .never = status {
-        } else {
-            Section { reconcileBadge(a, status) }
+    /// Seal color beside the title balance — same meaning as the Accounts
+    /// list rows (green fresh / orange overdue / nil never).
+    private func titleSeal(_ a: AccountRow) -> Color? {
+        switch Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday,
+                                         staleDays: ReconcileReminder.staleDays(reconcileStaleDays)) {
+        case .never: return nil
+        case .fresh: return .green
+        case .stale: return .orange
         }
-    }
-
-    @ViewBuilder private func reconcileBadge(_ a: AccountRow, _ status: ReconcileStatus) -> some View {
-        Group {
-            let date = reconciledOnLabel(a.lastReconciledAt)
-            HStack(spacing: 6) {
-                switch status {
-                case .never:
-                    EmptyView()
-                case .fresh:
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
-                    Text("Reconciled on \(date)").foregroundStyle(.green)
-                case .stale:
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.orange)
-                    Text("Reconciled on \(date)").foregroundStyle(.orange)
-                }
-                Spacer(minLength: 0)
-            }
-            .font(.caption)
-        }
-    }
-
-    /// "2026-06-07" → "Jun 7, 2026" (device locale); falls back to the raw string.
-    private func reconciledOnLabel(_ iso: String?) -> String {
-        guard let iso, let d = AppDate.isoDay.date(from: String(iso.prefix(10))) else { return iso ?? "—" }
-        return d.formatted(date: .abbreviated, time: .omitted)
     }
 
     @ViewBuilder private func holdingsSection(_ a: AccountRow) -> some View {

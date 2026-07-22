@@ -681,5 +681,6 @@
   "Reconciled on %@": "已于 %@ 对账",
   "Reconciled accounts show an orange badge once the last reconcile is older than this. Off keeps them green forever.": "当上次对账早于该时长时，已对账账户会显示橙色标记。选择「关闭」则始终保持绿色。",
   "Reconciled": "已对账",
-  "Reconcile overdue": "对账已逾期"
+  "Reconcile overdue": "对账已逾期",
+  "Last reconciled on %@": "上次对账：%@"
 }
