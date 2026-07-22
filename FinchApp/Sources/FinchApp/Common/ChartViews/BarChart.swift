@@ -8,6 +8,9 @@ struct BarChart: View {
     let yLabel: String
     /// Optional dashed horizontal rule (e.g. a budget cap) drawn across the bars.
     var referenceLine: Double? = nil
+    /// Tap a bar (its x-band) → the bar's index in `data`. Requires unique
+    /// labels — equal labels share one band and resolve to the first. nil = inert.
+    var onBarTap: ((Int) -> Void)? = nil
 
     struct DataPoint: Identifiable, Equatable {
         let id = UUID()
@@ -28,6 +31,21 @@ struct BarChart: View {
                 RuleMark(y: .value(yLabel, referenceLine))
                     .foregroundStyle(.secondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            }
+        }
+        .chartOverlay { proxy in
+            if let onBarTap {
+                GeometryReader { geo in
+                    Rectangle().fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            guard let plotFrame = proxy.plotFrame else { return }
+                            let x = location.x - geo[plotFrame].origin.x
+                            guard let label = proxy.value(atX: x, as: String.self),
+                                  let i = data.firstIndex(where: { $0.label == label }) else { return }
+                            onBarTap(i)
+                        }
+                }
             }
         }
     }
