@@ -4195,16 +4195,6 @@
         }
       }
     },
-    "No upcoming items.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无即将到期的项目。"
-          }
-        }
-      }
-    },
     "None": {
       "localizations": {
         "zh-Hans": {

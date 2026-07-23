@@ -96,10 +96,14 @@ struct ScheduledCalendarView: View {
             if occ.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
             else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
         } else {
-            let end = AppDate.civil.date(byAdding: .day, value: 90, to: AppDate.isoDay.date(from: store.wallToday) ?? Date()).map { AppDate.isoDay.string(from: $0) } ?? store.wallToday
-            let up = Array(Selectors.occurrencesInRange(templates, from: store.wallToday, through: end).prefix(20))
-            if up.isEmpty { Text("No upcoming items.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
-            else { ForEach(Array(up.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
+            // No day selected → the ANCHORED month's occurrences, so the rows
+            // always correspond to the cells above (swiping months swaps both,
+            // and past months review with their missed/done badges). The old
+            // "next 20 within 90 days of today" window ignored which month the
+            // grid showed — the list and the calendar could disagree.
+            let occs = byDay.sorted { $0.key < $1.key }.flatMap { $0.value }
+            if occs.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
+            else { ForEach(Array(occs.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
         }
     }
 
