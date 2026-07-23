@@ -30,7 +30,7 @@ struct FieldRow<Content: View, Trailing: View>: View {
                 .font(.body)
                 .foregroundStyle(glyph.tint)
                 .frame(width: 24, alignment: .center)
-                .accessibilityHidden(true)
+                .accessibilityLabel(title)
             Group {
                 if isEmpty {
                     Text(title).foregroundStyle(.secondary)
@@ -39,7 +39,7 @@ struct FieldRow<Content: View, Trailing: View>: View {
                     content.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .accessibilityLabel(title)
+            .accessibilityHidden(isEmpty)
             trailing
         }
     }

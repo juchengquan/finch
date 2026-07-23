@@ -118,7 +118,9 @@ struct ScheduledSheet: View {
                         .labelsHidden()
                     }
                     if frequency == "monthly" {
-                        Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
+                        FieldRow(glyph: .date, title: "Day of month") {
+                            Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
+                        }
                     }
                     if isEdit {
                         FieldRow(glyph: .date, title: "Start") { Text(template?.startDate ?? "—") }
