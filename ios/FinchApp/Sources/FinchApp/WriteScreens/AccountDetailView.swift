@@ -191,9 +191,12 @@ struct AccountDetailView: View {
         }
         if let day = calSelectedDay {
             let dayTx = txns.filter { $0.date == day }
+            // `order` drives the swipe-reset scroll anchor (#614): the display
+            // order of THIS list — the calendar's day drill-in shows dayTx only.
+            let order = dayTx.map(\.id)
             Section {
                 if dayTx.isEmpty { Text("No transactions.").foregroundStyle(.secondary) }
-                else { ForEach(dayTx, id: \.id) { t in txRow(t) } }
+                else { ForEach(dayTx, id: \.id) { t in txRow(t, order: order) } }
             } header: {
                 Text(MonthCashCalendar.pretty(day)).textCase(nil)
             }
@@ -202,9 +205,10 @@ struct AccountDetailView: View {
                              AppDate.civil.component(.year, from: calMonthAnchor),
                              AppDate.civil.component(.month, from: calMonthAnchor))
             let monthTx = txns.filter { $0.date.hasPrefix(key) }
+            let order = monthTx.map(\.id)
             if !monthTx.isEmpty {
                 Section {
-                    ForEach(monthTx, id: \.id) { t in txRow(t) }
+                    ForEach(monthTx, id: \.id) { t in txRow(t, order: order) }
                 } header: {
                     // Minimal month header (label + net). The running-balance
                     // figure the list headers carry is confirmed-rows-only math;
