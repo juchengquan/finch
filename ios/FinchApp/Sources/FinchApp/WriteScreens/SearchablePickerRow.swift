@@ -13,6 +13,7 @@ struct PickerOption: Identifiable, Hashable {
 /// a stray tap.
 struct SearchablePickerRow: View {
     let title: String
+    var glyph: FieldGlyph = .name
     let options: [PickerOption]
     @Binding var selection: String
     @State private var presented = false
@@ -21,10 +22,8 @@ struct SearchablePickerRow: View {
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                Text(selectedName).foregroundStyle(.secondary)
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: selection.isEmpty) {
+                Text(selectedName).foregroundStyle(.primary).lineLimit(1).truncationMode(.tail)
             }
             .contentShape(Rectangle())
         }
