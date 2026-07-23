@@ -26,4 +26,17 @@ final class SwipeResetTests: XCTestCase {
     func test_topVisibleID_emptyOrder_isNil() {
         XCTAssertNil(SwipeReset.topVisibleID(order: [], visible: ["a"]))
     }
+
+    func test_nextSavedAnchor_enabled_keepsCurrentTop() {
+        XCTAssertEqual(SwipeReset.nextSavedAnchor(enabled: true, currentAnchor: "tx5"), "tx5")
+    }
+
+    func test_nextSavedAnchor_gated_dropsAnchor() {
+        // Gated navigation (e.g. multi-select active): no rebuild → drop any anchor so no stale restore.
+        XCTAssertNil(SwipeReset.nextSavedAnchor(enabled: false, currentAnchor: "tx9"))
+    }
+
+    func test_nextSavedAnchor_enabled_nilTop_isNil() {
+        XCTAssertNil(SwipeReset.nextSavedAnchor(enabled: true, currentAnchor: nil))
+    }
 }

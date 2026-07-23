@@ -37,6 +37,13 @@ enum SwipeReset {
     static func topVisibleID(order: [String], visible: Set<String>) -> String? {
         order.first { visible.contains($0) }
     }
+
+    /// The anchor to keep for a pending scroll-restore. When the reset is gated off
+    /// (`enabled == false`) no rebuild happens, so any previously-saved anchor must be dropped —
+    /// otherwise the next return would restore a stale position from an earlier navigation.
+    static func nextSavedAnchor(enabled: Bool, currentAnchor: String?) -> String? {
+        enabled ? currentAnchor : nil
+    }
 }
 
 extension View {
@@ -63,14 +70,17 @@ extension View {
         self
             .id(token.wrappedValue)
             .onDisappear {
-                if enabled {
-                    savedAnchor.wrappedValue = anchor.wrappedValue
-                    token.wrappedValue &+= 1
-                }
+                // Freeze the live top anchor for restore-on-return; a gated navigation drops it
+                // (no rebuild happens, so there is nothing to restore).
+                savedAnchor.wrappedValue = SwipeReset.nextSavedAnchor(enabled: enabled, currentAnchor: anchor.wrappedValue)
+                if enabled { token.wrappedValue &+= 1 }
             }
             .onAppear {
                 if let a = savedAnchor.wrappedValue {
-                    DispatchQueue.main.async { proxy.scrollTo(a, anchor: .top) }
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(a, anchor: .top)
+                        savedAnchor.wrappedValue = nil   // one-shot: consume so a later gated return can't restore stale
+                    }
                 }
             }
     }
