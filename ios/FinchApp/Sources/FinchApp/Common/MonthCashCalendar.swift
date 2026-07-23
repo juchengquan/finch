@@ -100,13 +100,13 @@ struct MonthCashCalendar: View {
             // .borderless so each button is its own tap target inside the List
             // row (default-styled buttons in a List row fire together / not at all).
             Button("Today") { monthAnchor = Self.firstOfMonth(forISO: wallToday); selectedDay = wallToday }
-                .font(.caption)
+                .font(.body)
                 .buttonStyle(.borderless)
             // Prev/next grouped together, to the right of the year-month.
-            HStack(spacing: 16) {
-                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+            HStack(spacing: 18) {
+                Button { step(-1) } label: { Image(systemName: "chevron.left").font(.body.weight(.medium)) }
                     .accessibilityLabel("Previous month").buttonStyle(.borderless)
-                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                Button { step(1) } label: { Image(systemName: "chevron.right").font(.body.weight(.medium)) }
                     .accessibilityLabel("Next month").buttonStyle(.borderless)
             }
         }
