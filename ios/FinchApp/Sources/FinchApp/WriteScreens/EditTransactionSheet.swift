@@ -21,7 +21,7 @@ struct EditTransactionSheet: View {
     enum EditKind: String, CaseIterable, Identifiable {
         case expense, income, refund
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { KindLabel.label(rawValue) }
     }
 
     @State private var merchant: String

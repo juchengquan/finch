@@ -36,7 +36,7 @@ struct AddTransactionSheet: View {
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer, refund, adjust
         var id: String { rawValue }
-        var label: String { self == .adjust ? "Adjust Balance" : rawValue.capitalized }
+        var label: String { KindLabel.label(rawValue) }
         /// SF Symbol for the segment (adjust reuses the engine's "adjustment" icon).
         var iconName: String { TxnKindIcon.icon(for: self == .adjust ? "adjustment" : rawValue) }
     }

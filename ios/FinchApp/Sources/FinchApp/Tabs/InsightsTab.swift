@@ -9,7 +9,11 @@ struct InsightsTab: View {
     @EnvironmentObject private var store: FinchStore
     /// Trends (charts) vs Breakdown (the former Reports page: per-category
     /// monthly spend + CSV export). Mirrors the web Insights view toggle.
-    private enum InsightsMode: String, CaseIterable, Identifiable { case trends = "Trends", breakdown = "Breakdown"; var id: String { rawValue } }
+    private enum InsightsMode: String, CaseIterable, Identifiable {
+        case trends = "Trends", breakdown = "Breakdown"
+        var id: String { rawValue }
+        var title: String { self == .trends ? String(localized: "Trends") : String(localized: "Breakdown") }
+    }
     @State private var view: InsightsMode = .trends
     @State private var rangeMonths = 6   // 3M / 6M / 1Y range switcher
     @AppStorage("finch.insights.layout") private var layout = InsightsLayout.default
@@ -28,7 +32,7 @@ struct InsightsTab: View {
                     ScrollView {
                         LazyVStack(spacing: 16) {   // lazy: off-screen cards (+ their selectors) don't compute until scrolled
                             Picker("View", selection: $view) {
-                                ForEach(InsightsMode.allCases) { Text($0.rawValue).tag($0) }
+                                ForEach(InsightsMode.allCases) { Text($0.title).tag($0) }
                             }
                             .pickerStyle(.segmented)
                             if view == .trends {
