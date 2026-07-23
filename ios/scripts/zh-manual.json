@@ -288,6 +288,8 @@
   "New balance": "新余额",
   "No transactions in this ledger yet.": "此账本暂无交易。",
   "No upcoming items.": "暂无即将到期的项目。",
+  "No transactions.": "无交易。",
+  "Money in · out of this account, transfers included.": "本账户的资金流入 · 流出（含转账）。",
   "None (no link)": "无（不关联）",
   "None (top level)": "无（一级）",
   "Nothing scheduled.": "暂无计划。",

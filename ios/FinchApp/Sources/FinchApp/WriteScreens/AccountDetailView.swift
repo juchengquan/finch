@@ -29,14 +29,30 @@ struct AccountDetailView: View {
     @State private var previewURL: URL?
     @State private var searchQuery = ""
 
+    // Calendar lens (List default): the shared MonthCashCalendar with IN/OUT
+    // semantics — at single-account grain the honest reading is a bank
+    // statement's credits/debits, so transfers count on the side they move
+    // (unlike Activity's wallet-level income/expense, where the two legs of a
+    // transfer appear together). The math is the same sign-split; only the
+    // meaning differs, hence the explanatory footer.
+    private enum ViewMode: String, CaseIterable { case list = "List", calendar = "Calendar" }
+    @State private var viewMode: ViewMode = .list
+    @State private var calMonthAnchor: Date = MonthCashCalendar.firstOfMonth(forISO: nil)
+    @State private var calSelectedDay: String?
+
     private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
 
     var body: some View {
         Group {
             if let account {
                 List {
+                    modePickerRow
                     holdingsSection(account)
-                    transactionsSection(account)
+                    if viewMode == .calendar {
+                        calendarSection(account)
+                    } else {
+                        transactionsSection(account)
+                    }
                 }
                 .errorAlert($errorMessage)
                 .navigationTitle(account.name ?? "Account")
@@ -134,6 +150,60 @@ struct AccountDetailView: View {
                         Text(h.symbol)
                         Spacer()
                         Text(Selectors.holdingValue(h).map { store.displayMoney($0, from: h.currency) } ?? "—")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The List/Calendar toggle as a list row — the shared `ViewModePickerRow`.
+    private var modePickerRow: some View {
+        ViewModePickerRow(selection: $viewMode, options: ViewMode.allCases.map { ($0, $0.rawValue) })
+    }
+
+    /// Calendar lens: daily in/out cells over THIS account's rows (search
+    /// applies, like the list), a tapped day's transactions beneath, and the
+    /// anchored month's rows as the no-selection fallback.
+    @ViewBuilder private func calendarSection(_ a: AccountRow) -> some View {
+        let all = store.transactions(for: a.id)
+        let txns = searchQuery.isEmpty ? all
+            : Selectors.selectTransactions(all, ListOptions(ledgerId: store.activeLedgerId, query: searchQuery))
+        Section {
+            MonthCashCalendar(
+                monthAnchor: $calMonthAnchor, selectedDay: $calSelectedDay,
+                wallToday: store.wallToday,
+                amountsForRange: { from, through in
+                    MonthGrouping.dailyIncomeExpense(txns.filter { $0.date >= from && $0.date <= through })
+                },
+                format: { store.displayExactBase($0) })
+        } footer: {
+            Text("Money in · out of this account, transfers included.")
+        }
+        if let day = calSelectedDay {
+            let dayTx = txns.filter { $0.date == day }
+            Section {
+                if dayTx.isEmpty { Text("No transactions.").foregroundStyle(.secondary) }
+                else { ForEach(dayTx, id: \.id) { t in txRow(t) } }
+            } header: {
+                Text(MonthCashCalendar.pretty(day)).textCase(nil)
+            }
+        } else {
+            let key = String(format: "%04d-%02d",
+                             AppDate.civil.component(.year, from: calMonthAnchor),
+                             AppDate.civil.component(.month, from: calMonthAnchor))
+            let monthTx = txns.filter { $0.date.hasPrefix(key) }
+            if !monthTx.isEmpty {
+                Section {
+                    ForEach(monthTx, id: \.id) { t in txRow(t) }
+                } header: {
+                    // Minimal month header (label + net). The running-balance
+                    // figure the list headers carry is confirmed-rows-only math;
+                    // this fallback includes pending rows, so it stays out.
+                    HStack {
+                        Text(MonthGrouping.label(key)).textCase(nil)
+                        Spacer()
+                        Text(store.displayMoneyBase(MonthGrouping.net(monthTx)))
                             .foregroundStyle(.secondary)
                     }
                 }

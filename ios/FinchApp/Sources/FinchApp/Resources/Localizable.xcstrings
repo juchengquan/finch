@@ -3675,6 +3675,16 @@
         }
       }
     },
+    "Money in · out of this account, transfers included.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本账户的资金流入 · 流出（含转账）。"
+          }
+        }
+      }
+    },
     "Money out": {
       "localizations": {
         "zh-Hans": {
@@ -4171,6 +4181,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂无交易"
+          }
+        }
+      }
+    },
+    "No transactions.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无交易。"
           }
         }
       }
