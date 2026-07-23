@@ -111,7 +111,7 @@ public enum MirrorAlert {
 public enum BackupFrequency: String, CaseIterable, Identifiable, Sendable {
     case hourly, daily, weekly, monthly
     public var id: String { rawValue }
-    public var title: String { rawValue.capitalized }
+    public var title: String { FrequencyLabel.label(rawValue) }
     /// Minimum seconds between automatic backups.
     public var interval: TimeInterval {
         switch self {

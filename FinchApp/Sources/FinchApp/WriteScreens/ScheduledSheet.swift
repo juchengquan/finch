@@ -15,7 +15,7 @@ struct ScheduledSheet: View {
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income, transfer
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { KindLabel.label(rawValue) }
     }
     let frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly", "once"]
 
@@ -111,7 +111,7 @@ struct ScheduledSheet: View {
 
                 Section {
                     Picker("Frequency", selection: $frequency) {
-                        ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
+                        ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
                     }
                     if frequency == "monthly" {
                         Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length

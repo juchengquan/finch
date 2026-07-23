@@ -20,7 +20,7 @@ struct BudgetSheet: View {
     enum Kind: String, CaseIterable, Identifiable {
         case expense, income
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { KindLabel.label(rawValue) }
     }
     let frequencies = ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
 
@@ -172,7 +172,7 @@ struct BudgetSheet: View {
 
         Section {
             Picker("Frequency", selection: $frequency) {
-                ForEach(frequencies, id: \.self) { Text($0.capitalized).tag($0) }
+                ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
             }
             DatePicker("Start date", selection: $startDate, displayedComponents: .date)
         } header: {

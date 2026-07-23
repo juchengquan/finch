@@ -384,7 +384,7 @@ struct ActivityFeedView: View {
     /// The List/Calendar toggle as a list row — the shared `ViewModePickerRow`
     /// (same row the Scheduled tab uses).
     private var modePickerRow: some View {
-        ViewModePickerRow(selection: $viewMode, options: ViewMode.allCases.map { ($0, $0.rawValue) })
+        ViewModePickerRow(selection: $viewMode, options: [(.list, String(localized: "List")), (.calendar, String(localized: "Calendar"))])
     }
 
     /// Below the calendar grid: the selected day's transactions, or the anchored
