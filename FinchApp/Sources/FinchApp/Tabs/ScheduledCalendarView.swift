@@ -52,9 +52,7 @@ struct ScheduledCalendarView: View {
                     amountsForRange: scheduledAmounts,
                     format: { store.displayExactBase($0) })
             }
-            Section {
-                detail(byDay: byDay, posted: posted)
-            }
+            detailSections(byDay: byDay, posted: posted)
         }
         #if os(iOS)
         .listStyle(.insetGrouped)
@@ -84,26 +82,39 @@ struct ScheduledCalendarView: View {
         return out
     }
 
-    @ViewBuilder private func detail(byDay: [String: [(date: String, template: ScheduledTemplate)]], posted: [String: Bool]) -> some View {
+    /// The rows under the grid, as SECTIONS with date-title headers (the same
+    /// `pretty` format either way): the selected day's occurrences, or — no day
+    /// selected — the ANCHORED month's occurrences grouped by day, so the rows
+    /// always correspond to the cells above and past months review with their
+    /// missed/done badges.
+    @ViewBuilder private func detailSections(byDay: [String: [(date: String, template: ScheduledTemplate)]], posted: [String: Bool]) -> some View {
         if let day = selectedDay {
-            HStack {
-                Text(MonthCashCalendar.pretty(day)).font(.headline)
-                Spacer()
-                Button { onAdd(AppDate.isoDay.date(from: day) ?? Date()) } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("Add scheduled on this day")
+            Section {
+                let occ = byDay[day] ?? []
+                if occ.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
+                else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
+            } header: {
+                HStack {
+                    Text(MonthCashCalendar.pretty(day)).textCase(nil)
+                    Spacer()
+                    Button { onAdd(AppDate.isoDay.date(from: day) ?? Date()) } label: { Image(systemName: "plus") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Add scheduled on this day")
+                }
             }
-            let occ = byDay[day] ?? []
-            if occ.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
-            else { ForEach(occ, id: \.template.id) { o in occurrenceRow(o.template, date: day, posted: posted) } }
         } else {
-            // No day selected → the ANCHORED month's occurrences, so the rows
-            // always correspond to the cells above (swiping months swaps both,
-            // and past months review with their missed/done badges). The old
-            // "next 20 within 90 days of today" window ignored which month the
-            // grid showed — the list and the calendar could disagree.
-            let occs = byDay.sorted { $0.key < $1.key }.flatMap { $0.value }
-            if occs.isEmpty { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
-            else { ForEach(Array(occs.enumerated()), id: \.offset) { _, o in occurrenceRow(o.template, date: o.date, posted: posted) } }
+            let days = byDay.sorted { $0.key < $1.key }
+            if days.isEmpty {
+                Section { Text("Nothing scheduled.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
+            } else {
+                ForEach(days, id: \.key) { day, occs in
+                    Section {
+                        ForEach(occs, id: \.template.id) { o in occurrenceRow(o.template, date: o.date, posted: posted) }
+                    } header: {
+                        Text(MonthCashCalendar.pretty(day)).textCase(nil)
+                    }
+                }
+            }
         }
     }
 
@@ -118,7 +129,8 @@ struct ScheduledCalendarView: View {
                 Circle().fill(Color(hex: t.color ?? "") ?? .accentColor).frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(t.name)
-                    Text("\(date) · \(acct?.name ?? "—")").font(.caption2).foregroundStyle(.secondary)
+                    // The date lives in the section title above — caption keeps the account.
+                    Text(acct?.name ?? "—").font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
                 // Badge BEFORE the amount: the amount owns the trailing edge, so
