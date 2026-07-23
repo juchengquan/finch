@@ -76,12 +76,33 @@ struct ActivityFeedView: View {
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
 
+    // Calendar lens (List is the default): a month grid of ACTUAL daily
+    // income/expense over the filtered transactions — tap a day to see its rows.
+    // (The Scheduled tab's calendar is the plan-side counterpart.)
+    private enum ViewMode: String, CaseIterable { case list = "List", calendar = "Calendar" }
+    @State private var viewMode: ViewMode = .list
+    @State private var calMonthAnchor: Date = MonthCashCalendar.firstOfMonth(forISO: nil)
+    @State private var calSelectedDay: String?
+
     var body: some View {
         Group {
             if store.txns.isEmpty {
                 EmptyState(tab: .activity)
             } else {
                 List(selection: selection ?? $kbSel) {
+                    modePickerRow
+                    if viewMode == .calendar {
+                        Section {
+                            MonthCashCalendar(
+                                monthAnchor: $calMonthAnchor, selectedDay: $calSelectedDay,
+                                wallToday: store.wallToday,
+                                amountsForRange: { from, through in
+                                    MonthGrouping.dailyIncomeExpense(filteredTxns().filter { $0.date >= from && $0.date <= through })
+                                },
+                                format: { store.displayExactBase($0) })
+                        }
+                        calendarDetail
+                    } else {
                     savedSearchRow
                     Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -116,16 +137,7 @@ struct ActivityFeedView: View {
                             Section {
                                 ForEach(section.txns) { txn in row(txn) }
                             } header: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack {
-                                        Text(MonthGrouping.label(section.id)).textCase(nil)
-                                        Spacer()
-                                        Text(store.displayMoneyBase(MonthGrouping.net(section.txns)))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
-                                        .font(.caption2).textCase(nil).foregroundStyle(.secondary)
-                                }
+                                monthHeader(section.id, section.txns)
                             }
                         }
                     } else {
@@ -134,6 +146,7 @@ struct ActivityFeedView: View {
                     if hasMore {
                         Button("Load more") { visibleCount += 50 }
                     }
+                    }   // viewMode == .list
                 }
                 #if os(macOS)
                 .onKeyPress(.return) {
@@ -367,6 +380,58 @@ struct ActivityFeedView: View {
     }
     private var pendingCount: Int { store.txns.filter { $0.pending == true }.count }
     private var hasActiveQuery: Bool { !searchQuery.isEmpty || filter.isActive }
+
+    /// The List/Calendar toggle as a list row — the shared `ViewModePickerRow`
+    /// (same row the Scheduled tab uses).
+    private var modePickerRow: some View {
+        ViewModePickerRow(selection: $viewMode, options: ViewMode.allCases.map { ($0, $0.rawValue) })
+    }
+
+    /// Below the calendar grid: the selected day's transactions, or the anchored
+    /// month's when no day is selected — always the same filtered set the grid
+    /// sums, so the cells and the rows can't disagree.
+    @ViewBuilder private var calendarDetail: some View {
+        let all = filteredTxns()
+        if let day = calSelectedDay {
+            let dayTx = all.filter { $0.date == day }
+            Section {
+                if dayTx.isEmpty {
+                    Text("No transactions.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(dayTx) { txn in row(txn) }
+                }
+            } header: {
+                Text(MonthCashCalendar.pretty(day)).textCase(nil)
+            }
+        } else {
+            let key = String(format: "%04d-%02d",
+                             AppDate.civil.component(.year, from: calMonthAnchor),
+                             AppDate.civil.component(.month, from: calMonthAnchor))
+            let monthTx = all.filter { $0.date.hasPrefix(key) }
+            if !monthTx.isEmpty {
+                Section {
+                    ForEach(monthTx) { txn in row(txn) }
+                } header: {
+                    monthHeader(key, monthTx)
+                }
+            }
+        }
+    }
+
+    /// The month section header (wide label + net, "Income · Spent" caption) —
+    /// one markup for the list lens and the calendar's month fallback.
+    private func monthHeader(_ key: String, _ txns: [Tx]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(MonthGrouping.label(key)).textCase(nil)
+                Spacer()
+                Text(store.displayMoneyBase(MonthGrouping.net(txns)))
+                    .foregroundStyle(.secondary)
+            }
+            Text("Income \(store.displayMoneyBase(MonthGrouping.income(txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(txns)))")
+                .font(.caption2).textCase(nil).foregroundStyle(.secondary)
+        }
+    }
 
     @ViewBuilder private var savedSearchRow: some View {
         let saved = savedSearches.all(ledgerId: store.activeLedgerId)
