@@ -74,10 +74,11 @@ struct ScheduledSheet: View {
             Form {
                 Section { TxnTypeToolbar.caption(kind.label) }   // names the toolbar type control above
                 Section {
-                    TextField("Name", text: $name)
-                    HStack {
-                        Text("Amount"); Spacer()
-                        TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    FieldRow(glyph: .name, title: "Name") {
+                        TextField("Name", text: $name)
+                    }
+                    FieldRow(glyph: .amount, title: "Amount") {
+                        TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
                     }
                 } footer: {
                     if !installmentEnabled {
@@ -93,25 +94,28 @@ struct ScheduledSheet: View {
                             LabeledContent("To", value: accountName(accountId))
                         } else {
                             LabeledContent("Account", value: accountName(accountId))
-                            CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
+                            CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId)
                         }
                     } else if kind == .transfer {
-                        SearchablePickerRow(title: "From",
+                        SearchablePickerRow(title: "From", glyph: .fromAccount,
                             options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
-                        SearchablePickerRow(title: "To",
+                        SearchablePickerRow(title: "To", glyph: .toAccount,
                             options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
                     } else {
-                        SearchablePickerRow(title: "Account",
+                        SearchablePickerRow(title: "Account", glyph: .account,
                             options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
-                        CategoryPickerRow(title: "Category", categories: categories, selection: $categoryId)
+                        CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId)
                     }
                 } header: {
                     finchSectionHeader("Account")
                 }
 
                 Section {
-                    Picker("Frequency", selection: $frequency) {
-                        ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
+                    FieldRow(glyph: .frequency, title: "Frequency", showsDefaultTrailing: false) {
+                        Picker("Frequency", selection: $frequency) {
+                            ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
+                        }
+                        .labelsHidden()
                     }
                     if frequency == "monthly" {
                         Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
@@ -119,7 +123,10 @@ struct ScheduledSheet: View {
                     if isEdit {
                         LabeledContent("Start", value: template?.startDate ?? "—")
                     } else {
-                        DatePicker("Start", selection: $startDate, displayedComponents: .date)
+                        FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
+                            DatePicker("Start", selection: $startDate, displayedComponents: .date)
+                                .labelsHidden()
+                        }
                     }
                 } header: {
                     finchSectionHeader("Schedule")
@@ -128,9 +135,8 @@ struct ScheduledSheet: View {
                 Section {
                     Toggle("Installment plan", isOn: $installmentEnabled)
                     if installmentEnabled {
-                        HStack {
-                            Text("Number of payments"); Spacer()
-                            TextField("12", text: $installmentTotal).numericInput($installmentTotal, allowsDecimal: false).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                        FieldRow(glyph: .amount, title: "Number of payments") {
+                            TextField("12", text: $installmentTotal).numericInput($installmentTotal, allowsDecimal: false).keyboardType(.numberPad)
                         }
                     }
                 } header: {
