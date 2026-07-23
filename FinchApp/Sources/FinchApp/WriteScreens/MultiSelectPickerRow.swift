@@ -12,6 +12,7 @@ func multiSelectSummary(names: [String], emptyLabel: String) -> String {
 /// commits it on Confirm; Cancel discards.
 struct MultiSelectPickerRow: View {
     let title: String
+    let glyph: FieldGlyph
     let options: [PickerOption]
     @Binding var selection: Set<String>
     let emptyLabel: String
@@ -23,11 +24,8 @@ struct MultiSelectPickerRow: View {
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Text(summary).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .lineLimit(1).truncationMode(.tail)
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: false) {
+                Text(summary).foregroundStyle(selection.isEmpty ? .secondary : .primary).lineLimit(1).truncationMode(.tail)
             }
             .contentShape(Rectangle())
         }

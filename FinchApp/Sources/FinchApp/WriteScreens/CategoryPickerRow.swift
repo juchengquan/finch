@@ -15,6 +15,7 @@ func splitSummaryText(categoryNames: [String]) -> String? {
 /// Any node (parent or leaf) is selectable; a transaction can sit on a parent.
 struct CategoryPickerRow: View {
     let title: String
+    let glyph: FieldGlyph
     let categories: [CategoryRow]         // kind-filtered rows (sort_order order)
     @Binding var selection: String
     /// Non-nil ⇒ an empty selection ("") is a legal choice shown under this label
@@ -35,33 +36,34 @@ struct CategoryPickerRow: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             Button {
                 if splitSummary != nil { onSplit?() } else { presented = true }
             } label: {
-                HStack {
-                    Text(title).foregroundStyle(.primary)
-                    Text(splitSummary ?? selectedName).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                FieldRow(glyph: glyph, title: LocalizedStringKey(title),
+                         isEmpty: (splitSummary ?? (selection.isEmpty ? nil : selectedName)) == nil,
+                         trailing: {
+                    if let onSplit {
+                        Button { onSplit() } label: {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.body)
+                                .foregroundStyle(splitSummary != nil ? Color.accentColor : Color.secondary)
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(splitSummary == nil && !splitEnabled)
+                        .opacity(splitSummary == nil && !splitEnabled ? 0.4 : 1)   // dim until an amount exists
+                        .accessibilityLabel(splitSummary != nil ? "Edit split" : "Split across categories")
+                    }
+                    FieldRowChevron()
+                }) {
+                    Text(splitSummary ?? selectedName).foregroundStyle(.primary)
                         .lineLimit(1).truncationMode(.tail)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            if let onSplit {
-                Button { onSplit() } label: {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.body)
-                        .foregroundStyle(splitSummary != nil ? Color.accentColor : Color.secondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(splitSummary == nil && !splitEnabled)
-                .opacity(splitSummary == nil && !splitEnabled ? 0.4 : 1)   // dim until an amount exists
-                .accessibilityLabel(splitSummary != nil ? "Edit split" : "Split across categories")
-            }
         }
         .sheet(isPresented: $presented) {
             CategoryPickerSheet(title: title, categories: categories, selection: $selection, noneLabel: noneLabel)

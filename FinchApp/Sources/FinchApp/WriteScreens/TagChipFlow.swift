@@ -9,6 +9,7 @@ import FinchCore
 struct TagField: View {
     let tags: [TagRow]
     @Binding var selected: Set<String>
+    let glyph: FieldGlyph
     @State private var presented = false
 
     /// Selected tags in `tags` order (unknown ids ignored). Pure — unit-tested.
@@ -19,18 +20,11 @@ struct TagField: View {
     var body: some View {
         let chosen = Self.selectedRows(tags: tags, selected: selected)
         Button { presented = true } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Text("Tags").foregroundStyle(.primary)
-                if chosen.isEmpty {
-                    Spacer()
-                    Text("None").foregroundStyle(.secondary)
-                } else {
-                    // Chips fill the space to the right of the label and wrap;
-                    // the row height follows the number of selected tags.
-                    FlowLayout(spacing: 8, rowSpacing: 8) {
-                        ForEach(chosen) { tag in chip(tag.name, tint: Color(hex: tag.color ?? "") ?? .accentColor) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            FieldRow(glyph: glyph, title: "Tags", isEmpty: chosen.isEmpty) {
+                // Chips fill the space to the right of the label and wrap;
+                // the row height follows the number of selected tags.
+                FlowLayout(spacing: 8, rowSpacing: 8) {
+                    ForEach(chosen) { tag in chip(tag.name, tint: Color(hex: tag.color ?? "") ?? .accentColor) }
                 }
             }
             .contentShape(Rectangle())

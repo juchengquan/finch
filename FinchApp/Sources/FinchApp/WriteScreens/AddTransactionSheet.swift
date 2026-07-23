@@ -243,13 +243,20 @@ struct AddTransactionSheet: View {
                 // Adjust Balance is account maintenance — no status/tags/receipt/merchant.
                 if k != .adjust {
                     Section {
-                        Picker("Status", selection: $status) {
-                            Text("Confirmed").tag(Entries.Status.confirmed)
-                            Text("Pending").tag(Entries.Status.pending)
+                        // Status keeps its name on the left and the selection on the
+                        // right (not the placeholder→value treatment of other rows).
+                        FieldRow(glyph: .status, title: "Status", trailing: {
+                            Picker("Status", selection: $status) {
+                                Text("Confirmed").tag(Entries.Status.confirmed)
+                                Text("Pending").tag(Entries.Status.pending)
+                            }
+                            .labelsHidden()
+                        }) {
+                            Text("Status")
                         }
                         // Tags is a single row here (wraps to hold all selected), not its own section.
                         if !store.tags.isEmpty {
-                            TagField(tags: store.tags, selected: $selectedTags)
+                            TagField(tags: store.tags, selected: $selectedTags, glyph: .tags)
                         }
                     }
                 }
@@ -257,15 +264,23 @@ struct AddTransactionSheet: View {
                     Section {
                         #if os(macOS)
                         Button { showingFileImporter = true } label: {
-                            Label(pickedFileURL == nil ? "Add receipt…" : "Receipt selected", systemImage: "paperclip")
+                            FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: pickedFileURL == nil) {
+                                Text(pickedFileURL == nil ? "Add receipt…" : "Receipt selected")
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image, .pdf]) { result in
                             if case .success(let url) = result { pickedFileURL = url }
                         }
                         #else
                         PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                            Label(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected", systemImage: "camera")
+                            FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: pickedPhoto == nil) {
+                                Text(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected")
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         #endif
                     } header: {
                         finchSectionHeader("Receipt")
@@ -283,23 +298,26 @@ struct AddTransactionSheet: View {
 
     @ViewBuilder private func expenseIncomeFields(for k: Kind) -> some View {
         Section {
-            SearchablePickerRow(title: "Account",
+            SearchablePickerRow(title: "Account", glyph: .account,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
             amountField
-            CategoryPickerRow(title: "Category", categories: categories(for: k), selection: $categoryId,
+            CategoryPickerRow(title: "Category", glyph: .category, categories: categories(for: k), selection: $categoryId,
                 splitSummary: splitSummaryText(categoryNames: (pendingSplits ?? []).map { store.categoryName($0.categoryId) ?? "Uncategorized" }),
                 splitEnabled: (DecimalInput.parse(amount) ?? 0) != 0,
                 onSplit: k == .refund ? nil : { showingSplit = true })
-            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .environment(\.locale, AppDate.h24Locale)
+            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .environment(\.locale, AppDate.h24Locale)
+            }
             if k == .refund {
                 Button { showingRefundPicker = true } label: {
-                    HStack {
-                        Text("Refunds")
-                        Spacer()
-                        Text(refundedSummary).foregroundStyle(.secondary)
+                    FieldRow(glyph: .refund, title: "Refunds", isEmpty: refundedTxId == nil) {
+                        Text(refundedSummary)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -307,11 +325,10 @@ struct AddTransactionSheet: View {
     /// Merchant/Source + Note — optional free-text, shown as the LAST section.
     @ViewBuilder private func detailsSection(for k: Kind) -> some View {
         Section {
-            MerchantPickerRow(title: k == .income ? "Source" : "Merchant",
+            MerchantPickerRow(title: "Merchant", glyph: .merchant,
                               counterparties: store.counterparties, merchant: $merchant)
-            HStack {
-                Text("Note"); Spacer()
-                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $note, axis: .vertical)
             }
         } header: {
             finchSectionHeader("Details")
@@ -326,52 +343,53 @@ struct AddTransactionSheet: View {
     /// account-detail sheet). Date-only — `adjustAccountBalance` takes no time.
     @ViewBuilder private var adjustFields: some View {
         Section {
-            SearchablePickerRow(title: "Account",
+            SearchablePickerRow(title: "Account", glyph: .account,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $accountId)
-            HStack {
-                Text("New balance"); Spacer()
-                // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
+            // numbersAndPunctuation allows a leading minus (e.g. a credit-card balance).
+            FieldRow(glyph: .amount, title: "New balance") {
                 TextField("0.00", text: $targetBalance)
                     #if os(iOS)
                     .keyboardType(.numbersAndPunctuation)
                     #endif
-                    .multilineTextAlignment(.trailing)
             }
         } footer: {
             Text("Posts an adjustment for the difference from the account's current balance.")
         }
         Section {
-            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .environment(\.locale, AppDate.h24Locale)
-            HStack {
-                Text("Note"); Spacer()
-                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .environment(\.locale, AppDate.h24Locale)
+            }
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $note, axis: .vertical)
             }
         }
     }
 
     @ViewBuilder private var transferFields: some View {
         Section {
-            SearchablePickerRow(title: "From",
+            SearchablePickerRow(title: "From", glyph: .fromAccount,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $fromAccountId)
-            SearchablePickerRow(title: "To",
+            SearchablePickerRow(title: "To", glyph: .toAccount,
                 options: accounts.map { PickerOption(id: $0.id, name: $0.name ?? "—") }, selection: $toAccountId)
-            // Always TWO amount rows, each in its account's own currency. Same
-            // currency → the To row mirrors From (disabled); cross-currency →
-            // the To row is the independent received amount.
-            transferAmountRow("From amount", text: $amount, currency: currency(of: fromAccountId))
+            // Same currency → one amount row; cross-currency → From + To, the To
+            // row being the independent received amount in the destination's money.
             if transferIsCrossCurrency {
+                transferAmountRow("From amount", text: $amount, currency: currency(of: fromAccountId))
                 transferAmountRow("To amount", text: $received, currency: currency(of: toAccountId))
             } else {
-                transferAmountRow("To amount", text: $amount, currency: currency(of: toAccountId), mirrored: true)
+                transferAmountRow("Amount", text: $amount, currency: currency(of: fromAccountId))
             }
             // Transfer has no Merchant/category, so Date + Note live here (the
             // reorder moved the shared Date/Note section into the line-item path).
-            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .environment(\.locale, AppDate.h24Locale)
-            HStack {
-                Text("Note"); Spacer()
-                TextField("Optional", text: $note, axis: .vertical).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .date, title: "Date", showsDefaultTrailing: false) {
+                DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .environment(\.locale, AppDate.h24Locale)
+            }
+            FieldRow(glyph: .note, title: "Note") {
+                TextField("Note (optional)", text: $note, axis: .vertical)
             }
         }
     }
@@ -379,29 +397,23 @@ struct AddTransactionSheet: View {
     /// Line-item amount row: Amount + the currency menu inline (currency is
     /// ALWAYS visible, even when only one option exists).
     private var amountField: some View {
-        HStack {
-            Text("Amount")
-            Spacer()
-            TextField("0.00", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).numericInput($amount)
+        FieldRow(glyph: .amount, title: "Amount", trailing: {
             Picker("", selection: $currencyCode) {
                 ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
             }
             .pickerStyle(.menu).labelsHidden().fixedSize()
+        }) {
+            TextField("0.00", text: $amount).keyboardType(.decimalPad).numericInput($amount)
         }
     }
 
     /// Transfer amount row: fixed currency label from the leg's account (the
-    /// account owns the currency — no picker). `mirrored` renders the
-    /// same-currency To row: disabled, live-synced to the From field.
-    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String, mirrored: Bool = false) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            TextField("0.00", text: text).numericInput(text)
-                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                .disabled(mirrored)
-                .foregroundStyle(mirrored ? Color.secondary : Color.primary)
+    /// account owns the currency — no picker).
+    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
+        FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
             Text(currency).foregroundStyle(.secondary)
+        }) {
+            TextField("0.00", text: text).numericInput(text).keyboardType(.decimalPad)
         }
     }
 
@@ -496,10 +508,12 @@ struct AddTransactionSheet: View {
                 break
             }
         }
-        if accountId.isEmpty {
-            let preferred = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
-            accountId = preferred ?? accounts.first?.id ?? ""
-        }
+        // Only prefill an account when we can actually deduce one: a duplicate /
+        // scheduled source already set it above, else a `defaultAccountId` handed in
+        // when opened from an account's detail. A generic Add (the global +) leaves
+        // the account empty so the user picks it — same for a transfer's From/To.
+        let preferredAccount = defaultAccountId.flatMap { id in accounts.first { $0.id == id }?.id }
+        if accountId.isEmpty { accountId = preferredAccount ?? "" }
         // Only seed a category from a prefill/duplicate or an explicit
         // defaultCategoryId — a FRESH add starts uncategorized (no default),
         // so the user makes an intentional choice.
@@ -509,8 +523,9 @@ struct AddTransactionSheet: View {
         if categoryId.isEmpty, let id = defaultCategoryId, categories.contains(where: { $0.id == id }) {
             categoryId = id
         }
-        if fromAccountId.isEmpty { fromAccountId = accounts.first?.id ?? "" }
-        if toAccountId.isEmpty { toAccountId = accounts.dropFirst().first?.id ?? accounts.first?.id ?? "" }
+        // Transfer From follows the same deduce-or-empty rule; To can't be deduced
+        // from a single source account, so it stays empty until the user picks it.
+        if fromAccountId.isEmpty { fromAccountId = preferredAccount ?? "" }
         if currencyCode.isEmpty { currencyCode = currency(of: accountId) }
     }
 

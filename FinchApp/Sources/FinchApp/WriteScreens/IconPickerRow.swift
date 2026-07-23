@@ -8,20 +8,14 @@ import SwiftUI
 /// again clears it.
 struct IconPickerRow: View {
     let title: String
+    let glyph: FieldGlyph
     @Binding var selection: String
     @State private var presented = false
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                if selection.isEmpty {
-                    Text("None").foregroundStyle(.secondary)
-                } else {
-                    Image(systemName: CategoryIcon.symbol(for: selection))
-                        .foregroundStyle(.tint)
-                }
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: selection.isEmpty) {
+                Image(systemName: CategoryIcon.symbol(for: selection))
             }
             .contentShape(Rectangle())
         }

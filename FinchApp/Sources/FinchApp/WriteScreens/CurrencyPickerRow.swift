@@ -12,6 +12,7 @@ import FinchCore
 /// so cancelling the ledger sheet leaves nothing behind.
 struct CurrencyPickerRow: View {
     let title: LocalizedStringKey            // "Base currency"
+    let glyph: FieldGlyph
     @Binding var code: String
     /// The effective tracked set — drives both the pinned ordering and the
     /// "will be activated" hint. Passed in so the row stays free of store access.
@@ -26,13 +27,10 @@ struct CurrencyPickerRow: View {
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
+            FieldRow(glyph: glyph, title: title, isEmpty: code.isEmpty) {
                 // String(localized:) so the suffix goes through the catalog (a
                 // String ternary would render verbatim and skip localization).
                 Text(willActivate ? String(localized: "\(code) · will be activated") : code)
-                    .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }

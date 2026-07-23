@@ -106,24 +106,32 @@ struct BudgetSheet: View {
     /// (categories/accounts/tags/merchants) that funds progress. No cycle or rollover.
     @ViewBuilder private var incomeFields: some View {
         Section {
-            TextField("Name", text: $name)
-            HStack {
-                Text("Target"); Spacer()
-                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .name, title: "Name") {
+                TextField("Name", text: $name)
             }
-            Picker("Group", selection: $groupId) {
-                Text("None").tag("")
-                ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
+            FieldRow(glyph: .amount, title: "Target") {
+                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
+            }
+            FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
+                Picker("Group", selection: $groupId) {
+                    Text("None").tag("")
+                    ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
+                }
+                .labelsHidden()
             }
         }
         Section {
-            HStack {
-                Text("Saved so far"); Spacer()
-                TextField("0.00", text: $savedText).numericInput($savedText).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .amount, title: "Saved so far") {
+                TextField("0.00", text: $savedText).numericInput($savedText).keyboardType(.decimalPad)
             }
-            Toggle("Set target date", isOn: $hasTargetDate)
+            FieldRow(glyph: .status, title: "Set target date") {
+                Toggle("Set target date", isOn: $hasTargetDate)
+            }
             if hasTargetDate {
-                DatePicker("Target date", selection: $targetDate, displayedComponents: .date)
+                FieldRow(glyph: .date, title: "Target date", showsDefaultTrailing: false) {
+                    DatePicker("Target date", selection: $targetDate, displayedComponents: .date)
+                        .labelsHidden()
+                }
             }
         } footer: {
             Text("\"Saved so far\" is money set aside before tracking began. Matching transactions add on top of it.")
@@ -131,21 +139,25 @@ struct BudgetSheet: View {
         Section {
             CategoryMultiPickerRow(
                 title: "Categories",
+                glyph: .category,
                 categories: categories,
                 selection: $selectedCategories,
                 emptyLabel: "Any category")
             MultiSelectPickerRow(
                 title: "Accounts",
+                glyph: .account,
                 options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
                 selection: $selectedAccounts,
                 emptyLabel: "Any account")
             MultiSelectPickerRow(
                 title: "Tags",
+                glyph: .tags,
                 options: store.tags.map { PickerOption(id: $0.id, name: $0.name) },
                 selection: $selectedTags,
                 emptyLabel: "Any tag")
             MultiSelectPickerRow(
                 title: "Merchants",
+                glyph: .merchant,
                 options: store.counterparties.map { PickerOption(id: $0.id, name: $0.name) },
                 selection: $selectedCounterparties,
                 emptyLabel: "Any merchant")
@@ -159,22 +171,32 @@ struct BudgetSheet: View {
     /// Expense (spend cap): details, cycle, tracking scope, rollover.
     @ViewBuilder private var expenseFields: some View {
         Section {
-            TextField("Name", text: $name)
-            HStack {
-                Text("Limit"); Spacer()
-                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+            FieldRow(glyph: .name, title: "Name") {
+                TextField("Name", text: $name)
             }
-            Picker("Group", selection: $groupId) {
-                Text("None").tag("")
-                ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
+            FieldRow(glyph: .amount, title: "Limit") {
+                TextField("0.00", text: $amount).numericInput($amount).keyboardType(.decimalPad)
+            }
+            FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
+                Picker("Group", selection: $groupId) {
+                    Text("None").tag("")
+                    ForEach(store.budgetGroups) { Text($0.name).tag($0.id) }
+                }
+                .labelsHidden()
             }
         }
 
         Section {
-            Picker("Frequency", selection: $frequency) {
-                ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
+            FieldRow(glyph: .frequency, title: "Frequency", showsDefaultTrailing: false) {
+                Picker("Frequency", selection: $frequency) {
+                    ForEach(frequencies, id: \.self) { Text(FrequencyLabel.label($0)).tag($0) }
+                }
+                .labelsHidden()
             }
-            DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+            FieldRow(glyph: .date, title: "Start date", showsDefaultTrailing: false) {
+                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                    .labelsHidden()
+            }
         } header: {
             finchSectionHeader("Cycle")
         } footer: {
@@ -186,11 +208,13 @@ struct BudgetSheet: View {
         Section {
             CategoryMultiPickerRow(
                 title: "Categories",
+                glyph: .category,
                 categories: categories,
                 selection: $selectedCategories,
                 emptyLabel: "All categories")
             MultiSelectPickerRow(
                 title: "Accounts",
+                glyph: .account,
                 options: store.accounts.map { PickerOption(id: $0.id, name: $0.name ?? "Account") },
                 selection: $selectedAccounts,
                 emptyLabel: "All accounts")
@@ -201,12 +225,13 @@ struct BudgetSheet: View {
         }
 
         Section {
-            Toggle("Roll over unused budget", isOn: $rollover)
+            FieldRow(glyph: .status, title: "Roll over unused budget") {
+                Toggle("Roll over unused budget", isOn: $rollover)
+            }
             if rollover {
-                HStack {
-                    Text("Cap"); Spacer()
+                FieldRow(glyph: .amount, title: "Cap") {
                     TextField("Optional", text: $rolloverCap).numericInput($rolloverCap)
-                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                        .keyboardType(.decimalPad)
                 }
             }
         } header: {
