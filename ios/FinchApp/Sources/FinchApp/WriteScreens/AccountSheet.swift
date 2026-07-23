@@ -53,31 +53,43 @@ struct AccountSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $name)
-                    Picker("Type", selection: $type) {
-                        ForEach(Self.types, id: \.self) { Text(Self.typeLabel($0)).tag($0) }
+                    FieldRow(glyph: .name, title: "Name") {
+                        TextField("Name", text: $name)
+                    }
+                    FieldRow(glyph: .icon, title: "Type", showsDefaultTrailing: false) {
+                        Picker("Type", selection: $type) {
+                            ForEach(Self.types, id: \.self) { Text(Self.typeLabel($0)).tag($0) }
+                        }
+                        .labelsHidden()
                     }
                     if isEdit {
-                        LabeledContent("Currency", value: currency)   // not editable post-creation
+                        FieldRow(glyph: .currency, title: "Currency") { Text(currency) }   // not editable post-creation
                     } else {
-                        Picker("Currency", selection: $currency) {
-                            ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+                        FieldRow(glyph: .currency, title: "Currency", showsDefaultTrailing: false) {
+                            Picker("Currency", selection: $currency) {
+                                ForEach(currencyOptions, id: \.self) { Text($0).tag($0) }
+                            }
+                            .labelsHidden()
                         }
                     }
-                    Picker("Group", selection: $groupId) {
-                        Text("None").tag("")
-                        ForEach(store.accountGroups) { Text($0.name).tag($0.id) }
+                    FieldRow(glyph: .group, title: "Group", showsDefaultTrailing: false) {
+                        Picker("Group", selection: $groupId) {
+                            Text("None").tag("")
+                            ForEach(store.accountGroups) { Text($0.name).tag($0.id) }
+                        }
+                        .labelsHidden()
                     }
                     if isEdit {
-                        Toggle("Include in net worth", isOn: $includeInNetWorth)
+                        FieldRow(glyph: .status, title: "Include in net worth") {
+                            Toggle("Include in net worth", isOn: $includeInNetWorth)
+                        }
                     }
                 }
 
                 Section {
-                    HStack {
-                        Text("Amount"); Spacer()
+                    FieldRow(glyph: .amount, title: "Amount") {
                         TextField("0.00", text: $openingBalance).numericInput($openingBalance)
-                            .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                            .keyboardType(.decimalPad)
                     }
                 } header: {
                     finchSectionHeader("Opening balance")
@@ -88,12 +100,14 @@ struct AccountSheet: View {
                 }
 
                 Section {
-                    HStack(spacing: 14) {
-                        ForEach(Self.palette, id: \.hex) { swatch in
-                            Circle().fill(swatch.color).frame(width: 26, height: 26)
-                                .overlay(Circle().stroke(Color.primary, lineWidth: colorHex == swatch.hex ? 2.5 : 0))
-                                .onTapGesture { colorHex = (colorHex == swatch.hex ? "" : swatch.hex) }
-                                .accessibilityLabel("Color \(swatch.hex)")
+                    FieldRow(glyph: .color, title: "Color") {
+                        HStack(spacing: 14) {
+                            ForEach(Self.palette, id: \.hex) { swatch in
+                                Circle().fill(swatch.color).frame(width: 26, height: 26)
+                                    .overlay(Circle().stroke(Color.primary, lineWidth: colorHex == swatch.hex ? 2.5 : 0))
+                                    .onTapGesture { colorHex = (colorHex == swatch.hex ? "" : swatch.hex) }
+                                    .accessibilityLabel("Color \(swatch.hex)")
+                            }
                         }
                     }
                 } header: {
