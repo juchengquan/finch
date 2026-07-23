@@ -40,7 +40,6 @@ struct HoldingsView: View {
                             }
                     }
                 }
-                .resetsSwipeOnNavigation()
             }
         }
         .navigationTitle("Holdings")

@@ -46,7 +46,6 @@ struct ExchangeRateHistoryView: View {
                 }
             }
         }
-        .resetsSwipeOnNavigation()
         .navigationTitle(currency)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -173,7 +173,6 @@ struct BudgetsTab: View {
                         .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
             }
-            .resetsSwipeOnNavigation(enabled: selection.wrappedValue == nil)
             #if os(macOS)
             .onDeleteCommand { if let id = selection.wrappedValue, let b = store.budgets.first(where: { $0.id == id }) { delete(b) } }
             #endif
@@ -193,7 +192,6 @@ struct BudgetsTab: View {
                     .contextMenu { leadingActions(budget); Divider(); rowActions(budget) }
                 }
             }
-            .resetsSwipeOnNavigation()
         }
     }
 

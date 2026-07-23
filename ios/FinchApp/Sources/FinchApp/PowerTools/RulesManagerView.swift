@@ -49,7 +49,6 @@ struct RulesManagerView: View {
                 }
             }
         }
-        .resetsSwipeOnNavigation()
         .navigationTitle("Rules")
         // Centered ALERT (window-level) — see ActivityTab's delete alert.
         .alert("Delete rule?", isPresented: Binding(

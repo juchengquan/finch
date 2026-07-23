@@ -11,10 +11,6 @@ struct TagDetailView: View {
     @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var pendingDelete: Tx?   // delete awaiting confirmation
     @State private var errorMessage: String?
-    @State private var swipeToken = 0
-    @State private var visibleTxns: Set<String> = []
-    @State private var scrollAnchor: String?
-    @State private var savedScrollAnchor: String?
 
     private var txns: [Tx] {
         Selectors.tagTransactions(store.txns, tag.id, store.activeLedgerId)
@@ -28,10 +24,8 @@ struct TagDetailView: View {
         Selectors.tagTransactions(store.txns, tag.id, store.activeLedgerId, includePending: true)
             .filter { $0.pending == true }
     }
-    private var displayOrder: [String] { (pendingTxns + txns).map(\.id) }
 
     var body: some View {
-        ScrollViewReader { proxy in
         List {
             Section {
                 LabeledContent("Transactions", value: "\(txns.count)")
@@ -51,9 +45,6 @@ struct TagDetailView: View {
                 }
             }
         }
-        .resetsSwipeAndRestoresScroll(enabled: true, token: $swipeToken,
-                                      anchor: $scrollAnchor, savedAnchor: $savedScrollAnchor,
-                                      proxy: proxy)
         .navigationTitle(tag.name)
         .sheet(item: $editing) { EditTransactionSheet(txn: $0) }
         .sheet(item: $duplicating) { AddTransactionSheet(prefill: $0) }
@@ -68,7 +59,6 @@ struct TagDetailView: View {
             Text("\(tx.merchant) · \(store.displayMoneyBase(tx.amount))")
         }
         .errorAlert($errorMessage)
-        }
     }
 
     private func toggleStatus(_ tx: Tx) {
@@ -89,6 +79,5 @@ struct TagDetailView: View {
                              requestDelete: { pendingDelete = $0 },
                              toggleStatus: { toggleStatus($0) },
                              edit: { editing = $0 })
-            .tracksTopRow(id: tx.id, order: displayOrder, visible: $visibleTxns, anchor: $scrollAnchor)
     }
 }
