@@ -193,7 +193,7 @@ struct AccountDetailView: View {
             let dayTx = txns.filter { $0.date == day }
             Section {
                 if dayTx.isEmpty { Text("No transactions.").foregroundStyle(.secondary) }
-                else { ForEach(dayTx, id: \.id) { t in txRow(t, order: dayTx.map(\.id)) } }
+                else { ForEach(dayTx, id: \.id) { t in txRow(t) } }
             } header: {
                 Text(MonthCashCalendar.pretty(day)).textCase(nil)
             }
@@ -204,7 +204,7 @@ struct AccountDetailView: View {
             let monthTx = txns.filter { $0.date.hasPrefix(key) }
             if !monthTx.isEmpty {
                 Section {
-                    ForEach(monthTx, id: \.id) { t in txRow(t, order: monthTx.map(\.id)) }
+                    ForEach(monthTx, id: \.id) { t in txRow(t) }
                 } header: {
                     // Minimal month header (label + net). The running-balance
                     // figure the list headers carry is confirmed-rows-only math;
