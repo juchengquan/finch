@@ -6,6 +6,7 @@ import FinchCore
 /// multi-select sibling of `CategoryPickerRow`. Staged-then-Confirm.
 struct CategoryMultiPickerRow: View {
     let title: String
+    var glyph: FieldGlyph = .category
     let categories: [CategoryRow]
     @Binding var selection: Set<String>
     let emptyLabel: String
@@ -17,11 +18,8 @@ struct CategoryMultiPickerRow: View {
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Text(summary).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .lineLimit(1).truncationMode(.tail)
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: selection.isEmpty) {
+                Text(summary).foregroundStyle(.primary).lineLimit(1).truncationMode(.tail)
             }
             .contentShape(Rectangle())
         }
