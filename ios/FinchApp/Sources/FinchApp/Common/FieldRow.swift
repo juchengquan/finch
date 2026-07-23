@@ -31,16 +31,17 @@ struct FieldRow<Content: View, Trailing: View>: View {
                 .foregroundStyle(glyph.tint)
                 .frame(width: 24, alignment: .center)
                 .accessibilityHidden(true)
-            if isEmpty {
-                Text(title).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                content.frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if isEmpty {
+                    Text(title).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    content.frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .accessibilityLabel(title)
             trailing
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
     }
 }
 
