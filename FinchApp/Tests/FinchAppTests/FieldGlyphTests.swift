@@ -16,6 +16,9 @@ final class FieldGlyphTests: XCTestCase {
     func testFromAndToAreDistinct() {
         XCTAssertNotEqual(FieldGlyph.fromAccount.symbol, FieldGlyph.toAccount.symbol)
     }
+    func testFrequencyAndDateAreDistinct() {
+        XCTAssertNotEqual(FieldGlyph.frequency.symbol, FieldGlyph.date.symbol)
+    }
     func testEveryCaseHasANonEmptySymbol() {
         let all: [FieldGlyph] = [.account,.fromAccount,.toAccount,.amount,.category,.date,
             .merchant,.note,.status,.tags,.receipt,.refund,.name,.group,.frequency,.currency,.color,.icon]

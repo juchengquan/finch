@@ -24,8 +24,8 @@ struct MultiSelectPickerRow: View {
 
     var body: some View {
         Button { presented = true } label: {
-            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: selection.isEmpty) {
-                Text(summary).foregroundStyle(.primary).lineLimit(1).truncationMode(.tail)
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: false) {
+                Text(summary).foregroundStyle(selection.isEmpty ? .secondary : .primary).lineLimit(1).truncationMode(.tail)
             }
             .contentShape(Rectangle())
         }
