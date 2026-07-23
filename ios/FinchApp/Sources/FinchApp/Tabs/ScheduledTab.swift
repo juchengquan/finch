@@ -196,16 +196,10 @@ struct ScheduledTab: View {
         }
     }
 
-    /// The Calendar/List toggle as a list row (clear background, no separator)
-    /// — shared by both modes so each List can own it as its first row.
+    /// The Calendar/List toggle as a list row — the shared `ViewModePickerRow`,
+    /// so each mode's List can own it as its first row.
     private var modePickerRow: some View {
-        Picker("View", selection: $mode) {
-            ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 4, trailing: 16))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        ViewModePickerRow(selection: $mode, options: Mode.allCases.map { ($0, $0.rawValue) })
     }
 
     /// The list rows' Post (swipe action + context menu) — no occurrence in
