@@ -173,6 +173,7 @@ struct ScheduledTab: View {
                                     }
                                 }
                             }
+                            .resetsSwipeOnNavigation(enabled: selection?.wrappedValue == nil && kbSel == nil)
                             .overlay {
                                 if searchActive && filteredScheduled.isEmpty && filteredDetected.isEmpty {
                                     ContentUnavailableView.search(text: searchQuery)

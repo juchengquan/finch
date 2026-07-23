@@ -54,6 +54,7 @@ struct ScheduledCalendarView: View {
             }
             detailSections(byDay: byDay, posted: posted)
         }
+        .resetsSwipeOnNavigation()
         #if os(iOS)
         .listStyle(.insetGrouped)
         #endif
