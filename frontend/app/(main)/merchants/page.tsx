@@ -16,7 +16,6 @@ import { oklchToHex } from '@/lib/colors';
 import { useFinanceStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
-const CP_LEDGER = 'personal';
 
 interface MerchantData {
   id: string;
@@ -110,7 +109,7 @@ export default function MerchantsPage() {
   const submitCreate = () => {
     const name = newName.trim();
     if (!name) return void toast.error(t('createDialog.createErrorEmpty'));
-    createCounterparty({ name, ledgerId: CP_LEDGER });
+    createCounterparty({ name });
     toast.success(t('createDialog.createdToast'), { description: name });
     setNewName('');
     setCreateOpen(false);
