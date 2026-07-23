@@ -2509,6 +2509,16 @@
         }
       }
     },
+    "Ended": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已结束"
+          }
+        }
+      }
+    },
     "Ends": {
       "localizations": {
         "zh-Hans": {
@@ -4191,16 +4201,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无交易。"
-          }
-        }
-      }
-    },
-    "No upcoming items.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无即将到期的项目。"
           }
         }
       }

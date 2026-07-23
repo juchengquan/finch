@@ -32,11 +32,67 @@ struct ScheduledTab: View {
     /// True while the user has typed a non-empty search.
     private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
     /// Scheduled templates narrowed by the search query (case-insensitive name).
+    /// Search-narrowed templates, ordered by NEXT OCCURRENCE (soonest first,
+    /// name tiebreak) — the projection's raw order is rowid (creation order),
+    /// which means nothing to the user. Sorted on the same computed next-run
+    /// the rows display (the raw next_run column can be stale), so a row never
+    /// sorts against a different date than it prints. Ended templates ("—")
+    /// sink to the bottom. The calendar lens is order-insensitive (it re-sorts
+    /// occurrences by date), so one sorted list serves both modes.
     private var filteredScheduled: [ScheduledTemplate] {
         let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.scheduled }
-        return store.scheduled.filter { $0.name.lowercased().contains(q) }
+        let base = q.isEmpty ? store.scheduled : store.scheduled.filter { $0.name.lowercased().contains(q) }
+        let today = store.wallToday
+        return base.map { (next: scheduledNextRun($0, today: today), t: $0) }
+            .sorted { $0.next != $1.next ? $0.next < $1.next : $0.t.name < $1.t.name }
+            .map(\.t)
     }
+
+    /// Templates grouped by the MONTH of their computed next occurrence
+    /// ("yyyy-MM" keys in the already-sorted order; ended templates under a
+    /// trailing "—" key). Same date-landmark idea as the transactions feed.
+    private var scheduledByMonth: [(key: String, items: [ScheduledTemplate])] {
+        let today = store.wallToday
+        var order: [String] = []
+        var by: [String: [ScheduledTemplate]] = [:]
+        for t in filteredScheduled {
+            let next = scheduledNextRun(t, today: today)
+            let key = next.count >= 7 ? String(next.prefix(7)) : "—"
+            if by[key] == nil { order.append(key) }
+            by[key, default: []].append(t)
+        }
+        return order.map { ($0, by[$0] ?? []) }
+    }
+
+    /// One List row: tap to edit (or select, in three-column mode); swipe
+    /// trailing = Edit + Delete, leading = Post; context menu mirrors both.
+    @ViewBuilder private func scheduledListRow(_ t: ScheduledTemplate) -> some View {
+        Button {
+            if let selection { selection.wrappedValue = t.id } else { editing = t }
+        } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .swipeActions(edge: .trailing) {
+                // Edit declared first → sits at the trailing edge (rightmost); Delete to its left.
+                // Not role: .destructive — the role plays a fake row-removal animation before the confirm.
+                Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
+                Button { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
+            }
+            .swipeActions(edge: .leading) {
+                // Deliberately presents the prefilled sheet rather than posting
+                // instantly (unlike a typical swipe quick-action) — postNow(_:)
+                // must resolve WHICH occurrence "Post" means before it can act,
+                // and that occurrence needs the user's confirmation. Do not
+                // "fix" this back to an instant post.
+                Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
+            }
+            .contextMenu {
+                Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
+                Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
+                Button(role: .destructive) { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }
+            }
+            .tag(t.id)
+    }
+
     /// Detected (not-yet-scheduled) charges narrowed by the same query.
     private var filteredDetected: [RecurringCharge] {
         let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
@@ -72,37 +128,23 @@ struct ScheduledTab: View {
                                 // card lost its top corner rounding once scrolled under
                                 // the pinned search drawer — the rounding belonged to
                                 // the invisible toggle row.
-                                Section {
                                 if filteredScheduled.isEmpty && filteredDetected.isEmpty && !searchActive {
-                                    Text("Tap + or a calendar day to add a recurring transaction.")
-                                        .foregroundStyle(.secondary)
+                                    Section {
+                                        Text("Tap + or a calendar day to add a recurring transaction.")
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
-                                ForEach(filteredScheduled, id: \.id) { t in
-                                    Button {
-                                        if let selection { selection.wrappedValue = t.id } else { editing = t }
-                                    } label: { ScheduledRow(template: t).contentShape(Rectangle()) }
-                                        .buttonStyle(.plain)
-                                        .swipeActions(edge: .trailing) {
-                                            // Edit declared first → sits at the trailing edge (rightmost); Delete to its left.
-                                            // Not role: .destructive — the role plays a fake row-removal animation before the confirm.
-                                            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }.tint(.blue)
-                                            Button { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }.tint(.red)
-                                        }
-                                        .swipeActions(edge: .leading) {
-                                            // Deliberately presents the prefilled sheet rather than posting
-                                            // instantly (unlike a typical swipe quick-action) — postNow(_:)
-                                            // must resolve WHICH occurrence "Post" means before it can act,
-                                            // and that occurrence needs the user's confirmation. Do not
-                                            // "fix" this back to an instant post.
-                                            Button { postNow(t) } label: { Label("Post", systemImage: "checkmark.circle") }.tint(.green)
-                                        }
-                                        .contextMenu {
-                                            Button { editing = t } label: { Label("Edit", systemImage: "pencil") }
-                                            Button { postNow(t) } label: { Label("Post now", systemImage: "checkmark.circle") }
-                                            Button(role: .destructive) { pendingDelete = t } label: { Label("Delete", systemImage: "trash") }
-                                        }
-                                        .tag(t.id)
-                                }
+                                // Month sections over the next-occurrence order —
+                                // the same date landmarks the transactions feed
+                                // uses. Ended templates group under a trailing
+                                // "Ended" section.
+                                ForEach(scheduledByMonth, id: \.key) { group in
+                                    Section {
+                                        ForEach(group.items, id: \.id) { t in scheduledListRow(t) }
+                                    } header: {
+                                        if group.key == "—" { Text("Ended").textCase(nil) }
+                                        else { Text(MonthGrouping.label(group.key)).textCase(nil) }
+                                    }
                                 }
                                 if !filteredDetected.isEmpty {
                                     Section {
