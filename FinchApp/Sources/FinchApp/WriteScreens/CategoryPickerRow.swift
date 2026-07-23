@@ -15,7 +15,7 @@ func splitSummaryText(categoryNames: [String]) -> String? {
 /// Any node (parent or leaf) is selectable; a transaction can sit on a parent.
 struct CategoryPickerRow: View {
     let title: String
-    var glyph: FieldGlyph = .category
+    let glyph: FieldGlyph
     let categories: [CategoryRow]         // kind-filtered rows (sort_order order)
     @Binding var selection: String
     /// Non-nil ⇒ an empty selection ("") is a legal choice shown under this label

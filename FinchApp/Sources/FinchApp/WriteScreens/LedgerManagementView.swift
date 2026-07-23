@@ -124,7 +124,7 @@ struct AddLedgerSheet: View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
-                CurrencyPickerRow(title: "Base currency", code: $base, activated: activated)
+                CurrencyPickerRow(title: "Base currency", glyph: .currency, code: $base, activated: activated)
                 Picker("Start from", selection: $startFrom) {
                     Text("None").tag(String?.none)
                     ForEach(store.ledgers) { l in Text(l.name).tag(Optional(l.id)) }
@@ -208,7 +208,7 @@ struct EditLedgerSheet: View {
             Form {
                 Section {
                     TextField("Name", text: $name)
-                    CurrencyPickerRow(title: "Base currency", code: $base, activated: activated)
+                    CurrencyPickerRow(title: "Base currency", glyph: .currency, code: $base, activated: activated)
                 } footer: {
                     if baseChanged {
                         Text("Changing the base currency re-derives every entry's base amount.")

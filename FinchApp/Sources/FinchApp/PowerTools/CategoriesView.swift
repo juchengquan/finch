@@ -505,9 +505,9 @@ struct CategoryEditSheet: View {
                 // parents, with "None (top level)" as the empty choice.
                 // String(localized:) because both params are plain Strings —
                 // literals would bypass extraction and ship English in zh-Hans.
-                CategoryPickerRow(title: String(localized: "Parent"), categories: parentOptions.map(\.row),
+                CategoryPickerRow(title: String(localized: "Parent"), glyph: .category, categories: parentOptions.map(\.row),
                                   selection: parentBinding, noneLabel: String(localized: "None (top level)"))
-                IconPickerRow(title: "Icon", selection: $icon)
+                IconPickerRow(title: "Icon", glyph: .icon, selection: $icon)
                 Section("Color") {
                     HStack(spacing: 10) {
                         ForEach(CategoryPalette.hexes, id: \.self) { hex in

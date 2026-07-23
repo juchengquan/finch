@@ -6,7 +6,7 @@ import FinchCore
 /// multi-select sibling of `CategoryPickerRow`. Staged-then-Confirm.
 struct CategoryMultiPickerRow: View {
     let title: String
-    var glyph: FieldGlyph = .category
+    let glyph: FieldGlyph
     let categories: [CategoryRow]
     @Binding var selection: Set<String>
     let emptyLabel: String

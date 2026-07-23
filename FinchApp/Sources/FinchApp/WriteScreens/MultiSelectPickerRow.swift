@@ -12,7 +12,7 @@ func multiSelectSummary(names: [String], emptyLabel: String) -> String {
 /// commits it on Confirm; Cancel discards.
 struct MultiSelectPickerRow: View {
     let title: String
-    var glyph: FieldGlyph = .account
+    let glyph: FieldGlyph
     let options: [PickerOption]
     @Binding var selection: Set<String>
     let emptyLabel: String
