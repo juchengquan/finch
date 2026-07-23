@@ -133,7 +133,9 @@ struct ScheduledSheet: View {
                 }
 
                 Section {
-                    Toggle("Installment plan", isOn: $installmentEnabled)
+                    FieldRow(glyph: .status, title: "Installment plan") {
+                        Toggle("Installment plan", isOn: $installmentEnabled)
+                    }
                     if installmentEnabled {
                         FieldRow(glyph: .amount, title: "Number of payments") {
                             TextField("12", text: $installmentTotal).numericInput($installmentTotal, allowsDecimal: false).keyboardType(.numberPad)

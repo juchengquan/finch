@@ -12,7 +12,7 @@ import FinchCore
 /// so cancelling the ledger sheet leaves nothing behind.
 struct CurrencyPickerRow: View {
     let title: LocalizedStringKey            // "Base currency"
-    var glyph: FieldGlyph = .name
+    let glyph: FieldGlyph
     @Binding var code: String
     /// The effective tracked set — drives both the pinned ordering and the
     /// "will be activated" hint. Passed in so the row stays free of store access.

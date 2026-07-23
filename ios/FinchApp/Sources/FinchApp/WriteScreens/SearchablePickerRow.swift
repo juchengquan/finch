@@ -13,7 +13,7 @@ struct PickerOption: Identifiable, Hashable {
 /// a stray tap.
 struct SearchablePickerRow: View {
     let title: String
-    var glyph: FieldGlyph = .name
+    let glyph: FieldGlyph
     let options: [PickerOption]
     @Binding var selection: String
     @State private var presented = false

@@ -9,7 +9,7 @@ import FinchCore
 /// unrecognized merchant).
 struct MerchantPickerRow: View {
     let title: String                     // "Merchant" or "Source"
-    var glyph: FieldGlyph = .name
+    let glyph: FieldGlyph
     let counterparties: [Counterparty]
     @Binding var merchant: String
     @State private var presented = false

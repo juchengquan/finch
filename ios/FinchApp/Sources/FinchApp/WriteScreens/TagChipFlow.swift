@@ -9,7 +9,7 @@ import FinchCore
 struct TagField: View {
     let tags: [TagRow]
     @Binding var selected: Set<String>
-    var glyph: FieldGlyph = .tags
+    let glyph: FieldGlyph
     @State private var presented = false
 
     /// Selected tags in `tags` order (unknown ids ignored). Pure — unit-tested.
