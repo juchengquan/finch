@@ -9,16 +9,15 @@ import FinchCore
 /// unrecognized merchant).
 struct MerchantPickerRow: View {
     let title: String                     // "Merchant" or "Source"
+    var glyph: FieldGlyph = .name
     let counterparties: [Counterparty]
     @Binding var merchant: String
     @State private var presented = false
 
     var body: some View {
         Button { presented = true } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                Text(merchant.isEmpty ? "None" : merchant).foregroundStyle(.secondary)
+            FieldRow(glyph: glyph, title: LocalizedStringKey(title), isEmpty: merchant.isEmpty) {
+                Text(merchant)
             }
             .contentShape(Rectangle())
         }
