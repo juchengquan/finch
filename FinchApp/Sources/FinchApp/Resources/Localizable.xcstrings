@@ -2509,6 +2509,16 @@
         }
       }
     },
+    "Ended": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已结束"
+          }
+        }
+      }
+    },
     "Ends": {
       "localizations": {
         "zh-Hans": {
