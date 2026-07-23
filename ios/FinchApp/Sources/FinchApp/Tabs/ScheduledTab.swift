@@ -241,7 +241,7 @@ struct ScheduledTab: View {
     /// The Calendar/List toggle as a list row — the shared `ViewModePickerRow`,
     /// so each mode's List can own it as its first row.
     private var modePickerRow: some View {
-        ViewModePickerRow(selection: $mode, options: Mode.allCases.map { ($0, $0.rawValue) })
+        ViewModePickerRow(selection: $mode, options: [(.calendar, String(localized: "Calendar")), (.list, String(localized: "List"))])
     }
 
     /// The list rows' Post (swipe action + context menu) — no occurrence in

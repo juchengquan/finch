@@ -159,7 +159,7 @@ struct AccountDetailView: View {
 
     /// The List/Calendar toggle as a list row — the shared `ViewModePickerRow`.
     private var modePickerRow: some View {
-        ViewModePickerRow(selection: $viewMode, options: ViewMode.allCases.map { ($0, $0.rawValue) })
+        ViewModePickerRow(selection: $viewMode, options: [(.list, String(localized: "List")), (.calendar, String(localized: "Calendar"))])
     }
 
     /// Calendar lens: daily in/out cells over THIS account's rows (search
