@@ -32,10 +32,20 @@ struct ScheduledTab: View {
     /// True while the user has typed a non-empty search.
     private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
     /// Scheduled templates narrowed by the search query (case-insensitive name).
+    /// Search-narrowed templates, ordered by NEXT OCCURRENCE (soonest first,
+    /// name tiebreak) — the projection's raw order is rowid (creation order),
+    /// which means nothing to the user. Sorted on the same computed next-run
+    /// the rows display (the raw next_run column can be stale), so a row never
+    /// sorts against a different date than it prints. Ended templates ("—")
+    /// sink to the bottom. The calendar lens is order-insensitive (it re-sorts
+    /// occurrences by date), so one sorted list serves both modes.
     private var filteredScheduled: [ScheduledTemplate] {
         let q = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.scheduled }
-        return store.scheduled.filter { $0.name.lowercased().contains(q) }
+        let base = q.isEmpty ? store.scheduled : store.scheduled.filter { $0.name.lowercased().contains(q) }
+        let today = store.wallToday
+        return base.map { (next: scheduledNextRun($0, today: today), t: $0) }
+            .sorted { $0.next != $1.next ? $0.next < $1.next : $0.t.name < $1.t.name }
+            .map(\.t)
     }
     /// Detected (not-yet-scheduled) charges narrowed by the same query.
     private var filteredDetected: [RecurringCharge] {
