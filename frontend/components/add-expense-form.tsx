@@ -389,7 +389,7 @@ export function AddExpenseForm({
                     // "Create new" returns only a name — create the counterparty
                     // row here so the save-time name resolution has something to
                     // link (the pending flow's server mutation does this itself).
-                    if (res.kind === 'new') createCounterparty({ name: res.name, ledgerId: activeId });
+                    if (res.kind === 'new') createCounterparty({ name: res.name });
                     setMerchant(res.name);
                   })
                 }

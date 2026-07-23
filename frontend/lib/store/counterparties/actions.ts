@@ -8,9 +8,9 @@ import { syncMutation } from '../hydrate';
 import type { SetState, GetState } from '../_shared/types';
 
 export const counterpartyActions = (set: SetState, get: GetState) => ({
-  createCounterparty: (input: { name: string; ledgerId?: string }): string => {
+  createCounterparty: (input: { name: string }): string => {
     const id = newId('cp', { long: false });
-    // Merchants are global — ledgerId (if passed by a caller) is ignored.
+    // Merchants are global — there is no per-ledger scoping (schema 2026-07-20).
     set((s) => ({ counterparties: [...s.counterparties, { id, name: input.name, verified: false }] }));
     syncMutation('createCounterparty', { id, name: input.name });
     return id;
