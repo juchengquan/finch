@@ -28,10 +28,6 @@ struct AccountDetailView: View {
     @State private var duplicating: Tx?   // Duplicate → Add sheet pre-filled
     @State private var previewURL: URL?
     @State private var searchQuery = ""
-    @State private var swipeToken = 0
-    @State private var visibleTxns: Set<String> = []
-    @State private var scrollAnchor: String?
-    @State private var savedScrollAnchor: String?
 
     // Calendar lens (List default): the shared MonthCashCalendar with IN/OUT
     // semantics — at single-account grain the honest reading is a bank
@@ -49,7 +45,6 @@ struct AccountDetailView: View {
     var body: some View {
         Group {
             if let account {
-                ScrollViewReader { proxy in
                 List {
                     modePickerRow
                     holdingsSection(account)
@@ -59,9 +54,6 @@ struct AccountDetailView: View {
                         transactionsSection(account)
                     }
                 }
-                .resetsSwipeAndRestoresScroll(enabled: true, token: $swipeToken,
-                                              anchor: $scrollAnchor, savedAnchor: $savedScrollAnchor,
-                                              proxy: proxy)
                 .errorAlert($errorMessage)
                 .navigationTitle(account.name ?? "Account")
                 .navigationBarTitleDisplayMode(.inline)
@@ -130,7 +122,6 @@ struct AccountDetailView: View {
                     Button("Cancel", role: .cancel) {}
                 } message: { t in
                     Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
-                }
                 }
             } else {
                 // Archived or deleted while open → pop back.
@@ -229,12 +220,9 @@ struct AccountDetailView: View {
             : Selectors.selectTransactions(all, ListOptions(ledgerId: store.activeLedgerId, query: searchQuery))
         let pending = txns.filter { $0.pending == true }
         let confirmed = txns.filter { $0.pending != true }
-        let order: [String] = groupByMonth
-            ? (pending + MonthGrouping.sections(confirmed).flatMap { $0.txns }).map(\.id)
-            : (pending + confirmed).map(\.id)
         if !pending.isEmpty {
             Section("To confirm (\(pending.count))") {
-                ForEach(pending, id: \.id) { t in txRow(t, order: order) }
+                ForEach(pending, id: \.id) { t in txRow(t) }
             }
         }
         if confirmed.isEmpty {
@@ -245,7 +233,7 @@ struct AccountDetailView: View {
         } else if groupByMonth {
             ForEach(MonthGrouping.sections(confirmed)) { section in
                 Section {
-                    ForEach(section.txns, id: \.id) { t in txRow(t, order: order) }
+                    ForEach(section.txns, id: \.id) { t in txRow(t) }
                 } header: {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -267,14 +255,14 @@ struct AccountDetailView: View {
             }
         } else {
             Section("Transactions") {
-                ForEach(confirmed, id: \.id) { t in txRow(t, order: order) }
+                ForEach(confirmed, id: \.id) { t in txRow(t) }
             }
         }
     }
 
     // Same behavior as the Activity feed: tap opens the editor; swipe / context
     // menu give delete + confirm + receipt preview. Reuses the feed's `TxRow`.
-    @ViewBuilder private func txRow(_ t: Tx, order: [String]) -> some View {
+    @ViewBuilder private func txRow(_ t: Tx) -> some View {
         Button { editing = t } label: {
             TxRow(txn: t, onPreviewReceipt: { previewReceipt($0) })
                 .contentShape(Rectangle())
@@ -287,7 +275,6 @@ struct AccountDetailView: View {
                          toggleStatus: { toggleStatusTxn($0) },
                          edit: { editing = $0 },
                          previewReceipt: store.attachments(for: t.id).isEmpty ? nil : { previewReceipt($0) })
-        .tracksTopRow(id: t.id, order: order, visible: $visibleTxns, anchor: $scrollAnchor)
     }
 
     private func previewReceipt(_ txn: Tx) {

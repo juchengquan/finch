@@ -45,7 +45,6 @@ struct TagsView: View {
                 ForEach(rows) { tag in row(tag, counts) }
             }
         }
-        .resetsSwipeOnNavigation(enabled: !isSelecting)
         .modifier(SearchableModifier(text: $search))
         .navigationTitle("Tags")
         .errorAlert($errorMessage)

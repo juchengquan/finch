@@ -117,7 +117,6 @@ struct SettingsBackupsView: View {
                 }
             }
         }
-        .resetsSwipeOnNavigation()
         // Older builds allowed counts up to 50 — snap a stored value into the wheel's range.
         .onAppear { retention = min(max(retention, AutoBackupManager.retentionRange.lowerBound), AutoBackupManager.retentionRange.upperBound) }
         .onChange(of: retention) { _, _ in backups.pruneNow() }

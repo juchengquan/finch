@@ -193,7 +193,6 @@ struct AccountsTab: View {
                         .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
-            .resetsSwipeOnNavigation(enabled: selection.wrappedValue == nil)
             #if os(macOS)
             .onDeleteCommand { if let id = selection.wrappedValue, let a = store.accounts.first(where: { $0.id == id }) { pendingDelete = a } }
             #endif
@@ -213,7 +212,6 @@ struct AccountsTab: View {
                     .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
             }
-            .resetsSwipeOnNavigation()
         }
     }
 
