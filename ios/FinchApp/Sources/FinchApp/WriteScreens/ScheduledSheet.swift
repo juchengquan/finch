@@ -90,10 +90,10 @@ struct ScheduledSheet: View {
                     if isEdit {
                         // account / from / to are not patchable — show them read-only.
                         if kind == .transfer {
-                            LabeledContent("From", value: accountName(fromAccountId))
-                            LabeledContent("To", value: accountName(accountId))
+                            FieldRow(glyph: .fromAccount, title: "From") { Text(accountName(fromAccountId)) }
+                            FieldRow(glyph: .toAccount, title: "To") { Text(accountName(accountId)) }
                         } else {
-                            LabeledContent("Account", value: accountName(accountId))
+                            FieldRow(glyph: .account, title: "Account") { Text(accountName(accountId)) }
                             CategoryPickerRow(title: "Category", glyph: .category, categories: categories, selection: $categoryId)
                         }
                     } else if kind == .transfer {
@@ -121,7 +121,7 @@ struct ScheduledSheet: View {
                         Stepper("Day of month: \(dayOfMonth)", value: $dayOfMonth, in: 1...31)   // matches web (1–31); engine clamps to month length
                     }
                     if isEdit {
-                        LabeledContent("Start", value: template?.startDate ?? "—")
+                        FieldRow(glyph: .date, title: "Start") { Text(template?.startDate ?? "—") }
                     } else {
                         FieldRow(glyph: .date, title: "Start", showsDefaultTrailing: false) {
                             DatePicker("Start", selection: $startDate, displayedComponents: .date)
