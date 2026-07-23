@@ -158,8 +158,12 @@ struct EditTransactionSheet: View {
                     // immutable in updateTransfer → read-only; no Category row for
                     // transfers.
                     Section {
-                        LabeledContent("From", value: accountName(legs.from.account))
-                        LabeledContent("To", value: accountName(legs.to.account))
+                        FieldRow(glyph: .fromAccount, title: "From") {
+                            Text(accountName(legs.from.account))
+                        }
+                        FieldRow(glyph: .toAccount, title: "To") {
+                            Text(accountName(legs.to.account))
+                        }
                         // Always TWO amount rows, each in its leg's own currency.
                         // Same currency → the To row mirrors From (disabled);
                         // cross-currency → independent To amount.
@@ -255,7 +259,7 @@ struct EditTransactionSheet: View {
                     }
                     #if os(macOS)
                     Button { showingFileImporter = true } label: {
-                        FieldRow(glyph: .receipt, title: "Receipt", isEmpty: true) {
+                        FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: true) {
                             Text("Add receipt…")
                         }
                         .contentShape(Rectangle())
@@ -266,7 +270,7 @@ struct EditTransactionSheet: View {
                     }
                     #else
                     PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                        FieldRow(glyph: .receipt, title: "Receipt", isEmpty: pickedPhoto == nil) {
+                        FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: pickedPhoto == nil) {
                             Text("Add receipt photo")
                         }
                         .contentShape(Rectangle())

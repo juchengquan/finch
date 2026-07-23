@@ -260,7 +260,7 @@ struct AddTransactionSheet: View {
                     Section {
                         #if os(macOS)
                         Button { showingFileImporter = true } label: {
-                            FieldRow(glyph: .receipt, title: "Receipt", isEmpty: pickedFileURL == nil) {
+                            FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: pickedFileURL == nil) {
                                 Text(pickedFileURL == nil ? "Add receipt…" : "Receipt selected")
                             }
                             .contentShape(Rectangle())
@@ -271,7 +271,7 @@ struct AddTransactionSheet: View {
                         }
                         #else
                         PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                            FieldRow(glyph: .receipt, title: "Receipt", isEmpty: pickedPhoto == nil) {
+                            FieldRow(glyph: .receipt, title: "Add receipt", isEmpty: pickedPhoto == nil) {
                                 Text(pickedPhoto == nil ? "Add receipt photo" : "Receipt photo selected")
                             }
                             .contentShape(Rectangle())
