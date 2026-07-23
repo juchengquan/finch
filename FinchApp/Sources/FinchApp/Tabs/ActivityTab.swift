@@ -75,6 +75,12 @@ struct ActivityFeedView: View {
     @State private var filteredCount = 0
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
+    @State private var swipeToken = 0
+    @State private var visibleTxns: Set<String> = []
+    @State private var scrollAnchor: String?
+    @State private var savedScrollAnchor: String?
+
+    private var displayOrder: [String] { (pendingTxns + sections.flatMap { $0.txns }).map(\.id) }
 
     // Calendar lens (List is the default): a month grid of ACTUAL daily
     // income/expense over the filtered transactions — tap a day to see its rows.
@@ -89,6 +95,7 @@ struct ActivityFeedView: View {
             if store.txns.isEmpty {
                 EmptyState(tab: .activity)
             } else {
+                ScrollViewReader { proxy in
                 List(selection: selection ?? $kbSel) {
                     modePickerRow
                     if viewMode == .calendar {
@@ -148,6 +155,10 @@ struct ActivityFeedView: View {
                     }
                     }   // viewMode == .list
                 }
+                .resetsSwipeAndRestoresScroll(
+                    enabled: !isSelecting && selection?.wrappedValue == nil && kbSel == nil,
+                    token: $swipeToken, anchor: $scrollAnchor,
+                    savedAnchor: $savedScrollAnchor, proxy: proxy)
                 #if os(macOS)
                 .onKeyPress(.return) {
                     // In three-column selection mode the selection already drives
@@ -157,6 +168,7 @@ struct ActivityFeedView: View {
                     return .ignored
                 }
                 #endif
+                }
             }
         }
         #if os(iOS)
@@ -352,6 +364,7 @@ struct ActivityFeedView: View {
                          edit: { editing = $0 },
                          previewReceipt: store.attachments(for: txn.id).isEmpty ? nil : { previewReceipt($0) })
         .tag(txn.id)
+        .tracksTopRow(id: txn.id, order: displayOrder, visible: $visibleTxns, anchor: $scrollAnchor)
     }
 
     private func delete(_ txn: Tx) {
