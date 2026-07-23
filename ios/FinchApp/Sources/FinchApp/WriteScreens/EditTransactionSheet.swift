@@ -110,16 +110,12 @@ struct EditTransactionSheet: View {
         store.accounts.first { $0.id == id }?.name ?? "—"
     }
     /// Transfer amount row: fixed currency label from the leg (accounts own
-    /// their currency — no picker). `mirrored` = same-currency To row: disabled,
-    /// live-synced to the From field.
-    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String, mirrored: Bool = false) -> some View {
+    /// their currency — no picker).
+    private func transferAmountRow(_ label: String, text: Binding<String>, currency: String) -> some View {
         FieldRow(glyph: .amount, title: LocalizedStringKey(label), trailing: {
             Text(currency).foregroundStyle(.secondary)
         }) {
-            TextField("0.00", text: text).numericInput(text)
-                .keyboardType(.decimalPad)
-                .disabled(mirrored)
-                .foregroundStyle(mirrored ? Color.secondary : Color.primary)
+            TextField("0.00", text: text).numericInput(text).keyboardType(.decimalPad)
         }
     }
 
@@ -139,7 +135,7 @@ struct EditTransactionSheet: View {
                         // exposed Note via this shared top section — keep that.
                         if transferLegs != nil {
                             FieldRow(glyph: .note, title: "Note") {
-                                TextField("Optional", text: $note, axis: .vertical)
+                                TextField("Note (optional)", text: $note, axis: .vertical)
                             }
                         }
                     }
@@ -164,15 +160,13 @@ struct EditTransactionSheet: View {
                         FieldRow(glyph: .toAccount, title: "To") {
                             Text(accountName(legs.to.account))
                         }
-                        // Always TWO amount rows, each in its leg's own currency.
-                        // Same currency → the To row mirrors From (disabled);
-                        // cross-currency → independent To amount.
-                        transferAmountRow("From amount", text: $fromAmountText,
-                                          currency: legs.from.currency ?? "")
+                        // Same currency → one amount row; cross-currency → From + To.
                         if transferSameCurrency {
-                            transferAmountRow("To amount", text: $fromAmountText,
-                                              currency: legs.to.currency ?? "", mirrored: true)
+                            transferAmountRow("Amount", text: $fromAmountText,
+                                              currency: legs.from.currency ?? "")
                         } else {
+                            transferAmountRow("From amount", text: $fromAmountText,
+                                              currency: legs.from.currency ?? "")
                             transferAmountRow("To amount", text: $toAmountText,
                                               currency: legs.to.currency ?? "")
                         }
@@ -224,12 +218,15 @@ struct EditTransactionSheet: View {
                 }
                 // Status directly after the primary/split rows (matches the Add sheet).
                 Section {
-                    FieldRow(glyph: .status, title: "Status", showsDefaultTrailing: false) {
+                    // Status keeps its name on the left and the selection on the right.
+                    FieldRow(glyph: .status, title: "Status", trailing: {
                         Picker("Status", selection: $status) {
                             Text("Confirmed").tag(Entries.Status.confirmed)
                             Text("Pending").tag(Entries.Status.pending)
                         }
                         .labelsHidden()
+                    }) {
+                        Text("Status")
                     }
                     // Tags is a single row here (wraps to hold all selected), not its own section.
                     if !store.tags.isEmpty {
@@ -283,10 +280,10 @@ struct EditTransactionSheet: View {
 
                 if txn.kind != "transfer", txn.kind != "adjustment", txn.kind != "opening" {
                     Section {
-                        MerchantPickerRow(title: effectiveKind == "income" ? "Source" : "Merchant", glyph: .merchant,
+                        MerchantPickerRow(title: "Merchant", glyph: .merchant,
                                           counterparties: store.counterparties, merchant: $merchant)
                         FieldRow(glyph: .note, title: "Note") {
-                            TextField("Optional", text: $note, axis: .vertical)
+                            TextField("Note (optional)", text: $note, axis: .vertical)
                         }
                     } header: {
                         finchSectionHeader("Details")
@@ -297,7 +294,7 @@ struct EditTransactionSheet: View {
                 if txn.kind == "adjustment" || txn.kind == "opening" {
                     Section {
                         FieldRow(glyph: .note, title: "Note") {
-                            TextField("Optional", text: $note, axis: .vertical)
+                            TextField("Note (optional)", text: $note, axis: .vertical)
                         }
                     } header: {
                         finchSectionHeader("Details")
