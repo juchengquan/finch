@@ -58,6 +58,7 @@ struct FinchApp: App {
                 }
             }
             .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
+            .modifier(ScrollEdgeArtifactWorkaround())
             .modifier(TextSizeModifier(useSystem: useSystemTextSize, step: textSizeStep))
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
@@ -166,3 +167,25 @@ struct FinchApp: App {
 // for compact width, SplitViewShell for regular. Canonical order: Accounts,
 // Activity, Budgets, Insights, Scheduled, Settings (a future Reports tab slots
 // between Insights and Scheduled).
+
+
+/// Works around an iOS 26 Liquid Glass artifact: on returning from the
+/// background, the ADAPTIVE ("automatic") scroll-edge effect re-samples the
+/// content under the glass chrome and visibly re-converges — ~2-3s of
+/// exaggerated shadows under the nav pills / search field / tab bar on
+/// device (bisected on an iPhone 16 Pro Max; goes away entirely with glass
+/// disabled). Pinning the edge style to `.hard` (a fixed dim, no adaptive
+/// sampling) sidesteps the re-convergence with a near-identical look.
+/// REMOVE once Apple fixes the adaptive path (retest each iOS point release
+/// by app-switching away/back on a scrolled transaction list, on device).
+private struct ScrollEdgeArtifactWorkaround: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.hard, for: .all)
+        } else { content }
+        #else
+        content
+        #endif
+    }
+}
