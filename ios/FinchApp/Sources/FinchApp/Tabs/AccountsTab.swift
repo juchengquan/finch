@@ -12,6 +12,13 @@ import FinchCore
 /// (the iPad/Mac three-column shell) rows are selectable and drive the shell's
 /// detail column. The toolbar / sheets / actions / focus handling are written
 /// once.
+/// A compact drill-in destination shown as a top-level cover (Accounts → these).
+enum DrillTarget: Identifiable, Hashable {
+    case activity
+    case account(String)
+    var id: String { switch self { case .activity: return "activity"; case .account(let a): return "acct-\(a)" } }
+}
+
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
@@ -25,7 +32,6 @@ struct AccountsTab: View {
     @State private var addingGroup = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
-    @State private var path: [String] = []             // compact-mode push stack (account ids)
     @State private var errorMessage: String?
     @State private var searchQuery = ""                // filters account rows by name
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
@@ -33,14 +39,28 @@ struct AccountsTab: View {
     @State private var renameText = ""
     @State private var groupPendingDelete: AccountGroupRow?
     @State private var pendingDelete: AccountRow?       // account awaiting delete confirmation
+    // Compact drill-in target, presented as a top-level cover (see `.fullScreenCover`
+    // below). iOS 26's glass shadows a scrolled list on RESUME only when the list is
+    // a *pushed* (non-root) page; a top-level cover keeps it a root, so the shadow
+    // never forms while the bars stay fully transparent `.soft`. iPad (selection mode)
+    // is unaffected — it uses the split view's detail column.
+    @State private var drill: DrillTarget?
     #if os(iOS)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
     @State private var reorderRows: [ReorderRow] = []
     @State private var expandedReorderGroups: Set<String> = []   // reorder mode: groups start collapsed
     #endif
 
+    /// The compact drill-in cover's content.
+    @ViewBuilder private func drillContent(_ target: DrillTarget) -> some View {
+        switch target {
+        case .activity:            ActivityFeedView()
+        case .account(let id):     AccountDetailView(accountId: id)
+        }
+    }
+
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             listContent
             #if os(iOS)
             .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search accounts")
@@ -78,6 +98,23 @@ struct AccountsTab: View {
             .sheet(item: $reconcileFor) { ReconcileSheet(preselect: $0.id) }
             .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
             .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
+            // Compact drill-in (Activity feed / account detail) as a top-level cover
+            // rather than a push — the only way to keep iOS 26's `.soft` glass from
+            // re-converging into a resume shadow (verified on device: a pushed list
+            // shadows, a top-level one doesn't). Its own NavigationStack so the detail
+            // pages' own sheets/drill-ins still work; a "‹ Accounts" chevron dismisses.
+            #if os(iOS)
+            .fullScreenCover(item: $drill) { target in
+                NavigationStack {
+                    drillContent(target)
+                        .toolbar { ToolbarItem(placement: .topBarLeading) {
+                            Button { drill = nil } label: {
+                                Label("Accounts", systemImage: "chevron.left")
+                            }
+                        } }
+                }
+            }
+            #endif
             .errorAlert($errorMessage)
             // Centered ALERTS, not row-anchored confirmationDialogs: window-level,
             // so they present instantly and survive swipe collapse / cell
@@ -106,7 +143,6 @@ struct AccountsTab: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
             }
-            .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
             .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
@@ -203,7 +239,7 @@ struct AccountsTab: View {
                     // Plain Button (navigates via the path) instead of NavigationLink
                     // so there's no trailing disclosure chevron; contentShape keeps
                     // the whole row tappable.
-                    Button { path.append(account.id) } label: {
+                    Button { drill = .account(account.id) } label: {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -223,11 +259,20 @@ struct AccountsTab: View {
         Section {
             StatusSummaryRow(leadingLabel: "Net worth", leadingValue: store.netWorthDisplay,
                              trailingLabel: "Liabilities", trailingValue: store.liabilitiesDisplay)
-            NavigationLink { ActivityFeedView() } label: {
-                Label("All Transactions", systemImage: "list.bullet")
+            // Compact: open as a top-level cover (no resume shadow). iPad: push into
+            // the split view as before.
+            if selection == nil {
+                Button { drill = .activity } label: {
+                    Label("All Transactions", systemImage: "list.bullet")
+                }
+            } else {
+                NavigationLink { ActivityFeedView() } label: {
+                    Label("All Transactions", systemImage: "list.bullet")
+                }
             }
         }
     }
+
 
     /// True while the user has typed a non-empty account search.
     private var searchActive: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -442,7 +487,7 @@ struct AccountsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { path = [id] }
+        else { drill = .account(id) }
         router.focusedId = nil
     }
 
