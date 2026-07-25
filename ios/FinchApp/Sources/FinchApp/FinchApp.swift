@@ -34,8 +34,65 @@ struct FinchApp: App {
         if UserDefaults.standard.bool(forKey: "openAdd") {
             DeepLinkRouter.shared.showAddTransaction = true
         }
+        // `-resetStore YES` wipes the live DB + App Group scratch before
+        // FinchStore bootstraps so UI tests run hermetically. The XCTest
+        // `isRunningTests` branch in FinchStore only protects *unit-test*
+        // targets — UI tests launch a separate host-app process that does
+        // NOT see XCTestCase, so the host process uses Application Support
+        // and would clobber dev-sim data without an explicit reset. All
+        // removes are `try?`-ignored so a clean install (no prior files)
+        // is fine. DEBUG only — never ships to release.
+        if UserDefaults.standard.bool(forKey: "resetStore") {
+            Self.wipeLiveStateForTesting()
+        }
+        // `-disableNotifications YES` skips the permission prompt AND
+        // NotificationService.refresh() at launch. The demo seed stamps
+        // transactions dated `store.today`, so the planner fires budget
+        // alerts immediately — the system banner blocks the accessibility
+        // tree and breaks UI tests. DEBUG only — never ships to release.
+        if UserDefaults.standard.bool(forKey: "disableNotifications") {
+            Self.disableNotificationsForTesting = true
+        }
         #endif
     }
+
+    #if DEBUG
+    /// In-memory flag the launch task reads to short-circuit notification
+    /// scheduling. Toggled by the `-disableNotifications YES` launch arg in
+    /// `init()`. Reset to `false` between test runs by process restart.
+    private static var disableNotificationsForTesting = false
+    #endif
+
+    #if DEBUG
+    /// Wipe the persistent live DB and the App Group scratch files. Intended
+    /// only for the `-resetStore YES` UI-test launch flag; never call from
+    /// production paths.
+    private static func wipeLiveStateForTesting() {
+        let fm = FileManager.default
+        let dbBase = liveDBURLForTesting().deletingPathExtension()    // "finch"
+        for ext in ["sqlite3", "sqlite3-wal", "sqlite3-shm"] {
+            try? fm.removeItem(at: dbBase.appendingPathExtension(ext))
+        }
+        // AppGroup.containerURL falls back to Application Support when the
+        // entitlement is absent (sim without App Group provisioning), so
+        // removing the same directory again is harmless — but use the
+        // shared AppGroup widget + pending paths so we only nuke files
+        // we actually own.
+        try? fm.removeItem(at: AppGroup.widgetSnapshotURL)
+        try? fm.removeItem(at: AppGroup.containerURL.appendingPathComponent("pending_attachments"))
+    }
+
+    /// Mirror of `FinchStore.liveDBURL` *without* the XCTest temp-dir branch —
+    /// the host app process spawned by UI tests does not see XCTestCase, so
+    /// `isRunningTests` is false and `liveDBURL` already points at
+    /// Application Support. Read it directly here to avoid coupling to
+    /// FinchStore's private bootstrapping.
+    private static func liveDBURLForTesting() -> URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("finch.sqlite3")
+    }
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -76,8 +133,15 @@ struct FinchApp: App {
                 store.isHydrating = false
                 // Phase 6.2: notifications
                 NotificationService.shared.configure(store: store, router: router)
+                #if DEBUG
+                if !Self.disableNotificationsForTesting {
+                    await NotificationService.shared.requestPermissionIfNeeded()
+                    await NotificationService.shared.refresh()
+                }
+                #else
                 await NotificationService.shared.requestPermissionIfNeeded()
                 await NotificationService.shared.refresh()
+                #endif
                 AutoBackupManager.shared.configure(store: store)   // Phase 5
                 ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
                 await CloudKitSyncCoordinator.shared.start()        // Phase 8: row-level sync (scaffold; inert without an iCloud account)
