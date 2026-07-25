@@ -25,7 +25,7 @@ struct AccountsTab: View {
     @State private var addingGroup = false
     @State private var showingArchived = false
     @State private var editing: AccountRow?
-    @State private var path: [String] = []             // compact-mode push stack (account ids)
+    @State private var path: [AppDestination] = [] // compact-mode push stack (account ids)
     @State private var errorMessage: String?
     @State private var searchQuery = ""                // filters account rows by name
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
@@ -106,7 +106,11 @@ struct AccountsTab: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
             }
-            .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
+            .navigationDestination(for: AppDestination.self) { dest in
+                if case .account(let id) = dest {
+                    AccountDetailView(accountId: id)
+                }
+            }
             .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
@@ -203,7 +207,7 @@ struct AccountsTab: View {
                     // Plain Button (navigates via the path) instead of NavigationLink
                     // so there's no trailing disclosure chevron; contentShape keeps
                     // the whole row tappable.
-                    Button { path.append(account.id) } label: {
+                    Button { path.append(.account(id: account.id)) } label: {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -442,7 +446,7 @@ struct AccountsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { path = [id] }
+        else { path = [.account(id: id)] }
         router.focusedId = nil
     }
 

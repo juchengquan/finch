@@ -51,13 +51,9 @@ struct LedgerListView: View {
                     rowContent(ledger).tag(ledger.id)
                 } else {
                     // A view-destination link, NOT NavigationLink(value:) + a
-                    // .navigationDestination(for: String.self): this list is pushed
-                    // onto whichever tab's stack is current (ledgerPush()), and the
-                    // Accounts/Budgets stacks use a typed [String] path — there SwiftUI
-                    // ignores non-root destinations ("Only root-level navigation
-                    // destinations are effective for a navigation stack with a
-                    // homogeneous path"), so a value link would resolve against the
-                    // TAB's String destination and push a blank page.
+                    // A view-based link avoids depending on the parent tab's path type.
+                    // View-based NavigationLinks push directly onto the NavigationStack
+                    // regardless of what type the path binding expects.
                     NavigationLink { LedgerDetailView(ledgerId: ledger.id) } label: { rowContent(ledger) }
                         .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))   // TxRow density
                 }

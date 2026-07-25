@@ -21,7 +21,7 @@ struct BudgetsTab: View {
     @State private var addingGroup = false
     @State private var editing: BudgetRow?
     @State private var quickAddFor: BudgetRow?     // leading swipe → Add sheet, category prefilled
-    @State private var path: [String] = []            // compact-mode push stack (budget ids)
+    @State private var path: [AppDestination] = [] // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
     @State private var searchQuery = ""                // filters budget rows by name
@@ -96,7 +96,11 @@ struct BudgetsTab: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Save") { renameGroup() }
             }
-            .navigationDestination(for: String.self) { BudgetDetailView(budgetId: $0) }
+            .navigationDestination(for: AppDestination.self) { dest in
+                if case .budget(let id) = dest {
+                    BudgetDetailView(budgetId: id)
+                }
+            }
             .onAppear { consumeFocus(); collapsedGroups = BudgetGroupCollapse.collapsed(ledger: store.activeLedgerId) }
             .onChange(of: router.focusedId) { _, _ in consumeFocus() }
             .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = BudgetGroupCollapse.collapsed(ledger: lid) }
@@ -180,10 +184,7 @@ struct BudgetsTab: View {
             List {
                 summarySection
                 groupedSections { budget in
-                    // Plain Button (navigates via the path) instead of NavigationLink
-                    // so there's no trailing disclosure chevron — same convention as
-                    // the Accounts rows; contentShape keeps the whole row tappable.
-                    Button { path.append(budget.id) } label: {
+                    Button { path.append(.budget(id: budget.id)) } label: {
                         BudgetRowView(budget: budget).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -387,7 +388,7 @@ struct BudgetsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.budgets.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { path = [id] }
+        else { path = [.budget(id: id)] }
         router.focusedId = nil
     }
 
