@@ -9,6 +9,13 @@ import FinchCore
 /// (green < 70, yellow 70–90, red > 90) and the "N days left" caption. The web
 /// budget bar is 2-state (over ? destructive : primary) with remaining-amount
 /// text and no day countdown.
+/// Compact drill-in target: presented as a top-level cover so the iOS 26 resume
+/// shadow never forms (a top-level scroll view doesn't re-converge on resume).
+private enum BudgetsDrill: Identifiable {
+    case detail(String)
+    var id: String { switch self { case .detail(let id): return id } }
+}
+
 /// One view, two layouts: with `selection == nil` (compact) budget rows push
 /// `BudgetDetailView`; with a `selection` binding (the iPad/Mac three-column
 /// shell) rows are selectable and drive the shell's detail column.
@@ -21,6 +28,9 @@ struct BudgetsTab: View {
     @State private var addingGroup = false
     @State private var editing: BudgetRow?
     @State private var quickAddFor: BudgetRow?     // leading swipe → Add sheet, category prefilled
+    #if os(iOS)
+    @State private var drill: BudgetsDrill?           // compact-mode drill (cover, not push)
+    #endif
     @State private var path: [String] = []            // compact-mode push stack (budget ids)
     @State private var errorMessage: String?
     @State private var collapsedGroups: Set<String> = []   // loaded per active ledger on appear
@@ -36,7 +46,7 @@ struct BudgetsTab: View {
     #endif
 
     var body: some View {
-        NavigationStack(path: $path) {
+NavigationStack(path: $path) {
             listContent
             #if os(iOS)
             .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search budgets")
@@ -46,8 +56,6 @@ struct BudgetsTab: View {
             .navigationTitle("Budgets")
             .ledgerPush()
             .toolbar {
-                // Reorder is modal: while editing (iOS-only, like editMode itself)
-                // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).
                 #if os(iOS)
                 if editMode.isEditing {
                     ToolbarItem(placement: .topBarLeading) {
@@ -71,8 +79,6 @@ struct BudgetsTab: View {
             .sheet(item: $quickAddFor) { AddTransactionSheet(defaultCategoryId: $0.categoryIds.first) }
             .sheet(isPresented: $addingGroup) { AddGroupSheet() }
             .errorAlert($errorMessage)
-            // Centered ALERTS, not row-anchored confirmationDialogs — see
-            // AccountsTab (window-level survives header-row animations).
             .alert("Delete this budget?", isPresented: Binding(
                 get: { pendingBudgetDelete != nil }, set: { if !$0 { pendingBudgetDelete = nil } }),
                 presenting: pendingBudgetDelete) { b in
@@ -109,6 +115,24 @@ struct BudgetsTab: View {
                 } else {
                     persistReorder()
                     reorderRows = []
+                }
+            }
+            #endif
+            // Compact drill-in: present BudgetDetailView as a cover instead of push —
+            // a top-level scroll view does NOT re-converge its Liquid Glass on resume,
+            // so no shadow forms. iPad/macOS (selection != nil) is unaffected.
+            #if os(iOS)
+            .fullScreenCover(item: $drill) { target in
+                NavigationStack {
+                    BudgetDetailView(budgetId: target.id)
+                        .toolbar { ToolbarItem(placement: .topBarLeading) {
+                            Button { drill = nil } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    Text("Budgets")
+                                }
+                            }
+                        } }
                 }
             }
             #endif
@@ -183,7 +207,10 @@ struct BudgetsTab: View {
                     // Plain Button (navigates via the path) instead of NavigationLink
                     // so there's no trailing disclosure chevron — same convention as
                     // the Accounts rows; contentShape keeps the whole row tappable.
-                    Button { path.append(budget.id) } label: {
+                    Button {
+                        if selection == nil { drill = .detail(budget.id) }
+                        else { path.append(budget.id) }
+                    } label: {
                         BudgetRowView(budget: budget).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -387,8 +414,18 @@ struct BudgetsTab: View {
     private func consumeFocus() {
         guard let id = router.focusedId, store.budgets.contains(where: { $0.id == id }) else { return }
         if let selection { selection.wrappedValue = id }
-        else { path = [id] }
+        else { openBudget(id) }
         router.focusedId = nil
+    }
+
+    /// Compact iOS: present detail as a cover (no resume shadow).
+    /// iPad/macOS: push via NavigationStack path.
+    private func openBudget(_ id: String) {
+        #if os(iOS)
+        drill = .detail(id)
+        #else
+        path = [id]
+        #endif
     }
 
     private func delete(_ budget: BudgetRow) {

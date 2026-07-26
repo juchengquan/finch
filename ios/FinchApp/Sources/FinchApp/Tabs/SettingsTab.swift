@@ -2,6 +2,15 @@ import SwiftUI
 import FinchCore
 import UniformTypeIdentifiers
 
+/// Compact drill-in target: presented as a top-level cover (no resume shadow).
+enum SettingsDrill: String, Identifiable {
+    case appearance, notifications, security
+    case categories, tags
+    case merchants, currencies
+    case backupsSync, powerTools, about
+    var id: String { rawValue }
+}
+
 /// Settings home — grouped drill-in sections: **General** (appearance,
 /// notifications, security), **Ledger** (categories, tags — per-ledger),
 /// **Shared** (merchants, currencies — global, one set across every ledger),
@@ -11,14 +20,13 @@ import UniformTypeIdentifiers
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
+    #if os(iOS)
+    @State private var drill: SettingsDrill?
+    #endif
+
     var body: some View {
-        // A primary tab supplies its own NavigationStack (like Accounts/Insights).
-        // The old MoreTabNavigationStack was a compact-width no-op (it assumed
-        // Settings was *pushed* into an existing stack), which left this tab with
-        // no nav bar — no title, no Ledger corner button, and disabled (grayed)
-        // NavigationLinks.
         NavigationStack {
-            SettingsRootList()
+            SettingsRootList(onDrill: { drill = $0 })
                 .toolbar {
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
@@ -27,48 +35,89 @@ struct SettingsTab: View {
                 }
                 .ledgerPush()
         }
+        // Compact drill-in: present as a cover instead of push.
+        #if os(iOS)
+        .fullScreenCover(item: $drill) { target in
+            NavigationStack {
+                drillContent(target)
+                    .toolbar { ToolbarItem(placement: .topBarLeading) {
+                        Button { drill = nil } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                Text("Settings")
+                            }
+                        }
+                    } }
+            }
+        }
+        #endif
     }
+
+    #if os(iOS)
+    @ViewBuilder private func drillContent(_ target: SettingsDrill) -> some View {
+        switch target {
+        case .appearance:  SettingsAppearanceView()
+        case .notifications: SettingsNotificationsView()
+        case .security:    SettingsSecurityView()
+        case .categories:  CategoriesView()
+        case .tags:        TagsView()
+        case .merchants:   MerchantsView()
+        case .currencies:  CurrenciesView()
+        case .backupsSync: SettingsBackupSyncView()
+        case .powerTools:  SettingsPowerToolsView()
+        case .about:       SettingsAboutView()
+        }
+    }
+    #endif
 }
 
 /// The Settings drill-in list — reused by the iOS `SettingsTab` and the macOS
 /// Preferences window (which supplies its own `NavigationStack`).
 struct SettingsRootList: View {
+    /// Compact iOS: row taps call this closure instead of pushing via NavigationLink.
+    /// Nil on macOS (NavigationLinks work directly).
+    var onDrill: ((SettingsDrill) -> Void)? = nil
+
     var body: some View {
         List {
             Section("General") {
-                NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
-                NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
-                NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
+                drillRow(.appearance)  { SettingsAppearanceView() }  label: { Label("Appearance & Language", systemImage: "paintbrush") }
+                drillRow(.notifications) { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
+                drillRow(.security)    { SettingsSecurityView() }    label: { Label("Security", systemImage: "lock") }
             }
-            // Categories + Tags are PER-LEDGER (each ledger has its own set) —
-            // switching the active ledger changes what these show.
             Section("Ledger") {
-                NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
-                NavigationLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
+                drillRow(.categories)  { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
+                drillRow(.tags)        { TagsView() }       label: { Label("Tags", systemImage: "tag") }
             }
-            // Merchants + Currencies are GLOBAL — one shared catalog / FX-rate set
-            // spanning every ledger — so they live in "Shared", not "Ledger", and
-            // don't change when you switch the active ledger.
             Section("Shared") {
-                NavigationLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
-                NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
+                drillRow(.merchants)   { MerchantsView() }  label: { Label("Merchants", systemImage: "storefront") }
+                drillRow(.currencies)  { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
             }
             Section("Data") {
-                NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
+                drillRow(.backupsSync) { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
             }
-            // "Experimental Labs" (formerly "Power Tools") — power-user / beta
-            // features; holds Rules + the CloudKit sync scaffold. Its own
-            // unlabeled section so it isn't miscategorised under Ledger.
             Section {
-                NavigationLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
+                drillRow(.powerTools)  { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
             }
-            // About absorbs the former Advanced page: version info up top, then
-            // the DB diagnostics / audit / force-import that used to live there.
             Section {
-                NavigationLink { SettingsAboutView() } label: { Label("About", systemImage: "info.circle") }
+                drillRow(.about)       { SettingsAboutView() }    label: { Label("About", systemImage: "info.circle") }
             }
         }
         .navigationTitle("Settings")
+    }
+
+    /// A row that uses the compact drill closure (Button) on iOS, or a standard
+    /// NavigationLink on macOS (where onDrill is nil).
+    @ViewBuilder private func drillRow<Destination: View, RowLabel: View>(
+        _ target: SettingsDrill,
+        @ViewBuilder dest: @escaping () -> Destination,
+        @ViewBuilder label: @escaping () -> RowLabel
+    ) -> some View {
+        if let onDrill {
+            Button { onDrill(target) } label: { label().contentShape(Rectangle()) }
+        } else {
+            NavigationLink(destination: dest, label: label)
+        }
     }
 }
 
