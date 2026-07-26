@@ -39,7 +39,15 @@ struct ScheduledCalendarView: View {
 
     var body: some View {
         let range = monthRange
-        let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: range.start, through: range.end), by: { $0.date })
+        // ONE occurrence expansion covering the carousel's full prev..next
+        // window, shared by the grid's three pages AND the detail sections —
+        // this body previously expanded four times per evaluation (once here,
+        // once per rendered month page), which was the bulk of the calendar's
+        // first-frame cost on tab entry (the "blink").
+        let wide = wideRange
+        let byDayAll = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: wide.start, through: wide.end), by: { $0.date })
+        let byDay = byDayAll.filter { $0.key >= range.start && $0.key <= range.end }
+        let amountsAll = dayAmounts(byDayAll)
         let posted = Selectors.scheduledPostedMap(store.txns)
         return List {
             if let topRow { topRow }
@@ -49,7 +57,7 @@ struct ScheduledCalendarView: View {
                 MonthCashCalendar(
                     monthAnchor: $monthAnchor, selectedDay: $selectedDay,
                     wallToday: store.wallToday,
-                    amountsForRange: scheduledAmounts,
+                    amountsForRange: { from, through in amountsAll.filter { $0.key >= from && $0.key <= through } },
                     format: { store.displayExactBase($0) })
             }
             detailSections(byDay: byDay, posted: posted)
@@ -59,18 +67,32 @@ struct ScheduledCalendarView: View {
         #endif
     }
 
-    /// Per-day SCHEDULED totals for the range — the calendar's plan-only cash
-    /// lines. Template amounts are unsigned magnitudes; `type` carries the
-    /// direction (unlike Tx.amount, which is signed). Transfers move between
-    /// the user's own accounts — neither income nor expense.
-    private func scheduledAmounts(from: String, through: String) -> [String: (income: Double, expense: Double)] {
+    /// The carousel's full window (prev month start … next month end): the
+    /// three rendered pages all draw from one expansion over this range.
+    private var wideRange: (start: String, end: String) {
+        let prev = AppDate.civil.date(byAdding: .month, value: -1, to: monthAnchor) ?? monthAnchor
+        let next = AppDate.civil.date(byAdding: .month, value: 1, to: monthAnchor) ?? monthAnchor
+        let py = AppDate.civil.component(.year, from: prev), pm = AppDate.civil.component(.month, from: prev)
+        let ny = AppDate.civil.component(.year, from: next), nm = AppDate.civil.component(.month, from: next)
+        let nDays = AppDate.civil.range(of: .day, in: .month, for: next)?.count ?? 30
+        return (String(format: "%04d-%02d-01", py, pm), String(format: "%04d-%02d-%02d", ny, nm, nDays))
+    }
+
+    /// Per-day SCHEDULED totals from an already-grouped expansion — the
+    /// calendar's plan-only cash lines. Template amounts are unsigned
+    /// magnitudes; `type` carries the direction (unlike Tx.amount, which is
+    /// signed). Transfers move between the user's own accounts — neither
+    /// income nor expense. Account currencies are dict-looked-up (the old
+    /// per-occurrence `accounts.first` linear scan showed up in the tab-entry
+    /// render cost).
+    private func dayAmounts(_ byDay: [String: [(date: String, template: ScheduledTemplate)]]) -> [String: (income: Double, expense: Double)] {
         var out: [String: (income: Double, expense: Double)] = [:]
-        let byDay = Dictionary(grouping: Selectors.occurrencesInRange(templates, from: from, through: through), by: { $0.date })
+        let currencyById = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, $0.currency) })
         for (d, occs) in byDay {
             var inc = 0.0, exp = 0.0
             for o in occs {
                 guard let amt = o.template.amount else { continue }
-                let base = abs(store.toBase(amt, from: store.accounts.first { $0.id == o.template.accountId }?.currency))
+                let base = abs(store.toBase(amt, from: currencyById[o.template.accountId] ?? nil))
                 switch o.template.type {
                 case "income":  inc += base
                 case "expense": exp += base
