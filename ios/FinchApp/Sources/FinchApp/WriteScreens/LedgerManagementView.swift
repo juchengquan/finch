@@ -50,16 +50,13 @@ struct LedgerListView: View {
                 if selection != nil {
                     rowContent(ledger).tag(ledger.id)
                 } else {
-                    // A view-destination link, NOT NavigationLink(value:) + a
-                    // .navigationDestination(for: String.self): this list is pushed
-                    // onto whichever tab's stack is current (ledgerPush()), and the
-                    // Accounts/Budgets stacks use a typed [String] path — there SwiftUI
-                    // ignores non-root destinations ("Only root-level navigation
-                    // destinations are effective for a navigation stack with a
-                    // homogeneous path"), so a value link would resolve against the
-                    // TAB's String destination and push a blank page.
+                    #if os(iOS)
+                    LedgerPushLink(ledgerId: ledger.id) { rowContent(ledger) }
+                        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
+                    #else
                     NavigationLink { LedgerDetailView(ledgerId: ledger.id) } label: { rowContent(ledger) }
-                        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))   // TxRow density
+                        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
+                    #endif
                 }
             }
             .swipeActions(edge: .trailing) {
@@ -271,3 +268,24 @@ struct EditLedgerSheet: View {
         catch { errorMessage = i18nMessage(error) }
     }
 }
+
+#if os(iOS)
+private struct LedgerPushLink<Label: View>: View {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var gate: BiometricGate
+    let ledgerId: String
+    @ViewBuilder let label: () -> Label
+
+    init(ledgerId: String, @ViewBuilder label: @escaping () -> Label) {
+        self.ledgerId = ledgerId; self.label = label
+    }
+
+    var body: some View {
+        Button {
+            pushViaUIKit(LedgerDetailView(ledgerId: ledgerId), store: store, router: router, gate: gate)
+        } label: { label().contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+    }
+}
+#endif

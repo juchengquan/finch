@@ -24,6 +24,12 @@ private struct MergePair: Identifiable {
 /// deleteCategory).
 struct CategoriesView: View {
     @EnvironmentObject private var store: FinchStore
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #if os(iOS)
+    @EnvironmentObject private var gate: BiometricGate
+    #endif
+    #endif
     @State private var kind: CategoryKind = .expense
     @State private var isReordering = false
     @State private var expanded: Set<String> = []
@@ -78,11 +84,19 @@ struct CategoriesView: View {
         .navigationTitle("Categories")
         .errorAlert($errorMessage)
         .toolbar { toolbarContent }
+        #if os(iOS)
+        .onChange(of: selectedCategoryId) { _, id in
+            guard let id, let c = store.pickableCategories.first(where: { $0.id == id }) else { return }
+            pushViaUIKit(CategoryDetailView(category: c), store: store, router: router, gate: gate)
+            selectedCategoryId = nil
+        }
+        #else
         .navigationDestination(item: $selectedCategoryId) { id in
             if let c = store.pickableCategories.first(where: { $0.id == id }) {
                 CategoryDetailView(category: c)
             }
         }
+        #endif
         // Present the keep-name alert only AFTER the picker sheet has fully
         // dismissed (onDismiss) — chaining dismiss + present in one transaction can
         // drop the second presentation on some iOS versions.

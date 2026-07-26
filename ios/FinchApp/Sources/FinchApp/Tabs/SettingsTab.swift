@@ -12,12 +12,8 @@ import UniformTypeIdentifiers
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
     var body: some View {
-        // A primary tab supplies its own NavigationStack (like Accounts/Insights).
-        // The old MoreTabNavigationStack was a compact-width no-op (it assumed
-        // Settings was *pushed* into an existing stack), which left this tab with
-        // no nav bar — no title, no Ledger corner button, and disabled (grayed)
-        // NavigationLinks.
-        NavigationStack {
+        #if os(iOS)
+        UIKitNavStack(title: "Settings") {
             SettingsRootList()
                 .toolbar {
                     #if os(iOS)
@@ -25,8 +21,17 @@ struct SettingsTab: View {
                     #endif
                     ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
                 }
+                .ledgerPushUIKit()
+        }
+        #else
+        NavigationStack {
+            SettingsRootList()
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+                }
                 .ledgerPush()
         }
+        #endif
     }
 }
 
@@ -36,39 +41,46 @@ struct SettingsRootList: View {
     var body: some View {
         List {
             Section("General") {
-                NavigationLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
-                NavigationLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
-                NavigationLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
+                SettingsRowLink { SettingsAppearanceView() } label: { Label("Appearance & Language", systemImage: "paintbrush") }
+                SettingsRowLink { SettingsNotificationsView() } label: { Label("Notifications", systemImage: "bell") }
+                SettingsRowLink { SettingsSecurityView() } label: { Label("Security", systemImage: "lock") }
             }
-            // Categories + Tags are PER-LEDGER (each ledger has its own set) —
-            // switching the active ledger changes what these show.
             Section("Ledger") {
-                NavigationLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
-                NavigationLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
+                SettingsRowLink { CategoriesView() } label: { Label("Categories", systemImage: "square.grid.2x2") }
+                SettingsRowLink { TagsView() } label: { Label("Tags", systemImage: "tag") }
             }
-            // Merchants + Currencies are GLOBAL — one shared catalog / FX-rate set
-            // spanning every ledger — so they live in "Shared", not "Ledger", and
-            // don't change when you switch the active ledger.
             Section("Shared") {
-                NavigationLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
-                NavigationLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
+                SettingsRowLink { MerchantsView() } label: { Label("Merchants", systemImage: "storefront") }
+                SettingsRowLink { CurrenciesView() } label: { Label("Currencies", systemImage: "dollarsign.circle") }
             }
             Section("Data") {
-                NavigationLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
+                SettingsRowLink { SettingsBackupSyncView() } label: { Label("Backup & Sync", systemImage: "arrow.triangle.2.circlepath") }
             }
-            // "Experimental Labs" (formerly "Power Tools") — power-user / beta
-            // features; holds Rules + the CloudKit sync scaffold. Its own
-            // unlabeled section so it isn't miscategorised under Ledger.
             Section {
-                NavigationLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
+                SettingsRowLink { SettingsPowerToolsView() } label: { Label("Experimental Labs", systemImage: "flask") }
             }
-            // About absorbs the former Advanced page: version info up top, then
-            // the DB diagnostics / audit / force-import that used to live there.
             Section {
-                NavigationLink { SettingsAboutView() } label: { Label("About", systemImage: "info.circle") }
+                SettingsRowLink { SettingsAboutView() } label: { Label("About", systemImage: "info.circle") }
             }
         }
         .navigationTitle("Settings")
+    }
+}
+
+private struct SettingsRowLink<Destination: View, RowLabel: View>: View {
+    let destination: () -> Destination
+    let label: () -> RowLabel
+
+    init(@ViewBuilder destination: @escaping () -> Destination, @ViewBuilder label: @escaping () -> RowLabel) {
+        self.destination = destination; self.label = label
+    }
+
+    var body: some View {
+        #if os(iOS)
+        UIKitNavLink(destination: destination, label: label)
+        #else
+        NavigationLink(destination: destination, label: label)
+        #endif
     }
 }
 
@@ -80,6 +92,12 @@ struct SettingsRootList: View {
 /// beside the always-working backups.
 struct SettingsBackupSyncView: View {
     @EnvironmentObject private var store: FinchStore
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #if os(iOS)
+    @EnvironmentObject private var gate: BiometricGate
+    #endif
+    #endif
     @StateObject private var backups = AutoBackupManager.shared
     @StateObject private var icloud = ICloudSync.shared
 
@@ -87,11 +105,19 @@ struct SettingsBackupSyncView: View {
         List {
             Section {
                 LabeledContent("Last backup", value: backups.lastBackupAt?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppDate.h24Locale)) ?? "—")
+                #if os(iOS)
+                Button {
+                    pushViaUIKit(SettingsBackupsView(), store: store, router: router, gate: gate)
+                } label: {
+                    LabeledContent("Backups", value: "\(BackupHistory.merge(local: backups.localBackups(), iCloud: icloud.remoteBackups).count)")
+                }
+                #else
                 NavigationLink {
                     SettingsBackupsView()
                 } label: {
                     LabeledContent("Backups", value: "\(BackupHistory.merge(local: backups.localBackups(), iCloud: icloud.remoteBackups).count)")
                 }
+                #endif
             } header: {
                 Text("Backups")
             } footer: {
@@ -117,12 +143,22 @@ struct SettingsBackupSyncView: View {
 /// Sync while it's inert/under reconsideration).
 struct SettingsPowerToolsView: View {
     @EnvironmentObject private var store: FinchStore
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #if os(iOS)
+    @EnvironmentObject private var gate: BiometricGate
+    #endif
+    #endif
     @StateObject private var cloudSync = CloudKitSyncCoordinator.shared
 
     var body: some View {
         List {
             Section {
+                #if os(iOS)
+                Button { pushViaUIKit(RulesManagerView(), store: store, router: router, gate: gate) } label: { Text("Rules") }
+                #else
                 NavigationLink("Rules") { RulesManagerView() }
+                #endif
             }
 
             Section {
@@ -228,6 +264,9 @@ struct SettingsSecurityView: View {
 struct SettingsAboutView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #endif
     @State private var importError: String?
     @State private var showForceImportConfirm = false
 
@@ -252,12 +291,21 @@ struct SettingsAboutView: View {
                 if store.auditProblems.isEmpty {
                     Label("Clean", systemImage: "checkmark.seal")
                 } else {
+                    #if os(iOS)
+                    Button {
+                        pushViaUIKit(AuditDetailView(problems: store.auditProblems), store: store, router: router, gate: gate)
+                    } label: {
+                        Label("\(store.auditProblems.count) problems",
+                              systemImage: "exclamationmark.triangle")
+                    }
+                    #else
                     NavigationLink {
                         AuditDetailView(problems: store.auditProblems)
                     } label: {
                         Label("\(store.auditProblems.count) problems",
                               systemImage: "exclamationmark.triangle")
                     }
+                    #endif
                 }
             }
 

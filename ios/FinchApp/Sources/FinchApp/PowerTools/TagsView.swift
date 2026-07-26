@@ -16,6 +16,12 @@ private struct TagMergePair: Identifiable {
 /// (single + multi-select) mirrors Categories.
 struct TagsView: View {
     @EnvironmentObject private var store: FinchStore
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #if os(iOS)
+    @EnvironmentObject private var gate: BiometricGate
+    #endif
+    #endif
     @State private var selectedTagId: String?          // tapped row → transactions
     @State private var creating = false
     @State private var editing: TagRow?
@@ -75,9 +81,17 @@ struct TagsView: View {
                 }
             }
         }
+        #if os(iOS)
+        .onChange(of: selectedTagId) { _, id in
+            guard let id, let t = store.tags.first(where: { $0.id == id }) else { return }
+            pushViaUIKit(TagDetailView(tag: t), store: store, router: router, gate: gate)
+            selectedTagId = nil
+        }
+        #else
         .navigationDestination(item: $selectedTagId) { id in
             if let t = store.tags.first(where: { $0.id == id }) { TagDetailView(tag: t) }
         }
+        #endif
         .sheet(isPresented: $creating) { TagEditSheet(tag: nil) }
         .sheet(item: $editing) { TagEditSheet(tag: $0) }
         .sheet(isPresented: $importing) {

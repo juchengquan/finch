@@ -28,7 +28,11 @@ enum TxSort: String, CaseIterable, Identifiable {
 /// supplies a navigation stack), so the feed must NOT wrap one itself.
 struct ActivityTab: View {
     var body: some View {
+        #if os(iOS)
+        UIKitNavStack(title: "Activity") { ActivityFeedView(consumesPendingFilter: true) }
+        #else
         NavigationStack { ActivityFeedView(consumesPendingFilter: true) }
+        #endif
     }
 }
 

@@ -40,87 +40,114 @@ struct AccountsTab: View {
     #endif
 
     var body: some View {
+        #if os(iOS)
+        if selection == nil {
+            UIKitNavStack(title: "Accounts") {
+                accountsInner
+                    .ledgerPushUIKit()
+                    
+                    .onAppear { collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
+                    .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
+                    .environment(\.editMode, $editMode)
+                    .onChange(of: editMode) { _, mode in
+                        if mode.isEditing {
+                            reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
+                            expandedReorderGroups = []
+                        } else {
+                            persistReorder()
+                        }
+                    }
+                    .modifier(AccountFocusBridge())
+            }
+        } else {
+            NavigationStack(path: $path) {
+                accountsInner
+                    .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
+                    .ledgerPush()
+                    .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
+                    .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+                    .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
+                    .environment(\.editMode, $editMode)
+                    .onChange(of: editMode) { _, mode in
+                        if mode.isEditing {
+                            reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
+                            expandedReorderGroups = []
+                        } else {
+                            persistReorder()
+                        }
+                    }
+            }
+        }
+        #else
         NavigationStack(path: $path) {
-            listContent
+            accountsInner
+                .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
+                .ledgerPush()
+                .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
+                .onChange(of: router.focusedId) { _, _ in consumeFocus() }
+                .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
+        }
+        #endif
+    }
+
+    @ViewBuilder private var accountsInner: some View {
+        listContent
+        #if os(iOS)
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search accounts")
+        #else
+        .searchable(text: $searchQuery, prompt: "Search accounts")
+        #endif
+        .navigationTitle("Accounts")
+        .toolbar {
             #if os(iOS)
-            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search accounts")
-            #else
-            .searchable(text: $searchQuery, prompt: "Search accounts")
-            #endif
-            .navigationTitle("Accounts")
-            .ledgerPush()
-            .toolbar {
-                // Reorder is modal: while editing (iOS-only, like editMode itself)
-                // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).
-                #if os(iOS)
-                if editMode.isEditing {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { reorderRows = []; withAnimation { editMode = .inactive } } label: { Image(systemName: "xmark") }
-                            .accessibilityLabel("Cancel")
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
-                            .accessibilityLabel("Done")
-                            .confirmCheckmarkStyle()
-                    }
-                } else {
-                    standardToolbar
+            if editMode.isEditing {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { reorderRows = []; withAnimation { editMode = .inactive } } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Cancel")
                 }
-                #else
+                ToolbarItem(placement: .primaryAction) {
+                    Button { withAnimation { editMode = .inactive } } label: { Image(systemName: "checkmark") }
+                        .accessibilityLabel("Done")
+                        .confirmCheckmarkStyle()
+                }
+            } else {
                 standardToolbar
-                #endif
             }
-            .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
-            .sheet(isPresented: $showingImport) { ImportStatementView() }
-            .sheet(isPresented: $showingAdd) { AccountSheet(defaultCurrency: store.baseCurrency) }
-            .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
-            .sheet(item: $quickAddFor) { AddTransactionSheet(defaultAccountId: $0.id) }
-            .sheet(item: $reconcileFor) { ReconcileSheet(preselect: $0.id) }
-            .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
-            .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
-            .errorAlert($errorMessage)
-            // Centered ALERTS, not row-anchored confirmationDialogs: window-level,
-            // so they present instantly and survive swipe collapse / cell
-            // recycling (row-anchored popouts kept getting torn down or pinning
-            // dead cells). Same confirm-before-delete as the ledger list.
-            .alert("Delete this account?", isPresented: Binding(
-                get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-                presenting: pendingDelete) { account in
-                Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
-                Button("Cancel", role: .cancel) {}
-            } message: { account in
-                Text("This permanently deletes \(account.name ?? "this account").")
-            }
-            .alert("Delete group?", isPresented: Binding(
-                get: { groupPendingDelete != nil }, set: { if !$0 { groupPendingDelete = nil } }),
-                presenting: groupPendingDelete) { g in
-                Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
-                Button("Cancel", role: .cancel) {}
-            } message: { _ in
-                Text("Accounts in this group become ungrouped.")
-            }
-            .alert("Rename group", isPresented: Binding(
-                get: { renamingGroupId != nil },
-                set: { if !$0 { renamingGroupId = nil } })) {
-                TextField("Name", text: $renameText)
-                Button("Cancel", role: .cancel) {}
-                Button("Save") { renameGroup() }
-            }
-            .navigationDestination(for: String.self) { AccountDetailView(accountId: $0) }
-            .onAppear { consumeFocus(); collapsedGroups = AccountGroupCollapse.collapsed(ledger: store.activeLedgerId) }
-            .onChange(of: router.focusedId) { _, _ in consumeFocus() }
-            .onChange(of: store.activeLedgerId) { _, lid in collapsedGroups = AccountGroupCollapse.collapsed(ledger: lid) }
-            #if os(iOS)
-            .environment(\.editMode, $editMode)
-            .onChange(of: editMode) { _, mode in
-                if mode.isEditing {
-                    reorderRows = AccountReorder.buildRows(groups: store.accountGroups, accounts: store.accounts)
-                    expandedReorderGroups = []
-                } else {
-                    persistReorder()
-                }
-            }
+            #else
+            standardToolbar
             #endif
+        }
+        .sheet(isPresented: $showingReconcile) { ReconcileSheet() }
+        .sheet(isPresented: $showingImport) { ImportStatementView() }
+        .sheet(isPresented: $showingAdd) { AccountSheet(defaultCurrency: store.baseCurrency) }
+        .sheet(item: $editing) { AccountSheet(account: $0, defaultCurrency: store.baseCurrency) }
+        .sheet(item: $quickAddFor) { AddTransactionSheet(defaultAccountId: $0.id) }
+        .sheet(item: $reconcileFor) { ReconcileSheet(preselect: $0.id) }
+        .sheet(isPresented: $addingGroup) { AddAccountGroupSheet() }
+        .sheet(isPresented: $showingArchived) { NavigationStack { ArchivedAccountsView() } }
+        .errorAlert($errorMessage)
+        .alert("Delete this account?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            presenting: pendingDelete) { account in
+            Button("Delete \(account.name ?? "account")", role: .destructive) { delete(account) }
+            Button("Cancel", role: .cancel) {}
+        } message: { account in
+            Text("This permanently deletes \(account.name ?? "this account").")
+        }
+        .alert("Delete group?", isPresented: Binding(
+            get: { groupPendingDelete != nil }, set: { if !$0 { groupPendingDelete = nil } }),
+            presenting: groupPendingDelete) { g in
+            Button("Delete \(g.name)", role: .destructive) { deleteGroup(g) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Accounts in this group become ungrouped.")
+        }
+        .alert("Rename group", isPresented: Binding(
+            get: { renamingGroupId != nil },
+            set: { if !$0 { renamingGroupId = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { renameGroup() }
         }
     }
 
@@ -152,9 +179,13 @@ struct AccountsTab: View {
         ToolbarItem(placement: .secondaryAction) {
             Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
         }
+        #if os(iOS)
+        ToolbarItem(placement: .secondaryAction) { HoldingsPushButton() }
+        #else
         ToolbarItem(placement: .secondaryAction) {
             NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
         }
+        #endif
         ToolbarItem(placement: .secondaryAction) {
             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
                 .disabled(store.accounts.isEmpty)
@@ -199,10 +230,17 @@ struct AccountsTab: View {
         } else {
             List {
                 summarySection
+                #if os(iOS)
                 groupedSections { account in
-                    // Plain Button (navigates via the path) instead of NavigationLink
-                    // so there's no trailing disclosure chevron; contentShape keeps
-                    // the whole row tappable.
+                    AccountPushLink(accountId: account.id) {
+                        AccountRowView(account: account).contentShape(Rectangle())
+                    }
+                    .swipeActions(edge: .trailing) { trailingSwipeActions(account) }
+                    .swipeActions(edge: .leading) { leadingSwipeActions(account) }
+                    .contextMenu { leadingActions(account); Divider(); rowActions(account) }
+                }
+                #else
+                groupedSections { account in
                     Button { path.append(account.id) } label: {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
@@ -211,6 +249,7 @@ struct AccountsTab: View {
                     .swipeActions(edge: .leading) { leadingSwipeActions(account) }
                     .contextMenu { leadingActions(account); Divider(); rowActions(account) }
                 }
+                #endif
             }
         }
     }
@@ -223,8 +262,18 @@ struct AccountsTab: View {
         Section {
             StatusSummaryRow(leadingLabel: "Net worth", leadingValue: store.netWorthDisplay,
                              trailingLabel: "Liabilities", trailingValue: store.liabilitiesDisplay)
-            NavigationLink { ActivityFeedView() } label: {
-                Label("All Transactions", systemImage: "list.bullet")
+            if selection == nil {
+                #if os(iOS)
+                ActivityFeedLink()
+                #else
+                NavigationLink { ActivityFeedView() } label: {
+                    Label("All Transactions", systemImage: "list.bullet")
+                }
+                #endif
+            } else {
+                NavigationLink { ActivityFeedView() } label: {
+                    Label("All Transactions", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -470,6 +519,71 @@ struct AccountsTab: View {
         } catch { errorMessage = i18nMessage(error) }   // engine rejects accounts with transactions
     }
 }
+
+#if os(iOS)
+private struct AccountFocusBridge: ViewModifier {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var gate: BiometricGate
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { consume() }
+            .onChange(of: router.focusedId) { _, _ in consume() }
+    }
+
+    private func consume() {
+        guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
+        pushViaUIKit(AccountDetailView(accountId: id), store: store, router: router, gate: gate)
+        router.focusedId = nil
+    }
+}
+
+private struct AccountPushLink<Label: View>: View {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var gate: BiometricGate
+    let accountId: String
+    @ViewBuilder let label: () -> Label
+
+    init(accountId: String, @ViewBuilder label: @escaping () -> Label) {
+        self.accountId = accountId; self.label = label
+    }
+
+    var body: some View {
+        Button {
+            pushViaUIKit(AccountDetailView(accountId: accountId), store: store, router: router, gate: gate)
+        } label: { label().contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+    }
+}
+
+private struct ActivityFeedLink: View {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var gate: BiometricGate
+
+    var body: some View {
+        Button {
+            pushViaUIKit(ActivityFeedView(), store: store, router: router, gate: gate)
+        } label: {
+            Label("All Transactions", systemImage: "list.bullet")
+        }
+    }
+}
+
+private struct HoldingsPushButton: View {
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+    @EnvironmentObject private var gate: BiometricGate
+
+    var body: some View {
+        Button { pushViaUIKit(HoldingsView(), store: store, router: router, gate: gate) } label: {
+            Label("Holdings", systemImage: "chart.bar")
+        }
+    }
+}
+#endif
 
 /// Two-column status/summary row: a caption label over a headline value on each
 /// side, with a little horizontal padding so the figures aren't flush to the

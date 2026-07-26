@@ -14,6 +14,12 @@ private struct MerchantMergePair: Identifiable {
 /// (merchant-only) and merge (single + multi-select). All via FinchStore.apply.
 struct MerchantsView: View {
     @EnvironmentObject private var store: FinchStore
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #if os(iOS)
+    @EnvironmentObject private var gate: BiometricGate
+    #endif
+    #endif
     @State private var selectedMerchantId: String?
     @State private var showingAdd = false
     @State private var editing: Counterparty?
@@ -48,9 +54,17 @@ struct MerchantsView: View {
         .navigationTitle("Merchants")
         .errorAlert($errorMessage)
         .toolbar { toolbarContent }
+        #if os(iOS)
+        .onChange(of: selectedMerchantId) { _, id in
+            guard let id, let cp = store.merchants.first(where: { $0.id == id }) else { return }
+            pushViaUIKit(CounterpartyDetailView(counterparty: cp), store: store, router: router, gate: gate)
+            selectedMerchantId = nil
+        }
+        #else
         .navigationDestination(item: $selectedMerchantId) { id in
             if let cp = store.merchants.first(where: { $0.id == id }) { CounterpartyDetailView(counterparty: cp) }
         }
+        #endif
         .sheet(isPresented: $showingAdd) { CounterpartyNameSheet(counterparty: nil) }
         .sheet(item: $editing) { CounterpartyNameSheet(counterparty: $0) }
         // Single-merge target picker; present keep-name alert only after it dismisses.

@@ -20,7 +20,14 @@ struct InsightsTab: View {
     @State private var customizing = false
 
     var body: some View {
-        NavigationStack {
+        #if os(iOS)
+        UIKitNavStack(title: "Insights") { insightsContent.ledgerPushUIKit() }
+        #else
+        NavigationStack { insightsContent.ledgerPush() }
+        #endif
+    }
+
+    @ViewBuilder private var insightsContent: some View {
             Group {
                 if store.txns.isEmpty && store.accounts.isEmpty {
                     ContentUnavailableView {
@@ -54,7 +61,6 @@ struct InsightsTab: View {
                 }
             }
             .navigationTitle("Insights")
-            .ledgerPush()
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)
@@ -81,5 +87,4 @@ struct InsightsTab: View {
                     #endif
             }
         }
-    }
 }

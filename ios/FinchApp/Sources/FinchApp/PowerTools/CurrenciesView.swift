@@ -49,22 +49,30 @@ struct CurrenciesView: View {
             let rows = fxFilterRows(fxCurrencyRows(all: Currencies.iso, rates: store.exchangeRates, tracked: effectiveTracked), query: query)
             Section {
                 ForEach(rows.filter { $0.isHub || $0.tracked }, id: \.code) { row in
+                    #if os(iOS)
+                    UIKitNavLink { ExchangeRateHistoryView(currency: row.code) } label: { currencyRow(row) }
+                    #else
                     NavigationLink {
                         ExchangeRateHistoryView(currency: row.code)
                     } label: {
                         currencyRow(row)
                     }
+                    #endif
                 }
             }
             let inactive = rows.filter { !$0.isHub && !$0.tracked }
             if !inactive.isEmpty {
                 Section {
                     ForEach(inactive, id: \.code) { row in
+                        #if os(iOS)
+                        UIKitNavLink { ExchangeRateHistoryView(currency: row.code) } label: { currencyRow(row) }
+                        #else
                         NavigationLink {
                             ExchangeRateHistoryView(currency: row.code)
                         } label: {
                             currencyRow(row)
                         }
+                        #endif
                     }
                 }
             }

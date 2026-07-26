@@ -9,6 +9,9 @@ import FinchCore
 struct LedgerDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
+    #if os(iOS)
+    @EnvironmentObject private var router: DeepLinkRouter
+    #endif
     @Environment(\.dismiss) private var dismiss
     let ledgerId: String
 
@@ -30,9 +33,17 @@ struct LedgerDetailView: View {
                     actionsSection(ledger)
                     if isActive {
                         Section {
+                            #if os(iOS)
+                            Button {
+                                pushViaUIKit(ActivityFeedView(), store: store, router: router, gate: gate)
+                            } label: {
+                                Label("View all activity", systemImage: "list.bullet")
+                            }
+                            #else
                             NavigationLink { ActivityFeedView() } label: {
                                 Label("View all activity", systemImage: "list.bullet")
                             }
+                            #endif
                         }
                     }
                 }

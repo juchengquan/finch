@@ -101,10 +101,14 @@ struct ScheduledTab: View {
     }
 
     var body: some View {
-        // A primary tab supplies its own NavigationStack (like Accounts/Insights)
-        // so it gets a nav bar, large title, and working NavigationLinks in
-        // compact width.
-        NavigationStack {
+        #if os(iOS)
+        UIKitNavStack(title: "Scheduled") { scheduledContent.ledgerPushUIKit() }
+        #else
+        NavigationStack { scheduledContent.ledgerPush() }
+        #endif
+    }
+
+    @ViewBuilder private var scheduledContent: some View {
             Group {
                 // Empty state only when nothing CAN be scheduled (no accounts; the
                 // + button is disabled too). With accounts, the calendar always
@@ -209,7 +213,6 @@ struct ScheduledTab: View {
                 }
             }
             .navigationTitle("Scheduled")
-            .ledgerPush()
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
@@ -236,8 +239,6 @@ struct ScheduledTab: View {
             }
             .errorAlert($errorMessage)
         }
-    }
-
     /// The Calendar/List toggle as a list row — the shared `ViewModePickerRow`,
     /// so each mode's List can own it as its first row.
     private var modePickerRow: some View {

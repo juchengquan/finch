@@ -305,6 +305,17 @@ struct RuleSheet: View {
 
     /// A pushed, searchable multi-select that summarizes the count inline.
     @ViewBuilder private func multiSelect(_ title: String, _ sel: Binding<[String]>, _ items: [PickItem]) -> some View {
+        #if os(iOS)
+        UIKitNavLink {
+            MultiSelectList(title: title, selected: sel, items: items)
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(sel.wrappedValue.isEmpty ? "None" : "\(sel.wrappedValue.count) selected").foregroundStyle(.secondary)
+            }
+        }
+        #else
         NavigationLink {
             MultiSelectList(title: title, selected: sel, items: items)
         } label: {
@@ -314,6 +325,7 @@ struct RuleSheet: View {
                 Text(sel.wrappedValue.isEmpty ? "None" : "\(sel.wrappedValue.count) selected").foregroundStyle(.secondary)
             }
         }
+        #endif
     }
 
     /// Inline Sun–Sat chips toggling weekday indices (0–6) in the selection.
