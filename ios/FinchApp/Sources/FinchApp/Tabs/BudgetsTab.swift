@@ -118,23 +118,6 @@ NavigationStack(path: $path) {
                 }
             }
             #endif
-            // Compact drill-in: present as a right-slide cover (root scroll view,
-            // no iOS 26 resume shadow). iPad/macOS (selection != nil) unaffected.
-            #if os(iOS)
-            .rightSlideDrill(item: $drill) { target in
-                NavigationStack {
-                    BudgetDetailView(budgetId: target.id)
-                        .toolbar { ToolbarItem(placement: .topBarLeading) {
-                            Button { drill = nil } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "chevron.left")
-                                    Text("Budgets")
-                                }
-                            }
-                        } }
-                }
-            }
-            #endif
         }
     }
 
@@ -207,8 +190,25 @@ NavigationStack(path: $path) {
                     // so there's no trailing disclosure chevron — same convention as
                     // the Accounts rows; contentShape keeps the whole row tappable.
                     Button {
-                        if selection == nil { drill = .detail(budget.id) }
-                        else { path.append(budget.id) }
+                        if selection == nil {
+                            _rd_presentModal(
+                                NavigationStack {
+                                    BudgetDetailView(budgetId: budget.id)
+                                        .toolbar { ToolbarItem(placement: .topBarLeading) {
+                                            Button {
+                                                _rd_dismissModal(); drill = nil
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "chevron.left")
+                                                    Text("Budgets")
+                                                }
+                                            }
+                                        } }
+                                }
+                            )
+                        } else {
+                            path.append(budget.id)
+                        }
                     } label: {
                         BudgetRowView(budget: budget).contentShape(Rectangle())
                     }

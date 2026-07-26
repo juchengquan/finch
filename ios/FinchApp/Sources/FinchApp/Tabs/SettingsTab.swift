@@ -20,13 +20,23 @@ enum SettingsDrill: String, Identifiable {
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
-    #if os(iOS)
-    @State private var drill: SettingsDrill?
-    #endif
-
     var body: some View {
         NavigationStack {
-            SettingsRootList(onDrill: { drill = $0 })
+            SettingsRootList(onDrill: { target in
+                _rd_presentModal(
+                    NavigationStack {
+                        drillContent(target)
+                            .toolbar { ToolbarItem(placement: .topBarLeading) {
+                                Button { _rd_dismissModal() } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chevron.left")
+                                        Text("Settings")
+                                    }
+                                }
+                            } }
+                    }
+                )
+            })
                 .toolbar {
                     #if os(iOS)
                     ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
@@ -35,22 +45,9 @@ struct SettingsTab: View {
                 }
                 .ledgerPush()
         }
-        // Compact drill-in: present as a right-slide cover (root scroll view,
-        // no iOS 26 resume shadow).
+        // Compact drill-in: present as a right-slide cover via the row's
+        // onDrill callback. iPad/macOS uses NavigationLink (unchanged).
         #if os(iOS)
-        .rightSlideDrill(item: $drill) { target in
-            NavigationStack {
-                drillContent(target)
-                    .toolbar { ToolbarItem(placement: .topBarLeading) {
-                        Button { drill = nil } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                Text("Settings")
-                            }
-                        }
-                    } }
-            }
-        }
         #endif
     }
 
