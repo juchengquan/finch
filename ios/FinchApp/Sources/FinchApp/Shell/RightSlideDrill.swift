@@ -77,20 +77,16 @@ func _rd_presentModal<Content: View>(_ view: Content) {
         .environmentObject(FinchStore.shared)
         .environmentObject(DeepLinkRouter.shared)
         .environmentObject(BiometricGate.shared))
-    hosting.modalPresentationStyle = .overFullScreen
+    hosting.modalPresentationStyle = UIModalPresentationStyle.overFullScreen
     hosting.transitioningDelegate = delegate
     _rd_hosting = hosting
-    DispatchQueue.main.async {
-        // Try the key window first, fall through to the scene's first window.
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let scene = scenes.first else { return }
-        guard let root = scene.keyWindow?.rootViewController ?? scene.windows.first?.rootViewController
-        else { return }
-        // Walk up to the topmost presented VC so we never present on a child
-        var top = root
-        while let presented = top.presentedViewController { top = presented }
-        top.present(hosting, animated: true)
-    }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    guard let scene = scenes.first,
+          let root = scene.keyWindow?.rootViewController ?? scene.windows.first?.rootViewController
+    else { return }
+    var top = root
+    while let presented = top.presentedViewController { top = presented }
+    top.present(hosting, animated: true)
 }
 
 /// Dismiss the currently presented right-slide cover, if any.
