@@ -39,15 +39,24 @@ struct MonthCashCalendar: View {
     }
 
     /// "2026-07-15" → "Wed, Jul 15" (device locale) — the selected-day headline
-    /// both calling tabs use above their day-detail rows.
+    /// both calling tabs use above their day-detail rows. The formatter is
+    /// cached (main-thread only): DateFormatter() costs real milliseconds and
+    /// this runs once per day-section header — allocating per call was a
+    /// measurable slice of the calendar's first-frame cost on tab entry.
+    private static let prettyFormatter: DateFormatter = {
+        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "EEE, MMM d"; return f
+    }()
     static func pretty(_ iso: String) -> String {
         guard let d = AppDate.isoDay.date(from: iso) else { return iso }
-        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "EEE, MMM d"; return f.string(from: d)
+        return prettyFormatter.string(from: d)
     }
 
     private var year: Int { AppDate.civil.component(.year, from: monthAnchor) }
     private var month: Int { AppDate.civil.component(.month, from: monthAnchor) }
-    private var monthLabel: String { let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "LLLL yyyy"; return f.string(from: monthAnchor) }
+    private static let monthLabelFormatter: DateFormatter = {
+        let f = DateFormatter(); f.calendar = AppDate.civil; f.timeZone = AppDate.civil.timeZone; f.dateFormat = "LLLL yyyy"; return f
+    }()
+    private var monthLabel: String { Self.monthLabelFormatter.string(from: monthAnchor) }
 
     var body: some View {
         VStack(spacing: 16) {
