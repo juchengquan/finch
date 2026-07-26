@@ -35,9 +35,10 @@ struct SettingsTab: View {
                 }
                 .ledgerPush()
         }
-        // Compact drill-in: present as a cover instead of push.
+        // Compact drill-in: present as a right-slide cover (root scroll view,
+        // no iOS 26 resume shadow).
         #if os(iOS)
-        .fullScreenCover(item: $drill) { target in
+        .rightSlideDrill(item: $drill) { target in
             NavigationStack {
                 drillContent(target)
                     .toolbar { ToolbarItem(placement: .topBarLeading) {

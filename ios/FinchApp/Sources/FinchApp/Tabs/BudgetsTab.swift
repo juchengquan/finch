@@ -118,11 +118,10 @@ NavigationStack(path: $path) {
                 }
             }
             #endif
-            // Compact drill-in: present BudgetDetailView as a cover instead of push —
-            // a top-level scroll view does NOT re-converge its Liquid Glass on resume,
-            // so no shadow forms. iPad/macOS (selection != nil) is unaffected.
+            // Compact drill-in: present as a right-slide cover (root scroll view,
+            // no iOS 26 resume shadow). iPad/macOS (selection != nil) unaffected.
             #if os(iOS)
-            .fullScreenCover(item: $drill) { target in
+            .rightSlideDrill(item: $drill) { target in
                 NavigationStack {
                     BudgetDetailView(budgetId: target.id)
                         .toolbar { ToolbarItem(placement: .topBarLeading) {
