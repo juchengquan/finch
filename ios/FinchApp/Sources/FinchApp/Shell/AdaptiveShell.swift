@@ -242,6 +242,12 @@ extension View {
 /// MasterDetailShell); the dashboard / sheet-based tabs (Insights, Settings)
 /// keep two columns (sidebar │ full-width content), which suits their wide
 /// layouts. Selection persists per tab across section switches.
+///
+/// The split view owns navigation for its columns. Detail views are rendered
+/// directly in the detail column rather than wrapped in another
+/// `NavigationStack`; the compact tab stacks remain the push-navigation owners
+/// for iPhone. This avoids competing navigation contexts and preserves the
+/// split view's column-specific navigation behavior.
 struct SplitViewShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
@@ -260,7 +266,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (e.g. after a ledger switch).
                     if let id = accountSelection, store.accounts.contains(where: { $0.id == id }) {
-                        NavigationStack { AccountDetailView(accountId: id) }
+                        AccountDetailView(accountId: id)
                     } else {
                         DetailPlaceholder(systemImage: "creditcard", label: "Select an account")
                     }
@@ -270,7 +276,7 @@ struct SplitViewShell: View {
                     BudgetsTab(selection: $budgetSelection)
                 } detail: {
                     if let id = budgetSelection, store.budgets.contains(where: { $0.id == id }) {
-                        NavigationStack { BudgetDetailView(budgetId: id) }
+                        BudgetDetailView(budgetId: id)
                     } else {
                         DetailPlaceholder(systemImage: "chart.pie", label: "Select a budget")
                     }
@@ -281,7 +287,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (e.g. a deleted ledger).
                     if let id = ledgerSelection, store.ledgers.contains(where: { $0.id == id }) {
-                        NavigationStack { LedgerDetailView(ledgerId: id) }
+                        LedgerDetailView(ledgerId: id)
                     } else {
                         DetailPlaceholder(systemImage: "books.vertical", label: "Select a ledger")
                     }
@@ -292,7 +298,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (deleted tx / ledger switch).
                     if let id = txSelection, store.txns.contains(where: { $0.id == id }) {
-                        NavigationStack { TransactionDetailView(txId: id) }
+                        TransactionDetailView(txId: id)
                     } else {
                         DetailPlaceholder(systemImage: "list.bullet", label: "Select a transaction")
                     }
@@ -303,7 +309,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (deleted template / ledger switch).
                     if let id = scheduledSelection, store.scheduled.contains(where: { $0.id == id }) {
-                        NavigationStack { ScheduledDetailView(templateId: id) }
+                        ScheduledDetailView(templateId: id)
                     } else {
                         DetailPlaceholder(systemImage: "calendar", label: "Select a scheduled item")
                     }
