@@ -9,7 +9,9 @@ import FinchCore
 struct LedgerDetailView: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var gate: BiometricGate
+    @EnvironmentObject private var router: DeepLinkRouter
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let ledgerId: String
 
     @State private var summary: FinchStore.LedgerSummary?
@@ -30,8 +32,16 @@ struct LedgerDetailView: View {
                     actionsSection(ledger)
                     if isActive {
                         Section {
-                            NavigationLink { ActivityFeedView() } label: {
-                                Label("View all activity", systemImage: "list.bullet")
+                            if sizeClass == .compact {
+                                NavigationLink { ActivityFeedView() } label: {
+                                    Label("View all activity", systemImage: "list.bullet")
+                                }
+                            } else {
+                                Button {
+                                    router.selectedTab = .activity
+                                } label: {
+                                    Label("View all activity", systemImage: "list.bullet")
+                                }
                             }
                         }
                     }

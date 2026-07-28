@@ -39,6 +39,12 @@ struct TabBarShell: View {
     var body: some View {
         TabView(selection: $selected) {
             tabContent(.accounts).modifier(AddTransactionFAB())
+                // Instant tab switches (kills the iOS 26 cross-dissolve "block"); see
+                // DisableTabContentTransition. Hosted in one tab so it can reach the
+                // real UITabBarController — one install covers the whole TabView.
+                #if os(iOS)
+                .background(DisableTabContentTransition())
+                #endif
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
             tabContent(.budgets).modifier(AddTransactionFAB())
@@ -66,6 +72,19 @@ struct TabBarShell: View {
                 router.selectedTab = tab
             }
         }
+        #if os(iOS)
+        // The Ledger drill as a top-level right-slide cover, presented ONCE here at
+        // the compact shell (not per-tab) so the single `router.showLedger` bool
+        // drives exactly one cover. LedgerList → LedgerDetail → "View all activity"
+        // then push natively *inside* the cover's NavigationStack — native
+        // swipe-back and NO resume shadow (only main-tab-stack pushes shadow).
+        .rightSlideDrill(isPresented: $router.showLedger) {
+            NavigationStack {
+                LedgerListView()
+                    .rsdBackToolbar { router.showLedger = false }
+            }
+        }
+        #endif
     }
 
     private func syncFromRouter(_ tab: AppTab) {
@@ -182,10 +201,10 @@ private struct AddTransactionFAB: ViewModifier {
     }
 }
 
-/// The top-left Ledger control on every compact primary tab — pushes the
-/// two-layer Ledger onto the current tab (via `.ledgerPush()`). Compact-only, so
-/// the iPad/Mac sidebar (which lists Ledger itself) doesn't get a redundant
-/// button. Drop one in each tab's `.toolbar`:
+/// The top-left Ledger control on every compact primary tab — sets
+/// `router.showLedger`, which `TabBarShell` presents as a top-level Ledger cover.
+/// Compact-only, so the iPad/Mac sidebar (which lists Ledger itself) doesn't get a
+/// redundant button. Drop one in each tab's `.toolbar`:
 /// `ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }`.
 struct LedgerBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -212,36 +231,17 @@ struct PrivacyToggleButton: View {
     }
 }
 
-/// Pushes the two-layer Ledger onto the enclosing NavigationStack when
-/// `router.showLedger` is set (by the corner button or a `.ledger` route).
-/// Compact-only — iPad/Mac reach the Ledger via the sidebar.
-private struct LedgerPush: ViewModifier {
-    @EnvironmentObject private var router: DeepLinkRouter
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.navigationDestination(isPresented: Binding(
-            get: { sizeClass == .compact && router.showLedger },
-            set: { if !$0 { router.showLedger = false } })) {
-            LedgerListView()   // titles itself "Ledgers" — don't override with a second (dead) title
-        }
-        #else
-        content
-        #endif
-    }
-}
-
-extension View {
-    /// Apply inside a compact tab's NavigationStack so the top-left Ledger control
-    /// (and a `.ledger` route) pushes the Ledger there.
-    func ledgerPush() -> some View { modifier(LedgerPush()) }
-}
-
 /// The iPad/Mac shell. Accounts, Budgets, Ledger, Activity, and Scheduled get
 /// a true three-column master–detail (sidebar │ list │ detail — see
 /// MasterDetailShell); the dashboard / sheet-based tabs (Insights, Settings)
 /// keep two columns (sidebar │ full-width content), which suits their wide
 /// layouts. Selection persists per tab across section switches.
+///
+/// The split view owns navigation for its columns. Detail views are rendered
+/// directly in the detail column rather than wrapped in another
+/// `NavigationStack`; the compact tab stacks remain the push-navigation owners
+/// for iPhone. This avoids competing navigation contexts and preserves the
+/// split view's column-specific navigation behavior.
 struct SplitViewShell: View {
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
@@ -260,7 +260,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (e.g. after a ledger switch).
                     if let id = accountSelection, store.accounts.contains(where: { $0.id == id }) {
-                        NavigationStack { AccountDetailView(accountId: id) }
+                        AccountDetailView(accountId: id)
                     } else {
                         DetailPlaceholder(systemImage: "creditcard", label: "Select an account")
                     }
@@ -270,7 +270,7 @@ struct SplitViewShell: View {
                     BudgetsTab(selection: $budgetSelection)
                 } detail: {
                     if let id = budgetSelection, store.budgets.contains(where: { $0.id == id }) {
-                        NavigationStack { BudgetDetailView(budgetId: id) }
+                        BudgetDetailView(budgetId: id)
                     } else {
                         DetailPlaceholder(systemImage: "chart.pie", label: "Select a budget")
                     }
@@ -281,7 +281,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (e.g. a deleted ledger).
                     if let id = ledgerSelection, store.ledgers.contains(where: { $0.id == id }) {
-                        NavigationStack { LedgerDetailView(ledgerId: id) }
+                        LedgerDetailView(ledgerId: id)
                     } else {
                         DetailPlaceholder(systemImage: "books.vertical", label: "Select a ledger")
                     }
@@ -292,7 +292,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (deleted tx / ledger switch).
                     if let id = txSelection, store.txns.contains(where: { $0.id == id }) {
-                        NavigationStack { TransactionDetailView(txId: id) }
+                        TransactionDetailView(txId: id)
                     } else {
                         DetailPlaceholder(systemImage: "list.bullet", label: "Select a transaction")
                     }
@@ -303,7 +303,7 @@ struct SplitViewShell: View {
                 } detail: {
                     // Guard against a stale selection (deleted template / ledger switch).
                     if let id = scheduledSelection, store.scheduled.contains(where: { $0.id == id }) {
-                        NavigationStack { ScheduledDetailView(templateId: id) }
+                        ScheduledDetailView(templateId: id)
                     } else {
                         DetailPlaceholder(systemImage: "calendar", label: "Select a scheduled item")
                     }
@@ -360,3 +360,76 @@ func tabContent(_ tab: AppTab) -> some View {
     case .settings: SettingsTab()
     }
 }
+
+#if os(iOS)
+// MARK: - Instant tab switch (kills the iOS 26 tab-content cross-dissolve)
+//
+// iOS 26 cross-dissolves the OUTGOING tab over the incoming one for ~130ms. When
+// the outgoing list is scrolled, its dense rows fill the top region where the
+// incoming page shows only its large title, so the overlap reads as a flashing
+// "block". The dissolve lives in the backing `UITabBarController` — SwiftUI's
+// own `.transaction`/animation controls don't reach it — so we suppress it
+// through the tab controller's PUBLIC delegate hook:
+// `animationControllerForTransitionFrom` returning a zero-duration animator makes
+// the swap instant (the pre-iOS-26 behaviour). SwiftUI's own delegate is kept and
+// every other call forwarded, so tab-selection observation is unaffected.
+// REMOVE if Apple makes the dissolve content-aware / offers an opt-out.
+
+/// A zero-duration `UIViewControllerAnimatedTransitioning` — swaps the tab's view
+/// in with no animation, so there is nothing to double-expose.
+private final class InstantTabTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    func transitionDuration(using ctx: UIViewControllerContextTransitioning?) -> TimeInterval { 0 }
+    func animateTransition(using ctx: UIViewControllerContextTransitioning) {
+        if let to = ctx.view(forKey: .to) { ctx.containerView.addSubview(to) }
+        ctx.completeTransition(!ctx.transitionWasCancelled)
+    }
+}
+
+/// Forwards every `UITabBarControllerDelegate` call to SwiftUI's original delegate
+/// (ObjC message forwarding), overriding only the transition animator. Holding the
+/// original means selection observation keeps working and can be restored on teardown.
+private final class TabTransitionProxy: NSObject, UITabBarControllerDelegate {
+    weak var original: UITabBarControllerDelegate?
+    weak var tabController: UITabBarController?
+    private let instant = InstantTabTransition()
+    func tabBarController(_ tabBarController: UITabBarController,
+                          animationControllerForTransitionFrom fromVC: UIViewController,
+                          to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? { instant }
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
+    }
+    override func forwardingTarget(for aSelector: Selector!) -> Any? { original }
+}
+
+/// Installs `TabTransitionProxy` on the enclosing `UITabBarController`. Placed
+/// INSIDE a tab's content (not on the `TabView`) so `.tabBarController` resolves
+/// to SwiftUI's real controller rather than a hosting layer above it.
+private struct DisableTabContentTransition: UIViewControllerRepresentable {
+    func makeCoordinator() -> TabTransitionProxy { TabTransitionProxy() }
+    func makeUIViewController(context: Context) -> UIViewController { UIViewController() }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            // Walk the parent chain — `.tabBarController` alone can miss it across
+            // SwiftUI's hosting layers. Degrades gracefully (no-op) if not found.
+            var node: UIViewController? = uiViewController
+            var found: UITabBarController?
+            while let n = node {
+                if let t = n as? UITabBarController { found = t; break }
+                found = found ?? n.tabBarController
+                node = n.parent
+            }
+            guard let tab = found, tab.delegate !== context.coordinator else { return }
+            context.coordinator.original = tab.delegate
+            context.coordinator.tabController = tab
+            tab.delegate = context.coordinator
+        }
+    }
+    /// `UITabBarController.delegate` is `weak`; if this representable is torn down,
+    /// hand the delegate back to SwiftUI's coordinator rather than leaving it nil.
+    static func dismantleUIViewController(_ uiViewController: UIViewController, coordinator: TabTransitionProxy) {
+        if coordinator.tabController?.delegate === coordinator {
+            coordinator.tabController?.delegate = coordinator.original
+        }
+    }
+}
+#endif

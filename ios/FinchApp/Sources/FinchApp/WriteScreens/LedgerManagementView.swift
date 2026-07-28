@@ -51,8 +51,8 @@ struct LedgerListView: View {
                     rowContent(ledger).tag(ledger.id)
                 } else {
                     // A view-destination link, NOT NavigationLink(value:) + a
-                    // .navigationDestination(for: String.self): this list is pushed
-                    // onto whichever tab's stack is current (ledgerPush()), and the
+                    // .navigationDestination(for: String.self): this list is hosted in
+                    // the Ledger cover's own NavigationStack (see TabBarShell), and the
                     // Accounts/Budgets stacks use a typed [String] path — there SwiftUI
                     // ignores non-root destinations ("Only root-level navigation
                     // destinations are effective for a navigation stack with a
