@@ -31,9 +31,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: FinchApp/FinchApp.entitlements
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: "YES"
-        DEVELOPMENT_TEAM: 2WDR2437MU
+        CODE_SIGNING_ALLOWED: "NO"
         # Let the compiler extract LocalizedStringKey literals so the String
         # Catalog (Resources/Localizable.xcstrings) drives en/zh-Hans.
         SWIFT_EMIT_LOC_STRINGS: "YES"
@@ -56,9 +54,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: FinchWidget/FinchWidget.entitlements
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: "YES"
-        DEVELOPMENT_TEAM: 2WDR2437MU
+        CODE_SIGNING_ALLOWED: "NO"
         SKIP_INSTALL: "NO"
 
   # Phase 6.5 — Share Extension (receipt photos/PDFs → staged to the App Group).
@@ -78,9 +74,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: FinchShare/FinchShare.entitlements
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGNING_ALLOWED: "YES"
-        DEVELOPMENT_TEAM: 2WDR2437MU
+        CODE_SIGNING_ALLOWED: "NO"
         SKIP_INSTALL: "NO"
 
   # Phase 3 — the macOS app. Shares the SAME SwiftUI sources as the iOS app; the
