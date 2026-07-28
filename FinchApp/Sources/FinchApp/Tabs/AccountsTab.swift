@@ -1,6 +1,21 @@
 import SwiftUI
 import FinchCore
 
+#if os(iOS)
+/// Compact drill-in target, presented as a top-level right-slide cover so the
+/// iOS 26 resume shadow never forms (a top-level scroll view doesn't re-converge).
+private enum AccountsDrill: Identifiable {
+    case account(String), activity, holdings
+    var id: String {
+        switch self {
+        case .account(let a): return "acct:\(a)"
+        case .activity:       return "activity"
+        case .holdings:       return "holdings"
+        }
+    }
+}
+#endif
+
 /// Accounts grouped by account group, each section with a subtotal, plus a
 /// net-worth footer (includeInNetWorth == 1). All amounts convert
 /// account-currency → base → display via Money. The toolbar `+` menu covers add
@@ -34,6 +49,7 @@ struct AccountsTab: View {
     @State private var groupPendingDelete: AccountGroupRow?
     @State private var pendingDelete: AccountRow?       // account awaiting delete confirmation
     #if os(iOS)
+    @State private var drill: AccountsDrill?            // compact drill-in cover (no resume shadow)
     @State private var editMode: EditMode = .inactive  // drives reorder; entered via a group's long-press menu
     @State private var reorderRows: [ReorderRow] = []
     @State private var expandedReorderGroups: Set<String> = []   // reorder mode: groups start collapsed
@@ -48,7 +64,6 @@ struct AccountsTab: View {
             .searchable(text: $searchQuery, prompt: "Search accounts")
             #endif
             .navigationTitle("Accounts")
-            .ledgerPush()
             .toolbar {
                 // Reorder is modal: while editing (iOS-only, like editMode itself)
                 // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).
@@ -120,9 +135,29 @@ struct AccountsTab: View {
                     persistReorder()
                 }
             }
+            // Compact drill-in cover (account detail / Activity / Holdings) — top-level
+            // presentation so iOS 26's glass never re-converges into a resume shadow.
+            // State-driven, so a deep link into an account opens it too.
+            .rightSlideDrill(item: $drill) { target in
+                NavigationStack {
+                    accountDrillDestination(target)
+                        .rsdBackToolbar("Accounts") { drill = nil }
+                }
+            }
             #endif
         }
     }
+
+    #if os(iOS)
+    /// The compact drill-in cover's destination for each `AccountsDrill`.
+    @ViewBuilder private func accountDrillDestination(_ target: AccountsDrill) -> some View {
+        switch target {
+        case .account(let id): AccountDetailView(accountId: id)
+        case .activity:        ActivityFeedView()
+        case .holdings:        HoldingsView()
+        }
+    }
+    #endif
 
     /// The complete non-editing toolbar item set (both platforms) — hidden as a
     /// block while reordering, when only ✕/✓ show (see the branch in `body`).
@@ -153,7 +188,15 @@ struct AccountsTab: View {
             Button { showingArchived = true } label: { Label("Archived Accounts", systemImage: "archivebox") }
         }
         ToolbarItem(placement: .secondaryAction) {
+            #if os(iOS)
+            if selection == nil {
+                Button { drill = .holdings } label: { Label("Holdings", systemImage: "chart.bar") }
+            } else {
+                NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
+            }
+            #else
             NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
+            #endif
         }
         ToolbarItem(placement: .secondaryAction) {
             Button { showingReconcile = true } label: { Label("Reconcile", systemImage: "checkmark.circle") }
@@ -203,7 +246,13 @@ struct AccountsTab: View {
                     // Plain Button (navigates via the path) instead of NavigationLink
                     // so there's no trailing disclosure chevron; contentShape keeps
                     // the whole row tappable.
-                    Button { path.append(account.id) } label: {
+                    Button {
+                        #if os(iOS)
+                        drill = .account(account.id)
+                        #else
+                        path.append(account.id)
+                        #endif
+                    } label: {
                         AccountRowView(account: account).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -223,9 +272,23 @@ struct AccountsTab: View {
         Section {
             StatusSummaryRow(leadingLabel: "Net worth", leadingValue: store.netWorthDisplay,
                              trailingLabel: "Liabilities", trailingValue: store.liabilitiesDisplay)
+            #if os(iOS)
+            // Compact: drill-in cover (no resume shadow). iPad: push in the list column.
+            if selection == nil {
+                Button { drill = .activity } label: {
+                    Label("All Transactions", systemImage: "list.bullet").contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink { ActivityFeedView() } label: {
+                    Label("All Transactions", systemImage: "list.bullet")
+                }
+            }
+            #else
             NavigationLink { ActivityFeedView() } label: {
                 Label("All Transactions", systemImage: "list.bullet")
             }
+            #endif
         }
     }
 
@@ -441,8 +504,15 @@ struct AccountsTab: View {
     /// (select in three-column mode, push in compact mode).
     private func consumeFocus() {
         guard let id = router.focusedId, store.accounts.contains(where: { $0.id == id }) else { return }
-        if let selection { selection.wrappedValue = id }
-        else { path = [id] }
+        if let selection {
+            selection.wrappedValue = id
+        } else {
+            #if os(iOS)
+            drill = .account(id)
+            #else
+            path = [id]
+            #endif
+        }
         router.focusedId = nil
     }
 

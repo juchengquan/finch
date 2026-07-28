@@ -209,7 +209,6 @@ struct ScheduledTab: View {
                 }
             }
             .navigationTitle("Scheduled")
-            .ledgerPush()
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }

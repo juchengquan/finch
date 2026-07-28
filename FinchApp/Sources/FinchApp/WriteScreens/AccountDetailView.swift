@@ -45,24 +45,33 @@ struct AccountDetailView: View {
     var body: some View {
         Group {
             if let account {
-                List {
-                    modePickerRow
-                    holdingsSection(account)
-                    if viewMode == .calendar {
-                        calendarSection(account)
-                    } else {
-                        transactionsSection(account)
-                    }
-                }
-                .errorAlert($errorMessage)
-                .navigationTitle(account.name ?? "Account")
-                .navigationBarTitleDisplayMode(.inline)
-                #if os(iOS)
-                .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
-                #else
-                .searchable(text: $searchQuery, prompt: "Search transactions")
-                #endif
-                .toolbar {
+                accountDetailContent(account)
+            } else {
+                Color.clear.onAppear { dismiss() }
+            }
+        }
+        #if os(iOS)
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
+        #else
+        .searchable(text: $searchQuery, prompt: "Search transactions")
+        #endif
+    }
+
+    @ViewBuilder
+    private func accountDetailContent(_ account: AccountRow) -> some View {
+        List {
+            modePickerRow
+            holdingsSection(account)
+            if viewMode == .calendar {
+                calendarSection(account)
+            } else {
+                transactionsSection(account)
+            }
+        }
+        .errorAlert($errorMessage)
+        .navigationTitle(account.name ?? "Account")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
                     // Name over balance — always visible while scrolled;
                     // privacy-aware via displayMoney. The reconcile seal sits
                     // beside the balance (same glyph/colors as the Accounts
@@ -122,11 +131,6 @@ struct AccountDetailView: View {
                     Button("Cancel", role: .cancel) {}
                 } message: { t in
                     Text("\(t.merchant) · \(store.displayMoneyBase(t.amount))")
-                }
-            } else {
-                // Archived or deleted while open → pop back.
-                Color.clear.onAppear { dismiss() }
-            }
         }
     }
 
@@ -243,9 +247,10 @@ struct AccountDetailView: View {
                             // The section is date-descending, so its first (newest) row's
                             // running balance IS the end-of-month balance — same cache the
                             // row shows, so header and row agree exactly.
+                            // No force-unwrap: a month section is never empty in practice,
+                            // but `first!` at render time is a hard crash if it ever is.
                             Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
-                                 + "  ·  "
-                                 + store.displayMoneyBase(store.runningBalanceBase(for: section.txns.first!)))
+                                 + (section.txns.first.map { "  ·  " + store.displayMoneyBase(store.runningBalanceBase(for: $0)) } ?? ""))
                                 .foregroundStyle(.secondary)
                         }
                         Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
