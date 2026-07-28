@@ -12,6 +12,15 @@ import UIKit
 // fine (they don't shadow and keep native swipe-back) — only main-tab-stack
 // pushes shadow.
 //
+// ⚠️ WORKAROUND, NOT A DESIGN CHOICE — REMOVE if Apple fixes the iOS 26
+// scroll-edge re-converge on pushed views. There is no native "slide-from-right
+// modal": the nav PUSH has the exact feel we want (slide-in + swipe-back) but is
+// the thing that shadows; the modal (`.fullScreenCover`/`.overFullScreen`) is a
+// shadow-free root but slides UP with no swipe-back. This file re-creates the
+// push's look+feel on top of a modal — a custom transition + interactive gesture
+// — purely to dodge the shadow bug. If the bug goes away, delete this and replace
+// each `.rightSlideDrill(...)` with a plain `NavigationStack` push.
+//
 // STATE-DRIVEN API — use the `.rightSlideDrill(item:)` / `(isPresented:)` view
 // modifiers, never the `_rd_*` free functions directly. Driving presentation off
 // state (not off a `Button` action) is what lets `DeepLinkRouter` / App Intents /
