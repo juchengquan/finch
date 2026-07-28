@@ -28,7 +28,6 @@ struct SettingsTab: View {
         NavigationStack {
             settingsRoot
                 .toolbar { toolbarContent }
-                .ledgerPush()
                 // Compact iOS: rows set `drill`, presented as a right-slide cover
                 // (no resume shadow) — state-driven, so router / deep-link entry
                 // opens the drill, not just a row tap.

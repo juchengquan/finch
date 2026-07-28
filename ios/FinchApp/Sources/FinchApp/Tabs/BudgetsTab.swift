@@ -54,7 +54,6 @@ NavigationStack(path: $path) {
             .searchable(text: $searchQuery, prompt: "Search budgets")
             #endif
             .navigationTitle("Budgets")
-            .ledgerPush()
             .toolbar {
                 #if os(iOS)
                 if editMode.isEditing {

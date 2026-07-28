@@ -54,7 +54,6 @@ struct InsightsTab: View {
                 }
             }
             .navigationTitle("Insights")
-            .ledgerPush()
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }   // .topBarLeading is iOS-only; books.vertical is compact-only (macOS uses the sidebar)

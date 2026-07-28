@@ -64,7 +64,6 @@ struct AccountsTab: View {
             .searchable(text: $searchQuery, prompt: "Search accounts")
             #endif
             .navigationTitle("Accounts")
-            .ledgerPush()
             .toolbar {
                 // Reorder is modal: while editing (iOS-only, like editMode itself)
                 // the whole toolbar collapses to ✕ (cancel/discard) + ✓ (save).

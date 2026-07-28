@@ -201,10 +201,10 @@ private struct AddTransactionFAB: ViewModifier {
     }
 }
 
-/// The top-left Ledger control on every compact primary tab — pushes the
-/// two-layer Ledger onto the current tab (via `.ledgerPush()`). Compact-only, so
-/// the iPad/Mac sidebar (which lists Ledger itself) doesn't get a redundant
-/// button. Drop one in each tab's `.toolbar`:
+/// The top-left Ledger control on every compact primary tab — sets
+/// `router.showLedger`, which `TabBarShell` presents as a top-level Ledger cover.
+/// Compact-only, so the iPad/Mac sidebar (which lists Ledger itself) doesn't get a
+/// redundant button. Drop one in each tab's `.toolbar`:
 /// `ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }`.
 struct LedgerBarButton: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -229,22 +229,6 @@ struct PrivacyToggleButton: View {
         .accessibilityLabel("Privacy mode")
         .accessibilityValue(store.privacyMode ? "on" : "off")
     }
-}
-
-/// No-op passthrough. The compact Ledger is now presented as a top-level
-/// right-slide cover once at `TabBarShell` (see `.rightSlideDrill(isPresented:
-/// $router.showLedger)`), NOT as a per-tab `navigationDestination` push — a
-/// main-tab-stack push re-converges iOS 26's glass into a resume shadow, a cover
-/// does not. iPad/Mac reach the Ledger via the sidebar. The `.ledgerPush()` calls
-/// on the compact tabs are left as harmless no-ops.
-private struct LedgerPush: ViewModifier {
-    func body(content: Content) -> some View { content }
-}
-
-extension View {
-    /// Superseded — the compact Ledger cover lives at `TabBarShell`. Retained as a
-    /// no-op so existing call sites compile; safe to remove in a later cleanup.
-    func ledgerPush() -> some View { modifier(LedgerPush()) }
 }
 
 /// The iPad/Mac shell. Accounts, Budgets, Ledger, Activity, and Scheduled get
