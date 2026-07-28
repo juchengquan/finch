@@ -72,8 +72,13 @@ private final class SlideRightAnimator: NSObject, UIViewControllerAnimatedTransi
 
 // MARK: Per-cover coordinator (transition + interactive edge-swipe)
 
-private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningDelegate {
+/// How far in from the left edge a back-swipe may start — wider than the system
+/// screen-edge gesture (~20pt) so it's easier to trigger. Tune here.
+private let rsdEdgeSwipeWidth: CGFloat = 44
+
+private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningDelegate, UIGestureRecognizerDelegate {
     weak var hosting: UIViewController?
+    weak var innerNav: UINavigationController?
     /// Runs when the cover is fully gone (see SlideRightAnimator.onDismissed).
     var onDismissed: (() -> Void)?
     private var interactor: UIPercentDrivenInteractiveTransition?
@@ -91,7 +96,18 @@ private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningD
         interactor
     }
 
-    @objc func handleEdgePan(_ g: UIScreenEdgePanGestureRecognizer) {
+    /// Begin only for a rightward, horizontal drag that STARTS within the left
+    /// margin, and only at the cover's nav root (deeper levels keep the native pop).
+    func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        guard let pan = g as? UIPanGestureRecognizer, let view = pan.view else { return false }
+        let t = pan.translation(in: view)
+        let startX = pan.location(in: view).x - t.x
+        guard startX <= rsdEdgeSwipeWidth, t.x > abs(t.y) else { return false }
+        if let nav = innerNav, nav.viewControllers.count > 1 { return false }
+        return true
+    }
+
+    @objc func handleEdgePan(_ g: UIPanGestureRecognizer) {
         guard let view = g.view else { return }
         let width = max(view.bounds.width, 1)
         let progress = min(max(g.translation(in: view).x / width, 0), 1)
@@ -142,11 +158,14 @@ private final class RSDHostingController<Content: View>: UIHostingController<Con
             }
             return
         }
-        let edge = UIScreenEdgePanGestureRecognizer(target: delegate,
-                                                    action: #selector(RightSlideDelegate.handleEdgePan(_:)))
-        edge.edges = .left
-        if let pop = nav.interactivePopGestureRecognizer { edge.require(toFail: pop) }
-        nav.view.addGestureRecognizer(edge)
+        // A plain pan (not a screen-edge gesture) so the start margin can be wider;
+        // `gestureRecognizerShouldBegin` gates it to a left-margin rightward drag at
+        // the nav root, so deeper levels still use the native edge-pop gesture.
+        let pan = UIPanGestureRecognizer(target: delegate,
+                                         action: #selector(RightSlideDelegate.handleEdgePan(_:)))
+        pan.delegate = delegate
+        delegate.innerNav = nav
+        nav.view.addGestureRecognizer(pan)
         installed = true
     }
 }
