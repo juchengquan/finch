@@ -60,6 +60,13 @@ account's detail) shadows. Bisected on device: it is **not** the content,
 rows, headers, search bar, large title, nav-bar background, or the data —
 it is purely **navigation depth** (root vs pushed).
 
+**Sharpened (device-confirmed 2026-07-28).** More precisely: only pushes on the
+**main tab-bar `NavigationStack`** shadow. A **modal cover** — and normal
+`NavigationStack` pushes *inside* a cover — do **not** (verified: a Settings drill
+cover → a category-detail push, scrolled and resumed, stays clean). This is why a
+multi-level flow is fixed by moving only its *entry* off the tab stack into a cover;
+the deeper levels then push natively inside it — no shadow, native swipe-back.
+
 **Proven NOT a data refresh.** Instrumented on resume: **0**
 `reprojectActiveLedger`, **0** Activity `recompute`, **0** view body
 re-evaluations (`Self._printChanges`). finch runs no code at all on resume;
@@ -67,33 +74,46 @@ the effect is entirely Apple's.
 
 ---
 
-## Fix (shipped) — RightSlideDrill
+## Fix (shipped) — RightSlideDrill (state-driven, device-verified)
 
-`Shell/RightSlideDrill.swift` (100 lines, iOS-only) plus call sites in
-`Tabs/BudgetsTab.swift` and `Tabs/SettingsTab.swift`. Two free functions:
+`Shell/RightSlideDrill.swift` (iOS-only) presents a SwiftUI view as a **full-screen
+`.overFullScreen` cover with a right-slide animation** (push feel, not modal feel)
+from the top-most presented VC. The presented view is a **root**, so iOS 26's glass
+doesn't re-converge on resume — no shadow, bars stay fully `.soft` transparent.
 
-- `_rd_presentModal(_:)` — presents a SwiftUI view as a **full-screen
-  modal with a right-slide animation** (push feel, not modal feel) from
-  the key window's root view controller.
-- `_rd_dismissModal()` — dismisses the currently presented cover.
+**State-driven API** (not imperative — that mattered): use the
+`.rightSlideDrill(item:)` / `(isPresented:)` view modifiers, so `DeepLinkRouter` /
+App Intents / notifications / Spotlight can open a drill, not just a `Button` tap.
+A `RightSlideDelegate` provides the transition; each cover gets an **interactive
+left-edge swipe-to-dismiss** — a `UIScreenEdgePanGestureRecognizer` installed by
+`RSDHostingController` once SwiftUI's inner nav exists, `require(toFail:)` that nav's
+pop gesture, so it fires only at the cover **root** and defers to the native pop
+deeper in. `_rd_present` carries an `onDismiss` that resets the driving state (so a
+completed swipe stays in sync); present/dismiss happen on the next runloop.
 
-A `UIViewControllerAnimatedTransitioning` does the slide-from-right
-animation; a `UIViewControllerTransitioningDelegate` plugs it in.
-
-The presented view is a **root** (not a pushed child), so iOS 26's Liquid
-Glass doesn't re-converge its scroll-edge material on resume — no shadow,
-while bars stay fully `.soft` and transparent.
-
-The compact-mode call sites use it for drill-ins:
-
-- `BudgetsTab`: tap a budget → `_rd_presentModal(BudgetDetailView(budgetId:))`
-  with a custom `‹ Budgets` back button in the toolbar.
-- `SettingsTab`: `SettingsRootList.onDrill` closure → `_rd_presentModal`
-  for each of the 10 drill-in pages (Categories, Tags, Merchants, etc.).
+Call sites (compact iOS only; iPad/Mac `selection != nil` three-column untouched):
+- **Accounts** — account detail / "All Transactions"→Activity / Holdings.
+- **Budgets** — budget detail (also fixed a deep-link dead path).
+- **Settings** — its 10 first-level drill pages.
+- **Ledger** — presented once at `TabBarShell` via
+  `.rightSlideDrill(isPresented: $router.showLedger)` hosting a `NavigationStack`;
+  LedgerList → LedgerDetail → "View all activity" then push **natively inside the
+  cover** (no shadow, native swipe-back). The old per-tab `LedgerPush`
+  `navigationDestination` (a main-tab-stack push) is retired.
 
 The three app-wide `@EnvironmentObject`s (`FinchStore`, `DeepLinkRouter`,
-`BiometricGate`) are re-injected on the hosted `UIHostingController`.
-iPad/Mac (`selection != nil`) three-column paths are untouched.
+`BiometricGate`) are re-injected on each hosted `UIHostingController`.
+
+> **It was latently broken until 2026-07-28** — never actually presented a cover:
+> `RightSlideDrill.swift` wasn't in the Xcode project (a `project.yml` YAML error broke
+> `xcodegen`, so everyone built a stale `.xcodeproj`); `SlideRightAnimator` required a
+> `.from` view that is nil under `.overFullScreen`, aborting every present; `import
+> UIKit` sat outside `#if os(iOS)`. The "This is the fix" claim below predated those
+> fixes.
+
+**Settings 2nd-level detail** (Categories→a category, etc.) is intentionally left on
+native `NavigationStack` push — device-confirmed it does NOT shadow (a push inside a
+cover is fine; see the sharpened rule above).
 
 ---
 
@@ -109,7 +129,7 @@ iPad/Mac (`selection != nil`) three-column paths are untouched.
 | Wrap the pushed page in its **own** `NavigationStack` (nested) | **Intermittent** — a nested stack isn't reliably treated as top-level. |
 | **`UIKitNavStack`** — `UINavigationController`-wrapped SwiftUI views, env re-injection, `UIKitNavLink` for declarative pushes | **Tried. Did not fix the shadow on device.** Replaced by `.fullScreenCover` drill (PR #628), then by RightSlideDrill. The earlier post-mortem on `feat/uikit-device-build` claimed this was the fix; the on-device test refuted that claim. |
 | `.fullScreenCover` drill | Reliably kills the shadow (the presented view is a root), but the slide-up modal feel was jarring vs. the native slide-from-right push. Replaced by RightSlideDrill. |
-| **RightSlideDrill** — full-screen modal with right-slide animation via `UIViewControllerAnimatedTransitioning` | Reliably kills the shadow, preserves slide-from-right push feel, keeps `.soft` transparency. **This is the fix.** |
+| **RightSlideDrill** — `.overFullScreen` cover, right-slide animation, state-driven, interactive edge-swipe | **The fix — device-verified 2026-07-28 for one- AND multi-level** (Accounts/Budgets/Settings + the Ledger flow). Kills the shadow, keeps slide-from-right + swipe-back and `.soft` transparency. Needed the three latent-bug fixes noted above before it actually presented a cover. |
 
 ---
 
