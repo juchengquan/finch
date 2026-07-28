@@ -72,10 +72,6 @@ private final class SlideRightAnimator: NSObject, UIViewControllerAnimatedTransi
 
 // MARK: Per-cover coordinator (transition + interactive edge-swipe)
 
-/// How far in from the left edge a back-swipe may start — wider than the system
-/// screen-edge gesture (~20pt) so it's easier to trigger. Tune here.
-private let rsdEdgeSwipeWidth: CGFloat = 44
-
 private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningDelegate, UIGestureRecognizerDelegate {
     weak var hosting: UIViewController?
     weak var innerNav: UINavigationController?
@@ -96,15 +92,29 @@ private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningD
         interactor
     }
 
-    /// Begin only for a rightward, horizontal drag that STARTS within the left
-    /// margin, and only at the cover's nav root (deeper levels keep the native pop).
+    /// Begin for a rightward, horizontal drag anywhere, but only at the cover's nav
+    /// root (deeper levels keep the native pop). Row swipe-actions still win via
+    /// `shouldRequireFailureOf` below — so this effectively fires from blank/gap areas.
     func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         guard let pan = g as? UIPanGestureRecognizer, let view = pan.view else { return false }
         let t = pan.translation(in: view)
-        let startX = pan.location(in: view).x - t.x
-        guard startX <= rsdEdgeSwipeWidth, t.x > abs(t.y) else { return false }
+        guard t.x > abs(t.y) else { return false }   // clearly rightward + horizontal
         if let nav = innerNav, nav.viewControllers.count > 1 { return false }
         return true
+    }
+
+    /// Rows win: the back-swipe defers to a row's swipe-action gesture, so it only
+    /// activates from non-row (blank/gap) areas. Identify the row gesture by class
+    /// name ("…SwipeActionPanGestureRecognizer") or by living inside a list cell; do
+    /// NOT defer to the scroll pan (so scrolling keeps its instant response).
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+        if String(describing: type(of: other)).contains("Swipe") { return true }
+        var v = other.view
+        while let cur = v {
+            if cur is UICollectionViewCell || cur is UITableViewCell { return true }
+            v = cur.superview
+        }
+        return false
     }
 
     @objc func handleEdgePan(_ g: UIPanGestureRecognizer) {
