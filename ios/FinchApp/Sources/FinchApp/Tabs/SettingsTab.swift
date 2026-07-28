@@ -20,34 +20,48 @@ enum SettingsDrill: String, Identifiable {
 /// Ledger switching, Manage ledgers, and display currency live in the Ledger
 /// screen (the top-left corner control) now, so they're not duplicated here.
 struct SettingsTab: View {
+    #if os(iOS)
+    @State private var drill: SettingsDrill?
+    #endif
+
     var body: some View {
         NavigationStack {
-            SettingsRootList(onDrill: { target in
-                _rd_presentModal(
-                    NavigationStack {
-                        drillContent(target)
-                            .toolbar { ToolbarItem(placement: .topBarLeading) {
-                                Button { _rd_dismissModal() } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chevron.left")
-                                        Text("Settings")
-                                    }
-                                }
-                            } }
-                    }
-                )
-            })
-                .toolbar {
-                    #if os(iOS)
-                    ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
-                    #endif
-                    ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
-                }
+            settingsRoot
+                .toolbar { toolbarContent }
                 .ledgerPush()
+                // Compact iOS: rows set `drill`, presented as a right-slide cover
+                // (no resume shadow) — state-driven, so router / deep-link entry
+                // opens the drill, not just a row tap.
+                #if os(iOS)
+                .rightSlideDrill(item: $drill) { settingsDrillCover($0) }
+                #endif
         }
-        // Compact drill-in: present as a right-slide cover via the row's
-        // onDrill callback. iPad/macOS uses NavigationLink (unchanged).
+    }
+
+    #if os(iOS)
+    /// The compact drill-in cover's content (top-level → no resume shadow).
+    @ViewBuilder private func settingsDrillCover(_ target: SettingsDrill) -> some View {
+        NavigationStack {
+            drillContent(target)
+                .rsdBackToolbar("Settings") { drill = nil }
+        }
+    }
+    #endif
+
+    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) { LedgerBarButton() }
+        #endif
+        ToolbarItem(placement: .primaryAction) { PrivacyToggleButton() }
+    }
+
+    // macOS: `SettingsRootList` uses NavigationLink (onDrill == nil); compact iOS
+    // routes taps through `drill` instead.
+    @ViewBuilder private var settingsRoot: some View {
+        #if os(iOS)
+        SettingsRootList(onDrill: { drill = $0 })
+        #else
+        SettingsRootList()
         #endif
     }
 

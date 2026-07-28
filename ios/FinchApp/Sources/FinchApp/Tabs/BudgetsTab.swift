@@ -117,6 +117,14 @@ NavigationStack(path: $path) {
                     reorderRows = []
                 }
             }
+            // Compact drill-in cover (no resume shadow). State-driven, so a deep
+            // link into a budget (openBudget → drill) opens it, not just row taps.
+            .rightSlideDrill(item: $drill) { target in
+                NavigationStack {
+                    BudgetDetailView(budgetId: target.id)
+                        .rsdBackToolbar("Budgets") { drill = nil }
+                }
+            }
             #endif
         }
     }
@@ -190,25 +198,11 @@ NavigationStack(path: $path) {
                     // so there's no trailing disclosure chevron — same convention as
                     // the Accounts rows; contentShape keeps the whole row tappable.
                     Button {
-                        if selection == nil {
-                            _rd_presentModal(
-                                NavigationStack {
-                                    BudgetDetailView(budgetId: budget.id)
-                                        .toolbar { ToolbarItem(placement: .topBarLeading) {
-                                            Button {
-                                                _rd_dismissModal(); drill = nil
-                                            } label: {
-                                                HStack(spacing: 4) {
-                                                    Image(systemName: "chevron.left")
-                                                    Text("Budgets")
-                                                }
-                                            }
-                                        } }
-                                }
-                            )
-                        } else {
-                            path.append(budget.id)
-                        }
+                        #if os(iOS)
+                        if selection == nil { drill = .detail(budget.id) } else { path.append(budget.id) }
+                        #else
+                        path.append(budget.id)
+                        #endif
                     } label: {
                         BudgetRowView(budget: budget).contentShape(Rectangle())
                     }

@@ -30,7 +30,7 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
-CODE_SIGN_ENTITLEMENTS: FinchApp/FinchApp.entitlements
+        CODE_SIGN_ENTITLEMENTS: FinchApp/FinchApp.entitlements
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: "YES"
         DEVELOPMENT_TEAM: 2WDR2437MU

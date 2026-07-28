@@ -247,9 +247,10 @@ struct AccountDetailView: View {
                             // The section is date-descending, so its first (newest) row's
                             // running balance IS the end-of-month balance — same cache the
                             // row shows, so header and row agree exactly.
+                            // No force-unwrap: a month section is never empty in practice,
+                            // but `first!` at render time is a hard crash if it ever is.
                             Text(store.displayMoneyBase(MonthGrouping.net(section.txns))
-                                 + "  ·  "
-                                 + store.displayMoneyBase(store.runningBalanceBase(for: section.txns.first!)))
+                                 + (section.txns.first.map { "  ·  " + store.displayMoneyBase(store.runningBalanceBase(for: $0)) } ?? ""))
                                 .foregroundStyle(.secondary)
                         }
                         Text("Income \(store.displayMoneyBase(MonthGrouping.income(section.txns))) · Spent \(store.displayMoneyBase(MonthGrouping.expense(section.txns)))")
