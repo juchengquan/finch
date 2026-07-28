@@ -42,7 +42,7 @@ struct SettingsTab: View {
     @ViewBuilder private func settingsDrillCover(_ target: SettingsDrill) -> some View {
         NavigationStack {
             drillContent(target)
-                .rsdBackToolbar("Settings") { drill = nil }
+                .rsdBackToolbar { drill = nil }
         }
     }
     #endif
@@ -125,7 +125,10 @@ struct SettingsRootList: View {
         @ViewBuilder label: @escaping () -> RowLabel
     ) -> some View {
         if let onDrill {
+            // .plain so the row reads as a normal (black) settings row, not a blue
+            // accent-tinted button — matches the Accounts/Budgets row convention.
             Button { onDrill(target) } label: { label().contentShape(Rectangle()) }
+                .buttonStyle(.plain)
         } else {
             NavigationLink(destination: dest, label: label)
         }

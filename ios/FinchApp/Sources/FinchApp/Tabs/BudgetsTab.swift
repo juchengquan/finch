@@ -121,7 +121,7 @@ NavigationStack(path: $path) {
             .rightSlideDrill(item: $drill) { target in
                 NavigationStack {
                     BudgetDetailView(budgetId: target.id)
-                        .rsdBackToolbar("Budgets") { drill = nil }
+                        .rsdBackToolbar { drill = nil }
                 }
             }
             #endif

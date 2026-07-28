@@ -141,7 +141,7 @@ struct AccountsTab: View {
             .rightSlideDrill(item: $drill) { target in
                 NavigationStack {
                     accountDrillDestination(target)
-                        .rsdBackToolbar("Accounts") { drill = nil }
+                        .rsdBackToolbar { drill = nil }
                 }
             }
             #endif

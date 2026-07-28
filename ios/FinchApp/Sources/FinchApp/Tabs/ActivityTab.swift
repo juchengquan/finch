@@ -72,7 +72,6 @@ struct ActivityFeedView: View {
     @State private var pendingTxns: [Tx] = []   // pinned "To confirm" bucket (filtered)
     @State private var dateShownIds: Set<String> = []
     @State private var hasMore = false
-    @State private var filteredCount = 0
     @State private var confirmingBulkDelete = false
     @State private var pendingDelete: Tx?   // single-row delete awaiting confirmation
 
@@ -104,10 +103,6 @@ struct ActivityFeedView: View {
                         calendarDetail
                     } else {
                     savedSearchRow
-                    Text("\(filteredCount) transaction\(filteredCount == 1 ? "" : "s")")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-                        .listRowBackground(Color.clear)
                     if sections.isEmpty && pendingTxns.isEmpty {
                         ContentUnavailableView {
                             Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle")
@@ -271,7 +266,6 @@ struct ActivityFeedView: View {
     /// that actually affect the list (txns, query, page size).
     private func recompute() {
         let f = filteredTxns()
-        filteredCount = f.count
         // Pending splits into its pinned bucket (newest first, whatever the sort
         // menu says); the month sections cover confirmed rows only.
         pendingTxns = TxSort.dateDesc.sorted(f.filter { $0.pending == true })
