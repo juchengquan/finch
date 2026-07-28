@@ -38,7 +38,7 @@ struct TabBarShell: View {
 
     var body: some View {
         TabView(selection: $selected) {
-            tabContent(.accounts).modifier(AddTransactionFAB())
+            tabContent(.accounts).addTransactionFAB()
                 // Instant tab switches (kills the iOS 26 cross-dissolve "block"); see
                 // DisableTabContentTransition. Hosted in one tab so it can reach the
                 // real UITabBarController — one install covers the whole TabView.
@@ -47,13 +47,13 @@ struct TabBarShell: View {
                 #endif
                 .tabItem { Label(AppTab.accounts.title, systemImage: AppTab.accounts.icon) }
                 .tag(CompactTab.accounts)
-            tabContent(.budgets).modifier(AddTransactionFAB())
+            tabContent(.budgets).addTransactionFAB()
                 .tabItem { Label(AppTab.budgets.title, systemImage: AppTab.budgets.icon) }
                 .tag(CompactTab.budgets)
-            tabContent(.scheduled).modifier(AddTransactionFAB())
+            tabContent(.scheduled).addTransactionFAB()
                 .tabItem { Label(AppTab.scheduled.title, systemImage: AppTab.scheduled.icon) }
                 .tag(CompactTab.scheduled)
-            tabContent(.insights).modifier(AddTransactionFAB())
+            tabContent(.insights).addTransactionFAB()
                 .tabItem { Label(AppTab.insights.title, systemImage: AppTab.insights.icon) }
                 .tag(CompactTab.insights)
             tabContent(.settings)
@@ -138,6 +138,17 @@ struct AddTxContext: Equatable {
     var isEmpty: Bool { accountId == nil && categoryId == nil }
 }
 
+/// The FAB's cover-local Add sheet payload. `.sheet(item:)`, not
+/// `.sheet(isPresented:)`: the `isPresented` content closure is captured on an
+/// earlier body pass, so it read the page context from BEFORE
+/// `onPreferenceChange` delivered it and opened an unseeded sheet (device-verified
+/// — the FAB knew `accountId=savings` while the sheet it opened had no account).
+private struct AddTxSeed: Identifiable {
+    let accountId: String?
+    let categoryId: String?
+    var id: String { "\(accountId ?? "-")|\(categoryId ?? "-")" }
+}
+
 struct AddTxContextKey: PreferenceKey {
     static let defaultValue = AddTxContext()
     // The innermost publisher wins: a pushed detail page's context replaces
@@ -148,12 +159,14 @@ struct AddTxContextKey: PreferenceKey {
     }
 }
 
-/// A floating "add transaction" button for the compact primary tabs — quick
-/// capture from anywhere (it replaces the prominent `+` the removed Activity tab
-/// used to provide). Triggers the same app-root sheet as ⌘N / the command
-/// palette. Hidden until at least one account exists (you can't post without one).
-/// The overlay sits inside the tab's content area, so it floats just above the
-/// bottom bar automatically. Hidden while the content is in multi-select so it
+/// A floating "add transaction" button for the compact primary tabs **and for the
+/// right-slide drill covers they open** — quick capture from anywhere (it replaces
+/// the prominent `+` the removed Activity tab used to provide). Triggers the same
+/// app-root sheet as ⌘N / the command palette (covers present it themselves — see
+/// `presentsLocally`). Hidden until at least one account exists (you can't post
+/// without one). The overlay sits inside the tab's content area, so it floats just
+/// above the bottom bar automatically; a cover has no bottom bar, so there it sits
+/// against the safe area. Hidden while the content is in multi-select so it
 /// doesn't overlap the bulk-action bar (see `SelectionActiveKey`).
 /// User preference for which bottom corner hosts the floating add button
 /// (Settings › Appearance › Quick add button). Stored as a raw string so the
@@ -164,11 +177,19 @@ enum FabPosition: String, CaseIterable, Identifiable {
     var label: LocalizedStringKey { self == .left ? "Bottom left" : "Bottom right" }
 }
 
-private struct AddTransactionFAB: ViewModifier {
+struct AddTransactionFAB: ViewModifier {
+    /// A drill cover (`rightSlideDrill`) is a top-level UIKit modal, so the
+    /// app-root Add sheet cannot present over it — SwiftUI tears the cover down
+    /// to show it, ejecting the user back to the tab root (verified on device via
+    /// `finch://add` from an account page). Inside a cover the FAB therefore
+    /// presents its OWN sheet, exactly like the page's toolbar `+` does; on a tab
+    /// it keeps routing through the router so ⌘N / palette / FAB stay one path.
+    var presentsLocally = false
     @EnvironmentObject private var router: DeepLinkRouter
     @EnvironmentObject private var store: FinchStore
     @State private var selecting = false
     @State private var context = AddTxContext()
+    @State private var localAddSeed: AddTxSeed?
     @AppStorage("finch.fab.enabled") private var fabEnabled = true
     @AppStorage("finch.fab.position") private var fabPositionRaw = FabPosition.right.rawValue
     private var fabLeft: Bool { fabPositionRaw == FabPosition.left.rawValue }
@@ -180,9 +201,14 @@ private struct AddTransactionFAB: ViewModifier {
                 Button {
                     // Seed the sheet with the page's subject (account/budget
                     // detail) so the FAB matches the page's own toolbar `+`.
-                    router.pendingAddAccountId = context.accountId
-                    router.pendingAddCategoryId = context.categoryId
-                    router.showAddTransaction = true
+                    if presentsLocally {
+                        localAddSeed = AddTxSeed(accountId: context.accountId,
+                                                 categoryId: context.categoryId)
+                    } else {
+                        router.pendingAddAccountId = context.accountId
+                        router.pendingAddCategoryId = context.categoryId
+                        router.showAddTransaction = true
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.title2.weight(.semibold))
@@ -198,7 +224,28 @@ private struct AddTransactionFAB: ViewModifier {
         }
         .onPreferenceChange(SelectionActiveKey.self) { selecting = $0 }
         .onPreferenceChange(AddTxContextKey.self) { context = $0 }
+        // Cover-local presentation (see `presentsLocally`) — seeded from the same
+        // page context the router path passes through `pendingAdd*`.
+        .sheet(item: $localAddSeed) { seed in
+            AddTransactionSheet(defaultAccountId: seed.accountId,
+                                defaultCategoryId: seed.categoryId)
+        }
     }
+}
+
+extension View {
+    /// The floating add-`+` for a compact primary tab (Accounts / Budgets /
+    /// Scheduled / Insights). Taps route through `DeepLinkRouter` to the app-root
+    /// Add sheet, the same one ⌘N and the command palette open.
+    func addTransactionFAB() -> some View { modifier(AddTransactionFAB()) }
+
+    /// The same button for a right-slide drill cover's content. Identical look and
+    /// page-context seeding, but the Add sheet is presented by the cover itself —
+    /// the app-root sheet would dismiss the cover out from under the user.
+    /// Apply INSIDE the cover's `NavigationStack`, on the destination view — that
+    /// is the arrangement verified on device, and it keeps the FAB a direct
+    /// ancestor of the page publishing `AddTxContextKey`.
+    func addTransactionFABInCover() -> some View { modifier(AddTransactionFAB(presentsLocally: true)) }
 }
 
 /// The top-left Ledger control on every compact primary tab — sets
