@@ -72,6 +72,19 @@ struct TabBarShell: View {
                 router.selectedTab = tab
             }
         }
+        #if os(iOS)
+        // The Ledger drill as a top-level right-slide cover, presented ONCE here at
+        // the compact shell (not per-tab) so the single `router.showLedger` bool
+        // drives exactly one cover. LedgerList → LedgerDetail → "View all activity"
+        // then push natively *inside* the cover's NavigationStack — native
+        // swipe-back and NO resume shadow (only main-tab-stack pushes shadow).
+        .rightSlideDrill(isPresented: $router.showLedger) {
+            NavigationStack {
+                LedgerListView()
+                    .rsdBackToolbar { router.showLedger = false }
+            }
+        }
+        #endif
     }
 
     private func syncFromRouter(_ tab: AppTab) {
@@ -218,28 +231,19 @@ struct PrivacyToggleButton: View {
     }
 }
 
-/// Pushes the two-layer Ledger onto the enclosing NavigationStack when
-/// `router.showLedger` is set (by the corner button or a `.ledger` route).
-/// Compact-only — iPad/Mac reach the Ledger via the sidebar.
+/// No-op passthrough. The compact Ledger is now presented as a top-level
+/// right-slide cover once at `TabBarShell` (see `.rightSlideDrill(isPresented:
+/// $router.showLedger)`), NOT as a per-tab `navigationDestination` push — a
+/// main-tab-stack push re-converges iOS 26's glass into a resume shadow, a cover
+/// does not. iPad/Mac reach the Ledger via the sidebar. The `.ledgerPush()` calls
+/// on the compact tabs are left as harmless no-ops.
 private struct LedgerPush: ViewModifier {
-    @EnvironmentObject private var router: DeepLinkRouter
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.navigationDestination(isPresented: Binding(
-            get: { sizeClass == .compact && router.showLedger },
-            set: { if !$0 { router.showLedger = false } })) {
-            LedgerListView()   // titles itself "Ledgers" — don't override with a second (dead) title
-        }
-        #else
-        content
-        #endif
-    }
+    func body(content: Content) -> some View { content }
 }
 
 extension View {
-    /// Apply inside a compact tab's NavigationStack so the top-left Ledger control
-    /// (and a `.ledger` route) pushes the Ledger there.
+    /// Superseded — the compact Ledger cover lives at `TabBarShell`. Retained as a
+    /// no-op so existing call sites compile; safe to remove in a later cleanup.
     func ledgerPush() -> some View { modifier(LedgerPush()) }
 }
 
