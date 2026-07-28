@@ -1255,6 +1255,16 @@
         }
       }
     },
+    "Back": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回"
+          }
+        }
+      }
+    },
     "Back up now": {
       "localizations": {
         "zh-Hans": {
