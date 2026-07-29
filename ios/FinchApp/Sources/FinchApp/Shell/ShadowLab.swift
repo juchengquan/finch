@@ -52,6 +52,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case coverCustomBar19
     // --- round 8 ---
     case uikitRootSwap20
+    // --- round 9 ---
+    case passthroughCover21
 
     var id: String { rawValue }
 
@@ -90,6 +92,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .customBar18:            return "18 · NATIVE push, custom bottom bar (no TabView)"
         case .coverCustomBar19:       return "19 · COVER + custom bar + native push"
         case .uikitRootSwap20:        return "20 · UIKit nav, ROOT-REPLACE (not push)"
+        case .passthroughCover21:     return "21 · Cover with the REAL tab bar showing through"
         }
     }
 
@@ -116,6 +119,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .customBar18:            return "One NavigationStack, no TabView; the bottom bar is drawn by us. Fully native push."
         case .coverCustomBar19:       return "Variant 8's clean structure (presented, no TabView) PLUS a drawn bottom bar."
         case .uikitRootSwap20:        return "Real UINavigationController + real tab bar. setViewControllers, so the page is a ROOT."
+        case .passthroughCover21:     return "#8's clean cover, but the bottom strip is transparent AND tappable — the REAL bar."
         }
     }
 
@@ -220,6 +224,67 @@ private struct CustomBarLab: View {
             }
             ReplicaBar(selected: $selected)
         }
+    }
+}
+
+// MARK: - Variant 21: a cover that lets the REAL tab bar through
+//
+// #8 and #19 were both presented from a shell that HAS a TabView, and their
+// pushes were clean — so a TabView is only poison as an ANCESTOR of the push,
+// not when it merely sits behind the presentation. #19 then showed a bottom bar
+// can coexist with a clean cover, but only as a replica.
+//
+// This tries for the real thing: present the drill `.overFullScreen` (so the
+// presenter, tab bar included, stays visible behind), keep the bottom strip
+// TRANSPARENT, and make it touch-transparent too, so taps land on the real tab
+// bar underneath. If it works: real Apple tab bar, visible and tappable, with
+// native pushes inside a clean cover.
+
+private var _pt_presented: UIViewController?
+private func _pt_dismiss() { _pt_presented?.dismiss(animated: true); _pt_presented = nil }
+
+/// Returns nil for touches in the bottom strip so they fall through to whatever
+/// is behind the cover — here, the real tab bar.
+private final class PassthroughView: UIView {
+    var passthroughHeight: CGFloat = 100
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if point.y > bounds.height - passthroughHeight { return nil }
+        return super.hitTest(point, with: event)
+    }
+}
+
+/// Hosts the cover's SwiftUI content above the passthrough strip.
+private final class PassthroughContainer: UIViewController {
+    private let host: UIViewController
+    private let stripHeight: CGFloat
+
+    init(host: UIViewController, stripHeight: CGFloat) {
+        self.host = host; self.stripHeight = stripHeight
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .overFullScreen
+    }
+    required init?(coder: NSCoder) { fatalError("unused") }
+
+    override func loadView() {
+        let v = PassthroughView()
+        v.passthroughHeight = stripHeight
+        v.backgroundColor = .clear
+        view = v
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            // Stop short of the bar so it stays visible AND hittable.
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -stripHeight),
+        ])
+        host.didMove(toParent: self)
     }
 }
 
@@ -720,11 +785,43 @@ private struct NormalLab: View {
         .navigationTitle("Shadow lab")
     }
 
+    /// Variant 21 — present over the shell, leaving the real tab bar exposed.
+    private func presentPassthroughCover() {
+        let content = NavigationStack {
+            List {
+                Section {
+                    Text("The bar below is the REAL tab bar, showing through this cover. Try tapping it. Then push, scroll, Home, resume.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                NavigationLink("Push the Activity feed (native push)") {
+                    LabContent(variant: .passthroughCover21)
+                }
+                Button("Close") { _pt_dismiss() }
+            }
+            .navigationTitle("Passthrough cover")
+        }
+        .environmentObject(FinchStore.shared)
+        .environmentObject(DeepLinkRouter.shared)
+        .environmentObject(BiometricGate.shared)
+
+        let host = UIHostingController(rootView: content)
+        host.view.backgroundColor = .systemBackground
+        let container = PassthroughContainer(host: host, stripHeight: 100)
+
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let root = scenes.first?.keyWindow?.rootViewController else { return }
+        var top = root
+        while let p = top.presentedViewController { top = p }
+        _pt_presented = container
+        top.present(container, animated: true)
+    }
+
     private func open(_ v: ShadowVariant) {
         minimize = (v == .push7TabBarMinimize)
         dragX = 0
         switch v {
         case .cover1Control, .pushInCover8:                       cover = v
+        case .passthroughCover21:     presentPassthroughCover()
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
         case .cover10Zoom, .cover11Plain:                         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:

@@ -34,6 +34,15 @@ struct FinchApp: App {
         if UserDefaults.standard.bool(forKey: "openAdd") {
             DeepLinkRouter.shared.showAddTransaction = true
         }
+        // Shadow lab (THROWAWAY branch): `-shadowLab YES` STICKS, so tapping the
+        // app icon keeps the lab instead of silently falling back to the real app
+        // — launch arguments only apply to the launch that passes them, which is
+        // an easy way to think you are testing the lab when you are not.
+        // `-shadowLab NO` turns it back off.
+        if UserDefaults.standard.object(forKey: "shadowLab") != nil {
+            UserDefaults.standard.set(UserDefaults.standard.bool(forKey: "shadowLab"),
+                                      forKey: "shadowLabSticky")
+        }
         #endif
     }
 
@@ -43,7 +52,7 @@ struct FinchApp: App {
                 #if DEBUG && os(iOS)
                 // `-shadowLab YES` swaps the shell for the iOS 26 resume-shadow lab
                 // (ShadowLab.swift). THROWAWAY branch only — never merged.
-                if UserDefaults.standard.bool(forKey: "shadowLab") {
+                if UserDefaults.standard.bool(forKey: "shadowLabSticky") {
                     ShadowLabRoot()
                         .environmentObject(store)
                         .environmentObject(router)
