@@ -54,7 +54,7 @@ struct HoldingsView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
+                Button { showingAdd = true } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Add Holding")
                     .disabled(investmentAccounts.isEmpty)
             }
@@ -122,7 +122,7 @@ struct AddHoldingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.toolbarCircleClip()
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -182,7 +182,7 @@ struct SetHoldingPriceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.toolbarCircleClip()
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

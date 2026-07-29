@@ -177,10 +177,9 @@ struct ActivityFeedView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingFilter = true } label: {
                     Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .toolbarTapTarget()
+                        
                 }
                 .accessibilityLabel("Filter")
-                .toolbarCircleClip()
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -188,14 +187,13 @@ struct ActivityFeedView: View {
                         ForEach(TxSort.allCases) { Text($0.label).tag($0) }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down").toolbarTapTarget()
+                    Image(systemName: "arrow.up.arrow.down")
                 }
                 .accessibilityLabel("Sort")
-                .toolbarCircleClip()
             }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
+                    Button { showingAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add Transaction")
                         .disabled(store.accounts.isEmpty)
                 }

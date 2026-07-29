@@ -91,7 +91,7 @@ struct AccountDetailView: View {
                         }
                     }
                     ToolbarItem(placement: .primaryAction) {
-                        Button { showingAddTx = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
+                        Button { showingAddTx = true } label: { Image(systemName: "plus") }
                             .accessibilityLabel("Add Transaction")
                     }
                     ToolbarItem(placement: .primaryAction) {
@@ -101,7 +101,7 @@ struct AccountDetailView: View {
                             Button { showingAdjust = true } label: { Label("Adjust balance…", systemImage: TxnKindIcon.icon(for: "adjustment")) }
                             Button { archive(account) } label: { Label("Archive", systemImage: "archivebox") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
-                        } label: { Image(systemName: "ellipsis").toolbarTapTarget() }.toolbarCircleClip()
+                        } label: { Image(systemName: "ellipsis") }
                         // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
                         .confirmationDialog("Delete this account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                             Button("Delete", role: .destructive) { delete(account) }

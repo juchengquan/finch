@@ -345,9 +345,8 @@ extension View {
         toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: dismiss) {
-                    Image(systemName: "chevron.left").toolbarTapTarget()
+                    Image(systemName: "chevron.left")
                 }
-                .toolbarCircleClip()
                 .accessibilityLabel("Back")
             }
         }
