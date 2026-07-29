@@ -8,7 +8,27 @@ exists on those platforms); incremental strangler migration, shipping continuous
 note. Read `ios26-shadow-variant-matrix.md` first, including its 2026-07-30
 addendum.
 
-> ## REVISED 2026-07-30 — the bug is no longer a reason to do this
+> ## REVISED AGAIN 2026-07-30 — FULL migration is the only thing that works
+>
+> The coverage tests settled the shape of this. Under a UIKit root, hosted SwiftUI
+> screens are **unpredictable**: `AccountDetailView` and `ActivityFeedView` are
+> clean at every volume; `CategoriesView` shadows — and still shadows after adding
+> the pinned search drawer that is the only structural property separating it from
+> the clean ones. Five explanations have now been tested to destruction (`TabView`,
+> SwiftUI-content, volume, sections, pinned search drawer).
+>
+> So **hosting is a transition state, not an end state**, and the only configuration
+> verified clean everywhere is **UIKit root + UIKit page**. That makes the full
+> migration of pushed screens the one approach that actually fixes the bug — which
+> is what this plan now describes.
+>
+> **Sequencing consequence:** `RightSlideDrill` STAYS during the migration. Each
+> unconverted pushed screen keeps its cover; the cover is removed per route as that
+> screen converts. The app is never mid-flight broken and the bug never regresses.
+>
+> The earlier revision below is kept for history.
+>
+> ## Superseded revision — 2026-07-30 (earlier)
 >
 > Two findings from testing at realistic volume (2,000 transactions) removed the
 > urgency this plan was written under:
@@ -41,9 +61,11 @@ From the 37-variant sweep and the UIKit-root reproducer:
 
 Two consequences the plan must respect:
 
-1. **A UIKit shell alone buys nothing.** Benefit arrives only when the root is UIKit
-   *and* the specific page is UIKit. So Phase 1 ships no user-visible improvement —
-   that is expected, not a failure.
+1. **A UIKit shell alone buys nothing** — and worse, it is not even reliable for
+   hosted screens: `CategoriesView` shadows under a UIKit root while
+   `AccountDetailView` does not. Benefit arrives only when the root is UIKit *and*
+   the specific page is UIKit. Phase 1 ships no user-visible improvement; that is
+   expected.
 2. **Only PUSHED pages shadow.** Tab roots are roots; sheets are presented. Both are
    already clean and never need converting for the bug.
 
@@ -141,8 +163,13 @@ its `.rightSlideDrill(...)` becomes a plain push again:
 4. `PowerTools` (2,568 across 15 files) — categories, rules, tags, merchants, FX.
    Mechanical, mostly table-driven, good after the pattern is proven.
 
-**Exit:** `RightSlideDrill.swift` deleted, every drill is a native push, native bar
-behaviour and swipe-back throughout, tab bar visible during drills.
+**Keep `RightSlideDrill` throughout this phase.** Every screen not yet converted
+stays behind its cover, and the cover is removed for that route only when its
+screen lands in UIKit. That way no screen ever regresses to shadowing mid-migration.
+
+**Exit:** `RightSlideDrill.swift` deleted once the LAST pushed screen converts;
+every drill is a native push, native bar behaviour and swipe-back throughout, tab
+bar visible during drills.
 
 ### Phase 3 — iPad (1–2 weeks)
 
@@ -196,7 +223,24 @@ motivation remains. **Re-run the shadow lab on every iOS release during this wor
 | **to bug-free + iPad** | **~7–10 weeks** |
 | 4 · opportunistic | ongoing, optional |
 
-## Recommended first step: a pilot, not Phase 0
+## Pre-flight: two checks before committing weeks
+
+The pilot already answers "can a screen be converted" — `AccountDetailVC` exists,
+builds, reuses the store, selectors and write chokepoint unchanged, and came in at
+roughly 1:1 lines against the SwiftUI original. Two things it has NOT yet proven,
+and both are cheap:
+
+1. **The converted screen is clean at realistic volume.** Verify `AccountDetailVC`
+   at 2,000 rows specifically (the pilot is already seeded).
+2. **Conversion fixes a screen that is KNOWN to shadow.** Convert `CategoriesView`
+   — the one real screen that shadows under a UIKit root, with or without a search
+   drawer — and confirm it goes clean. This is the strongest available evidence for
+   the whole plan: take the failing case and show the treatment fixes it.
+
+If (2) comes back clean, the plan is validated end to end. If it does not, the
+migration does not fix the bug and should be abandoned as a bug remedy entirely.
+
+## Earlier recommendation: a pilot, not Phase 0
 
 Convert **one** drill end-to-end — `AccountDetailView` — behind the existing shell,
 hosted the way Phase 1 would host it. It is 320 lines, it has a search field, swipe
