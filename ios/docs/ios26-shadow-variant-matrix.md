@@ -334,7 +334,11 @@ Pushing the app's remaining drill destinations under the same UIKit root:
 | `ActivityFeedView` | 44 | clean |
 | **`CategoriesView`** | ~40 | **SHADOWS** |
 
-**Consequence: a UIKit shell is not a fix.** This is now measured rather than
+**But CONVERSION is a fix, verified on the failing case.** `CategoriesVC` — the
+same screen converted to UIKit, same data, same UIKit root — is **clean**. So
+UIKit-page-under-UIKit-root holds even where hosting fails.
+
+**Consequence: a UIKit shell alone is not a fix.** This is now measured rather than
 argued from ignorance — a real finch screen shadows under a UIKit root, so Phase 1
 of the migration plan would leave an unknown subset of screens still shadowing and
 require per-screen conversion anyway, with no way to predict which screens need it

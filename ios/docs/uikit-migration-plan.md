@@ -8,6 +8,29 @@ exists on those platforms); incremental strangler migration, shipping continuous
 note. Read `ios26-shadow-variant-matrix.md` first, including its 2026-07-30
 addendum.
 
+> ## VALIDATED 2026-07-30 — conversion fixes the failing case
+>
+> `CategoriesView` is the one real finch screen that shadows under a UIKit root.
+> Converted to UIKit (`CategoriesVC` in the pilot), same data, same root: **clean**.
+> That is the treatment fixing the failing case, which is far stronger than the
+> earlier tests that took already-clean screens and showed they stayed clean.
+>
+> With reproducer A, UIKit-page-under-UIKit-root is now clean everywhere it has
+> been tried. **The plan is validated end to end; what remains is a cost decision.**
+>
+> **Two real conversions, for the estimate:**
+>
+> | screen | SwiftUI | UIKit | reused unchanged |
+> |---|---:|---:|---|
+> | `AccountDetailView` | 320 | ~250 | store, selectors, write chokepoint |
+> | `CategoriesView` | 574 | ~160 | same |
+>
+> **Read those with the caveat that both conversions covered SCROLL CONTENT only.**
+> Omitted: the calendar mode and holdings section (Account detail); reorder/drag,
+> merge/multi-select, import and copy-to-ledger (Categories). Those are real work —
+> drag-and-drop reordering in a collection view is fiddly — and would plausibly add
+> 30–50% on top. Treat Phase 2's 3–4 weeks as the optimistic end.
+>
 > ## REVISED AGAIN 2026-07-30 — FULL migration is the only thing that works
 >
 > The coverage tests settled the shape of this. Under a UIKit root, hosted SwiftUI
