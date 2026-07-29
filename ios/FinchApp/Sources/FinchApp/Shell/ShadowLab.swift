@@ -66,6 +66,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case opaqueToolbar28
     case fullyOpaque29
     case hardShell30
+    case hardPerPage31
 
     var id: String { rawValue }
 
@@ -114,6 +115,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .opaqueToolbar28:        return "28 · Push + opaque toolbar backgrounds"
         case .fullyOpaque29:          return "29 · Push + hard glass AND opaque backgrounds"
         case .hardShell30:            return "30 · Hard glass applied ONCE at the shell"
+        case .hardPerPage31:          return "31 · Hard glass PER PAGE + solid bar background"
         }
     }
 
@@ -150,6 +152,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .opaqueToolbar28:        return "Solid bar backgrounds instead of glass. Deliberately opaque rather than dimmed glass."
         case .fullyOpaque29:          return "Both together — the most opaque option. Compare all three against #0's look."
         case .hardShell30:            return "How it would actually ship: every tab and page hard. Switch tabs — no style flash."
+        case .hardPerPage31:          return "No inheritance, and the bar gets a solid backdrop immediately. Switch tabs and watch."
         }
     }
 
@@ -301,6 +304,8 @@ struct ShadowLabRoot: View {
             RootSwapNavLab(active: $outerVariant)
         case .some(.hardShell30):
             HardGlassShellLab(active: $outerVariant)
+        case .some(.hardPerPage31):
+            HardGlassPerPageLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -609,6 +614,62 @@ private struct HardGlassShellLab: View {
             .tabItem { Label("Three", systemImage: "3.circle") }
         }
         .modifier(HardGlassAll())
+    }
+}
+
+/// Variant 31 — the flash survived being applied at the shell (30), so this rules
+/// out propagation as the cause: the style is applied to EVERY page directly, and
+/// each page also gets an explicitly visible toolbar background so the bar has a
+/// solid backdrop from the first frame instead of waiting for a scroll-edge effect
+/// to converge. If the flash still survives this, it is the bar's appearance
+/// resolving late on tab switch, and no combination of these modifiers fixes it.
+private struct HardGlassPerPageLab: View {
+    @Binding var active: ShadowVariant?
+
+    var body: some View {
+        TabView {
+            NavigationStack {
+                List {
+                    Section {
+                        Text("Applied per page, plus a solid bar background. Switch tabs and watch the top area — then push, scroll, Home, resume.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    NavigationLink("Push the Activity feed") {
+                        LabContent(variant: .hardPerPage31).modifier(OpaqueBars())
+                    }
+                    Button("‹ Back to the menu") { active = nil }
+                }
+                .navigationTitle("Per-page hard")
+                .modifier(OpaqueBars())
+            }
+            .tabItem { Label("Lab", systemImage: "testtube.2") }
+
+            NavigationStack {
+                LabContent(variant: .hardPerPage31).navigationTitle("Tab 2").modifier(OpaqueBars())
+            }
+            .tabItem { Label("Two", systemImage: "2.circle") }
+
+            NavigationStack {
+                LabContent(variant: .hardPerPage31).navigationTitle("Tab 3").modifier(OpaqueBars())
+            }
+            .tabItem { Label("Three", systemImage: "3.circle") }
+        }
+    }
+}
+
+/// Hard scroll-edge glass AND a visible toolbar background, applied to one page.
+private struct OpaqueBars: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .scrollEdgeEffectStyle(.hard, for: .all)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(.visible, for: .tabBar)
+        } else {
+            content
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(.visible, for: .tabBar)
+        }
     }
 }
 
@@ -1036,7 +1097,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30:
+        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
