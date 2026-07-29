@@ -43,6 +43,9 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     // --- round 4 ---
     case slideOver14Snapped
     case slideOver15NoParallax
+    // --- round 5 ---
+    case hostedShell16
+    case sharedBar17
 
     var id: String { rawValue }
 
@@ -51,6 +54,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     var slideOverStyle: SlideOverStyle? {
         switch self {
         case .slideOver13:         return .parallax
+        case .sharedBar17:         return .parallaxPixelSnapped
         case .slideOver14Snapped:  return .parallaxPixelSnapped
         case .slideOver15NoParallax: return .staticDim
         default:                   return nil
@@ -75,6 +79,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .slideOver13:            return "13 · SwiftUI slide-over (parallax + edge swipe)"
         case .slideOver14Snapped:     return "14 · Slide-over, pixel-snapped parallax"
         case .slideOver15NoParallax:  return "15 · Slide-over, no parallax (static dim)"
+        case .hostedShell16:          return "16 · WHOLE SHELL inside a cover, then native push"
+        case .sharedBar17:            return "17 · Slide-over sharing ONE nav bar"
         }
     }
 
@@ -96,6 +102,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .slideOver13:            return "Previous page STAYS underneath and parallaxes. Edge-swipe back. Pure SwiftUI."
         case .slideOver14Snapped:     return "Same, but the under-page offset snaps to whole PIXELS — should kill the text jitter."
         case .slideOver15NoParallax:  return "Under-page does not move at all, just dims. Nothing to jitter."
+        case .hostedShell16:          return "Tab bar + stacks live INSIDE a permanent cover. If pushes are clean here, everything is native."
+        case .sharedBar17:            return "Only the CONTENT slides; the bar and search stay put and swap contents."
         }
     }
 
@@ -145,12 +153,57 @@ struct ShadowLabRoot: View {
     @State private var outerVariant: ShadowVariant?
 
     var body: some View {
-        if outerVariant != nil {
+        switch outerVariant {
+        case .some(.hostedShell16):
+            HostedShellLab(active: $outerVariant)
+        case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
-        } else {
+        case nil:
             NormalLab(goOuter: { outerVariant = $0 })
         }
+    }
+}
+
+/// Variant 16 — the whole shell (tab bar AND each tab's NavigationStack) lives
+/// inside a permanently-presented `fullScreenCover`, and navigation inside it is
+/// an ordinary native push.
+///
+/// The reasoning: variant 8 showed a push INSIDE a presentation is clean, while
+/// variants 0/2/3/5/7 showed every push OUTSIDE one shadows. If that immunity is
+/// a property of the presented hierarchy rather than of the cover's own root,
+/// then hosting the entire app this way makes every push in every tab clean —
+/// native bar behaviour, native swipe-back, tab bar visible, and no custom
+/// transition code anywhere.
+private struct HostedShellLab: View {
+    @Binding var active: ShadowVariant?
+    @State private var presented = true
+
+    var body: some View {
+        Color(.systemBackground)
+            .ignoresSafeArea()
+            .fullScreenCover(isPresented: $presented, onDismiss: { active = nil }) {
+                TabView {
+                    NavigationStack {
+                        List {
+                            Section {
+                                Text("The tab bar and this stack are INSIDE a cover. Push, scroll, Home, resume.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            NavigationLink("Push the Activity feed (native push)") {
+                                LabContent(variant: .hostedShell16)
+                            }
+                            Button("‹ Back to the menu") { presented = false }
+                        }
+                        .navigationTitle("Hosted shell")
+                    }
+                    .tabItem { Label("Lab", systemImage: "testtube.2") }
+                    Text("filler").tabItem { Label("Two", systemImage: "2.circle") }
+                    Text("filler").tabItem { Label("Three", systemImage: "3.circle") }
+                    Text("filler").tabItem { Label("Four", systemImage: "4.circle") }
+                    Text("filler").tabItem { Label("Five", systemImage: "5.circle") }
+                }
+            }
     }
 }
 
@@ -204,7 +257,19 @@ private struct NormalLab: View {
                     }
                     .disabled(slideOver != nil)
 
-                if let v = slideOver {
+                if let v = slideOver, v == .sharedBar17 {
+                    // Variant 17: NO inner NavigationStack. The detail's own
+                    // .navigationTitle/.toolbar/.searchable therefore attach to the
+                    // TAB's existing bar, so the bar is persistent chrome whose
+                    // CONTENTS swap — the way a real push behaves — while only the
+                    // content area slides.
+                    LabContent(variant: v)
+                        .frame(width: geo.size.width)
+                        .offset(x: snap(dragX))
+                        .geometryGroup()
+                        .transition(.move(edge: .trailing))
+                        .simultaneousGesture(backSwipe(width: geo.size.width))
+                } else if let v = slideOver {
                     NavigationStack {
                         LabContent(variant: v)
                             .toolbar { ToolbarItem(placement: .topBarLeading) {
@@ -270,6 +335,13 @@ private struct NormalLab: View {
                 }
             }
             .navigationDestination(item: $pushed) { LabDestination(variant: $0) }
+            .toolbar {
+                if slideOver == .sharedBar17 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("‹ Menu") { withAnimation(.easeOut(duration: 0.3)) { slideOver = nil } }
+                    }
+                }
+            }
         }
         .rightSlideDrill(item: $cover) { v in
             NavigationStack {
@@ -367,8 +439,10 @@ private struct NormalLab: View {
         case .cover1Control, .pushInCover8:                       cover = v
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
         case .cover10Zoom, .cover11Plain:                         fsCover = v
-        case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax:
+        case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
+        case .hostedShell16:
+            goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
         }
