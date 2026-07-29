@@ -293,6 +293,8 @@ private struct BisectList: View {
 enum DrillDestination: Int, CaseIterable {
     case budgetDetail, holdings, scheduledDetail, transactionDetail
     case categories, merchants, tags, rules
+    case categoriesWithSearch
+    case categoriesConverted
 
     var title: String {
         switch self {
@@ -304,6 +306,8 @@ enum DrillDestination: Int, CaseIterable {
         case .merchants:         return "PowerTools · Merchants"
         case .tags:              return "PowerTools · Tags"
         case .rules:             return "PowerTools · Rules"
+        case .categoriesWithSearch: return "Categories + pinned search drawer"
+        case .categoriesConverted:  return "★ Categories CONVERTED to UIKit"
         }
     }
 
@@ -317,6 +321,8 @@ enum DrillDestination: Int, CaseIterable {
         case .merchants:         return "Real screen. Row count grows with the seeded merchants."
         case .tags:              return "Real screen. Usually thin."
         case .rules:             return "Real screen. Usually thin."
+        case .categoriesWithSearch: return "Adding a second .searchable — it already had one via SearchableModifier, so this was a no-op."
+        case .categoriesConverted:  return "THE DECISIVE TEST: the screen that SHADOWS, converted. Clean = conversion works."
         }
     }
 
@@ -344,6 +350,34 @@ enum DrillDestination: Int, CaseIterable {
         case .merchants:  return host(MerchantsView())
         case .tags:       return host(TagsView())
         case .rules:      return host(RulesManagerView())
+        case .categoriesWithSearch:
+            // CategoriesView shadows; AccountDetailView and ActivityFeedView do not,
+            // and the sharpest structural difference is that both of those carry a
+            // permanently pinned search drawer while Categories has no .searchable
+            // at all. Add exactly that and nothing else.
+            //
+            // Caveat on interpreting a clean result: synthetic lists B1/B3 had this
+            // same pinned drawer and still shadowed, so the drawer alone was not
+            // protective there. A clean result here means it protects in
+            // combination with whatever else real screens do — not that the drawer
+            // is the mechanism.
+            return host(CategoriesWithSearch())
+        case .categoriesConverted:
+            return CategoriesVC()
         }
+    }
+}
+
+
+/// `CategoriesView` plus a pinned search drawer — the single-variable test of the
+/// only structural property that separates the clean real screens from the one
+/// that shadows.
+private struct CategoriesWithSearch: View {
+    @State private var query = ""
+    var body: some View {
+        CategoriesView()
+            .searchable(text: $query,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search")
     }
 }
