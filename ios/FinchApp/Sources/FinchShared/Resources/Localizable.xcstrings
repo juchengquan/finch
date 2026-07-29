@@ -5535,6 +5535,16 @@
         }
       }
     },
+    "Search transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索交易"
+          }
+        }
+      }
+    },
     "Security": {
       "localizations": {
         "zh-Hans": {

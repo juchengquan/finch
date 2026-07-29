@@ -22,6 +22,13 @@ final class RootTabBarController: UITabBarController {
     /// Bar order. `AppTab` has seven cases; only these five are slots.
     private let slots: [AppTab] = [.accounts, .budgets, .scheduled, .insights, .settings]
 
+    /// Tabs that have moved onto a UIKit navigation controller. Grows one tab at a
+    /// time through Phase 2. Gated for now: `-uikitActivity YES`, because the
+    /// converted feed is not yet at feature parity (see ActivityFeedVC).
+    private static var uikitNavTabs: Set<AppTab> {
+        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts] : []
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         delegate = self
@@ -32,7 +39,13 @@ final class RootTabBarController: UITabBarController {
             // behaviour-identical; a UINavigationController arrives per tab in
             // Phase 2, when that tab's screens are converted and the SwiftUI stack
             // is removed with them.
-            let vc = hostedRoot(tab)
+            // Phase 2: a tab whose screens are being converted gets a real
+            // UINavigationController, and its SwiftUI root renders WITHOUT its own
+            // NavigationStack (ownsNavigationStack: false) so the bars do not
+            // double. Unconverted tabs stay as bare hosted roots.
+            let vc = Self.uikitNavTabs.contains(tab)
+                ? navigationTab(tab)
+                : hostedRoot(tab)
             vc.tabBarItem = UITabBarItem(title: tab.title,
                                          image: UIImage(systemName: tab.icon),
                                          tag: slots.firstIndex(of: tab) ?? 0)
@@ -54,6 +67,34 @@ final class RootTabBarController: UITabBarController {
         )
         // No `host.title`: the hosted SwiftUI root sets its own navigationTitle.
         return host
+    }
+
+    /// A tab backed by a real `UINavigationController`, with the SwiftUI root
+    /// rendered stack-less and the native-route seam installed so its drills push
+    /// converted view controllers.
+    private func navigationTab(_ tab: AppTab) -> UIViewController {
+        let nav = UINavigationController()
+        let root = UIHostingController(rootView:
+            AccountsTab(ownsNavigationStack: false)
+                .finchSectionSpacing()
+                .environmentObject(store)
+                .environmentObject(router)
+                .environmentObject(BiometricGate.shared)
+                .environment(\.nativeRoute, { [weak nav] route in
+                    guard let nav else { return false }
+                    switch route {
+                    case .activity:
+                        nav.pushViewController(ActivityFeedVC(), animated: true)
+                        return true
+                    default:
+                        // Not converted yet — the screen keeps its own cover.
+                        return false
+                    }
+                })
+        )
+        nav.setViewControllers([root], animated: false)
+        nav.navigationBar.prefersLargeTitles = true
+        return nav
     }
 
     // MARK: Router bridge
