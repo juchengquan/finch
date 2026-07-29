@@ -4,6 +4,11 @@ import SwiftUI
 
 // MARK: - iOS 26 resume-shadow lab (THROWAWAY — never merged)
 //
+// HOW TO RE-RUN THIS (worktree, build, install, launch, what to look at):
+// see SHADOW-LAB.md at the root of this branch. Findings and the decision are on
+// feat/frontend in ios/docs/ios26-shadow-variant-matrix.md — read that first, it
+// records what is already ruled out.
+//
 // One build, N navigation structures, same content. Launch with
 // `-shadowLab YES` to replace the app shell with this menu.
 //
