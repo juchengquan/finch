@@ -158,7 +158,7 @@ final class AccountsListVC: UITableViewController {
 /// populates the bar is already clean — which is every real screen in finch — and
 /// Phase 1 of the migration plan fixes the bug WITHOUT converting any page.
 enum BisectCase: Int, CaseIterable {
-    case plain, searchable, toolbar, both, fewRows, realFeed
+    case plain, searchable, toolbar, both, fewRows, realFeed, sectioned, sectionedPlus
 
     var title: String {
         switch self {
@@ -167,7 +167,9 @@ enum BisectCase: Int, CaseIterable {
         case .toolbar:    return "B2 · List + .toolbar item"
         case .both:       return "B3 · List + both"
         case .fewRows:    return "B4 · List with only 8 rows"
-        case .realFeed:   return "B5 · the REAL Activity feed (44 txns)"
+        case .realFeed:   return "B5 · the REAL Activity feed"
+        case .sectioned:  return "B6 · 100 rows, in SECTIONS"
+        case .sectionedPlus: return "B7 · sections + searchable + toolbar"
         }
     }
     var blurb: String {
@@ -178,6 +180,8 @@ enum BisectCase: Int, CaseIterable {
         case .both:       return "What every real finch screen looks like."
         case .fewRows:    return "BARELY SCROLLS. If this is clean while B0 shadows, content VOLUME is the variable — and the A/B was confounded."
         case .realFeed:   return "A real finch screen with enough data to scroll properly. The honest test of the A/B."
+        case .sectioned:  return "THE HYPOTHESIS: every real finch list is sectioned; every synthetic one I built was flat."
+        case .sectionedPlus: return "Sections plus the bar content — the closest synthetic match to a real screen."
         }
     }
 }
@@ -202,6 +206,12 @@ private struct BisectList: View {
             rows
         case .realFeed:
             rows
+        case .sectioned:
+            rows
+        case .sectionedPlus:
+            rows
+                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+                .toolbar { ToolbarItem(placement: .primaryAction) { Button("Action") {} } }
         }
     }
 
@@ -218,11 +228,29 @@ private struct BisectList: View {
         }
     }
 
-    private var plainRows: some View {
-        List(0..<(kase == .fewRows ? 8 : 100), id: \.self) { i in
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Row \(i)").font(.body)
-                Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
+    @ViewBuilder private var plainRows: some View {
+        if kase == .sectioned || kase == .sectionedPlus {
+            // Same 100 rows as B0, but grouped into month-like sections with headers
+            // — the one structural thing every real finch list has and none of the
+            // earlier synthetic cases did.
+            List {
+                ForEach(0..<10, id: \.self) { s in
+                    Section("Section \(s)") {
+                        ForEach(0..<10, id: \.self) { r in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Row \(s * 10 + r)").font(.body)
+                                Text("Subtitle for row \(s * 10 + r)").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            List(0..<(kase == .fewRows ? 8 : 100), id: \.self) { i in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Row \(i)").font(.body)
+                    Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
     }

@@ -131,6 +131,11 @@ public final class FinchStore: ObservableObject {
             #endif
         }
         self.auditProblems = (try? Audit.run(on: live)) ?? []
+        #if DEBUG
+        // `-bulkSeed N`: fill the ledger to N transactions so the resume shadow can
+        // be judged at realistic volume rather than the demo seed's ~44 rows.
+        BulkSeed.seedIfRequested(live)
+        #endif
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
         let first = ledgers.first?.id ?? ""
         // Restore the last-active ledger if it still exists; else the default (first).
