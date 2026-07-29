@@ -16,6 +16,13 @@ import SwiftUI
 // rest against those two in the same session — every wrong conclusion in this
 // bug's history came from comparing against memory instead of a control.
 
+/// Under-layer treatment for the slide-over variants (13/14/15).
+enum SlideOverStyle {
+    case parallax               // raw fractional offset
+    case parallaxPixelSnapped   // offset aligned to the pixel grid
+    case staticDim              // under-page does not move; it dims
+}
+
 enum ShadowVariant: String, CaseIterable, Identifiable {
     case push0Control
     case cover1Control
@@ -33,8 +40,22 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case rootSwap12Draggable
     // --- round 3 ---
     case slideOver13
+    // --- round 4 ---
+    case slideOver14Snapped
+    case slideOver15NoParallax
 
     var id: String { rawValue }
+
+    /// The three slide-over flavours share one container; this picks the
+    /// under-layer treatment being compared.
+    var slideOverStyle: SlideOverStyle? {
+        switch self {
+        case .slideOver13:         return .parallax
+        case .slideOver14Snapped:  return .parallaxPixelSnapped
+        case .slideOver15NoParallax: return .staticDim
+        default:                   return nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -52,6 +73,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .cover11Plain:           return "11 · Plain fullScreenCover"
         case .rootSwap12Draggable:    return "12 · Root swap + drag-to-go-back"
         case .slideOver13:            return "13 · SwiftUI slide-over (parallax + edge swipe)"
+        case .slideOver14Snapped:     return "14 · Slide-over, pixel-snapped parallax"
+        case .slideOver15NoParallax:  return "15 · Slide-over, no parallax (static dim)"
         }
     }
 
@@ -71,6 +94,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .cover11Plain:           return "Native SwiftUI cover, default slide-up. Feel baseline."
         case .rootSwap12Draggable:    return "Variant 9 plus a drag-right-to-go-back gesture. Judge the FEEL."
         case .slideOver13:            return "Previous page STAYS underneath and parallaxes. Edge-swipe back. Pure SwiftUI."
+        case .slideOver14Snapped:     return "Same, but the under-page offset snaps to whole PIXELS — should kill the text jitter."
+        case .slideOver15NoParallax:  return "Under-page does not move at all, just dims. Nothing to jitter."
         }
     }
 
@@ -141,6 +166,7 @@ private struct NormalLab: View {
     @State private var dragX: CGFloat = 0
     @State private var slideOver: ShadowVariant?
     @Namespace private var zoomNS
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         TabView {
@@ -162,7 +188,20 @@ private struct NormalLab: View {
                     // incoming page's travel. THIS is what variants 9 and 12 were
                     // missing — a root swap has only one root, so there was nothing
                     // behind the detail and the back-drag revealed bare background.
-                    .offset(x: slideOver == nil ? 0 : -geo.size.width * 0.25 + dragX * 0.25)
+                    //
+                    // A raw fractional offset re-rasterises the under-page's text at
+                    // sub-pixel positions every frame, which reads as JITTER (v13).
+                    // v14 snaps the offset to the physical pixel grid; v15 doesn't
+                    // move the under-page at all.
+                    .offset(x: baseOffset(width: geo.size.width))
+                    .geometryGroup()
+                    .overlay {
+                        if slideOver?.slideOverStyle == .staticDim, slideOver != nil {
+                            Color.black.opacity(0.18 * (1 - min(dragX / max(geo.size.width, 1), 1)))
+                                .allowsHitTesting(false)
+                                .ignoresSafeArea()
+                        }
+                    }
                     .disabled(slideOver != nil)
 
                 if let v = slideOver {
@@ -172,13 +211,33 @@ private struct NormalLab: View {
                                 Button("‹ Menu") { withAnimation(.easeOut(duration: 0.3)) { slideOver = nil } } } }
                     }
                     .frame(width: geo.size.width)
-                    .offset(x: dragX)
+                    .offset(x: snap(dragX))
+                    .geometryGroup()
                     // The thin dark edge a real push casts on the page beneath.
                     .shadow(color: .black.opacity(0.18), radius: 8, x: -3)
                     .transition(.move(edge: .trailing))
                     .simultaneousGesture(backSwipe(width: geo.size.width))
                 }
             }
+        }
+    }
+
+    /// Snap a point value to the physical pixel grid (3x on this class of device).
+    /// Sub-pixel offsets are what make the under-page's text shimmer while dragging.
+    private func snap(_ v: CGFloat) -> CGFloat {
+        guard displayScale > 0 else { return v }
+        return (v * displayScale).rounded() / displayScale
+    }
+
+    private func baseOffset(width: CGFloat) -> CGFloat {
+        guard let style = slideOver?.slideOverStyle else { return 0 }
+        switch style {
+        case .staticDim:
+            return 0
+        case .parallax:
+            return -width * 0.25 + dragX * 0.25            // raw — jitters
+        case .parallaxPixelSnapped:
+            return snap(-width * 0.25 + dragX * 0.25)      // grid-aligned
         }
     }
 
@@ -308,7 +367,8 @@ private struct NormalLab: View {
         case .cover1Control, .pushInCover8:                       cover = v
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
         case .cover10Zoom, .cover11Plain:                         fsCover = v
-        case .slideOver13:            withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
+        case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax:
+            withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
         }
