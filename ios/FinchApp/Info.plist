@@ -2,78 +2,78 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
-    <key>CFBundleLocalizations</key>
-    <array>
-        <string>en</string>
-        <string>zh-Hans</string>
-    </array>
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-    <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>finch</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>$(MARKETING_VERSION)</string>
-    <key>CFBundleVersion</key>
-    <string>$(CURRENT_PROJECT_VERSION)</string>
-    <key>UILaunchScreen</key>
-    <dict/>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-    </array>
-    <key>NSUserActivityTypes</key>
-    <array>
-        <string>com.juchengquan.finch.spotlight-tx</string>
-        <string>com.juchengquan.finch.spotlight-account</string>
-        <string>com.juchengquan.finch.spotlight-category</string>
-        <string>com.juchengquan.finch.spotlight-counterparty</string>
-        <string>com.juchengquan.finch.spotlight-budget</string>
-    </array>
-    <key>LSRequiresIPhoneOS</key>
-    <true/>
-    <key>UTExportedTypeDeclarations</key>
-    <array>
-        <dict>
-            <key>UTTypeIdentifier</key>
-            <string>com.juchengquan.finch</string>
-            <key>UTTypeDescription</key>
-            <string>finch data pack</string>
-            <key>UTTypeConformsTo</key>
-            <array>
-                <string>public.zip</string>
-                <string>public.data</string>
-            </array>
-            <key>UTTypeTagSpecification</key>
-            <dict>
-                <key>public.filename-extension</key>
-                <array>
-                    <string>finch</string>
-                </array>
-            </dict>
-        </dict>
-    </array>
-    <key>CFBundleDocumentTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>finch data pack</string>
-            <key>LSHandlerRank</key>
-            <string>Owner</string>
-            <key>LSItemContentTypes</key>
-            <array>
-                <string>com.juchengquan.finch</string>
-            </array>
-        </dict>
-    </array>
-    <key>CFBundleURLTypes</key>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>finch</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.juchengquan.finch.spotlight-tx</string>
+		<string>com.juchengquan.finch.spotlight-account</string>
+		<string>com.juchengquan.finch.spotlight-category</string>
+		<string>com.juchengquan.finch.spotlight-counterparty</string>
+		<string>com.juchengquan.finch.spotlight-budget</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.juchengquan.finch</string>
+			<key>UTTypeDescription</key>
+			<string>finch data pack</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip</string>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>finch</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>finch data pack</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.juchengquan.finch</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
@@ -84,14 +84,26 @@
 			</array>
 		</dict>
 	</array>
-    <!-- .finch packs are imported by copying (atomic swap of the live DB), not
-         edited in place, so declare in-place opening as unsupported. -->
-    <key>LSSupportsOpeningDocumentsInPlace</key>
-    <false/>
-    <!-- Required for Face ID: without this key iOS silently degrades the app
-         lock's LAPolicy.deviceOwnerAuthentication to passcode-only on device
-         (invisible on the simulator, where the gate fails open). -->
-    <key>NSFaceIDUsageDescription</key>
-    <string>finch uses Face ID to unlock the app and to confirm exports and destructive actions.</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>finch uses Face ID to unlock the app and to confirm exports and destructive actions.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).MainSceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>
