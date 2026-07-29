@@ -325,9 +325,21 @@ under a UIKit root is **unknown**. Ruled out: content volume (2,000 real rows ar
 clean while 100 synthetic ones are not), navigation-bar contribution, and section
 structure.
 
-**Consequence:** a UIKit shell is NOT a defensible fix. It happens to protect the
-screens finch has today, for reasons nobody can state, and therefore says nothing
-about a screen written later. Do not plan around it. The defensible fixes remain
+**Coverage test, 2026-07-30 — it does not even hold across today's screens.**
+Pushing the app's remaining drill destinations under the same UIKit root:
+
+| screen | rows | result |
+|---|---:|---|
+| `AccountDetailView` | 10 / 2,000 | clean |
+| `ActivityFeedView` | 44 | clean |
+| **`CategoriesView`** | ~40 | **SHADOWS** |
+
+**Consequence: a UIKit shell is not a fix.** This is now measured rather than
+argued from ignorance — a real finch screen shadows under a UIKit root, so Phase 1
+of the migration plan would leave an unknown subset of screens still shadowing and
+require per-screen conversion anyway, with no way to predict which screens need it
+except by testing each. Unpredictable per-screen behaviour is the worst property a
+fix can have. Do not plan around it. The defensible fixes remain
 the two clean families above — and the shipped cover is one of them.
 
 **Also worth recording:** the minimal reproducer in `repro-uikit-root/` (a flat

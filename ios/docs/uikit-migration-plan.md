@@ -15,11 +15,12 @@ addendum.
 >
 > 1. **The shipped `RightSlideDrill` fix is sound at scale.** There is nothing
 >    broken to escape. Users with real ledgers are fine today.
-> 2. **A UIKit shell's protection is unexplained.** Under a UIKit root, finch's
->    real screens are clean at every volume tested — but every synthetic list is
->    not, and neither bar content, sections nor volume explains the difference.
->    A fix nobody can explain is not one to bet weeks on: it says nothing about
->    screens written later.
+> 2. **A UIKit shell does not fix the bug.** Coverage testing across the app's
+>    real drill destinations found `CategoriesView` SHADOWS under a UIKit root,
+>    while `AccountDetailView` and `ActivityFeedView` do not. So Phase 1 would
+>    leave an unknown subset of screens still shadowing and require per-screen
+>    conversion anyway — with no way to predict which screens need it except by
+>    testing each one, and no basis at all for screens written later.
 >
 > So this migration should be judged **purely as a control/ownership decision**,
 > on its own merits and timetable. If that is not compelling by itself, do not do
