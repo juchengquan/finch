@@ -38,6 +38,38 @@ targets:
 
   # Phase 7 — WidgetKit extension. Builds for the simulator without signing
   # (CODE_SIGNING_ALLOWED: NO); reads the WidgetSnapshot from the App Group.
+  # THROWAWAY pilot target (exp/uikit-pilot-account-detail): a UIKit-rooted app
+  # that reuses the real store and models, so one screen can be converted and
+  # measured against the SwiftUI original in the same app. FinchApp and FinchMac
+  # are untouched. Excludes FinchApp.swift because that carries the @main App.
+  FinchUIKitPilot:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: UIKitPilot
+      - path: FinchApp/Sources/FinchApp
+        excludes:
+          - "FinchApp.swift"
+      - path: Shared
+    dependencies:
+      - package: FinchCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.finch.uikitpilot
+        CODE_SIGNING_ALLOWED: "NO"
+        GENERATE_INFOPLIST_FILE: "NO"
+    info:
+      path: UIKitPilot/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+
   FinchWidget:
     type: app-extension
     platform: iOS
