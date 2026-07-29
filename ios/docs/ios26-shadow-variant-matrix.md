@@ -68,6 +68,9 @@ Human eyes are the only instrument — plan for that.
 | 25 | same vanilla list **+ `.searchable`** | **yes** |
 | 26 | plain push of a **pure UIKit `UITableView`** | **yes** |
 | — | Apple's **Files** and **Messages**, same sim, same OS, push + scroll + resume | **no** |
+| A | **UIKit-rooted app**, push a `UITableViewController` | **no** |
+| B | **UIKit-rooted app**, push a SwiftUI `List` in a `UIHostingController` | **yes** |
+| C | **UIKit-rooted app**, same + `.searchable` | **yes** |
 
 ---
 
@@ -106,10 +109,32 @@ our configuration does not matter (we set none). What distinguishes finch from
 Files and Messages is that finch is a **SwiftUI app** — its window is rooted in
 SwiftUI's hosting infrastructure — and theirs are not.
 
-**Stated as an observation rather than a mechanism:** in a SwiftUI app on iOS
-26.5, a push in the window hierarchy shadows on resume, whatever is inside it and
-whoever owns the stack. Pushes inside a modally presented hierarchy with no
-`TabView` do not, and navigation that never runs a push transition does not.
+**Settled by the UIKit-root reproducer** (`repro-uikit-root/` on the lab branch —
+a standalone UIKit app: `UIApplicationDelegate` → `UIWindow` →
+`UITabBarController` → `UINavigationController`):
+
+| App root | Pushed page | Result |
+|---|---|---|
+| UIKit | UIKit (A) | **clean** |
+| UIKit | SwiftUI (B, C) | shadows |
+| SwiftUI | UIKit (26) | shadows |
+| SwiftUI | SwiftUI (0, 24, 25) | shadows |
+
+**SwiftUI anywhere in the push path — the app's root OR the pushed page — is
+sufficient to trigger it. Clean requires UIKit on both sides.** A is the only
+clean push in 29 configurations, and it is exactly Files' shape.
+
+Pushes inside a modally presented hierarchy with no `TabView` are also clean, and
+navigation that never runs a push transition is clean.
+
+**This settles the "convert to UIKit" question empirically: a UIKit SHELL is not
+enough.** B *is* the shell-only configuration — UIKit app, UIKit navigation
+controller, SwiftUI pages — and it shadows. Removing the artifact by conversion
+would require UIKit on both sides, i.e. rewriting all 148 views (~20.5k lines),
+while the Watch app and Widget must stay SwiftUI (no UIKit option exists on those
+platforms) and the Mac app would need AppKit or its own SwiftUI copy. Months of
+work and two or three UI codebases, against a ~100-line workaround that deletes in
+one commit when Apple fixes this.
 
 This is Apple's defect, not ours, and worth a Feedback Assistant report — this lab
 is a good reproducer: one build, a known-bad control, a known-good control, and
