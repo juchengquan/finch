@@ -4,9 +4,26 @@
 move to UIKit; `FinchMac` stays SwiftUI; Watch and Widget stay SwiftUI (no UIKit
 exists on those platforms); incremental strangler migration, shipping continuously.
 
-**Why:** the iOS 26 Liquid Glass resume shadow now, and ownership of the UI layer
-later. Read `ios26-shadow-variant-matrix.md` first — it establishes the constraint
-this plan is built around.
+**Why:** ownership of the UI layer. **NOT the resume shadow** — see the revision
+note. Read `ios26-shadow-variant-matrix.md` first, including its 2026-07-30
+addendum.
+
+> ## REVISED 2026-07-30 — the bug is no longer a reason to do this
+>
+> Two findings from testing at realistic volume (2,000 transactions) removed the
+> urgency this plan was written under:
+>
+> 1. **The shipped `RightSlideDrill` fix is sound at scale.** There is nothing
+>    broken to escape. Users with real ledgers are fine today.
+> 2. **A UIKit shell's protection is unexplained.** Under a UIKit root, finch's
+>    real screens are clean at every volume tested — but every synthetic list is
+>    not, and neither bar content, sections nor volume explains the difference.
+>    A fix nobody can explain is not one to bet weeks on: it says nothing about
+>    screens written later.
+>
+> So this migration should be judged **purely as a control/ownership decision**,
+> on its own merits and timetable. If that is not compelling by itself, do not do
+> it. The phases below stand; only the justification changed.
 
 ---
 

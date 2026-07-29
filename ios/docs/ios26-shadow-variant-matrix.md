@@ -287,3 +287,50 @@ the workaround and go back to plain `NavigationStack` pushes.
 The "sharpened rule" — a push *inside* a cover is clean — **survives** and is
 independently confirmed here (variant 8), so the shipped Ledger and Settings
 flows are sound.
+
+
+---
+
+## Addendum, 2026-07-30 — realistic data volume, and the UIKit-root anomaly
+
+Everything above was judged on the demo seed's ~44 transactions. A `-bulkSeed N`
+debug path (writing through `FinchCore.Apply` directly) was added to re-test at
+**2,000**, the scale a real ledger reaches within a year.
+
+**The shipped fix holds at scale.** `RightSlideDrill` is clean at 2,000
+transactions. #636 was not validated by luck of small data — there is no latent
+defect waiting for users with real ledgers. This was the most important open
+question and it is closed.
+
+**A UIKit app root protects finch's real screens, and we cannot explain why.**
+Measured in a UIKit-rooted app (`UIApplicationDelegate` -> `UIWindow` ->
+`UITabBarController` -> `UINavigationController`), pushing a hosted SwiftUI page:
+
+| pushed page | rows | result |
+|---|---:|---|
+| real `AccountDetailView` | ~10 | clean |
+| real `ActivityFeedView` | 44 | clean |
+| real `AccountDetailView` | 2,000 | **clean** |
+| synthetic `List` | 8 | clean |
+| synthetic `List`, flat | 100 | **shadows** |
+| synthetic `List` + `.searchable` | 100 | **shadows** |
+| synthetic `List` + `.toolbar` | 100 | **shadows** |
+| synthetic `List` + both | 100 | **shadows** |
+| synthetic `List`, 10 SECTIONS with headers | 100 | **shadows** |
+| synthetic `List`, sections + search + toolbar | 100 | **shadows** |
+
+The same real screens under a **SwiftUI** root shadow at every volume. So the app
+root matters — but the discriminator between "real screen" and "synthetic list"
+under a UIKit root is **unknown**. Ruled out: content volume (2,000 real rows are
+clean while 100 synthetic ones are not), navigation-bar contribution, and section
+structure.
+
+**Consequence:** a UIKit shell is NOT a defensible fix. It happens to protect the
+screens finch has today, for reasons nobody can state, and therefore says nothing
+about a screen written later. Do not plan around it. The defensible fixes remain
+the two clean families above — and the shipped cover is one of them.
+
+**Also worth recording:** the minimal reproducer in `repro-uikit-root/` (a flat
+SwiftUI `List`) is a valid Apple bug, but it is NOT representative of this app's
+screens — under a UIKit root it shadows where the real screens do not. Keep that
+caveat with the Feedback report.
