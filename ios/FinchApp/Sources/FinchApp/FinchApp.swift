@@ -40,10 +40,26 @@ struct FinchApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
+                #if DEBUG && os(iOS)
+                // `-shadowLab YES` swaps the shell for the iOS 26 resume-shadow lab
+                // (ShadowLab.swift). THROWAWAY branch only — never merged.
+                if UserDefaults.standard.bool(forKey: "shadowLab") {
+                    ShadowLabRoot()
+                        .environmentObject(store)
+                        .environmentObject(router)
+                        .environmentObject(gate)
+                } else {
+                    AdaptiveShell()
+                        .environmentObject(store)
+                        .environmentObject(router)
+                        .environmentObject(gate)
+                }
+                #else
                 AdaptiveShell()   // Phase 3: tab bar (compact) ↔ sidebar+split (regular)
                     .environmentObject(store)
                     .environmentObject(router)
                     .environmentObject(gate)
+                #endif
                 // Reset the idle clock on interaction. Uses a platform-level
                 // passive observer (ActivityMonitor) instead of a SwiftUI
                 // `.simultaneousGesture(TapGesture())`, which swallowed taps on
