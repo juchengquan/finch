@@ -46,6 +46,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     // --- round 5 ---
     case hostedShell16
     case sharedBar17
+    // --- round 6 ---
+    case customBar18
 
     var id: String { rawValue }
 
@@ -81,6 +83,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .slideOver15NoParallax:  return "15 · Slide-over, no parallax (static dim)"
         case .hostedShell16:          return "16 · WHOLE SHELL inside a cover, then native push"
         case .sharedBar17:            return "17 · Slide-over sharing ONE nav bar"
+        case .customBar18:            return "18 · NATIVE push, custom bottom bar (no TabView)"
         }
     }
 
@@ -104,6 +107,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .slideOver15NoParallax:  return "Under-page does not move at all, just dims. Nothing to jitter."
         case .hostedShell16:          return "Tab bar + stacks live INSIDE a permanent cover. If pushes are clean here, everything is native."
         case .sharedBar17:            return "Only the CONTENT slides; the bar and search stay put and swap contents."
+        case .customBar18:            return "One NavigationStack, no TabView; the bottom bar is drawn by us. Fully native push."
         }
     }
 
@@ -156,12 +160,77 @@ struct ShadowLabRoot: View {
         switch outerVariant {
         case .some(.hostedShell16):
             HostedShellLab(active: $outerVariant)
+        case .some(.customBar18):
+            CustomBarLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
         case nil:
             NormalLab(goOuter: { outerVariant = $0 })
         }
+    }
+}
+
+/// Variant 18 — the rule that fits every observation so far is "a push shadows
+/// iff a TabView exists in the hierarchy hosting it": #8 (cover, no TabView) is
+/// clean while #16 (cover WITH a TabView) shadows, and #2 shows hiding the bar
+/// is not enough because the TabView still exists.
+///
+/// So: drop the TabView. One NavigationStack, a bottom bar we draw ourselves, and
+/// an ordinary native push. If the rule holds this is clean — and it is the only
+/// structure that can satisfy all three wants at once: native push (so the nav bar
+/// behaves natively and swipe-back is Apple's), a visible bottom bar, and no
+/// shadow.
+///
+/// The cost, if it works: our bar is a replica. It would not inherit the real tab
+/// bar's scroll-to-top on re-tap, minimise-on-scroll, keyboard avoidance, or its
+/// accessibility behaviour — those become ours to build and maintain.
+private struct CustomBarLab: View {
+    @Binding var active: ShadowVariant?
+    @State private var path: [ShadowVariant] = []
+    @State private var selected = 0
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            NavigationStack(path: $path) {
+                List {
+                    Section {
+                        Text("No TabView anywhere. Push, scroll, Home, resume.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    NavigationLink(value: ShadowVariant.customBar18) {
+                        Text("Push the Activity feed (native push)")
+                    }
+                    Button("‹ Back to the menu") { active = nil }
+                }
+                .navigationTitle("Custom bar")
+                .navigationDestination(for: ShadowVariant.self) { LabContent(variant: $0) }
+            }
+            replicaBar
+        }
+    }
+
+    /// A stand-in for the real tab bar — enough to judge the layout and the
+    /// shadow question. Not a faithful reproduction of iOS 26's tab bar glass.
+    private var replicaBar: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<5, id: \.self) { i in
+                Button { selected = i } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: ["testtube.2", "2.circle", "3.circle", "4.circle", "5.circle"][i])
+                            .font(.system(size: 20))
+                        Text(["Lab", "Two", "Three", "Four", "Five"][i]).font(.caption2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(selected == i ? Color.accentColor : Color.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
     }
 }
 
@@ -441,7 +510,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain:                         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16:
+        case .hostedShell16, .customBar18:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
