@@ -25,6 +25,12 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case push5BottomEdgeHidden
     case push6BackgroundExtension
     case push7TabBarMinimize
+    // --- round 2 ---
+    case pushInCover8
+    case rootSwap9Clean
+    case cover10Zoom
+    case cover11Plain
+    case rootSwap12Draggable
 
     var id: String { rawValue }
 
@@ -38,6 +44,11 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .push5BottomEdgeHidden:  return "5 · Push + bottom edge effect hidden"
         case .push6BackgroundExtension:return "6 · Push + backgroundExtensionEffect"
         case .push7TabBarMinimize:    return "7 · Push + tabBarMinimizeBehavior"
+        case .pushInCover8:           return "8 · Push INSIDE a cover"
+        case .rootSwap9Clean:         return "9 · Root swap, done properly"
+        case .cover10Zoom:            return "10 · fullScreenCover + zoom transition"
+        case .cover11Plain:           return "11 · Plain fullScreenCover"
+        case .rootSwap12Draggable:    return "12 · Root swap + drag-to-go-back"
         }
     }
 
@@ -51,6 +62,11 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .push5BottomEdgeHidden:  return "Only the bottom (tab-bar) scroll-edge effect is suppressed."
         case .push6BackgroundExtension:return "iOS 26 backgroundExtensionEffect on the pushed page."
         case .push7TabBarMinimize:    return "Tab bar minimises on scroll, changing its glass."
+        case .pushInCover8:           return "Open the cover, THEN push inside it. Shipped code assumes this is clean."
+        case .rootSwap9Clean:         return "Like 4 but the List is the root itself — should keep transparent bars."
+        case .cover10Zoom:            return "Native SwiftUI cover, zoom transition instead of slide-up. No UIKit."
+        case .cover11Plain:           return "Native SwiftUI cover, default slide-up. Feel baseline."
+        case .rootSwap12Draggable:    return "Variant 9 plus a drag-right-to-go-back gesture. Judge the FEEL."
         }
     }
 
@@ -117,6 +133,9 @@ private struct NormalLab: View {
     @State private var cover: ShadowVariant?
     @State private var swapped: ShadowVariant?
     @State private var minimize = false
+    @State private var fsCover: ShadowVariant?
+    @State private var dragX: CGFloat = 0
+    @Namespace private var zoomNS
 
     var body: some View {
         TabView {
@@ -134,16 +153,7 @@ private struct NormalLab: View {
         NavigationStack {
             Group {
                 if let v = swapped {
-                    // Variant 4: the destination IS the stack's root.
-                    VStack(spacing: 0) {
-                        HStack {
-                            Button("‹ Menu") { withAnimation(.easeInOut) { swapped = nil } }
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        LabContent(variant: v)
-                    }
-                    .transition(.move(edge: .trailing))
+                    swappedRoot(v)
                 } else {
                     menu.transition(.move(edge: .leading))
                 }
@@ -151,7 +161,71 @@ private struct NormalLab: View {
             .navigationDestination(item: $pushed) { LabDestination(variant: $0) }
         }
         .rightSlideDrill(item: $cover) { v in
-            NavigationStack { LabContent(variant: v).rsdBackToolbar("Lab") { cover = nil } }
+            NavigationStack {
+                if v == .pushInCover8 {
+                    // Variant 8: the cover's root is a plain list; the page under
+                    // test is PUSHED inside the cover. Shipped code (Ledger flow,
+                    // Settings 2nd level) assumes this arrangement is clean.
+                    List {
+                        NavigationLink("Push the Activity feed INSIDE this cover") {
+                            LabContent(variant: v)
+                        }
+                    }
+                    .navigationTitle("Cover root")
+                    .rsdBackToolbar("Lab") { cover = nil }
+                } else {
+                    LabContent(variant: v).rsdBackToolbar("Lab") { cover = nil }
+                }
+            }
+        }
+        .fullScreenCover(item: $fsCover) { v in
+            NavigationStack {
+                LabContent(variant: v)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("‹ Lab") { fsCover = nil }
+                        }
+                    }
+            }
+            .modifier(ZoomIn(id: v.rawValue, ns: zoomNS, enabled: v == .cover10Zoom))
+        }
+    }
+
+    /// Variants 4 / 9 / 12 — the destination replaces the stack's ROOT.
+    /// 4 keeps the original VStack wrapper (which cost the List its scroll-edge
+    /// effect, hence the opaque top bar); 9 and 12 put the List back as the root
+    /// and move the back control into the toolbar.
+    @ViewBuilder private func swappedRoot(_ v: ShadowVariant) -> some View {
+        switch v {
+        case .rootSwap4:
+            VStack(spacing: 0) {
+                HStack { Button("‹ Menu") { withAnimation(.easeInOut) { swapped = nil } }; Spacer() }
+                    .padding(.horizontal)
+                LabContent(variant: v)
+            }
+            .transition(.move(edge: .trailing))
+        case .rootSwap12Draggable:
+            LabContent(variant: v)
+                .toolbar { ToolbarItem(placement: .topBarLeading) {
+                    Button("‹ Menu") { withAnimation(.easeInOut) { swapped = nil } } } }
+                .offset(x: dragX)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onChanged { g in if g.translation.width > 0 { dragX = g.translation.width } }
+                        .onEnded { g in
+                            if g.translation.width > 120 {
+                                withAnimation(.easeOut) { swapped = nil; dragX = 0 }
+                            } else {
+                                withAnimation(.easeOut) { dragX = 0 }
+                            }
+                        }
+                )
+                .transition(.move(edge: .trailing))
+        default:
+            LabContent(variant: v)
+                .toolbar { ToolbarItem(placement: .topBarLeading) {
+                    Button("‹ Menu") { withAnimation(.easeInOut) { swapped = nil } } } }
+                .transition(.move(edge: .trailing))
         }
     }
 
@@ -168,6 +242,8 @@ private struct NormalLab: View {
                         Text(v.blurb).font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                // The zoom transition animates FROM the tapped row (variant 10).
+                .modifier(ZoomSource(id: v.rawValue, ns: zoomNS, enabled: v == .cover10Zoom))
             }
         }
         .navigationTitle("Shadow lab")
@@ -175,11 +251,13 @@ private struct NormalLab: View {
 
     private func open(_ v: ShadowVariant) {
         minimize = (v == .push7TabBarMinimize)
+        dragX = 0
         switch v {
-        case .cover1Control:           cover = v
-        case .rootSwap4:               withAnimation(.easeInOut) { swapped = v }
-        case .outer3StackWrapsTabView: goOuter(v)
-        default:                       pushed = v
+        case .cover1Control, .pushInCover8:                       cover = v
+        case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
+        case .cover10Zoom, .cover11Plain:                         fsCover = v
+        case .outer3StackWrapsTabView:                            goOuter(v)
+        default:                                                  pushed = v
         }
     }
 }
@@ -212,6 +290,35 @@ private struct OuterStackLab: View {
                 Text("filler").tabItem { Label("Five", systemImage: "5.circle") }
             }
             .navigationDestination(for: ShadowVariant.self) { LabDestination(variant: $0) }
+        }
+    }
+}
+
+/// Variant 10 — a native SwiftUI cover that zooms from the tapped row instead of
+/// sliding up. Covers are shadow-free; the only complaint about `.fullScreenCover`
+/// was the slide-up feel, and this is Apple's own alternative to it (no UIKit).
+private struct ZoomSource: ViewModifier {
+    let id: String
+    let ns: Namespace.ID
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled, #available(iOS 18.0, *) {
+            content.matchedTransitionSource(id: id, in: ns)
+        } else {
+            content
+        }
+    }
+}
+
+private struct ZoomIn: ViewModifier {
+    let id: String
+    let ns: Namespace.ID
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled, #available(iOS 18.0, *) {
+            content.navigationTransition(.zoom(sourceID: id, in: ns))
+        } else {
+            content
         }
     }
 }
