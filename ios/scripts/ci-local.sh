@@ -105,6 +105,13 @@ fi
 # SET (what matters is whether a string is missing, not byte-identical
 # formatting) and keeps the fresh extraction in /tmp, so a failure never mutates
 # your working tree.
+step "i18n - UIKit strings are localized"
+if python3 "$REPO/ios/scripts/uikit-strings-guard.py"; then
+  pass "no bare UIKit strings"
+else
+  fail "UIKit strings bypass extraction"
+fi
+
 step "i18n - extracted keys are current"
 rm -rf /tmp/finch-loc
 if xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
