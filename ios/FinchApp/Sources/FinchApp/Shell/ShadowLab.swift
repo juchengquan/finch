@@ -31,6 +31,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case cover10Zoom
     case cover11Plain
     case rootSwap12Draggable
+    // --- round 3 ---
+    case slideOver13
 
     var id: String { rawValue }
 
@@ -49,6 +51,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .cover10Zoom:            return "10 · fullScreenCover + zoom transition"
         case .cover11Plain:           return "11 · Plain fullScreenCover"
         case .rootSwap12Draggable:    return "12 · Root swap + drag-to-go-back"
+        case .slideOver13:            return "13 · SwiftUI slide-over (parallax + edge swipe)"
         }
     }
 
@@ -67,6 +70,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .cover10Zoom:            return "Native SwiftUI cover, zoom transition instead of slide-up. No UIKit."
         case .cover11Plain:           return "Native SwiftUI cover, default slide-up. Feel baseline."
         case .rootSwap12Draggable:    return "Variant 9 plus a drag-right-to-go-back gesture. Judge the FEEL."
+        case .slideOver13:            return "Previous page STAYS underneath and parallaxes. Edge-swipe back. Pure SwiftUI."
         }
     }
 
@@ -135,6 +139,7 @@ private struct NormalLab: View {
     @State private var minimize = false
     @State private var fsCover: ShadowVariant?
     @State private var dragX: CGFloat = 0
+    @State private var slideOver: ShadowVariant?
     @Namespace private var zoomNS
 
     var body: some View {
@@ -150,6 +155,53 @@ private struct NormalLab: View {
     }
 
     @ViewBuilder private var tab1: some View {
+        GeometryReader { geo in
+            ZStack {
+                tab1Base
+                    // Parallax: the page behind a native push moves at ~25% of the
+                    // incoming page's travel. THIS is what variants 9 and 12 were
+                    // missing — a root swap has only one root, so there was nothing
+                    // behind the detail and the back-drag revealed bare background.
+                    .offset(x: slideOver == nil ? 0 : -geo.size.width * 0.25 + dragX * 0.25)
+                    .disabled(slideOver != nil)
+
+                if let v = slideOver {
+                    NavigationStack {
+                        LabContent(variant: v)
+                            .toolbar { ToolbarItem(placement: .topBarLeading) {
+                                Button("‹ Menu") { withAnimation(.easeOut(duration: 0.3)) { slideOver = nil } } } }
+                    }
+                    .frame(width: geo.size.width)
+                    .offset(x: dragX)
+                    // The thin dark edge a real push casts on the page beneath.
+                    .shadow(color: .black.opacity(0.18), radius: 8, x: -3)
+                    .transition(.move(edge: .trailing))
+                    .simultaneousGesture(backSwipe(width: geo.size.width))
+                }
+            }
+        }
+    }
+
+    /// Interactive back: begins only near the leading edge, like the system pop
+    /// gesture, so it doesn't fight the list's scrolling or row swipe-actions.
+    private func backSwipe(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { g in
+                guard g.startLocation.x < 32, g.translation.width > 0 else { return }
+                dragX = g.translation.width
+            }
+            .onEnded { g in
+                guard g.startLocation.x < 32 else { return }
+                let far = g.translation.width > width * 0.3
+                let flick = g.predictedEndTranslation.width > width * 0.6
+                withAnimation(.easeOut(duration: 0.25)) {
+                    if far || flick { slideOver = nil }
+                    dragX = 0
+                }
+            }
+    }
+
+    @ViewBuilder private var tab1Base: some View {
         NavigationStack {
             Group {
                 if let v = swapped {
@@ -256,6 +308,7 @@ private struct NormalLab: View {
         case .cover1Control, .pushInCover8:                       cover = v
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
         case .cover10Zoom, .cover11Plain:                         fsCover = v
+        case .slideOver13:            withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
         }
