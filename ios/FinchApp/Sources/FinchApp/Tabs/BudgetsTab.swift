@@ -49,9 +49,9 @@ struct BudgetsTab: View {
 NavigationStack(path: $path) {
             listContent
             #if os(iOS)
-            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search budgets")
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             #else
-            .searchable(text: $searchQuery, prompt: "Search budgets")
+            .searchable(text: $searchQuery, prompt: "Search")
             #endif
             .navigationTitle("Budgets")
             .toolbar {
@@ -121,7 +121,7 @@ NavigationStack(path: $path) {
             .rightSlideDrill(item: $drill) { target in
                 NavigationStack {
                     BudgetDetailView(budgetId: target.id)
-                        .rsdBackToolbar("Budgets") { drill = nil }
+                        .rsdBackToolbar { drill = nil }
                         // See AccountsTab: the tab's FAB sits behind the cover, so
                         // the drilled page carries its own, seeded with whatever
                         // subject the budget publishes (its first account and/or

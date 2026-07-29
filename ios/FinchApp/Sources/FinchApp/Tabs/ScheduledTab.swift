@@ -202,9 +202,9 @@ struct ScheduledTab: View {
                     // Search lives outside the Calendar/List toggle, so it's pinned
                     // at the top and applies to whichever view is showing.
                     #if os(iOS)
-                    .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search scheduled")
+                    .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
                     #else
-                    .searchable(text: $searchQuery, prompt: "Search scheduled")
+                    .searchable(text: $searchQuery, prompt: "Search")
                     #endif
                 }
             }
