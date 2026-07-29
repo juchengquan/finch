@@ -57,6 +57,9 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     // --- round 10 ---
     case directCover22
     case directRightSlide23
+    // --- round 11: vary the CONTENT, not the structure ---
+    case vanillaPush24
+    case feedNoSearch25
 
     var id: String { rawValue }
 
@@ -98,6 +101,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .passthroughCover21:     return "21 · Cover with the REAL tab bar showing through"
         case .directCover22:          return "22 · Native cover, STRAIGHT to the page, no bar"
         case .directRightSlide23:     return "23 · SAME but from the RIGHT (needs UIKit)"
+        case .vanillaPush24:          return "24 · Plain push of a VANILLA list (no finch views)"
+        case .feedNoSearch25:         return "25 · Vanilla list + .searchable"
         }
     }
 
@@ -127,6 +132,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .passthroughCover21:     return "#8's clean cover, but the bottom strip is transparent AND tappable — the REAL bar."
         case .directCover22:          return "One tap in. No bottom bar. Deeper levels still push natively. Compare with #1."
         case .directRightSlide23:     return "One tap in, slides from the right, no bar, deeper push native. This is the shipped shape."
+        case .vanillaPush24:          return "Same structure as #0, but 100 plain rows. If THIS is clean, the cause is in our page, not the push."
+        case .feedNoSearch25:         return "Same vanilla list as 24 plus a search field in the bar — the likeliest content co-factor."
         }
     }
 
@@ -146,11 +153,53 @@ private struct LabContent: View {
     }
 }
 
+/// Round 11 — vary the CONTENT while holding the structure at #0 (plain push).
+///
+/// Every variant up to 23 pushed the real `ActivityFeedView`, so a content-side
+/// cause would have been invisible to all of them. Mainstream apps (Messages,
+/// WhatsApp, Files) push into scrolled lists under glass all day without this
+/// artifact, which is strong evidence that "any push shadows" is too broad.
+private struct VanillaList: View {
+    var body: some View {
+        List(0..<100, id: \.self) { i in
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Row \(i)").font(.body)
+                Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Vanilla list")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The same vanilla list PLUS a search field. `.searchable` installs a control in
+/// the nav-bar area — exactly where the shadow forms — and finch's drilled pages
+/// (account detail, the feed) all have one. If 24 is clean and this shadows, the
+/// trigger is the search field, not the push.
+private struct VanillaListWithSearch: View {
+    @State private var query = ""
+    var body: some View {
+        List(0..<100, id: \.self) { i in
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Row \(i)").font(.body)
+                Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+        .navigationTitle("Vanilla + search")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 /// Per-variant modifier applied to the PUSHED destination.
 private struct LabDestination: View {
     let variant: ShadowVariant
     var body: some View {
         switch variant {
+        case .vanillaPush24:
+            VanillaList()
+        case .feedNoSearch25:
+            VanillaListWithSearch()
         case .push2TabBarHidden:
             LabContent(variant: variant).toolbar(.hidden, for: .tabBar)
         case .push5BottomEdgeHidden:
