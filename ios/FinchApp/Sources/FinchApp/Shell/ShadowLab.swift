@@ -60,6 +60,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     // --- round 11: vary the CONTENT, not the structure ---
     case vanillaPush24
     case feedNoSearch25
+    case uikitTablePush26
 
     var id: String { rawValue }
 
@@ -103,6 +104,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .directRightSlide23:     return "23 · SAME but from the RIGHT (needs UIKit)"
         case .vanillaPush24:          return "24 · Plain push of a VANILLA list (no finch views)"
         case .feedNoSearch25:         return "25 · Vanilla list + .searchable"
+        case .uikitTablePush26:       return "26 · Plain push of a pure UIKit TABLE"
         }
     }
 
@@ -134,6 +136,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .directRightSlide23:     return "One tap in, slides from the right, no bar, deeper push native. This is the shipped shape."
         case .vanillaPush24:          return "Same structure as #0, but 100 plain rows. If THIS is clean, the cause is in our page, not the push."
         case .feedNoSearch25:         return "Same vanilla list as 24 plus a search field in the bar — the likeliest content co-factor."
+        case .uikitTablePush26:       return "Same push, UITableView instead of SwiftUI List. Clean = the cause is SwiftUI's scroll view."
         }
     }
 
@@ -151,6 +154,31 @@ private struct LabContent: View {
             .navigationTitle(variant.title)
             .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// Variant 26 — the same push, but the page is a pure-UIKit `UITableView`.
+/// Files and Messages (UIKit apps, UITableView/UICollectionView pages) do NOT
+/// shadow on this simulator while our SwiftUI pushes do, so this isolates the
+/// content technology: if this is clean, the trigger is SwiftUI's scroll view
+/// taking part in the iOS 26 scroll-edge effect, and the bug is Apple's.
+private struct UIKitTable: UIViewControllerRepresentable {
+    final class Table: UITableViewController {
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            tableView.register(UITableViewCell.self, forCellReuseIdentifier: "c")
+        }
+        override func tableView(_ t: UITableView, numberOfRowsInSection s: Int) -> Int { 100 }
+        override func tableView(_ t: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
+            let cell = t.dequeueReusableCell(withIdentifier: "c", for: ip)
+            var cfg = cell.defaultContentConfiguration()
+            cfg.text = "Row \(ip.row)"
+            cfg.secondaryText = "Subtitle for row \(ip.row)"
+            cell.contentConfiguration = cfg
+            return cell
+        }
+    }
+    func makeUIViewController(context: Context) -> Table { Table(style: .insetGrouped) }
+    func updateUIViewController(_ uiViewController: Table, context: Context) {}
 }
 
 /// Round 11 — vary the CONTENT while holding the structure at #0 (plain push).
@@ -198,6 +226,11 @@ private struct LabDestination: View {
         switch variant {
         case .vanillaPush24:
             VanillaList()
+        case .uikitTablePush26:
+            UIKitTable()
+                .ignoresSafeArea()
+                .navigationTitle("UIKit table")
+                .navigationBarTitleDisplayMode(.inline)
         case .feedNoSearch25:
             VanillaListWithSearch()
         case .push2TabBarHidden:
