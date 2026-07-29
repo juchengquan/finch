@@ -66,6 +66,8 @@ Human eyes are the only instrument — plan for that.
 | 23 | same, but right-slide (the shipped shape) | no |
 | 24 | plain push of a **vanilla** 100-row `List` (no finch views) | **yes** |
 | 25 | same vanilla list **+ `.searchable`** | **yes** |
+| 26 | plain push of a **pure UIKit `UITableView`** | **yes** |
+| — | Apple's **Files** and **Messages**, same sim, same OS, push + scroll + resume | **no** |
 
 ---
 
@@ -93,15 +95,26 @@ code in it shadows exactly like the real feed, with and without a search field.
 finch also sets no scroll-edge or glass configuration anywhere — everything is on
 Apple's defaults. So there is nothing to fix on our side of the page.
 
-**Why don't Messages / WhatsApp / Files shadow?** They are UIKit apps: their
-scrolled pages are `UITableView`/`UICollectionView`, not SwiftUI `List`s. Every
-shadowing case here has SwiftUI content in the pushed page — including variant 20,
-where the navigation controller was real UIKit but the page inside it was a hosted
-SwiftUI view. The working hypothesis is therefore that this is a **SwiftUI bug**
-in how its scroll views participate in the iOS 26 scroll-edge effect during a
-push, not a general iOS behaviour. That matters for strategy: an Apple-side bug in
-a first-year API is likely to be fixed, so prefer the cheapest workaround to
-delete later. (Untested: pushing a pure-UIKit table would confirm it.)
+**Why don't Messages / WhatsApp / Files shadow?** Checked on the same simulator
+and OS: they don't. The tempting explanation — that their pages are
+`UITableView`/`UICollectionView` rather than SwiftUI `List`s — was tested as
+variant 26 and is **WRONG**: a pure UIKit table pushed on our stack shadows too.
+
+So the content technology does not matter, the navigation owner does not matter
+(20 was a real `UINavigationController`), the `TabView` does not matter (18), and
+our configuration does not matter (we set none). What distinguishes finch from
+Files and Messages is that finch is a **SwiftUI app** — its window is rooted in
+SwiftUI's hosting infrastructure — and theirs are not.
+
+**Stated as an observation rather than a mechanism:** in a SwiftUI app on iOS
+26.5, a push in the window hierarchy shadows on resume, whatever is inside it and
+whoever owns the stack. Pushes inside a modally presented hierarchy with no
+`TabView` do not, and navigation that never runs a push transition does not.
+
+This is Apple's defect, not ours, and worth a Feedback Assistant report — this lab
+is a good reproducer: one build, a known-bad control, a known-good control, and
+one-variable isolations between them. Strategically it argues for the workaround
+that is CHEAPEST TO DELETE, since a first-year-API bug is likely to be fixed.
 
 **SwiftUI vs UIKit is not the axis for the NAVIGATION.** Variant 8 is a clean *SwiftUI* push; 16, 18
 and 20 are shadowing pushes, one of them pure UIKit. This is the second time
