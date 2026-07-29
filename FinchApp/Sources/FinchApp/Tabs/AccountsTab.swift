@@ -142,6 +142,12 @@ struct AccountsTab: View {
                 NavigationStack {
                     accountDrillDestination(target)
                         .rsdBackToolbar("Accounts") { drill = nil }
+                        // The cover is a top-level modal, so the tab's own FAB is
+                        // behind it — the drilled page carries its own (same look,
+                        // same page-context seeding). Without this the `+` vanishes
+                        // on every drill-in. Inside the stack, on the destination —
+                        // see `addTransactionFABInCover`.
+                        .addTransactionFABInCover()
                 }
             }
             #endif
