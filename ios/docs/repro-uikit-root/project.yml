@@ -1,0 +1,24 @@
+name: UIKitRootTest
+options:
+  bundleIdPrefix: com.juchengquan
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  UIKitRootTest:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: "NO"
+        PRODUCT_BUNDLE_IDENTIFIER: com.juchengquan.uikitroot
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
