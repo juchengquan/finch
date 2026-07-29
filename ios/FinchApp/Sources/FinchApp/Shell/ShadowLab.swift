@@ -67,6 +67,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case fullyOpaque29
     case hardShell30
     case hardPerPage31
+    case uikitAppearance32
 
     var id: String { rawValue }
 
@@ -116,6 +117,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .fullyOpaque29:          return "29 · Push + hard glass AND opaque backgrounds"
         case .hardShell30:            return "30 · Hard glass applied ONCE at the shell"
         case .hardPerPage31:          return "31 · Hard glass PER PAGE + solid bar background"
+        case .uikitAppearance32:      return "32 · UIKit appearance proxy (opaque bars)"
         }
     }
 
@@ -153,6 +155,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .fullyOpaque29:          return "Both together — the most opaque option. Compare all three against #0's look."
         case .hardShell30:            return "How it would actually ship: every tab and page hard. Switch tabs — no style flash."
         case .hardPerPage31:          return "No inheritance, and the bar gets a solid backdrop immediately. Switch tabs and watch."
+        case .uikitAppearance32:      return "Bars made opaque by UIKit at creation, not by SwiftUI converging. Last idea in this family."
         }
     }
 
@@ -306,6 +309,8 @@ struct ShadowLabRoot: View {
             HardGlassShellLab(active: $outerVariant)
         case .some(.hardPerPage31):
             HardGlassPerPageLab(active: $outerVariant)
+        case .some(.uikitAppearance32):
+            UIKitAppearanceLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -614,6 +619,57 @@ private struct HardGlassShellLab: View {
             .tabItem { Label("Three", systemImage: "3.circle") }
         }
         .modifier(HardGlassAll())
+    }
+}
+
+/// Variant 32 — opaque bars via UIKit's APPEARANCE PROXY rather than SwiftUI.
+///
+/// 27/29/30/31 all removed the resume shadow but exposed a transparent flash on
+/// every tab switch: the same late convergence, made visible because the bars are
+/// now opaque. Every one of those used SwiftUI modifiers, which ask the scroll-edge
+/// effect to settle on a style. `UINavigationBarAppearance` /
+/// `UITabBarAppearance` instead give the bar a background AT CREATION, with no
+/// convergence involved — so if anything can avoid the flash, this is it.
+///
+/// Note the appearance proxy only affects bars created afterwards, hence setting
+/// it before the shell is built.
+private struct UIKitAppearanceLab: View {
+    @Binding var active: ShadowVariant?
+
+    init(active: Binding<ShadowVariant?>) {
+        _active = active
+        let nav = UINavigationBarAppearance()
+        nav.configureWithOpaqueBackground()
+        UINavigationBar.appearance().standardAppearance = nav
+        UINavigationBar.appearance().scrollEdgeAppearance = nav
+        UINavigationBar.appearance().compactAppearance = nav
+
+        let tab = UITabBarAppearance()
+        tab.configureWithOpaqueBackground()
+        UITabBar.appearance().standardAppearance = tab
+        UITabBar.appearance().scrollEdgeAppearance = tab
+    }
+
+    var body: some View {
+        TabView {
+            NavigationStack {
+                List {
+                    Section {
+                        Text("Bars made opaque by UIKit at creation. Switch tabs and watch the top area — then push, scroll, Home, resume.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    NavigationLink("Push the Activity feed") { LabContent(variant: .uikitAppearance32) }
+                    Button("‹ Back to the menu") { active = nil }
+                }
+                .navigationTitle("UIKit appearance")
+            }
+            .tabItem { Label("Lab", systemImage: "testtube.2") }
+
+            NavigationStack { LabContent(variant: .uikitAppearance32).navigationTitle("Tab 2") }
+                .tabItem { Label("Two", systemImage: "2.circle") }
+            NavigationStack { LabContent(variant: .uikitAppearance32).navigationTitle("Tab 3") }
+                .tabItem { Label("Three", systemImage: "3.circle") }
+        }
     }
 }
 
@@ -1097,7 +1153,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31:
+        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31, .uikitAppearance32:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
