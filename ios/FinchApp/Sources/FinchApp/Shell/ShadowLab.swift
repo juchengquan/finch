@@ -56,6 +56,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case passthroughCover21
     // --- round 10 ---
     case directCover22
+    case directRightSlide23
 
     var id: String { rawValue }
 
@@ -96,6 +97,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .uikitRootSwap20:        return "20 · UIKit nav, ROOT-REPLACE (not push)"
         case .passthroughCover21:     return "21 · Cover with the REAL tab bar showing through"
         case .directCover22:          return "22 · Native cover, STRAIGHT to the page, no bar"
+        case .directRightSlide23:     return "23 · SAME but from the RIGHT (needs UIKit)"
         }
     }
 
@@ -124,6 +126,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .uikitRootSwap20:        return "Real UINavigationController + real tab bar. setViewControllers, so the page is a ROOT."
         case .passthroughCover21:     return "#8's clean cover, but the bottom strip is transparent AND tappable — the REAL bar."
         case .directCover22:          return "One tap in. No bottom bar. Deeper levels still push natively. Compare with #1."
+        case .directRightSlide23:     return "One tap in, slides from the right, no bar, deeper push native. This is the shipped shape."
         }
     }
 
@@ -713,6 +716,23 @@ private struct NormalLab: View {
                     }
                     .navigationTitle("Cover root")
                     .rsdBackToolbar("Lab") { cover = nil }
+                } else if v == .directRightSlide23 {
+                    // One tap in, no intermediate list, no bottom bar — and a
+                    // deeper level that pushes natively INSIDE the cover (#8).
+                    LabContent(variant: v)
+                        .rsdBackToolbar("Lab") { cover = nil }
+                        .navigationDestination(for: String.self) { _ in
+                            LabContent(variant: v).navigationTitle("Second level (native push)")
+                        }
+                        .safeAreaInset(edge: .bottom) {
+                            NavigationLink(value: "deeper") {
+                                Text("Go one level deeper (native push)")
+                                    .font(.footnote)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(.ultraThinMaterial)
+                            }
+                        }
                 } else {
                     LabContent(variant: v).rsdBackToolbar("Lab") { cover = nil }
                 }
@@ -843,7 +863,7 @@ private struct NormalLab: View {
         minimize = (v == .push7TabBarMinimize)
         dragX = 0
         switch v {
-        case .cover1Control, .pushInCover8:                       cover = v
+        case .cover1Control, .pushInCover8, .directRightSlide23:  cover = v
         case .passthroughCover21:     presentPassthroughCover()
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
         case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
