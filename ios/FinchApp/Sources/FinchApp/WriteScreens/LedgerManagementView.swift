@@ -37,7 +37,7 @@ struct LedgerListView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }
+                Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
                     .accessibilityLabel("Add Ledger")
             }
         }
@@ -133,7 +133,7 @@ struct AddLedgerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.toolbarCircleClip()
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -224,11 +224,11 @@ struct EditLedgerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.toolbarCircleClip()
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: { Image(systemName: "checkmark").toolbarTapTarget() }
+                    Button { Task { await save() } } label: { Image(systemName: "checkmark").toolbarTapTarget() }.toolbarCircleClip()
                         .accessibilityLabel("Save")
                         .confirmCheckmarkStyle()
                 }

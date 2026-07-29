@@ -55,7 +55,7 @@ struct ExchangeRateHistoryView: View {
                             Label("Delete all \(currency) rates", systemImage: "trash")
                         }
                     }
-                } label: { Image(systemName: "ellipsis.circle").toolbarTapTarget() }.accessibilityLabel("More")
+                } label: { Image(systemName: "ellipsis.circle").toolbarTapTarget() }.accessibilityLabel("More").toolbarCircleClip()
                 // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
                 .confirmationDialog("Delete all \(currency) rates", isPresented: $showDeleteAll, titleVisibility: .visible) {
                     Button("Delete \(rows.count) rates", role: .destructive) { deleteAll() }

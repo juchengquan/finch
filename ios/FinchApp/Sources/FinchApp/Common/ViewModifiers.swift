@@ -28,12 +28,30 @@ extension View {
     /// toolbar button's glass capsule larger than the glyph's default hit area, and
     /// inside a `.rightSlideDrill` cover the system's automatic hit-target enlargement
     /// isn't applied — so a *click* near the visual (glass) edge misses the action (the
-    /// button highlights but doesn't fire). Apply to the button's icon/label. iOS-only;
-    /// macOS toolbars size differently.
+    /// button highlights but doesn't fire). Apply to the button's icon/label.
+    ///
+    /// PAIR with `.toolbarCircleClip()` on the enclosing `Button`/`Menu`: the 44×44
+    /// frame otherwise makes iOS render the glass as a rounded-rect instead of the
+    /// circle it uses for a small glyph (`.buttonBorderShape(.circle)` does NOT
+    /// override the toolbar glass; a clip does). Grouped buttons stay a pill either
+    /// way. iOS-only; macOS toolbars size differently.
     @ViewBuilder
     func toolbarTapTarget() -> some View {
         #if os(iOS)
         frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+        #else
+        self
+        #endif
+    }
+
+    /// The circle clip that pairs with `toolbarTapTarget()` — see it. Applied to the
+    /// enclosing `Button`/`Menu`. iOS-only: on macOS `toolbarTapTarget()` adds no
+    /// frame, so there's no rounded-rect to correct and clipping would only crop the
+    /// natural toolbar button.
+    @ViewBuilder
+    func toolbarCircleClip() -> some View {
+        #if os(iOS)
+        clipShape(.circle)
         #else
         self
         #endif

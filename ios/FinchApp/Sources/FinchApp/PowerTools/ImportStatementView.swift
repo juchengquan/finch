@@ -52,7 +52,7 @@ struct ImportStatementView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.toolbarCircleClip()
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

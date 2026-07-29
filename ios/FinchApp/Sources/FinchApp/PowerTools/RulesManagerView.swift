@@ -62,7 +62,7 @@ struct RulesManagerView: View {
         .errorAlert($errorMessage)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { creating = true } label: { Image(systemName: "plus").toolbarTapTarget() }.accessibilityLabel("Add rule")
+                Button { creating = true } label: { Image(systemName: "plus").toolbarTapTarget() }.accessibilityLabel("Add rule").toolbarCircleClip()
             }
         }
         .sheet(isPresented: $creating) { RuleSheet(rule: nil) }
@@ -245,7 +245,7 @@ struct RuleSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel")
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel").toolbarCircleClip()
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").confirmCheckmarkStyle()

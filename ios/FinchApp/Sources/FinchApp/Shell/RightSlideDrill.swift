@@ -347,6 +347,7 @@ extension View {
                 Button(action: dismiss) {
                     Image(systemName: "chevron.left").toolbarTapTarget()
                 }
+                .toolbarCircleClip()
                 .accessibilityLabel("Back")
             }
         }

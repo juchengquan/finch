@@ -180,6 +180,7 @@ struct ActivityFeedView: View {
                         .toolbarTapTarget()
                 }
                 .accessibilityLabel("Filter")
+                .toolbarCircleClip()
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -190,10 +191,11 @@ struct ActivityFeedView: View {
                     Image(systemName: "arrow.up.arrow.down").toolbarTapTarget()
                 }
                 .accessibilityLabel("Sort")
+                .toolbarCircleClip()
             }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }
+                    Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
                         .accessibilityLabel("Add Transaction")
                         .disabled(store.accounts.isEmpty)
                 }

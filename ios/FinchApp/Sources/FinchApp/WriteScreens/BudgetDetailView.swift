@@ -57,7 +57,7 @@ struct BudgetDetailView: View {
                     // budget's category (and account, when the budget is
                     // account-filtered), so the transaction lands in this budget.
                     ToolbarItem(placement: .primaryAction) {
-                        Button { showingAddTx = true } label: { Image(systemName: "plus").toolbarTapTarget() }
+                        Button { showingAddTx = true } label: { Image(systemName: "plus").toolbarTapTarget() }.toolbarCircleClip()
                             .accessibilityLabel("Add Transaction")
                             .disabled(store.accounts.isEmpty)
                     }
@@ -65,7 +65,7 @@ struct BudgetDetailView: View {
                         Menu {
                             Button { showingEdit = true } label: { Label("Edit", systemImage: "pencil") }
                             Button(role: .destructive) { confirmingDelete = true } label: { Label("Delete", systemImage: "trash") }
-                        } label: { Image(systemName: "ellipsis.circle").toolbarTapTarget() }
+                        } label: { Image(systemName: "ellipsis.circle").toolbarTapTarget() }.toolbarCircleClip()
                         // Anchored on the ⋯ menu (iOS 26 positions popouts at their source).
                         .confirmationDialog("Delete this budget?", isPresented: $confirmingDelete, titleVisibility: .visible) {
                             Button("Delete", role: .destructive) { delete(budget) }
