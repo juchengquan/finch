@@ -67,6 +67,15 @@ Human eyes are the only instrument — plan for that.
 | 24 | plain push of a **vanilla** 100-row `List` (no finch views) | **yes** |
 | 25 | same vanilla list **+ `.searchable`** | **yes** |
 | 26 | plain push of a **pure UIKit `UITableView`** | **yes** |
+| 27 | push + `.scrollEdgeEffectStyle(.hard)` on the page | no — but see "opaque bars" |
+| 28 | push + `.toolbarBackground(.visible, …)` only | yes |
+| 29 | push + hard glass **and** opaque backgrounds | no |
+| 30 | hard glass applied once at the **shell** | no |
+| 31 | hard glass **per page** + visible bar background | no |
+| 32 | opaque bars via the **UIKit appearance proxy** | yes |
+| 33/34/35 | proxy: opaque no-hairline / blurred / transparent | inconclusive — see "method" |
+| 36 | **proxy + `.hard` together** | **no** |
+| 37 | same, `scrollEdgeAppearance` left default | **no** |
 | — | Apple's **Files** and **Messages**, same sim, same OS, push + scroll + resume | **no** |
 | A | **UIKit-rooted app**, push a `UITableViewController` | **no** |
 | B | **UIKit-rooted app**, push a SwiftUI `List` in a `UIHostingController` | **yes** |
@@ -151,6 +160,76 @@ machinery, and the push machinery is what shadows. So on iOS 26.5 you cannot
 have native push behaviour, a real `TabView`, and no shadow at once. Pick two.
 
 ---
+
+## The opaque-bars family (rounds 12–14)
+
+Accepting non-transparent bars looked like the cheapest possible fix: one modifier,
+native pushes everywhere, `RightSlideDrill` deleted, and one line to revert when
+Apple ships a fix. It half-works, and the half that fails is instructive.
+
+- **`.scrollEdgeEffectStyle(.hard)` removes the resume shadow** (27/29/30/31),
+  confirming the finding from the original investigation that was rejected on looks
+  in PR #635.
+- **But it exposes a second artifact: a transparent flash on EVERY tab switch.**
+  Opaque bars do not fix the late convergence — they relocate its visible symptom.
+  With default soft bars a moment of transparency is invisible, because the bar is
+  transparent anyway; make the bars opaque and the same convergence becomes
+  something you can see. Tab switches are far more frequent than resumes, so on its
+  own this is a worse trade than the bug.
+- Applying `.hard` **at the shell** (30) or **per page with an explicitly visible
+  `.toolbarBackground`** (31) does not stop the flash.
+- **The UIKit appearance proxy stops the flash but not the shadow** (32). The
+  mechanism differs: `UINavigationBarAppearance` / `UITabBarAppearance` give the bar
+  a background *at creation*, with no scroll-edge effect converging on a style.
+- **Together they work** (36/37): proxy for the background, `.hard` for the
+  convergence. No shadow, and the residual flash was judged acceptable. This is the
+  only complete configuration found besides a cover.
+
+### Two traps worth recording
+
+**Method: appearance proxies need a cold launch.** A proxy only affects bars created
+*after* it is set, so selecting styles from a menu inside one session leaves earlier
+bars on the earlier appearance. Results for 33/34/35 gathered that way were
+self-contradictory (32 and 33 differ only by a hairline yet disagreed) and are
+marked inconclusive. The lab takes `-barStyle 30|31|32|…|37` to boot straight into
+one style for this reason.
+
+**Do not stamp the proxy from a `View`'s `init`** — that runs on every body
+evaluation, and re-stamping while SwiftUI rebuilds bars on a tab switch appeared to
+reset toolbar buttons. It belongs in the App's `init`, once.
+
+### The pinned search bar was a red herring
+
+`.hard` and opaque bars appeared to pin the search field open. They do not: finch
+declares `.searchable(placement: .navigationBarDrawer(displayMode: .always))` on the
+feed and on account detail, so it never collapses. Measured with `idb ui
+describe-all`: the nav-bar container is **114pt unscrolled and 114pt scrolled in
+every configuration, including today's default-glass build**. Opaque bars only make
+the already-pinned field *look* fixed, because content no longer slides visibly
+under it. If collapsing search is ever wanted, that is `displayMode: .automatic` —
+a one-line change independent of any of this.
+
+---
+
+## DECISION (2026-07-29): keep `RightSlideDrill`
+
+Chosen over #37. The trade is a design call, not an engineering one, and it comes
+down to: **Liquid Glass transparency, or native push navigation with a visible tab
+bar.** On iOS 26.5 you cannot have both.
+
+| | #37 (proxy + `.hard`) | `RightSlideDrill` (kept) |
+|---|---|---|
+| resume shadow | gone | gone |
+| tab-switch flash | present, judged acceptable | none |
+| navigation | native push, native bar, native swipe-back | cover with a custom UIKit transition |
+| tab bar during a drill | visible | hidden |
+| code | one appearance block + one modifier | ~100 lines of UIKit in one file |
+| sheet-vs-cover bug class (#638) | does not exist | worked around |
+| **cost** | **Liquid Glass transparency, app-wide** | none |
+
+#37 remains the standing alternative if the shadow becomes intolerable before Apple
+fixes it, or if transparency stops mattering. It is fully specified above; building
+it is the appearance block in `FinchApp.init` plus `.hard` at the shell.
 
 ## Options, with their bills
 
