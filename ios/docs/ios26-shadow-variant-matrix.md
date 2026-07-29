@@ -61,7 +61,7 @@ Human eyes are the only instrument — plan for that.
 | 18 | native push, custom bottom bar, **no `TabView` anywhere** | **yes** |
 | 19 | cover + drawn bottom bar + native push | no |
 | 20 | real `UINavigationController`, `setViewControllers` (ROOT-replace) | **yes** |
-| 21 | `.overFullScreen` cover, bottom strip transparent + hit-test passthrough | *see notes* |
+| 21 | `.overFullScreen` cover, bottom strip transparent + hit-test passthrough | no — but rejected, see below |
 
 ---
 
@@ -102,7 +102,21 @@ have native push behaviour, a real `TabView`, and no shadow at once. Pick two.
 | **Status quo** — `RightSlideDrill` (family A) | yes, inside the cover | hidden during a drill | ~100 lines of UIKit; the app-root-sheet-vs-cover bug class (PR #638) |
 | **14** — SwiftUI slide-over (family B) | no — the bar slides with the page | real tab bar, in front | ~60 lines of SwiftUI; hand-rolled transition + back gesture |
 | **19** — cover + drawn bar (family A) | yes | a replica | replica bar loses scroll-to-top on re-tap, minimise-on-scroll, keyboard avoidance, accessibility, and Apple's future restyling; plus hosting the app in a permanent cover |
-| **21** — cover + real bar showing through (family A) | yes | the real bar, visible and tappable | hit-test passthrough; **the tab bar is absent from the accessibility tree while the cover is up**, so VoiceOver likely cannot reach it |
+| ~~**21**~~ — cover + real bar showing through | — | — | **REJECTED, see below** |
+
+**Variant 21 is shadow-free but unusable, for a structural reason.** iOS 26's tab
+bar glass samples what is BEHIND the bar. With the bar behind the cover, the only
+thing it can sample is the stale tab page underneath — never the drill content in
+front of it — so it renders flat and glassless, and no amount of tuning fixes
+that. Confirmed on the sim, along with two further faults: the bar stops being
+tappable once a page is pushed inside the cover, and it is absent from the
+accessibility tree while the cover is up (VoiceOver cannot reach it).
+
+**This reverses the ranking of the two "bottom bar + cover" options.** In variant
+19 the drawn bar lives INSIDE the cover, so the drill content scrolls under it and
+`.glassEffect()` samples the correct thing — a replica can look right where the
+real bar cannot. A replica bar inside the presentation beats the real bar behind
+it.
 
 Notes on the rejected-looking ones: **4's opaque top bar and 12's bare-background
 drag were lab bugs, not properties of the approach** — 4 wrapped the `List` in a
