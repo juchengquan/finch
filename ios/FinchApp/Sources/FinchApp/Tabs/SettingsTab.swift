@@ -127,8 +127,10 @@ struct SettingsRootList: View {
         if let onDrill {
             // .plain so the row reads as a normal (black) settings row, not a blue
             // accent-tinted button — matches the Accounts/Budgets row convention.
-            Button { onDrill(target) } label: { label().contentShape(Rectangle()) }
-                .buttonStyle(.plain)
+            Button { onDrill(target) } label: {
+                label().frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         } else {
             NavigationLink(destination: dest, label: label)
         }

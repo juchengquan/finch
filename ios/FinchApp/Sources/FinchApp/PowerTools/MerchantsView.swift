@@ -97,17 +97,17 @@ struct MerchantsView: View {
                 }.disabled(selected.count < 2)
             }
             ToolbarItem(placement: .cancellationAction) {
-                Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark") }
+                Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark").toolbarTapTarget() }
                     .accessibilityLabel("Cancel")
             }
         } else {
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("Add Merchant")
+                Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }.accessibilityLabel("Add Merchant")
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
-                } label: { Image(systemName: "ellipsis") }.accessibilityLabel("More")
+                } label: { Image(systemName: "ellipsis").toolbarTapTarget() }.accessibilityLabel("More")
             }
         }
     }
@@ -173,7 +173,7 @@ struct MerchantsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { mergingFrom = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                    Button { mergingFrom = nil } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel")
                 }
             }
         }
@@ -242,7 +242,7 @@ struct CounterpartyNameSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

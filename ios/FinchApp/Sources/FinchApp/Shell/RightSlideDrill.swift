@@ -35,8 +35,14 @@ private final class SlideRightAnimator: NSObject, UIViewControllerAnimatedTransi
     /// the cover is actually gone (a completed swipe or a programmatic dismiss, but
     /// not a swipe the user cancelled). Used to reset the driving SwiftUI state.
     let onDismissed: (() -> Void)?
-    init(presenting: Bool, onDismissed: (() -> Void)? = nil) {
-        self.presenting = presenting; self.onDismissed = onDismissed
+    /// The cover's nav bar, faded to 0 during a DISMISS so the chevron "disappears"
+    /// in place — like a native pop back to a page that has no back button — instead
+    /// of rigidly sliding off to the right with the rest of the cover. Scrubbed by the
+    /// interactive swipe automatically (the percent-driven interactor scrubs this
+    /// animation block), and restored on a cancelled swipe.
+    weak var fadingBar: UIView?
+    init(presenting: Bool, onDismissed: (() -> Void)? = nil, fadingBar: UIView? = nil) {
+        self.presenting = presenting; self.onDismissed = onDismissed; self.fadingBar = fadingBar
     }
 
     func transitionDuration(using ctx: UIViewControllerContextTransitioning?) -> TimeInterval { 0.35 }
@@ -70,10 +76,11 @@ private final class SlideRightAnimator: NSObject, UIViewControllerAnimatedTransi
             from.frame = bounds
             UIView.animate(withDuration: duration, delay: 0, options: .curveLinear) {
                 from.frame = bounds.offsetBy(dx: bounds.width, dy: 0)
+                self.fadingBar?.alpha = 0
             } completion: { _ in
                 let done = !ctx.transitionWasCancelled
                 ctx.completeTransition(done)
-                if done { self.onDismissed?() }
+                if done { self.onDismissed?() } else { self.fadingBar?.alpha = 1 }
             }
         }
     }
@@ -94,7 +101,8 @@ private final class RightSlideDelegate: NSObject, UIViewControllerTransitioningD
         SlideRightAnimator(presenting: true)
     }
     func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        SlideRightAnimator(presenting: false, onDismissed: { [weak self] in self?.onDismissed?() })
+        SlideRightAnimator(presenting: false, onDismissed: { [weak self] in self?.onDismissed?() },
+                           fadingBar: innerNav?.navigationBar)
     }
     /// Non-nil only while a left-edge swipe is in progress → interactive dismiss.
     func interactionControllerForDismissal(using animator: UIViewControllerAnimatedTransitioning) -> UIViewControllerInteractiveTransitioning? {
@@ -153,6 +161,24 @@ private func rsdInnerNav(_ vc: UIViewController) -> UINavigationController? {
     return nil
 }
 
+/// Forwards every `UINavigationControllerDelegate` call to SwiftUI's original
+/// delegate (ObjC message forwarding), hooking only `willShow` to make each pushed
+/// view's back button chevron-only (`.minimal` — arrow, no previous-title text) so
+/// the whole drill matches the cover's own chevron dismiss. Holding `original` keeps
+/// SwiftUI's NavigationStack state syncing intact. Mirrors `TabTransitionProxy`.
+private final class RSDNavProxy: NSObject, UINavigationControllerDelegate {
+    weak var original: UINavigationControllerDelegate?
+    func navigationController(_ navigationController: UINavigationController,
+                             willShow viewController: UIViewController, animated: Bool) {
+        viewController.navigationItem.backButtonDisplayMode = .minimal
+        original?.navigationController?(navigationController, willShow: viewController, animated: animated)
+    }
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
+    }
+    override func forwardingTarget(for aSelector: Selector!) -> Any? { original }
+}
+
 /// Hosting controller that installs the cover's left-edge swipe-to-dismiss ONCE its
 /// SwiftUI `NavigationStack` (and thus the inner nav's pop gesture) exists. The
 /// dismiss gesture is set to `require(toFail:)` that pop gesture, so it only fires
@@ -160,6 +186,8 @@ private func rsdInnerNav(_ vc: UIViewController) -> UINavigationController? {
 private final class RSDHostingController<Content: View>: UIHostingController<Content> {
     weak var edgeDelegate: RightSlideDelegate?
     private var installed = false
+    /// Strongly held — `UINavigationController.delegate` is weak (see RSDNavProxy).
+    private var navProxy: RSDNavProxy?
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -185,6 +213,15 @@ private final class RSDHostingController<Content: View>: UIHostingController<Con
         pan.delegate = delegate
         delegate.innerNav = nav
         nav.view.addGestureRecognizer(pan)
+
+        // Chevron-only back buttons for every push inside the cover, forwarding all
+        // other nav-delegate calls to SwiftUI so its NavigationStack state stays live.
+        let proxy = RSDNavProxy()
+        proxy.original = nav.delegate
+        nav.delegate = proxy
+        navProxy = proxy
+        for vc in nav.viewControllers { vc.navigationItem.backButtonDisplayMode = .minimal }
+
         installed = true
     }
 }
@@ -307,8 +344,10 @@ extension View {
     func rsdBackToolbar(dismiss: @escaping () -> Void) -> some View {
         toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button(action: dismiss) { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Back")
+                Button(action: dismiss) {
+                    Image(systemName: "chevron.left").toolbarTapTarget()
+                }
+                .accessibilityLabel("Back")
             }
         }
     }

@@ -58,19 +58,19 @@ struct TagsView: View {
                     .disabled(selected.count < 2)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark") }
+                    Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark").toolbarTapTarget() }
                         .accessibilityLabel("Cancel")
                 }
             } else {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { creating = true } label: { Image(systemName: "plus") }
+                    Button { creating = true } label: { Image(systemName: "plus").toolbarTapTarget() }
                         .accessibilityLabel("New tag")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
                         Button { importing = true } label: { Label("Import from another ledger…", systemImage: "square.and.arrow.down.on.square") }
-                    } label: { Image(systemName: "ellipsis") }
+                    } label: { Image(systemName: "ellipsis").toolbarTapTarget() }
                     .accessibilityLabel("More")
                 }
             }
@@ -129,7 +129,7 @@ struct TagsView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button { mergingFrom = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                        Button { mergingFrom = nil } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel")
                     }
                 }
             }
@@ -302,7 +302,7 @@ struct TagEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }
                         .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {

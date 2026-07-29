@@ -5505,26 +5505,6 @@
         }
       }
     },
-    "Search accounts": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索账户"
-          }
-        }
-      }
-    },
-    "Search budgets": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索预算"
-          }
-        }
-      }
-    },
     "Search icons": {
       "localizations": {
         "zh-Hans": {
@@ -5551,26 +5531,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "搜索或添加"
-          }
-        }
-      }
-    },
-    "Search scheduled": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索计划"
-          }
-        }
-      }
-    },
-    "Search transactions": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索交易"
           }
         }
       }

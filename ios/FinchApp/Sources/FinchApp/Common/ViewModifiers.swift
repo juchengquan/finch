@@ -24,6 +24,21 @@ extension View {
         buttonStyle(.borderedProminent).tint(.accentColor)
     }
 
+    /// Restores a full 44×44 tap target on a bare-glyph toolbar button. iOS 26 draws a
+    /// toolbar button's glass capsule larger than the glyph's default hit area, and
+    /// inside a `.rightSlideDrill` cover the system's automatic hit-target enlargement
+    /// isn't applied — so a *click* near the visual (glass) edge misses the action (the
+    /// button highlights but doesn't fire). Apply to the button's icon/label. iOS-only;
+    /// macOS toolbars size differently.
+    @ViewBuilder
+    func toolbarTapTarget() -> some View {
+        #if os(iOS)
+        frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+        #else
+        self
+        #endif
+    }
+
     /// The app-wide gap between grouped `List`/`Form` sections (`Metrics.sectionSpacing`) —
     /// tune it in one place (`Common/Metrics.swift`). Set once at `AdaptiveShell` for the
     /// main tabs (inherited via the environment); `.sheet` content does NOT inherit that,

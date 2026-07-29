@@ -117,7 +117,7 @@ struct CategoriesView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button { mergingFrom = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                        Button { mergingFrom = nil } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel")
                     }
                 }
             }
@@ -203,18 +203,18 @@ struct CategoriesView: View {
                     .disabled(selected.count < 2)
             }
             ToolbarItem(placement: .cancellationAction) {
-                Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark") }
+                Button { isSelecting = false; selected = [] } label: { Image(systemName: "xmark").toolbarTapTarget() }
                     .accessibilityLabel("Cancel")
             }
         } else if isReordering {
             ToolbarItem(placement: .confirmationAction) {
-                Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark") }
+                Button { isReordering = false; dropTargetId = nil; topLevelTargeted = false } label: { Image(systemName: "checkmark").toolbarTapTarget() }
                     .accessibilityLabel("Done")
                     .confirmCheckmarkStyle()
             }
         } else {
             ToolbarItem(placement: .primaryAction) {
-                Button { creating = true } label: { Image(systemName: "plus") }
+                Button { creating = true } label: { Image(systemName: "plus").toolbarTapTarget() }
                     .accessibilityLabel("New category")
             }
             ToolbarItem(placement: .primaryAction) {
@@ -222,7 +222,7 @@ struct CategoriesView: View {
                     Button { isReordering = true } label: { Label("Reorder", systemImage: "arrow.up.arrow.down") }
                     Button { isSelecting = true; selected = [] } label: { Label("Merge…", systemImage: "arrow.triangle.merge") }
                     Button { importing = true } label: { Label("Import from another ledger…", systemImage: "square.and.arrow.down.on.square") }
-                } label: { Image(systemName: "ellipsis") }
+                } label: { Image(systemName: "ellipsis").toolbarTapTarget() }
                 .accessibilityLabel("More")
             }
         }
@@ -530,7 +530,7 @@ struct CategoryEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Cancel")
+                    Button { dismiss() } label: { Image(systemName: "xmark").toolbarTapTarget() }.accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: save) { Image(systemName: "checkmark") }.accessibilityLabel("Save").confirmCheckmarkStyle()

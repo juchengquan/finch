@@ -155,9 +155,9 @@ struct ActivityFeedView: View {
             }
         }
         #if os(iOS)
-        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
         #else
-        .searchable(text: $searchQuery, prompt: "Search transactions")
+        .searchable(text: $searchQuery, prompt: "Search")
         #endif
         .navigationTitle("Activity")
         .errorAlert($errorMessage)
@@ -177,6 +177,7 @@ struct ActivityFeedView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingFilter = true } label: {
                     Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .toolbarTapTarget()
                 }
                 .accessibilityLabel("Filter")
             }
@@ -186,13 +187,13 @@ struct ActivityFeedView: View {
                         ForEach(TxSort.allCases) { Text($0.label).tag($0) }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: "arrow.up.arrow.down").toolbarTapTarget()
                 }
                 .accessibilityLabel("Sort")
             }
             if sizeClass != .compact {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
+                    Button { showingAdd = true } label: { Image(systemName: "plus").toolbarTapTarget() }
                         .accessibilityLabel("Add Transaction")
                         .disabled(store.accounts.isEmpty)
                 }

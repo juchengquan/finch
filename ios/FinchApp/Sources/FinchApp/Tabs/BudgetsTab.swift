@@ -49,9 +49,9 @@ struct BudgetsTab: View {
 NavigationStack(path: $path) {
             listContent
             #if os(iOS)
-            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search budgets")
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             #else
-            .searchable(text: $searchQuery, prompt: "Search budgets")
+            .searchable(text: $searchQuery, prompt: "Search")
             #endif
             .navigationTitle("Budgets")
             .toolbar {
