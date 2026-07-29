@@ -85,18 +85,23 @@ final class AccountsListVC: UITableViewController {
         tableView.reloadData()
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    override func numberOfSections(in tableView: UITableView) -> Int { 4 }
 
     override func tableView(_ t: UITableView, titleForHeaderInSection s: Int) -> String? {
         switch s {
         case 0:  return "Converted — UIKit (expected: NO shadow)"
         case 1:  return "Original — SwiftUI, hosted (expected: shadow)"
-        default: return "BISECT — why does the real screen stay clean but a plain List not?"
+        case 2:  return "BISECT — why does the real screen stay clean but a plain List not?"
+        default: return "COVERAGE — the app's remaining drill destinations, hosted"
         }
     }
 
     override func tableView(_ t: UITableView, numberOfRowsInSection s: Int) -> Int {
-        s == 2 ? BisectCase.allCases.count : accounts.count
+        switch s {
+        case 2:  return BisectCase.allCases.count
+        case 3:  return DrillDestination.allCases.count
+        default: return accounts.count
+        }
     }
 
     override func tableView(_ t: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
@@ -106,6 +111,15 @@ final class AccountsListVC: UITableViewController {
             var cfg = cell.defaultContentConfiguration()
             cfg.text = c.title
             cfg.secondaryText = c.blurb
+            cell.contentConfiguration = cfg
+            cell.accessoryType = .disclosureIndicator
+            return cell
+        }
+        if ip.section == 3 {
+            let d = DrillDestination.allCases[ip.row]
+            var cfg = cell.defaultContentConfiguration()
+            cfg.text = d.title
+            cfg.secondaryText = d.blurb
             cell.contentConfiguration = cfg
             cell.accessoryType = .disclosureIndicator
             return cell
@@ -125,6 +139,13 @@ final class AccountsListVC: UITableViewController {
             let c = BisectCase.allCases[ip.row]
             let host = UIHostingController(rootView: BisectList(kase: c))
             host.title = c.title
+            navigationController?.pushViewController(host, animated: true)
+            return
+        }
+        if ip.section == 3 {
+            let d = DrillDestination.allCases[ip.row]
+            guard let host = d.makeHost() else { return }
+            host.title = d.title
             navigationController?.pushViewController(host, animated: true)
             return
         }
@@ -252,6 +273,77 @@ private struct BisectList: View {
                     Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+}
+
+
+// MARK: - Coverage: the app's remaining drill destinations under a UIKit root
+//
+// AccountDetailView and ActivityFeedView are clean here at 10, 44 and 2,000 rows,
+// while every synthetic list shadows. Two screens is not coverage, so this pushes
+// the REST of what the app actually drills into. If they are all clean, the
+// migration's viability is settled empirically across the app's real surface and
+// the decision reduces to cost.
+//
+// Note on reading the results: a screen with only a handful of rows barely scrolls,
+// and this artifact needs content under the bar (8 synthetic rows were clean). Each
+// row below says how much content it has, so a "clean" on a thin screen is not
+// mistaken for evidence.
+enum DrillDestination: Int, CaseIterable {
+    case budgetDetail, holdings, scheduledDetail, transactionDetail
+    case categories, merchants, tags, rules
+
+    var title: String {
+        switch self {
+        case .budgetDetail:      return "Budget detail"
+        case .holdings:          return "Holdings"
+        case .scheduledDetail:   return "Scheduled detail"
+        case .transactionDetail: return "Transaction detail"
+        case .categories:        return "PowerTools · Categories"
+        case .merchants:         return "PowerTools · Merchants"
+        case .tags:              return "PowerTools · Tags"
+        case .rules:             return "PowerTools · Rules"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .budgetDetail:      return "Real screen. Rows = that budget's transactions."
+        case .holdings:          return "Real screen. THIN — few rows, may not scroll enough to judge."
+        case .scheduledDetail:   return "Real screen. THIN — few rows."
+        case .transactionDetail: return "Real screen. THIN — a form, barely scrolls."
+        case .categories:        return "Real screen, ~40 rows in a hierarchy."
+        case .merchants:         return "Real screen. Row count grows with the seeded merchants."
+        case .tags:              return "Real screen. Usually thin."
+        case .rules:             return "Real screen. Usually thin."
+        }
+    }
+
+    @MainActor func makeHost() -> UIViewController? {
+        let store = FinchStore.shared
+        func host<V: View>(_ v: V) -> UIViewController {
+            UIHostingController(rootView: v
+                .environmentObject(store)
+                .environmentObject(DeepLinkRouter.shared)
+                .environmentObject(BiometricGate.shared))
+        }
+        switch self {
+        case .budgetDetail:
+            guard let id = store.budgets.first?.id else { return nil }
+            return host(BudgetDetailView(budgetId: id))
+        case .holdings:
+            return host(HoldingsView())
+        case .scheduledDetail:
+            guard let id = store.scheduled.first?.id else { return nil }
+            return host(ScheduledDetailView(templateId: id))
+        case .transactionDetail:
+            guard let id = store.txns.first?.id else { return nil }
+            return host(TransactionDetailView(txId: id))
+        case .categories: return host(CategoriesView())
+        case .merchants:  return host(MerchantsView())
+        case .tags:       return host(TagsView())
+        case .rules:      return host(RulesManagerView())
         }
     }
 }
