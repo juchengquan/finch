@@ -50,6 +50,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case customBar18
     // --- round 7 ---
     case coverCustomBar19
+    // --- round 8 ---
+    case uikitRootSwap20
 
     var id: String { rawValue }
 
@@ -87,6 +89,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .sharedBar17:            return "17 · Slide-over sharing ONE nav bar"
         case .customBar18:            return "18 · NATIVE push, custom bottom bar (no TabView)"
         case .coverCustomBar19:       return "19 · COVER + custom bar + native push"
+        case .uikitRootSwap20:        return "20 · UIKit nav, ROOT-REPLACE (not push)"
         }
     }
 
@@ -112,6 +115,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .sharedBar17:            return "Only the CONTENT slides; the bar and search stay put and swap contents."
         case .customBar18:            return "One NavigationStack, no TabView; the bottom bar is drawn by us. Fully native push."
         case .coverCustomBar19:       return "Variant 8's clean structure (presented, no TabView) PLUS a drawn bottom bar."
+        case .uikitRootSwap20:        return "Real UINavigationController + real tab bar. setViewControllers, so the page is a ROOT."
         }
     }
 
@@ -168,6 +172,8 @@ struct ShadowLabRoot: View {
             CustomBarLab(active: $outerVariant)
         case .some(.coverCustomBar19):
             CoverCustomBarLab(active: $outerVariant)
+        case .some(.uikitRootSwap20):
+            RootSwapNavLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -213,6 +219,167 @@ private struct CustomBarLab: View {
                 .navigationDestination(for: ShadowVariant.self) { LabContent(variant: $0) }
             }
             ReplicaBar(selected: $selected)
+        }
+    }
+}
+
+// MARK: - Variant 20: UIKit nav container that ROOT-REPLACES instead of pushing
+//
+// The premise: a UIKit clone of NavigationStack that PUSHES would shadow exactly
+// like SwiftUI's (UIKitNavStack was built and device-refuted on
+// feat/uikit-device-build; #8 is a clean SwiftUI push, #16/#18 are shadowing
+// SwiftUI pushes — the framework is not the axis). But `setViewControllers`
+// animates like a push while leaving the destination as the stack's ROOT, and
+// every root variant (#4/#9/#14) is clean.
+//
+// If this works it is the only arrangement that gives all of: real UINavigation
+// bar (so the bar stays put and its CONTENTS transition, the thing SwiftUI's
+// slide-over cannot do), UIKit-quality animation and interactive gesture, the
+// REAL tab bar still visible, and no shadow.
+//
+// Note what this file already demonstrates about the cost: to get a backwards
+// animation and an interactive back out of a root replace, we have to supply our
+// own animator and percent-driven interaction — i.e. rebuild the machinery
+// RightSlideDrill already contains, per navigation level.
+
+/// Slides the outgoing page to the right and the incoming one back in from the
+/// left — the inverse of a push, used when root-replacing "backwards".
+private final class RootSwapBackAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+    func transitionDuration(using ctx: UIViewControllerContextTransitioning?) -> TimeInterval { 0.35 }
+    func animateTransition(using ctx: UIViewControllerContextTransitioning) {
+        let container = ctx.containerView
+        let bounds = container.bounds
+        guard let to = ctx.view(forKey: .to) else { ctx.completeTransition(false); return }
+        let from = ctx.view(forKey: .from)
+        to.frame = bounds.offsetBy(dx: -bounds.width * 0.25, dy: 0)
+        container.insertSubview(to, belowSubview: from ?? to)
+        UIView.animate(withDuration: transitionDuration(using: ctx), delay: 0, options: .curveEaseInOut) {
+            to.frame = bounds
+            from?.frame = bounds.offsetBy(dx: bounds.width, dy: 0)
+        } completion: { _ in
+            ctx.completeTransition(!ctx.transitionWasCancelled)
+        }
+    }
+}
+
+private final class RootSwapCoordinator: NSObject, UINavigationControllerDelegate, UIGestureRecognizerDelegate {
+    weak var nav: UINavigationController?
+    var onExit: () -> Void = {}
+    private var goingBack = false
+    private var interactor: UIPercentDrivenInteractiveTransition?
+
+    /// Environment has to be re-attached to EVERY hosted level — the cost noted above.
+    private func host<V: View>(_ view: V) -> UIHostingController<AnyView> {
+        UIHostingController(rootView: AnyView(
+            view.environmentObject(FinchStore.shared)
+                .environmentObject(DeepLinkRouter.shared)
+                .environmentObject(BiometricGate.shared)
+        ))
+    }
+
+    func makeList() -> UIViewController {
+        let vc = host(
+            List {
+                Section {
+                    Text("Real UINavigationController inside the real tab bar. Root-REPLACE, not push.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Button("Open the Activity feed (root replace)") { [weak self] in self?.goForward() }
+                Button("‹ Back to the menu") { [weak self] in self?.onExit() }
+            }
+            .navigationTitle("UIKit root-swap")
+        )
+        return vc
+    }
+
+    func goForward() {
+        let detail = host(LabContent(variant: .uikitRootSwap20))
+        // The SwiftUI page's own .navigationTitle / .toolbar / .searchable do NOT
+        // reach a hosting controller's navigationItem here — the feed lost its
+        // title, its Select/filter/sort buttons and its search field. Setting the
+        // title by hand so the BAR TRANSITION is judgeable; the rest would each
+        // need mapping to UIBarButtonItem / UISearchController by hand, per screen.
+        detail.navigationItem.title = "Activity"
+        detail.navigationItem.leftBarButtonItem =
+            UIBarButtonItem(title: "‹ Menu", style: .plain, target: self, action: #selector(goBack))
+        goingBack = false
+        nav?.setViewControllers([detail], animated: true)
+    }
+
+    @objc func goBack() {
+        goingBack = true
+        nav?.setViewControllers([makeList()], animated: true)
+    }
+
+    // Default (native, push-direction) animation forward; our reverse animator back.
+    func navigationController(_ navigationController: UINavigationController,
+                              animationControllerFor operation: UINavigationController.Operation,
+                              from fromVC: UIViewController,
+                              to toVC: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        goingBack ? RootSwapBackAnimator() : nil
+    }
+
+    func navigationController(_ navigationController: UINavigationController,
+                              interactionControllerFor animationController: UIViewControllerAnimatedTransitioning)
+    -> UIViewControllerInteractiveTransitioning? {
+        interactor
+    }
+
+    /// A stack of one has no interactivePopGestureRecognizer, so the back swipe is
+    /// ours to drive — again, machinery a real push gives away for free.
+    @objc func handleEdge(_ g: UIScreenEdgePanGestureRecognizer) {
+        guard let view = g.view else { return }
+        let progress = min(max(g.translation(in: view).x / max(view.bounds.width, 1), 0), 1)
+        switch g.state {
+        case .began:
+            interactor = UIPercentDrivenInteractiveTransition()
+            goBack()
+        case .changed:
+            interactor?.update(progress)
+        case .ended, .cancelled, .failed:
+            if progress > 0.35 || g.velocity(in: view).x > 800 { interactor?.finish() } else { interactor?.cancel() }
+            interactor = nil
+        default:
+            break
+        }
+    }
+}
+
+private struct UIKitRootSwapNav: UIViewControllerRepresentable {
+    let onExit: () -> Void
+
+    func makeCoordinator() -> RootSwapCoordinator {
+        let c = RootSwapCoordinator(); c.onExit = onExit; return c
+    }
+
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let nav = UINavigationController()
+        nav.delegate = context.coordinator
+        context.coordinator.nav = nav
+        nav.setViewControllers([context.coordinator.makeList()], animated: false)
+        let edge = UIScreenEdgePanGestureRecognizer(
+            target: context.coordinator, action: #selector(RootSwapCoordinator.handleEdge(_:)))
+        edge.edges = .left
+        nav.view.addGestureRecognizer(edge)
+        return nav
+    }
+
+    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+}
+
+/// Hosts variant 20 inside the REAL tab bar, so the configuration under test is
+/// TabView > UINavigationController > root-replaced page.
+private struct RootSwapNavLab: View {
+    @Binding var active: ShadowVariant?
+    var body: some View {
+        TabView {
+            UIKitRootSwapNav(onExit: { active = nil })
+                .ignoresSafeArea()
+                .tabItem { Label("Lab", systemImage: "testtube.2") }
+            Text("filler").tabItem { Label("Two", systemImage: "2.circle") }
+            Text("filler").tabItem { Label("Three", systemImage: "3.circle") }
+            Text("filler").tabItem { Label("Four", systemImage: "4.circle") }
+            Text("filler").tabItem { Label("Five", systemImage: "5.circle") }
         }
     }
 }
@@ -562,7 +729,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain:                         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18, .coverCustomBar19:
+        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
