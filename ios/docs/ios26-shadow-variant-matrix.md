@@ -62,6 +62,10 @@ Human eyes are the only instrument — plan for that.
 | 19 | cover + drawn bottom bar + native push | no |
 | 20 | real `UINavigationController`, `setViewControllers` (ROOT-replace) | **yes** |
 | 21 | `.overFullScreen` cover, bottom strip transparent + hit-test passthrough | no — but rejected, see below |
+| 22 | native `.fullScreenCover` straight to the page, no bar, deeper push inside | no |
+| 23 | same, but right-slide (the shipped shape) | no |
+| 24 | plain push of a **vanilla** 100-row `List` (no finch views) | **yes** |
+| 25 | same vanilla list **+ `.searchable`** | **yes** |
 
 ---
 
@@ -84,7 +88,22 @@ Everything else shadows: every push in the window hierarchy with or without a
 `TabView` (0, 2, 3, 5, 7, 18), a push inside a cover that contains a `TabView`
 (16), and a UIKit root-replace that animates as a push (20).
 
-**SwiftUI vs UIKit is not the axis.** Variant 8 is a clean *SwiftUI* push; 16, 18
+**The CONTENT is not the cause (24, 25).** A vanilla 100-row `List` with no finch
+code in it shadows exactly like the real feed, with and without a search field.
+finch also sets no scroll-edge or glass configuration anywhere — everything is on
+Apple's defaults. So there is nothing to fix on our side of the page.
+
+**Why don't Messages / WhatsApp / Files shadow?** They are UIKit apps: their
+scrolled pages are `UITableView`/`UICollectionView`, not SwiftUI `List`s. Every
+shadowing case here has SwiftUI content in the pushed page — including variant 20,
+where the navigation controller was real UIKit but the page inside it was a hosted
+SwiftUI view. The working hypothesis is therefore that this is a **SwiftUI bug**
+in how its scroll views participate in the iOS 26 scroll-edge effect during a
+push, not a general iOS behaviour. That matters for strategy: an Apple-side bug in
+a first-year API is likely to be fixed, so prefer the cheapest workaround to
+delete later. (Untested: pushing a pure-UIKit table would confirm it.)
+
+**SwiftUI vs UIKit is not the axis for the NAVIGATION.** Variant 8 is a clean *SwiftUI* push; 16, 18
 and 20 are shadowing pushes, one of them pure UIKit. This is the second time
 UIKit has been tried and failed — `UIKitNavStack` on `feat/uikit-device-build`
 was the first. Do not try a third.
