@@ -85,6 +85,23 @@ Workarounds found, both with significant cost:
   a custom right-slide transition, to preserve the push's look and feel).
 - Never run a push transition — swap the stack's root, or overlay the destination.
 
+### Second symptom, same underlying behaviour
+
+Configuring the bars to be **fully opaque** removes the resume shadow but exposes
+the same late convergence on a different trigger: the bar renders **transparent for
+a frame on every tab switch**. This happens with `.scrollEdgeEffectStyle(.hard)`
+applied at the shell or per page, and with an explicit
+`.toolbarBackground(.visible, for: .navigationBar)` — i.e. even when the bar has
+been told to have a solid background from the first frame.
+
+Setting the background through UIKit instead (`UINavigationBarAppearance`
+/`UITabBarAppearance` with `configureWithOpaqueBackground()`) avoids the flash but
+does not remove the resume shadow. Only the combination of the two avoids both.
+
+The two symptoms have different triggers (resume vs tab switch) and different
+workarounds, which suggests one underlying issue: the bar's scroll-edge effect
+resolving late rather than being correct on first display.
+
 ### Note on capture
 
 The artifact is **not present in captured images**: `xcrun simctl io … screenshot`
