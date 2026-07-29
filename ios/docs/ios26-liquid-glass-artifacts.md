@@ -6,10 +6,17 @@ each has a finch-side fix. This is the post-mortem: symptoms, what they
 actually are, what we ruled out, what shipped, and what was tried and
 abandoned along the way.
 
-> **The single most important lesson: the Simulator is NOT a valid proxy
-> for the Liquid Glass compositor.** It repeatedly reported a fix as
-> "working" when the physical device still showed the artifact. Screenshots
-> also miss the compositor's glass layers — you need device eyes or video.
+> **The single most important lesson: you cannot CAPTURE the Liquid Glass
+> compositor.** `simctl` screenshots and `recordVideo` read the simulator's
+> internal framebuffer, which does not contain the glass layers — after a
+> resume, a pushed page and a root page are byte-identical. macOS
+> `screencapture` is TCC-blocked under tmux. Human eyes are the instrument.
+>
+> **CORRECTED 2026-07-29:** the older claim that the artifact is "device-only,
+> invisible on the simulator" is WRONG — it reproduces on the simulator and is
+> plainly visible to a person. Only the *capture* fails. That mistake cost
+> earlier rounds device cycles they did not need. See
+> `ios26-shadow-variant-matrix.md`.
 
 ---
 
@@ -59,6 +66,15 @@ Budgets) stays clean; a page you *navigate into* (the Activity feed, an
 account's detail) shadows. Bisected on device: it is **not** the content,
 rows, headers, search bar, large title, nav-bar background, or the data —
 it is purely **navigation depth** (root vs pushed).
+
+**SUPERSEDED 2026-07-29 — see `ios26-shadow-variant-matrix.md`.** A 21-variant
+sweep shows this is wrong in both directions: a push on a stack that is NOT the
+tab's still shadows (a `NavigationStack` wrapping the `TabView`), and a push CAN
+be perfectly clean (inside a cover that contains no `TabView`). "Root vs pushed"
+is also the wrong framing — a UIKit root-replace via `setViewControllers` is a
+root and still shadows, because the trigger is the push TRANSITION, not the depth
+you land at. Clean = either modally presented with no `TabView` inside, or never
+running a push transition at all. The claim below is kept for history:
 
 **Sharpened (device-confirmed 2026-07-28).** More precisely: only pushes on the
 **main tab-bar `NavigationStack`** shadow. A **modal cover** — and normal
@@ -129,6 +145,13 @@ cover is fine; see the sharpened rule above).
 | Wrap the pushed page in its **own** `NavigationStack` (nested) | **Intermittent** — a nested stack isn't reliably treated as top-level. |
 | **`UIKitNavStack`** — `UINavigationController`-wrapped SwiftUI views, env re-injection, `UIKitNavLink` for declarative pushes | **Tried. Did not fix the shadow on device.** Replaced by `.fullScreenCover` drill (PR #628), then by RightSlideDrill. The earlier post-mortem on `feat/uikit-device-build` claimed this was the fix; the on-device test refuted that claim. |
 | `.fullScreenCover` drill | Reliably kills the shadow (the presented view is a root), but the slide-up modal feel was jarring vs. the native slide-from-right push. Replaced by RightSlideDrill. |
+| `.toolbar(.hidden, for: .tabBar)` on the pushed page | Still shadows — it is not the tab bar's glass (2026-07-29) |
+| `NavigationStack` **wrapping** the `TabView` | Still shadows (2026-07-29) |
+| `.scrollEdgeEffectHidden(true, for: .bottom)` | Still shadows (2026-07-29) |
+| `.tabBarMinimizeBehavior(.onScrollDown)` | Still shadows (2026-07-29) |
+| `.backgroundExtensionEffect()` on the pushed page | Kills the shadow but MIRRORS content into the bars — unusable (2026-07-29) |
+| Native push with a hand-drawn bottom bar, no `TabView` at all | Still shadows (2026-07-29) |
+| `UINavigationController` + `setViewControllers` (root-replace, not push) | Still shadows — the push TRANSITION is the trigger (2026-07-29) |
 | **RightSlideDrill** — `.overFullScreen` cover, right-slide animation, state-driven, interactive edge-swipe | **The fix — device-verified 2026-07-28 for one- AND multi-level** (Accounts/Budgets/Settings + the Ledger flow). Kills the shadow, keeps slide-from-right + swipe-back and `.soft` transparency. Needed the three latent-bug fixes noted above before it actually presented a cover. |
 
 ---
@@ -144,7 +167,12 @@ finch.
 
 ## Verification requirement
 
-Every glass fix must be verified on a physical device. The simulator is
-not a faithful proxy: it reports fixes as working when the device still
-shows the artifact, and screenshots miss the compositor's glass layers.
-This applies symmetrically to Issues 1 and 2.
+Every glass fix must be verified **by eye** — on the simulator at minimum, and
+on a device before shipping. What fails is *capture*, not the simulator:
+screenshots and video miss the compositor's glass layers entirely, so an
+automated check will report any fix as working. Never conclude from a
+screenshot. Always judge a candidate against a known-bad and a known-good
+control in the same session.
+
+See `ios26-shadow-variant-matrix.md` for the 21 navigation structures already
+tested, the two families that are clean, and the options with their costs.

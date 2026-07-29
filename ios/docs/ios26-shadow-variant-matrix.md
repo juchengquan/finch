@@ -1,0 +1,139 @@
+# iOS 26 resume shadow — the 21-variant navigation matrix
+
+A systematic sweep of navigation structures against the iOS 26 Liquid Glass
+**resume shadow**, run on the simulator (iOS 26.5, iPhone 17 Pro) with a
+throwaway lab that put every variant in one build. Read this before proposing a
+navigation change to the compact shell — it records what has already been ruled
+out, and why.
+
+Companion to `ios26-liquid-glass-artifacts.md`, which describes the artifact and
+the shipped fix. **This document supersedes that one on three points** (see
+"Corrections" at the end).
+
+---
+
+## Method
+
+`ShadowLab.swift` on the throwaway branch `exp/ios26-shadow-lab`: one DEBUG
+build, `-shadowLab YES`, a menu of navigation structures all showing the **same
+real `ActivityFeedView`**. Procedure per variant: open, scroll down, Home, wait
+~3s, resume, watch under the top bar.
+
+Two rules made this sweep trustworthy where earlier ones were not:
+
+1. **Known-bad and known-good controls in the same session** (variants 0 and 1).
+   Every wrong conclusion in this bug's history came from judging a variant
+   against memory rather than against a control.
+2. **The real view, not a mock** — a synthetic list risks "my mock doesn't
+   reproduce it".
+
+**The artifact cannot be captured programmatically.** `simctl` screenshots and
+`recordVideo` read the simulator's internal framebuffer, which does not contain
+the glass compositor layers: after a resume, a pushed page and a root page are
+*byte-identical*, and both show the same generic zoom profile (−6.7 vs −6.0 luma
+in the strip under the bar). macOS `screencapture` is TCC-blocked under tmux.
+Human eyes are the only instrument — plan for that.
+
+---
+
+## The matrix
+
+| # | Structure | Shadow? |
+|---|---|---|
+| 0 | `TabView` › `NavigationStack` › **push** (pre-#636 shape) — *control* | **yes** |
+| 1 | `RightSlideDrill` cover (shipped) — *control* | no |
+| 2 | push + `.toolbar(.hidden, for: .tabBar)` | **yes** |
+| 3 | `NavigationStack` **wrapping** the `TabView`, push on the outer stack | **yes** |
+| 4 | root swap + `.move(edge: .trailing)` | no (opaque top bar — lab artifact, see 9) |
+| 5 | push + `.scrollEdgeEffectHidden(true, for: .bottom)` | **yes** |
+| 6 | push + `.backgroundExtensionEffect()` | no — but mirrors content into the bars; unusable |
+| 7 | push + `.tabBarMinimizeBehavior(.onScrollDown)` | **yes** |
+| 8 | cover › `NavigationStack` › **push** (no `TabView` inside) | no |
+| 9 | root swap, `List` as the root, back control in the toolbar | no |
+| 10 | `.fullScreenCover` + zoom transition | no (dismiss looks odd) |
+| 11 | plain `.fullScreenCover` | no (returns from the bottom) |
+| 12 | root swap + drag-to-go-back | no (drag reveals bare background — see 13) |
+| 13 | SwiftUI slide-over, parallax + edge swipe | no (under-page text jitters) |
+| 14 | slide-over, parallax snapped to the pixel grid | **no — clean and smooth** |
+| 15 | slide-over, no parallax (static dim) | no |
+| 16 | cover › **`TabView`** › `NavigationStack` › push | **yes** |
+| 17 | slide-over sharing one nav bar | (bar came up empty — lab bug, see below) |
+| 18 | native push, custom bottom bar, **no `TabView` anywhere** | **yes** |
+| 19 | cover + drawn bottom bar + native push | no |
+| 20 | real `UINavigationController`, `setViewControllers` (ROOT-replace) | **yes** |
+| 21 | `.overFullScreen` cover, bottom strip transparent + hit-test passthrough | *see notes* |
+
+---
+
+## What the matrix says
+
+**A push shadows because of the push *transition*, not because of where it ends
+up.** Variant 20 is decisive: it ends with a single-view-controller stack — a
+genuine root — and still shadows, because `setViewControllers(animated: true)`
+runs UIKit's push machinery. Every clean variant avoids that machinery entirely.
+
+**Only two families are clean:**
+
+- **Family A — modally presented AND no `TabView` inside the presentation**
+  (1, 8, 10, 11, 19). Native pushes work *inside* it (8). A `TabView` behind the
+  presentation is harmless; a `TabView` inside it is not (16).
+- **Family B — never invokes a push transition** (4, 9, 12, 13, 14, 15). The
+  destination is the stack's root, or an overlay. The real tab bar stays.
+
+Everything else shadows: every push in the window hierarchy with or without a
+`TabView` (0, 2, 3, 5, 7, 18), a push inside a cover that contains a `TabView`
+(16), and a UIKit root-replace that animates as a push (20).
+
+**SwiftUI vs UIKit is not the axis.** Variant 8 is a clean *SwiftUI* push; 16, 18
+and 20 are shadowing pushes, one of them pure UIKit. This is the second time
+UIKit has been tried and failed — `UIKitNavStack` on `feat/uikit-device-build`
+was the first. Do not try a third.
+
+**The consequence for design:** native nav-bar behaviour comes from the push
+machinery, and the push machinery is what shadows. So on iOS 26.5 you cannot
+have native push behaviour, a real `TabView`, and no shadow at once. Pick two.
+
+---
+
+## Options, with their bills
+
+| Option | Native bar behaviour | Bottom bar | Cost |
+|---|---|---|---|
+| **Status quo** — `RightSlideDrill` (family A) | yes, inside the cover | hidden during a drill | ~100 lines of UIKit; the app-root-sheet-vs-cover bug class (PR #638) |
+| **14** — SwiftUI slide-over (family B) | no — the bar slides with the page | real tab bar, in front | ~60 lines of SwiftUI; hand-rolled transition + back gesture |
+| **19** — cover + drawn bar (family A) | yes | a replica | replica bar loses scroll-to-top on re-tap, minimise-on-scroll, keyboard avoidance, accessibility, and Apple's future restyling; plus hosting the app in a permanent cover |
+| **21** — cover + real bar showing through (family A) | yes | the real bar, visible and tappable | hit-test passthrough; **the tab bar is absent from the accessibility tree while the cover is up**, so VoiceOver likely cannot reach it |
+
+Notes on the rejected-looking ones: **4's opaque top bar and 12's bare-background
+drag were lab bugs, not properties of the approach** — 4 wrapped the `List` in a
+`VStack`, which cost it the scroll-edge effect, and a root swap has only one root
+so nothing sits behind the detail. Variant 14 fixes both. **17's empty nav bar was
+also a lab bug**: two layers declared toolbar content into the same bar at once.
+Doing 17 properly requires the container to own the bar and every destination to
+stop declaring its own — a real refactor across the drill pages.
+
+**Whatever is chosen is a workaround for an Apple bug, so weigh deletability.**
+`RightSlideDrill` is ~100 lines in one file. Family B is ~60 lines. A shell
+restructure (18/19) is a project to unwind. Re-run this lab when iOS 26.6 / 27
+lands: if Apple fixes the scroll-edge re-converge, the right move is to delete
+the workaround and go back to plain `NavigationStack` pushes.
+
+---
+
+## Corrections to `ios26-liquid-glass-artifacts.md`
+
+1. **"Device-only — invisible on the simulator to the eye" is wrong.** The
+   shadow reproduces on the simulator and is clearly visible to a human;
+   variant 0 was confirmed there. What is true is that it cannot be *captured*
+   (see Method). This mattered: the old claim is why earlier rounds burned
+   device cycles they did not need.
+2. **The root cause line — "only pushes on the main tab-bar `NavigationStack`
+   shadow" — is wrong in both directions.** Variant 3 shadows on a stack that is
+   not the tab's, and variant 8 is a clean push. The accurate statement is the
+   two-family rule above.
+3. **"Root vs pushed" is the wrong framing.** Variant 20 is a root and shadows.
+   The trigger is the push transition.
+
+The "sharpened rule" — a push *inside* a cover is clean — **survives** and is
+independently confirmed here (variant 8), so the shipped Ledger and Settings
+flows are sound.
