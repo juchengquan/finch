@@ -54,6 +54,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case uikitRootSwap20
     // --- round 9 ---
     case passthroughCover21
+    // --- round 10 ---
+    case directCover22
 
     var id: String { rawValue }
 
@@ -93,6 +95,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .coverCustomBar19:       return "19 · COVER + custom bar + native push"
         case .uikitRootSwap20:        return "20 · UIKit nav, ROOT-REPLACE (not push)"
         case .passthroughCover21:     return "21 · Cover with the REAL tab bar showing through"
+        case .directCover22:          return "22 · Native cover, STRAIGHT to the page, no bar"
         }
     }
 
@@ -120,6 +123,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .coverCustomBar19:       return "Variant 8's clean structure (presented, no TabView) PLUS a drawn bottom bar."
         case .uikitRootSwap20:        return "Real UINavigationController + real tab bar. setViewControllers, so the page is a ROOT."
         case .passthroughCover21:     return "#8's clean cover, but the bottom strip is transparent AND tappable — the REAL bar."
+        case .directCover22:          return "One tap in. No bottom bar. Deeper levels still push natively. Compare with #1."
         }
     }
 
@@ -722,6 +726,25 @@ private struct NormalLab: View {
                             Button("‹ Lab") { fsCover = nil }
                         }
                     }
+                    // Variant 22: the cover lands STRAIGHT on the page (one tap in,
+                    // no intermediate list as in #19), carries NO bottom bar, and a
+                    // deeper level still pushes natively inside the cover — the
+                    // arrangement #8 proved stays clean.
+                    .navigationDestination(for: String.self) { _ in
+                        LabContent(variant: v)
+                            .navigationTitle("Second level (native push)")
+                    }
+                    .safeAreaInset(edge: .bottom) {
+                        if v == .directCover22 {
+                            NavigationLink(value: "deeper") {
+                                Text("Go one level deeper (native push)")
+                                    .font(.footnote)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity)
+                                    .background(.ultraThinMaterial)
+                            }
+                        }
+                    }
             }
             .modifier(ZoomIn(id: v.rawValue, ns: zoomNS, enabled: v == .cover10Zoom))
         }
@@ -823,7 +846,7 @@ private struct NormalLab: View {
         case .cover1Control, .pushInCover8:                       cover = v
         case .passthroughCover21:     presentPassthroughCover()
         case .rootSwap4, .rootSwap9Clean, .rootSwap12Draggable:   withAnimation(.easeInOut) { swapped = v }
-        case .cover10Zoom, .cover11Plain:                         fsCover = v
+        case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
         case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20:
