@@ -61,6 +61,11 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case vanillaPush24
     case feedNoSearch25
     case uikitTablePush26
+    // --- round 12: accept opaque bars ---
+    case hardGlass27
+    case opaqueToolbar28
+    case fullyOpaque29
+    case hardShell30
 
     var id: String { rawValue }
 
@@ -105,6 +110,10 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .vanillaPush24:          return "24 · Plain push of a VANILLA list (no finch views)"
         case .feedNoSearch25:         return "25 · Vanilla list + .searchable"
         case .uikitTablePush26:       return "26 · Plain push of a pure UIKit TABLE"
+        case .hardGlass27:            return "27 · Push + .hard scroll-edge glass"
+        case .opaqueToolbar28:        return "28 · Push + opaque toolbar backgrounds"
+        case .fullyOpaque29:          return "29 · Push + hard glass AND opaque backgrounds"
+        case .hardShell30:            return "30 · Hard glass applied ONCE at the shell"
         }
     }
 
@@ -137,6 +146,10 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .vanillaPush24:          return "Same structure as #0, but 100 plain rows. If THIS is clean, the cause is in our page, not the push."
         case .feedNoSearch25:         return "Same vanilla list as 24 plus a search field in the bar — the likeliest content co-factor."
         case .uikitTablePush26:       return "Same push, UITableView instead of SwiftUI List. Clean = the cause is SwiftUI's scroll view."
+        case .hardGlass27:            return "Kills the shadow (known) — the question is whether the fixed dim is acceptable. JUDGE THE LOOK."
+        case .opaqueToolbar28:        return "Solid bar backgrounds instead of glass. Deliberately opaque rather than dimmed glass."
+        case .fullyOpaque29:          return "Both together — the most opaque option. Compare all three against #0's look."
+        case .hardShell30:            return "How it would actually ship: every tab and page hard. Switch tabs — no style flash."
         }
     }
 
@@ -224,6 +237,25 @@ private struct LabDestination: View {
     let variant: ShadowVariant
     var body: some View {
         switch variant {
+        case .hardGlass27:
+            if #available(iOS 26.0, *) {
+                LabContent(variant: variant).scrollEdgeEffectStyle(.hard, for: .all)
+            } else {
+                LabContent(variant: variant)
+            }
+        case .opaqueToolbar28:
+            LabContent(variant: variant)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(.visible, for: .tabBar)
+        case .fullyOpaque29:
+            if #available(iOS 26.0, *) {
+                LabContent(variant: variant)
+                    .scrollEdgeEffectStyle(.hard, for: .all)
+                    .toolbarBackground(.visible, for: .navigationBar)
+                    .toolbarBackground(.visible, for: .tabBar)
+            } else {
+                LabContent(variant: variant)
+            }
         case .vanillaPush24:
             VanillaList()
         case .uikitTablePush26:
@@ -267,6 +299,8 @@ struct ShadowLabRoot: View {
             CoverCustomBarLab(active: $outerVariant)
         case .some(.uikitRootSwap20):
             RootSwapNavLab(active: $outerVariant)
+        case .some(.hardShell30):
+            HardGlassShellLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -534,6 +568,57 @@ private struct RootSwapNavLab: View {
             Text("filler").tabItem { Label("Three", systemImage: "3.circle") }
             Text("filler").tabItem { Label("Four", systemImage: "4.circle") }
             Text("filler").tabItem { Label("Five", systemImage: "5.circle") }
+        }
+    }
+}
+
+/// Variant 30 — `.hard` scroll-edge glass applied ONCE at the shell, which is how
+/// it would actually ship. Variants 27/29 put it on the pushed destination only,
+/// so the other tabs kept soft glass and switching tabs showed the style change as
+/// a flash of transparency. Applied at the shell there is nothing to transition
+/// between. The other tabs carry real scrolling content so tab switches are
+/// judgeable, not filler text.
+private struct HardGlassShellLab: View {
+    @Binding var active: ShadowVariant?
+
+    var body: some View {
+        TabView {
+            NavigationStack {
+                List {
+                    Section {
+                        Text("Every tab and page is hard glass. Push, scroll, Home, resume — then SWITCH TABS and watch the top area.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    NavigationLink("Push the Activity feed") {
+                        LabContent(variant: .hardShell30)
+                    }
+                    Button("‹ Back to the menu") { active = nil }
+                }
+                .navigationTitle("Hard glass shell")
+            }
+            .tabItem { Label("Lab", systemImage: "testtube.2") }
+
+            NavigationStack {
+                LabContent(variant: .hardShell30).navigationTitle("Tab 2")
+            }
+            .tabItem { Label("Two", systemImage: "2.circle") }
+
+            NavigationStack {
+                LabContent(variant: .hardShell30).navigationTitle("Tab 3")
+            }
+            .tabItem { Label("Three", systemImage: "3.circle") }
+        }
+        .modifier(HardGlassAll())
+    }
+}
+
+/// iOS 26-only, so it needs the availability gate; applied to the whole shell.
+private struct HardGlassAll: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.hard, for: .all)
+        } else {
+            content
         }
     }
 }
@@ -951,7 +1036,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20:
+        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
