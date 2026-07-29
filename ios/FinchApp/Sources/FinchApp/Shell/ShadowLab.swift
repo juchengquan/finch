@@ -68,6 +68,9 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case hardShell30
     case hardPerPage31
     case uikitAppearance32
+    case appearanceNoLine33
+    case appearanceBlurred34
+    case appearanceTransparent35
 
     var id: String { rawValue }
 
@@ -118,6 +121,9 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .hardShell30:            return "30 · Hard glass applied ONCE at the shell"
         case .hardPerPage31:          return "31 · Hard glass PER PAGE + solid bar background"
         case .uikitAppearance32:      return "32 · UIKit appearance proxy (opaque bars)"
+        case .appearanceNoLine33:     return "33 · Same, hairline REMOVED"
+        case .appearanceBlurred34:    return "34 · Appearance proxy, BLURRED translucent bars"
+        case .appearanceTransparent35:return "35 · Appearance proxy, FULLY TRANSPARENT bars"
         }
     }
 
@@ -156,6 +162,9 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .hardShell30:            return "How it would actually ship: every tab and page hard. Switch tabs — no style flash."
         case .hardPerPage31:          return "No inheritance, and the bar gets a solid backdrop immediately. Switch tabs and watch."
         case .uikitAppearance32:      return "Bars made opaque by UIKit at creation, not by SwiftUI converging. Last idea in this family."
+        case .appearanceNoLine33:     return "Opaque, with the silver hairline under the bar removed (shadowColor = .clear)."
+        case .appearanceBlurred34:    return "System blur instead of a solid fill — translucent, closest to the glass look."
+        case .appearanceTransparent35:return "THE QUESTION: transparent bars set by UIKit. Shadow back, or transparency for free?"
         }
     }
 
@@ -310,7 +319,13 @@ struct ShadowLabRoot: View {
         case .some(.hardPerPage31):
             HardGlassPerPageLab(active: $outerVariant)
         case .some(.uikitAppearance32):
-            UIKitAppearanceLab(active: $outerVariant)
+            UIKitAppearanceLab(active: $outerVariant, style: .opaque)
+        case .some(.appearanceNoLine33):
+            UIKitAppearanceLab(active: $outerVariant, style: .opaqueNoLine)
+        case .some(.appearanceBlurred34):
+            UIKitAppearanceLab(active: $outerVariant, style: .blurred)
+        case .some(.appearanceTransparent35):
+            UIKitAppearanceLab(active: $outerVariant, style: .transparent)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -634,18 +649,51 @@ private struct HardGlassShellLab: View {
 /// Note the appearance proxy only affects bars created afterwards, hence setting
 /// it before the shell is built.
 private struct UIKitAppearanceLab: View {
-    @Binding var active: ShadowVariant?
+    enum BarStyle {
+        case opaque          // 32 — solid fill, system hairline left in place
+        case opaqueNoLine    // 33 — solid fill, hairline removed
+        case blurred         // 34 — system blur: translucent, content shows through softened
+        case transparent     // 35 — no background at all
+    }
 
-    init(active: Binding<ShadowVariant?>) {
+    @Binding var active: ShadowVariant?
+    let style: BarStyle
+
+    /// Stamped ONCE per style. Variant 32 did this straight from `init`, i.e. on
+    /// every body evaluation — and an appearance proxy only affects bars created
+    /// AFTER it is set, so re-stamping it while SwiftUI rebuilds bars on a tab
+    /// switch is the likely cause of the toolbar buttons resetting. Shipped, this
+    /// belongs in the App's `init`, run once.
+    private static var stamped: BarStyle?
+
+    init(active: Binding<ShadowVariant?>, style: BarStyle) {
         _active = active
+        self.style = style
+        guard Self.stamped != style else { return }
+        Self.stamped = style
+
         let nav = UINavigationBarAppearance()
-        nav.configureWithOpaqueBackground()
+        let tab = UITabBarAppearance()
+        switch style {
+        case .opaque:
+            nav.configureWithOpaqueBackground(); tab.configureWithOpaqueBackground()
+        case .opaqueNoLine:
+            nav.configureWithOpaqueBackground(); tab.configureWithOpaqueBackground()
+            // The silver hairline under the bar is the appearance's SHADOW, not a border.
+            nav.shadowColor = .clear; nav.shadowImage = UIImage()
+            tab.shadowColor = .clear; tab.shadowImage = UIImage()
+        case .blurred:
+            nav.configureWithDefaultBackground(); tab.configureWithDefaultBackground()
+            nav.shadowColor = .clear; nav.shadowImage = UIImage()
+            tab.shadowColor = .clear; tab.shadowImage = UIImage()
+        case .transparent:
+            nav.configureWithTransparentBackground(); tab.configureWithTransparentBackground()
+            nav.shadowColor = .clear; nav.shadowImage = UIImage()
+            tab.shadowColor = .clear; tab.shadowImage = UIImage()
+        }
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
-
-        let tab = UITabBarAppearance()
-        tab.configureWithOpaqueBackground()
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
     }
@@ -1153,7 +1201,8 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain, .directCover22:         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31, .uikitAppearance32:
+        case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31,
+             .uikitAppearance32, .appearanceNoLine33, .appearanceBlurred34, .appearanceTransparent35:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
