@@ -158,7 +158,7 @@ final class AccountsListVC: UITableViewController {
 /// populates the bar is already clean — which is every real screen in finch — and
 /// Phase 1 of the migration plan fixes the bug WITHOUT converting any page.
 enum BisectCase: Int, CaseIterable {
-    case plain, searchable, toolbar, both
+    case plain, searchable, toolbar, both, fewRows, realFeed
 
     var title: String {
         switch self {
@@ -166,6 +166,8 @@ enum BisectCase: Int, CaseIterable {
         case .searchable: return "B1 · List + .searchable"
         case .toolbar:    return "B2 · List + .toolbar item"
         case .both:       return "B3 · List + both"
+        case .fewRows:    return "B4 · List with only 8 rows"
+        case .realFeed:   return "B5 · the REAL Activity feed (44 txns)"
         }
     }
     var blurb: String {
@@ -174,6 +176,8 @@ enum BisectCase: Int, CaseIterable {
         case .searchable: return "Bridges a UISearchController into the UIKit bar."
         case .toolbar:    return "Bridges a bar button item into the UIKit bar."
         case .both:       return "What every real finch screen looks like."
+        case .fewRows:    return "BARELY SCROLLS. If this is clean while B0 shadows, content VOLUME is the variable — and the A/B was confounded."
+        case .realFeed:   return "A real finch screen with enough data to scroll properly. The honest test of the A/B."
         }
     }
 }
@@ -194,11 +198,28 @@ private struct BisectList: View {
             rows
                 .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
                 .toolbar { ToolbarItem(placement: .primaryAction) { Button("Action") {} } }
+        case .fewRows:
+            rows
+        case .realFeed:
+            rows
         }
     }
 
-    private var rows: some View {
-        List(0..<100, id: \.self) { i in
+    @ViewBuilder private var rows: some View {
+        if kase == .realFeed {
+            // The real screen, hosted the same way, but with the whole ledger's
+            // transactions rather than one thin account.
+            ActivityFeedView()
+                .environmentObject(FinchStore.shared)
+                .environmentObject(DeepLinkRouter.shared)
+                .environmentObject(BiometricGate.shared)
+        } else {
+            plainRows
+        }
+    }
+
+    private var plainRows: some View {
+        List(0..<(kase == .fewRows ? 8 : 100), id: \.self) { i in
             VStack(alignment: .leading, spacing: 2) {
                 Text("Row \(i)").font(.body)
                 Text("Subtitle for row \(i)").font(.caption).foregroundStyle(.secondary)
