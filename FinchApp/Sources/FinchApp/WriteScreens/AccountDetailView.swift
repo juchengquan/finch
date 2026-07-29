@@ -51,9 +51,9 @@ struct AccountDetailView: View {
             }
         }
         #if os(iOS)
-        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
+        .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
         #else
-        .searchable(text: $searchQuery, prompt: "Search transactions")
+        .searchable(text: $searchQuery, prompt: "Search")
         #endif
     }
 

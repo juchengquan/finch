@@ -59,9 +59,9 @@ struct AccountsTab: View {
         NavigationStack(path: $path) {
             listContent
             #if os(iOS)
-            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search accounts")
+            .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             #else
-            .searchable(text: $searchQuery, prompt: "Search accounts")
+            .searchable(text: $searchQuery, prompt: "Search")
             #endif
             .navigationTitle("Accounts")
             .toolbar {
@@ -141,7 +141,7 @@ struct AccountsTab: View {
             .rightSlideDrill(item: $drill) { target in
                 NavigationStack {
                     accountDrillDestination(target)
-                        .rsdBackToolbar("Accounts") { drill = nil }
+                        .rsdBackToolbar { drill = nil }
                         // The cover is a top-level modal, so the tab's own FAB is
                         // behind it — the drilled page carries its own (same look,
                         // same page-context seeding). Without this the `+` vanishes
@@ -282,7 +282,9 @@ struct AccountsTab: View {
             // Compact: drill-in cover (no resume shadow). iPad: push in the list column.
             if selection == nil {
                 Button { drill = .activity } label: {
-                    Label("All Transactions", systemImage: "list.bullet").contentShape(Rectangle())
+                    Label("All Transactions", systemImage: "list.bullet")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             } else {
