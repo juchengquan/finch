@@ -48,6 +48,8 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case sharedBar17
     // --- round 6 ---
     case customBar18
+    // --- round 7 ---
+    case coverCustomBar19
 
     var id: String { rawValue }
 
@@ -84,6 +86,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .hostedShell16:          return "16 · WHOLE SHELL inside a cover, then native push"
         case .sharedBar17:            return "17 · Slide-over sharing ONE nav bar"
         case .customBar18:            return "18 · NATIVE push, custom bottom bar (no TabView)"
+        case .coverCustomBar19:       return "19 · COVER + custom bar + native push"
         }
     }
 
@@ -108,6 +111,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .hostedShell16:          return "Tab bar + stacks live INSIDE a permanent cover. If pushes are clean here, everything is native."
         case .sharedBar17:            return "Only the CONTENT slides; the bar and search stay put and swap contents."
         case .customBar18:            return "One NavigationStack, no TabView; the bottom bar is drawn by us. Fully native push."
+        case .coverCustomBar19:       return "Variant 8's clean structure (presented, no TabView) PLUS a drawn bottom bar."
         }
     }
 
@@ -162,6 +166,8 @@ struct ShadowLabRoot: View {
             HostedShellLab(active: $outerVariant)
         case .some(.customBar18):
             CustomBarLab(active: $outerVariant)
+        case .some(.coverCustomBar19):
+            CoverCustomBarLab(active: $outerVariant)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -206,13 +212,16 @@ private struct CustomBarLab: View {
                 .navigationTitle("Custom bar")
                 .navigationDestination(for: ShadowVariant.self) { LabContent(variant: $0) }
             }
-            replicaBar
+            ReplicaBar(selected: $selected)
         }
     }
+}
 
-    /// A stand-in for the real tab bar — enough to judge the layout and the
-    /// shadow question. Not a faithful reproduction of iOS 26's tab bar glass.
-    private var replicaBar: some View {
+/// The replica bottom bar, shared by variants 18 and 19. A stand-in: enough to
+/// judge layout and the shadow question, not a faithful iOS 26 tab bar.
+private struct ReplicaBar: View {
+    @Binding var selected: Int
+    var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<5, id: \.self) { i in
                 Button { selected = i } label: {
@@ -231,6 +240,49 @@ private struct CustomBarLab: View {
         .background(.ultraThinMaterial, in: Capsule())
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+    }
+}
+
+/// Variant 19 — the last configuration that could satisfy everything at once.
+///
+/// #8 (presented, no TabView) is the ONLY clean push found in 19 variants; #18
+/// showed dropping the TabView alone is not enough, and #16 showed presenting
+/// alone is not enough either. So take #8's exact structure and add a drawn
+/// bottom bar, which is not a TabView and by the evidence should not matter.
+///
+/// If this is clean: native pushes, native bar behaviour, native swipe-back, a
+/// visible bottom bar, and no shadow. The bill is BOTH of the costs we have
+/// already priced — a replica bar (scroll-to-top on re-tap, minimise-on-scroll,
+/// keyboard avoidance, accessibility all become ours) AND hosting the entire app
+/// inside a permanently presented cover.
+private struct CoverCustomBarLab: View {
+    @Binding var active: ShadowVariant?
+    @State private var presented = true
+    @State private var path: [ShadowVariant] = []
+    @State private var selected = 0
+
+    var body: some View {
+        Color(.systemBackground)
+            .ignoresSafeArea()
+            .fullScreenCover(isPresented: $presented, onDismiss: { active = nil }) {
+                ZStack(alignment: .bottom) {
+                    NavigationStack(path: $path) {
+                        List {
+                            Section {
+                                Text("Presented cover, NO TabView, drawn bar. Push, scroll, Home, resume.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            NavigationLink(value: ShadowVariant.coverCustomBar19) {
+                                Text("Push the Activity feed (native push)")
+                            }
+                            Button("‹ Back to the menu") { presented = false }
+                        }
+                        .navigationTitle("Cover + drawn bar")
+                        .navigationDestination(for: ShadowVariant.self) { LabContent(variant: $0) }
+                    }
+                    ReplicaBar(selected: $selected)
+                }
+            }
     }
 }
 
@@ -510,7 +562,7 @@ private struct NormalLab: View {
         case .cover10Zoom, .cover11Plain:                         fsCover = v
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
-        case .hostedShell16, .customBar18:
+        case .hostedShell16, .customBar18, .coverCustomBar19:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
