@@ -122,6 +122,11 @@ NavigationStack(path: $path) {
                 NavigationStack {
                     BudgetDetailView(budgetId: target.id)
                         .rsdBackToolbar { drill = nil }
+                        // See AccountsTab: the tab's FAB sits behind the cover, so
+                        // the drilled page carries its own, seeded with whatever
+                        // subject the budget publishes (its first account and/or
+                        // category). Inside the stack, on the destination.
+                        .addTransactionFABInCover()
                 }
             }
             #endif
