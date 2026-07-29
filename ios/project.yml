@@ -13,7 +13,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: FinchApp/Sources/FinchApp
+      - path: FinchApp/Sources/FinchShared
+      - path: FinchApp/Sources/FinchAppSwiftUI
+      - path: FinchApp/Sources/FinchAppUIKit
       - path: Shared
     dependencies:
       - package: FinchCore
@@ -84,7 +86,8 @@ targets:
     type: application
     platform: macOS
     sources:
-      - path: FinchApp/Sources/FinchApp
+      - path: FinchApp/Sources/FinchShared
+      - path: FinchApp/Sources/FinchAppSwiftUI
       - path: Shared   # Foundation-only watch wire types; unguarded references (e.g. QuickAddCatalogBuilder) must resolve on macOS too
     dependencies:
       - package: FinchCore

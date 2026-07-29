@@ -146,9 +146,9 @@ jobs:
         working-directory: ios
         run: |
           bun run scripts/build-xcstrings.ts
-          if ! git diff --quiet -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings; then
-            git diff --stat -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings
-            echo "::error file=ios/FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
+          if ! git diff --quiet -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
+            git diff --stat -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings
+            echo "::error file=ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
             exit 1
           fi
 
