@@ -71,6 +71,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case appearanceNoLine33
     case appearanceBlurred34
     case appearanceTransparent35
+    case proxyPlusHard36
 
     var id: String { rawValue }
 
@@ -124,6 +125,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .appearanceNoLine33:     return "33 · Same, hairline REMOVED"
         case .appearanceBlurred34:    return "34 · Appearance proxy, BLURRED translucent bars"
         case .appearanceTransparent35:return "35 · Appearance proxy, FULLY TRANSPARENT bars"
+        case .proxyPlusHard36:        return "36 · UIKit proxy + SwiftUI .hard TOGETHER"
         }
     }
 
@@ -165,6 +167,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .appearanceNoLine33:     return "Opaque, with the silver hairline under the bar removed (shadowColor = .clear)."
         case .appearanceBlurred34:    return "System blur instead of a solid fill — translucent, closest to the glass look."
         case .appearanceTransparent35:return "THE QUESTION: transparent bars set by UIKit. Shadow back, or transparency for free?"
+        case .proxyPlusHard36:        return "The proxy stops the flash, .hard stops the shadow. Together — both, or neither?"
         }
     }
 
@@ -301,8 +304,22 @@ private struct LabDestination: View {
 }
 
 /// Entry point: `-shadowLab YES`.
+///
+/// `-barStyle 32|33|34|35|36` boots STRAIGHT into that bar-appearance variant.
+/// Appearance proxies only affect bars created after they are set, so selecting
+/// styles from the menu inside one session contaminates the comparison — each
+/// must be judged from a cold launch.
 struct ShadowLabRoot: View {
-    @State private var outerVariant: ShadowVariant?
+    @State private var outerVariant: ShadowVariant? = {
+        switch UserDefaults.standard.integer(forKey: "barStyle") {
+        case 32: return .uikitAppearance32
+        case 33: return .appearanceNoLine33
+        case 34: return .appearanceBlurred34
+        case 35: return .appearanceTransparent35
+        case 36: return .proxyPlusHard36
+        default: return nil
+        }
+    }()
 
     var body: some View {
         switch outerVariant {
@@ -326,6 +343,8 @@ struct ShadowLabRoot: View {
             UIKitAppearanceLab(active: $outerVariant, style: .blurred)
         case .some(.appearanceTransparent35):
             UIKitAppearanceLab(active: $outerVariant, style: .transparent)
+        case .some(.proxyPlusHard36):
+            UIKitAppearanceLab(active: $outerVariant, style: .opaqueNoLine, alsoHardGlass: true)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -658,6 +677,7 @@ private struct UIKitAppearanceLab: View {
 
     @Binding var active: ShadowVariant?
     let style: BarStyle
+    var alsoHardGlass: Bool = false
 
     /// Stamped ONCE per style. Variant 32 did this straight from `init`, i.e. on
     /// every body evaluation — and an appearance proxy only affects bars created
@@ -666,9 +686,10 @@ private struct UIKitAppearanceLab: View {
     /// belongs in the App's `init`, run once.
     private static var stamped: BarStyle?
 
-    init(active: Binding<ShadowVariant?>, style: BarStyle) {
+    init(active: Binding<ShadowVariant?>, style: BarStyle, alsoHardGlass: Bool = false) {
         _active = active
         self.style = style
+        self.alsoHardGlass = alsoHardGlass
         guard Self.stamped != style else { return }
         Self.stamped = style
 
@@ -703,20 +724,32 @@ private struct UIKitAppearanceLab: View {
             NavigationStack {
                 List {
                     Section {
-                        Text("Bars made opaque by UIKit at creation. Switch tabs and watch the top area — then push, scroll, Home, resume.")
+                        Text("Bar background set by UIKit at creation\(alsoHardGlass ? ", PLUS SwiftUI .hard glass" : ""). Switch tabs, then push, scroll, Home, resume.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
-                    NavigationLink("Push the Activity feed") { LabContent(variant: .uikitAppearance32) }
+                    NavigationLink("Push the Activity feed") { page }
                     Button("‹ Back to the menu") { active = nil }
                 }
                 .navigationTitle("UIKit appearance")
             }
             .tabItem { Label("Lab", systemImage: "testtube.2") }
 
-            NavigationStack { LabContent(variant: .uikitAppearance32).navigationTitle("Tab 2") }
+            NavigationStack { page.navigationTitle("Tab 2") }
                 .tabItem { Label("Two", systemImage: "2.circle") }
-            NavigationStack { LabContent(variant: .uikitAppearance32).navigationTitle("Tab 3") }
+            NavigationStack { page.navigationTitle("Tab 3") }
                 .tabItem { Label("Three", systemImage: "3.circle") }
+        }
+    }
+
+    /// Variant 36 layers SwiftUI's `.hard` scroll-edge style ON TOP of the UIKit
+    /// proxy: the proxy is the only thing that avoided the tab-switch flash, and
+    /// `.hard` is the only thing that avoided the resume shadow. They address
+    /// different halves, so the question is whether they compose.
+    @ViewBuilder private var page: some View {
+        if alsoHardGlass, #available(iOS 26.0, *) {
+            LabContent(variant: .proxyPlusHard36).scrollEdgeEffectStyle(.hard, for: .all)
+        } else {
+            LabContent(variant: .uikitAppearance32)
         }
     }
 }
@@ -1202,7 +1235,8 @@ private struct NormalLab: View {
         case .slideOver13, .slideOver14Snapped, .slideOver15NoParallax, .sharedBar17:
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
         case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31,
-             .uikitAppearance32, .appearanceNoLine33, .appearanceBlurred34, .appearanceTransparent35:
+             .uikitAppearance32, .appearanceNoLine33, .appearanceBlurred34, .appearanceTransparent35,
+             .proxyPlusHard36:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
