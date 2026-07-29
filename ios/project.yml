@@ -168,6 +168,21 @@ targets:
     dependencies:
       - target: FinchApp
 
+  # UI-test bundle — a SEPARATE target from FinchAppTests: UI tests run in their own
+  # runner process that *launches* the host app, while unit tests load in-process and
+  # reach FinchApp's @StateObject singletons directly. Mixing them would break the unit
+  # tests (no FinchStore.shared in a separate runner).
+  FinchAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: FinchApp/Tests/FinchAppUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: FinchApp
+
   FinchCoreTests:
     type: bundle.unit-test
     platform: iOS
@@ -185,7 +200,7 @@ schemes:
       targets:
         FinchApp: all
     test:
-      targets: [FinchAppTests, FinchCoreTests]
+      targets: [FinchAppTests, FinchAppUITests, FinchCoreTests]
   FinchMac:
     build:
       targets:

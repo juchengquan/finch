@@ -34,8 +34,45 @@ struct FinchApp: App {
         if UserDefaults.standard.bool(forKey: "openAdd") {
             DeepLinkRouter.shared.showAddTransaction = true
         }
+        // `-resetStore YES` wipes the live DB + App Group scratch before FinchStore
+        // bootstraps so UI tests run hermetically. UI tests launch a SEPARATE host-app
+        // process that does NOT see XCTestCase, so FinchStore's isRunningTests temp-dir
+        // branch doesn't protect it — without this a UI-test run would clobber the dev
+        // sim's data. All removes are `try?`-ignored (a clean install has no files).
+        if UserDefaults.standard.bool(forKey: "resetStore") {
+            Self.wipeLiveStateForTesting()
+        }
+        // `-disableNotifications YES` skips the permission prompt + refresh at launch.
+        // The demo seed dates transactions at `store.today`, so the planner fires budget
+        // alerts immediately; the system banner blocks the accessibility tree and breaks
+        // UI tests. Read by the launch `.task` below.
+        if UserDefaults.standard.bool(forKey: "disableNotifications") {
+            Self.disableNotificationsForTesting = true
+        }
         #endif
     }
+
+    #if DEBUG
+    /// Set by the `-disableNotifications YES` launch flag; read by the launch task to
+    /// short-circuit notification scheduling. Touched only at launch on the main
+    /// thread, so `nonisolated(unsafe)` is safe. Reset between runs by process restart.
+    nonisolated(unsafe) static var disableNotificationsForTesting = false
+
+    /// Wipe the persistent live DB and App Group scratch. Only for the `-resetStore YES`
+    /// UI-test flag — never call from production paths. Mirrors `FinchStore`'s live-DB
+    /// path directly (Application Support / `finch.sqlite3`); the UI-test host process
+    /// doesn't see XCTestCase, so that's where the real DB lives.
+    private static func wipeLiveStateForTesting() {
+        let fm = FileManager.default
+        let dbBase = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("finch")
+        for ext in ["sqlite3", "sqlite3-wal", "sqlite3-shm"] {
+            try? fm.removeItem(at: dbBase.appendingPathExtension(ext))
+        }
+        try? fm.removeItem(at: AppGroup.widgetSnapshotURL)
+        try? fm.removeItem(at: AppGroup.containerURL.appendingPathComponent("pending_attachments"))
+    }
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -76,8 +113,15 @@ struct FinchApp: App {
                 store.isHydrating = false
                 // Phase 6.2: notifications
                 NotificationService.shared.configure(store: store, router: router)
+                #if DEBUG
+                if !Self.disableNotificationsForTesting {
+                    await NotificationService.shared.requestPermissionIfNeeded()
+                    await NotificationService.shared.refresh()
+                }
+                #else
                 await NotificationService.shared.requestPermissionIfNeeded()
                 await NotificationService.shared.refresh()
+                #endif
                 AutoBackupManager.shared.configure(store: store)   // Phase 5
                 ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
                 await CloudKitSyncCoordinator.shared.start()        // Phase 8: row-level sync (scaffold; inert without an iCloud account)
