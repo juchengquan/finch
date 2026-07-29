@@ -72,6 +72,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
     case appearanceBlurred34
     case appearanceTransparent35
     case proxyPlusHard36
+    case proxyStandardOnly37
 
     var id: String { rawValue }
 
@@ -126,6 +127,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .appearanceBlurred34:    return "34 · Appearance proxy, BLURRED translucent bars"
         case .appearanceTransparent35:return "35 · Appearance proxy, FULLY TRANSPARENT bars"
         case .proxyPlusHard36:        return "36 · UIKit proxy + SwiftUI .hard TOGETHER"
+        case .proxyStandardOnly37:    return "37 · Same as 36, but scrollEdgeAppearance left alone"
         }
     }
 
@@ -168,6 +170,7 @@ enum ShadowVariant: String, CaseIterable, Identifiable {
         case .appearanceBlurred34:    return "System blur instead of a solid fill — translucent, closest to the glass look."
         case .appearanceTransparent35:return "THE QUESTION: transparent bars set by UIKit. Shadow back, or transparency for free?"
         case .proxyPlusHard36:        return "The proxy stops the flash, .hard stops the shadow. Together — both, or neither?"
+        case .proxyStandardOnly37:    return "36 pinned the search bar. This leaves the scrolled-state appearance default so it can collapse again."
         }
     }
 
@@ -316,7 +319,10 @@ struct ShadowLabRoot: View {
         case 33: return .appearanceNoLine33
         case 34: return .appearanceBlurred34
         case 35: return .appearanceTransparent35
+        case 30: return .hardShell30
+        case 31: return .hardPerPage31
         case 36: return .proxyPlusHard36
+        case 37: return .proxyStandardOnly37
         default: return nil
         }
     }()
@@ -345,6 +351,8 @@ struct ShadowLabRoot: View {
             UIKitAppearanceLab(active: $outerVariant, style: .transparent)
         case .some(.proxyPlusHard36):
             UIKitAppearanceLab(active: $outerVariant, style: .opaqueNoLine, alsoHardGlass: true)
+        case .some(.proxyStandardOnly37):
+            UIKitAppearanceLab(active: $outerVariant, style: .standardOnly, alsoHardGlass: true)
         case .some:
             // Variant 3: one stack ABOVE the whole TabView.
             OuterStackLab(active: $outerVariant)
@@ -673,6 +681,11 @@ private struct UIKitAppearanceLab: View {
         case opaqueNoLine    // 33 — solid fill, hairline removed
         case blurred         // 34 — system blur: translucent, content shows through softened
         case transparent     // 35 — no background at all
+        /// 37 — opaque for the STANDARD (scrolled) state only, leaving
+        /// `scrollEdgeAppearance` at the system default. 36 set both to the same
+        /// opaque appearance, so the bar stopped distinguishing scrolled from
+        /// unscrolled — which is why the search drawer stayed pinned open.
+        case standardOnly
     }
 
     @Binding var active: ShadowVariant?
@@ -711,12 +724,20 @@ private struct UIKitAppearanceLab: View {
             nav.configureWithTransparentBackground(); tab.configureWithTransparentBackground()
             nav.shadowColor = .clear; nav.shadowImage = UIImage()
             tab.shadowColor = .clear; tab.shadowImage = UIImage()
+        case .standardOnly:
+            nav.configureWithOpaqueBackground(); tab.configureWithOpaqueBackground()
+            nav.shadowColor = .clear; nav.shadowImage = UIImage()
+            tab.shadowColor = .clear; tab.shadowImage = UIImage()
         }
         UINavigationBar.appearance().standardAppearance = nav
-        UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
         UITabBar.appearance().standardAppearance = tab
-        UITabBar.appearance().scrollEdgeAppearance = tab
+        // 37 deliberately leaves the scrolled-state appearance at the system
+        // default so the bar still collapses its search drawer on scroll.
+        if style != .standardOnly {
+            UINavigationBar.appearance().scrollEdgeAppearance = nav
+            UITabBar.appearance().scrollEdgeAppearance = tab
+        }
     }
 
     var body: some View {
@@ -1236,7 +1257,7 @@ private struct NormalLab: View {
             withAnimation(.easeOut(duration: 0.3)) { slideOver = v }
         case .hostedShell16, .customBar18, .coverCustomBar19, .uikitRootSwap20, .hardShell30, .hardPerPage31,
              .uikitAppearance32, .appearanceNoLine33, .appearanceBlurred34, .appearanceTransparent35,
-             .proxyPlusHard36:
+             .proxyPlusHard36, .proxyStandardOnly37:
             goOuter(v)
         case .outer3StackWrapsTabView:                            goOuter(v)
         default:                                                  pushed = v
