@@ -61,6 +61,7 @@ final class RootTabBarController: UITabBarController {
         let host = UIHostingController(rootView:
             TabRootHost(tab: tab)
                 .finchSectionSpacing()
+                .modifier(AppTextSize())
                 .environmentObject(store)
                 .environmentObject(router)
                 .environmentObject(BiometricGate.shared)
@@ -77,6 +78,7 @@ final class RootTabBarController: UITabBarController {
         let root = UIHostingController(rootView:
             AccountsTab(ownsNavigationStack: false)
                 .finchSectionSpacing()
+                .modifier(AppTextSize())
                 .environmentObject(store)
                 .environmentObject(router)
                 .environmentObject(BiometricGate.shared)
@@ -252,5 +254,16 @@ private struct TabRootHost: View {
                 }
             }
         )
+    }
+}
+
+
+/// The text-size preference the SwiftUI root applied once at the top. Hosting
+/// controllers do not inherit it, so every hosted root re-applies it.
+struct AppTextSize: ViewModifier {
+    @AppStorage(TextSize.systemKey) private var useSystem = true
+    @AppStorage(TextSize.stepKey) private var step = TextSize.defaultStep
+    func body(content: Content) -> some View {
+        content.modifier(TextSizeModifier(useSystem: useSystem, step: step))
     }
 }

@@ -29,6 +29,7 @@ final class UIKitAppDelegate: UIResponder, UIApplicationDelegate {
 final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var lockWindow: UIWindow?
+    private var idleTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     private let store = FinchStore.shared
@@ -69,6 +70,10 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         observeLock()
+        observeAppearance()
+        startIdleTimer()
+        installActivityMonitor(on: w)
+        installGlobalOverlay(on: w)
         handle(connectionOptions: options)
     }
 
@@ -153,6 +158,62 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.makeKeyAndVisible()
     }
 
+    // MARK: App-wide behaviours the SwiftUI root used to provide
+    //
+    // Phase 1 replaced the root but initially dropped these. They are not
+    // cosmetic: the idle timer and the activity monitor together are what make
+    // the `.onIdle` biometric lock policy fire at all.
+
+    /// `Timer.publish(every: 30) { gate.tick() }` in the SwiftUI root.
+    private func startIdleTimer() {
+        idleTimer?.invalidate()
+        idleTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.gate.tick()
+        }
+    }
+
+    /// `ActivityMonitor()` — a passive touch observer that resets the idle clock
+    /// without consuming the interaction. It is a UIKit probe underneath, so the
+    /// SwiftUI wrapper is not needed: attach the same recognizer to the window.
+    private func installActivityMonitor(on window: UIWindow) {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(noteActivity))
+        tap.cancelsTouchesInView = false
+        tap.delaysTouchesBegan = false
+        tap.delaysTouchesEnded = false
+        tap.delegate = self
+        window.addGestureRecognizer(tap)
+    }
+
+    @objc private func noteActivity() { gate.noteActivity() }
+
+    /// The app-wide toast layer and the import/hydrate progress HUD, both of which
+    /// the SwiftUI root hosted. A transparent, non-interactive hosting controller
+    /// over the shell keeps them in one place rather than per tab.
+    private func installGlobalOverlay(on window: UIWindow) {
+        let host = UIHostingController(rootView: GlobalOverlay().environmentObject(store))
+        host.view.backgroundColor = .clear
+        guard let root = window.rootViewController else { return }
+        root.addChild(host)
+        host.view.frame = root.view.bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.view.isUserInteractionEnabled = false
+        root.view.addSubview(host.view)
+        host.didMove(toParent: root)
+    }
+
+    /// The appearance preference is live in SwiftUI (`preferredColorScheme` reads
+    /// `@AppStorage`); here it must be re-applied when the setting changes.
+    private func observeAppearance() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let w = self.window else { return }
+                self.applyAppearancePreference(to: w)
+                self.lockWindow.map { self.applyAppearancePreference(to: $0) }
+            }
+            .store(in: &cancellables)
+    }
+
     /// `preferredColorScheme` in SwiftUI; `overrideUserInterfaceStyle` here.
     private func applyAppearancePreference(to window: UIWindow) {
         let raw = UserDefaults.standard.string(forKey: "finch.appearance")
@@ -161,6 +222,31 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         case .dark:  window.overrideUserInterfaceStyle = .dark
         default:     window.overrideUserInterfaceStyle = .unspecified
         }
+    }
+}
+
+/// The gesture must observe without consuming, exactly like `ActivityMonitor`.
+extension MainSceneDelegate: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ g: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool { true }
+}
+
+/// The app-wide toast layer plus the import/hydrate HUD — the two overlays the
+/// SwiftUI root carried in its ZStack.
+private struct GlobalOverlay: View {
+    @EnvironmentObject private var store: FinchStore
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .overlay {
+                if store.isImporting || store.isHydrating {
+                    ProgressView(store.isImporting ? "Importing…" : "Loading…")
+                        .padding(24)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .toastOverlay()
     }
 }
 
