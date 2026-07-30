@@ -224,6 +224,32 @@ colour, so both fall back to the default cyan tag.
       and compare against the same screen with the flag off, which should still
       shadow.
 
+## 2g. Phase 2 — the converted Tags screen (`-uikitActivity YES`)
+
+Settings → Tags. Flat list, so much less to go wrong than Categories: no tree, no
+reorder, no drag.
+
+**Already verified on the simulator**: 8 tags render with their own swatch colours,
+count pills and no chevrons; select mode ticks rows and enables "Merge (2)"; the
+survivor prompt reports "4 transactions will be combined" for business (3) + gift
+(1); the swipe reveals **Edit at the outer edge, then Merge…, then Delete inboard**
+(so a full swipe edits, never deletes); the delete confirmation reads "business is
+removed from 3 transactions."; and searching "zzz" empties the list **without** the
+"No tags yet" message, with every row returning when the search clears. Both
+destructive prompts were cancelled, so no data changed.
+
+- [ ] **New tag** (`+`) creates one, and **Edit** renames / recolours it.
+- [ ] **Deleting an UNUSED tag** shows the title with no message body (the count
+      line is suppressed when nothing references it).
+- [ ] **Pairwise Merge…** from a row: the picker lists every other tag, and the
+      keep-name prompt appears AFTER the picker dismisses.
+- [ ] **Import from another ledger…** / **Copy to another ledger…** toast a count,
+      including "Nothing new to copy".
+- [ ] **The real empty state** — a ledger with no tags at all shows "No tags yet".
+- [ ] **No resume shadow**: scroll, background, wait ~3s, reopen.
+- [ ] Tapping a row drills to the tag's transactions — still hosted SwiftUI in a
+      pushed page, so `TagDetailView` can shadow until it too is converted.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
