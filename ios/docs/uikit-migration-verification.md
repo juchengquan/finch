@@ -25,6 +25,11 @@ of 9 checks** — a green exit that proved nothing. Use
 `./scripts/ci-local.sh --sim "<this session's sim>"`, and confirm the summary really
 says `all checks passed` rather than trusting the exit code.
 
+**The simulator's accessibility service can wedge**, especially under sustained
+load. The symptom is `describe-all` returning a single `Application` element while
+the UI renders perfectly in a screenshot. It is not an app failure and not an empty
+screen — fall back to screenshots, and do not drive multi-field sheets blind.
+
 **A regenerated string catalog must be COMMITTED to pass its own check.** The
 catalog step is `build-xcstrings.ts && git diff --quiet`, so a correct-but-uncommitted
 catalog fails with "does not match a fresh build" — which reads like a content
@@ -432,14 +437,39 @@ account can produce.
       Pending changes / Last sync, the red error line, and the Resync button
       (disabled without an account). Needs a device with iCloud and a provisioned
       container.
-- [ ] **Rules** pushes the manager — still hosted SwiftUI in a pushed page, so that
-      one drill can shadow until `RulesManagerView` is converted. It is now the ONLY
-      such page left.
+- [x] **Rules** pushes the converted manager (see §2o). No hosted SwiftUI remains
+      in any pushed page.
 - [ ] **Two strings are newly translatable**: "Subscribed to N ledgers" and "iCloud
       account required" ship English-only from the SwiftUI screen (plain `String` to
       `LabeledContent(value:)`). The conversion routes them through the catalog,
       where they now sit **untranslated** — so nothing changes for a zh-Hans user
       yet. They want a translation in `scripts/zh-manual.json`.
+
+## 2o. Phase 2 — the converted Rules manager (`-uikitActivity YES`)
+
+Settings → Experimental Labs → Rules.
+
+**Already verified**: the screen pushes and renders the inline title, the `+` button
+and the empty-state row.
+
+**Nothing else could be**: the demo seed contains NO RULES, so every row-level
+behaviour below is unexercised — the same gap as Holdings and the rate sparkline.
+Create a rule first, then work through these.
+
+- [ ] **Row layout**: name with "priority N" beneath, the "N×" match count (hidden
+      at zero — a rule that never matched shows nothing, not a "0×" that reads like
+      failure), and the Active switch.
+- [ ] **The Active switch** writes and survives a relaunch. Remember `idb ui tap`
+      will not flip a `UISwitch` — drag it.
+- [ ] **Swipe LEFT → Delete** (confirmation: "This permanently deletes the rule.").
+- [ ] **Swipe RIGHT → Backfill** — this edge exists only on this screen. It applies
+      the rule to existing transactions, so check the match count moves.
+- [ ] **Long-press** gives Backfill and Delete.
+- [ ] ⚠️ **The two-way sheet split is the load-bearing one.** A rule using only CP1
+      fields must open the EDITOR; a rule using CP2 fields, nested groups, `not` or a
+      split must open READ-ONLY. Sending an unparseable rule to the editor would
+      silently rewrite it on save, so make a rule of each kind and confirm which
+      sheet appears.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
