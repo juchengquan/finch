@@ -232,14 +232,9 @@ extension PowerToolsVC: UICollectionViewDelegate {
             return
         }
         guard id == Self.rulesID else { return }
-        // RulesManagerView is not converted, so this is still hosted SwiftUI in a
-        // pushed page — reproducer B — and can shadow until it is.
-        navigationController?.pushViewController(
-            UIHostingController(rootView: RulesManagerView()
-                .environmentObject(store)
-                .environmentObject(DeepLinkRouter.shared)
-                .environmentObject(BiometricGate.shared)),
-            animated: true)
+        // Converted too, so nothing reachable from here is a hosted SwiftUI scroll
+        // view in a pushed page.
+        navigationController?.pushViewController(RulesManagerVC(), animated: true)
     }
 }
 #endif
