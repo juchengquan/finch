@@ -2,44 +2,90 @@
 import UIKit
 import SwiftUI
 import Combine
+import QuickLook
 import FinchCore
 
-/// Phase 2, screen 2: `AccountDetailView` converted to UIKit.
+/// Phase 2, screen 2: `AccountDetailView` converted to UIKit — now at parity.
 ///
 /// Lifted from the migration pilot (`exp/uikit-pilot-account-detail`), where it was
-/// written to measure conversion effort. Same patterns as `ActivityFeedVC`:
-/// `UICollectionView` list config + diffable data source for the pending bucket and
-/// month sections, `UISearchController`, `UISwipeActionsConfiguration`, `UIMenu`,
-/// and sheets left in SwiftUI behind `UIHostingController`.
+/// written to measure conversion effort, then finished here. Same patterns as
+/// `ActivityFeedVC`: `UICollectionView` list config + a diffable data source for
+/// the holdings / pending / month sections, `UISearchController`,
+/// `UISwipeActionsConfiguration`, `UIMenu`, and sheets left in SwiftUI behind
+/// `UIHostingController`.
 ///
-/// NOT YET PORTED — this screen is gated with the rest of the drill behind
-/// `-uikitActivity YES` until these land:
-///   - the Calendar view mode (the pattern exists in ActivityFeedVC: host
-///     MonthCashCalendar in a cell via UIHostingConfiguration, keeping the
-///     collection view as the scroll view)
-///   - the Holdings section
-///   - the running-balance column the SwiftUI rows show beneath each amount
-///   - the principal toolbar item (name over balance with the reconcile seal)
-///   - Reconcile / Adjust balance / Archive / Delete in the overflow menu
+/// Two things are hosted rather than rebuilt, both LEAF views with no scroll view
+/// of their own: the List/Calendar picker and `MonthCashCalendar`. Hosting a
+/// screen's whole scroll view is what brings the iOS 26 resume shadow back (see
+/// `ios/docs/ios26-shadow-variant-matrix.md`, reproducer B); hosting leaves does
+/// not, because the `UICollectionView` remains the scroll view.
 final class AccountDetailVC: UIViewController {
 
     // MARK: Model
 
     private let accountId: String
-    private var account: AccountRow? { FinchStore.shared.accounts.first { $0.id == accountId } }
+    private let store = FinchStore.shared
+    private var account: AccountRow? { store.accounts.first { $0.id == accountId } }
     private var searchQuery = ""
     private var cancellables = Set<AnyCancellable>()
 
+    // The SwiftUI screen read these through `@AppStorage`; the wrapper works
+    // outside a `View` (it is just UserDefaults underneath) — it simply no longer
+    // invalidates anything, so the reads happen inside `applySnapshot`.
+    @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
+    @AppStorage(ReconcileReminder.key) private var reconcileStaleDays = ReconcileReminder.defaultDays
+
+    /// Calendar lens: the shared `MonthCashCalendar` with IN/OUT semantics — at
+    /// single-account grain the honest reading is a bank statement's credits and
+    /// debits, so transfers count on the side they move. Hence the footer.
+    private enum ViewMode { case list, calendar }
+    private var viewMode: ViewMode = .list
+    private var calMonthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
+    private var calSelectedDay: String?
+
     private enum SectionID: Hashable {
+        case modePicker
+        case holdings
+        case calendar
         case pending
-        case month(String)
+        case month(String)      // list mode: label · net · end-of-month balance
+        case calMonth(String)   // calendar fallback: label · net only (see below)
+        case day(String)
+        case all
         case empty
+
+        /// The picker and the grid are bare rows in SwiftUI — no `Section` header.
+        var wantsHeader: Bool {
+            switch self {
+            case .modePicker, .calendar: return false
+            default: return true
+            }
+        }
+        /// Only the grid carries the in/out explanation.
+        var wantsFooter: Bool {
+            if case .calendar = self { return true }
+            return false
+        }
     }
+
+    private static let modePickerID = "__mode_picker__"
+    private static let calendarID = "__calendar__"
+    private static let emptyID = "__empty__"
+    private static let emptyDayID = "__empty_day__"
+    private static let holdingPrefix = "__holding__"
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
     /// Diffable wants Hashable ids, so the source of truth stays `Tx` keyed by id.
     private var txByID: [String: Tx] = [:]
+    private var holdingByID: [String: Holding] = [:]
+    /// The layout's section provider needs the section kinds, and querying the
+    /// data source's snapshot from inside that closure races `apply`. Keep the
+    /// order here and set it BEFORE applying.
+    private var sectionIDs: [SectionID] = []
+
+    private var previewURL: URL?
+    private var moreItem: UIBarButtonItem?
 
     init(accountId: String) {
         self.accountId = accountId
@@ -51,35 +97,63 @@ final class AccountDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = account?.name ?? "Account"
         navigationItem.largeTitleDisplayMode = .never
         configureCollectionView()
         configureDataSource()
         configureSearch()
         configureToolbar()
+        updateTitleView()
         applySnapshot()
 
         // The SwiftUI store needs no rewrite: 18 @Published properties, observed
         // here with Combine instead of by the view-update system.
-        FinchStore.shared.$txns
+        store.$txns
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applySnapshot()
+                self?.updateTitleView()   // the balance moves with the rows
+            }
+            .store(in: &cancellables)
+        store.$holdings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }
             .store(in: &cancellables)
-        FinchStore.shared.$accounts
+        store.$accounts
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.title = self?.account?.name ?? "Account" }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // The SwiftUI screen re-resolved the account by id and dismissed
+                // when it vanished, which is how Archive and Delete leave the
+                // page. Same rule here.
+                guard self.account != nil else {
+                    self.navigationController?.popViewController(animated: true)
+                    return
+                }
+                self.updateTitleView()
+                self.applySnapshot()
+            }
             .store(in: &cancellables)
     }
 
     // MARK: Collection view
 
     private func configureCollectionView() {
-        var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
-        config.headerMode = .supplementary
-        config.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            self?.swipeActions(at: indexPath)
+        // Per-section header/footer, so the picker and the grid stay bare and only
+        // the grid gets the explanatory footer — the SwiftUI `Section` shape.
+        let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
+            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
+            if kind?.wantsFooter == true { config.footerMode = .supplementary }
+            config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.swipe(at: ip)?.leading
+            }
+            config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.swipe(at: ip)?.trailing
+            }
+            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
         }
-        let layout = UICollectionViewCompositionalLayout.list(using: config)
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
@@ -94,17 +168,80 @@ final class AccountDetailVC: UIViewController {
 
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
-            guard let tx = self?.txByID[id] else { return }
+            guard let self else { return }
+
+            if id == Self.modePickerID {
+                // The picker is the list's FIRST ROW, not a title view — same reason
+                // as the SwiftUI screen: it keeps the collection view the primary
+                // scroll view so the nav bar behaves.
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Picker("", selection: Binding(
+                        get: { self.viewMode },
+                        set: { self.viewMode = $0; self.calSelectedDay = nil; self.applySnapshot() })) {
+                        Text(String(localized: "List")).tag(ViewMode.list)
+                        Text(String(localized: "Calendar")).tag(ViewMode.calendar)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                cell.accessories = []
+                return
+            }
+
+            if id == Self.calendarID {
+                cell.contentConfiguration = UIHostingConfiguration {
+                    MonthCashCalendar(
+                        monthAnchor: Binding(get: { self.calMonthAnchor },
+                                             set: { self.calMonthAnchor = $0; self.applySnapshot() }),
+                        selectedDay: Binding(get: { self.calSelectedDay },
+                                             set: { self.calSelectedDay = $0; self.applySnapshot() }),
+                        wallToday: self.store.wallToday,
+                        amountsForRange: { from, through in
+                            MonthGrouping.dailyIncomeExpense(
+                                self.visibleTxns().filter { $0.date >= from && $0.date <= through })
+                        },
+                        format: { self.store.displayExactBase($0) })
+                }
+                cell.accessories = []
+                return
+            }
+
+            if id == Self.emptyID || id == Self.emptyDayID {
+                var cfg = cell.defaultContentConfiguration()
+                cfg.text = id == Self.emptyDayID
+                    ? String(localized: "No transactions.")
+                    : (self.searchQuery.isEmpty ? String(localized: "No transactions")
+                                                : String(localized: "No matching transactions"))
+                cfg.textProperties.font = .preferredFont(forTextStyle: .caption1)
+                cfg.textProperties.color = .secondaryLabel
+                cell.contentConfiguration = cfg
+                cell.accessories = []
+                return
+            }
+
+            if let holding = self.holdingByID[id] {
+                var cfg = cell.defaultContentConfiguration()
+                cfg.text = holding.symbol
+                cell.contentConfiguration = cfg
+                let value = UILabel()
+                value.text = Selectors.holdingValue(holding)
+                    .map { self.store.displayMoney($0, from: holding.currency) } ?? "—"
+                value.font = .preferredFont(forTextStyle: .body)
+                value.textColor = .secondaryLabel
+                cell.accessories = [.customView(configuration: .init(customView: value, placement: .trailing()))]
+                return
+            }
+
+            guard let tx = self.txByID[id] else { return }
             var cfg = cell.defaultContentConfiguration()
             // Same labelling rule as the SwiftUI TxRow: the category is the title.
-            cfg.text = FinchStore.shared.categoryName(tx.category) ?? String(localized: "Uncategorized")
+            cfg.text = self.store.categoryName(tx.category) ?? String(localized: "Uncategorized")
             cfg.secondaryText = tx.date
             cell.contentConfiguration = cfg
 
             // The amount, privacy-aware — same helper the SwiftUI row uses, so the
             // money rules are not reimplemented.
             let amount = UILabel()
-            amount.text = FinchStore.shared.displayMoneyBase(tx.amount)
+            amount.text = self.store.displayMoneyBase(tx.amount)
             amount.font = .preferredFont(forTextStyle: .body)
             amount.textColor = tx.amount < 0 ? .label : .systemGreen
             cell.accessories = [.customView(configuration: .init(customView: amount, placement: .trailing()))]
@@ -113,72 +250,197 @@ final class AccountDetailVC: UIViewController {
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, indexPath in
-            guard let self else { return }
-            var cfg = view.defaultContentConfiguration()
-            let section = self.dataSource.snapshot().sectionIdentifiers[indexPath.section]
+            guard let self, self.sectionIDs.indices.contains(indexPath.section) else { return }
+            let section = self.sectionIDs[indexPath.section]
+            let ids = self.dataSource.snapshot().itemIdentifiers(inSection: section)
+            let txns = ids.compactMap { self.txByID[$0] }
+
             switch section {
-            case .pending:
-                let n = self.dataSource.snapshot().numberOfItems(inSection: .pending)
-                cfg.text = String(localized: "To confirm (\(n))")
             case .month(let key):
-                cfg.text = MonthGrouping.label(key)
-                let ids = self.dataSource.snapshot().itemIdentifiers(inSection: section)
-                let txns = ids.compactMap { self.txByID[$0] }
-                cfg.secondaryText = "\(String(localized: "Income")) \(FinchStore.shared.displayMoneyBase(MonthGrouping.income(txns)))"
-                    + " · \(String(localized: "Spent")) \(FinchStore.shared.displayMoneyBase(MonthGrouping.expense(txns)))"
-            case .empty:
-                cfg.text = String(localized: "Transactions")
+                // Net change · this account's balance at the end of the month. The
+                // section is date-descending, so the first (newest) row's running
+                // balance IS the end-of-month figure — the same cache the row shows,
+                // so header and row agree exactly.
+                let balance = txns.first.map { "  ·  " + self.store.displayMoneyBase(self.store.runningBalanceBase(for: $0)) } ?? ""
+                view.contentConfiguration = UIHostingConfiguration {
+                    MonthHeader(label: MonthGrouping.label(key),
+                                trailing: self.store.displayMoneyBase(MonthGrouping.net(txns)) + balance,
+                                subtitle: "\(String(localized: "Income")) \(self.store.displayMoneyBase(MonthGrouping.income(txns)))"
+                                    + " · \(String(localized: "Spent")) \(self.store.displayMoneyBase(MonthGrouping.expense(txns)))")
+                }
+            case .calMonth(let key):
+                // Minimal header. The running-balance figure the list headers carry
+                // is confirmed-rows-only math; this fallback includes pending rows,
+                // so it deliberately stays out.
+                view.contentConfiguration = UIHostingConfiguration {
+                    MonthHeader(label: MonthGrouping.label(key),
+                                trailing: self.store.displayMoneyBase(MonthGrouping.net(txns)),
+                                subtitle: nil)
+                }
+            default:
+                var cfg = view.defaultContentConfiguration()
+                switch section {
+                case .pending: cfg.text = String(localized: "To confirm (\(ids.count))")
+                case .holdings: cfg.text = String(localized: "Holdings")
+                case .day(let day): cfg.text = MonthCashCalendar.pretty(day)
+                case .all, .empty: cfg.text = String(localized: "Transactions")
+                default: cfg.text = nil
+                }
+                view.contentConfiguration = cfg
             }
+        }
+
+        let footer = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+            elementKind: UICollectionView.elementKindSectionFooter
+        ) { view, _, _ in
+            var cfg = view.defaultContentConfiguration()
+            cfg.text = String(localized: "Money in · out of this account, transfers included.")
             view.contentConfiguration = cfg
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
             cv, indexPath, id in cv.dequeueConfiguredReusableCell(using: cell, for: indexPath, item: id)
         }
-        dataSource.supplementaryViewProvider = { cv, _, indexPath in
-            cv.dequeueConfiguredReusableSupplementary(using: header, for: indexPath)
+        dataSource.supplementaryViewProvider = { cv, kind, indexPath in
+            kind == UICollectionView.elementKindSectionFooter
+                ? cv.dequeueConfiguredReusableSupplementary(using: footer, for: indexPath)
+                : cv.dequeueConfiguredReusableSupplementary(using: header, for: indexPath)
         }
+    }
+
+    /// This account's rows, searched — the same base, selector and options as the
+    /// SwiftUI screen, so filtering and ordering stay identical.
+    private func visibleTxns() -> [Tx] {
+        guard let account else { return [] }
+        let all = store.transactions(for: account.id)
+        guard !searchQuery.isEmpty else { return all }
+        return Selectors.selectTransactions(
+            all, ListOptions(ledgerId: store.activeLedgerId, query: searchQuery))
     }
 
     /// The SwiftUI original recomputes this inside `body`; here it is explicit —
     /// which is the single biggest day-to-day difference the migration introduces.
     private func applySnapshot() {
         guard let account else { return }
-        let all = FinchStore.shared.transactions(for: account.id)
-        let txns = searchQuery.isEmpty ? all
-            : Selectors.selectTransactions(all, ListOptions(ledgerId: FinchStore.shared.activeLedgerId,
-                                                            query: searchQuery))
+        let txns = visibleTxns()
         txByID = Dictionary(uniqueKeysWithValues: txns.map { ($0.id, $0) })
 
-        var snapshot = NSDiffableDataSourceSnapshot<SectionID, String>()
-        let pending = txns.filter { $0.pending == true }
-        let confirmed = txns.filter { $0.pending != true }
+        let holdings = Selectors.holdingsForAccount(store.holdings, account.id)
+        holdingByID = Dictionary(uniqueKeysWithValues: holdings.map { (Self.holdingPrefix + $0.id, $0) })
 
-        if !pending.isEmpty {
-            snapshot.appendSections([.pending])
-            snapshot.appendItems(pending.map(\.id), toSection: .pending)
+        var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        snap.appendSections([.modePicker])
+        snap.appendItems([Self.modePickerID], toSection: .modePicker)
+
+        if !holdings.isEmpty {
+            snap.appendSections([.holdings])
+            snap.appendItems(holdings.map { Self.holdingPrefix + $0.id }, toSection: .holdings)
         }
-        if confirmed.isEmpty {
-            snapshot.appendSections([.empty])
+
+        if viewMode == .calendar {
+            snap.appendSections([.calendar])
+            snap.appendItems([Self.calendarID], toSection: .calendar)
+            // The rows under the grid: the selected day, or the whole anchored
+            // month — always the same searched set the grid sums, so the cells and
+            // the rows cannot disagree.
+            if let day = calSelectedDay {
+                let dayTx = txns.filter { $0.date == day }
+                snap.appendSections([.day(day)])
+                snap.appendItems(dayTx.isEmpty ? [Self.emptyDayID] : dayTx.map(\.id), toSection: .day(day))
+            } else {
+                let key = String(format: "%04d-%02d",
+                                 AppDate.civil.component(.year, from: calMonthAnchor),
+                                 AppDate.civil.component(.month, from: calMonthAnchor))
+                let monthTx = txns.filter { $0.date.hasPrefix(key) }
+                if !monthTx.isEmpty {
+                    snap.appendSections([.calMonth(key)])
+                    snap.appendItems(monthTx.map(\.id), toSection: .calMonth(key))
+                }
+            }
         } else {
-            for section in MonthGrouping.sections(confirmed) {
-                snapshot.appendSections([.month(section.id)])
-                snapshot.appendItems(section.txns.map(\.id), toSection: .month(section.id))
+            let pending = txns.filter { $0.pending == true }
+            let confirmed = txns.filter { $0.pending != true }
+            if !pending.isEmpty {
+                snap.appendSections([.pending])
+                snap.appendItems(pending.map(\.id), toSection: .pending)
+            }
+            if confirmed.isEmpty {
+                snap.appendSections([.empty])
+                snap.appendItems([Self.emptyID], toSection: .empty)
+            } else if groupByMonth {
+                for section in MonthGrouping.sections(confirmed) {
+                    snap.appendSections([.month(section.id)])
+                    snap.appendItems(section.txns.map(\.id), toSection: .month(section.id))
+                }
+            } else {
+                snap.appendSections([.all])
+                snap.appendItems(confirmed.map(\.id), toSection: .all)
             }
         }
-        dataSource.apply(snapshot, animatingDifferences: false)
+
+        sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
+        dataSource.apply(snap, animatingDifferences: false)
     }
 
-    // MARK: Search / toolbar / swipe — the SwiftUI one-liners, expanded
+    // MARK: Search / bars — the SwiftUI one-liners, expanded
 
     private func configureSearch() {
         let search = UISearchController(searchResultsController: nil)
         search.searchResultsUpdater = self
         search.obscuresBackgroundDuringPresentation = false
-        search.searchBar.placeholder = String(localized: "Search transactions")
+        search.searchBar.placeholder = String(localized: "Search")
         navigationItem.searchController = search
         // Matches the SwiftUI screen's `.navigationBarDrawer(displayMode: .always)`.
         navigationItem.hidesSearchBarWhenScrolling = false
+    }
+
+    /// Name over balance, always visible while scrolled — the SwiftUI
+    /// `ToolbarItem(placement: .principal)`. Privacy-aware via `displayMoney`; the
+    /// reconcile seal sits beside the balance with the same glyph and colors as the
+    /// Accounts list rows, and the absolute date stays in the Reconcile sheet where
+    /// you would act on it.
+    private func updateTitleView() {
+        guard let account else { return }
+        title = account.name ?? String(localized: "Account")
+
+        let name = UILabel()
+        name.text = account.name ?? "—"
+        name.font = .preferredFont(forTextStyle: .headline)
+        name.textAlignment = .center
+
+        let balance = UILabel()
+        balance.text = store.displayMoney(account.balance, from: account.currency)
+        balance.font = .preferredFont(forTextStyle: .caption1)
+        balance.textColor = .secondaryLabel
+
+        let bottom = UIStackView(arrangedSubviews: [balance])
+        bottom.axis = .horizontal
+        bottom.spacing = 3
+        bottom.alignment = .center
+        if let seal = titleSeal(account) {
+            let mark = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
+            mark.tintColor = seal
+            mark.contentMode = .scaleAspectFit
+            mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2)
+            bottom.addArrangedSubview(mark)
+        }
+
+        let stack = UIStackView(arrangedSubviews: [name, bottom])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 0
+        navigationItem.titleView = stack
+    }
+
+    /// Seal color beside the title balance — same meaning as the Accounts list
+    /// rows (green fresh / orange overdue / none never reconciled).
+    private func titleSeal(_ a: AccountRow) -> UIColor? {
+        switch Selectors.reconcileStatus(a.lastReconciledAt, store.wallToday,
+                                         staleDays: ReconcileReminder.staleDays(reconcileStaleDays)) {
+        case .never: return nil
+        case .fresh: return .systemGreen
+        case .stale: return .systemOrange
+        }
     }
 
     private func configureToolbar() {
@@ -194,29 +456,100 @@ final class AccountDetailVC: UIViewController {
             UIAction(title: String(localized: "Reconcile"), image: UIImage(systemName: "checkmark.circle")) { [weak self] _ in
                 self?.presentReconcile()
             },
+            UIAction(title: String(localized: "Adjust balance…"),
+                     image: UIImage(systemName: TxnKindIcon.icon(for: "adjustment"))) { [weak self] _ in
+                self?.presentAdjustBalance()
+            },
+            UIAction(title: String(localized: "Archive"), image: UIImage(systemName: "archivebox")) { [weak self] _ in
+                self?.archiveAccount()
+            },
+            UIAction(title: String(localized: "Delete"), image: UIImage(systemName: "trash"),
+                     attributes: .destructive) { [weak self] _ in
+                self?.confirmDeleteAccount()
+            },
         ])
         let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: menu)
+        moreItem = more
         navigationItem.rightBarButtonItems = [more, add]
     }
 
-    private func swipeActions(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+    private var rowActions: TxRowActions {
+        TxRowActions(
+            duplicate: { [weak self] tx in self?.presentDuplicate(tx) },
+            requestDelete: { [weak self] tx in self?.confirmDeleteTransaction(tx) },
+            toggleStatus: { [weak self] tx in
+                guard let self else { return }
+                self.run { try txnToggleStatus(tx, store: self.store) }
+            },
+            edit: { [weak self] tx in self?.presentEditTransaction(tx) },
+            previewReceipt: { [weak self] tx in self?.previewReceipt(tx) })
+    }
+
+    private func swipe(at indexPath: IndexPath)
+        -> (leading: UISwipeActionsConfiguration, trailing: UISwipeActionsConfiguration)? {
         guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
-        let delete = UIContextualAction(style: .destructive, title: String(localized: "Delete")) { _, _, done in
-            // The write chokepoint is unchanged by the migration — the same helper
-            // the SwiftUI screen calls (it also unlinks receipt files).
-            do {
-                try FinchStore.shared.deleteTransaction(tx.id)
-                done(true)
-            } catch { done(false) }
+        let actions = rowActions
+        return (actions.leading(tx), actions.trailing(tx))
+    }
+
+    // MARK: Writes
+    //
+    // Every one goes through the same chokepoint the SwiftUI screen used, so the
+    // engine rules (receipt unlinking, balance recompute, rejection on accounts
+    // that still have transactions) are unchanged by the migration.
+
+    /// Surfaces a rejected write as a localized alert rather than silently
+    /// no-op'ing — the SwiftUI screen's `errorAlert`.
+    private func run(_ work: () throws -> Void) {
+        do { try work() } catch {
+            let alert = UIAlertController(title: String(localized: "Data problem"),
+                                          message: i18nMessage(error), preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: String(localized: "OK"), style: .cancel))
+            present(alert, animated: true)
         }
-        return UISwipeActionsConfiguration(actions: [delete])
+    }
+
+    private func confirmDeleteTransaction(_ tx: Tx) {
+        // A centered ALERT, not a row-anchored sheet: the row is torn down when the
+        // swipe collapses or the cell recycles, which would take the popout with it.
+        let alert = UIAlertController(title: String(localized: "Delete transaction?"),
+                                      message: "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.run { try self.store.deleteTransaction(tx.id); Haptics.warning() }
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func archiveAccount() {
+        guard let account else { return }
+        run { try store.apply(.archiveAccount, Args(["id": .string(account.id)])) }   // pops via account == nil
+    }
+
+    private func confirmDeleteAccount() {
+        guard let account else { return }
+        let sheet = UIAlertController(
+            title: String(localized: "Delete this account?"),
+            message: String(localized: "Accounts with transactions can't be deleted — archive instead."),
+            preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            // The engine rejects this if the account still has transactions.
+            self.run { try self.store.apply(.deleteAccount, Args(["id": .string(account.id)])); Haptics.warning() }
+        })
+        sheet.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        // iPad needs an anchor; the ⋯ item is where the SwiftUI dialog was anchored.
+        sheet.popoverPresentationController?.barButtonItem = moreItem
+        present(sheet, animated: true)
     }
 
     // MARK: Sheets — still SwiftUI, hosted. They are presented, so they never shadow.
 
     private func hosted<V: View>(_ view: V) -> UIViewController {
         UIHostingController(rootView: view
-            .environmentObject(FinchStore.shared)
+            .environmentObject(store)
             .environmentObject(DeepLinkRouter.shared)
             .environmentObject(BiometricGate.shared))
     }
@@ -228,20 +561,63 @@ final class AccountDetailVC: UIViewController {
 
     private func presentEditAccount() {
         guard let account else { return }
-        present(hosted(AccountSheet(account: account, defaultCurrency: FinchStore.shared.baseCurrency)), animated: true)
+        present(hosted(AccountSheet(account: account, defaultCurrency: store.baseCurrency)), animated: true)
     }
 
     private func presentReconcile() {
         guard let account else { return }
         present(hosted(ReconcileSheet(preselect: account.id)), animated: true)
     }
+
+    private func presentAdjustBalance() {
+        guard let account else { return }
+        present(hosted(AdjustBalanceSheet(account: account)), animated: true)
+    }
+
+    private func presentEditTransaction(_ tx: Tx) {
+        present(hosted(EditTransactionSheet(txn: tx)), animated: true)
+    }
+
+    /// Duplicate opens the Add sheet pre-filled; nothing is written until Save.
+    private func presentDuplicate(_ tx: Tx) {
+        present(hosted(AddTransactionSheet(prefill: tx)), animated: true)
+    }
+
+    /// The SwiftUI screen's `.quickLookPreview($previewURL)`.
+    private func previewReceipt(_ tx: Tx) {
+        guard let first = store.attachments(for: tx.id).first else { return }
+        previewURL = store.attachmentURL(for: first)
+        let preview = QLPreviewController()
+        preview.dataSource = self
+        present(preview, animated: true)
+    }
 }
 
 extension AccountDetailVC: UICollectionViewDelegate {
+    /// Cells that host an interactive SwiftUI control must not be selectable, or the
+    /// cell's own selection swallows the touch and the control never sees it — the
+    /// mode picker looked inert for exactly this reason.
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return true }
+        return txByID[id] != nil
+    }
+
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return }
-        present(hosted(EditTransactionSheet(txn: tx)), animated: true)
+        presentEditTransaction(tx)
+    }
+
+    /// Right-click on Mac/iPad and long-press on touch — swipe is touch-only, so the
+    /// SwiftUI row carried the same actions in a context menu.
+    func collectionView(_ cv: UICollectionView,
+                        contextMenuConfigurationForItemAt indexPath: IndexPath,
+                        point: CGPoint) -> UIContextMenuConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
+        var actions = rowActions
+        // The item is omitted when the row has no attachment, as in SwiftUI.
+        if store.attachments(for: tx.id).isEmpty { actions.previewReceipt = nil }
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in actions.menu(tx) }
     }
 }
 
@@ -249,6 +625,41 @@ extension AccountDetailVC: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
         searchQuery = searchController.searchBar.text ?? ""
         applySnapshot()
+    }
+}
+
+extension AccountDetailVC: QLPreviewControllerDataSource {
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewURL == nil ? 0 : 1 }
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        (previewURL ?? URL(fileURLWithPath: "/")) as NSURL
+    }
+}
+
+/// The month section header: label, right-aligned figures, and (list mode only) the
+/// income/spent line. A leaf view, so it rides in the header via
+/// `UIHostingConfiguration` rather than being rebuilt with constraints — a plain
+/// `UIListContentConfiguration` has no trailing-aligned text slot.
+///
+/// `Text(verbatim:)` throughout: these strings are already composed and localized,
+/// and a plain `Text("…")` here would mint new catalog keys.
+private struct MonthHeader: View {
+    let label: String
+    let trailing: String
+    let subtitle: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(verbatim: label)
+                Spacer()
+                Text(verbatim: trailing)
+            }
+            if let subtitle {
+                Text(verbatim: subtitle).font(.caption2)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
     }
 }
 #endif

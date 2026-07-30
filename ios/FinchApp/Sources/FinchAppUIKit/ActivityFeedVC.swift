@@ -2,6 +2,7 @@
 import UIKit
 import SwiftUI
 import Combine
+import QuickLook
 import FinchCore
 
 /// Phase 2, screen 1: `ActivityFeedView` converted to UIKit.
@@ -26,7 +27,7 @@ import FinchCore
 /// category/tag name maps, then the same `TxSort.sorted`. Anything else would
 /// drift from the SwiftUI screen the moment either changed.
 ///
-/// STILL NOT PORTED (the flag stays until these land):
+/// DELIBERATELY STILL SWIFTUI (not a gap — this is the intended end state):
 /// The Calendar grid and the saved-search chips stay SwiftUI, hosted in cells via
 /// `UIHostingConfiguration` — they are leaf views with no navigation, which is
 /// where SwiftUI is strongest. Crucially the `UICollectionView` remains the
@@ -68,6 +69,8 @@ final class ActivityFeedVC: UIViewController {
     private var calMonthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
     private var calSelectedDay: String?
     private let savedSearches = SavedSearchStore()
+    /// Staged for QuickLook, which reads its item from the data source.
+    private var previewURL: URL?
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     private var cancellables = Set<AnyCancellable>()
 
@@ -98,8 +101,11 @@ final class ActivityFeedVC: UIViewController {
     private func configureCollectionView() {
         var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         config.headerMode = .supplementary
+        config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
+            self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
+        }
         config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
-            self?.swipeActions(at: ip)
+            self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
         }
         collectionView = UICollectionView(
             frame: .zero,
@@ -472,13 +478,72 @@ final class ActivityFeedVC: UIViewController {
         }
     }
 
-    private func swipeActions(at ip: IndexPath) -> UISwipeActionsConfiguration? {
+    /// The row's gestures come from the shared `TxRowActions`, so this feed and the
+    /// account detail cannot drift apart — the whole reason the SwiftUI side keeps
+    /// `TxnSwipeActions` in one place. This screen previously offered a bare
+    /// Delete: no Duplicate, no status toggle, no confirmation step.
+    private func rowActions(at ip: IndexPath) -> (tx: Tx, actions: TxRowActions)? {
         guard let id = dataSource.itemIdentifier(for: ip), let tx = txByID[id] else { return nil }
-        let delete = UIContextualAction(style: .destructive, title: String(localized: "Delete")) { [weak self] _, _, done in
+        var actions = TxRowActions(
+            duplicate: { [weak self] tx in self?.presentDuplicate(tx) },
+            requestDelete: { [weak self] tx in self?.confirmDeleteTransaction(tx) },
+            toggleStatus: { [weak self] tx in
+                guard let self else { return }
+                self.run { try txnToggleStatus(tx, store: self.store) }
+            },
+            edit: { [weak self] tx in self?.presentEditTransaction(tx) },
+            previewReceipt: { [weak self] tx in self?.previewReceipt(tx) })
+        // The item is omitted when the row has no attachment, as in SwiftUI.
+        if store.attachments(for: tx.id).isEmpty { actions.previewReceipt = nil }
+        return (tx, actions)
+    }
+
+    /// Centered alert, not a row-anchored sheet: the row is torn down when the swipe
+    /// collapses or the cell recycles, which would take a popout with it.
+    private func confirmDeleteTransaction(_ tx: Tx) {
+        let alert = UIAlertController(title: String(localized: "Delete transaction?"),
+                                      message: "\(tx.merchant) · \(store.displayMoneyBase(tx.amount))",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
+            guard let self else { return }
             // Same chokepoint helper the SwiftUI screen calls; it also unlinks receipts.
-            do { try self?.store.deleteTransaction(tx.id); done(true) } catch { done(false) }
-        }
-        return UISwipeActionsConfiguration(actions: [delete])
+            self.run { try self.store.deleteTransaction(tx.id); Haptics.warning() }
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func presentEditTransaction(_ tx: Tx) {
+        present(UIHostingController(rootView:
+            EditTransactionSheet(txn: tx)
+                .environmentObject(store)
+                .environmentObject(DeepLinkRouter.shared)
+        ), animated: true)
+    }
+
+    /// Duplicate opens the Add sheet pre-filled; nothing is written until Save.
+    private func presentDuplicate(_ tx: Tx) {
+        present(UIHostingController(rootView:
+            AddTransactionSheet(prefill: tx)
+                .environmentObject(store)
+                .environmentObject(DeepLinkRouter.shared)
+        ), animated: true)
+    }
+
+    /// The SwiftUI screen's `.quickLookPreview($previewURL)`.
+    private func previewReceipt(_ tx: Tx) {
+        guard let first = store.attachments(for: tx.id).first else { return }
+        previewURL = store.attachmentURL(for: first)
+        let preview = QLPreviewController()
+        preview.dataSource = self
+        present(preview, animated: true)
+    }
+}
+
+extension ActivityFeedVC: QLPreviewControllerDataSource {
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewURL == nil ? 0 : 1 }
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        (previewURL ?? URL(fileURLWithPath: "/")) as NSURL
     }
 }
 
@@ -503,11 +568,18 @@ extension ActivityFeedVC: UICollectionViewDelegate {
             return
         }
         guard let tx = txByID[id] else { return }
-        present(UIHostingController(rootView:
-            EditTransactionSheet(txn: tx)
-                .environmentObject(store)
-                .environmentObject(DeepLinkRouter.shared)
-        ), animated: true)
+        presentEditTransaction(tx)
+    }
+
+    /// Right-click on Mac/iPad and long-press on touch — swipe is touch-only, so the
+    /// SwiftUI row carried the same actions in a context menu.
+    func collectionView(_ cv: UICollectionView,
+                        contextMenuConfigurationForItemAt ip: IndexPath,
+                        point: CGPoint) -> UIContextMenuConfiguration? {
+        guard !isSelecting, let row = rowActions(at: ip) else { return nil }
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            row.actions.menu(row.tx)
+        }
     }
 }
 
