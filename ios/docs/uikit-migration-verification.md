@@ -444,9 +444,8 @@ account can produce.
       Pending changes / Last sync, the red error line, and the Resync button
       (disabled without an account). Needs a device with iCloud and a provisioned
       container.
-- [x] **Rules** pushes the converted manager (see §2o). **Correction:** one hosted
-      SwiftUI push does remain — `SettingsBackupsView`, behind Backup & Sync →
-      Backups (see §2r). It is 235 lines and was left out of scope.
+- [x] **Rules** pushes the converted manager (see §2o), and `SettingsBackupsView`
+      is converted too (§2s). No pushed page in the app hosts a SwiftUI scroll view.
 - [ ] **Two strings are newly translatable**: "Subscribed to N ledgers" and "iCloud
       account required" ship English-only from the SwiftUI screen (plain `String` to
       `LabeledContent(value:)`). The conversion routes them through the catalog,
@@ -547,9 +546,7 @@ and the red force-import row.
 - [ ] **Import / Export / Export CSV** each work — a file importer, a share sheet,
       and a CSV share. Import REPLACES the database, so use a scratch ledger.
 - [ ] **Last backup** and the **Backups count** update after a backup runs.
-- [ ] ⚠️ **The Backups row pushes `SettingsBackupsView`, which is STILL hosted
-      SwiftUI in a pushed page** — the one remaining reproducer-B screen. Check
-      whether it shadows; converting it is the obvious next job if it does.
+- [x] **The Backups row** pushes the converted `BackupsVC` (§2s).
 
 ### About
 - [ ] **Audit problems list** — unexercised, because the audit is Clean. Needs a
@@ -558,6 +555,31 @@ and the red force-import row.
       an audit-REJECTED pack and cannot be undone. When you do test it, confirm the
       biometric prompt appears BETWEEN the confirmation and the replacement.
 - [ ] The database row counts match reality after an import.
+
+## 2s. Phase 2 — the converted Backups history (`-uikitActivity YES`)
+
+Settings → Backup & Sync → Backups.
+
+**Already verified**: both settings sections render with the correct conditional
+footer, and the history row shows its stamp, the "Latest" pill, the on-device badge
+and the size.
+
+- [ ] ⚠️ **RESTORE — the highest-risk path in the app, and untested.** It replaces
+      ALL current data. Verify on a scratch ledger, and check the ORDER holds: the
+      biometric prompt appears, the current state is backed up first (so the restore
+      is reversible), and the restored data is correct. If a restore ever loses the
+      snapshot it was restoring, the read-before-flush ordering has been broken.
+- [ ] **Restoring a backup that fails its integrity check** shows the
+      "Backup failed its integrity check" message pointing at About → Force import.
+- [ ] **Delete** removes the snapshot from BOTH the device and the folder.
+- [ ] **Long-press → Share** offers the pack (on-device snapshots only).
+- [ ] **Back up now** writes a fresh one and is disabled with no ledgers.
+- [ ] **The folder toggle** opens the document picker; picking a folder reveals the
+      Folder / Number of backups / Frequency rows and switches the footer. Cancelling
+      the picker must leave the toggle OFF, not stuck on.
+- [ ] **The count wheel** expands on tap, tints its value while open, and prunes to
+      the new count.
+- [ ] **Rows are inert to tapping** — confirm a tap does nothing at all.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
