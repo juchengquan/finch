@@ -15,10 +15,8 @@ import FinchCore
 /// riskiest code on the screen (import REPLACES the database) for no benefit, so the
 /// cells are non-selectable and the hosted buttons keep their own touches.
 ///
-/// KNOWN GAP: the Backups row still pushes `SettingsBackupsView`, which is 235 lines
-/// of SwiftUI and out of scope here. That makes it the one remaining hosted SwiftUI
-/// scroll view inside a pushed page — reproducer B — so that screen can still
-/// shadow. Recorded in the verification checklist.
+/// The Backups row pushes `BackupsVC`, converted alongside this screen, so nothing
+/// reachable from here hosts a SwiftUI scroll view in a pushed page.
 final class BackupSyncSettingsVC: UIViewController {
 
     private let store = FinchStore.shared
@@ -201,8 +199,7 @@ extension BackupSyncSettingsVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard dataSource.itemIdentifier(for: indexPath) == Self.backupsID else { return }
-        // Still SwiftUI, hosted — see the note at the top of this file.
-        navigationController?.pushViewController(hosted(SettingsBackupsView()), animated: true)
+        navigationController?.pushViewController(BackupsVC(), animated: true)
     }
 }
 #endif

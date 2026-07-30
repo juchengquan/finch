@@ -270,6 +270,7 @@
         }
       }
     },
+    "%lld integrity problem(s). Use Settings › About › Force import to override (iOS only).": {},
     "%lld matched · %lld new": {
       "localizations": {
         "zh-Hans": {
@@ -1895,6 +1896,7 @@
         }
       }
     },
+    "Couldn't read that backup — it may still be downloading from iCloud.": {},
     "Couldn't switch: %@": {
       "localizations": {
         "zh-Hans": {
@@ -4415,6 +4417,7 @@
         }
       }
     },
+    "None yet": {},
     "Not enough history": {
       "localizations": {
         "zh-Hans": {
