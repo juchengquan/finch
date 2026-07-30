@@ -659,13 +659,21 @@ look flat), while Currencies and Backups do not. **The control was never the var
 — rebuilding the view was.** The same defect very likely explains the dead taps: a
 switch replaced out from under a touch never completes its gesture, while a drag does.
 
-- [ ] **THE FIX: stop rebuilding the switch on reconfigure.** Reuse the cell's
-      existing `UISwitch` and just update `isOn` + its action, rather than
-      constructing a new one and reassigning `cell.accessories`. This keeps `UISwitch`
-      (no hosting, no restructuring) and should restore both the glass and the tap.
-      Not yet implemented.
-- [ ] After fixing, verify BOTH on a device: tap (not just drag) flips every switch,
-      and toggling one row leaves the others' appearance untouched.
+- [x] **IMPLEMENTED in `16174ca`** — `ToggleAccessory` installs the switch once and
+      afterwards updates only `isOn` and its action; the blanket
+      `cell.accessories = []` is guarded so clearing never removes it.
+- [ ] ⚠️ **VERIFY ON A DEVICE — this cannot be checked here.** Toggling one row must
+      leave every other switch's appearance untouched, and the glass must survive
+      navigating away and back (which forces a reconfigure).
+- [ ] ⚠️ **STILL BROKEN — tapping a toggle ROW does nothing.** Only hitting the small
+      switch works. NOT a rendering fault and NOT the automation tool: in SwiftUI a
+      `Toggle` makes the WHOLE ROW the control, while a UIKit `UISwitch` in an
+      accessory takes touches only on itself. Six screens have rows that are purely
+      toggles (Appearance ×6, Notifications ×4, Security, Experimental Labs, Backups'
+      folder row, Currencies' auto-update) and all need row-level tap handling:
+      `shouldSelectItemAt` → true for those ids, and `didSelectItemAt` flips the
+      switch and runs its action. NOT to be applied to the Currencies currency rows
+      or the Rules rows, where a row tap must keep navigating.
 - [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
       actually flipping every toggle, not by reading the code.
 
