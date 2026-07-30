@@ -665,17 +665,37 @@ switch replaced out from under a touch never completes its gesture, while a drag
 - [ ] ⚠️ **VERIFY ON A DEVICE — this cannot be checked here.** Toggling one row must
       leave every other switch's appearance untouched, and the glass must survive
       navigating away and back (which forces a reconfigure).
-- [ ] ⚠️ **STILL BROKEN — tapping a toggle ROW does nothing.** Only hitting the small
-      switch works. NOT a rendering fault and NOT the automation tool: in SwiftUI a
-      `Toggle` makes the WHOLE ROW the control, while a UIKit `UISwitch` in an
-      accessory takes touches only on itself. Six screens have rows that are purely
-      toggles (Appearance ×6, Notifications ×4, Security, Experimental Labs, Backups'
-      folder row, Currencies' auto-update) and all need row-level tap handling:
-      `shouldSelectItemAt` → true for those ids, and `didSelectItemAt` flips the
-      switch and runs its action. NOT to be applied to the Currencies currency rows
-      or the Rules rows, where a row tap must keep navigating.
+- [x] **Row taps FIXED in `a955c1a`.** Tapping anywhere on a toggle row now flips
+      the switch, matching SwiftUI. Applied to the six screens whose rows are purely
+      toggles; deliberately NOT to the Currencies currency rows or the Rules rows,
+      where a tap must keep navigating — both verified on the simulator.
+- [ ] On a device, confirm the row tap works on all six, AND that tapping a currency
+      row still opens its rate history rather than toggling tracking.
 - [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
       actually flipping every toggle, not by reading the code.
+
+## 2u. Design note: settings toggles cost more in UIKit than they look
+
+UIKit has **no toggle accessory**. The full set is disclosure indicator, detail,
+checkmark, delete, insert, reorder, multiselect, outline disclosure, pop-up menu,
+label and custom view. A settings switch is therefore hand-rolled every time, and
+three things that SwiftUI's `Toggle` gives free have to be written and maintained:
+
+1. **View reuse across `reconfigureItems`** — rebuilding the switch destroys iOS 26's
+   appearance (§2t).
+2. **Row-level tap** — an accessory takes touches only on itself.
+3. **The appearance itself** — automatic for standard controls, but only if the view
+   survives.
+
+All three are solved now (`ToggleAccessory`), but the wider point stands: **the
+settings forms were never in the shadow's blast radius.** They cannot shadow — the
+bug affects pushed content — and they were converted for completeness of the tab, not
+to fix anything.
+
+- [ ] Worth deciding before any further form conversion: keep converting settings
+      screens, or leave forms in SwiftUI and spend UIKit only where it earns its keep
+      (the pushed, scrollable screens). Nothing here argues for reverting what has
+      landed and is green.
 
 ## 3. Accessibility — a concern raised by the tooling, not yet investigated
 
