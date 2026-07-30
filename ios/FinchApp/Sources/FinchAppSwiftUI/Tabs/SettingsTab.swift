@@ -54,6 +54,9 @@ struct SettingsTab: View {
         case .powerTools: return .powerTools
         case .appearance: return .appearance
         case .notifications: return .notifications
+        case .security: return .security
+        case .backupsSync: return .backupsSync
+        case .about: return .about
         default: return nil
         }
     }

@@ -23,6 +23,9 @@ public enum NativeRoute: Equatable {
     case powerTools
     case appearance
     case notifications
+    case security
+    case backupsSync
+    case about
 }
 
 public struct NativeRouteKey: EnvironmentKey {
