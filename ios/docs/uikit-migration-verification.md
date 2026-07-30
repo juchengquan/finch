@@ -42,10 +42,13 @@ catalog step is `build-xcstrings.ts && git diff --quiet`, so a correct-but-uncom
 catalog fails with "does not match a fresh build" — which reads like a content
 problem and is not one.
 
-**`idb ui tap` does not flip a `UISwitch`.** Even a tap provably inside the switch's
-frame does nothing; only a short DRAG across it works
-(`idb ui swipe <x-8> <y> <x+24> <y> --duration 0.3`). A switch that ignores taps is a
-tooling limitation, not a broken action.
+**~~`idb ui tap` does not flip a `UISwitch`~~ — WRONG, and it hid a real bug.** Tapping
+a switch does nothing while a drag works, and this was written off as an `idb`
+limitation. A device test with a real finger showed the SAME behaviour: the switches
+in the converted screens do not respond to taps at all. That is an app defect, not a
+tooling one — see §2t. The lesson generalises: when tooling and the app disagree,
+"the tooling is limited" is a hypothesis, not a conclusion, and it is the comfortable
+one.
 
 Launch the app in each mode with:
 
@@ -642,10 +645,27 @@ it produced switches that could not be toggled at all. Two stacked defects, both
 recorded in that commit message — a binding that captured a stale value, and hosted
 toggles not receiving touches in a non-selectable cell.
 
-- [ ] **Work out what actually differs** between those two groups of screens. The
-      control is ruled out. Worth checking next: section/footer configuration, the
-      layout's section provider vs `.list(using:)`, and whether the screens that look
-      right are the ones whose cells were reconfigured most recently.
+**ROOT CAUSE FOUND (device, not reproducible on a simulator).** Toggling any switch
+on Appearance & Language makes **every other switch on that screen go flat**. The cell
+registration builds a BRAND-NEW `UISwitch` on every configure, and `applySnapshot()`
+calls `reconfigureItems` on every carried-over row — so:
+
+  - first display → fresh cells, nothing reconfigured → glass;
+  - any later snapshot → every switch rebuilt → glass lost, permanently.
+
+That explains the whole split: Appearance / Notifications / Security / Experimental
+Labs have observers that fire soon after load (so they reconfigure immediately and
+look flat), while Currencies and Backups do not. **The control was never the variable
+— rebuilding the view was.** The same defect very likely explains the dead taps: a
+switch replaced out from under a touch never completes its gesture, while a drag does.
+
+- [ ] **THE FIX: stop rebuilding the switch on reconfigure.** Reuse the cell's
+      existing `UISwitch` and just update `isOn` + its action, rather than
+      constructing a new one and reassigning `cell.accessories`. This keeps `UISwitch`
+      (no hosting, no restructuring) and should restore both the glass and the tap.
+      Not yet implemented.
+- [ ] After fixing, verify BOTH on a device: tap (not just drag) flips every switch,
+      and toggling one row leaves the others' appearance untouched.
 - [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
       actually flipping every toggle, not by reading the code.
 
