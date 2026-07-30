@@ -235,6 +235,43 @@ Account detail. Neither is guessed.
 - [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes
       the shell's structure.
 
+## 4b. Scope correction — two screens on the Phase 2 list need no conversion
+
+`ScheduledDetailView` and `TransactionDetailView` were both queued for conversion.
+Neither should be: **they are unreachable from the compact UIKit shell**, so a
+converted version could not be reached from any path.
+
+The evidence, all of it grep-able:
+
+- Each is referenced from exactly ONE place — `AdaptiveShell.swift:353` and
+  `:342` — and both sit in a `ThreeColumnShell`'s **detail column**, not in any
+  push or cover.
+- The compact path opens a SHEET instead. `ScheduledTab.swift:71`:
+  `if let selection { selection.wrappedValue = t.id } else { editing = t }`, and
+  `ActivityTab.swift:328`: `else if let selection { … } else { editing = txn }`.
+  A `selection` binding exists only in three-column mode, so on iPhone a row tap
+  goes straight to `ScheduledSheet` / `EditTransactionSheet`.
+- The three-column mode runs on WIDE windows, which Phase 1 deliberately keeps on
+  the SwiftUI split shell (`UIKitShell.makeRoot`: `wide → AppRootHost`). No
+  `nativeRoute` handler is installed there, so the seam returns its default
+  `false` and the SwiftUI screen is used regardless.
+- `FinchMac` keeps the SwiftUI screens either way.
+
+And the motivating bug does not apply: the iOS 26 resume shadow affects **pushed**
+screens. A split-view detail column is never pushed, so neither screen can exhibit
+it — converting them buys nothing even in principle.
+
+Converting either would mean shipping a view controller that nothing constructs.
+The only way to make them reachable is a PRODUCT change — giving the iPhone a
+read-only detail screen where it currently opens the editor — which is a design
+decision, not a migration step.
+
+**What to do instead.** The remaining compact-reachable pushed screens are the
+`PowerTools` set (Categories, Tags, Merchants, FX, and so on). `CategoriesView` is
+the strongest next candidate: it is the one screen MEASURED to shadow under a
+UIKit root while `AccountDetailView` did not, and converting it was measured to
+fix that (see `ios26-shadow-variant-matrix.md`). It is the case with proven value.
+
 ## 5. Open questions
 
 - [x] **iPad keeps its split view.** Phase 1 originally built the tab bar
