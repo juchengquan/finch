@@ -298,14 +298,9 @@ extension CurrenciesVC: UICollectionViewDelegate {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
         if id == Self.refreshID { refreshNow(); return }
         guard let row = rowByCode[id] else { return }
-        // Hosted SwiftUI in a pushed page — reproducer B — so the history screen can
-        // shadow until it is converted too.
+        // Converted too, so this drill is native end to end.
         navigationController?.pushViewController(
-            UIHostingController(rootView: ExchangeRateHistoryView(currency: row.code)
-                .environmentObject(store)
-                .environmentObject(DeepLinkRouter.shared)
-                .environmentObject(BiometricGate.shared)),
-            animated: true)
+            ExchangeRateHistoryVC(currency: row.code), animated: true)
     }
 }
 
