@@ -320,6 +320,44 @@ the cell reconfigure are all confirmed. The tracked set was left as found.
 - [ ] `ExchangeRateHistoryView` is still hosted SwiftUI in a pushed page, so it can
       shadow until converted.
 
+## 2j. Phase 2 — the converted Category detail (`-uikitActivity YES`)
+
+Settings → Categories → any category. **The Categories drill is now fully native**,
+so this is the first chain where a converted list pushes a converted detail — worth
+checking end to end for the shadow, since that is the whole point.
+
+**Already verified on the simulator**: Groceries shows Transactions 7 (matching the
+count pill on the parent page), Total −$317.10 and Average −$45.30 — 317.10 ÷ 7
+exactly; the pending −$42.18 row appears under "To confirm (1)" with its clock and
+"reimbursable" chip and is correctly **excluded** from the total.
+
+- [ ] **Row gestures** — the shared `TxRowActions` again (swipe right ⇒ Duplicate;
+      swipe left ⇒ status toggle at the edge, Delete inboard with a confirmation;
+      long-press ⇒ the same menu **without** Preview receipt, since the SwiftUI row
+      passes no `previewReceipt` here).
+- [ ] **The summary updates after a write** — delete or flip a row and check
+      Transactions / Total / Average all move. They sit under fixed identifiers, so
+      they depend on the reconfigure.
+- [ ] **No resume shadow, on BOTH screens of the chain**: Categories, then the
+      detail. Compare against the flag off, where the detail is hosted SwiftUI in a
+      pushed page and should still shadow.
+
+## 2k. Row fidelity: the earlier converted screens render a poorer row
+
+Not a bug report, a scope note. `CategoryDetailVC` hosts the shared SwiftUI `TxRow`
+verbatim, so its rows carry tag chips, the pending clock, the expense/income kind bar
+and relative dates (`Jul 28 · 12:00`).
+
+`ActivityFeedVC` and `AccountDetailVC` do NOT — they build cells by hand with
+category, date and amount only. That was inherited from the migration pilot, and it
+means those two screens are visibly plainer than their SwiftUI originals.
+
+- [ ] Decide whether to switch them to a hosted `TxRow` too. Arguments both ways:
+      hosting is exact and free of drift, but those lists are the ones expected to
+      hold thousands of rows, and they also need a leading selection tick that the
+      shared row knows nothing about. Worth measuring scroll performance at 2,000
+      rows before committing either way.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
