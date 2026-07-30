@@ -117,12 +117,53 @@ the empty-state row all render. Everything below still needs eyes.
       This section has never been rendered, not once.
 - [ ] **No resume shadow** on this screen: scroll, background, wait ~3s, reopen.
 
+## 2d. Phase 2 — the converted Budget detail (`-uikitActivity YES`)
+
+Budgets → any budget row. `.budgets` is now a UIKit nav tab, so **re-check §1 on
+this tab too** — its structure changed, not just its detail screen.
+
+**Already verified on the simulator**: every section renders with correct figures
+(progress `$167.80 of $600.00`, `$432.20 left`, the cycle range, the History
+chart with its 600 reference line, `Last 4 cycles · budget $600.00`, This cycle's
+rows); tapping a past bar opens that cycle (`2026-05-01 – 2026-05-31`), tapping
+the same bar clears it, the current-cycle bar never selects, and switching bars
+updates the summary. The Budgets root keeps its search field, title, toolbar and
+add button, with no doubled nav bar.
+
+- [ ] **⋯ → Edit** opens BudgetSheet; **⋯ → Delete** confirms, and deleting leaves
+      the page.
+- [ ] **`+`** opens the Add sheet pre-filled with this budget's category (and its
+      account when the budget is account-filtered), and is **disabled when there
+      are no accounts**.
+- [ ] **Income budget** (`Vacation Fund`): the Income section shows Saved and,
+      when set, Target date.
+- [ ] **Pending next cycle** + **Clear pending amount** — needs a budget with a
+      pending amount; none of the seeded budgets has one.
+- [ ] **A multi-month cycle** (quarterly/yearly budget) month-sections both this
+      cycle and a selected past cycle *at the same time*. This is the case whose
+      identifiers had to be namespaced — if they ever collide the app crashes
+      rather than misdraws, so it is worth exercising deliberately.
+- [ ] Tapping a row opens the editor; the rows have **no swipe actions**, matching
+      the SwiftUI screen.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
 Account detail. Neither is guessed.
 
-- [ ] **The floating add button is absent on every converted pushed screen.**
+- [x] **A converted tab lost its FAB, its externally-targeted transaction sheet,
+      and its Ledger cover** — `navigationTab` bypassed `TabRootHost`, which
+      supplied all three, so Accounts had been missing them since Phase 2 screen
+      1. Fixed in `877951b` by moving that chrome into one `TabChrome` modifier
+      both hosts apply. A/B verified. **Still worth re-checking by hand:** the
+      externally-targeted sheet (deep link / Spotlight / App Intent to a specific
+      transaction while a converted tab is selected) — only the FAB and the ledger
+      cover were actually observed.
+- [ ] **The converted tab root shows an INLINE title where SwiftUI showed a large
+      one** (content sits ~52pt higher). The nav bar sets `prefersLargeTitles`,
+      but the hosted stack-less root ends up inline. Cosmetic, affects Accounts
+      and Budgets, and worth deciding before more tabs convert.
+- [ ] **The floating add button is still absent on every converted PUSHED screen.**
       Measured: SwiftUI has `Add Transaction` at `y=764 h=56` on the account
       detail; the converted screen has no such element. Cause: the shell applies
       `.addTransactionFAB()` to the hosted tab *root*
