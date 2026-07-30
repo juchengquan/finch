@@ -18,6 +18,11 @@ try the centre before believing it. Cross-checking against the SwiftUI screen un
 the SAME coordinates is the cheapest way to tell a missed tap from a real defect —
 if both fail, it is the tap.
 
+**`idb ui tap` does not flip a `UISwitch`.** Even a tap provably inside the switch's
+frame does nothing; only a short DRAG across it works
+(`idb ui swipe <x-8> <y> <x+24> <y> --duration 0.3`). A switch that ignores taps is a
+tooling limitation, not a broken action.
+
 Launch the app in each mode with:
 
 ```bash
@@ -285,6 +290,35 @@ Both prompts were cancelled, so no data changed.
 - [ ] **No resume shadow**: scroll, background, wait ~3s, reopen.
 - [ ] Tapping a row drills to the merchant's transactions — still hosted SwiftUI in
       a pushed page, so `CounterpartyDetailView` can shadow until converted.
+
+## 2i. Phase 2 — the converted Currencies screen (`-uikitActivity YES`)
+
+Settings → Currencies.
+
+**Already verified on the simulator**: the controls section renders (auto-update on,
+"Last updated Jul 30, 2026 at 00:47", "Refresh now" tinted, and the privacy footer);
+USD shows `1.0000` as the hub **with no switch**, CAD/EUR/GBP/JPY show 4-decimal
+rates with green switches, and inactive AED shows "—" with its switch off; tapping a
+row pushes the history screen; search filters to a single currency; and the tracking
+switch works **both ways** — dragging CAD off removed it from the Active group and
+dragging it back on restored it between USD and EUR, so the write, the regrouping and
+the cell reconfigure are all confirmed. The tracked set was left as found.
+
+- [ ] **Auto-update toggle** actually persists (it writes
+      `finch.fx.autoUpdate`; absent key means ON, so check it survives a relaunch in
+      BOTH states — the off state is the one a bug would hide).
+- [ ] **Refresh now** — needs network. Check the spinner shows, then one of "Updated
+      N rates" / "Nothing to update" beside the row, or the error alert when offline.
+      Nothing here has been exercised: the sim run never triggered a fetch.
+- [ ] **Toggling ON a currency with no stored rate** must fetch immediately
+      (manual-act semantics) — pick one showing "—". This is the one branch of
+      `setTracked` that was deliberately avoided on the sim, because it hits the
+      network.
+- [ ] **The search bar hides on scroll here** (plain `.searchable`), unlike
+      Categories/Tags which pin it. Confirm that is still what you want.
+- [ ] **No resume shadow**: scroll, background, wait ~3s, reopen.
+- [ ] `ExchangeRateHistoryView` is still hosted SwiftUI in a pushed page, so it can
+      shadow until converted.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
