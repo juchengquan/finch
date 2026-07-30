@@ -83,20 +83,15 @@ final class NotificationsSettingsVC: UIViewController {
             }
 
             guard let kind = NotificationKind(rawValue: id) else { return }
-            var cfg = cell.defaultContentConfiguration()
-            cfg.text = kind.title      // already localized on the enum
-            cell.contentConfiguration = cfg
-
-            let toggle = UISwitch()
-            toggle.isOn = NotificationPrefs.isOn(kind)
-            toggle.addAction(UIAction { [weak toggle] _ in
-                NotificationPrefs.set(kind, on: toggle?.isOn ?? false)
-                // Rescheduling is what actually adds or removes the pending
-                // notifications; the preference alone changes nothing.
-                Task { await NotificationService.shared.refresh() }
-            }, for: .valueChanged)
-            cell.accessories = [.customView(configuration: .init(customView: toggle,
-                                                                 placement: .trailing()))]
+            cell.contentConfiguration = UIHostingConfiguration {
+                HostedToggleRow(title: kind.title,          // already localized on the enum
+                                isOn: NotificationPrefs.isOn(kind)) { on in
+                    NotificationPrefs.set(kind, on: on)
+                    // Rescheduling is what actually adds or removes the pending
+                    // notifications; the preference alone changes nothing.
+                    Task { await NotificationService.shared.refresh() }
+                }
+            }
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {

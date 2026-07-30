@@ -273,16 +273,13 @@ final class AppearanceSettingsVC: UIViewController {
 
     /// Label plus a `UISwitch` accessory. The switch owns its touches; the row is not
     /// selectable, matching a SwiftUI `Toggle` row.
+    /// SwiftUI draws the switch — see `HostedToggleRows` for why UIKit cannot.
     private func configureToggleRow(_ cell: UICollectionViewListCell, _ label: String,
                                     isOn: Bool, onChange: @escaping (Bool) -> Void) {
-        var cfg = cell.defaultContentConfiguration()
-        cfg.text = label
-        cell.contentConfiguration = cfg
-        let toggle = UISwitch()
-        toggle.isOn = isOn
-        toggle.addAction(UIAction { [weak toggle] _ in onChange(toggle?.isOn ?? false) },
-                         for: .valueChanged)
-        cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
+        cell.accessories = []
+        cell.contentConfiguration = UIHostingConfiguration {
+            HostedToggleRow(title: label, isOn: isOn, onChange: onChange)
+        }
     }
 
     /// A pull-down menu button showing the current value — what SwiftUI's default

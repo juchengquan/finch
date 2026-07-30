@@ -106,15 +106,12 @@ final class CurrenciesVC: UIViewController {
 
             switch id {
             case Self.autoUpdateID:
-                var cfg = cell.defaultContentConfiguration()
-                cfg.text = String(localized: "Auto-update exchange rates")
-                cell.contentConfiguration = cfg
-                let toggle = UISwitch()
-                toggle.isOn = self.autoUpdateEnabled
-                toggle.addAction(UIAction { [weak toggle] _ in
-                    UserDefaults.standard.set(toggle?.isOn ?? false, forKey: RateAutoUpdater.toggleKey)
-                }, for: .valueChanged)
-                cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HostedToggleRow(title: String(localized: "Auto-update exchange rates"),
+                                    isOn: self.autoUpdateEnabled) { on in
+                        UserDefaults.standard.set(on, forKey: RateAutoUpdater.toggleKey)
+                    }
+                }
 
             case Self.lastUpdatedID:
                 var cfg = cell.defaultContentConfiguration()
@@ -146,34 +143,38 @@ final class CurrenciesVC: UIViewController {
 
             default:
                 guard let row = self.rowByCode[id] else { return }
-                // Code + symbol on the first line ("EUR (€)"), the localized name on
-                // the second, with the hub suffixed through the catalog.
                 let name = FxCurrencyInfo.name(row.code)
-                var cfg = cell.defaultContentConfiguration()
-                cfg.text = FxCurrencyInfo.symbol(row.code).map { "\(row.code) (\($0))" } ?? row.code
-                cfg.textProperties.font = .preferredFont(forTextStyle: .body)
-                cfg.secondaryText = row.isHub ? String(localized: "\(name) · hub") : name
-                cell.contentConfiguration = cfg
+                let code = FxCurrencyInfo.symbol(row.code).map { "\(row.code) (\($0))" } ?? row.code
+                let subtitle = row.isHub ? String(localized: "\(name) · hub") : name
+                let rate = row.rate.map { String(format: "%.4f", $0) } ?? "—"
+                let hasRate = row.rate != nil
 
-                let rate = UILabel()
-                rate.text = row.rate.map { String(format: "%.4f", $0) } ?? "—"
-                rate.font = .preferredFont(forTextStyle: .body)
-                rate.textColor = row.rate == nil ? .secondaryLabel : .label
-                var accessories: [UICellAccessory] = [
-                    .customView(configuration: .init(customView: rate, placement: .trailing()))
-                ]
-                // The hub (USD) is always active and cannot be toggled off.
-                if !row.isHub {
-                    let toggle = UISwitch()
-                    toggle.isOn = row.tracked
-                    toggle.accessibilityLabel = String(localized: "Activate \(row.code)")
-                    toggle.addAction(UIAction { [weak self, weak toggle] _ in
-                        self?.setTracked(row.code, toggle?.isOn ?? false)
-                    }, for: .valueChanged)
-                    accessories.append(.customView(configuration: .init(customView: toggle,
-                                                                        placement: .trailing())))
+                // The whole row is hosted so SwiftUI draws the switch — see
+                // HostedToggleRows for why UIKit cannot. The hub (USD) is always
+                // active and gets no toggle, so it stays a plain tappable row.
+                if row.isHub {
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        Button { self.openHistory(row.code) } label: {
+                            CurrencyRowLabel(code: code, subtitle: subtitle,
+                                             rate: rate, hasRate: hasRate)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    let activate = String(localized: "Activate \(row.code)")
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        HostedToggleNavigationRow(
+                            isOn: row.tracked,
+                            toggleLabel: activate,
+                            onChange: { [weak self] on in self?.setTracked(row.code, on) },
+                            onTap: { [weak self] in self?.openHistory(row.code) }
+                        ) {
+                            CurrencyRowLabel(code: code, subtitle: subtitle,
+                                             rate: rate, hasRate: hasRate)
+                        }
+                    }
                 }
-                cell.accessories = accessories
             }
         }
 
@@ -282,25 +283,43 @@ final class CurrenciesVC: UIViewController {
     }
 }
 
+extension CurrenciesVC {
+    /// Pushed from the hosted row's button. Converted, so the drill is native.
+    func openHistory(_ code: String) {
+        navigationController?.pushViewController(ExchangeRateHistoryVC(currency: code), animated: true)
+    }
+}
+
+/// The two-line currency label plus its rate — the non-interactive part of the row.
+private struct CurrencyRowLabel: View {
+    let code: String
+    let subtitle: String
+    let rate: String
+    let hasRate: Bool
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: code)
+                Text(verbatim: subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(verbatim: rate).foregroundStyle(hasRate ? .primary : .secondary)
+        }
+    }
+}
+
 extension CurrenciesVC: UICollectionViewDelegate {
-    /// The two read-only control rows do nothing; the switch rows are still
-    /// selectable, because in SwiftUI the row was a NavigationLink WITH a toggle
-    /// inside it — the switch handles its own touches as a UIKit accessory.
+    /// Only "Refresh now" is a cell-level tap now. The currency rows host their own
+    /// button, because a selectable cell would swallow the switch beside it.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
-        if id == Self.autoUpdateID || id == Self.lastUpdatedID { return false }
-        if id == Self.refreshID { return !refreshing }
-        return rowByCode[id] != nil
+        dataSource.itemIdentifier(for: indexPath) == Self.refreshID && !refreshing
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
-        guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
-        if id == Self.refreshID { refreshNow(); return }
-        guard let row = rowByCode[id] else { return }
-        // Converted too, so this drill is native end to end.
-        navigationController?.pushViewController(
-            ExchangeRateHistoryVC(currency: row.code), animated: true)
+        guard dataSource.itemIdentifier(for: indexPath) == Self.refreshID else { return }
+        refreshNow()
     }
 }
 
