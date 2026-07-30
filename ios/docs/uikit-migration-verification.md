@@ -498,6 +498,23 @@ finch."; turning it back on removes both and restores the original footer.
 - [ ] Every preference **survives a relaunch** — they are plain UserDefaults writes,
       but the OFF states are the ones a bug would hide.
 
+## 2q. Phase 2 — the converted Notifications settings (`-uikitActivity YES`)
+
+Settings → Notifications.
+
+**Already verified**: all four kind toggles render, and a Weekly digest round-trip
+reads 1 → 0 → 1, so the write and the cell reconfigure both work.
+
+- [ ] **The denied-permission nudge** — unverified, because notifications are
+      GRANTED on this simulator. Deny them (or use a fresh sim and decline the
+      prompt) and check the orange "Notifications are turned off" block appears
+      above the toggles, with its caption and a working "Open Settings" link.
+- [ ] **Turning a kind off actually stops its notifications** — the toggle calls
+      `NotificationService.refresh()`, and rescheduling is what adds or removes the
+      pending requests. Check with `xcrun simctl push` or by waiting for a budget
+      alert, not just by re-reading the switch.
+- [ ] Preferences **survive a relaunch**.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
