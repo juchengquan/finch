@@ -320,16 +320,25 @@ the cell reconfigure are all confirmed. The tracked set was left as found.
 - [ ] `ExchangeRateHistoryView` is still hosted SwiftUI in a pushed page, so it can
       shadow until converted.
 
-## 2j. Phase 2 — the converted Category detail (`-uikitActivity YES`)
+## 2j. Phase 2 — the converted Category / Tag / Merchant detail (`-uikitActivity YES`)
 
-Settings → Categories → any category. **The Categories drill is now fully native**,
-so this is the first chain where a converted list pushes a converted detail — worth
-checking end to end for the shadow, since that is the whole point.
+One screen, `TxListDetailVC`, reached three ways: Settings → Categories / Tags /
+Merchants → any row. **All three drill chains are now native end to end** — the first
+time any chain has been — so the shadow check below is the one that actually tests
+the migration's premise.
 
-**Already verified on the simulator**: Groceries shows Transactions 7 (matching the
-count pill on the parent page), Total −$317.10 and Average −$45.30 — 317.10 ÷ 7
-exactly; the pending −$42.18 row appears under "To confirm (1)" with its clock and
-"reimbursable" chip and is correctly **excluded** from the total.
+**Already verified on the simulator, all three entry points**:
+- Category (Groceries): Transactions 7 (matching the parent's count pill), Total
+  −$317.10, Average −$45.30 — 317.10 ÷ 7 exactly; the pending −$42.18 row sits under
+  "To confirm (1)" with its clock and "reimbursable" chip and is correctly
+  **excluded** from the total.
+- Tag (business): rows carry the "business" chip.
+- Merchant (Acme Corp Payroll): 3 / $12,600.00 / $4,200.00 — 3 × 4,200 — with the
+  green income kind bar rather than the expense red.
+
+Because it is one implementation, a defect found through any entry point affects all
+three; conversely a fix only needs verifying once, except where the SOURCE differs
+(membership rules, below).
 
 - [ ] **Row gestures** — the shared `TxRowActions` again (swipe right ⇒ Duplicate;
       swipe left ⇒ status toggle at the edge, Delete inboard with a confirmation;
@@ -338,9 +347,14 @@ exactly; the pending −$42.18 row appears under "To confirm (1)" with its clock
 - [ ] **The summary updates after a write** — delete or flip a row and check
       Transactions / Total / Average all move. They sit under fixed identifiers, so
       they depend on the reconfigure.
-- [ ] **No resume shadow, on BOTH screens of the chain**: Categories, then the
-      detail. Compare against the flag off, where the detail is hosted SwiftUI in a
-      pushed page and should still shadow.
+- [ ] **Membership matches each parent's count pill** — the one thing that is NOT
+      shared, since each `Source` calls a different selector. Category includes split
+      legs; tag is "tagged in this ledger"; merchant goes through
+      `merchantTransactions`. Spot-check one of each against the pill on its parent.
+- [ ] **No resume shadow, on BOTH screens of each chain**: the list, then the
+      detail, for Categories / Tags / Merchants. Compare against the flag off, where
+      the detail is hosted SwiftUI in a pushed page and should still shadow. **This
+      is the check the whole migration exists to pass.**
 
 ## 2k. Row fidelity: the earlier converted screens render a poorer row
 
