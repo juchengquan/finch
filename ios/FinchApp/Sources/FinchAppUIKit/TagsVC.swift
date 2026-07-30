@@ -388,9 +388,9 @@ extension TagsVC: UICollectionViewDelegate {
             applySnapshot()
             return
         }
-        // Still hosted SwiftUI in a pushed page — reproducer B — so TagDetailView can
-        // shadow until it is converted too.
-        navigationController?.pushViewController(hosted(TagDetailView(tag: tag)), animated: true)
+        // Converted too, so this drill is native end to end — no hosted SwiftUI
+        // scroll view in a pushed page, which is the shape that shadows.
+        navigationController?.pushViewController(TxListDetailVC(.tag(tag)), animated: true)
     }
 
     func collectionView(_ cv: UICollectionView,

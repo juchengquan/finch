@@ -4,26 +4,72 @@ import SwiftUI
 import Combine
 import FinchCore
 
-/// Phase 2, screen 9: `CategoryDetailView` converted to UIKit.
+/// Phase 2, screens 9–11: `CategoryDetailView`, `TagDetailView` and
+/// `CounterpartyDetailView` converted — as ONE view controller.
 ///
-/// A category's transactions plus aggregate stats, pushed from `CategoriesVC`.
-/// Converting it matters beyond parity: it was the last hosted SwiftUI screen in
-/// the Categories chain, and a hosted SwiftUI scroll view inside a PUSHED page is
-/// reproducer B — the shape that brings the iOS 26 resume shadow back. Categories
-/// itself was already clean; this closes the drill behind it.
+/// Those three SwiftUI screens are the same screen three times: identical summary
+/// block, identical pending/confirmed sections, identical row and gestures. They
+/// differ only in the selector they call and the title they show. Rather than port
+/// three near-identical files, this takes a `Source` and the callers pick one. The
+/// SwiftUI side can stay as it is; the UIKit side does not inherit its triplication.
 ///
-/// Membership deliberately matches the count pill on the parent page:
-/// `categoryTransactions` ≙ `categoryTxCounts`, i.e. split legs included, pending
-/// excluded. Pending rows are queried separately and pinned on top rather than
-/// silently omitted — the same "To confirm" treatment the account detail gives.
+/// Converting these matters beyond parity: each was the last hosted SwiftUI screen
+/// in its drill chain, and a hosted SwiftUI scroll view inside a PUSHED page is
+/// reproducer B — the shape that brings the iOS 26 resume shadow back. With these
+/// converted, Categories, Tags and Merchants are native end to end.
 ///
-/// The row is the shared SwiftUI `TxRow`, hosted. It is a leaf, so the collection
-/// view stays the scroll view, and hosting it keeps the tag chips, the receipt
-/// indicator and the relative-date formatting that a hand-built UIKit cell would
-/// silently drop.
-final class CategoryDetailVC: UIViewController {
+/// The row is the shared SwiftUI `TxRow`, hosted verbatim. It is a leaf, so the
+/// collection view stays the scroll view, and hosting keeps the tag chips, the
+/// pending clock, the kind bar and the relative dates that a hand-built cell drops.
+final class TxListDetailVC: UIViewController {
 
-    private let category: CategoryRow
+    /// Title plus the two row sets. `confirmed` must match the parent page's count
+    /// pill; `pending` is queried separately so pending rows are surfaced on top
+    /// rather than silently omitted — the same treatment the account detail gives.
+    struct Source {
+        let title: String
+        // @MainActor because FinchStore is: these read `txns` / `activeLedgerId`, and
+        // they are only ever called from `applySnapshot` on the main actor.
+        let confirmed: @MainActor (FinchStore) -> [Tx]
+        let pending: @MainActor (FinchStore) -> [Tx]
+
+        /// Membership matches `categoryTxCounts`: split legs in, pending out.
+        static func category(_ row: CategoryRow) -> Source {
+            Source(title: row.name,
+                   confirmed: { Selectors.categoryTransactions($0.txns, row.id, $0.activeLedgerId) },
+                   pending: {
+                       Selectors.categoryTransactions($0.txns, row.id, $0.activeLedgerId,
+                                                      includePending: true)
+                           .filter { $0.pending == true }
+                   })
+        }
+
+        /// Membership matches `tagTxCounts`: tagged in this ledger, pending out.
+        static func tag(_ row: TagRow) -> Source {
+            Source(title: row.name,
+                   confirmed: { Selectors.tagTransactions($0.txns, row.id, $0.activeLedgerId) },
+                   pending: {
+                       Selectors.tagTransactions($0.txns, row.id, $0.activeLedgerId,
+                                                 includePending: true)
+                           .filter { $0.pending == true }
+                   })
+        }
+
+        /// Membership matches `counterpartyTxCounts`.
+        static func merchant(_ row: Counterparty) -> Source {
+            Source(title: row.name,
+                   confirmed: {
+                       Selectors.merchantTransactions($0.txns, $0.merchants, row.id, $0.activeLedgerId)
+                   },
+                   pending: {
+                       Selectors.merchantTransactions($0.txns, $0.merchants, row.id,
+                                                      $0.activeLedgerId, includePending: true)
+                           .filter { $0.pending == true }
+                   })
+        }
+    }
+
+    private let source: Source
     private let store = FinchStore.shared
     private var cancellables = Set<AnyCancellable>()
 
@@ -38,18 +84,18 @@ final class CategoryDetailVC: UIViewController {
     private var sectionIDs: [SectionID] = []
     private var txByID: [String: Tx] = [:]
     private var headerContent: [SectionID: String] = [:]
-    /// Recomputed in `applySnapshot` so the summary cells never re-derive.
+    /// Recomputed in `applySnapshot`, so the summary cells never re-derive.
     private var summary: (count: Int, total: Double) = (0, 0)
 
-    init(category: CategoryRow) {
-        self.category = category
+    init(_ source: Source) {
+        self.source = source
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = category.name
+        title = source.title
         navigationItem.largeTitleDisplayMode = .never
         configureCollectionView()
         configureDataSource()
@@ -102,16 +148,13 @@ final class CategoryDetailVC: UIViewController {
                 self.configureValueRow(cell, String(localized: "Total"),
                                        self.store.displayMoneyBase(self.summary.total))
             case Self.averageID:
-                let average = self.summary.count > 0
-                    ? self.summary.total / Double(self.summary.count) : 0
+                let average = self.summary.count > 0 ? self.summary.total / Double(self.summary.count) : 0
                 self.configureValueRow(cell, String(localized: "Average"),
                                        self.store.displayMoneyBase(average))
             default:
                 guard let tx = self.txByID[id] else { return }
-                // The shared SwiftUI row, hosted verbatim — a leaf, so the collection
-                // view remains the scroll view. `showRunningBalance: false` because a
-                // running balance only reads sensibly when every row shares one
-                // account, which a category's rows do not.
+                // `showRunningBalance: false` — a running balance only reads sensibly
+                // when every row shares one account, which none of these lists do.
                 cell.contentConfiguration = UIHostingConfiguration {
                     TxRow(txn: tx, showRunningBalance: false)
                         .environmentObject(self.store)
@@ -148,13 +191,8 @@ final class CategoryDetailVC: UIViewController {
     }
 
     private func applySnapshot() {
-        let ledger = store.activeLedgerId
-        let txns = Selectors.categoryTransactions(store.txns, category.id, ledger)
-        // Pending is excluded from `txns` (and from the parent's count pill), so it is
-        // fetched separately rather than being dropped on the floor.
-        let pending = Selectors.categoryTransactions(store.txns, category.id, ledger,
-                                                     includePending: true)
-            .filter { $0.pending == true }
+        let txns = source.confirmed(store)
+        let pending = source.pending(store)
 
         summary = (txns.count, txns.reduce(0) { $0 + $1.amount })
         txByID = Dictionary(uniqueKeysWithValues: (txns + pending).map { ($0.id, $0) })
@@ -178,8 +216,8 @@ final class CategoryDetailVC: UIViewController {
             headers[.transactions] = String(localized: "Transactions")
         }
 
-        // The summary cells sit under fixed identifiers and every figure on them is
-        // derived, so without this a delete or a status flip would leave them stale.
+        // The summary cells sit under fixed identifiers and every figure is derived,
+        // so without this a delete or a status flip would leave them stale.
         let carried = Set(dataSource.snapshot().itemIdentifiers)
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
 
@@ -190,7 +228,8 @@ final class CategoryDetailVC: UIViewController {
 
     // MARK: Row actions
 
-    /// The SwiftUI row passes no `previewReceipt`, so the menu omits it here too.
+    /// The SwiftUI rows pass no `previewReceipt` on any of these three screens, so
+    /// the menu omits it here too.
     private func rowActions(at indexPath: IndexPath) -> (tx: Tx, actions: TxRowActions)? {
         guard let id = dataSource.itemIdentifier(for: indexPath), let tx = txByID[id] else { return nil }
         let actions = TxRowActions(
@@ -244,7 +283,7 @@ final class CategoryDetailVC: UIViewController {
     }
 }
 
-extension CategoryDetailVC: UICollectionViewDelegate {
+extension TxListDetailVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
         return txByID[id] != nil   // the summary rows are read-only

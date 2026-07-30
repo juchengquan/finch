@@ -368,10 +368,9 @@ extension MerchantsVC: UICollectionViewDelegate {
             applySnapshot()
             return
         }
-        // Still hosted SwiftUI in a pushed page — reproducer B — so
-        // CounterpartyDetailView can shadow until it is converted too.
-        navigationController?.pushViewController(
-            hosted(CounterpartyDetailView(counterparty: merchant)), animated: true)
+        // Converted too — the same shared detail screen, so this drill is native end
+        // to end and no hosted SwiftUI scroll view sits in a pushed page.
+        navigationController?.pushViewController(TxListDetailVC(.merchant(merchant)), animated: true)
     }
 
     /// Verify/Unverify lives ONLY here, never on the swipe — the SwiftUI screen's

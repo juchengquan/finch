@@ -556,7 +556,7 @@ extension CategoriesVC: UICollectionViewDelegate {
 
         // Converted too, so this whole drill is native — no hosted SwiftUI scroll view
         // in a pushed page, which is the shape that shadows.
-        navigationController?.pushViewController(CategoryDetailVC(category: row), animated: true)
+        navigationController?.pushViewController(TxListDetailVC(.category(row)), animated: true)
     }
 
     func collectionView(_ cv: UICollectionView,
