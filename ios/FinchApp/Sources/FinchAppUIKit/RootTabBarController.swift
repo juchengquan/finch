@@ -88,6 +88,9 @@ final class RootTabBarController: UITabBarController {
                     case .activity:
                         nav.pushViewController(ActivityFeedVC(), animated: true)
                         return true
+                    case .account(let id):
+                        nav.pushViewController(AccountDetailVC(accountId: id), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false

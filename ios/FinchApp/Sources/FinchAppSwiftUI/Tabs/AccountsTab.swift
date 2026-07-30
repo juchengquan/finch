@@ -262,7 +262,7 @@ struct AccountsTab: View {
                     // the whole row tappable.
                     Button {
                         #if os(iOS)
-                        drill = .account(account.id)
+                        if !nativeRoute(.account(account.id)) { drill = .account(account.id) }
                         #else
                         path.append(account.id)
                         #endif
