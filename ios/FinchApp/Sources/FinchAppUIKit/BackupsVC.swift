@@ -139,13 +139,16 @@ final class BackupsVC: UIViewController {
                 cell.contentConfiguration = cfg
 
             case Self.folderToggleID:
-                cell.contentConfiguration = UIHostingConfiguration {
-                    HostedToggleRow(title: String(localized: "Back up to a folder"),
-                                    isOn: self.icloud.designatedFolderName != nil) { [weak self] on in
-                        guard let self else { return }
-                        if on { self.pickFolder() } else { self.icloud.clearFolder() }
-                    }
-                }
+                cfg.text = String(localized: "Back up to a folder")
+                cell.contentConfiguration = cfg
+                let toggle = UISwitch()
+                toggle.isOn = self.icloud.designatedFolderName != nil
+                toggle.addAction(UIAction { [weak self, weak toggle] _ in
+                    guard let self else { return }
+                    if toggle?.isOn == true { self.pickFolder() } else { self.icloud.clearFolder() }
+                }, for: .valueChanged)
+                cell.accessories = [.customView(configuration: .init(customView: toggle,
+                                                                     placement: .trailing()))]
 
             case Self.mirrorFailingID:
                 cfg.text = String(localized: "Backup folder unavailable — re-select it. Your latest backup is still saved on this device.")

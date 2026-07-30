@@ -91,26 +91,40 @@ final class RulesManagerVC: UIViewController {
             }
 
             guard let rule = self.ruleByID[id] else { return }
-            let count = self.counts[rule.id] ?? 0
-            let active = String(localized: "Active")
-            // The whole row is hosted so SwiftUI draws the switch — see
-            // HostedToggleRows. The row still opens the editor; the button inside
-            // handles that, because a selectable cell would swallow the switch.
-            cell.contentConfiguration = UIHostingConfiguration {
-                HostedToggleNavigationRow(
-                    isOn: rule.isActive,
-                    toggleLabel: active,
-                    onChange: { [weak self] on in self?.setActive(rule, on) },
-                    onTap: { [weak self] in self?.open(rule) }
-                ) {
-                    RuleRowLabel(name: rule.name,
-                                 priority: String(localized: "priority \(rule.priority)"),
-                                 // Hidden at zero: a rule that never matched shows
-                                 // nothing, not a "0×" that reads like failure.
-                                 matches: count > 0 ? String(localized: "\(count)×") : nil,
-                                 matchesLabel: count > 0 ? String(localized: "\(count) transactions") : nil)
-                }
+            var cfg = cell.defaultContentConfiguration()
+            cfg.text = rule.name
+            cfg.secondaryText = String(localized: "priority \(rule.priority)")
+            cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption2)
+            cell.contentConfiguration = cfg
+
+            var accessories: [UICellAccessory] = []
+            // The match count is hidden at zero, as in SwiftUI — a rule that has never
+            // matched shows nothing rather than a "0×" that reads like a failure.
+            if let n = self.counts[rule.id], n > 0 {
+                let label = UILabel()
+                // Through the catalog, not a bare literal: the SwiftUI screen's
+                // `Text("\(n)×")` already contributes the key "%lld×", so this reuses
+                // it rather than shipping an unextractable string.
+                label.text = String(localized: "\(n)×")
+                label.font = UIFont.monospacedDigitSystemFont(
+                    ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular)
+                label.textColor = .secondaryLabel
+                label.accessibilityLabel = String(localized: "\(n) transactions")
+                accessories.append(.customView(configuration: .init(customView: label,
+                                                                    placement: .trailing())))
             }
+            // A UISwitch accessory rather than hosted SwiftUI: it must take its own
+            // touches while the row stays tappable for the editor.
+            let toggle = UISwitch()
+            toggle.isOn = rule.isActive
+            toggle.accessibilityLabel = String(localized: "Active")
+            toggle.addAction(UIAction { [weak self, weak toggle] _ in
+                guard let self, let on = toggle?.isOn else { return }
+                self.setActive(rule, on)
+            }, for: .valueChanged)
+            accessories.append(.customView(configuration: .init(customView: toggle,
+                                                                placement: .trailing())))
+            cell.accessories = accessories
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
@@ -182,7 +196,7 @@ final class RulesManagerVC: UIViewController {
         }
     }
 
-    func setActive(_ rule: RuleSummary, _ on: Bool) {
+    private func setActive(_ rule: RuleSummary, _ on: Bool) {
         run {
             try store.apply(.updateRule, Args(["id": .string(rule.id),
                                                "patch": .object(["isActive": .bool(on)])]))
@@ -218,7 +232,7 @@ final class RulesManagerVC: UIViewController {
     /// Editable only if the rule round-trips through the editor's model. A rule using
     /// CP2 fields, nested groups, `not` or splits opens READ-ONLY — handing it to the
     /// editor would silently rewrite it on save.
-    func open(_ rule: RuleSummary) {
+    private func open(_ rule: RuleSummary) {
         let editable = RuleParse.parse(conditionJSON: rule.conditionJSON,
                                        actionsJSON: rule.actionsJSON) != nil
         present(hosted(editable ? AnyView(RuleSheet(rule: rule))
@@ -226,32 +240,17 @@ final class RulesManagerVC: UIViewController {
     }
 }
 
-/// Name over priority, with the match count — the non-interactive part of the row.
-private struct RuleRowLabel: View {
-    let name: String
-    let priority: String
-    let matches: String?
-    let matchesLabel: String?
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: name)
-                Text(verbatim: priority).font(.caption2).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if let matches {
-                Text(verbatim: matches)
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .accessibilityLabel(Text(verbatim: matchesLabel ?? matches))
-            }
-        }
-    }
-}
-
 extension RulesManagerVC: UICollectionViewDelegate {
-    /// The rows host their own button, so the switch beside it keeps its touches.
-    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool { false }
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        return ruleByID[id] != nil
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        cv.deselectItem(at: indexPath, animated: true)
+        guard let id = dataSource.itemIdentifier(for: indexPath), let rule = ruleByID[id] else { return }
+        open(rule)
+    }
 
     func collectionView(_ cv: UICollectionView,
                         contextMenuConfigurationForItemAt indexPath: IndexPath,

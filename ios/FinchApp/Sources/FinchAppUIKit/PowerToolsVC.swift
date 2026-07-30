@@ -93,13 +93,16 @@ final class PowerToolsVC: UIViewController {
                 cell.accessories = [.disclosureIndicator()]
 
             case Self.toggleID:
-                cell.contentConfiguration = UIHostingConfiguration {
-                    HostedToggleRow(title: String(localized: "Sync across devices (iCloud)"),
-                                    isOn: self.cloudSync.enabled) { [weak self] on in
-                        guard let self else { return }
-                        Task { await self.cloudSync.setEnabled(on, store: self.store) }
-                    }
-                }
+                cfg.text = String(localized: "Sync across devices (iCloud)")
+                cell.contentConfiguration = cfg
+                let toggle = UISwitch()
+                toggle.isOn = self.cloudSync.enabled
+                toggle.addAction(UIAction { [weak self, weak toggle] _ in
+                    guard let self, let on = toggle?.isOn else { return }
+                    Task { await self.cloudSync.setEnabled(on, store: self.store) }
+                }, for: .valueChanged)
+                cell.accessories = [.customView(configuration: .init(customView: toggle,
+                                                                     placement: .trailing()))]
 
             case Self.progressID:
                 // Bootstrapping wins over syncing, as in the SwiftUI `if / else if`.
