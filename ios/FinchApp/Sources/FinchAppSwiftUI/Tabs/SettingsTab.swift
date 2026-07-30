@@ -48,6 +48,7 @@ struct SettingsTab: View {
     private static func route(for target: SettingsDrill) -> NativeRoute? {
         switch target {
         case .categories: return .categories
+        case .tags: return .tags
         default: return nil
         }
     }

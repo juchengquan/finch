@@ -100,6 +100,9 @@ final class RootTabBarController: UITabBarController {
                     case .categories:
                         nav.pushViewController(CategoriesVC(), animated: true)
                         return true
+                    case .tags:
+                        nav.pushViewController(TagsVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false
