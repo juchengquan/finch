@@ -6,8 +6,17 @@ you go; add findings inline under the item.
 **Why this file exists.** `idb ui describe-all` does not expose toolbar items,
 nav-bar buttons, search fields, or segmented controls in the accessibility tree, and
 `simctl` screenshots do not contain the Liquid Glass compositor layers. So a whole
-class of change builds green, passes 676 tests, and is still unverified. Twice
-during this work an automated "check" was actually a missed tap read as a bug.
+class of change builds green, passes 676 tests, and is still unverified.
+
+**Aim at `frame.y + height/2`, never `frame.y`.** By the end of this work FIVE
+"bugs" turned out to be missed taps. `describe-all` reports the row's TOP EDGE, and
+tapping exactly there lands in the gap between rows: the Settings "Merchants" row is
+`y=573 h=52`, so y=573 misses and y=599 hits. The same fraction-of-a-point error hit
+a chevron accessory (off by 0.2pt) and a swipe button (Delete starts at x=175.3, so
+x=175 falls between buttons). When something "does nothing", re-read the frame and
+try the centre before believing it. Cross-checking against the SwiftUI screen under
+the SAME coordinates is the cheapest way to tell a missed tap from a real defect —
+if both fail, it is the tap.
 
 Launch the app in each mode with:
 
@@ -249,6 +258,33 @@ destructive prompts were cancelled, so no data changed.
 - [ ] **No resume shadow**: scroll, background, wait ~3s, reopen.
 - [ ] Tapping a row drills to the tag's transactions — still hosted SwiftUI in a
       pushed page, so `TagDetailView` can shadow until it too is converted.
+
+## 2h. Phase 2 — the converted Merchants screen (`-uikitActivity YES`)
+
+Settings → Merchants.
+
+**Already verified on the simulator**: rows render with verified seals and count
+pills; the swipe reveals **Rename outermost, Delete, then Merge… innermost**, so a
+full swipe renames (confirmed when a long swipe opened the Rename sheet pre-filled —
+the intended safety property); and **both** delete branches are right — "This
+permanently deletes Adobe." for a merchant with 0 transactions, and "Acme Corp
+Payroll — 3 transactions keep the name but lose the merchant link." for one with 3.
+Both prompts were cancelled, so no data changed.
+
+- [ ] **Long-press** gives Rename / **Verify or Unverify** / Merge… / Delete. The
+      verify toggle is merchant-only and exists ONLY here, never on the swipe — and
+      it is the one action on this screen nobody has exercised. Check the seal
+      appears and disappears on the row.
+- [ ] **Rename** actually renames (the sheet was opened but Save was never tapped).
+- [ ] **Add Merchant** (`+`) creates one.
+- [ ] **Merge…**, single and multi-select, with the keep-name prompt appearing after
+      the picker dismisses.
+- [ ] **The empty state** — a ledger with no merchants shows the full-screen "No
+      merchants" placeholder **and no search bar**. Both halves matter: a stray
+      search bar over a placeholder would read as a bug.
+- [ ] **No resume shadow**: scroll, background, wait ~3s, reopen.
+- [ ] Tapping a row drills to the merchant's transactions — still hosted SwiftUI in
+      a pushed page, so `CounterpartyDetailView` can shadow until converted.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
