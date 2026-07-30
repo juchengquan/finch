@@ -554,10 +554,9 @@ extension CategoriesVC: UICollectionViewDelegate {
             return
         }
 
-        // The drill target is still SwiftUI, hosted. NOTE: a hosted SwiftUI screen in
-        // a PUSHED page is reproducer B, so CategoryDetailView can still shadow until
-        // it is converted too — converting this screen fixes THIS screen.
-        navigationController?.pushViewController(hosted(CategoryDetailView(category: row)), animated: true)
+        // Converted too, so this whole drill is native — no hosted SwiftUI scroll view
+        // in a pushed page, which is the shape that shadows.
+        navigationController?.pushViewController(CategoryDetailVC(category: row), animated: true)
     }
 
     func collectionView(_ cv: UICollectionView,
