@@ -25,6 +25,11 @@ of 9 checks** — a green exit that proved nothing. Use
 `./scripts/ci-local.sh --sim "<this session's sim>"`, and confirm the summary really
 says `all checks passed` rather than trusting the exit code.
 
+**A regenerated string catalog must be COMMITTED to pass its own check.** The
+catalog step is `build-xcstrings.ts && git diff --quiet`, so a correct-but-uncommitted
+catalog fails with "does not match a fresh build" — which reads like a content
+problem and is not one.
+
 **`idb ui tap` does not flip a `UISwitch`.** Even a tap provably inside the switch's
 frame does nothing; only a short DRAG across it works
 (`idb ui swipe <x-8> <y> <x+24> <y> --duration 0.3`). A switch that ignores taps is a
@@ -412,6 +417,29 @@ whole migration — if any of these still shadow, the premise is wrong:
 - [ ] For contrast, repeat any one of them with the flag OFF, where the detail is
       hosted SwiftUI in a pushed page — that one **should** still shadow. A run where
       neither shadows proves nothing.
+
+## 2n. Phase 2 — the converted Experimental Labs (`-uikitActivity YES`)
+
+Settings → Experimental Labs (scroll down; the row sits under the tab bar).
+
+**Already verified**: the screen renders with the Rules row, the Sync header and
+footer, and the iCloud toggle, and the conditional status rows are correctly
+**absent** while sync is disabled — the only state a simulator without an iCloud
+account can produce.
+
+- [ ] **Everything behind the iCloud toggle is unexercised**, because the sync layer
+      is inert scaffold here: the bootstrapping and syncing progress rows, Status /
+      Pending changes / Last sync, the red error line, and the Resync button
+      (disabled without an account). Needs a device with iCloud and a provisioned
+      container.
+- [ ] **Rules** pushes the manager — still hosted SwiftUI in a pushed page, so that
+      one drill can shadow until `RulesManagerView` is converted. It is now the ONLY
+      such page left.
+- [ ] **Two strings are newly translatable**: "Subscribed to N ledgers" and "iCloud
+      account required" ship English-only from the SwiftUI screen (plain `String` to
+      `LabeledContent(value:)`). The conversion routes them through the catalog,
+      where they now sit **untranslated** — so nothing changes for a zh-Hans user
+      yet. They want a translation in `scripts/zh-manual.json`.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
