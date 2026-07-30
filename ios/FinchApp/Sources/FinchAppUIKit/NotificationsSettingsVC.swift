@@ -62,7 +62,10 @@ final class NotificationsSettingsVC: UIViewController {
 
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { cell, _, id in
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
 
             if id == Self.deniedID {
                 // Hosted verbatim: it is a leaf, and the `Link` opens iOS Settings
@@ -87,16 +90,12 @@ final class NotificationsSettingsVC: UIViewController {
             cfg.text = kind.title      // already localized on the enum
             cell.contentConfiguration = cfg
 
-            let toggle = UISwitch()
-            toggle.isOn = NotificationPrefs.isOn(kind)
-            toggle.addAction(UIAction { [weak toggle] _ in
-                NotificationPrefs.set(kind, on: toggle?.isOn ?? false)
+            ToggleAccessory.install(on: cell, isOn: NotificationPrefs.isOn(kind)) { on in
+                NotificationPrefs.set(kind, on: on)
                 // Rescheduling is what actually adds or removes the pending
                 // notifications; the preference alone changes nothing.
                 Task { await NotificationService.shared.refresh() }
-            }, for: .valueChanged)
-            cell.accessories = [.customView(configuration: .init(customView: toggle,
-                                                                 placement: .trailing()))]
+            }
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {

@@ -111,7 +111,10 @@ final class AppearanceSettingsVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
 
             switch id {
             case Self.appearancePickerID:
@@ -278,11 +281,7 @@ final class AppearanceSettingsVC: UIViewController {
         var cfg = cell.defaultContentConfiguration()
         cfg.text = label
         cell.contentConfiguration = cfg
-        let toggle = UISwitch()
-        toggle.isOn = isOn
-        toggle.addAction(UIAction { [weak toggle] _ in onChange(toggle?.isOn ?? false) },
-                         for: .valueChanged)
-        cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
+        ToggleAccessory.install(on: cell, isOn: isOn, onChange: onChange)
     }
 
     /// A pull-down menu button showing the current value — what SwiftUI's default

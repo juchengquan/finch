@@ -83,7 +83,10 @@ final class PowerToolsVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
             var cfg = cell.defaultContentConfiguration()
 
             switch id {
@@ -95,14 +98,10 @@ final class PowerToolsVC: UIViewController {
             case Self.toggleID:
                 cfg.text = String(localized: "Sync across devices (iCloud)")
                 cell.contentConfiguration = cfg
-                let toggle = UISwitch()
-                toggle.isOn = self.cloudSync.enabled
-                toggle.addAction(UIAction { [weak self, weak toggle] _ in
-                    guard let self, let on = toggle?.isOn else { return }
+                ToggleAccessory.install(on: cell, isOn: self.cloudSync.enabled) { [weak self] on in
+                    guard let self else { return }
                     Task { await self.cloudSync.setEnabled(on, store: self.store) }
-                }, for: .valueChanged)
-                cell.accessories = [.customView(configuration: .init(customView: toggle,
-                                                                     placement: .trailing()))]
+                }
 
             case Self.progressID:
                 // Bootstrapping wins over syncing, as in the SwiftUI `if / else if`.

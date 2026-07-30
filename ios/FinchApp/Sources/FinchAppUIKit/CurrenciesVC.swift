@@ -102,19 +102,19 @@ final class CurrenciesVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
 
             switch id {
             case Self.autoUpdateID:
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = String(localized: "Auto-update exchange rates")
                 cell.contentConfiguration = cfg
-                let toggle = UISwitch()
-                toggle.isOn = self.autoUpdateEnabled
-                toggle.addAction(UIAction { [weak toggle] _ in
-                    UserDefaults.standard.set(toggle?.isOn ?? false, forKey: RateAutoUpdater.toggleKey)
-                }, for: .valueChanged)
-                cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
+                ToggleAccessory.install(on: cell, isOn: self.autoUpdateEnabled) { on in
+                    UserDefaults.standard.set(on, forKey: RateAutoUpdater.toggleKey)
+                }
 
             case Self.lastUpdatedID:
                 var cfg = cell.defaultContentConfiguration()
@@ -163,17 +163,14 @@ final class CurrenciesVC: UIViewController {
                     .customView(configuration: .init(customView: rate, placement: .trailing()))
                 ]
                 // The hub (USD) is always active and cannot be toggled off.
-                if !row.isHub {
-                    let toggle = UISwitch()
-                    toggle.isOn = row.tracked
-                    toggle.accessibilityLabel = String(localized: "Activate \(row.code)")
-                    toggle.addAction(UIAction { [weak self, weak toggle] _ in
-                        self?.setTracked(row.code, toggle?.isOn ?? false)
-                    }, for: .valueChanged)
-                    accessories.append(.customView(configuration: .init(customView: toggle,
-                                                                        placement: .trailing())))
-                }
                 cell.accessories = accessories
+                // The hub (USD) is always active and cannot be toggled off.
+                if !row.isHub {
+                    ToggleAccessory.install(on: cell, isOn: row.tracked,
+                                            accessibilityLabel: String(localized: "Activate \(row.code)")) { [weak self] on in
+                        self?.setTracked(row.code, on)
+                    }
+                }
             }
         }
 

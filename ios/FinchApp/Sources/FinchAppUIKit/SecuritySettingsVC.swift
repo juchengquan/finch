@@ -66,7 +66,10 @@ final class SecuritySettingsVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
             var cfg = cell.defaultContentConfiguration()
 
             switch id {
@@ -97,13 +100,10 @@ final class SecuritySettingsVC: UIViewController {
             case Self.sensitiveID:
                 cfg.text = String(localized: "Require Face ID for export & destructive actions")
                 cell.contentConfiguration = cfg
-                let toggle = UISwitch()
-                toggle.isOn = self.gate.settings.sensitiveActionsEnabled
-                toggle.addAction(UIAction { [weak self, weak toggle] _ in
-                    self?.gate.settings.sensitiveActionsEnabled = toggle?.isOn ?? false
-                }, for: .valueChanged)
-                cell.accessories = [.customView(configuration: .init(customView: toggle,
-                                                                     placement: .trailing()))]
+                ToggleAccessory.install(on: cell,
+                                        isOn: self.gate.settings.sensitiveActionsEnabled) { [weak self] on in
+                    self?.gate.settings.sensitiveActionsEnabled = on
+                }
 
             default:
                 break

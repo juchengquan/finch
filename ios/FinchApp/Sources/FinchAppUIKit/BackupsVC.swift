@@ -118,7 +118,10 @@ final class BackupsVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
             var cfg = cell.defaultContentConfiguration()
 
             switch id {
@@ -141,14 +144,11 @@ final class BackupsVC: UIViewController {
             case Self.folderToggleID:
                 cfg.text = String(localized: "Back up to a folder")
                 cell.contentConfiguration = cfg
-                let toggle = UISwitch()
-                toggle.isOn = self.icloud.designatedFolderName != nil
-                toggle.addAction(UIAction { [weak self, weak toggle] _ in
+                ToggleAccessory.install(on: cell,
+                                        isOn: self.icloud.designatedFolderName != nil) { [weak self] on in
                     guard let self else { return }
-                    if toggle?.isOn == true { self.pickFolder() } else { self.icloud.clearFolder() }
-                }, for: .valueChanged)
-                cell.accessories = [.customView(configuration: .init(customView: toggle,
-                                                                     placement: .trailing()))]
+                    if on { self.pickFolder() } else { self.icloud.clearFolder() }
+                }
 
             case Self.mirrorFailingID:
                 cfg.text = String(localized: "Backup folder unavailable — re-select it. Your latest backup is still saved on this device.")

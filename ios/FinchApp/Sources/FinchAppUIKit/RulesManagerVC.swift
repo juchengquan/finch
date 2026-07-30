@@ -80,7 +80,10 @@ final class RulesManagerVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
-            cell.accessories = []
+            // Clear accessories EXCEPT an already-installed switch: removing it from
+            // the hierarchy is what destroyed the glass and swallowed taps. See
+            // ToggleAccessory.
+            if !ToggleAccessory.isInstalled(on: cell) { cell.accessories = [] }
 
             if id == Self.emptyID {
                 var cfg = cell.defaultContentConfiguration()
@@ -113,18 +116,13 @@ final class RulesManagerVC: UIViewController {
                 accessories.append(.customView(configuration: .init(customView: label,
                                                                     placement: .trailing())))
             }
+            cell.accessories = accessories
             // A UISwitch accessory rather than hosted SwiftUI: it must take its own
             // touches while the row stays tappable for the editor.
-            let toggle = UISwitch()
-            toggle.isOn = rule.isActive
-            toggle.accessibilityLabel = String(localized: "Active")
-            toggle.addAction(UIAction { [weak self, weak toggle] _ in
-                guard let self, let on = toggle?.isOn else { return }
-                self.setActive(rule, on)
-            }, for: .valueChanged)
-            accessories.append(.customView(configuration: .init(customView: toggle,
-                                                                placement: .trailing())))
-            cell.accessories = accessories
+            ToggleAccessory.install(on: cell, isOn: rule.isActive,
+                                    accessibilityLabel: String(localized: "Active")) { [weak self] on in
+                self?.setActive(rule, on)
+            }
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
