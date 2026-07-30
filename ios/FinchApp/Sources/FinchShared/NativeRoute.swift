@@ -21,6 +21,7 @@ public enum NativeRoute: Equatable {
     case merchants
     case currencies
     case powerTools
+    case appearance
 }
 
 public struct NativeRouteKey: EnvironmentKey {

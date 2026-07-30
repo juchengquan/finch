@@ -52,6 +52,7 @@ struct SettingsTab: View {
         case .merchants: return .merchants
         case .currencies: return .currencies
         case .powerTools: return .powerTools
+        case .appearance: return .appearance
         default: return nil
         }
     }

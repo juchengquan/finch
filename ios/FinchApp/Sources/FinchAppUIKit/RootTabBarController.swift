@@ -112,6 +112,9 @@ final class RootTabBarController: UITabBarController {
                     case .powerTools:
                         nav.pushViewController(PowerToolsVC(), animated: true)
                         return true
+                    case .appearance:
+                        nav.pushViewController(AppearanceSettingsVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false
