@@ -112,9 +112,11 @@ the empty-state row all render. Everything below still needs eyes.
       edge with red **Delete** inboard, and a full swipe performs the status
       toggle in both directions (the safe action, as intended). Duplicate,
       Delete-with-confirm and the long-press menu are still unchecked.
-- [ ] **Holdings section** — **cannot be checked on a seeded sim: the demo seed
-      creates no holdings at all.** Verify on real data, or add a holding first.
-      This section has never been rendered, not once.
+- [x] **Holdings section** — verified, after creating a position (see §2e: the
+      demo seed contains no holdings, so this had never rendered once). Brokerage
+      shows `Holdings` → `AAPL  $1,900.00`. **An AAPL position is left on the
+      `ios-finch5` sim on purpose**; delete it and this item becomes untestable
+      again.
 - [ ] **No resume shadow** on this screen: scroll, background, wait ~3s, reopen.
 
 ## 2d. Phase 2 — the converted Budget detail (`-uikitActivity YES`)
@@ -145,6 +147,33 @@ add button, with no doubled nav bar.
       rather than misdraws, so it is worth exercising deliberately.
 - [ ] Tapping a row opens the editor; the rows have **no swipe actions**, matching
       the SwiftUI screen.
+
+## 2e. Phase 2 — the converted Holdings screen (`-uikitActivity YES`)
+
+Accounts → ⋯ → Holdings. Note the entry is in the overflow menu, which `idb`
+cannot see — reach it by tapping the ⋯ item and reading the menu from a
+screenshot.
+
+**The demo seed contains no holdings at all**, so nothing here (nor the account
+detail's Holdings section) could be exercised until a position was created by
+hand. One is now on the `ios-finch5` sim: AAPL in Brokerage, 10 shares, $1,500
+basis, $190 price.
+
+**Already verified**: the empty state (native `UIContentUnavailableConfiguration`,
+correctly choosing "Tap + to add a position." over the no-investment-account
+wording); the row after adding — `AAPL` / `10 shares` / `$1,900.00` / `$400.00`
+gain, all arithmetically right; the price sheet round-tripping twice, with the row
+redrawing **in place**; and the empty state clearing.
+
+- [ ] **`+` is disabled when there are no investment accounts** (needs a ledger
+      without one — switch ledgers, or archive the investment accounts).
+- [ ] **Swipe-left → Delete** raises "Delete holding?" naming the symbol, and
+      Cancel leaves the row alone.
+- [ ] **Long-press → Delete** does the same.
+- [ ] **Clearing the price** (empty field → Save) shows "No price" on the row and
+      drops the gain/loss line.
+- [ ] **A negative or garbage price** is refused with a message rather than
+      silently dropped.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
