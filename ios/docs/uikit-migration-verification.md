@@ -175,6 +175,55 @@ redrawing **in place**; and the empty state clearing.
 - [ ] **A negative or garbage price** is refused with a message rather than
       silently dropped.
 
+## 2f. Phase 2 — the converted Categories screen (`-uikitActivity YES`)
+
+Settings → Categories. `.settings` is now a UIKit nav tab, so **re-check §1 on that
+tab too**. This is the screen the migration was justified by: the only one measured
+to shadow under a UIKit root, and measured to be fixed by conversion.
+
+**Already verified on the simulator**: the screen pushes and renders (pinned search,
+kind picker as the first row, parent-only chevrons, count pills); the chevron expands
+Dining to three children indented 14pt; Income switches to its own set; searching
+"cof" surfaces `Dining → Coffee Shops` (parent shown because a descendant matches,
+force-expanded); select mode ticks rows, **dims and disables the parent of a ticked
+row**, and enables "Merge (2)"; the survivor prompt reports "3 transactions will be
+combined", the correct union of 2 + 1. Swatch rendering was A/B'd against the SwiftUI
+screen and is identical — the seeded categories simply carry no per-category icon or
+colour, so both fall back to the default cyan tag.
+
+- [ ] ⚠️ **REORDER BY DRAG IS ENTIRELY UNVERIFIED, AND IT IS THE RISKIEST ITEM ON
+      THIS PAGE.** `idb` has no drag command — only press-move-release, which never
+      triggers a UIKit drag lift — so the gesture cannot be automated at all (a slow
+      swipe was tried; the order did not change). If the drop never arrives, ⋯ →
+      Reorder strands the user in a mode where nothing works. Check all four
+      outcomes: drop on a row's **top quarter** (lands before it), **bottom quarter**
+      (after it), **middle** (nests under it), and on the **"Top level"** row
+      (un-nests). Also confirm the engine's refusals surface as messages: nesting a
+      parent under its own child, and exceeding 3 levels.
+      *What IS tested:* `CategoryDropZone.at(pointY:cellMinY:cellHeight:)` has 5 unit
+      tests for the quarter boundaries and the zero-height fallback, and
+      `CategoryReorder` was already unit-tested. Only the UIKit drag/drop plumbing
+      is unproven.
+- [ ] **Tapping a row** drills to the category's transactions. NOTE that target is
+      still hosted SwiftUI in a PUSHED page — reproducer B — so `CategoryDetailView`
+      can still shadow until it too is converted. Converting this screen fixes THIS
+      screen.
+- [ ] **Swipe-left**: Edit at the outer edge (so a careless full swipe edits, never
+      deletes), then Delete, then Merge…. **Long-press** adds "Copy to another
+      ledger…".
+- [ ] **Delete** names the category and reports its impact (transaction count and
+      how many children promote up a level).
+- [ ] **Pairwise Merge…** from a row: the target picker excludes the row itself and
+      its descendants, and the keep-name prompt appears AFTER the picker dismisses
+      (chaining dismiss+present in one transaction can drop the second).
+- [ ] **Import from another ledger…** and **Copy to another ledger…** both toast a
+      count, including "Nothing new to copy" when the target already has them.
+- [ ] **The empty state** for a kind with no categories keeps the kind picker
+      visible above it (switch to a ledger with no income categories).
+- [ ] **No resume shadow** — the whole point. Scroll, background, wait ~3s, reopen,
+      and compare against the same screen with the flag off, which should still
+      shadow.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
