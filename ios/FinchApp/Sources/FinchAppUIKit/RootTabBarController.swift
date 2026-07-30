@@ -26,7 +26,7 @@ final class RootTabBarController: UITabBarController {
     /// time through Phase 2. Gated for now: `-uikitActivity YES`, because the
     /// converted feed is not yet at feature parity (see ActivityFeedVC).
     private static var uikitNavTabs: Set<AppTab> {
-        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets] : []
+        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets, .settings] : []
     }
 
     override func viewDidLoad() {
@@ -96,6 +96,9 @@ final class RootTabBarController: UITabBarController {
                         return true
                     case .holdings:
                         nav.pushViewController(HoldingsVC(), animated: true)
+                        return true
+                    case .categories:
+                        nav.pushViewController(CategoriesVC(), animated: true)
                         return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
@@ -240,6 +243,7 @@ private struct StacklessTabRoot: View {
         switch tab {
         case .accounts: AccountsTab(ownsNavigationStack: false)
         case .budgets: BudgetsTab(ownsNavigationStack: false)
+        case .settings: SettingsTab(ownsNavigationStack: false)
         default: TabRootHost(tab: tab)
         }
     }

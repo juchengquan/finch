@@ -723,12 +723,18 @@ private struct AddAccountGroupSheet: View {
 /// `UINavigationController`, so the SwiftUI root must not add a second stack.
 struct MaybeNavigationStack<Content: View>: View {
     let enabled: Bool
-    @Binding var path: [String]
+    /// Nil for a stack that carries no push path — Settings drills via covers, so it
+    /// has nothing to bind.
+    var path: Binding<[String]>? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         if enabled {
-            NavigationStack(path: $path) { content() }
+            if let path {
+                NavigationStack(path: path) { content() }
+            } else {
+                NavigationStack { content() }
+            }
         } else {
             content()
         }
