@@ -84,6 +84,19 @@ final class AccountDetailVC: UIViewController {
     /// order here and set it BEFORE applying.
     private var sectionIDs: [SectionID] = []
 
+    /// Header text is computed in `applySnapshot` and read back here, NOT recomputed
+    /// from `dataSource.snapshot()` inside the header registration. Reading the
+    /// snapshot there returns the PRE-apply sections while an apply is in flight, so
+    /// every figure came out one generation stale: confirming a transaction moved the
+    /// row into its month but left the month's net, income/spent and end-of-month
+    /// balance showing the values from before the move. Verified on the simulator —
+    /// it survived a re-dequeue, which is what ruled out a display-refresh cause.
+    private enum HeaderContent {
+        case plain(String?)
+        case month(label: String, trailing: String, subtitle: String?)
+    }
+    private var headerContent: [SectionID: HeaderContent] = [:]
+
     private var previewURL: URL?
     private var moreItem: UIBarButtonItem?
 
@@ -250,46 +263,8 @@ final class AccountDetailVC: UIViewController {
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, indexPath in
-            guard let self, self.sectionIDs.indices.contains(indexPath.section) else { return }
-            let section = self.sectionIDs[indexPath.section]
-            let ids = self.dataSource.snapshot().itemIdentifiers(inSection: section)
-            let txns = ids.compactMap { self.txByID[$0] }
-
-            switch section {
-            case .month(let key):
-                // Net change · this account's balance at the end of the month. The
-                // section is date-descending, so the first (newest) row's running
-                // balance IS the end-of-month figure — the same cache the row shows,
-                // so header and row agree exactly.
-                let balance = txns.first.map { "  ·  " + self.store.displayMoneyBase(self.store.runningBalanceBase(for: $0)) } ?? ""
-                view.contentConfiguration = UIHostingConfiguration {
-                    MonthHeader(label: MonthGrouping.label(key),
-                                trailing: self.store.displayMoneyBase(MonthGrouping.net(txns)) + balance,
-                                subtitle: "\(String(localized: "Income")) \(self.store.displayMoneyBase(MonthGrouping.income(txns)))"
-                                    + " · \(String(localized: "Spent")) \(self.store.displayMoneyBase(MonthGrouping.expense(txns)))")
-                }
-            case .calMonth(let key):
-                // Minimal header. The running-balance figure the list headers carry
-                // is confirmed-rows-only math; this fallback includes pending rows,
-                // so it deliberately stays out.
-                view.contentConfiguration = UIHostingConfiguration {
-                    MonthHeader(label: MonthGrouping.label(key),
-                                trailing: self.store.displayMoneyBase(MonthGrouping.net(txns)),
-                                subtitle: nil)
-                }
-            default:
-                var cfg = view.defaultContentConfiguration()
-                switch section {
-                case .pending: cfg.text = String(localized: "To confirm (\(ids.count))")
-                case .holdings: cfg.text = String(localized: "Holdings")
-                case .day(let day): cfg.text = MonthCashCalendar.pretty(day)
-                case .all, .empty: cfg.text = String(localized: "Transactions")
-                default: cfg.text = nil
-                }
-                view.contentConfiguration = cfg
-            }
+            self?.configureHeader(view, at: indexPath)
         }
-
         let footer = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionFooter
         ) { view, _, _ in
@@ -305,6 +280,63 @@ final class AccountDetailVC: UIViewController {
             kind == UICollectionView.elementKindSectionFooter
                 ? cv.dequeueConfiguredReusableSupplementary(using: footer, for: indexPath)
                 : cv.dequeueConfiguredReusableSupplementary(using: header, for: indexPath)
+        }
+    }
+
+    /// Extracted from the registration so `refreshVisibleHeaders()` can re-run it —
+    /// see the comment there for why that is necessary.
+    private func configureHeader(_ view: UICollectionViewListCell, at indexPath: IndexPath) {
+        guard sectionIDs.indices.contains(indexPath.section) else { return }
+        switch headerContent[sectionIDs[indexPath.section]] {
+        case .month(let label, let trailing, let subtitle):
+            view.contentConfiguration = UIHostingConfiguration {
+                MonthHeader(label: label, trailing: trailing, subtitle: subtitle)
+            }
+        case .plain(let text):
+            var cfg = view.defaultContentConfiguration()
+            cfg.text = text
+            view.contentConfiguration = cfg
+        case nil:
+            view.contentConfiguration = view.defaultContentConfiguration()
+        }
+    }
+
+    /// Net change · this account's balance at the end of the month. The section is
+    /// date-descending, so the first (newest) row's running balance IS the
+    /// end-of-month figure — the same cache the rows show, so header and rows cannot
+    /// disagree. `withBalance: false` is the calendar fallback, which includes
+    /// pending rows while the running balance is confirmed-only math, so the figure
+    /// deliberately stays out there.
+    private func monthHeader(_ key: String, _ txns: [Tx], withBalance: Bool) -> HeaderContent {
+        let balance = withBalance
+            ? (txns.first.map { "  ·  " + store.displayMoneyBase(store.runningBalanceBase(for: $0)) } ?? "")
+            : ""
+        let subtitle = withBalance
+            ? "\(String(localized: "Income")) \(store.displayMoneyBase(MonthGrouping.income(txns)))"
+                + " · \(String(localized: "Spent")) \(store.displayMoneyBase(MonthGrouping.expense(txns)))"
+            : nil
+        return .month(label: MonthGrouping.label(key),
+                      trailing: store.displayMoneyBase(MonthGrouping.net(txns)) + balance,
+                      subtitle: subtitle)
+    }
+
+    /// A diffable data source does NOT re-render a supplementary view when only the
+    /// section's ITEMS change — the section identifier is unchanged, so the header is
+    /// left exactly as it was. Every header here is computed FROM those rows (net,
+    /// end-of-month balance, income/spent, the pending count), so a row moving in or
+    /// out of a month left the figures stale: confirming a transaction visibly did
+    /// not update July's net or its end-of-month balance. SwiftUI recomputed the
+    /// header for free; in UIKit it is explicit.
+    ///
+    /// Only the VISIBLE headers are refreshed, which keeps this off `reloadSections`
+    /// — that would re-render every row in the section, and this screen is expected
+    /// to hold thousands.
+    private func refreshVisibleHeaders() {
+        let kind = UICollectionView.elementKindSectionHeader
+        for indexPath in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: indexPath)
+                    as? UICollectionViewListCell else { continue }
+            configureHeader(view, at: indexPath)
         }
     }
 
@@ -329,12 +361,14 @@ final class AccountDetailVC: UIViewController {
         holdingByID = Dictionary(uniqueKeysWithValues: holdings.map { (Self.holdingPrefix + $0.id, $0) })
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        var headers: [SectionID: HeaderContent] = [:]
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
         if !holdings.isEmpty {
             snap.appendSections([.holdings])
             snap.appendItems(holdings.map { Self.holdingPrefix + $0.id }, toSection: .holdings)
+            headers[.holdings] = .plain(String(localized: "Holdings"))
         }
 
         if viewMode == .calendar {
@@ -347,6 +381,7 @@ final class AccountDetailVC: UIViewController {
                 let dayTx = txns.filter { $0.date == day }
                 snap.appendSections([.day(day)])
                 snap.appendItems(dayTx.isEmpty ? [Self.emptyDayID] : dayTx.map(\.id), toSection: .day(day))
+                headers[.day(day)] = .plain(MonthCashCalendar.pretty(day))
             } else {
                 let key = String(format: "%04d-%02d",
                                  AppDate.civil.component(.year, from: calMonthAnchor),
@@ -355,6 +390,7 @@ final class AccountDetailVC: UIViewController {
                 if !monthTx.isEmpty {
                     snap.appendSections([.calMonth(key)])
                     snap.appendItems(monthTx.map(\.id), toSection: .calMonth(key))
+                    headers[.calMonth(key)] = monthHeader(key, monthTx, withBalance: false)
                 }
             }
         } else {
@@ -363,23 +399,30 @@ final class AccountDetailVC: UIViewController {
             if !pending.isEmpty {
                 snap.appendSections([.pending])
                 snap.appendItems(pending.map(\.id), toSection: .pending)
+                headers[.pending] = .plain(String(localized: "To confirm (\(pending.count))"))
             }
             if confirmed.isEmpty {
                 snap.appendSections([.empty])
                 snap.appendItems([Self.emptyID], toSection: .empty)
+                headers[.empty] = .plain(String(localized: "Transactions"))
             } else if groupByMonth {
                 for section in MonthGrouping.sections(confirmed) {
                     snap.appendSections([.month(section.id)])
                     snap.appendItems(section.txns.map(\.id), toSection: .month(section.id))
+                    headers[.month(section.id)] = monthHeader(section.id, section.txns, withBalance: true)
                 }
             } else {
                 snap.appendSections([.all])
                 snap.appendItems(confirmed.map(\.id), toSection: .all)
+                headers[.all] = .plain(String(localized: "Transactions"))
             }
         }
 
+        headerContent = headers                // before apply — the headers read it
         sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
-        dataSource.apply(snap, animatingDifferences: false)
+        dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+            self?.refreshVisibleHeaders()
+        }
     }
 
     // MARK: Search / bars — the SwiftUI one-liners, expanded

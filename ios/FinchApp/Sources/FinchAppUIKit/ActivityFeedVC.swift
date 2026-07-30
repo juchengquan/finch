@@ -77,6 +77,11 @@ final class ActivityFeedVC: UIViewController {
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
     private var txByID: [String: Tx] = [:]
+    /// Section order and header text, both computed in `applySnapshot` and set BEFORE
+    /// the apply — see `configureHeader` for why they cannot be derived on demand.
+    private var sectionIDs: [SectionID] = []
+    private struct HeaderContent { var title: String?; var subtitle: String? }
+    private var headerContent: [SectionID: HeaderContent] = [:]
 
     private let store = FinchStore.shared
 
@@ -220,29 +225,7 @@ final class ActivityFeedVC: UIViewController {
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionHeader
         ) { [weak self] view, _, ip in
-            guard let self else { return }
-            var cfg = view.defaultContentConfiguration()
-            let section = self.dataSource.snapshot().sectionIdentifiers[ip.section]
-            switch section {
-            case .pending:
-                let n = self.dataSource.snapshot().numberOfItems(inSection: .pending)
-                cfg.text = String(localized: "To confirm (\(n))")
-            case .month(let key):
-                cfg.text = MonthGrouping.label(key)
-                let txns = self.dataSource.snapshot().itemIdentifiers(inSection: section)
-                    .compactMap { self.txByID[$0] }
-                cfg.secondaryText = "\(String(localized: "Income")) \(self.store.displayMoneyBase(MonthGrouping.income(txns)))"
-                    + " · \(String(localized: "Spent")) \(self.store.displayMoneyBase(MonthGrouping.expense(txns)))"
-            case .all:
-                cfg.text = String(localized: "Transactions")
-            case .empty:
-                cfg.text = String(localized: "Transactions")
-            case .day(let day):
-                cfg.text = MonthCashCalendar.pretty(day)
-            case .modePicker, .savedSearch, .calendar, .loadMore:
-                cfg.text = nil
-            }
-            view.contentConfiguration = cfg
+            self?.configureHeader(view, at: ip)
         }
 
         dataSource = UICollectionViewDiffableDataSource<SectionID, String>(collectionView: collectionView) {
@@ -250,6 +233,45 @@ final class ActivityFeedVC: UIViewController {
         }
         dataSource.supplementaryViewProvider = { cv, _, ip in
             cv.dequeueConfiguredReusableSupplementary(using: header, for: ip)
+        }
+    }
+
+    private func monthHeader(_ key: String, _ txns: [Tx]) -> HeaderContent {
+        HeaderContent(
+            title: MonthGrouping.label(key),
+            subtitle: "\(String(localized: "Income")) \(store.displayMoneyBase(MonthGrouping.income(txns)))"
+                + " · \(String(localized: "Spent")) \(store.displayMoneyBase(MonthGrouping.expense(txns)))")
+    }
+
+    /// Reads text computed in `applySnapshot`, and deliberately does NOT recompute it
+    /// from `dataSource.snapshot()`: that returns the PRE-apply sections while an
+    /// apply is in flight, which made every header one generation stale (confirming a
+    /// row moved it into its month but left the month's income/spent unchanged).
+    /// Verified on the simulator; it survived a re-dequeue, which ruled out a
+    /// display-refresh cause.
+    private func configureHeader(_ view: UICollectionViewListCell, at ip: IndexPath) {
+        guard sectionIDs.indices.contains(ip.section) else { return }
+        var cfg = view.defaultContentConfiguration()
+        if let content = headerContent[sectionIDs[ip.section]] {
+            cfg.text = content.title
+            cfg.secondaryText = content.subtitle
+        }
+        view.contentConfiguration = cfg
+    }
+
+    /// A diffable data source does NOT re-render a supplementary view when only the
+    /// section's ITEMS change — the section identifier is unchanged, so the header
+    /// stays exactly as it was. The month headers here show income/spent computed
+    /// FROM those rows, and the pending header shows a count, so deleting a row or
+    /// flipping its status left the figures stale. SwiftUI recomputed them for free.
+    /// Only the visible headers are refreshed, to stay off `reloadSections` — which
+    /// would re-render every row in the section.
+    private func refreshVisibleHeaders() {
+        let kind = UICollectionView.elementKindSectionHeader
+        for ip in collectionView.indexPathsForVisibleSupplementaryElements(ofKind: kind) {
+            guard let view = collectionView.supplementaryView(forElementKind: kind, at: ip)
+                    as? UICollectionViewListCell else { continue }
+            configureHeader(view, at: ip)
         }
     }
 
@@ -292,6 +314,7 @@ final class ActivityFeedVC: UIViewController {
         let page = Array(confirmed.prefix(visibleCount))
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        var headers: [SectionID: HeaderContent] = [:]
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
@@ -305,6 +328,7 @@ final class ActivityFeedVC: UIViewController {
                 let dayTx = txns.filter { $0.date == day }
                 snap.appendSections([.day(day)])
                 snap.appendItems(dayTx.map(\.id), toSection: .day(day))
+                headers[.day(day)] = HeaderContent(title: MonthCashCalendar.pretty(day))
             } else {
                 let key = String(format: "%04d-%02d",
                                  AppDate.civil.component(.year, from: calMonthAnchor),
@@ -313,9 +337,14 @@ final class ActivityFeedVC: UIViewController {
                 if !monthTx.isEmpty {
                     snap.appendSections([.month(key)])
                     snap.appendItems(monthTx.map(\.id), toSection: .month(key))
+                    headers[.month(key)] = monthHeader(key, monthTx)
                 }
             }
-            dataSource.apply(snap, animatingDifferences: false)
+            headerContent = headers
+            sectionIDs = snap.sectionIdentifiers
+            dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+                self?.refreshVisibleHeaders()
+            }
             configureToolbar()
             return
         }
@@ -326,23 +355,32 @@ final class ActivityFeedVC: UIViewController {
         if !pending.isEmpty {
             snap.appendSections([.pending])
             snap.appendItems(pending.map(\.id) + [Self.confirmAllID], toSection: .pending)
+            // The count excludes the "Confirm all" row that shares the section.
+            headers[.pending] = HeaderContent(title: String(localized: "To confirm (\(pending.count))"))
         }
         if page.isEmpty {
             snap.appendSections([.empty])
+            headers[.empty] = HeaderContent(title: String(localized: "Transactions"))
         } else if groupByMonth {
             for section in MonthGrouping.sections(page) {
                 snap.appendSections([.month(section.id)])
                 snap.appendItems(section.txns.map(\.id), toSection: .month(section.id))
+                headers[.month(section.id)] = monthHeader(section.id, section.txns)
             }
         } else {
             snap.appendSections([.all])
             snap.appendItems(page.map(\.id), toSection: .all)
+            headers[.all] = HeaderContent(title: String(localized: "Transactions"))
         }
         if hasMore {
             snap.appendSections([.loadMore])
             snap.appendItems([Self.loadMoreID], toSection: .loadMore)
         }
-        dataSource.apply(snap, animatingDifferences: false)
+        headerContent = headers
+        sectionIDs = snap.sectionIdentifiers
+        dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+            self?.refreshVisibleHeaders()
+        }
         configureToolbar()
     }
 
