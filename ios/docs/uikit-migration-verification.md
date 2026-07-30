@@ -621,6 +621,34 @@ Account detail. Neither is guessed.
       Consistent offset, so it is a top-inset or picker-height difference, not a
       per-row spacing drift. Decide whether it is worth matching.
 
+## 2t. OPEN: switch appearance differs between converted screens (device only)
+
+Reported from a side-by-side device comparison, and **unresolved**. On a phone the
+switches on **Currencies** and **Backups** look right, while those on **Appearance &
+Language**, **Notifications**, **Security** and **Experimental Labs** look flat —
+even though all eight are the SAME code (a native cell with a `UISwitch` in a
+`.customView` accessory). Verified by diffing the six screens.
+
+**A simulator cannot settle this.** Measured on a 24×24 pixel sample of a settled
+frame from a screen recording, SwiftUI's `Toggle` and UIKit's `UISwitch` render
+IDENTICALLY: thumb (253,253,253), track (49,196,86), standard deviation 0.0 in both.
+Zero variance means no gradient, translucency or specular in either — the simulator
+does not draw the glass treatment on switches, so the difference cannot be
+reproduced or diagnosed there. `simctl` video capture is no better than screenshots
+for this.
+
+An attempted fix (hosting SwiftUI `Toggle`s instead) was **reverted** in `f6c5db3`:
+it produced switches that could not be toggled at all. Two stacked defects, both
+recorded in that commit message — a binding that captured a stale value, and hosted
+toggles not receiving touches in a non-selectable cell.
+
+- [ ] **Work out what actually differs** between those two groups of screens. The
+      control is ruled out. Worth checking next: section/footer configuration, the
+      layout's section provider vs `.list(using:)`, and whether the screens that look
+      right are the ones whose cells were reconfigured most recently.
+- [ ] If hosting is attempted again, the row must remain touch-reachable — verify by
+      actually flipping every toggle, not by reading the code.
+
 ## 3. Accessibility — a concern raised by the tooling, not yet investigated
 
 - [ ] The mode picker and saved-search chips are **not visible to `idb`'s
