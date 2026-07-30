@@ -94,6 +94,9 @@ final class RootTabBarController: UITabBarController {
                     case .budget(let id):
                         nav.pushViewController(BudgetDetailVC(budgetId: id), animated: true)
                         return true
+                    case .holdings:
+                        nav.pushViewController(HoldingsVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false

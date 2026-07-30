@@ -204,7 +204,9 @@ struct AccountsTab: View {
         ToolbarItem(placement: .secondaryAction) {
             #if os(iOS)
             if selection == nil {
-                Button { drill = .holdings } label: { Label("Holdings", systemImage: "chart.bar") }
+                Button {
+                    if !nativeRoute(.holdings) { drill = .holdings }
+                } label: { Label("Holdings", systemImage: "chart.bar") }
             } else {
                 NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
             }
