@@ -25,6 +25,13 @@ of 9 checks** — a green exit that proved nothing. Use
 `./scripts/ci-local.sh --sim "<this session's sim>"`, and confirm the summary really
 says `all checks passed` rather than trusting the exit code.
 
+**A `UIHostingConfiguration` does NOT inherit environment objects.** The `hosted()`
+helper used for presented controllers injects them; hosted CELL content does not, and
+a SwiftUI view reading `@EnvironmentObject` will TRAP ("No ObservableObject of type
+FinchStore found") the instant the cell appears. That crashed the app on first open of
+the converted Backup & Sync screen. Wire the environment by hand in every
+`UIHostingConfiguration` whose content needs it.
+
 **The simulator's accessibility service can wedge**, especially under sustained
 load. The symptom is `describe-all` returning a single `Application` element while
 the UI renders perfectly in a screenshot. It is not an app failure and not an empty
@@ -437,8 +444,9 @@ account can produce.
       Pending changes / Last sync, the red error line, and the Resync button
       (disabled without an account). Needs a device with iCloud and a provisioned
       container.
-- [x] **Rules** pushes the converted manager (see §2o). No hosted SwiftUI remains
-      in any pushed page.
+- [x] **Rules** pushes the converted manager (see §2o). **Correction:** one hosted
+      SwiftUI push does remain — `SettingsBackupsView`, behind Backup & Sync →
+      Backups (see §2r). It is 235 lines and was left out of scope.
 - [ ] **Two strings are newly translatable**: "Subscribed to N ledgers" and "iCloud
       account required" ship English-only from the SwiftUI screen (plain `String` to
       `LabeledContent(value:)`). The conversion routes them through the catalog,
@@ -514,6 +522,42 @@ reads 1 → 0 → 1, so the write and the cell reconfigure both work.
       pending requests. Check with `xcrun simctl push` or by waiting for a budget
       alert, not just by re-reading the switch.
 - [ ] Preferences **survive a relaunch**.
+
+## 2r. Phase 2 — Security, Backup & Sync, About (`-uikitActivity YES`)
+
+**Already verified**: Security renders with its two conditional rows correctly
+absent while the policy is Off; Backup & Sync renders both sections and all three
+hosted buttons (Import .finch, Export .finch, Export transactions (.csv)); About
+renders versions, the database summary with its dynamic row counts, a "Clean" audit
+and the red force-import row.
+
+### Security — treat with care
+- [ ] ⚠️ **Changing the lock policy locks the app IMMEDIATELY**, even to "After
+      background" and even while in the foreground. On a simulator with no enrolled
+      biometrics and no device passcode that is UNRECOVERABLE without reinstalling —
+      it happened during this work. Test on a device, or on a sim with a passcode
+      set. This is `BiometricGate`'s behaviour, shared with the SwiftUI screen, not
+      something the conversion introduced.
+- [ ] **"Lock after"** appears only for After-background / After-idle, and the chosen
+      timeout is the one actually enforced.
+- [ ] **"Require Face ID for export & destructive actions"** appears only while
+      locking is on, and genuinely prompts on export and on force import.
+
+### Backup & Sync
+- [ ] **Import / Export / Export CSV** each work — a file importer, a share sheet,
+      and a CSV share. Import REPLACES the database, so use a scratch ledger.
+- [ ] **Last backup** and the **Backups count** update after a backup runs.
+- [ ] ⚠️ **The Backups row pushes `SettingsBackupsView`, which is STILL hosted
+      SwiftUI in a pushed page** — the one remaining reproducer-B screen. Check
+      whether it shadows; converting it is the obvious next job if it does.
+
+### About
+- [ ] **Audit problems list** — unexercised, because the audit is Clean. Needs a
+      ledger with problems.
+- [ ] ⚠️ **Force import** — untested on purpose. It replaces the live database with
+      an audit-REJECTED pack and cannot be undone. When you do test it, confirm the
+      biometric prompt appears BETWEEN the confirmation and the replacement.
+- [ ] The database row counts match reality after an import.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
