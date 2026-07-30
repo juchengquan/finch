@@ -18,6 +18,7 @@ public enum NativeRoute: Equatable {
     case budget(String)
     case categories
     case tags
+    case merchants
 }
 
 public struct NativeRouteKey: EnvironmentKey {

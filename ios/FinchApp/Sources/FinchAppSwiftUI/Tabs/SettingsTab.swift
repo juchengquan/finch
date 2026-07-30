@@ -49,6 +49,7 @@ struct SettingsTab: View {
         switch target {
         case .categories: return .categories
         case .tags: return .tags
+        case .merchants: return .merchants
         default: return nil
         }
     }
