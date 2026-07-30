@@ -471,6 +471,33 @@ Create a rule first, then work through these.
       silently rewrite it on save, so make a rule of each kind and confirm which
       sheet appears.
 
+## 2p. Phase 2 — the converted Appearance & Language (`-uikitActivity YES`)
+
+Settings → Appearance & Language.
+
+**Already verified, both directions**: all eight sections with their headers and
+footers; turning "Use system size" OFF grows the slider and the "Sample —
+$1,234.56" row **and** flips the footer to "Overrides the system text size inside
+finch."; turning it back on removes both and restores the original footer.
+
+- [ ] **Theme** — System / Light / Dark changes the app immediately (this is the
+      live one; it drives `applyAppearancePreference` on the window) and the LOCK
+      SCREEN follows it too.
+- [ ] **Text-size slider** actually resizes type across tabs, and the sample row
+      tracks it as you drag.
+- [ ] **Language** — picking one writes `AppleLanguages`, turns the footer ORANGE
+      with "Relaunch finch to apply the new language.", and the language really
+      changes after a relaunch. **Set it back to System afterwards**, or the sim
+      stays in that language.
+- [ ] **Group by month / Relative dates** change the Activity feed and an account's
+      list.
+- [ ] **Reconcile reminder** — the pull-down offers Off plus the day options and the
+      chosen one shows on the row; the Accounts list's badge colour follows it.
+- [ ] **Haptic feedback**, **Adjust Balance in Add sheet**, **Floating add button**
+      + its position picker each take effect where advertised.
+- [ ] Every preference **survives a relaunch** — they are plain UserDefaults writes,
+      but the OFF states are the ones a bug would hide.
+
 ## 2c. Measured gaps against the SwiftUI screens
 
 Both found with `idb ui describe-all` (numbers, not screenshots) while checking
