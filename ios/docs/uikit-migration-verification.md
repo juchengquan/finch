@@ -71,6 +71,69 @@ Accounts → All Transactions.
       whole exercise. Compare against the same screen with the flag off, which
       should still shadow.)*
 
+## 2b. Phase 2 — the converted Account detail (`-uikitActivity YES`)
+
+Accounts → any account row.
+
+**Already verified on the simulator** (ios-finch5, seeded): the screen pushes
+without crashing (the per-section header/footer layout is the part that would
+throw), and the titleView, the List/Calendar picker, the pinned search bar and
+the empty-state row all render. Everything below still needs eyes.
+
+- [ ] **Title area**: name over balance, and the reconcile seal beside the
+      balance — green on a fresh account (`Everyday`), orange on an overdue one
+      (`Savings`), absent on one never reconciled (`Brokerage`).
+- [ ] **⋯ menu**: Edit, Reconcile, Adjust balance… each open the right sheet.
+- [ ] **Archive** leaves the page (the account stops resolving, so the VC pops).
+- [ ] **Delete** raises the confirmation, and deleting an account that still has
+      transactions is refused with the engine's message rather than silently
+      doing nothing.
+- [ ] **Month headers** show `net · end-of-month balance` on the first line and
+      `Income … · Spent …` beneath. The balance must equal the newest row's
+      running balance in that month.
+- [ ] **Group-by-month off** (⋯ on the Activity feed sets the shared flag)
+      collapses this screen to one "Transactions" section.
+- [ ] **Calendar mode**: the grid appears, a tapped day filters the rows
+      beneath, the footer reads "Money in · out of this account…", and the
+      no-selection fallback shows the anchored month with net only — *no*
+      running balance, since that fallback includes pending rows.
+- [ ] **Row gestures** (shared with the feed now, so check them once on each):
+      swipe right ⇒ Duplicate; swipe left ⇒ status toggle at the edge, Delete
+      inboard raising a confirmation; long-press ⇒ Edit / Duplicate / Preview
+      receipt (only when the row has an attachment) / status / Delete.
+- [ ] **Holdings section** — **cannot be checked on a seeded sim: the demo seed
+      creates no holdings at all.** Verify on real data, or add a holding first.
+      This section has never been rendered, not once.
+- [ ] **No resume shadow** on this screen: scroll, background, wait ~3s, reopen.
+
+## 2c. Measured gaps against the SwiftUI screens
+
+Both found with `idb ui describe-all` (numbers, not screenshots) while checking
+Account detail. Neither is guessed.
+
+- [ ] **The floating add button is absent on every converted pushed screen.**
+      Measured: SwiftUI has `Add Transaction` at `y=764 h=56` on the account
+      detail; the converted screen has no such element. Cause: the shell applies
+      `.addTransactionFAB()` to the hosted tab *root*
+      (`RootTabBarController.swift:234`), and a pushed UIKit VC covers it. The
+      SwiftUI shell instead overlaid the FAB above the whole `NavigationStack`,
+      so it survived pushes and read the pushed screen's `AddTxContext` to seed
+      the sheet.
+      *Not fixed here on purpose.* The fix belongs to the shell, and the shell
+      is the **shipped default** — a full-frame hosting overlay over the nav
+      controller risks swallowing touches app-wide, and moving the FAB out of
+      the SwiftUI tree breaks the preference plumbing that seeds it for the
+      screens still hosted in SwiftUI. Proposed shape when someone takes it: a
+      small, intrinsically-sized hosting view constrained bottom-trailing on the
+      `UINavigationController`'s view (so only the button area is interactive),
+      plus an `AddTxContextProviding` protocol the top view controller
+      implements to replace the SwiftUI preference. Both converted screens keep
+      their toolbar `+`, so nothing is unreachable meanwhile.
+- [ ] **Converted rows sit 9pt lower**: the "Transactions" header is at
+      `y=289.7` vs SwiftUI's `280.7`, and the first row at `330.0` vs `321.0`.
+      Consistent offset, so it is a top-inset or picker-height difference, not a
+      per-row spacing drift. Decide whether it is worth matching.
+
 ## 3. Accessibility — a concern raised by the tooling, not yet investigated
 
 - [ ] The mode picker and saved-search chips are **not visible to `idb`'s
@@ -81,10 +144,13 @@ Accounts → All Transactions.
 
 ## 4. Before the flag comes off
 
-- [ ] Everything in §2 passes.
+- [ ] Everything in §2, §2b and §2c passes.
 - [ ] `ActivityFeedView`'s `.rightSlideDrill(...)` entry replaced by the native push,
       and the SwiftUI screen dropped from the iOS target (`excludes:` in
-      `project.yml`) while `FinchMac` keeps it.
+      `project.yml`) while `FinchMac` keeps it — likewise `AccountDetailView`,
+      which `AccountsTab` already asks `nativeRoute(.account(id))` for first.
+- [ ] The FAB gap in §2c is resolved (or consciously accepted), since by then
+      every drill destination is a converted push.
 - [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes
       the shell's structure.
 
