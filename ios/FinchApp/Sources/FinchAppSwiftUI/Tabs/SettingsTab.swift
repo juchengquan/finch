@@ -50,6 +50,7 @@ struct SettingsTab: View {
         case .categories: return .categories
         case .tags: return .tags
         case .merchants: return .merchants
+        case .currencies: return .currencies
         default: return nil
         }
     }

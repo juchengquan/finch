@@ -106,6 +106,9 @@ final class RootTabBarController: UITabBarController {
                     case .merchants:
                         nav.pushViewController(MerchantsVC(), animated: true)
                         return true
+                    case .currencies:
+                        nav.pushViewController(CurrenciesVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false

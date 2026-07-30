@@ -19,6 +19,7 @@ public enum NativeRoute: Equatable {
     case categories
     case tags
     case merchants
+    case currencies
 }
 
 public struct NativeRouteKey: EnvironmentKey {
