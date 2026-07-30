@@ -27,11 +27,18 @@ import FinchCore
 /// drift from the SwiftUI screen the moment either changed.
 ///
 /// STILL NOT PORTED (the flag stays until these land):
-///   - the Calendar view mode
-///   - saved searches (save / list / delete)
+/// The Calendar grid and the saved-search chips stay SwiftUI, hosted in cells via
+/// `UIHostingConfiguration` — they are leaf views with no navigation, which is
+/// where SwiftUI is strongest. Crucially the `UICollectionView` remains the
+/// screen's scroll view: hosting the whole calendar mode as a SwiftUI list would
+/// put a SwiftUI scroll view in a pushed page, which is reproducer B and shadows.
 final class ActivityFeedVC: UIViewController {
 
     private enum SectionID: Hashable {
+        case modePicker   // List | Calendar, the list's first row as in SwiftUI
+        case savedSearch  // the chip row
+        case calendar     // the month grid
+        case day(String)  // calendar mode: the selected day's rows
         case pending
         case month(String)
         case all          // group-by-month off: one flat section
@@ -39,9 +46,14 @@ final class ActivityFeedVC: UIViewController {
         case loadMore
     }
 
+    private enum ViewMode { case list, calendar }
+
     /// Item ids are transaction ids; these two are sentinels for the non-row cells.
     private static let confirmAllID = "__confirm_all__"
     private static let loadMoreID = "__load_more__"
+    private static let modePickerID = "__mode_picker__"
+    private static let savedSearchID = "__saved_searches__"
+    private static let calendarID = "__calendar__"
 
     private var searchQuery = ""
     /// The app's own sort enum, reused — it carries `sorted(_:)`, so ordering is
@@ -52,6 +64,10 @@ final class ActivityFeedVC: UIViewController {
     private var hasMore = false
     private var isSelecting = false
     private var selected: Set<String> = []
+    private var viewMode: ViewMode = .list
+    private var calMonthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
+    private var calSelectedDay: String?
+    private let savedSearches = SavedSearchStore()
     @AppStorage("finch.feed.groupByMonth") private var groupByMonth = true
     private var cancellables = Set<AnyCancellable>()
 
@@ -112,6 +128,56 @@ final class ActivityFeedVC: UIViewController {
                 cell.accessories = []
                 return
             }
+            if id == Self.modePickerID {
+                // The picker is the list's FIRST ROW, not a nav-bar title view —
+                // same reason as the SwiftUI screen: it keeps the collection view
+                // the primary scroll view so the large title behaves.
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Picker("", selection: Binding(
+                        get: { self.viewMode },
+                        set: { self.viewMode = $0; self.calSelectedDay = nil; self.applySnapshot() })) {
+                        Text(String(localized: "List")).tag(ViewMode.list)
+                        Text(String(localized: "Calendar")).tag(ViewMode.calendar)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                cell.accessories = []
+                return
+            }
+            if id == Self.savedSearchID {
+                cell.contentConfiguration = UIHostingConfiguration {
+                    SavedSearchChips(
+                        searches: self.savedSearches.all(ledgerId: self.store.activeLedgerId),
+                        onApply: { [weak self] s in
+                            self?.filter = s.filter
+                            self?.applySnapshot()
+                        },
+                        onDelete: { [weak self] s in
+                            self?.savedSearches.remove(s.id)
+                            self?.applySnapshot()
+                        },
+                        onSave: { [weak self] in self?.promptSaveSearch() })
+                }
+                cell.accessories = []
+                return
+            }
+            if id == Self.calendarID {
+                cell.contentConfiguration = UIHostingConfiguration {
+                    MonthCashCalendar(
+                        monthAnchor: Binding(get: { self.calMonthAnchor },
+                                             set: { self.calMonthAnchor = $0; self.applySnapshot() }),
+                        selectedDay: Binding(get: { self.calSelectedDay },
+                                             set: { self.calSelectedDay = $0; self.applySnapshot() }),
+                        wallToday: self.store.wallToday,
+                        amountsForRange: { from, through in
+                            MonthGrouping.dailyIncomeExpense(
+                                self.filteredTxns().filter { $0.date >= from && $0.date <= through })
+                        },
+                        format: { self.store.displayExactBase($0) })
+                }
+                cell.accessories = []
+                return
+            }
             if id == Self.loadMoreID {
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = String(localized: "Load more")
@@ -165,7 +231,9 @@ final class ActivityFeedVC: UIViewController {
                 cfg.text = String(localized: "Transactions")
             case .empty:
                 cfg.text = String(localized: "Transactions")
-            case .loadMore:
+            case .day(let day):
+                cfg.text = MonthCashCalendar.pretty(day)
+            case .modePicker, .savedSearch, .calendar, .loadMore:
                 cfg.text = nil
             }
             view.contentConfiguration = cfg
@@ -218,6 +286,37 @@ final class ActivityFeedVC: UIViewController {
         let page = Array(confirmed.prefix(visibleCount))
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
+        snap.appendSections([.modePicker])
+        snap.appendItems([Self.modePickerID], toSection: .modePicker)
+
+        if viewMode == .calendar {
+            snap.appendSections([.calendar])
+            snap.appendItems([Self.calendarID], toSection: .calendar)
+            // The rows under the grid: the selected day, or the whole anchored
+            // month — always the same filtered set the grid sums, so the cells and
+            // the rows cannot disagree.
+            if let day = calSelectedDay {
+                let dayTx = txns.filter { $0.date == day }
+                snap.appendSections([.day(day)])
+                snap.appendItems(dayTx.map(\.id), toSection: .day(day))
+            } else {
+                let key = String(format: "%04d-%02d",
+                                 AppDate.civil.component(.year, from: calMonthAnchor),
+                                 AppDate.civil.component(.month, from: calMonthAnchor))
+                let monthTx = txns.filter { $0.date.hasPrefix(key) }
+                if !monthTx.isEmpty {
+                    snap.appendSections([.month(key)])
+                    snap.appendItems(monthTx.map(\.id), toSection: .month(key))
+                }
+            }
+            dataSource.apply(snap, animatingDifferences: false)
+            configureToolbar()
+            return
+        }
+
+        snap.appendSections([.savedSearch])
+        snap.appendItems([Self.savedSearchID], toSection: .savedSearch)
+
         if !pending.isEmpty {
             snap.appendSections([.pending])
             snap.appendItems(pending.map(\.id) + [Self.confirmAllID], toSection: .pending)
@@ -337,6 +436,20 @@ final class ActivityFeedVC: UIViewController {
         }
     }
 
+    /// The SwiftUI screen used an `.alert` with a `TextField`; same shape here.
+    private func promptSaveSearch() {
+        let alert = UIAlertController(title: String(localized: "Save search"),
+                                      message: nil, preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = String(localized: "Name") }
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: String(localized: "Save"), style: .default) { [weak self, weak alert] _ in
+            guard let self, let name = alert?.textFields?.first?.text, !name.isEmpty else { return }
+            self.savedSearches.save(name: name, filter: self.filter, ledgerId: self.store.activeLedgerId)
+            self.applySnapshot()
+        })
+        present(alert, animated: true)
+    }
+
     private func presentFilter() {
         // The filter UI stays SwiftUI — it is a sheet, so it never shadows.
         present(UIHostingController(rootView:
@@ -370,6 +483,14 @@ final class ActivityFeedVC: UIViewController {
 }
 
 extension ActivityFeedVC: UICollectionViewDelegate {
+    /// Cells that host an interactive SwiftUI control must not be selectable, or the
+    /// cell's own selection swallows the touch and the control never sees it — the
+    /// mode picker looked inert for exactly this reason.
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt ip: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: ip) else { return true }
+        return id != Self.modePickerID && id != Self.savedSearchID && id != Self.calendarID
+    }
+
     func collectionView(_ cv: UICollectionView, didSelectItemAt ip: IndexPath) {
         cv.deselectItem(at: ip, animated: true)
         guard let id = dataSource.itemIdentifier(for: ip) else { return }
@@ -394,6 +515,41 @@ extension ActivityFeedVC: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
         searchQuery = searchController.searchBar.text ?? ""
         applySnapshot()
+    }
+}
+
+/// The saved-search chip row: a leaf view, so it stays SwiftUI and rides in a cell.
+/// Long-press a chip to delete, matching the SwiftUI screen's context menu.
+private struct SavedSearchChips: View {
+    let searches: [SavedSearch]
+    let onApply: (SavedSearch) -> Void
+    let onDelete: (SavedSearch) -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(searches) { s in
+                    Button { onApply(s) } label: { chip(s.name) }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) { onDelete(s) } label: {
+                                Label(String(localized: "Delete"), systemImage: "trash")
+                            }
+                        }
+                }
+                Button { onSave() } label: { chip(String(localized: "＋ Save")) }
+                    .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func chip(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.quaternary, in: Capsule())
     }
 }
 
