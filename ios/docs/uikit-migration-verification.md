@@ -90,7 +90,14 @@ Accounts → All Transactions.
 
 ## 5. Open questions
 
-- [ ] iPad: the converted feed has only been seen at compact width. The split shell
-      is Phase 3, but check it is not visibly broken meanwhile.
+- [x] **iPad keeps its split view.** Phase 1 originally built the tab bar
+      unconditionally, so a wide window lost the three-column layout — a real
+      regression, since iPad runs the same iOS app. Fixed: wide windows keep
+      hosting the SwiftUI split shell, and the root swaps when the size class
+      changes (iPad multitasking). Verified on an iPad Pro 11" sim: list column +
+      detail placeholder, sidebar toggle, no tab bar.
+- [ ] iPad, deeper: exercise selection into the detail column, and Split
+      View/Slide Over resizing across the compact↔regular boundary (the root
+      rebuilds; check nothing is lost).
 - [ ] The `-legacyShell YES` escape hatch still works, so there is a way back if the
       UIKit shell misbehaves in the field.

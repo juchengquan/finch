@@ -40,11 +40,7 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let w = UIWindow(windowScene: windowScene)
-        if UserDefaults.standard.bool(forKey: "legacyShell") {
-            w.rootViewController = UIHostingController(rootView: AppRootHost())
-        } else {
-            w.rootViewController = RootTabBarController()
-        }
+        w.rootViewController = Self.makeRoot(for: w)
         applyAppearancePreference(to: w)
         w.makeKeyAndVisible()
         window = w
@@ -75,6 +71,34 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         installActivityMonitor(on: w)
         installGlobalOverlay(on: w)
         handle(connectionOptions: options)
+    }
+
+    /// The old shell switched on `horizontalSizeClass`: compact got the tab bar,
+    /// regular got the three-column split. Phase 1 replaced only the compact
+    /// branch, so a wide window must keep the SwiftUI shell — otherwise iPad loses
+    /// its split view and gets the phone layout, which is a real regression, not a
+    /// cosmetic one. Phase 3 replaces this with a UISplitViewController.
+    private static func makeRoot(for window: UIWindow) -> UIViewController {
+        let wide = window.traitCollection.horizontalSizeClass == .regular
+        if wide || UserDefaults.standard.bool(forKey: "legacyShell") {
+            return UIHostingController(rootView: AppRootHost())
+        }
+        return RootTabBarController()
+    }
+
+    /// iPad multitasking changes the size class at runtime (Split View, Slide Over),
+    /// so the root has to be able to swap. Rebuilding is acceptable here because
+    /// all state lives in the store and the router, not in the view tree.
+    func windowScene(_ windowScene: UIWindowScene,
+                     didUpdate previousCoordinateSpace: UICoordinateSpace,
+                     interfaceOrientation: UIInterfaceOrientation,
+                     traitCollection previousTraitCollection: UITraitCollection) {
+        guard let w = window else { return }
+        let wasWide = previousTraitCollection.horizontalSizeClass == .regular
+        let isWide = w.traitCollection.horizontalSizeClass == .regular
+        guard wasWide != isWide else { return }
+        w.rootViewController = Self.makeRoot(for: w)
+        installGlobalOverlay(on: w)
     }
 
     // MARK: Scene phase — the `.onChange(of: scenePhase)` block
