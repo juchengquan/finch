@@ -115,6 +115,9 @@ final class RootTabBarController: UITabBarController {
                     case .appearance:
                         nav.pushViewController(AppearanceSettingsVC(), animated: true)
                         return true
+                    case .notifications:
+                        nav.pushViewController(NotificationsSettingsVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false

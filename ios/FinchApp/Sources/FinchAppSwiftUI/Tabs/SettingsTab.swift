@@ -53,6 +53,7 @@ struct SettingsTab: View {
         case .currencies: return .currencies
         case .powerTools: return .powerTools
         case .appearance: return .appearance
+        case .notifications: return .notifications
         default: return nil
         }
     }
