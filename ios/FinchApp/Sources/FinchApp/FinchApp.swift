@@ -61,23 +61,48 @@ struct FinchApp: App {
             .modifier(TextSizeModifier(useSystem: useSystemTextSize, step: textSizeStep))
             .onReceive(idleTimer) { _ in gate.tick() }
             .task {
+                #if DEBUG
+                LaunchTiming.begin()
+                #endif
                 store.isHydrating = true
-                store.bootstrap()   // re-open the persisted live DB on launch
+                store.bootstrap()   // re-open the persisted live DB + project the active ledger
                 #if os(iOS)
                 PhoneWatchLink.shared.activate()   // Watch CP1: WCSession link
                 #endif
-                gate.start()        // Phase 6.3: evaluate lock state
-                // Don't expose financial data in system-wide Spotlight while the
-                // app is locked — index only when unlocked (the lock-transition
-                // handler below clears on lock and re-indexes on unlock).
-                if !gate.isLocked {
-                    await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1 (can be slow on large data)
-                }
+                gate.start()        // Phase 6.3: evaluate the lock BEFORE revealing content
+                // FIRST PAINT: the projection is ready, so drop the "Loading…" spinner
+                // now. The heavy launch chores below no longer gate the UI.
                 store.isHydrating = false
+                #if DEBUG
+                LaunchTiming.mark("first paint")
+                #endif
+
+                // Deferred off the first-paint path — both of these used to block the
+                // spinner on every launch:
+                //   • Audit — a full ledger sweep that only feeds the Settings indicator.
+                //   • Spotlight — a full delete-all + re-index of every entity. Kept
+                //     lock-gated (don't expose data to system search while locked); the
+                //     lock-transition handler re-indexes on unlock.
+                store.runAuditInBackground()
+                if !gate.isLocked {
+                    Task(priority: .utility) {
+                        // Spotlight snapshots store.txns; on launch that projection is
+                        // deferred off first paint, so wait for it or we'd index an empty
+                        // txns set and leave transactions unsearchable until the next write.
+                        await store.awaitTxnsReady()
+                        await SpotlightIndexer.shared.indexAll(store: store)
+                        #if DEBUG
+                        LaunchTiming.mark("spotlight done")
+                        #endif
+                    }
+                }
                 // Phase 6.2: notifications
                 NotificationService.shared.configure(store: store, router: router)
                 await NotificationService.shared.requestPermissionIfNeeded()
-                await NotificationService.shared.refresh()
+                // refresh() plans budget/spend alerts from store.txns — await the
+                // launch-deferred projection so we don't plan from an empty list.
+                // Detached so it doesn't stall the trailing launch chores ~600ms.
+                Task { await store.awaitTxnsReady(); await NotificationService.shared.refresh() }
                 AutoBackupManager.shared.configure(store: store)   // Phase 5
                 ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
                 await CloudKitSyncCoordinator.shared.start()        // Phase 8: row-level sync (scaffold; inert without an iCloud account)
