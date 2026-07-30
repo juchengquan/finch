@@ -80,17 +80,24 @@ without crashing (the per-section header/footer layout is the part that would
 throw), and the titleView, the List/Calendar picker, the pinned search bar and
 the empty-state row all render. Everything below still needs eyes.
 
-- [ ] **Title area**: name over balance, and the reconcile seal beside the
-      balance — green on a fresh account (`Everyday`), orange on an overdue one
-      (`Savings`), absent on one never reconciled (`Brokerage`).
+- [x] **Title area**: name over balance, and the reconcile seal beside the
+      balance. Verified green on `Everyday` (fresh) and absent on `Brokerage`
+      (never reconciled); **the orange overdue seal on `Savings` is still
+      unchecked**.
 - [ ] **⋯ menu**: Edit, Reconcile, Adjust balance… each open the right sheet.
 - [ ] **Archive** leaves the page (the account stops resolving, so the VC pops).
 - [ ] **Delete** raises the confirmation, and deleting an account that still has
       transactions is refused with the engine's message rather than silently
       doing nothing.
-- [ ] **Month headers** show `net · end-of-month balance` on the first line and
-      `Income … · Spent …` beneath. The balance must equal the newest row's
-      running balance in that month.
+- [x] **Month headers** show `net · end-of-month balance` on the first line and
+      `Income … · Spent …` beneath, and **stay correct after a write**. Verified
+      by measurement: July read `$5,903.50 · $11,453.50` / `Spent $2,496.50`,
+      and flipping one −$58.20 row to pending moved all three to `$5,961.70 ·
+      $11,511.70` / `$2,438.30`, with no relaunch; flipping back restored them.
+      June's end balance + July's net = July's end balance exactly.
+      *This is where the staleness bug fixed in `f08e810` was found — headers
+      are the one thing a diffable data source will not refresh for you, so
+      re-check them after any change to how sections are built.*
 - [ ] **Group-by-month off** (⋯ on the Activity feed sets the shared flag)
       collapses this screen to one "Transactions" section.
 - [ ] **Calendar mode**: the grid appears, a tapped day filters the rows
@@ -101,6 +108,10 @@ the empty-state row all render. Everything below still needs eyes.
       swipe right ⇒ Duplicate; swipe left ⇒ status toggle at the edge, Delete
       inboard raising a confirmation; long-press ⇒ Edit / Duplicate / Preview
       receipt (only when the row has an attachment) / status / Delete.
+      *Partly verified already*: swipe-left renders green **Confirm** at the
+      edge with red **Delete** inboard, and a full swipe performs the status
+      toggle in both directions (the safe action, as intended). Duplicate,
+      Delete-with-confirm and the long-press menu are still unchecked.
 - [ ] **Holdings section** — **cannot be checked on a seeded sim: the demo seed
       creates no holdings at all.** Verify on real data, or add a holding first.
       This section has never been rendered, not once.
