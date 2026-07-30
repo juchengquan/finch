@@ -340,6 +340,8 @@ final class ActivityFeedVC: UIViewController {
                     headers[.month(key)] = monthHeader(key, monthTx)
                 }
             }
+            let carried = Set(dataSource.snapshot().itemIdentifiers)
+            snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
             headerContent = headers
             sectionIDs = snap.sectionIdentifiers
             dataSource.apply(snap, animatingDifferences: false) { [weak self] in
@@ -376,6 +378,13 @@ final class ActivityFeedVC: UIViewController {
             snap.appendSections([.loadMore])
             snap.appendItems([Self.loadMoreID], toSection: .loadMore)
         }
+        // Diffable keeps the EXISTING cell for an unchanged item identifier, so a row
+        // whose data changed — an edited amount, a new category, a recomputed figure —
+        // would keep drawing the old values until it happened to be re-dequeued.
+        // Reconfiguring the carried-over items re-runs the cell provider, and only for
+        // the visible ones, so this is not a reload.
+        let carried = Set(dataSource.snapshot().itemIdentifiers)
+        snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         headerContent = headers
         sectionIDs = snap.sectionIdentifiers
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in

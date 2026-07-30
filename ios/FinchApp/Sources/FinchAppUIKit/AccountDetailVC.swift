@@ -290,7 +290,7 @@ final class AccountDetailVC: UIViewController {
         switch headerContent[sectionIDs[indexPath.section]] {
         case .month(let label, let trailing, let subtitle):
             view.contentConfiguration = UIHostingConfiguration {
-                MonthHeader(label: label, trailing: trailing, subtitle: subtitle)
+                MonthSectionHeader(label: label, trailing: trailing, subtitle: subtitle)
             }
         case .plain(let text):
             var cfg = view.defaultContentConfiguration()
@@ -418,6 +418,13 @@ final class AccountDetailVC: UIViewController {
             }
         }
 
+        // Diffable keeps the EXISTING cell for an unchanged item identifier, so a row
+        // whose data changed — an edited amount, a new category, a recomputed figure —
+        // would keep drawing the old values until it happened to be re-dequeued.
+        // Reconfiguring the carried-over items re-runs the cell provider, and only for
+        // the visible ones, so this is not a reload.
+        let carried = Set(dataSource.snapshot().itemIdentifiers)
+        snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         headerContent = headers                // before apply — the headers read it
         sectionIDs = snap.sectionIdentifiers   // before apply — the layout reads it
         dataSource.apply(snap, animatingDifferences: false) { [weak self] in
@@ -678,31 +685,4 @@ extension AccountDetailVC: QLPreviewControllerDataSource {
     }
 }
 
-/// The month section header: label, right-aligned figures, and (list mode only) the
-/// income/spent line. A leaf view, so it rides in the header via
-/// `UIHostingConfiguration` rather than being rebuilt with constraints — a plain
-/// `UIListContentConfiguration` has no trailing-aligned text slot.
-///
-/// `Text(verbatim:)` throughout: these strings are already composed and localized,
-/// and a plain `Text("…")` here would mint new catalog keys.
-private struct MonthHeader: View {
-    let label: String
-    let trailing: String
-    let subtitle: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(verbatim: label)
-                Spacer()
-                Text(verbatim: trailing)
-            }
-            if let subtitle {
-                Text(verbatim: subtitle).font(.caption2)
-            }
-        }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-    }
-}
 #endif

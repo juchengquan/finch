@@ -26,7 +26,7 @@ final class RootTabBarController: UITabBarController {
     /// time through Phase 2. Gated for now: `-uikitActivity YES`, because the
     /// converted feed is not yet at feature parity (see ActivityFeedVC).
     private static var uikitNavTabs: Set<AppTab> {
-        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts] : []
+        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets] : []
     }
 
     override func viewDidLoad() {
@@ -76,7 +76,7 @@ final class RootTabBarController: UITabBarController {
     private func navigationTab(_ tab: AppTab) -> UIViewController {
         let nav = UINavigationController()
         let root = UIHostingController(rootView:
-            AccountsTab(ownsNavigationStack: false)
+            StacklessTabRoot(tab: tab)
                 .finchSectionSpacing()
                 .modifier(AppTextSize())
                 .environmentObject(store)
@@ -90,6 +90,9 @@ final class RootTabBarController: UITabBarController {
                         return true
                     case .account(let id):
                         nav.pushViewController(AccountDetailVC(accountId: id), animated: true)
+                        return true
+                    case .budget(let id):
+                        nav.pushViewController(BudgetDetailVC(budgetId: id), animated: true)
                         return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
@@ -221,17 +224,55 @@ extension RootTabBarController: UIAdaptivePresentationControllerDelegate {
 /// behaviour-identical: the floating add-`+` on the four content tabs (not
 /// Settings), the Ledger cover presented once, and the focused-transaction sheet
 /// that tx deep links / notifications / Spotlight open.
+/// A tab's SwiftUI root rendered WITHOUT its own `NavigationStack`, for the tabs a
+/// `UINavigationController` now owns. Only converted tabs reach here; the rest go
+/// through `TabRootHost`, which keeps its stack.
+private struct StacklessTabRoot: View {
+    let tab: AppTab
+    var body: some View {
+        stackless.modifier(TabChrome(tab: tab))
+    }
+
+    @ViewBuilder private var stackless: some View {
+        switch tab {
+        case .accounts: AccountsTab(ownsNavigationStack: false)
+        case .budgets: BudgetsTab(ownsNavigationStack: false)
+        default: TabRootHost(tab: tab)
+        }
+    }
+}
+
 private struct TabRootHost: View {
     let tab: AppTab
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
 
     var body: some View {
+        tabContent(tab).modifier(TabChrome(tab: tab))
+    }
+}
+
+/// The per-tab chrome `AdaptiveShell` used to supply: the floating add button, the
+/// sheet for a transaction targeted from OUTSIDE the view tree (deep link, Spotlight,
+/// an App Intent), and the Ledger cover behind the top-left corner control.
+///
+/// It lives in a modifier both tab hosts apply because it silently went missing
+/// otherwise. `navigationTab` built its SwiftUI root directly, bypassing
+/// `TabRootHost`, so every CONVERTED tab lost all three at once — verified on the
+/// simulator: the ledger corner control on a converted tab did nothing at all, and
+/// the tab root had no floating add button. Nothing failed loudly; the features were
+/// simply absent.
+private struct TabChrome: ViewModifier {
+    let tab: AppTab
+    @EnvironmentObject private var store: FinchStore
+    @EnvironmentObject private var router: DeepLinkRouter
+
+    func body(content: Content) -> some View {
         Group {
             if tab == .settings {
-                tabContent(tab)
+                content
             } else {
-                tabContent(tab).addTransactionFAB()
+                content.addTransactionFAB()
             }
         }
         .sheet(item: focusedTx) { EditTransactionSheet(txn: $0) }
