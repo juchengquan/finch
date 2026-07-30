@@ -109,6 +109,9 @@ final class RootTabBarController: UITabBarController {
                     case .currencies:
                         nav.pushViewController(CurrenciesVC(), animated: true)
                         return true
+                    case .powerTools:
+                        nav.pushViewController(PowerToolsVC(), animated: true)
+                        return true
                     default:
                         // Not converted yet — the screen keeps its own cover.
                         return false

@@ -20,6 +20,7 @@ public enum NativeRoute: Equatable {
     case tags
     case merchants
     case currencies
+    case powerTools
 }
 
 public struct NativeRouteKey: EnvironmentKey {

@@ -5955,6 +5955,7 @@
         }
       }
     },
+    "Subscribed to %lld ledgers": {},
     "Swipe right on a backup to restore it, left to delete it. Restoring replaces all current data — your current data is backed up first.": {
       "localizations": {
         "zh-Hans": {
@@ -7016,6 +7017,7 @@
         }
       }
     },
+    "iCloud account required": {},
     "left to spend": {
       "localizations": {
         "zh-Hans": {
