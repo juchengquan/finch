@@ -57,6 +57,19 @@ enum ToggleAccessory {
         }, for: .valueChanged)
     }
 
+    /// Flip the cell's switch and run its action — for row-level taps.
+    ///
+    /// A UIKit `UISwitch` in an accessory only takes touches on ITSELF, whereas
+    /// SwiftUI's `Toggle` makes the whole row the control. Users trained on the
+    /// SwiftUI screens tap the row and nothing happens, which is what a device test
+    /// surfaced. Screens whose rows are purely a toggle route their selection here;
+    /// screens whose rows navigate (Currencies' currency rows, Rules) must NOT.
+    static func flip(on cell: UICollectionViewListCell) {
+        guard let toggle = cell.viewWithTag(tag) as? UISwitch else { return }
+        toggle.setOn(!toggle.isOn, animated: true)
+        toggle.sendActions(for: .valueChanged)
+    }
+
     /// True when this cell already carries a switch, so the caller knows not to wipe
     /// `cell.accessories` — clearing them removes the switch from the hierarchy and
     /// reintroduces both faults above.

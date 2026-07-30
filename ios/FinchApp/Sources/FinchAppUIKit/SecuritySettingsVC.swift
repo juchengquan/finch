@@ -162,6 +162,15 @@ final class SecuritySettingsVC: UIViewController {
 }
 
 extension SecuritySettingsVC: UICollectionViewDelegate {
-    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool { false }
+    /// Only the Face-ID row is a toggle; the two pull-down menus own their touches.
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        dataSource.itemIdentifier(for: indexPath) == Self.sensitiveID
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        cv.deselectItem(at: indexPath, animated: true)
+        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
+        ToggleAccessory.flip(on: cell)
+    }
 }
 #endif

@@ -219,13 +219,21 @@ extension PowerToolsVC: UICollectionViewDelegate {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
         if id == Self.rulesID { return true }
         if id == Self.resyncID { return cloudSync.status.accountAvailable }
-        return false   // the toggle, the spinner and the status rows are not tappable
+        // A tap anywhere on the sync row flips it, as SwiftUI's Toggle does.
+        if id == Self.toggleID { return true }
+        return false   // the spinner and the status rows are not tappable
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
 
+        if id == Self.toggleID {
+            if let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell {
+                ToggleAccessory.flip(on: cell)
+            }
+            return
+        }
         if id == Self.resyncID {
             Task { await cloudSync.resync(store: store) }
             return

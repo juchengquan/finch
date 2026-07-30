@@ -398,8 +398,22 @@ final class AppearanceSettingsVC: UIViewController {
 }
 
 extension AppearanceSettingsVC: UICollectionViewDelegate {
-    /// Nothing on this screen is a tappable ROW: every control owns its own touches
-    /// (switches, sliders, segmented pickers, pull-down menus).
-    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool { false }
+    /// Toggle rows are selectable so a tap ANYWHERE on the row flips the switch, as
+    /// SwiftUI's `Toggle` does. The sliders, segmented pickers and pull-down menus
+    /// own their own touches and stay unselectable.
+    private static let toggleRowIDs: Set<String> = [
+        systemSizeID, groupByMonthID, relativeDatesID, hapticsID, adjustID, fabID,
+    ]
+
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        return Self.toggleRowIDs.contains(id)
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        cv.deselectItem(at: indexPath, animated: true)
+        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
+        ToggleAccessory.flip(on: cell)
+    }
 }
 #endif

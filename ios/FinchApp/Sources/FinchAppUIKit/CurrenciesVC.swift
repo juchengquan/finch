@@ -285,7 +285,11 @@ extension CurrenciesVC: UICollectionViewDelegate {
     /// inside it — the switch handles its own touches as a UIKit accessory.
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
-        if id == Self.autoUpdateID || id == Self.lastUpdatedID { return false }
+        // A tap anywhere on the auto-update row flips it, as SwiftUI's Toggle does.
+        // The CURRENCY rows are deliberately excluded: a tap there must navigate to
+        // the rate history, and their switch keeps its own touches.
+        if id == Self.autoUpdateID { return true }
+        if id == Self.lastUpdatedID { return false }
         if id == Self.refreshID { return !refreshing }
         return rowByCode[id] != nil
     }
@@ -293,6 +297,12 @@ extension CurrenciesVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+        if id == Self.autoUpdateID {
+            if let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell {
+                ToggleAccessory.flip(on: cell)
+            }
+            return
+        }
         if id == Self.refreshID { refreshNow(); return }
         guard let row = rowByCode[id] else { return }
         // Converted too, so this drill is native end to end.

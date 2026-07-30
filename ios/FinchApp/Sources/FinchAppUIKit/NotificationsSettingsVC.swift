@@ -120,7 +120,17 @@ final class NotificationsSettingsVC: UIViewController {
 }
 
 extension NotificationsSettingsVC: UICollectionViewDelegate {
-    /// Every row owns its own control — the switches, and the Link inside the nudge.
-    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool { false }
+    /// A tap anywhere on a kind row flips its switch, matching SwiftUI's `Toggle`.
+    /// The denied-permission nudge is not selectable — its `Link` owns its touches.
+    func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        return NotificationKind(rawValue: id) != nil
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        cv.deselectItem(at: indexPath, animated: true)
+        guard let cell = cv.cellForItem(at: indexPath) as? UICollectionViewListCell else { return }
+        ToggleAccessory.flip(on: cell)
+    }
 }
 #endif
