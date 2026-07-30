@@ -18,6 +18,13 @@ try the centre before believing it. Cross-checking against the SwiftUI screen un
 the SAME coordinates is the cheapest way to tell a missed tap from a real defect —
 if both fail, it is the tap.
 
+**Pin the simulator when the machine is busy.** `ci-local.sh` picks a shared device
+by default; a run of it WEDGED for 30 minutes on "iPhone 17 Pro" while other sessions
+were building (load average 568). Killing it reported **exit code 0 having run only 4
+of 9 checks** — a green exit that proved nothing. Use
+`./scripts/ci-local.sh --sim "<this session's sim>"`, and confirm the summary really
+says `all checks passed` rather than trusting the exit code.
+
 **`idb ui tap` does not flip a `UISwitch`.** Even a tap provably inside the switch's
 frame does nothing; only a short DRAG across it works
 (`idb ui swipe <x-8> <y> <x+24> <y> --duration 0.3`). A switch that ignores taps is a
@@ -371,6 +378,40 @@ means those two screens are visibly plainer than their SwiftUI originals.
       hold thousands of rows, and they also need a leading selection tick that the
       shared row knows nothing about. Worth measuring scroll performance at 2,000
       rows before committing either way.
+
+## 2l. Phase 2 — the converted rate history (`-uikitActivity YES`)
+
+Settings → Currencies → any currency.
+
+**Already verified**: CAD shows "Jul 29, 2026 · 0.7092" with the ECB source badge,
+and the ⋯ menu offers "Delete all CAD rates" with the currency interpolated. Nothing
+was deleted.
+
+- [ ] **The sparkline** — *never rendered*, because the seeded data carries fewer
+      than three rates per currency and the chart is deliberately hidden below three
+      points. Same class of gap as Holdings: the demo seed cannot exercise it. Add a
+      few manual rates, or check against real data.
+- [ ] **Per-row delete** confirms with "{currency} · {date}", and **deleting the last
+      row pops the screen** (that pop re-derives the row set after the write — a
+      behaviour easy to lose in translation).
+- [ ] **Delete all** confirms with "Delete N rates" and pops.
+- [ ] The ⋯ menu is **empty when there are no rates** (the SwiftUI screen hides the
+      item, leaving an empty menu — check that reads acceptably).
+
+## 2m. Every drill chain is now native end to end
+
+With `TxListDetailVC` and `ExchangeRateHistoryVC` landed, no converted list pushes a
+hosted SwiftUI screen any more. That makes the following the decisive test of the
+whole migration — if any of these still shadow, the premise is wrong:
+
+- [ ] **Categories → a category → background ~3s → reopen.** No shadow on either.
+- [ ] **Tags → a tag.** Same.
+- [ ] **Merchants → a merchant.** Same.
+- [ ] **Currencies → a currency.** Same.
+- [ ] **Accounts → an account**, and **Accounts → All Transactions**. Same.
+- [ ] For contrast, repeat any one of them with the flag OFF, where the detail is
+      hosted SwiftUI in a pushed page — that one **should** still shadow. A run where
+      neither shadows proves nothing.
 
 ## 2c. Measured gaps against the SwiftUI screens
 
