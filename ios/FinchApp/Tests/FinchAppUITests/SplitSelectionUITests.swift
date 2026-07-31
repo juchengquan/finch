@@ -49,6 +49,22 @@ final class SplitSelectionUITests: XCTestCase {
             .firstMatch
     }
 
+    /// Bring the sidebar on screen if it isn't already.
+    ///
+    /// iPadOS auto-collapses columns in portrait, so on a portrait destination the
+    /// sidebar is an overlay behind a toggle. The toggle is found by label rather than
+    /// position: `navigationBars.buttons.element(boundBy: 0)` picks whichever nav bar
+    /// the query resolves to first, and once a detail column is populated that is not
+    /// reliably the one carrying the toggle — it found nothing on the UIKit split
+    /// shell while the button was plainly there and tappable.
+    private func revealSidebarIfNeeded() {
+        if row(labelled: "Budgets").exists { return }
+        let named = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "sidebar")).firstMatch
+        if named.exists { named.tap(); return }
+        let positional = app.navigationBars.buttons.element(boundBy: 0)
+        if positional.exists { positional.tap() }
+    }
+
     /// The whole contract in one test: the placeholder is up, a row is tapped, the
     /// detail column shows that account instead.
     func testSelectingAnAccountFillsTheDetailColumn() throws {
@@ -83,11 +99,7 @@ final class SplitSelectionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Select an account"].waitForNonExistence(timeout: 15),
                       "selection never reached the detail column")
 
-        // The sidebar may be an overlay in portrait; reveal it before reaching for a row.
-        if !row(labelled: "Budgets").exists {
-            let toggle = app.navigationBars.buttons.element(boundBy: 0)
-            if toggle.exists { toggle.tap() }
-        }
+        revealSidebarIfNeeded()
         let target = row(labelled: "Budgets")
         XCTAssertTrue(target.waitForExistence(timeout: 15), "no Budgets entry in the sidebar")
         target.tap()
