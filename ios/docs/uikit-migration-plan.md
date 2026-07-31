@@ -253,7 +253,7 @@ iPhone and iPad are one code path. Two constraints worth knowing before touching
 Verified by `SplitSelectionUITests` on both shells: selecting a row fills the detail
 column, and switching section resets it.
 
-#### Phase 3b — native columns (NOT STARTED)
+#### Phase 3b — native columns (IN PROGRESS — Ledger done, Scheduled blocked)
 
 Replace each hosted list column with a `UIViewController`, and delete
 `selection: Binding<String?>?` from the six screens that carry it. **This is the large
@@ -289,16 +289,19 @@ more given what Phase 2's conversions actually cost.
 > This pulls Phase 4's tab-root work into 3b rather than leaving it optional, and
 > makes each remaining step far larger than "replace a column". Re-estimate before
 > starting.
-2. **Scheduled** — next simplest.
-3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
-4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
+2. **Budgets** — next. `BudgetsTab` is 607 lines; `BudgetDetailVC` already exists for
+   the detail side.
+3. **Activity** — `ActivityTab` is 665 lines. `ActivityFeedVC` already exists; this is
+   mostly wiring it as a column rather than a pushed screen, plus the `focusedId`
+   deep-link path.
+4. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
    like `CategoriesVC`, not like `TagsVC`.
-5. **Activity** — `ActivityFeedVC` already exists; this is mostly wiring it as a column
-   rather than a pushed screen, plus the `focusedId` deep-link path.
+5. **Scheduled** — parked, not next. It was attempted first (it looks smallest at 329
+   lines) and is blocked on a scroll regression; see below.
 
-**The detail column is nearly free** for 3, 4 and 5: `BudgetDetailVC`,
-`AccountDetailVC` and `TxListDetailVC` were built in Phase 2 and take an id in their
+**The detail column is nearly free** for 2, 3 and 4: `BudgetDetailVC`,
+`TxListDetailVC` and `AccountDetailVC` were built in Phase 2 and take an id in their
 initialiser, which is exactly what a detail column needs.
 
 **Selection plumbing.** `SplitSelection` stays — it is already a plain `ObservableObject`
@@ -311,6 +314,86 @@ from `AccountsTab` must not disturb its `selection == nil` branch, which is what
 pushes. Until a screen's compact path is *also* native, the SwiftUI file has to keep
 working — so delete the binding only when both sides are converted, or keep it and let
 it go unused.
+
+##### Before any of them: the tab-chrome prerequisite
+
+Converting a tab ROOT to a native `UINavigationController` silently loses the
+add-transaction FAB and the focused-tx sheet. Both come from `TabChrome`, a SwiftUI
+`ViewModifier` that `TabRootHost` and `StacklessTabRoot` apply — so a root with no
+SwiftUI view in it gets neither, and nothing fails loudly. This already happened once
+in Phase 2, when `navigationTab` bypassed `TabRootHost` and every converted tab lost
+its chrome at once; it was found by eye.
+
+`TabChromeVC` is the fix — written and building, but **not on this branch**. It puts
+the native content in a child and hosts the real `AddTransactionFAB` + focused-tx
+sheet over it behind a passthrough view, so touches reach the collection view
+everywhere except the button. The chrome is hosted rather than rebuilt on purpose: the
+FAB honours `finch.fab.enabled`, the left/right position preference, hides during
+multi-select and while the ledger cover is up, and seeds from the page's
+`AddTxContext`. A UIKit copy of those rules would drift from the one the Mac renders.
+
+- Signature: `TabChromeVC(content:tab:store:router:)`. Wrap every native tab root.
+- Trap: name the stored property `appTab`, not `tab` — `UIViewController.tab` is
+  `UITab?` on iOS 18+ and the override does not compile.
+- **Land it with its first consumer, not before.** Today every tab root on this branch
+  is SwiftUI, so `TabChromeVC` has nothing to wrap: merged alone it is dead code, and
+  its guard test (`TabChromeUITests`) would go green against a *hosted* root, proving
+  nothing. It belongs in the same PR as the first fully native root.
+
+##### The Scheduled block — what is known, so it is not re-derived
+
+The code (`ScheduledListVC`, `TabChromeVC`, `TabChromeUITests`) lives on
+`feat/ios-uikit-scheduled`, from the **closed** PR #652. List mode, the iPad column and
+the tab-chrome work are all sound; only calendar mode is broken.
+
+**Symptom.** In calendar mode a drag on the month grid does not scroll the page, so the
+day sections below are unreachable.
+
+**It is a regression, not a shipped bug.** A control build of plain `feat/frontend` on
+an erased simulator scrolls fine. The same `MonthCashCalendar` inside a SwiftUI `List`
+behaves; inside `UICollectionView` + `UIHostingConfiguration` it does not. So it is
+gesture coordination, not layout — `List` coordinates the vertical pan and the
+collection view does not.
+
+**Ruled out:** stale build products, a corrupt simulator, content-size problems.
+
+**Attempted and failed — do not repeat:** walking the cell for `UIScrollView`s whose
+content fits their bounds and clearing `alwaysBounceVertical` / `bounces`, deferred a
+runloop so SwiftUI has built the hierarchy. Compiles, changes nothing. Also superseded:
+bounding the hosted grid with `.frame(height: 420)`, which only shrank the dead zone.
+
+**Required next step: inspect before changing.** `recursiveDescription` on the cell, or
+a breakpoint, to find which view actually owns the pan. Four attempts on this screen
+failed because they reasoned about UIKit instead of looking at it.
+
+Also settled while working on it: occurrence ids must be `__occ__<day>|<templateId>` —
+the day belongs in the id because a template recurring twice in a month otherwise
+produces a duplicate diffable identifier, which crashes rather than glitches.
+
+##### Two rules this screen paid for
+
+**"Is it a leaf?" is the wrong question — ask "does it contain a scroll view?"**
+Hosting a leaf in a cell is safe; hosting anything containing a scroll view is not. It
+collapses, and it re-introduces reproducer B, the iOS 26 resume shadow this migration
+exists to remove. `ScheduledCalendarView` returns a `List` — its own comment says the
+`topRow` parameter exists to keep that `List` the nav stack's primary scroll view.
+`MonthCashCalendar` looks like a grid of numbers and is a `.page TabView`
+(`MonthCashCalendar.swift:74`), i.e. a horizontal pager. Both read as leaves and
+neither is.
+
+`TxRowCell`'s doc comment already states the rule the strict way ("a leaf —
+`HStack`/`VStack`, no scroll view"), so the wording is not the problem; applying it is.
+**Two merged VCs host `MonthCashCalendar` today** — `AccountDetailVC:215` and
+`ActivityFeedVC:194` — and both are therefore hosting a pager inside a scroll view.
+`AccountDetailVC`'s calendar does scroll, verified on the simulator, but only because
+the balance card and mode picker sit above the grid and rows below it, so a pan has
+somewhere to land outside the pager. That is layout luck, not compliance. Re-check both
+when the gesture fix for Scheduled lands, and apply it to all three.
+
+**Build the control first.** Every screen being converted has a working original one
+commit away on `feat/frontend`. When converted behaviour looks wrong, build plain
+`feat/frontend`, install it and compare, before theorising. One control build answered
+in minutes what three rounds of reasoning about pagers and content sizes got wrong.
 
 ### Phase 4 — Opportunistic (ongoing, optional)
 
