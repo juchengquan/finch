@@ -69,8 +69,8 @@ Launch the app in each mode with:
 
 ```bash
 UDID=$(xcrun simctl list devices | grep "<your-sim> (" | grep -oE '[0-9A-F-]{36}')
-xcrun simctl launch "$UDID" com.juchengquan.finch                      # default shell
-xcrun simctl launch "$UDID" com.juchengquan.finch -uikitActivity YES    # + converted feed
+xcrun simctl launch "$UDID" com.juchengquan.finch                      # default: UIKit shell + converted screens
+xcrun simctl launch "$UDID" com.juchengquan.finch -uikitActivity NO     # UIKit shell, hosted SwiftUI screens
 xcrun simctl launch "$UDID" com.juchengquan.finch -legacyShell YES      # pre-migration shell
 ```
 

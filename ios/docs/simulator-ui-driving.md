@@ -59,7 +59,8 @@ two confidently-wrong "fixes", then one `describe-all` (`caption y=167` vs
 #### Reference measurements — SwiftUI vs UIKit rows (2026-07-31)
 
 Measured on Account detail, iPhone 17 Pro Max sim, same account, same data, by
-launching with and without `-uikitActivity YES`:
+launching with and without the converted screens (`-uikitActivity NO` is now the way to
+get the SwiftUI side; the converted screens ship by default):
 
 | element | SwiftUI | UIKit | delta |
 |---|---:|---:|---:|

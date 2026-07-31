@@ -50,11 +50,10 @@ final class SplitShellVC: UIViewController {
     /// a ledger switch clearing it).
     private weak var budgetList: BudgetsListVC?
 
-    /// Same gate `RootTabBarController.uikitNavTabs` uses, so the compact root and the
-    /// regular-width column convert together or not at all.
-    private static var uikitBudgets: Bool {
-        UserDefaults.standard.bool(forKey: "uikitActivity")
-    }
+    /// Same switch `RootTabBarController.uikitNavTabs` uses — literally the same read
+    /// now — so the compact root and the regular-width column convert together or not
+    /// at all.
+    private static var uikitBudgets: Bool { UIKitScreens.isEnabled }
 
     private enum Arity { case three, two }
 
