@@ -392,6 +392,8 @@ hand edits belong in `scripts/zh-manual.json` (which pins terminology to the web
   detached tmux server (PPID 1), so granting Accessibility to the terminal *or* to ClaudeCode.app
   changes nothing — you'd have to grant the tmux binary and restart the server, killing the session.
   Fastest jumps use **DEBUG-only launch args** `-initialTab <tab>` and `-openAdd YES`
-  (`FinchApp.swift init()`), or the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
+  (`LaunchSequence.run` — with `-resetStore` / `-disableNotifications`; they must live there
+  because `FinchApp.swift` is excluded from the iOS target, so anything parsed in the SwiftUI
+  `App.init` is dead code on iOS), or the `finch://add` deep link. Bundle id `com.juchengquan.finch`.
   (`ios/docs/simulator-ui-driving.md` has the longer recipe: install steps, the `describe-all`
   measuring snippet, and the full AppleScript/TCC post-mortem.)
