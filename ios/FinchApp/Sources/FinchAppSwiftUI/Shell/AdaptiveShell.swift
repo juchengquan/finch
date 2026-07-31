@@ -177,6 +177,29 @@ enum FabPosition: String, CaseIterable, Identifiable {
     var label: LocalizedStringKey { self == .left ? "Bottom left" : "Bottom right" }
 }
 
+/// The add-transaction FAB's frame in GLOBAL (window) coordinates, published by the
+/// button itself.
+///
+/// **Why a preference and not a constant.** When a UIKit tab root hosts this modifier
+/// over native content (`TabChromeVC`), the host has to let every touch except the
+/// button reach the collection view underneath. It cannot ask SwiftUI where the button
+/// is: `_UIHostingView.hitTest` returns the hosting view for ANY point in its bounds —
+/// verified by logging the hit chain, which was identical for a tap on the FAB and a
+/// swipe on empty space — so `.allowsHitTesting(false)` on the backdrop does not make
+/// it transparent to touches either. Reading the real rect is what keeps the passthrough
+/// honest about the position preference, the hidden states and the button's size,
+/// instead of hard-coding a corner that would drift.
+///
+/// `.zero` means "no FAB right now" (disabled, no accounts, multi-select, ledger cover),
+/// in which case the host passes everything through.
+struct FABFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
 struct AddTransactionFAB: ViewModifier {
     /// A drill cover (`rightSlideDrill`) is a top-level UIKit modal, so the
     /// app-root Add sheet cannot present over it — SwiftUI tears the cover down
@@ -218,6 +241,13 @@ struct AddTransactionFAB: ViewModifier {
                         .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
                 }
                 .accessibilityLabel("Add Transaction")
+                // Publishes the button's own rect so a UIKit host can pass every touch
+                // that is NOT on it through to the native content underneath — see
+                // FABFrameKey. Measured before the paddings, so it is the 56×56 button.
+                // No effect on the pure-SwiftUI path, which never reads the preference.
+                .background(GeometryReader { geo in
+                    Color.clear.preference(key: FABFrameKey.self, value: geo.frame(in: .global))
+                })
                 .padding(fabLeft ? .leading : .trailing, 20)
                 .padding(.bottom, 20)
             }
