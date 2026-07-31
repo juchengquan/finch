@@ -222,7 +222,8 @@ final class AccountDetailVC: UIViewController {
                             MonthGrouping.dailyIncomeExpense(
                                 self.visibleTxns().filter { $0.date >= from && $0.date <= through })
                         },
-                        format: { self.store.displayExactBase($0) })
+                        format: { self.store.displayExactBase($0) },
+                        masked: self.store.privacyMode)
                 }
                 cell.accessories = []
                 return
