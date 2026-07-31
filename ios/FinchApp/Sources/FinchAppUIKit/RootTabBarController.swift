@@ -140,6 +140,29 @@ final class RootTabBarController: UITabBarController {
 
     // MARK: Router bridge
 
+    /// The ledger cover, natively. Tracked so the router's `showLedger = false` can
+    /// dismiss it — the flag is set from several places (the corner button, a `.ledger`
+    /// deep link, the tab intercept), and a presentation nobody holds a reference to
+    /// cannot be closed by any of them.
+    private weak var ledgerNav: UIViewController?
+
+    private func presentLedgers() {
+        guard ledgerNav == nil else { return }   // single slot, as the SwiftUI cover had
+        let vc = LedgersVC()
+        vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "chevron.left"),
+            primaryAction: UIAction { [weak self] _ in self?.router.showLedger = false })
+        vc.navigationItem.leftBarButtonItem?.accessibilityLabel = String(localized: "Back")
+        RightSlideModal.present(vc, from: self)
+        ledgerNav = vc.navigationController
+    }
+
+    private func dismissLedgers() {
+        guard let nav = ledgerNav else { return }
+        ledgerNav = nil
+        nav.dismiss(animated: true)
+    }
+
     private func bindRouter() {
         // Router -> bar. A `.ledger` target is not a slot: it is the corner
         // presentation, so the bar settles on a real tab instead (same rule as
@@ -152,6 +175,19 @@ final class RootTabBarController: UITabBarController {
                 if let i = self.slots.firstIndex(of: tab), i != self.selectedIndex {
                     self.selectedIndex = i
                 }
+            }
+            .store(in: &cancellables)
+
+        // The ledger flow. It used to be a hosted SwiftUI cover applied in TabChrome —
+        // the last hosted scroll view left in this shell. Both of its screens are now
+        // UIKit (LedgersVC / LedgerDetailVC), so it presents natively and its pushes
+        // are real pushes.
+        router.$showLedger
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] show in
+                guard let self else { return }
+                if show { self.presentLedgers() } else { self.dismissLedgers() }
             }
             .store(in: &cancellables)
 
@@ -310,11 +346,7 @@ private struct TabChrome: ViewModifier {
             }
         }
         .sheet(item: focusedTx) { EditTransactionSheet(txn: $0) }
-        .rightSlideDrill(isPresented: $router.showLedger) {
-            NavigationStack {
-                LedgerListView().rsdBackToolbar { router.showLedger = false }
-            }
-        }
+
     }
 
     /// Same binding as TabBarShell: a tx targeted from outside the view tree opens
