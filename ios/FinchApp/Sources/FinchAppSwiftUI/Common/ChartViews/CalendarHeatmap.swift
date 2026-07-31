@@ -6,6 +6,11 @@ import SwiftUI
 struct CalendarHeatmap: View {
     /// Daily values in date order (oldest → newest).
     let values: [(date: String, value: Double)]
+    /// Formats a day's value for VoiceOver. The caller owns it because this view
+    /// has no store — and it must go through the privacy-aware display helpers:
+    /// interpolating the raw `Double` spoke the exact unconverted figure
+    /// ("2026-07-15: 1850.000000") to a screen reader even with amounts masked.
+    let format: (Double) -> String
 
     private var maxValue: Double { values.map(\.value).max() ?? 0 }
 
@@ -21,11 +26,18 @@ struct CalendarHeatmap: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color.accentColor.opacity(intensity(day.value)))
                             .frame(width: 12, height: 12)
-                            .accessibilityLabel("\(day.date): \(day.value)")
+                            .accessibilityLabel(Text(verbatim: Self.cellLabel(date: day.date, value: day.value, format: format)))
                     }
                 }
             }
         }
+    }
+
+    /// One cell's VoiceOver text. Pure so it can be tested — this defect is
+    /// invisible on screen (only a screen reader ever spoke the figure), so no
+    /// screenshot can catch a regression here.
+    static func cellLabel(date: String, value: Double, format: (Double) -> String) -> String {
+        "\(date): \(format(value))"
     }
 
     private func intensity(_ v: Double) -> Double {
