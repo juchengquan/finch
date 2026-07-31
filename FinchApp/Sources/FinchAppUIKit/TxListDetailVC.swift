@@ -155,10 +155,10 @@ final class TxListDetailVC: UIViewController {
                 guard let tx = self.txByID[id] else { return }
                 // `showRunningBalance: false` — a running balance only reads sensibly
                 // when every row shares one account, which none of these lists do.
-                cell.contentConfiguration = UIHostingConfiguration {
-                    TxRow(txn: tx, showRunningBalance: false)
-                        .environmentObject(self.store)
-                }
+                // Routed through TxRowCell for its row-height margins; this screen
+                // already hosted TxRow, it just sat taller than the SwiftUI original.
+                TxRowCell.configure(cell, tx: tx, store: self.store,
+                                    showRunningBalance: false)
             }
         }
 

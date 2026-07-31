@@ -56,6 +56,45 @@ two confidently-wrong "fixes", then one `describe-all` (`caption y=167` vs
 
 **Never eyeball spacing from a screenshot when `describe-all` can give numbers.**
 
+#### Reference measurements — SwiftUI vs UIKit rows (2026-07-31)
+
+Measured on Account detail, iPhone 17 Pro Max sim, same account, same data, by
+launching with and without `-uikitActivity YES`:
+
+| element | SwiftUI | UIKit | delta |
+|---|---:|---:|---:|
+| transaction row | **52.0** | **72.3** | +20.3 (+39%) |
+| month header | 20.3 | 15.7 | −4.6 |
+| month subtitle | 13.3 | 13.3 | 0 |
+
+**The transaction row is the outlier and it is a real regression.** SwiftUI's
+`TxRow` is a purpose-built compact row; the converted screens use a generic
+`cell.defaultContentConfiguration()` with `text` + `secondaryText`, which is
+Apple's two-line subtitle cell and simply is that tall. Three VCs share the
+pattern verbatim — `ActivityFeedVC`, `AccountDetailVC`, `BudgetDetailVC` — so
+they are all 39% taller per row than the screens they replaced.
+
+Height is not the only gap it creates. The generic cell also renders
+`tx.date` raw (`2026-07-29`) where `TxRow` renders a relative/short date
+(`Jul 29 · 12:00`, honouring the `finch.feed.relativeDates` preference), and it
+carries neither the tag chips nor the running-balance column that `TxRow` shows
+on Account detail. Accessibility differs too: SwiftUI rows surface as `Button`
+with a composed label ("Expense, Groceries, Jul 29 · 12:00"), the UIKit ones as
+`StaticText` ("Groceries, 2026-07-29").
+
+**FIXED the same day.** Not by a custom `UIContentConfiguration` — by *hosting
+`TxRow` itself* (`TxRowCell`). It is a leaf view, and the migration's rule is
+that hosting leaves is fine; it is hosting a screen's *scroll view* that brings
+the resume shadow back. Re-measured after: **52.0pt pitch, exactly matching**,
+and the content gaps closed for free because it is literally the same view.
+A UIKit reimplementation would have been a few hundred lines that then drift
+from the original every time a row gains a feature — and the Mac keeps rendering
+that original, so the drift is certain rather than hypothetical.
+
+`UIHostingConfiguration`'s default margins are wider than a `List` row's, so the
+row still sat tall until `.margins(.vertical, 7)`. Measure after hosting, don't
+assume.
+
 ```bash
 # print every labelled element with its frame
 $IDB ui describe-all --udid $UDID | ~/.local/idb-venv/bin/python -c '

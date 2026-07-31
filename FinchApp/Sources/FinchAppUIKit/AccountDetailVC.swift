@@ -44,6 +44,7 @@ final class AccountDetailVC: UIViewController {
     private var calSelectedDay: String?
 
     private enum SectionID: Hashable {
+        case balance        // account balance + reconcile seal, formerly the titleView
         case modePicker
         case holdings
         case calendar
@@ -57,7 +58,7 @@ final class AccountDetailVC: UIViewController {
         /// The picker and the grid are bare rows in SwiftUI — no `Section` header.
         var wantsHeader: Bool {
             switch self {
-            case .modePicker, .calendar: return false
+            case .balance, .modePicker, .calendar: return false
             default: return true
             }
         }
@@ -70,6 +71,7 @@ final class AccountDetailVC: UIViewController {
 
     private static let modePickerID = "__mode_picker__"
     private static let calendarID = "__calendar__"
+    private static let balanceID = "__balance__"
     private static let emptyID = "__empty__"
     private static let emptyDayID = "__empty_day__"
     private static let holdingPrefix = "__holding__"
@@ -110,7 +112,11 @@ final class AccountDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.largeTitleDisplayMode = .never
+        // Large, collapsing on scroll. The balance moved into a content row (see
+        // applySnapshot) because a large title and a custom `titleView` cannot share
+        // the bar — the bar renders the titleView, so the name would appear twice
+        // while expanded and the large title would have nowhere to collapse to.
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -222,6 +228,12 @@ final class AccountDetailVC: UIViewController {
                 return
             }
 
+            if id == Self.balanceID {
+                guard let account = self.account else { return }
+                self.configureBalanceCell(cell, account)
+                return
+            }
+
             if id == Self.emptyID || id == Self.emptyDayID {
                 // The balance header above is already correct — it reads the stored
                 // current_balance column, not this list — so only the rows wait.
@@ -255,19 +267,12 @@ final class AccountDetailVC: UIViewController {
             }
 
             guard let tx = self.txByID[id] else { return }
-            var cfg = cell.defaultContentConfiguration()
-            // Same labelling rule as the SwiftUI TxRow: the category is the title.
-            cfg.text = self.store.categoryName(tx.category) ?? String(localized: "Uncategorized")
-            cfg.secondaryText = tx.date
-            cell.contentConfiguration = cfg
-
-            // The amount, privacy-aware — same helper the SwiftUI row uses, so the
-            // money rules are not reimplemented.
-            let amount = UILabel()
-            amount.text = self.store.displayMoneyBase(tx.amount)
-            amount.font = .preferredFont(forTextStyle: .body)
-            amount.textColor = tx.amount < 0 ? .label : .systemGreen
-            cell.accessories = [.customView(configuration: .init(customView: amount, placement: .trailing()))]
+            // The SwiftUI row itself, hosted — it draws the amount and the running
+            // balance, so no trailing accessory here. See TxRowCell for why this is
+            // hosted rather than rebuilt.
+            TxRowCell.configure(cell, tx: tx, store: self.store,
+                                onPreviewReceipt: { [weak self] in self?.previewReceipt($0) })
+            cell.accessories = []
         }
 
         let header = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
@@ -372,6 +377,8 @@ final class AccountDetailVC: UIViewController {
 
         var snap = NSDiffableDataSourceSnapshot<SectionID, String>()
         var headers: [SectionID: HeaderContent] = [:]
+        snap.appendSections([.balance])
+        snap.appendItems([Self.balanceID], toSection: .balance)
         snap.appendSections([.modePicker])
         snap.appendItems([Self.modePickerID], toSection: .modePicker)
 
@@ -459,37 +466,43 @@ final class AccountDetailVC: UIViewController {
     /// reconcile seal sits beside the balance with the same glyph and colors as the
     /// Accounts list rows, and the absolute date stays in the Reconcile sheet where
     /// you would act on it.
+    /// The account name, as the (large) navigation title.
+    ///
+    /// No `titleView` any more. It used to carry name-over-balance, ported from the
+    /// SwiftUI screen's `.principal` toolbar item, but a large title and a custom
+    /// `titleView` cannot share the bar: the bar renders the `titleView`, so the name
+    /// would show twice while expanded and the large title would have nowhere to
+    /// collapse into. The balance moved to a content row instead — see
+    /// `configureBalanceCell`. The trade is deliberate: the balance now scrolls away
+    /// rather than staying pinned, which is what the SwiftUI comment
+    /// ("always visible while scrolled") was protecting.
     private func updateTitleView() {
         guard let account else { return }
         title = account.name ?? String(localized: "Account")
+    }
 
-        let name = UILabel()
-        name.text = account.name ?? "—"
-        name.font = .preferredFont(forTextStyle: .headline)
-        name.textAlignment = .center
-
-        let balance = UILabel()
-        balance.text = store.displayMoney(account.balance, from: account.currency)
-        balance.font = .preferredFont(forTextStyle: .caption1)
-        balance.textColor = .secondaryLabel
-
-        let bottom = UIStackView(arrangedSubviews: [balance])
-        bottom.axis = .horizontal
-        bottom.spacing = 3
-        bottom.alignment = .center
+    /// The balance row: amount, with the reconcile seal beside it.
+    ///
+    /// Same meaning as the old title subtitle and the Accounts list rows — green fresh,
+    /// orange overdue, nothing if never reconciled — and still privacy-aware, because
+    /// it goes through `displayMoney`.
+    private func configureBalanceCell(_ cell: UICollectionViewListCell, _ account: AccountRow) {
+        var cfg = cell.defaultContentConfiguration()
+        cfg.text = store.displayMoney(account.balance, from: account.currency)
+        cfg.textProperties.font = .preferredFont(forTextStyle: .title2)
+        cfg.secondaryText = String(localized: "Balance")
+        cfg.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+        cfg.secondaryTextProperties.color = .secondaryLabel
+        cfg.textToSecondaryTextVerticalPadding = 2
+        cell.contentConfiguration = cfg
         if let seal = titleSeal(account) {
             let mark = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
             mark.tintColor = seal
             mark.contentMode = .scaleAspectFit
-            mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2)
-            bottom.addArrangedSubview(mark)
+            cell.accessories = [.customView(configuration: .init(customView: mark, placement: .trailing()))]
+        } else {
+            cell.accessories = []
         }
-
-        let stack = UIStackView(arrangedSubviews: [name, bottom])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 0
-        navigationItem.titleView = stack
     }
 
     /// Seal color beside the title balance — same meaning as the Accounts list
