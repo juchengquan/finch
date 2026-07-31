@@ -14,10 +14,12 @@ struct FinchApp: App {
     // stays open; tick() is a no-op for the other policies.
     private let idleTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     @AppStorage("finch.appearance") private var appearanceRaw = AppearancePreference.system.rawValue
-    @AppStorage(TextSize.systemKey) private var useSystemTextSize = true
     @AppStorage(TextSize.stepKey) private var textSizeStep = TextSize.defaultStep
 
     init() {
+        // The "Use system size" toggle is gone; seed the slider for anyone
+        // upgrading from it BEFORE the first frame reads the preference.
+        TextSize.migrateLegacySystemPreference(systemStep: TextSize.currentSystemStep)
         #if DEBUG
         // Testing aid (DEBUG only — never in release): launch with
         // `-initialTab <accounts|activity|budgets|insights|scheduled|settings|ledger>`
@@ -58,7 +60,7 @@ struct FinchApp: App {
                 }
             }
             .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
-            .modifier(TextSizeModifier(useSystem: useSystemTextSize, step: textSizeStep))
+            .modifier(TextSizeModifier(step: textSizeStep))
             .onReceive(idleTimer) { _ in gate.tick() }
             // Shared with the iOS UIKit entry point — see LaunchSequence, which owns
             // the ordering that keeps first paint off the heavy chores.

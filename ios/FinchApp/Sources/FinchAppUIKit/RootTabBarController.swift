@@ -371,9 +371,8 @@ private struct TabChrome: ViewModifier {
 /// The text-size preference the SwiftUI root applied once at the top. Hosting
 /// controllers do not inherit it, so every hosted root re-applies it.
 struct AppTextSize: ViewModifier {
-    @AppStorage(TextSize.systemKey) private var useSystem = true
     @AppStorage(TextSize.stepKey) private var step = TextSize.defaultStep
     func body(content: Content) -> some View {
-        content.modifier(TextSizeModifier(useSystem: useSystem, step: step))
+        content.modifier(TextSizeModifier(step: step))
     }
 }
