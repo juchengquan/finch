@@ -128,8 +128,12 @@ Must compile for macOS too — `FinchMac` shares these sources, so no iOS-only A
 ## Accessibility
 
 The dots are the cell's only content while masked, so left decorative they would make VoiceOver
-read a bare day number. The dot stack gets a label and the cell combines its children, giving
-"15, income and spending".
+read a bare day number. The dot stack becomes its own labelled element — VoiceOver reads the day
+number, then "Income and spending".
+
+The label is scoped to the masked branch on purpose. Combining the *cell's* children into one
+element would also change how an unmasked cell reads, and privacy-off must change nothing. A
+quiet day's empty stack is hidden outright so it doesn't become a silent VoiceOver stop.
 
 Three new localizable strings: `Income`, `Spending`, `Income and spending`.
 
