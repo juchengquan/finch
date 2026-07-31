@@ -348,7 +348,22 @@ more given what Phase 2's conversions actually cost.
    `ScheduledCalendarView` failed on returning a `List`; `MonthCashCalendar` looks like
    a leaf and is not. Two defects, one root cause.
 
-   **FIXED — `.frame(height: 420)` on the hosted grid.** Unbounded, it self-sizes to
+   **NOT FIXED — and it is a REGRESSION I introduced. Control test, 2026-07-31:** built
+   `origin/feat/frontend @ fa8a912` (no Scheduled conversion) on an erased simulator —
+   **the SwiftUI Scheduled calendar scrolls fine.** So `MonthCashCalendar`'s pager is
+   NOT inherently hostile: SwiftUI's `List` coordinates the vertical pan correctly, and
+   a `UICollectionView` + `UIHostingConfiguration` does not.
+   The fix is therefore gesture coordination, not layout — let a vertical pan on the
+   hosted pager reach the collection view while horizontal still pages the month
+   (`UIGestureRecognizerDelegate` on the inner scroll view, or requiring its pan to
+   fail vertically). `.frame(height: 420)` only shrank the dead zone and should be
+   re-evaluated once the gesture is right; it may not be needed at all.
+
+   **Run the control build FIRST next time.** Three rounds were spent theorising about
+   pagers and content sizes when one build of plain `feat/frontend` answered it
+   immediately.
+
+   (Superseded: `.frame(height: 420)` on the hosted grid. Unbounded, it self-sizes to
    fill the viewport, leaving nowhere to begin a scroll, because `MonthCashCalendar` is
    a `.page TabView` and a pan starting inside it belongs to that pager. Bounding it
    leaves a strip to drag from. 420 fits the month header + six week rows (360 clipped
@@ -356,7 +371,7 @@ more given what Phase 2's conversions actually cost.
    pages the month — which is what the SwiftUI screen does too.
    Note the test that misled: a swipe from y=900pt "outside the calendar" appeared to
    prove the gesture innocent, but y=900 is the TAB BAR on a 956pt screen. Check the
-   swipe start is on the content.
+   swipe start is on the content.)
 
    (Superseded note — verified on the simulator: `AccountDetailVC`'s calendar DOES scroll.
    (Switched an account to Calendar, swiped, screenshots differ.) So the code
