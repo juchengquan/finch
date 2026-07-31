@@ -391,15 +391,30 @@ final class ScheduledListVC: UIViewController {
         if let d = selectedDay, d < start || d > end { selectedDay = nil }
     }
 
-    /// Per-day income/expense totals, the shape `MonthCashCalendar` colours by. A
-    /// template with no amount contributes nothing rather than crashing the sum.
+    /// Per-day income/expense totals, the shape `MonthCashCalendar` colours by.
+    ///
+    /// Split on `template.type`, NOT on the sign of `amount` — scheduled amounts are
+    /// stored unsigned, so a sign test marks every expense as income and the whole
+    /// month renders green. Converted to base currency first, because a month can mix
+    /// accounts in different currencies and summing raw amounts across them is
+    /// meaningless. Both rules lifted from `ScheduledCalendarView.dayAmounts`.
     private func dayAmounts() -> [String: (income: Double, expense: Double)] {
-        occurrencesByDay.mapValues { occ in
-            occ.reduce(into: (income: 0.0, expense: 0.0)) { acc, o in
-                let amount = o.template.amount ?? 0
-                if amount >= 0 { acc.income += amount } else { acc.expense += -amount }
+        let currencyById = Dictionary(uniqueKeysWithValues: store.accounts.map { ($0.id, $0.currency) })
+        var out: [String: (income: Double, expense: Double)] = [:]
+        for (day, occs) in occurrencesByDay {
+            var inc = 0.0, exp = 0.0
+            for o in occs {
+                guard let amt = o.template.amount else { continue }
+                let base = abs(store.toBase(amt, from: currencyById[o.template.accountId] ?? nil))
+                switch o.template.type {
+                case "income":  inc += base
+                case "expense": exp += base
+                default: break
+                }
             }
+            out[day] = (income: inc, expense: exp)
         }
+        return out
     }
 
     private func monthLabel(_ key: String) -> String {
