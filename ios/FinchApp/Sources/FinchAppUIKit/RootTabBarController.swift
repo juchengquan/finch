@@ -26,7 +26,7 @@ final class RootTabBarController: UITabBarController {
     /// time through Phase 2. Gated for now: `-uikitActivity YES`, because the
     /// converted feed is not yet at feature parity (see ActivityFeedVC).
     private static var uikitNavTabs: Set<AppTab> {
-        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets, .settings] : []
+        UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets, .scheduled, .settings] : []
     }
 
     override func viewDidLoad() {
@@ -50,6 +50,10 @@ final class RootTabBarController: UITabBarController {
             let vc: UIViewController
             if tab == .budgets, Self.uikitNavTabs.contains(tab) {
                 let nav = UINavigationController(rootViewController: BudgetsListVC())
+                nav.navigationBar.prefersLargeTitles = true
+                vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
+            } else if tab == .scheduled, Self.uikitNavTabs.contains(tab) {
+                let nav = UINavigationController(rootViewController: ScheduledListVC())
                 nav.navigationBar.prefersLargeTitles = true
                 vc = TabChromeVC(content: nav, tab: tab, store: store, router: router)
             } else {

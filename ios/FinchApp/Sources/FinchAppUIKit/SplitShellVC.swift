@@ -213,6 +213,15 @@ final class SplitShellVC: UIViewController {
             return
         }
         budgetList = nil
+        if tab == .scheduled, Self.uikitBudgets {
+            let list = ScheduledListVC(onSelect: { [weak self] id in self?.selection.scheduled = id })
+            list.selectedID = selection.scheduled
+            svc.setViewController(UINavigationController(rootViewController: list), for: .supplementary)
+            // Detail stays hosted: `ScheduledDetailView` is a sibling COLUMN here, not a
+            // push, so it is not at navigation depth and cannot shadow.
+            svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
+            return
+        }
         svc.setViewController(host(SplitListColumn(tab: tab, selection: selection)), for: .supplementary)
         svc.setViewController(host(SplitDetailColumn(tab: tab, selection: selection)), for: .secondary)
     }
