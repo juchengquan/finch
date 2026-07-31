@@ -174,6 +174,21 @@ struct MonthCashCalendar: View {
         }
     }
 
+    /// Income / expense presence for one day — privacy mode's stand-in for the
+    /// amount lines. Presence only: never magnitude, never a count.
+    enum Mark: Hashable { case income, expense }
+
+    /// Which presence dots a day cell draws. Empty unless masked: an unmasked
+    /// cell draws real amount lines and never dots. Income first — its dot sits
+    /// above the expense one, mirroring the line order it replaces.
+    static func marks(income: Double, expense: Double, masked: Bool) -> [Mark] {
+        guard masked else { return [] }
+        var out: [Mark] = []
+        if income > 0 { out.append(.income) }
+        if expense > 0 { out.append(.expense) }
+        return out
+    }
+
     /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
     static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
     /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every

@@ -32,6 +32,16 @@ final class PrivacyModeTests: XCTestCase {
         XCTAssertTrue(store.displayNative(42.0, currency: "USD").contains("42"))
     }
 
+    // The calendar cells' formatter — nil under privacy is the contract the
+    // month grid depends on to swap amount lines for presence dots.
+    func test_displayExactBase_nilUnderPrivacy_realFigureWhenOff() {
+        let store = FinchStore()
+        XCTAssertNotNil(store.displayExactBase(1234.5))
+        XCTAssertTrue(store.displayExactBase(1234.5)?.contains("1") ?? false)
+        store.privacyMode = true
+        XCTAssertNil(store.displayExactBase(1234.5))
+    }
+
     func test_togglePersistsToUserDefaults_andNewStoreReadsIt() {
         let store = FinchStore()
         store.privacyMode = true
