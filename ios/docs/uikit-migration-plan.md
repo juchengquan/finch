@@ -329,7 +329,14 @@ more given what Phase 2's conversions actually cost.
    hosted SwiftUI *scroll view* is reproducer B — the very thing this migration exists
    to remove.
    List mode is fine; only the calendar branch is affected.
-   **The fix is to convert `ScheduledCalendarView` to UIKit**, not to wrap it harder.
+   **FIXED same day** — by hosting the grid instead of the List. `ScheduledCalendarView`'s
+   `List` contains exactly three things: the topRow, a `MonthCashCalendar` (a genuine
+   leaf, already hosted by `AccountDetailVC`), and per-day occurrence sections. So
+   `ScheduledListVC` now hosts `MonthCashCalendar` alone and renders the day sections as
+   sections of its OWN collection view. One scroll view, no collapse, no reproducer B.
+   Occurrence ids are `__occ__<day>|<templateId>` — the day is in the id because a
+   template recurring twice in a month would otherwise produce a duplicate diffable
+   identifier, which is a crash rather than a glitch.
    Check every "leaf" the same way before hosting it: `MonthCashCalendar` genuinely is
    one, which is why `AccountDetailVC` gets away with hosting it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.

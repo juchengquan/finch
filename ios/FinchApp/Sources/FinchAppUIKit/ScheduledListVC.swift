@@ -42,6 +42,10 @@ final class ScheduledListVC: UIViewController {
     private enum Mode { case list, calendar }
     private var mode: Mode = .calendar          // the SwiftUI screen opens on the calendar
     private var searchQuery = ""
+    private var monthAnchor = MonthCashCalendar.firstOfMonth(forISO: nil)
+    private var selectedDay: String?
+    /// Occurrences for the visible month, keyed by day. Rebuilt in `applySnapshot`.
+    private var occurrencesByDay: [String: [(date: String, template: ScheduledTemplate)]] = [:]
 
     private enum SectionID: Hashable {
         case modePicker
@@ -50,12 +54,16 @@ final class ScheduledListVC: UIViewController {
         case month(String)              // "yyyy-MM", or "—" for ended templates
         case detected
         case noResults                  // search matched nothing
+        case day(String)                // calendar mode: one section per day with occurrences
+        case nothingScheduled
     }
     private static let modePickerID = "__mode_picker__"
     private static let calendarID = "__calendar__"
     private static let emptyID = "__empty__"
     private static let noResultsID = "__no_results__"
     private static let chargePrefix = "__charge__"
+    private static let occPrefix = "__occ__"
+    private static let nothingID = "__nothing__"
 
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -155,18 +163,23 @@ final class ScheduledListVC: UIViewController {
                 .margins(.vertical, 4)
 
             case Self.calendarID:
-                // Hosted whole: the calendar is a leaf with its own gesture model, and
-                // it already routes edit / post / delete / add / select through the
-                // callbacks below. Rebuilding a month grid in UIKit would buy nothing.
+                // The month GRID only. `ScheduledCalendarView` returns a `List`, so
+                // hosting it collapsed inside a self-sizing cell AND put a hosted
+                // SwiftUI scroll view at navigation depth — reproducer B, the thing
+                // this migration removes. `MonthCashCalendar` is the genuine leaf
+                // inside it, and is the same view `AccountDetailVC` hosts.
+                let amounts = self.dayAmounts()
                 cell.contentConfiguration = UIHostingConfiguration {
-                    ScheduledCalendarView(
-                        templates: self.filteredTemplates(),
-                        onEdit: { [weak self] t in self?.presentSheet(ScheduledSheet(template: t)) },
-                        onPost: { [weak self] t, occ in self?.post(t, occurrence: occ) },
-                        onDelete: { [weak self] t in self?.confirmDelete(t, from: nil) },
-                        onAdd: { [weak self] date in self?.presentSheet(ScheduledSheet(prefillStart: date)) },
-                        onSelect: self.onSelect.map { pick in { (t: ScheduledTemplate) in pick(t.id) } },
-                        topRow: AnyView(EmptyView()))   // the picker is its own row here
+                    MonthCashCalendar(
+                        monthAnchor: Binding(get: { self.monthAnchor },
+                                             set: { self.monthAnchor = $0; self.applySnapshot() }),
+                        selectedDay: Binding(get: { self.selectedDay },
+                                             set: { self.selectedDay = $0; self.applySnapshot() }),
+                        wallToday: self.store.wallToday,
+                        amountsForRange: { from, through in
+                            amounts.filter { $0.key >= from && $0.key <= through }
+                        },
+                        format: { self.store.displayExactBase($0) })
                         .environmentObject(self.store)
                 }
 
@@ -182,7 +195,22 @@ final class ScheduledListVC: UIViewController {
                 cfg.textProperties.color = .secondaryLabel
                 cell.contentConfiguration = cfg
 
+            case Self.nothingID:
+                var cfg = cell.defaultContentConfiguration()
+                cfg.text = String(localized: "Nothing scheduled.")
+                cfg.textProperties.color = .secondaryLabel
+                cell.contentConfiguration = cfg
+
             default:
+                if id.hasPrefix(Self.occPrefix), let t = self.template(forOccurrence: id) {
+                    // The occurrence row: the template, hosted as the same ScheduledRow
+                    // the list mode uses, so the two modes cannot drift apart.
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        ScheduledRow(template: t).environmentObject(self.store)
+                    }
+                    .margins(.vertical, 6)
+                    return
+                }
                 if let charge = self.chargeByID[id] {
                     // A detected, not-yet-scheduled charge: tapping it opens the sheet
                     // prefilled from the charge, which is how one becomes a template.
@@ -267,6 +295,7 @@ final class ScheduledListVC: UIViewController {
     }
 
     private func applySnapshot() {
+        rebuildOccurrences()
         let templates = templatesByMonth()
         let charges = filteredCharges()
         templateByID = Dictionary(uniqueKeysWithValues: filteredTemplates().map { ($0.id, $0) })
@@ -281,6 +310,29 @@ final class ScheduledListVC: UIViewController {
         if mode == .calendar {
             snap.appendSections([.calendar])
             snap.appendItems([Self.calendarID], toSection: .calendar)
+            // The day sections the SwiftUI calendar rendered inside its own List are
+            // now sections of THIS collection view.
+            let days = occurrencesByDay.keys.sorted()
+            if let day = selectedDay {
+                let section = SectionID.day(day)
+                snap.appendSections([section])
+                let occ = occurrencesByDay[day] ?? []
+                snap.appendItems(occ.isEmpty ? [Self.nothingID]
+                                             : occ.map { Self.occPrefix + day + "|" + $0.template.id },
+                                 toSection: section)
+                headers[section] = MonthCashCalendar.pretty(day)
+            } else if days.isEmpty {
+                snap.appendSections([.nothingScheduled])
+                snap.appendItems([Self.nothingID], toSection: .nothingScheduled)
+            } else {
+                for day in days {
+                    let section = SectionID.day(day)
+                    snap.appendSections([section])
+                    snap.appendItems((occurrencesByDay[day] ?? []).map { Self.occPrefix + day + "|" + $0.template.id },
+                                     toSection: section)
+                    headers[section] = MonthCashCalendar.pretty(day)
+                }
+            }
         } else {
             if templates.isEmpty && charges.isEmpty && !searchActive {
                 snap.appendSections([.empty])
@@ -313,6 +365,40 @@ final class ScheduledListVC: UIViewController {
         // row stops looking selected whenever the list refreshes underneath it.
         if let selectedID, let ip = dataSource.indexPath(for: selectedID) {
             collectionView.selectItem(at: ip, animated: false, scrollPosition: [])
+        }
+    }
+
+    /// `__occ__<day>|<templateId>` → the template. Occurrence ids carry the day so a
+    /// template recurring twice in one month gets two distinct diffable ids; a repeated
+    /// identifier is a hard crash, not a glitch.
+    private func template(forOccurrence id: String) -> ScheduledTemplate? {
+        guard let sep = id.lastIndex(of: "|") else { return nil }
+        return templateByID[String(id[id.index(after: sep)...])]
+    }
+
+    /// Occurrences for the visible month, and the per-day amounts the grid colours by.
+    private func rebuildOccurrences() {
+        let anchor = monthAnchor
+        let y = AppDate.civil.component(.year, from: anchor)
+        let m = AppDate.civil.component(.month, from: anchor)
+        let days = AppDate.civil.range(of: .day, in: .month, for: anchor)?.count ?? 30
+        let start = String(format: "%04d-%02d-01", y, m)
+        let end = String(format: "%04d-%02d-%02d", y, m, days)
+        occurrencesByDay = Dictionary(
+            grouping: Selectors.occurrencesInRange(filteredTemplates(), from: start, through: end),
+            by: { $0.date })
+        // A stale selection (month changed under it) must not strand the day section.
+        if let d = selectedDay, d < start || d > end { selectedDay = nil }
+    }
+
+    /// Per-day income/expense totals, the shape `MonthCashCalendar` colours by. A
+    /// template with no amount contributes nothing rather than crashing the sum.
+    private func dayAmounts() -> [String: (income: Double, expense: Double)] {
+        occurrencesByDay.mapValues { occ in
+            occ.reduce(into: (income: 0.0, expense: 0.0)) { acc, o in
+                let amount = o.template.amount ?? 0
+                if amount >= 0 { acc.income += amount } else { acc.expense += -amount }
+            }
         }
     }
 
@@ -420,7 +506,7 @@ extension ScheduledListVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
         if id == Self.modePickerID || id == Self.calendarID { return false }   // own their touches
-        return templateByID[id] != nil || chargeByID[id] != nil
+        return templateByID[id] != nil || chargeByID[id] != nil || id.hasPrefix(Self.occPrefix)
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
@@ -430,7 +516,8 @@ extension ScheduledListVC: UICollectionViewDelegate {
             presentSheet(ScheduledSheet(fromCharge: charge))
             return
         }
-        guard let t = templateByID[id] else { return }
+        let t0 = templateByID[id] ?? template(forOccurrence: id)
+        guard let t = t0 else { return }
         if let onSelect {
             selectedID = id           // stays selected: it is the column's state, not a button
             onSelect(t.id)
