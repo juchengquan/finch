@@ -276,12 +276,18 @@ struct MonthCashCalendar: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Self.marksLabel(marks) ?? Text(verbatim: ""))
                     .accessibilityHidden(marks.isEmpty)
-                } else if let a = amounts {
+                } else {
                     // Exact figures (cents only when non-zero), sign-prefixed;
-                    // nil from `format` drops the line.
+                    // nil from `format` drops the line. The VStack is rendered
+                    // unconditionally — the `if let` must stay INSIDE it. Branch
+                    // it away for a day with no amounts and the 32pt slot stops
+                    // being reserved, so that cell's number re-centres ~13pt
+                    // lower than its neighbours' and the whole row staggers.
                     VStack(spacing: 0) {
-                        if a.income > 0, let s = format(a.income) { amountLine("+" + s, .green) }
-                        if a.expense > 0, let s = format(a.expense) { amountLine("−" + s, .red) }
+                        if let a = amounts {
+                            if a.income > 0, let s = format(a.income) { amountLine("+" + s, .green) }
+                            if a.expense > 0, let s = format(a.expense) { amountLine("−" + s, .red) }
+                        }
                     }
                 }
             }
