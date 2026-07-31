@@ -337,6 +337,22 @@ more given what Phase 2's conversions actually cost.
    Occurrence ids are `__occ__<day>|<templateId>` — the day is in the id because a
    template recurring twice in a month would otherwise produce a duplicate diffable
    identifier, which is a crash rather than a glitch.
+
+   **STILL OPEN: the page does not scroll.** Confirmed on the simulator — a full swipe
+   changes nothing, and the day sections sit unreachable below the tab bar.
+   `MonthCashCalendar` is a **`.page` `TabView`** (`MonthCashCalendar.swift:70`) — a
+   horizontal pager, i.e. a scroll view. Hosted inside a vertically scrolling
+   `UICollectionView`, it swallows the vertical pan.
+
+   **So "is it a leaf?" is the wrong question — ask "does it contain a scroll view?"**
+   `ScheduledCalendarView` failed on returning a `List`; `MonthCashCalendar` looks like
+   a leaf and is not. Two defects, one root cause.
+
+   `AccountDetailVC` hosts the same calendar and is NOT reported as stuck, so either it
+   has the same latent bug unnoticed (its calendar mode may simply have little content
+   below) or something about its section config lets the pan through. **Establish which
+   before fixing** — the answer decides whether this is a Scheduled bug or a shipped
+   `AccountDetailVC` bug too.
    Check every "leaf" the same way before hosting it: `MonthCashCalendar` genuinely is
    one, which is why `AccountDetailVC` gets away with hosting it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
