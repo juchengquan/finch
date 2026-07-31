@@ -3,8 +3,7 @@ import FinchCore
 
 // Phase 3 / remediation #23 — true three-column master–detail on regular width
 // (iPad / Mac). Only the tabs that have a real list→detail relationship —
-// Accounts, Budgets, and Ledger (added 2026-07-07, see
-// 2026-07-07-ipad-multicolumn-design.md) — use three columns: sidebar
+// Accounts, Budgets, and Ledger (added 2026-07-07) — use three columns: sidebar
 // (sections) │ list │ detail. The dashboard / sheet-based tabs (Insights,
 // Settings, Activity, Scheduled) keep two columns (sidebar │ full-width
 // content) — a dashboard squeezed into a narrow middle column would be worse.

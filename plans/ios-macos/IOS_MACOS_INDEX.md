@@ -2,28 +2,63 @@
 
 > _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
 
-> **⚠️ CURRENT STATUS (2026-06-14):** the **engine** is complete + parity-tested,
-> but a feature audit found the **UI is a read-mostly shell** — whole domains
-> (accounts, budget edit, counterparties, display-currency, splits/tags) have no
-> UI yet. Read first: **`IOS_MACOS_UI_GAP_AUDIT.md`** (what's missing) +
-> **`IOS_MACOS_UI_REMEDIATION_PLAN.md`** (the build-out). The earlier "full
-> parity" framing described the engine, not the app.
+> **CURRENT STATUS (2026-08-01).** Phases 0–8 shipped, and so did the ~135-feature
+> build-out that followed them (listed below). **Web→iOS parity is closed** and the
+> native app now runs ahead of the web in places. Current native work is the
+> **UIKit migration** — see `ios/docs/uikit-migration-plan.md`, which is where the
+> live plan lives; this directory is the architectural record of how the app got here.
 >
-> **Docs are no longer parity-only:** iOS/macOS may now add features ahead of the
-> web and feed them back to `frontend/`. Track net-new native work in the
-> remediation plan and flag it for back-port.
+> The June-14 gap audit and its remediation plan are a **historical snapshot**, not
+> current state — they describe a read-mostly shell that no longer exists. Kept for
+> the reasoning, not the verdict.
 >
-> - `plans/ios-macos/IOS_MACOS_UI_GAP_AUDIT.md` — **authoritative capability/gap matrix (read first)**
-> - `plans/ios-macos/IOS_MACOS_UI_REMEDIATION_PLAN.md` — **the prioritized UI build-out**
+> **Docs are no longer parity-only:** iOS/macOS may add features ahead of the web and
+> feed them back to `frontend/`.
+>
 > - `plans/ios-macos/IOS_MACOS_PLAN.md` — the direction brief (§1-§16)
 > - `plans/ios-macos/IOS_MACOS_ROADMAP.md` — the 8-phase arc sketch
 > - `plans/ios-macos/IOS_MACOS_WIRE_FORMAT.md` — the wire-format annex (reference)
 > - `plans/ios-macos/IOS_MACOS_PHASE_*.md` — the 12 phase design specs
+> - `plans/ios-macos/IOS_MACOS_UI_GAP_AUDIT.md` + `IOS_MACOS_UI_REMEDIATION_PLAN.md` — the 2026-06-14 snapshot (historical)
 > - `plans/ios-macos/IOS_MACOS_INDEX.md` (this file) — the navigation index
 >
-> _This index is the single entry point for navigating the 16 iOS/macOS
-> plan files. It does not introduce new design content; it points to
-> the canonical location of recurring terms and topics._
+> _This index is the single entry point for navigating the iOS/macOS plan files.
+> It does not introduce new design content; it points to the canonical location
+> of recurring terms and topics._
+
+## §0. What shipped after the phases (2026-06-21 → 2026-07-23)
+
+135 features, built one at a time. Each had a `<date>-<feature>-{design,plan}.md`
+pair here; **those 246 files were deleted on 2026-08-01** and this list replaces them.
+
+They were deleted rather than archived because they had stopped being true: every one
+described work that had shipped, most still carried `Status: Design approved, pending
+implementation`, and nothing outside the set referenced any of them. The rationale that
+outlived each feature is in a doc comment at the point of use — where it stays correct.
+`AccountGroupCollapse.swift`, for instance, explains why the *collapsed* set is stored
+rather than the expanded one, and adds the per-ledger keying its design doc never knew
+about. Git history has the originals if a decision ever needs re-reading.
+
+- **Accounts** (11, 06-21–07-22) — account group collapse · accounts unified reorder · ios budget account filter · ios guided reconcile cp1 · ios guided reconcile cp2 · ios opening balance display · ios reconcile badge split · account group parity · account leading swipe · adjust balance relocation · account month sections
+- **Budgets** (12, 06-25–07-22) — ios budget rollover · budget addform frequencies · demo budget groups · budget cycle history · budget group reorder · budget order · budget reorder editor · budget swipe · budget sheet pickers · budgets ui optimization · income budget transaction matching · budget detail month sections
+- **Activity & search** (16, 06-22–07-19) — add tx tags status receipt · transaction search filter · feed count emptystate bulk · feed counterparty filter · feed sort options · merchant feed deeplink · multi tag filter · flat feed · ios activity saved searches · relative row dates · feed date dedup · feed display prefs · activity detail column · tx duplicate · txrow density · tx form redesign
+- **Scheduled** (6, 06-25–07-21) — ios scheduled calendar · add to scheduled · recurring detector · scheduled detail column · scheduled calendar always · scheduled post occurrence
+- **Insights & charts** (5, 06-25–07-20) — ios insights advice cp1 · ring stackedbar primitives · insights ring stackedbar · whatif sliders · insights customizable dashboard
+- **Categories/tags/merchants** (24, 06-23–07-19) — add counterparty linking · ios category hierarchy · ios category reorder cp2 step2 · ios category reparent cp2 · ios category reparent cp2 step1 · ios tag colors · ios merchant txcounts · ios rule multi condition cp1 · ios rules editing · ios tag category counts · transfer tags status · edit counterparty suggestions · ios rule multi condition cp2a · ios rule multi condition cp2b · merchant detail · row tag colors · categories page redesign · category merge · category merge multiselect · global merchants phase2 · merchant label · merchants settings merge · tag merge · tags settings page
+- **Money, FX & currency** (6, 06-25–07-19) — edit currency · ios fx source currency picker · currencies page · fx autoupdate · fx page redesign · numeric input validation
+- **Write sheets & forms** (9, 06-23–07-23) — add split creation · add refund linking · edit form parity · refund badge · edit type control · split discoverability · type control glass · sheet layout unification · write sheet icon rows
+- **Settings & appearance** (8, 06-22–07-20) — settings native push · notifications cancel fix · settings appearance language · nav settings ledger swap · privacy mode · backup sync merge · text size · haptics
+- **iPad / macOS** (8, 06-21–07-15) — compact more tab · macos kbopen · macos parity phase1 · macos parity phase2 · macos parity phase3 · macos parity roadmap · ipad multicolumn · sidebar persistence
+- **Watch & widgets** (7, 06-26–07-07) — ios widgets cp1 · ios widgets cp2 · ios widgets cp3 · watch cp1 · watch cp2 · watch cp3 · watch quickadd templates
+- **Demo data & seeds** (2, 06-27–06-27) — demo richer · extract demo seed
+- **i18n** (5, 06-26–07-10) — loc pipeline refresh · localize tab titles · zh manual 96 · zh batch · zh review pass
+- **Receipts & export** (4, 06-25–07-07) — receipt attachment preview · receipt preview from row · receipt thumbnails · ios export report
+- **Ledger model** (2, 07-19–07-19) — ledger reference copy phase1 · ledger reference model
+- **Other** (10, 06-25–07-31) — ios handoff · ios kind reclassification · ios web parity gap inventory · ungrouped top · group color · reorder collapse · reorder menu entry · swipe trim · dialog anchors · uikit pushed fab
+
+
+Since 2026-07-23 the native work has been the UIKit migration, planned in
+`ios/docs/uikit-migration-plan.md` rather than here.
 
 ## §1. Glossary
 

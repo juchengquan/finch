@@ -2,7 +2,6 @@
 /// Budgets, Scheduled, Insights, Settings; `.more` is the corner-pushed overflow
 /// role, carrying the two-layer Ledger reached from the top-left control.
 /// (Activity is not a bottom-bar tab — its feed lives inside Accounts.)
-/// See plans/ios-macos/2026-06-27-nav-settings-ledger-swap-spec.md.
 enum CompactTab: Hashable {
     case accounts, budgets, scheduled, insights, settings, more
 }

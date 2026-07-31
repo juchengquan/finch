@@ -1,5 +1,17 @@
 # iOS / macOS — UI capability gap audit (2026-06-14)
 
+> ## ⚠️ HISTORICAL — a 2026-06-14 snapshot, not current state
+>
+> **The gap this audit found is closed.** The ~135 features listed in
+> `IOS_MACOS_INDEX.md` §0 are what closed it, and web→iOS parity is complete; the
+> app described below — "a read-mostly shell over a complete engine" — no longer
+> exists. Do not read the findings as a to-do list.
+>
+> Kept for the reasoning, not the verdict: the *method* (five parallel surveys, each
+> finding spot-checked against the code, the headline confirmed by three agents and
+> re-verified by hand) is why it caught something ordinary review had missed for
+> weeks, and the "why prior testing missed it" section below is the durable part.
+
 > **Status: authoritative.** This supersedes any earlier "full functional
 > parity" claim for the iOS/macOS port. Produced by a 5-agent feature audit
 > (screen parity · macOS/iPad fitness · OS integrations · non-functional ·

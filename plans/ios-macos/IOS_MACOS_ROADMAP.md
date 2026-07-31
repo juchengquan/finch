@@ -14,7 +14,7 @@
 > | 7 — Widgets / Live Activities / Watch | ✅ Shipped | `FinchWidget` + `FinchWatch` targets; `WidgetSnapshot` |
 > | 8 — Row-level CloudKit sync | 🚧 Scaffold | `CloudKitSyncCoordinator`/`Sync` built; **inert** until container provisioned + device-tested ("CloudKit sync maturity") |
 >
-> On top of the phases, a long tail of **web→iOS parity** and polish shipped (see `2026-06-25-ios-web-parity-gap-inventory.md`): Tier-1 & Tier-3 fully closed; only *Accounts: guided reconcile / quick-add* (Tier-2) remains. **Full zh-Hans localization** landed (#346/#349/#350). Per-phase status notes are inline under each heading below.
+> On top of the phases, a long tail of **web→iOS parity** and polish shipped — 135 features between 2026-06-21 and 2026-07-23, listed by area in `IOS_MACOS_INDEX.md`. Web→iOS parity is closed (the last Tier-2 item, guided reconcile, shipped in two increments), and the native app now runs **ahead** of the web in places. **Full zh-Hans localization** landed (#346/#349/#350). Per-phase status notes are inline under each heading below.
 
 > _Web facts verified vs commit `22c9896` (SCHEMA_VERSION `2026-06-14T00:00:00Z`), 2026-06-13. See `_WEB_DRIFT_CHECKLIST.md`._
 
