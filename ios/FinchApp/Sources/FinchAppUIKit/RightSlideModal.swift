@@ -60,6 +60,17 @@ enum RightSlideModal {
                 } completion: { _ in ctx.completeTransition(!ctx.transitionWasCancelled) }
             } else {
                 guard let from = ctx.view(forKey: .from) else { ctx.completeTransition(false); return }
+                // Put the presenter BACK before sliding away from it. Under
+                // `.fullScreen` UIKit removes the presenting view once the
+                // presentation completes and only restores it at
+                // `completeTransition` — so without this the container is empty
+                // behind the outgoing view and the window's black backdrop is what
+                // gets revealed. Measured before this line: ~250ms of black
+                // (left-quarter luma 16) before the previous page snapped in at 223.
+                if let to = ctx.view(forKey: .to) {
+                    to.frame = container.bounds
+                    container.insertSubview(to, belowSubview: from)
+                }
                 UIView.animate(withDuration: transitionDuration(using: ctx),
                                delay: 0, options: .curveEaseIn) {
                     from.frame = container.bounds.offsetBy(dx: container.bounds.width, dy: 0)
