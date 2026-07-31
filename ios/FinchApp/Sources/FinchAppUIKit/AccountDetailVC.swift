@@ -127,6 +127,10 @@ final class AccountDetailVC: UIViewController {
                 self?.updateTitleView()   // the balance moves with the rows
             }
             .store(in: &cancellables)
+        // Clears the launch spinner on a ledger with no transactions, where `$txns`
+        // publishes [] → [] and cannot distinguish the two states. See TxnsLoadingCell.
+        TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
+            .store(in: &cancellables)
         store.$holdings
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }
@@ -219,6 +223,12 @@ final class AccountDetailVC: UIViewController {
             }
 
             if id == Self.emptyID || id == Self.emptyDayID {
+                // The balance header above is already correct — it reads the stored
+                // current_balance column, not this list — so only the rows wait.
+                if TxnsLoadingCell.shouldSpin(self.store, searchQuery: self.searchQuery) {
+                    TxnsLoadingCell.configure(cell)
+                    return
+                }
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = id == Self.emptyDayID
                     ? String(localized: "No transactions.")
