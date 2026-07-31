@@ -3287,6 +3287,16 @@
         }
       }
     },
+    "Income and spending": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收入与支出"
+          }
+        }
+      }
+    },
     "Income categories": {
       "localizations": {
         "zh-Hans": {
@@ -5794,6 +5804,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "来源"
+          }
+        }
+      }
+    },
+    "Spending": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支出"
           }
         }
       }

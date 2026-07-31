@@ -193,6 +193,17 @@ struct MonthCashCalendar: View {
         return out
     }
 
+    /// VoiceOver text for a masked cell. The dots are shapes — without this a
+    /// screen reader would hear the day number and nothing else. Scoped to the
+    /// masked branch on purpose: combining the whole cell's children would
+    /// change how an UNMASKED cell reads, and privacy-off must change nothing.
+    static func marksLabel(_ marks: [Mark]) -> Text? {
+        if marks == [.income, .expense] { return Text("Income and spending") }
+        if marks == [.income] { return Text("Income") }
+        if marks == [.expense] { return Text("Spending") }
+        return nil
+    }
+
     /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
     static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
     /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every
@@ -262,6 +273,9 @@ struct MonthCashCalendar: View {
                     VStack(spacing: 3) {
                         ForEach(marks, id: \.self) { dot($0) }
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.marksLabel(marks) ?? Text(verbatim: ""))
+                    .accessibilityHidden(marks.isEmpty)
                 } else if let a = amounts {
                     // Exact figures (cents only when non-zero), sign-prefixed;
                     // nil from `format` drops the line.
