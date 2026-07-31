@@ -105,7 +105,8 @@ struct ActivityFeedView: View {
                                 amountsForRange: { from, through in
                                     MonthGrouping.dailyIncomeExpense(filteredTxns().filter { $0.date >= from && $0.date <= through })
                                 },
-                                format: { store.displayExactBase($0) })
+                                format: { store.displayExactBase($0) },
+                                masked: store.privacyMode)
                         }
                         calendarDetail
                     } else {

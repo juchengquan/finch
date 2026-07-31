@@ -18,6 +18,10 @@ struct MonthCashCalendar: View {
     let amountsForRange: (_ from: String, _ through: String) -> [String: (income: Double, expense: Double)]
     /// Formats a magnitude for a cell line; nil drops the line (privacy mode).
     let format: (Double) -> String?
+    /// Privacy mode: cells trade their amount lines for presence dots. The
+    /// caller owns the flag for the same reason it owns `format` — this view
+    /// deliberately knows nothing about the store.
+    let masked: Bool
 
     /// 3-page carousel position (-1/0/+1 around monthAnchor). A settled swipe
     /// commits the month and snaps back to 0 without animation (a TabView over
@@ -174,6 +178,32 @@ struct MonthCashCalendar: View {
         }
     }
 
+    /// Income / expense presence for one day — privacy mode's stand-in for the
+    /// amount lines. Presence only: never magnitude, never a count.
+    enum Mark: Hashable { case income, expense }
+
+    /// Which presence dots a day cell draws. Empty unless masked: an unmasked
+    /// cell draws real amount lines and never dots. Income first — its dot sits
+    /// above the expense one, mirroring the line order it replaces.
+    static func marks(income: Double, expense: Double, masked: Bool) -> [Mark] {
+        guard masked else { return [] }
+        var out: [Mark] = []
+        if income > 0 { out.append(.income) }
+        if expense > 0 { out.append(.expense) }
+        return out
+    }
+
+    /// VoiceOver text for a masked cell. The dots are shapes — without this a
+    /// screen reader would hear the day number and nothing else. Scoped to the
+    /// masked branch on purpose: combining the whole cell's children would
+    /// change how an UNMASKED cell reads, and privacy-off must change nothing.
+    static func marksLabel(_ marks: [Mark]) -> Text? {
+        if marks == [.income, .expense] { return Text("Income and spending") }
+        if marks == [.income] { return Text("Income") }
+        if marks == [.expense] { return Text("Spending") }
+        return nil
+    }
+
     /// Week rows a month actually needs (5 for most, 4 or 6 at the extremes).
     static func weekRows(firstWeekday: Int, days: Int) -> Int { (firstWeekday + days + 6) / 7 }
     /// CONSTANT grid height (a 6-week month at 62pt cells + 4pt spacing) so every
@@ -225,6 +255,9 @@ struct MonthCashCalendar: View {
     private func dayCell(_ day: Int, iso d: String,
                          amounts: (income: Double, expense: Double)?, height: CGFloat) -> some View {
         let isSel = d == selectedDay, isToday = d == wallToday
+        let marks = Self.marks(income: amounts?.income ?? 0,
+                               expense: amounts?.expense ?? 0,
+                               masked: masked)
         return VStack(spacing: 2) {
             // Today gets a filled accent circle (white number); other days plain.
             Text("\(day)")
@@ -233,12 +266,29 @@ struct MonthCashCalendar: View {
                 .frame(width: 26, height: 26)
                 .background(isToday ? Color.accentColor : Color.clear, in: Circle())
             // Fixed-height two-line slot (rows align whether or not a day has
-            // amounts). Exact figures (cents only when non-zero), sign-prefixed;
-            // nil from `format` (privacy mode) drops the lines.
-            VStack(spacing: 0) {
-                if let a = amounts {
-                    if a.income > 0, let s = format(a.income) { amountLine("+" + s, .green) }
-                    if a.expense > 0, let s = format(a.expense) { amountLine("−" + s, .red) }
+            // amounts). Privacy mode swaps the exact figures for presence dots
+            // INSIDE the same slot — the grid must not shift when it toggles.
+            Group {
+                if masked {
+                    VStack(spacing: 3) {
+                        ForEach(marks, id: \.self) { dot($0) }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.marksLabel(marks) ?? Text(verbatim: ""))
+                    .accessibilityHidden(marks.isEmpty)
+                } else {
+                    // Exact figures (cents only when non-zero), sign-prefixed;
+                    // nil from `format` drops the line. The VStack is rendered
+                    // unconditionally — the `if let` must stay INSIDE it. Branch
+                    // it away for a day with no amounts and the 32pt slot stops
+                    // being reserved, so that cell's number re-centres ~13pt
+                    // lower than its neighbours' and the whole row staggers.
+                    VStack(spacing: 0) {
+                        if let a = amounts {
+                            if a.income > 0, let s = format(a.income) { amountLine("+" + s, .green) }
+                            if a.expense > 0, let s = format(a.expense) { amountLine("−" + s, .red) }
+                        }
+                    }
                 }
             }
             .frame(height: 32)
@@ -261,6 +311,15 @@ struct MonthCashCalendar: View {
             .minimumScaleFactor(0.55)
             .padding(.horizontal, 1)
             .frame(maxWidth: .infinity)
+    }
+
+    /// One presence dot — privacy mode's stand-in for an amount line. Fixed
+    /// size on purpose: scaling it by amount would leak the magnitude the
+    /// mask exists to hide.
+    private func dot(_ mark: Mark) -> some View {
+        Circle()
+            .fill(mark == .income ? Color.green : Color.red)
+            .frame(width: 6, height: 6)
     }
 
     private func step(_ n: Int) {
