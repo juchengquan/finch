@@ -23,6 +23,26 @@ final class LedgersVC: UIViewController {
     private let gate = BiometricGate.shared
     private var cancellables = Set<AnyCancellable>()
 
+    /// Selection mode. `nil` → compact: a row PUSHES its detail. Non-nil → this list
+    /// drives a split view's detail column and reports the id instead.
+    ///
+    /// The UIKit counterpart of the `selection: Binding<String?>?` the SwiftUI screens
+    /// carry. A closure rather than a binding because the owner here is a view
+    /// controller, and because the list never needs to read the value back — only the
+    /// highlight does, and that comes through `selectedID`.
+    private let onSelect: ((String) -> Void)?
+    /// The row to show as selected, when a split view owns the selection.
+    var selectedID: String? {
+        didSet { guard selectedID != oldValue else { return }; applySnapshot() }
+    }
+
+    init(onSelect: ((String) -> Void)? = nil) {
+        self.onSelect = onSelect
+        super.init(nibName: nil, bundle: nil)
+    }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     private enum SectionID: Hashable { case ledgers }
     private var collectionView: UICollectionView!
     private var dataSource: UICollectionViewDiffableDataSource<SectionID, String>!
@@ -85,9 +105,11 @@ final class LedgersVC: UIViewController {
             worth.font = .preferredFont(forTextStyle: .subheadline)
             worth.textColor = .secondaryLabel
             var accessories: [UICellAccessory] = [
-                .customView(configuration: .init(customView: worth, placement: .trailing())),
-                .disclosureIndicator(),
+                .customView(configuration: .init(customView: worth, placement: .trailing()))
             ]
+            // A chevron promises a push. In selection mode the row fills a column
+            // beside it instead, so the chevron would be a lie.
+            if self.onSelect == nil { accessories.append(.disclosureIndicator()) }
             if ledger.id == self.store.activeLedgerId {
                 let tick = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
                 tick.tintColor = .tintColor
@@ -120,6 +142,12 @@ final class LedgersVC: UIViewController {
         let carried = Set(dataSource.snapshot().itemIdentifiers)
         snap.reconfigureItems(snap.itemIdentifiers.filter(carried.contains))
         dataSource.apply(snap, animatingDifferences: false)
+
+        // Re-assert the highlight: `apply` clears the selection, so without this the
+        // row stops looking selected every time a net worth changes underneath it.
+        if let selectedID, let ip = dataSource.indexPath(for: selectedID) {
+            collectionView.selectItem(at: ip, animated: false, scrollPosition: [])
+        }
     }
 
     // MARK: Actions
@@ -185,8 +213,15 @@ final class LedgersVC: UIViewController {
 
 extension LedgersVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        cv.deselectItem(at: indexPath, animated: true)
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+        if let onSelect {
+            // Stay selected: the row is the current state of the column beside it, not
+            // a button that fired.
+            selectedID = id
+            onSelect(id)
+            return
+        }
+        cv.deselectItem(at: indexPath, animated: true)
         navigationController?.pushViewController(LedgerDetailVC(ledgerId: id), animated: true)
     }
 
