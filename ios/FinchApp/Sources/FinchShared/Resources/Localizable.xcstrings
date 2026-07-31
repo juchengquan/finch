@@ -2357,6 +2357,16 @@
         }
       }
     },
+    "Delete this scheduled item?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除此计划项？"
+          }
+        }
+      }
+    },
     "Delete this transaction?": {
       "localizations": {
         "zh-Hans": {
@@ -2403,6 +2413,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "详情"
+          }
+        }
+      }
+    },
+    "Detected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测到"
           }
         }
       }
@@ -4183,6 +4203,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂无洞察"
+          }
+        }
+      }
+    },
+    "No matches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无匹配"
           }
         }
       }
