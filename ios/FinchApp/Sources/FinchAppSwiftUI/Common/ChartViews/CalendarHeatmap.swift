@@ -11,8 +11,22 @@ struct CalendarHeatmap: View {
     /// interpolating the raw `Double` spoke the exact unconverted figure
     /// ("2026-07-15: 1850.000000") to a screen reader even with amounts masked.
     let format: (Double) -> String
+    /// Privacy mode: every day with spending gets the SAME shade. Opacity that
+    /// scales with the amount *is* the amount — the grid ranked your days, so a
+    /// glance picked out payday and rent day while every figure on screen read
+    /// "••••". Masked, it answers only "did I spend that day?", the same thing
+    /// the month calendar's presence dots answer.
+    let masked: Bool
 
     private var maxValue: Double { values.map(\.value).max() ?? 0 }
+
+    /// Empty day. Barely-there, so the grid still reads as a grid.
+    private static let emptyOpacity = 0.06
+    /// The floor for a day with spending, and the whole range's base.
+    private static let minOpacity = 0.15
+    /// The single shade every spending day gets while masked — deliberately one
+    /// value, well clear of `emptyOpacity`, carrying no ranking at all.
+    private static let maskedOpacity = 0.55
 
     var body: some View {
         // Chunk into week columns of 7 (the input is already day-ordered).
@@ -24,7 +38,8 @@ struct CalendarHeatmap: View {
                 VStack(spacing: 3) {
                     ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.accentColor.opacity(intensity(day.value)))
+                            .fill(Color.accentColor.opacity(
+                                Self.intensity(day.value, maxValue: maxValue, masked: masked)))
                             .frame(width: 12, height: 12)
                             .accessibilityLabel(Text(verbatim: Self.cellLabel(date: day.date, value: day.value, format: format)))
                     }
@@ -40,8 +55,13 @@ struct CalendarHeatmap: View {
         "\(date): \(format(value))"
     }
 
-    private func intensity(_ v: Double) -> Double {
-        guard maxValue > 0, v > 0 else { return v > 0 ? 0.15 : 0.06 }
-        return 0.15 + 0.85 * (v / maxValue)
+    /// Cell opacity. Pure and static so the privacy property is testable: while
+    /// masked, every day with spending must return the SAME value, whatever the
+    /// amount. Unmasked behaviour is unchanged.
+    static func intensity(_ v: Double, maxValue: Double, masked: Bool) -> Double {
+        if v <= 0 { return emptyOpacity }
+        if masked { return maskedOpacity }
+        guard maxValue > 0 else { return minOpacity }
+        return minOpacity + 0.85 * (v / maxValue)
     }
 }
