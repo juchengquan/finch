@@ -91,7 +91,11 @@ final class ActivityFeedVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Activity")
-        navigationItem.largeTitleDisplayMode = .never
+        // Large, collapsing to inline on scroll — what `.navigationTitle("Activity")`
+        // gives the SwiftUI screen, which sets no display mode and so inherits the
+        // navigation controller's `prefersLargeTitles`. Phase 2 pinned every converted
+        // screen to `.never`, which silently dropped that on the feed.
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureSearch()
@@ -362,8 +366,15 @@ final class ActivityFeedVC: UIViewController {
             return
         }
 
-        snap.appendSections([.savedSearch])
-        snap.appendItems([Self.savedSearchID], toSection: .savedSearch)
+        // Only when there is something to show. The SwiftUI screen gates this the same
+        // way (`if !saved.isEmpty || filter.isActive`); appending it unconditionally put
+        // an empty chip row above every feed, which is not a row this screen ever had.
+        // `filter.isActive` keeps the "＋ Save" affordance reachable once the user has
+        // narrowed the list — that is the only way to create the first saved search.
+        if !savedSearches.all(ledgerId: store.activeLedgerId).isEmpty || filter.isActive {
+            snap.appendSections([.savedSearch])
+            snap.appendItems([Self.savedSearchID], toSection: .savedSearch)
+        }
 
         if !pending.isEmpty {
             snap.appendSections([.pending])
