@@ -212,11 +212,7 @@ final class LedgerDetailVC: UIViewController {
     /// A pull-down menu button, as SwiftUI's default `Picker` renders inside a form.
     private func menuAccessory(value: String, options: [String],
                                onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = UIButton(type: .system)
-        button.setTitle(value, for: .normal)
-        button.setTitleColor(.secondaryLabel, for: .normal)
-        button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-        button.showsMenuAsPrimaryAction = true
+        let button = MenuValueButton.make(value: value)
         button.menu = UIMenu(children: options.map { code in
             UIAction(title: code, state: code == value ? .on : .off) { _ in onPick(code) }
         })

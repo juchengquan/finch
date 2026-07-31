@@ -75,7 +75,14 @@ final class AppearanceSettingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Appearance & Language")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
+        // The full name does not fit the large title — it renders as
+        // "Appearance & Langua…". iOS 26 lets the large slot carry its own,
+        // shorter string while the back button and any other reference to this
+        // screen keep the full one. Below 26 it truncates, as SwiftUI does.
+        if #available(iOS 26.0, *) {
+            navigationItem.largeTitle = String(localized: "Appearance")
+        }
         configureCollectionView()
         configureDataSource()
         applySnapshot()
@@ -283,11 +290,7 @@ final class AppearanceSettingsVC: UIViewController {
         cfg.text = label
         cell.contentConfiguration = cfg
 
-        let button = UIButton(type: .system)
-        button.setTitle(value, for: .normal)
-        button.setTitleColor(.secondaryLabel, for: .normal)
-        button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-        button.showsMenuAsPrimaryAction = true
+        let button = MenuValueButton.make(value: value)
         button.menu = UIMenu(children: options.map { title, raw in
             UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }
         })

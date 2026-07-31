@@ -45,6 +45,16 @@ final class ActivityFeedVC: UIViewController {
         case all          // group-by-month off: one flat section
         case empty
         case loadMore
+
+        /// The picker, the chip row and the grid are bare rows in the SwiftUI
+        /// screen — no `Section` header. Reserving header space for them (which a
+        /// uniform `.supplementary` config does) added ~17pt above the picker.
+        var wantsHeader: Bool {
+            switch self {
+            case .modePicker, .savedSearch, .calendar, .loadMore: return false
+            default: return true
+            }
+        }
     }
 
     private enum ViewMode { case list, calendar }
@@ -117,17 +127,24 @@ final class ActivityFeedVC: UIViewController {
     // MARK: Collection view
 
     private func configureCollectionView() {
-        var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
-        config.headerMode = .supplementary
-        config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
-            self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
+        // Per-section header mode, as AccountDetailVC does — a single
+        // `.list(using:)` config applies `.supplementary` to every section, which
+        // reserves header space above the bare rows. `sectionIDs` is set before each
+        // apply, so the provider can ask what kind of section it is laying out.
+        let layout = UICollectionViewCompositionalLayout { [weak self] index, env in
+            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            let kind: SectionID? = self?.sectionIDs.indices.contains(index) == true
+                ? self?.sectionIDs[index] : nil
+            config.headerMode = (kind?.wantsHeader ?? true) ? .supplementary : .none
+            config.leadingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.rowActions(at: ip).map { $0.actions.leading($0.tx) }
+            }
+            config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
+                self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
+            }
+            return NSCollectionLayoutSection.list(using: config, layoutEnvironment: env)
         }
-        config.trailingSwipeActionsConfigurationProvider = { [weak self] ip in
-            self?.rowActions(at: ip).map { $0.actions.trailing($0.tx) }
-        }
-        collectionView = UICollectionView(
-            frame: .zero,
-            collectionViewLayout: UICollectionViewCompositionalLayout.list(using: config))
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
@@ -169,6 +186,12 @@ final class ActivityFeedVC: UIViewController {
                     }
                     .pickerStyle(.segmented)
                 }
+                // No card behind it. An insetGrouped list gives every cell the
+                // grouped background, which wrapped the picker in a white rounded
+                // card the SwiftUI row doesn't have — and cost ~20pt of vertical
+                // rhythm, pushing everything below it down.
+                .margins(.vertical, 0)
+                cell.backgroundConfiguration = .clear()
                 cell.accessories = []
                 return
             }
@@ -429,7 +452,10 @@ final class ActivityFeedVC: UIViewController {
         let sc = UISearchController(searchResultsController: nil)
         sc.searchResultsUpdater = self
         sc.obscuresBackgroundDuringPresentation = false
-        sc.searchBar.placeholder = String(localized: "Search transactions")
+        // Plain "Search" everywhere, matching the SwiftUI screens and the other
+        // converted ones — the bar sits under a title that already says what is
+        // being searched.
+        sc.searchBar.placeholder = String(localized: "Search")
         navigationItem.searchController = sc
         navigationItem.hidesSearchBarWhenScrolling = false   // matches displayMode: .always
     }

@@ -70,7 +70,7 @@ final class BackupsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Backups")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         // Older builds allowed counts up to 50 — snap a stored value into range, as
         // the SwiftUI screen did on appear.
         let clamped = min(max(retention, AutoBackupManager.retentionRange.lowerBound),
@@ -277,11 +277,7 @@ final class BackupsVC: UIViewController {
 
     private func menuAccessory(value: String, options: [(String, String)],
                                onPick: @escaping (String) -> Void) -> UICellAccessory {
-        let button = UIButton(type: .system)
-        button.setTitle(value, for: .normal)
-        button.setTitleColor(.secondaryLabel, for: .normal)
-        button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-        button.showsMenuAsPrimaryAction = true
+        let button = MenuValueButton.make(value: value)
         button.menu = UIMenu(children: options.map { title, raw in
             UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }
         })

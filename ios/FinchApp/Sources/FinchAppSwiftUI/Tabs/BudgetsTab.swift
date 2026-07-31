@@ -60,6 +60,16 @@ struct BudgetsTab: View {
             .searchable(text: $searchQuery, prompt: "Search")
             #endif
             .navigationTitle("Budgets")
+            #if os(iOS)
+            // Pin the large title. This root renders a bare ProgressView until the
+            // deferred txns projection lands (see listContent), and a non-scrollable
+            // root settles the bar to inline — permanently, since it never re-expands
+            // once the list arrives. Accounts and Settings have no loading branch, so
+            // only this tab came up inline. Setting the UIHostingController's
+            // largeTitleDisplayMode from the UIKit side does NOT work: SwiftUI owns
+            // the hosted navigationItem and overwrites it on first layout.
+            .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
                 #if os(iOS)
                 if editMode.isEditing {

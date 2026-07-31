@@ -39,7 +39,7 @@ final class BackupSyncSettingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Backup & Sync")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         applySnapshot()
