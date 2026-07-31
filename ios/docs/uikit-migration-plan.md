@@ -302,6 +302,15 @@ more given what Phase 2's conversions actually cost.
    Do not design the calendar handling again; lift it.
 
    `kbSel` is macOS keyboard selection and has no iOS counterpart — drop it.
+
+   **BLOCKER found while wiring it, 2026-07-31 — read before the next tab.** The VC is
+   written and the iPad column is wired, but the COMPACT tab root is not, and the
+   reason generalises to all four remaining tabs: the tab chrome — the add-transaction
+   FAB and the focused-tx sheet — is a SwiftUI `ViewModifier` (`TabChrome`) applied to
+   hosted roots. A native `UINavigationController` tab root gets none of it, so
+   swapping the root in loses the FAB, which is a visible regression.
+   **Write a UIKit tab-chrome equivalent FIRST**, then convert the roots. Doing it in
+   the other order leaves each converted tab missing its FAB.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
 4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
