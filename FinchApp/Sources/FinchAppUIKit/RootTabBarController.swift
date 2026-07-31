@@ -22,9 +22,21 @@ final class RootTabBarController: UITabBarController {
     /// Bar order. `AppTab` has seven cases; only these five are slots.
     private let slots: [AppTab] = [.accounts, .budgets, .scheduled, .insights, .settings]
 
-    /// Tabs that have moved onto a UIKit navigation controller. Grows one tab at a
-    /// time through Phase 2. Gated for now: `-uikitActivity YES`, because the
-    /// converted feed is not yet at feature parity (see ActivityFeedVC).
+    /// Tabs whose converted UIKit screens are live. Anything not listed here — and
+    /// everything at all while the flag is off — stays a hosted SwiftUI root.
+    ///
+    /// **Off by default.** Nothing registers a default for this key, so an ordinary
+    /// launch is still the all-SwiftUI app; `-uikitActivity YES` opts in.
+    ///
+    /// **The key's name is historical.** The gate arrived with the Activity feed
+    /// (#643) and its original justification was that feed's missing parity — but the
+    /// set has long since outgrown that reason. Budgets (#658) and Scheduled (#660)
+    /// joined for their own Phase 3b reasons, nothing to do with `ActivityFeedVC`. It
+    /// now covers four of the five bar slots; only Insights is untouched. Read it as
+    /// "the migration preview", not "the feed".
+    ///
+    /// `SplitShellVC` reads the same key, so the compact root and the regular-width
+    /// column convert together or not at all — see `uikitBudgets` there.
     private static var uikitNavTabs: Set<AppTab> {
         UserDefaults.standard.bool(forKey: "uikitActivity") ? [.accounts, .budgets, .scheduled, .settings] : []
     }
