@@ -70,7 +70,7 @@ final class BackupsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Backups")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         // Older builds allowed counts up to 50 — snap a stored value into range, as
         // the SwiftUI screen did on appear.
         let clamped = min(max(retention, AutoBackupManager.retentionRange.lowerBound),

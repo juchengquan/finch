@@ -59,7 +59,7 @@ final class CurrenciesVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Currencies")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         // The SwiftUI screen read the stamp in `.onAppear`.
         lastUpdated = UserDefaults.standard.object(forKey: RateAutoUpdater.stampKey) as? Date
         configureCollectionView()

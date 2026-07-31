@@ -75,7 +75,7 @@ final class AppearanceSettingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Appearance & Language")
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         applySnapshot()
@@ -283,10 +283,24 @@ final class AppearanceSettingsVC: UIViewController {
         cfg.text = label
         cell.contentConfiguration = cfg
 
+        // The chevron is the affordance, not decoration: without it the row reads as
+        // a plain value label and nothing says it opens a menu. SwiftUI's
+        // `.pickerStyle(.menu)` draws it, so the converted row has to as well.
+        var conf = UIButton.Configuration.plain()
+        conf.title = value
+        conf.image = UIImage(systemName: "chevron.up.chevron.down")
+        conf.imagePlacement = .trailing
+        conf.imagePadding = 5
+        conf.contentInsets = .zero
+        conf.baseForegroundColor = .secondaryLabel
+        conf.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .caption2)
+        conf.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var out = incoming
+            out.font = .preferredFont(forTextStyle: .body)
+            return out
+        }
         let button = UIButton(type: .system)
-        button.setTitle(value, for: .normal)
-        button.setTitleColor(.secondaryLabel, for: .normal)
-        button.titleLabel?.font = .preferredFont(forTextStyle: .body)
+        button.configuration = conf
         button.showsMenuAsPrimaryAction = true
         button.menu = UIMenu(children: options.map { title, raw in
             UIAction(title: title, state: title == value ? .on : .off) { _ in onPick(raw) }

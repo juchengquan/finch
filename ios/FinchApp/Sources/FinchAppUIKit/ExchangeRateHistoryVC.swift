@@ -52,7 +52,7 @@ final class ExchangeRateHistoryVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = currency
-        navigationItem.largeTitleDisplayMode = .never
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureToolbar()
