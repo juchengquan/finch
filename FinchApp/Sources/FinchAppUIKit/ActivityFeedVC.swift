@@ -52,6 +52,9 @@ final class ActivityFeedVC: UIViewController {
     /// Item ids are transaction ids; these two are sentinels for the non-row cells.
     private static let confirmAllID = "__confirm_all__"
     private static let loadMoreID = "__load_more__"
+    /// Appears in the `.empty` section only while the launch txns projection is in
+    /// flight, so it can never collide with a transaction id. See TxnsLoadingCell.
+    private static let loadingID = "__loading__"
     private static let modePickerID = "__mode_picker__"
     private static let savedSearchID = "__saved_searches__"
     private static let calendarID = "__calendar__"
@@ -99,6 +102,10 @@ final class ActivityFeedVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (_: [Tx]) in self?.applySnapshot() }
             .store(in: &cancellables)
+        // Removes the loading row when the projection lands on an empty ledger, where
+        // `$txns` publishes [] → [] and cannot distinguish the two states.
+        TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
+            .store(in: &cancellables)
     }
 
     // MARK: Collection view
@@ -129,6 +136,10 @@ final class ActivityFeedVC: UIViewController {
     private func configureDataSource() {
         let cell = UICollectionView.CellRegistration<UICollectionViewListCell, String> { [weak self] cell, _, id in
             guard let self else { return }
+            if id == Self.loadingID {
+                TxnsLoadingCell.configure(cell)
+                return
+            }
             if id == Self.confirmAllID {
                 var cfg = cell.defaultContentConfiguration()
                 let n = self.dataSource.snapshot().numberOfItems(inSection: .pending) - 1
@@ -363,6 +374,11 @@ final class ActivityFeedVC: UIViewController {
         if page.isEmpty {
             snap.appendSections([.empty])
             headers[.empty] = HeaderContent(title: String(localized: "Transactions"))
+            // At launch the feed is empty because the projection has not landed, not
+            // because the ledger is — spin rather than present a bare "Transactions".
+            if TxnsLoadingCell.shouldSpin(store, searchQuery: searchQuery) {
+                snap.appendItems([Self.loadingID], toSection: .empty)
+            }
         } else if groupByMonth {
             for section in MonthGrouping.sections(page) {
                 snap.appendSections([.month(section.id)])
@@ -601,6 +617,7 @@ extension ActivityFeedVC: UICollectionViewDelegate {
     func collectionView(_ cv: UICollectionView, shouldSelectItemAt ip: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: ip) else { return true }
         return id != Self.modePickerID && id != Self.savedSearchID && id != Self.calendarID
+            && id != Self.loadingID   // a spinner, not a row
     }
 
     func collectionView(_ cv: UICollectionView, didSelectItemAt ip: IndexPath) {

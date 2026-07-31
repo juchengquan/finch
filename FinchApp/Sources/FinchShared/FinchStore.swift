@@ -22,6 +22,7 @@ public final class FinchStore: ObservableObject {
     @Published public private(set) var accountGroups: [AccountGroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public internal(set) var isImporting = false   // drives the import spinner (set by ImportExport)
     @Published public internal(set) var isHydrating = false   // drives the launch spinner (set by FinchApp.task)
+    @Published public internal(set) var txnsReady = true      // false while the launch-deferred txns projection is in flight (see reprojectActiveLedger / awaitTxnsReady)
     @Published public private(set) var budgets: [BudgetRow] = []
     @Published public private(set) var budgetGroups: [GroupRow] = []   // ordered id+name (incl. empty groups)
     @Published public internal(set) var ledgers: [Ledger] = []   // set by core + ImportExport
@@ -129,15 +130,56 @@ public final class FinchStore: ObservableObject {
             #else
             try? seedMinimalStarter(live)
             #endif
+            #if DEBUG
+            // `-stressSeed N`: append N synthetic transactions for scale profiling.
+            let stressCount = UserDefaults.standard.integer(forKey: "stressSeed")
+            if stressCount > 0 { try? StressSeed.seed(live, count: stressCount) }
+            #endif
         }
-        self.auditProblems = (try? Audit.run(on: live)) ?? []
+        #if DEBUG
+        LaunchTiming.mark("db open + migrate + seed")
+        #endif
+        // NOTE: the integrity Audit used to run HERE (a full ledger sweep, every
+        // launch) and blocked the launch spinner. It only feeds the Settings
+        // "N problems" indicator, so it's now deferred off the critical path —
+        // see `runAuditInBackground()`, called after first paint.
         self.ledgers = (try? Projection.ledgers(dbQueue: live)) ?? []
         let first = ledgers.first?.id ?? ""
         // Restore the last-active ledger if it still exists; else the default (first).
         let saved = UserDefaults.standard.string(forKey: Self.activeLedgerKey)
         let target = (saved.map { s in ledgers.contains { $0.id == s } } ?? false) ? saved! : first
         if activeLedgerId == target { reprojectActiveLedger() } else { activeLedgerId = target }
-        self.dbInfo = makeDBInfo()
+        // dbInfo (file size + row counts) only feeds the Settings "database info"
+        // screen. Computing it here would block ~600ms behind the deferred txns
+        // projection on the serialized queue, so defer it off the first-paint path too.
+        // (`bootstrap` runs once — guarded by `dbQueue == nil` — so this is always the
+        // launch path; import recomputes dbInfo synchronously via `makeDBInfo()`.)
+        if let q = dbQueue {
+            let url = liveDBURL
+            Task.detached(priority: .utility) { [q, url] in
+                let info = FinchStore.computeDBInfo(dbQueue: q, url: url)
+                await MainActor.run { self.dbInfo = info }
+            }
+        }
+        #if DEBUG
+        LaunchTiming.mark("bootstrap done (projection ready)")
+        #endif
+    }
+
+    /// Run the integrity Audit off the main thread and publish `auditProblems`.
+    /// The audit sweeps every ledger entry, so it must NOT sit on the launch
+    /// critical path — it only feeds the Settings "N problems" indicator. Call
+    /// once after first paint. `DatabaseQueue` serializes access, so reading it
+    /// off-main concurrently with the projection is safe.
+    func runAuditInBackground() {
+        guard let q = dbQueue else { return }
+        Task.detached(priority: .utility) {
+            let problems = (try? Audit.run(on: q)) ?? []
+            await MainActor.run { self.auditProblems = problems }
+            #if DEBUG
+            LaunchTiming.mark("audit done")
+            #endif
+        }
     }
 
     /// Minimal starter so a brand-new install can write immediately (per the
@@ -248,12 +290,18 @@ public final class FinchStore: ObservableObject {
     /// `Projection.run(ledgerId:)` keeps it from rebuilding every ledger's txns.
     func reprojectActiveLedger() {
         guard let q = dbQueue else { return }
+        // Launch defers the heavy txns projection off the first-paint path (see the
+        // txns block below); every OTHER reproject — a mutation, a ledger switch —
+        // projects synchronously so the change shows immediately. `isHydrating` is true
+        // only during `bootstrap()`'s launch reproject.
+        let deferTxns = isHydrating
         // All-or-nothing: compute every slice first, then publish a consistent
         // snapshot. On any query failure, keep the last-good state and surface
         // the error rather than silently publishing stale-or-empty data.
         do {
             let id = activeLedgerId
-            let txns     = try Projection.run(dbQueue: q, ledgerId: id)
+            // Cheap slices — each its own SQL query (~1ms even at scale). The Accounts
+            // landing (the launch tab) reads only these, never the txns list.
             let accounts = try Projection.accounts(dbQueue: q, ledgerId: id)
             let accountGroups = try Projection.accountGroups(dbQueue: q, ledgerId: id)
             let budgets  = try Projection.budgets(dbQueue: q, ledgerId: id)
@@ -270,7 +318,7 @@ public final class FinchStore: ObservableObject {
             let budgetOrderByLedger = try Projection.budgetOrderByLedger(dbQueue: q)
             let trackedCurrencies = try Projection.trackedCurrencies(dbQueue: q)
 
-            self.txns = txns; self.accounts = accounts; self.accountGroups = accountGroups
+            self.accounts = accounts; self.accountGroups = accountGroups
             self.budgets = budgets; self.categories = categories; self.counterparties = counterparties
             self.budgetGroupNames = budgetGroupNames; self.budgetGroups = budgetGroups
             self.holdings = holdings; self.scheduled = scheduled; self.exchangeRates = exchangeRates
@@ -279,16 +327,78 @@ public final class FinchStore: ObservableObject {
             self.trackedCurrencies = trackedCurrencies
             self.rateMap = Money.latestRateMap(exchangeRates)
             self.merchantStatsCache = nil   // recompute on next access
-            self.runningBalanceCache = nil  // depends on txns + opening balances; recompute lazily
             self.dataError = nil
+
+            // The txns list (`Projection.run`, per-account-leg grain) is the one slice
+            // that scales O(transactions): it materializes every leg with its splits /
+            // tags / transfer & refund resolution (~600ms at 20k legs). On LAUNCH we
+            // publish the cheap slices above for an instant first paint and project
+            // txns from a background task; `txnsReady` lets the txn feeds show a brief
+            // spinner until it lands (Accounts never reads txns, so it's unaffected).
+            if deferTxns {
+                self.txns = []
+                self.runningBalanceCache = nil
+                self.txnsReady = false
+                Task.detached(priority: .userInitiated) { [q, id] in
+                    let txns = (try? Projection.run(dbQueue: q, ledgerId: id)) ?? []
+                    await MainActor.run {
+                        // A newer reproject (e.g. a ledger switch) may have superseded
+                        // this one — only publish if we're still on the same ledger.
+                        guard self.activeLedgerId == id else { return }
+                        self.txns = txns
+                        self.runningBalanceCache = nil
+                        self.markTxnsReady()
+                        #if DEBUG
+                        LaunchTiming.mark("txns projected (\(txns.count) legs)")
+                        #endif
+                    }
+                }
+            } else {
+                self.txns = try Projection.run(dbQueue: q, ledgerId: id)
+                self.runningBalanceCache = nil
+                self.markTxnsReady()
+            }
         } catch {
             self.dataError = "Couldn't load your data: \(error.localizedDescription)"
         }
     }
 
+    /// Continuations parked by `awaitTxnsReady()` while the launch txns projection
+    /// is in flight; resumed by `markTxnsReady()`. MainActor-only.
+    private var txnsReadyWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Suspends until the active ledger's txns projection has been published. On
+    /// launch that projection is deferred off the first-paint path (see
+    /// `reprojectActiveLedger`), so background consumers that snapshot the FULL
+    /// txns list — Spotlight indexing, notification planning — must await this or
+    /// they'd capture an empty list and leave transactions unsearchable / budget
+    /// alerts mis-planned until the next write. Returns immediately when txns are
+    /// already ready (every non-launch reproject projects synchronously). Always
+    /// completes: `markTxnsReady()` fires even when the projection itself failed.
+    func awaitTxnsReady() async {
+        if txnsReady { return }
+        await withCheckedContinuation { txnsReadyWaiters.append($0) }
+    }
+
+    /// Publish `txnsReady = true` and wake anyone parked in `awaitTxnsReady()`.
+    private func markTxnsReady() {
+        txnsReady = true
+        let waiters = txnsReadyWaiters
+        txnsReadyWaiters = []
+        for w in waiters { w.resume() }
+    }
+
     func makeDBInfo() -> DatabaseInfo {
         guard let q = dbQueue else { return .empty }
-        let size = (try? FileManager.default.attributesOfItem(atPath: liveDBURL.path)[.size] as? Int) ?? 0
+        return Self.computeDBInfo(dbQueue: q, url: liveDBURL)
+    }
+
+    /// The DB-info probe (file size + row counts + schema / import metadata), factored
+    /// out of `makeDBInfo()` so the launch path can run it OFF the main actor — it
+    /// otherwise blocks ~600ms behind the deferred txns projection on the serialized
+    /// queue (see `bootstrap`). Pure DB reads through that queue — safe on any thread.
+    nonisolated static func computeDBInfo(dbQueue q: DatabaseQueue, url: URL) -> DatabaseInfo {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
         let counts = (try? Projection.rowCounts(dbQueue: q)) ?? [:]
         let meta: (schema: String, exportedAt: String?)? = try? q.read { db in
             let r = try Row.fetchOne(db, sql: "SELECT schema_version, exported_at FROM db_metadata WHERE id = 1")
@@ -296,7 +406,7 @@ public final class FinchStore: ObservableObject {
         }
         let lastImported: Date? = meta?.exportedAt.flatMap { ISO8601DateFormatter().date(from: $0) }
         return DatabaseInfo(
-            filename: liveDBURL.lastPathComponent, sizeBytes: size,
+            filename: url.lastPathComponent, sizeBytes: size,
             schemaVersion: meta?.schema ?? Schema.version,
             lastImportedAt: lastImported, rowCounts: counts)
     }

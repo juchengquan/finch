@@ -60,29 +60,9 @@ struct FinchApp: App {
             .preferredColorScheme((AppearancePreference(rawValue: appearanceRaw) ?? .system).colorScheme)
             .modifier(TextSizeModifier(useSystem: useSystemTextSize, step: textSizeStep))
             .onReceive(idleTimer) { _ in gate.tick() }
-            .task {
-                store.isHydrating = true
-                store.bootstrap()   // re-open the persisted live DB on launch
-                #if os(iOS)
-                PhoneWatchLink.shared.activate()   // Watch CP1: WCSession link
-                #endif
-                gate.start()        // Phase 6.3: evaluate lock state
-                // Don't expose financial data in system-wide Spotlight while the
-                // app is locked — index only when unlocked (the lock-transition
-                // handler below clears on lock and re-indexes on unlock).
-                if !gate.isLocked {
-                    await SpotlightIndexer.shared.indexAll(store: store)   // Phase 6.1 (can be slow on large data)
-                }
-                store.isHydrating = false
-                // Phase 6.2: notifications
-                NotificationService.shared.configure(store: store, router: router)
-                await NotificationService.shared.requestPermissionIfNeeded()
-                await NotificationService.shared.refresh()
-                AutoBackupManager.shared.configure(store: store)   // Phase 5
-                ICloudSync.shared.start()                           // Phase 5: iCloud Drive sync
-                await CloudKitSyncCoordinator.shared.start()        // Phase 8: row-level sync (scaffold; inert without an iCloud account)
-                PendingAttachmentImporter.importPending(into: store)   // Phase 6.5: import shared receipts
-            }
+            // Shared with the iOS UIKit entry point — see LaunchSequence, which owns
+            // the ordering that keeps first paint off the heavy chores.
+            .task { await LaunchSequence.run(store: store, router: router, gate: gate) }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
                     router.route(to: id)

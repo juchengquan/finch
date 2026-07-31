@@ -109,6 +109,10 @@ final class BudgetDetailVC: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applySnapshot() }
             .store(in: &cancellables)
+        // Clears the launch spinner when the projection lands on an empty cycle, where
+        // `$txns` alone cannot tell "not projected yet" from "nothing matched".
+        TxnsLoadingCell.observe(store) { [weak self] in self?.applySnapshot() }
+            .store(in: &cancellables)
         store.$budgets
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -222,6 +226,12 @@ final class BudgetDetailVC: UIViewController {
                 cell.contentConfiguration = cfg
 
             case Self.emptyCycleID, Self.emptySelectedID:
+                // Budget "spent" comes from the deferred txns projection, so at launch
+                // the bars read $0 and the list reads empty for ~600ms before filling.
+                if TxnsLoadingCell.shouldSpin(self.store) {
+                    TxnsLoadingCell.configure(cell)
+                    return
+                }
                 var cfg = cell.defaultContentConfiguration()
                 cfg.text = String(localized: "No matching transactions")
                 cfg.textProperties.font = .preferredFont(forTextStyle: .caption1)
