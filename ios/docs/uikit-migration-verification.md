@@ -662,9 +662,19 @@ switch replaced out from under a touch never completes its gesture, while a drag
 - [x] **IMPLEMENTED in `16174ca`** — `ToggleAccessory` installs the switch once and
       afterwards updates only `isOn` and its action; the blanket
       `cell.accessories = []` is guarded so clearing never removes it.
-- [ ] ⚠️ **VERIFY ON A DEVICE — this cannot be checked here.** Toggling one row must
-      leave every other switch's appearance untouched, and the glass must survive
-      navigating away and back (which forces a reconfigure).
+- [ ] ⚠️ **VERIFY ON A DEVICE — measured, the simulator cannot check this.** Toggling
+      one row must leave every other switch's appearance untouched, and the glass must
+      survive navigating away and back (which forces a reconfigure).
+      *Negative result, with a control:* a switch was sampled before and after a
+      reconfigure (triggered by toggling a sibling row, which changes no layout), in
+      BOTH the pre-fix build that rebuilds the switch and the post-fix build that
+      reuses it. All six samples are byte-identical — sha `bb0f2554bd84`, the same
+      hash in both builds. The method is sensitive (an earlier attempt caught a
+      layout shift), so this is a real negative: **the simulator renders the switch
+      the same whether it is rebuilt or reused, so it cannot validate or invalidate
+      the fix.** The device evidence stands on its own — toggling one row flattened
+      the others, which is a reconfigure — and reuse is the correct response to that
+      regardless.
 - [x] **Row taps FIXED in `a955c1a`.** Tapping anywhere on a toggle row now flips
       the switch, matching SwiftUI. Applied to the six screens whose rows are purely
       toggles; deliberately NOT to the Currencies currency rows or the Rules rows,
