@@ -7,11 +7,14 @@
 //   3. an English→Chinese map zipped from the web's messages/en.json + zh-CN.json.
 //
 // Precedence per key: manual > web-map > untranslated (English fallback at runtime).
-// Re-run after adding UI strings:
+// Re-run after adding UI strings (export to a FRESH directory each time and pass it
+// through — a reused one lets a failed export leave a stale xliff that yields a wrong
+// key set, silently):
+//   LOC=$(mktemp -d)
 //   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 //     xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
-//     -localizationPath /tmp/finch-loc -exportLanguage zh-Hans
-//   bun run scripts/xliff-keys.ts > scripts/extracted-keys.json
+//     -localizationPath "$LOC" -exportLanguage zh-Hans
+//   bun run scripts/xliff-keys.ts "$LOC" > scripts/extracted-keys.json
 //   bun run scripts/build-xcstrings.ts
 //
 // REMOVING a UI string? The export can't see deletions — it emits the union of

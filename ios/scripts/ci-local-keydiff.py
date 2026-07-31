@@ -7,12 +7,23 @@ catalog — a formatting-only difference in the generated file is noise.
 
 Exits 1 and NAMES the offending keys, because "N insertions" tells you something
 drifted but not what, which is a round-trip you don't need.
+
+Takes the fresh extraction's path as an argument. It used to read a fixed
+/tmp/keys-fresh.json, which every worktree on the machine shared — so a run whose
+export failed could diff against another branch's extraction and name keys as
+missing that were present. The caller passes a run-scoped path instead.
 """
 import json
+import os
 import sys
 
-FRESH = "/tmp/keys-fresh.json"
+if len(sys.argv) < 2:
+    sys.exit("ci-local-keydiff: usage: ci-local-keydiff.py <fresh-keys.json>")
+FRESH = sys.argv[1]
 COMMITTED = "scripts/extracted-keys.json"
+
+if not os.path.exists(FRESH):
+    sys.exit(f"ci-local-keydiff: no extraction at {FRESH} — the export step did not produce one")
 
 fresh = set(json.load(open(FRESH)))
 committed = set(json.load(open(COMMITTED)))

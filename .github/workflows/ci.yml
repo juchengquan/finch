@@ -244,19 +244,23 @@ jobs:
       - name: i18n — extracted keys are current
         working-directory: ios
         run: |
-          rm -rf /tmp/finch-loc
+          # Run-scoped export dir, passed explicitly to xliff-keys.ts. A CI runner is
+          # isolated so a fixed path is safe HERE, but the script no longer accepts an
+          # implicit one — locally that default let a failed export fall through to
+          # another worktree's xliff and report a wrong key set.
+          LOC_DIR="$(mktemp -d)"
           xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
-            -localizationPath /tmp/finch-loc -exportLanguage zh-Hans \
+            -localizationPath "$LOC_DIR" -exportLanguage zh-Hans \
             -derivedDataPath /tmp/dd -quiet \
             -skipPackagePluginValidation -skipMacroValidation \
             COMPILER_INDEX_STORE_ENABLE=NO
-          bun run scripts/xliff-keys.ts > /tmp/keys-fresh.json
+          bun run scripts/xliff-keys.ts "$LOC_DIR" > "$LOC_DIR/keys-fresh.json"
           # Compare the KEY SET, not the file bytes: what matters is whether any
           # UI string is missing from the catalog, and a set diff also names the
           # offenders instead of printing "N insertions" and leaving you guessing.
-          python3 - <<'PYEOF'
+          python3 - "$LOC_DIR/keys-fresh.json" <<'PYEOF'
           import json, sys
-          fresh = set(json.load(open("/tmp/keys-fresh.json")))
+          fresh = set(json.load(open(sys.argv[1])))
           committed = set(json.load(open("scripts/extracted-keys.json")))
           missing = sorted(fresh - committed)   # in the app, absent from the catalog
           stale   = sorted(committed - fresh)   # in the catalog, gone from the app
