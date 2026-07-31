@@ -18,6 +18,16 @@ try the centre before believing it. Cross-checking against the SwiftUI screen un
 the SAME coordinates is the cheapest way to tell a missed tap from a real defect —
 if both fail, it is the tap.
 
+**Sample DENSELY when checking anything animated.** Settled-state screenshots miss
+transitions entirely, and several iOS 26 effects live in the transition rather than
+the resting frame. Record with `simctl io recordVideo`, extract with
+`ffmpeg -vf "fps=60,crop=W:H:X:Y"`, and compare a per-frame signature across the
+sequence — a smooth animation shows many small steps, an interrupted one shows a
+single jump. Sampling before and after an action only tells you the endpoints agree.
+(Attempted for the switch-reuse question; the run did not register a toggle and the
+comparison is still open. Note the two builds have SEPARATE containers, so row
+positions must be re-read per app rather than assumed.)
+
 **Pin the simulator when the machine is busy.** `ci-local.sh` picks a shared device
 by default; a run of it WEDGED for 30 minutes on "iPhone 17 Pro" while other sessions
 were building (load average 568). Killing it reported **exit code 0 having run only 4
