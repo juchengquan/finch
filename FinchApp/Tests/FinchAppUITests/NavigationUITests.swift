@@ -3,8 +3,10 @@ import XCTest
 /// UI regression net for the compact (iPhone) navigation model.
 ///
 /// **Runs twice.** The app has two navigation implementations behind a flag, and this
-/// class is the base (`-uikitActivity` off, screens hosted from SwiftUI);
-/// `NavigationUIKitUITests` below re-runs every test with it on, where Accounts,
+/// class is the base (`-uikitActivity NO`, screens hosted from SwiftUI);
+/// `NavigationUIKitUITests` below re-runs every test with it on — which is now also the
+/// SHIPPING default, so that subclass is the one describing what users get. Both modes
+/// pass the flag explicitly; see `setUpWithError`. Under it Accounts,
 /// Budgets and Settings drill into real `UIViewController`s. Testing only one of them
 /// would pass while saying nothing about the other — which is what the original
 /// version of this suite did, before the UIKit migration existed.
@@ -44,8 +46,12 @@ class NavigationUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
+        // Both modes are passed EXPLICITLY. The converted screens now ship on by
+        // default, so "send no flag" would silently mean UIKit and this class would
+        // stop testing the hosted path at all — the half of the coverage that exists
+        // to catch the two implementations drifting apart.
         var args = ["-resetStore", "YES", "-disableNotifications", "YES"]
-        if uikitActivity { args += ["-uikitActivity", "YES"] }
+        args += ["-uikitActivity", uikitActivity ? "YES" : "NO"]
         app.launchArguments = args
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "app did not reach foreground")
@@ -258,7 +264,7 @@ class NavigationUITests: XCTestCase {
 
         app.terminate()
         var args = ["-resetStore", "YES", "-disableNotifications", "YES", "-initialTab", "budgets"]
-        if uikitActivity { args += ["-uikitActivity", "YES"] }
+        args += ["-uikitActivity", uikitActivity ? "YES" : "NO"]
         app.launchArguments = args
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "[\(mode)] app did not relaunch")
