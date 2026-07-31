@@ -237,6 +237,81 @@ a push, so Phase 3 buys **consistency and one shell instead of two**, not a bug 
 See "Stopping early is a legitimate outcome" below — it applies with more force here
 than to Phase 2.
 
+#### Phase 3a — the container (DONE, 2026-07-31)
+
+`SplitShellVC` is a real `UISplitViewController`; the columns are still hosted SwiftUI.
+iPhone and iPad are one code path. Two constraints worth knowing before touching it:
+
+- **`UISplitViewController.style` is fixed at init**, and a triple-column split view has
+  no display mode meaning "primary + secondary, no supplementary" — the modes run
+  `.oneBesideSecondary` (supplementary + secondary) to `.twoBesideSecondary` (all
+  three). So the three-column tabs and the dashboard tabs need *different* split views,
+  and `SplitShellVC` swaps between them on the arity boundary.
+- **`SplitSelection` is a reference type** because the columns are hosted separately and
+  it must outlive a split-view swap.
+
+Verified by `SplitSelectionUITests` on both shells: selecting a row fills the detail
+column, and switching section resets it.
+
+#### Phase 3b — native columns (NOT STARTED)
+
+Replace each hosted list column with a `UIViewController`, and delete
+`selection: Binding<String?>?` from the six screens that carry it. **This is the large
+half** — 3a was days, this is the "1–2 weeks" the estimate above refers to, and probably
+more given what Phase 2's conversions actually cost.
+
+**Do them one at a time, in this order.** Each is independently shippable because
+`SplitShellVC.install(columns:into:arity:)` sets each column separately — a native
+`AccountsListVC` can sit beside four still-hosted columns.
+
+1. **Ledger** — DONE 2026-07-31. Smallest list, fewest interactions.
+
+> ### Correction, 2026-07-31 — steps 2–5 are much bigger than this list implies
+>
+> Ledger converted cheaply for a reason that does **not** generalise: `LedgersVC`
+> serves BOTH platforms. On iPhone the ledger flow *is* the list (presented from the
+> corner control), so one view controller covers the phone flow and the iPad column.
+>
+> The other four are not like that. Even under `-uikitActivity YES` the iPhone tab
+> ROOT is still hosted SwiftUI — `RootTabBarController.navigationTab` builds
+> `UIHostingController(rootView: StacklessTabRoot(tab:))` and only the *pushed*
+> destinations are native. So a native list column for Accounts would serve iPad
+> alone while iPhone keeps rendering `AccountsTab`: **two implementations of one
+> list, which will drift.** That is the "Mac divergence" risk below, reproduced
+> between iPhone and iPad — a bad trade to take on for one platform.
+>
+> **Convert the tab root and the iPad column together, one tab at a time** — the
+> shape Ledger demonstrated by accident. Each tab then has ONE list serving compact
+> (as a tab root) and regular (as a supplementary column), and
+> `selection: Binding<String?>?` can finally be deleted from that screen, which this
+> step list assumed but could not have achieved.
+>
+> This pulls Phase 4's tab-root work into 3b rather than leaving it optional, and
+> makes each remaining step far larger than "replace a column". Re-estimate before
+> starting.
+2. **Scheduled** — next simplest.
+3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
+4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
+   groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
+   like `CategoriesVC`, not like `TagsVC`.
+5. **Activity** — `ActivityFeedVC` already exists; this is mostly wiring it as a column
+   rather than a pushed screen, plus the `focusedId` deep-link path.
+
+**The detail column is nearly free** for 3, 4 and 5: `BudgetDetailVC`,
+`AccountDetailVC` and `TxListDetailVC` were built in Phase 2 and take an id in their
+initialiser, which is exactly what a detail column needs.
+
+**Selection plumbing.** `SplitSelection` stays — it is already a plain `ObservableObject`
+that UIKit owns. A native list VC writes `selection.account = id` in
+`didSelectItemAt` and observes `$account` to keep its highlight in sync; the detail
+column reads it exactly as now. Nothing about the shell changes.
+
+**Watch for:** the compact path uses the SAME views. Deleting the `selection` binding
+from `AccountsTab` must not disturb its `selection == nil` branch, which is what iPhone
+pushes. Until a screen's compact path is *also* native, the SwiftUI file has to keep
+working — so delete the binding only when both sides are converted, or keep it and let
+it go unused.
+
 ### Phase 4 — Opportunistic (ongoing, optional)
 
 Tab roots, sheets and charts convert only when you want control over them. **None of
