@@ -23,6 +23,7 @@ import FinchCore
 final class ScheduledListVC: UIViewController {
 
     private let store = FinchStore.shared
+    private let router = DeepLinkRouter.shared
     private var cancellables = Set<AnyCancellable>()
 
     /// Selection mode, as `LedgersVC` defines it: nil → compact, a row opens the
@@ -136,6 +137,22 @@ final class ScheduledListVC: UIViewController {
     }
 
     private func configureToolbar() {
+        // The Ledger corner control is compact-only — the iPad sidebar lists Ledger
+        // itself, so the column must not carry a redundant button. `onSelect != nil` is
+        // exactly "this list is a split-view column". Same rule and same construction as
+        // `BudgetsListVC`; this tab shipped without it, so the ledger was unreachable
+        // from Scheduled entirely.
+        if onSelect == nil {
+            let ledger = UIBarButtonItem(image: UIImage(systemName: "books.vertical"),
+                                         primaryAction: UIAction { [weak self] _ in
+                self?.router.showLedger = true
+            })
+            ledger.accessibilityLabel = String(localized: "Ledger")
+            navigationItem.leftBarButtonItems = [ledger]
+        } else {
+            navigationItem.leftBarButtonItems = nil
+        }
+
         let add = UIBarButtonItem(image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self] _ in
             self?.presentSheet(ScheduledSheet(prefillStart: nil))
         })
