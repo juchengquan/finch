@@ -39,7 +39,8 @@ final class HoldingsVC: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = String(localized: "Holdings")
-        navigationItem.largeTitleDisplayMode = .never
+        // Large, like HoldingsView — its SwiftUI twin sets no inline mode.
+        navigationItem.largeTitleDisplayMode = .always
         configureCollectionView()
         configureDataSource()
         configureToolbar()

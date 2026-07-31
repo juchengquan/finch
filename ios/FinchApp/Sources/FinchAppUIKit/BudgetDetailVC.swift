@@ -98,7 +98,10 @@ final class BudgetDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        navigationItem.largeTitleDisplayMode = .never
+        // Large, collapsing on scroll — same as the account page. (The SwiftUI
+        // budget detail still shows an inline title; this is a deliberate
+        // divergence, not drift.)
+        navigationItem.largeTitleDisplayMode = .always
         title = budget?.name
         configureCollectionView()
         configureDataSource()

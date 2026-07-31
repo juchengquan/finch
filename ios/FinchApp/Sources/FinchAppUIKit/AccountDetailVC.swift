@@ -206,6 +206,9 @@ final class AccountDetailVC: UIViewController {
                     }
                     .pickerStyle(.segmented)
                 }
+                // No card behind it — same as ActivityFeedVC's identical picker.
+                .margins(.vertical, 0)
+                cell.backgroundConfiguration = .clear()
                 cell.accessories = []
                 return
             }
