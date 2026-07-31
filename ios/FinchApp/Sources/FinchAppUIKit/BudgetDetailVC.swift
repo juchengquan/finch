@@ -98,10 +98,18 @@ final class BudgetDetailVC: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Large, collapsing on scroll — same as the account page. (The SwiftUI
-        // budget detail still shows an inline title; this is a deliberate
-        // divergence, not drift.)
-        navigationItem.largeTitleDisplayMode = .always
+        // Inline, like the account page and like the SwiftUI budget screen: a large
+        // title belongs to a place you navigate TO (Accounts, Budgets, Settings), not
+        // to a thing you opened.
+        //
+        // The account page also pins its figure in the bar as a subtitle, and this
+        // screen deliberately does NOT follow it there. That worked because the
+        // subtitle REPLACED the balance card. This card can't be replaced — it
+        // carries the progress bar, the remaining amount and the cycle range as well
+        // as the figure — so a subtitle would just repeat a number sitting 40pt
+        // below it. Put a figure in the bar only when it lets you delete whatever was
+        // showing it.
+        navigationItem.largeTitleDisplayMode = .never
         title = budget?.name
         configureCollectionView()
         configureDataSource()
