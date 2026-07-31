@@ -1,92 +1,67 @@
 # Migrating finch's iOS UI to UIKit — plan
 
-**Status:** Phases 0–2 IMPLEMENTED (2026-07-31) · **Date:** 2026-07-29 · **Decided
-parameters:** iPhone + iPad move to UIKit; `FinchMac` stays SwiftUI; Watch and Widget
-stay SwiftUI (no UIKit exists on those platforms); incremental strangler migration,
-shipping continuously.
+**Status:** Phases 0–2 done · Phase 3 in progress · **Date:** 2026-07-29, revised
+2026-08-01 · **Decided parameters:** iPhone + iPad move to UIKit; `FinchMac` stays
+SwiftUI; Watch and Widget stay SwiftUI (no UIKit exists on those platforms);
+incremental strangler migration, shipping continuously.
 
-> ## Where this stands — 2026-07-31
+> ## Where this stands — 2026-08-01
 >
 > | Phase | State |
 > |---|---|
-> | **0 — source split** | **Done.** `.swift` counts: `FinchShared` 56 · `FinchAppSwiftUI` 91 · `FinchAppUIKit` 23 (iOS-only). |
+> | **0 — source split** | **Done.** `.swift` counts: `FinchShared` 59 · `FinchAppSwiftUI` 93 · `FinchAppUIKit` 35 (iOS-only). |
 > | **1 — UIKit shell** | **Done, shipping by default on iPhone.** `project.yml` excludes `FinchApp.swift` from the iOS target; the phone boots `@main UIKitAppDelegate`. Not gated. |
-> | **2 — pushed destinations** | **Done, gated behind `-uikitActivity YES`.** 21 screens across 18 `*VC.swift` files. |
-> | **3 — iPad** | **Not started.** iPad still runs the SwiftUI shell — see below. |
+> | **2 — pushed destinations** | **Done, gated behind `-uikitActivity YES`.** 24 `*VC.swift` files. |
+> | **3a — iPad container** | **Done (#646).** `UIKitShell.makeRoot` returns `SplitShellVC` at regular width and `RootTabBarController` at compact — both UIKit. The two shells no longer differ by framework. |
+> | **3b — native columns + tab roots** | **In progress.** Done: Ledger (#648), Budgets (#658), Scheduled (#660) — each converted at BOTH widths. Remaining: **Activity**, **Accounts**. |
 > | **4 — opportunistic** | Not started; optional by design. |
 >
-> The estimates below are the pre-implementation forecast, kept as written so the
-> forecast can be judged against the outcome. Do not read them as remaining work.
->
-> **The Phase 3 seam is live in the code today.** `UIKitShell.makeRoot` returns the
-> hosted SwiftUI `AppRootHost` whenever horizontal size class is `.regular`, so iPhone
-> and iPad run *different shells*. Anything verified on the phone needs re-checking on
-> iPad until Phase 3 lands.
+> **Forecast vs actual.** The estimates below are the pre-implementation forecast,
+> kept as written so it can be judged against the outcome. It now can be, for phases
+> 0–3a: forecast 2–4 days + 1.5–3 weeks + 3–4 weeks + 1–2 weeks; delivered across
+> roughly one week of concentrated work, with Phase 2 landing 24 view controllers.
+> The forecast was pessimistic on throughput and — see the 3b correction below —
+> optimistic about what "convert a column" means. Do not read the estimates as
+> remaining work.
 
-**Why:** ownership of the UI layer. **NOT the resume shadow** — see the revision
-note. Read `ios26-shadow-variant-matrix.md` first, including its 2026-07-30
+**Why:** ownership of the UI layer. **NOT the resume shadow** — see *How this plan
+changed*. Read `ios26-shadow-variant-matrix.md` first, including its 2026-07-30
 addendum.
 
-> ## VALIDATED 2026-07-30 — conversion fixes the failing case
->
-> `CategoriesView` is the one real finch screen that shadows under a UIKit root.
-> Converted to UIKit (`CategoriesVC` in the pilot), same data, same root: **clean**.
-> That is the treatment fixing the failing case, which is far stronger than the
-> earlier tests that took already-clean screens and showed they stayed clean.
->
-> With reproducer A, UIKit-page-under-UIKit-root is now clean everywhere it has
-> been tried. **The plan is validated end to end; what remains is a cost decision.**
->
-> **Two real conversions, for the estimate:**
->
-> | screen | SwiftUI | UIKit | reused unchanged |
-> |---|---:|---:|---|
-> | `AccountDetailView` | 320 | ~250 | store, selectors, write chokepoint |
-> | `CategoriesView` | 574 | ~160 | same |
->
-> **Read those with the caveat that both conversions covered SCROLL CONTENT only.**
-> Omitted: the calendar mode and holdings section (Account detail); reorder/drag,
-> merge/multi-select, import and copy-to-ledger (Categories). Those are real work —
-> drag-and-drop reordering in a collection view is fiddly — and would plausibly add
-> 30–50% on top. Treat Phase 2's 3–4 weeks as the optimistic end.
->
-> ## REVISED AGAIN 2026-07-30 — FULL migration is the only thing that works
->
-> The coverage tests settled the shape of this. Under a UIKit root, hosted SwiftUI
-> screens are **unpredictable**: `AccountDetailView` and `ActivityFeedView` are
-> clean at every volume; `CategoriesView` shadows — and still shadows after adding
-> the pinned search drawer that is the only structural property separating it from
-> the clean ones. Five explanations have now been tested to destruction (`TabView`,
-> SwiftUI-content, volume, sections, pinned search drawer).
->
-> So **hosting is a transition state, not an end state**, and the only configuration
-> verified clean everywhere is **UIKit root + UIKit page**. That makes the full
-> migration of pushed screens the one approach that actually fixes the bug — which
-> is what this plan now describes.
->
-> **Sequencing consequence:** `RightSlideDrill` STAYS during the migration. Each
-> unconverted pushed screen keeps its cover; the cover is removed per route as that
-> screen converts. The app is never mid-flight broken and the bug never regresses.
->
-> The earlier revision below is kept for history.
->
-> ## Superseded revision — 2026-07-30 (earlier)
->
-> Two findings from testing at realistic volume (2,000 transactions) removed the
-> urgency this plan was written under:
->
-> 1. **The shipped `RightSlideDrill` fix is sound at scale.** There is nothing
->    broken to escape. Users with real ledgers are fine today.
-> 2. **A UIKit shell does not fix the bug.** Coverage testing across the app's
->    real drill destinations found `CategoriesView` SHADOWS under a UIKit root,
->    while `AccountDetailView` and `ActivityFeedView` do not. So Phase 1 would
->    leave an unknown subset of screens still shadowing and require per-screen
->    conversion anyway — with no way to predict which screens need it except by
->    testing each one, and no basis at all for screens written later.
->
-> So this migration should be judged **purely as a control/ownership decision**,
-> on its own merits and timetable. If that is not compelling by itself, do not do
-> it. The phases below stand; only the justification changed.
+## How this plan changed, and why
+
+Three turning points. Each was forced by evidence, and each is recorded because the
+reasoning is what stops it being re-litigated.
+
+1. **A UIKit shell alone does not fix the bug** (2026-07-30). Coverage testing at
+   realistic volume found `CategoriesView` shadows under a UIKit root while
+   `AccountDetailView` and `ActivityFeedView` do not — and it still shadowed after
+   adding the pinned search drawer, the only structural property separating it from
+   the clean ones. Five explanations were tested to destruction (`TabView`,
+   SwiftUI-content, volume, sections, pinned search drawer). So hosting is a
+   **transition state, not an end state**, and the plan became a full conversion of
+   pushed screens rather than a shell swap. The shipped `RightSlideDrill` fix is
+   sound at scale, so there was never anything broken to escape — this is a
+   control/ownership decision, judged on its own merits.
+
+2. **Conversion fixes the failing case** (2026-07-30, validation). `CategoriesView`
+   converted to `CategoriesVC`, same data, same root: **clean**. Taking the one
+   screen that fails and showing the treatment fixes it is far stronger than the
+   earlier tests, which took already-clean screens and showed they stayed clean.
+   Cost of the two real conversions: `AccountDetailView` 320 → ~250 lines,
+   `CategoriesView` 574 → ~160, store/selectors/write-chokepoint reused unchanged.
+   Read those with the caveat that both covered **scroll content only** — the
+   omitted parts (calendar mode, holdings, reorder/drag, merge/multi-select,
+   import/copy-to-ledger) are real work and plausibly add 30–50%.
+
+3. **Phase 3b converts a tab's root and its iPad column together** (2026-07-31).
+   Converting only the column leaves iPhone rendering the SwiftUI screen — two
+   implementations of one list, which will drift. See the 3b correction below.
+
+**Sequencing consequence, unchanged throughout:** `RightSlideDrill` STAYS during the
+migration. Each unconverted pushed screen keeps its cover; the cover is removed per
+route as that screen converts. The app is never mid-flight broken and the bug never
+regresses.
 
 ---
 
@@ -110,6 +85,30 @@ Two consequences the plan must respect:
    expected.
 2. **Only PUSHED pages shadow.** Tab roots are roots; sheets are presented. Both are
    already clean and never need converting for the bug.
+
+## Approaches ruled out
+
+Recorded so they are not re-proposed. Each was built or device-tested, not reasoned
+about.
+
+**`UIKitNavStack` — host the existing SwiftUI screens inside a `UINavigationController`.**
+The cheap version of this plan: keep every screen, change only who owns the push. It
+was specified in full, prototyped, and **device-tested — and it still shadowed.** The
+trigger is a hosted SwiftUI *scroll view at navigation depth*, not which framework owns
+the navigation controller, so wrapping the same screens in UIKit chrome changes nothing.
+Neither `UIKitNavStack` nor `UIKitNavLink` exists in the codebase.
+
+> **The part worth remembering is how it looked right.** An on-device prototype
+> (2026-07-25) measured post-resume top-edge contrast at ~47 for a SwiftUI push against
+> ~6 for a UIKit push and ~9 for a root — a clean, three-way separation that read as
+> conclusive, and produced the confident wrong conclusion "SwiftUI `NavigationStack`
+> re-converges the glass; a UIKit push does not." The 21-variant matrix later showed
+> that framing is wrong in both directions (`ios26-shadow-variant-matrix.md`). A
+> prototype that separates cleanly on one axis is not evidence that axis is the cause.
+
+**A UIKit shell alone** (Phase 1 without Phase 2). Covered above: `CategoriesView`
+shadows under a UIKit root. Kept as a phase because it is the prerequisite, not because
+it fixes anything on its own.
 
 ## Scope: what must move, and what need not
 
@@ -253,7 +252,7 @@ iPhone and iPad are one code path. Two constraints worth knowing before touching
 Verified by `SplitSelectionUITests` on both shells: selecting a row fills the detail
 column, and switching section resets it.
 
-#### Phase 3b — native columns (IN PROGRESS — Ledger done, Scheduled blocked)
+#### Phase 3b — native columns + tab roots (IN PROGRESS — 3 of 5 done)
 
 Replace each hosted list column with a `UIViewController`, and delete
 `selection: Binding<String?>?` from the six screens that carry it. **This is the large
@@ -289,20 +288,41 @@ more given what Phase 2's conversions actually cost.
 > This pulls Phase 4's tab-root work into 3b rather than leaving it optional, and
 > makes each remaining step far larger than "replace a column". Re-estimate before
 > starting.
-2. **Budgets** — next. `BudgetsTab` is 607 lines; `BudgetDetailVC` already exists for
-   the detail side.
-3. **Activity** — `ActivityTab` is 665 lines. `ActivityFeedVC` already exists; this is
-   mostly wiring it as a column rather than a pushed screen, plus the `focusedId`
+2. **Budgets** — DONE 2026-08-01 (#658). `BudgetsListVC`, root + column.
+3. **Scheduled** — DONE 2026-08-01 (#660). `ScheduledListVC`, root + column. Attempted
+   FIRST (it looks smallest at 329 lines) and appeared blocked on a scroll regression
+   for four attempts; it turned out to be `TabChromeVC` swallowing every touch, not the
+   screen. See *the tab-chrome prerequisite* below.
+4. **Activity** — NEXT. `ActivityTab` is 665 lines. `ActivityFeedVC` already exists; this
+   is mostly wiring it as a column rather than a pushed screen, plus the `focusedId`
    deep-link path.
-4. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
+5. **Accounts** — last, and by far the biggest. `AccountsTab` is 742 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
    like `CategoriesVC`, not like `TagsVC`.
-5. **Scheduled** — attempted first (it looks smallest at 329 lines) and was blocked on
-   a scroll regression that turned out to be `TabChromeVC`, not the screen; see below.
 
-**The detail column is nearly free** for 2, 3 and 4: `BudgetDetailVC`,
-`TxListDetailVC` and `AccountDetailVC` were built in Phase 2 and take an id in their
-initialiser, which is exactly what a detail column needs.
+**The detail column is nearly free** for the rest: `BudgetDetailVC`, `TxListDetailVC`
+and `AccountDetailVC` were built in Phase 2 and take an id in their initialiser, which
+is exactly what a detail column needs.
+
+**Patterns to copy rather than reinvent**, established by the three that are done:
+
+- Two-mode list — `onSelect: ((String?) -> Void)?`. Nil → compact, the row pushes its
+  detail; set → the row reports its id and stays selected, driving the split's detail
+  column. Drop the disclosure chevron in selection mode; it promises a push.
+- Wrap every native tab root in `TabChromeVC(content:tab:store:router:)`.
+- Re-assert the selection highlight after `dataSource.apply` — it clears it.
+- Set the grouped-section gap explicitly: `Metrics.sectionSpacing` via each section's
+  `contentInsets`. A collection view does not inherit `.finchSectionSpacing()`, and
+  UIKit's own insetGrouped gap is ~36pt against SwiftUI's 12.
+  (`UICollectionViewCompositionalLayoutConfiguration.interSectionSpacing` does **not**
+  move a list layout — tried; the screenshots were byte-identical.)
+- Combine each hosted row into ONE VoiceOver element
+  (`.accessibilityElement(children: .combine)` + `.accessibilityAddTraits(.isButton)`).
+  The SwiftUI rows were `Button`s, which aggregate; hosting the same view bare exposes
+  every text separately — several swipes per row instead of one.
+- Diffable ids must be unique; derive them so repeats cannot collide. Scheduled
+  occurrences use `__occ__<day>|<templateId>` because a template can recur twice in a
+  month, and a duplicate identifier is a crash rather than a glitch.
 
 **Selection plumbing.** `SplitSelection` stays — it is already a plain `ObservableObject`
 that UIKit owns. A native list VC writes `selection.account = id` in
@@ -324,90 +344,47 @@ SwiftUI view in it gets neither, and nothing fails loudly. This already happened
 in Phase 2, when `navigationTab` bypassed `TabRootHost` and every converted tab lost
 its chrome at once; it was found by eye.
 
-`TabChromeVC` is the fix — written and building, but **not on this branch**. It puts
-the native content in a child and hosts the real `AddTransactionFAB` + focused-tx
-sheet over it behind a passthrough view, so touches reach the collection view
-everywhere except the button. The chrome is hosted rather than rebuilt on purpose: the
-FAB honours `finch.fab.enabled`, the left/right position preference, hides during
-multi-select and while the ledger cover is up, and seeds from the page's
-`AddTxContext`. A UIKit copy of those rules would drift from the one the Mac renders.
+`TabChromeVC` is the fix (shipped #658). It puts the native content in a child and hosts
+the real `AddTransactionFAB` + focused-tx sheet over it behind a passthrough view, so
+touches reach the collection view everywhere except the button. The chrome is hosted
+rather than rebuilt on purpose: the FAB honours `finch.fab.enabled`, the left/right
+position preference, hides during multi-select and while the ledger cover is up, and
+seeds from the page's `AddTxContext`. A UIKit copy of those rules would drift from the
+one the Mac renders.
 
 - Signature: `TabChromeVC(content:tab:store:router:)`. Wrap every native tab root.
 - Trap: name the stored property `appTab`, not `tab` — `UIViewController.tab` is
   `UITab?` on iOS 18+ and the override does not compile.
-- **Land it with its first consumer, not before.** Today every tab root on this branch
-  is SwiftUI, so `TabChromeVC` has nothing to wrap: merged alone it is dead code, and
-  its guard test (`TabChromeUITests`) would go green against a *hosted* root, proving
-  nothing. It belongs in the same PR as the first fully native root.
-  **Vindicated the first time it was tried:** wrapped around a real native list it
-  swallowed every touch and the tab would not scroll at all (see the Scheduled block).
-  Merged on its own it would have shipped broken, under a green test.
+- **Land it with its first consumer, not before.** Merged alone it is dead code — every
+  tab root was SwiftUI — and its guard test (`TabChromeUITests`) would go green against
+  a *hosted* root, proving nothing.
 
-##### RESOLVED 2026-08-01 — it was `TabChromeVC`, not the pager
+**Passing touches through is the whole difficulty, and it is not obvious.** The
+passthrough originally asked "did a *descendant* claim this, rather than the hosting
+view's own background?" — but `_UIHostingView.hitTest` returns **the hosting view
+itself for any point inside its bounds**. Logging the hit chain gave the identical view
+for a swipe on empty space and for a tap on the FAB, so identity can never discriminate,
+and `.allowsHitTesting(false)` on the backdrop does not change it. Written that way the
+chrome swallowed every touch and nothing underneath it could scroll, on any converted
+tab. The button now publishes its own window rect (`FABFrameKey`) and the passthrough
+tests geometry, which also keeps the position preference and hidden states honest
+instead of hard-coding a corner.
 
-The diagnosis below is **wrong**. It is kept because the way it went wrong is the
-lesson.
-
-**`TabChromeVC` swallowed every touch on the tab.** Its passthrough asked "did a
-*descendant* claim this, rather than the hosting view's own background?" — but
-`_UIHostingView.hitTest` returns the hosting view ITSELF for any point inside its
-bounds. Logging the hit chain gave the identical view for a swipe on empty space and
-for a tap on the FAB, so identity could never discriminate, and `.allowsHitTesting(false)`
-on the backdrop does not change it either. Nothing underneath the chrome could scroll,
-on any converted tab.
-
-It surfaced on Budgets, where the symptom was the whole list refusing to move rather
-than "the calendar is stuck". Fixing it there fixed Scheduled with no change to
-`ScheduledListVC` at all. The button now publishes its own rect (`FABFrameKey`) and the
-passthrough tests geometry.
-
-Why it read as a calendar-only, pager-shaped bug: every observation on this screen was
-made *through* that broken chrome, and calendar mode was simply the branch being looked
-at. `MonthCashCalendar`'s `.page TabView` was never involved. The `.frame(height: 420)`
-added to "leave a strip to drag from" was compensating for the wrong cause and is gone —
-unbounded, the grid self-sizes to 359.3pt against the SwiftUI control's 359.4, and both
-gestures work: a vertical pan scrolls the page, a horizontal one pages the month.
-
-**The rule this cost.** *Build the control and compare* was applied to the screen —
-SwiftUI Scheduled against native Scheduled — but never to the CONTAINER. The control
-proved "my change broke it", and the search then stayed inside the calendar code, which
-is the one place the bug was not. Bisect the container as well as the content: bypassing
-`TabChromeVC` for a single build answers it in minutes, and would have four attempts
-earlier.
-
-The "does it contain a scroll view?" rule still stands on its own merits — a hosted
-`List` really would collapse, and `ScheduledCalendarView` really does return one. It
-just was not what jammed this page.
-
-##### The Scheduled block — the original diagnosis, kept as a record of how it misled
-
-The code (`ScheduledListVC`, `TabChromeVC`, `TabChromeUITests`) lives on
-`feat/ios-uikit-scheduled`, from the **closed** PR #652. List mode, the iPad column and
-the tab-chrome work are all sound; only calendar mode is broken.
-
-**Symptom.** In calendar mode a drag on the month grid does not scroll the page, so the
-day sections below are unreachable.
-
-**It is a regression, not a shipped bug.** A control build of plain `feat/frontend` on
-an erased simulator scrolls fine. The same `MonthCashCalendar` inside a SwiftUI `List`
-behaves; inside `UICollectionView` + `UIHostingConfiguration` it does not. So it is
-gesture coordination, not layout — `List` coordinates the vertical pan and the
-collection view does not.
-
-**Ruled out:** stale build products, a corrupt simulator, content-size problems.
-
-**Attempted and failed — do not repeat:** walking the cell for `UIScrollView`s whose
-content fits their bounds and clearing `alwaysBounceVertical` / `bounces`, deferred a
-runloop so SwiftUI has built the hierarchy. Compiles, changes nothing. Also superseded:
-bounding the hosted grid with `.frame(height: 420)`, which only shrank the dead zone.
-
-**Required next step: inspect before changing.** `recursiveDescription` on the cell, or
-a breakpoint, to find which view actually owns the pan. Four attempts on this screen
-failed because they reasoned about UIKit instead of looking at it.
-
-Also settled while working on it: occurrence ids must be `__occ__<day>|<templateId>` —
-the day belongs in the id because a template recurring twice in a month otherwise
-produces a duplicate diffable identifier, which crashes rather than glitches.
+> **This cost four attempts on the wrong screen, and the reason generalises.**
+> The symptom first appeared on Scheduled's calendar mode, and was diagnosed as gesture
+> coordination — `MonthCashCalendar` is a `.page TabView`, so surely a pan starting
+> inside it belonged to that pager. A `.frame(height: 420)` was added to "leave a strip
+> to drag from". All of it was wrong: the pager was never involved, and Scheduled later
+> shipped with that frame removed, the grid self-sizing to 359.3pt against the SwiftUI
+> control's 359.4.
+>
+> *Build the control and compare* had been applied to the SCREEN — SwiftUI Scheduled
+> against native Scheduled — but never to the CONTAINER. The control proved "my change
+> broke it", and the search then stayed inside the calendar code, which is the one place
+> the bug was not. **Bisect the container as well as the content**: one build with
+> `TabChromeVC` bypassed answers it in minutes. It was only found because the same
+> chrome broke Budgets, where the symptom was a whole list refusing to move and no
+> pager to blame.
 
 ##### Two rules this screen paid for
 
@@ -426,20 +403,31 @@ neither is.
 `ActivityFeedVC:194` — and both are therefore hosting a pager inside a scroll view.
 `AccountDetailVC`'s calendar does scroll, verified on the simulator, but only because
 the balance card and mode picker sit above the grid and rows below it, so a pan has
-somewhere to land outside the pager. That is layout luck, not compliance. Re-check both
-when the gesture fix for Scheduled lands, and apply it to all three.
+somewhere to land outside the pager. That is layout luck, not compliance.
 
-**Build the control first.** Every screen being converted has a working original one
-commit away on `feat/frontend`. When converted behaviour looks wrong, build plain
-`feat/frontend`, install it and compare, before theorising. One control build answered
-in minutes what three rounds of reasoning about pagers and content sizes got wrong.
+**Still open on those two.** Scheduled shipped with no gesture handling at all — its
+jam was the chrome, not the pager — so nothing was written that would also protect
+`AccountDetailVC` and `ActivityFeedVC` if their grid ever fills the viewport. Neither
+has been tested in that configuration.
+
+**Build the control first — and bisect the CONTAINER, not just the content.** Every
+screen being converted has a working original one commit away on `feat/frontend`. When
+converted behaviour looks wrong, build plain `feat/frontend`, install it and compare,
+before theorising. But note what the control can and cannot tell you: on Scheduled it
+correctly proved "my change broke it" and was then read as "my change to *this screen*
+broke it", which sent four attempts into the calendar code. A control build localises
+the regression to your diff, not to the file you were editing.
 
 ### Phase 4 — Opportunistic (ongoing, optional)
 
-Tab roots, sheets and charts convert only when you want control over them. **None of
-them shadow**, so there is no deadline. A reasonable end state keeps the 10 sheets
-and the chart primitives in SwiftUI permanently — they are leaf views with no
-navigation, which is where SwiftUI is strongest and least buggy.
+Sheets and charts convert only when you want control over them. **None of them shadow**,
+so there is no deadline. A reasonable end state keeps the 10 sheets and the chart
+primitives in SwiftUI permanently — they are leaf views with no navigation, which is
+where SwiftUI is strongest and least buggy.
+
+(Tab roots were originally listed here as optional. Phase 3b's correction pulled them
+in: a tab's root and its iPad column have to convert together or the two widths run
+different implementations of one list.)
 
 ---
 
@@ -480,31 +468,13 @@ motivation remains. **Re-run the shadow lab on every iOS release during this wor
 | **to bug-free + iPad** | **~7–10 weeks** |
 | 4 · opportunistic | ongoing, optional |
 
-## Pre-flight: two checks before committing weeks
+Kept as the forecast, not as remaining work — see *Where this stands* for how it
+compares with the outcome.
 
-The pilot already answers "can a screen be converted" — `AccountDetailVC` exists,
-builds, reuses the store, selectors and write chokepoint unchanged, and came in at
-roughly 1:1 lines against the SwiftUI original. Two things it has NOT yet proven,
-and both are cheap:
-
-1. **The converted screen is clean at realistic volume.** Verify `AccountDetailVC`
-   at 2,000 rows specifically (the pilot is already seeded).
-2. **Conversion fixes a screen that is KNOWN to shadow.** Convert `CategoriesView`
-   — the one real screen that shadows under a UIKit root, with or without a search
-   drawer — and confirm it goes clean. This is the strongest available evidence for
-   the whole plan: take the failing case and show the treatment fixes it.
-
-If (2) comes back clean, the plan is validated end to end. If it does not, the
-migration does not fix the bug and should be abandoned as a bug remedy entirely.
-
-## Earlier recommendation: a pilot, not Phase 0
-
-Convert **one** drill end-to-end — `AccountDetailView` — behind the existing shell,
-hosted the way Phase 1 would host it. It is 320 lines, it has a search field, swipe
-actions, a toolbar, a context menu and sheets, so it exercises nearly every
-conversion pattern in the codebase.
-
-The pilot answers three questions cheaply: does a converted page actually stop
-shadowing in *this* app (not just the reproducer); how long does a real screen take
-against the estimate above; and how bad is the bridging seam in practice. If the
-answers are good, start Phase 0. If not, nothing has been lost.
+**Both pre-flight gates passed** (2026-07-30) and are recorded here only so they are
+not re-run. The pilot was `AccountDetailVC`, converted end-to-end behind the existing
+shell at roughly 1:1 lines. It then had to prove two things: that a converted screen is
+clean at realistic volume (2,000 rows — yes), and that conversion fixes a screen KNOWN
+to shadow (`CategoriesView` → `CategoriesVC` — yes, clean). The second was the gate the
+whole plan hung on: if it had come back dirty, the migration would have been abandoned
+as a bug remedy.

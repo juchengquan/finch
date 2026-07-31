@@ -3,6 +3,11 @@
 Things that **cannot be verified programmatically** and are waiting on eyes. Tick as
 you go; add findings inline under the item.
 
+**Two tiers.** §0 is the short list that actually gates the flag coming off — read it
+first. Everything from §1 onwards is the exhaustive per-screen sweep, kept as reference
+for whoever verifies a given screen; it is organised by screen because that is how you
+verify (open one, run its list), not by theme.
+
 **Why this file exists.** `idb ui describe-all` does not expose toolbar items,
 nav-bar buttons, search fields, or segmented controls in the accessibility tree, and
 `simctl` screenshots do not contain the Liquid Glass compositor layers. So a whole
@@ -68,6 +73,51 @@ xcrun simctl launch "$UDID" com.juchengquan.finch                      # default
 xcrun simctl launch "$UDID" com.juchengquan.finch -uikitActivity YES    # + converted feed
 xcrun simctl launch "$UDID" com.juchengquan.finch -legacyShell YES      # pre-migration shell
 ```
+
+---
+
+## 0. Blocking — what has to be true before the flag comes off
+
+Everything here needs a human, and most of it needs a **device**. The per-screen sweep
+below is reference; this is the queue.
+
+**Needs a real phone — the simulator provably cannot answer these.**
+
+- [ ] **Switch appearance survives a reconfigure.** Toggling one row must leave every
+      other switch's glass intact, and it must survive navigating away and back. The
+      fix (`16174ca`, `ToggleAccessory` reuses the switch instead of rebuilding it) is
+      device-unverified: six before/after samples in both the fixed and unfixed builds
+      are byte-identical, sha `bb0f2554bd84` — the simulator renders a rebuilt and a
+      reused switch the same, so it can neither validate nor invalidate the fix. Full
+      account in §2t.
+- [ ] **Row taps on toggle rows** work on all six converted settings screens, and
+      tapping a *currency* row still opens its rate history rather than toggling.
+
+**Accessibility — raised by the tooling, never investigated (§3).**
+
+- [ ] The mode picker and saved-search chips are invisible to `idb`'s accessibility
+      tree. If an automation tool cannot see them, VoiceOver may not either. Check with
+      Accessibility Inspector and VoiceOver on.
+- [ ] Converted rows announce sensibly, and selection ticks announce their state.
+      (Phase 3b found and fixed this class twice — hosting a SwiftUI row in a cell
+      exposes each text separately unless it is explicitly combined.)
+
+**Flag removal itself (§4).**
+
+- [ ] Everything in §2, §2b and §2c passes.
+- [ ] `ActivityFeedView`'s `.rightSlideDrill(...)` entry replaced by the native push,
+      and the SwiftUI screen dropped from the iOS target (`excludes:` in `project.yml`)
+      while `FinchMac` keeps it — likewise `AccountDetailView`.
+- [ ] The FAB gap in §2c is resolved or consciously accepted.
+- [ ] Re-run §1 afterwards — the tab gains a `UINavigationController`, which changes the
+      shell's structure.
+
+**iPad, now that Phase 3 has shipped (§6).**
+
+- [ ] Selection into the detail column, and Split View / Slide Over resizing across the
+      compact↔regular boundary (the root rebuilds; check nothing is lost).
+- [ ] `-legacyShell YES` still works, so there is a way back if the UIKit shell
+      misbehaves in the field.
 
 ---
 
@@ -774,10 +824,11 @@ The evidence, all of it grep-able:
   `ActivityTab.swift:328`: `else if let selection { … } else { editing = txn }`.
   A `selection` binding exists only in three-column mode, so on iPhone a row tap
   goes straight to `ScheduledSheet` / `EditTransactionSheet`.
-- The three-column mode runs on WIDE windows, which Phase 1 deliberately keeps on
-  the SwiftUI split shell (`UIKitShell.makeRoot`: `wide → AppRootHost`). No
-  `nativeRoute` handler is installed there, so the seam returns its default
-  `false` and the SwiftUI screen is used regardless.
+- The three-column mode runs on WIDE windows. *(Premise updated 2026-08-01: Phase 3a
+  moved wide windows onto the native `SplitShellVC`, so the original wording — "Phase 1
+  deliberately keeps them on the SwiftUI split shell" — is obsolete. **The conclusion is
+  unchanged**: the detail COLUMN is still hosted SwiftUI, still never pushed, and no
+  `nativeRoute` handler is installed for it.)*
 - `FinchMac` keeps the SwiftUI screens either way.
 
 And the motivating bug does not apply: the iOS 26 resume shadow affects **pushed**
@@ -795,16 +846,49 @@ the strongest next candidate: it is the one screen MEASURED to shadow under a
 UIKit root while `AccountDetailView` did not, and converting it was measured to
 fix that (see `ios26-shadow-variant-matrix.md`). It is the case with proven value.
 
+## 6. Phase 3 — iPad (3a container shipped; 3b converting tab roots + columns)
+
+**3a — the container (#646).** `UIKitShell.makeRoot` now returns `SplitShellVC` at
+regular width and `RootTabBarController` at compact. Both are UIKit; the two widths no
+longer differ by framework, which is what the old "iPad still runs the SwiftUI shell"
+note in §4b and §5 was written against.
+
+- [x] iPad keeps its split view. Phase 1 originally built the tab bar unconditionally
+      and a wide window lost the three-column layout. Verified on an iPad Pro 11" sim:
+      list column + detail placeholder, sidebar toggle, no tab bar.
+- [ ] Sidebar visibility persists the user's preference and is not overwritten by
+      iPadOS auto-collapsing on rotation to portrait (`SplitShellVC` only records the
+      preference while landscape — check it survives a rotate round-trip).
+- [ ] Switching tabs across the three-column ↔ two-column boundary rebuilds cleanly
+      (Insights and Settings are two-column; the rest are three).
+
+**3b — native tab roots + columns.** Each converted tab is native at BOTH widths, from
+one view controller. Done: Ledger (#648), Budgets (#658), Scheduled (#660). Remaining:
+Activity, Accounts.
+
+Per converted tab, on **both** an iPhone and an iPad:
+
+- [ ] The list scrolls. Not a formality: `TabChromeVC` swallowed every touch on its
+      first outing and nothing underneath it moved at all. Swipe starting ON the
+      content, and confirm the screenshot actually changes.
+- [ ] The FAB is present on the tab root, opens the Add sheet, and does not block
+      taps or scrolling anywhere else.
+- [ ] Compact: tapping a row PUSHES its detail. Regular: tapping a row fills the
+      DETAIL COLUMN and the row stays highlighted (no disclosure chevron in that mode).
+- [ ] The highlight survives a data change — `dataSource.apply` clears the selection,
+      so it has to be re-asserted.
+- [ ] Deleting the selected row clears the detail column back to its placeholder.
+      *(Known issue: a stale nav-bar title lingers above the placeholder. Shared
+      `SplitDetailColumn` behaviour, so it affects every tab equally — not specific to
+      the converted ones.)*
+- [ ] A ledger switch clears the per-tab selection.
+- [ ] Section spacing matches the SwiftUI screen (`Metrics.sectionSpacing`, 12pt — UIKit's
+      insetGrouped default is ~36pt, and this was wrong on first conversion).
+- [ ] Each row reads as ONE VoiceOver element, not one per label.
+- [ ] Deep link into the tab (`-initialTab`, or a `budget:` / `tx:` target) selects or
+      pushes the right thing.
+
 ## 5. Open questions
 
-- [x] **iPad keeps its split view.** Phase 1 originally built the tab bar
-      unconditionally, so a wide window lost the three-column layout — a real
-      regression, since iPad runs the same iOS app. Fixed: wide windows keep
-      hosting the SwiftUI split shell, and the root swaps when the size class
-      changes (iPad multitasking). Verified on an iPad Pro 11" sim: list column +
-      detail placeholder, sidebar toggle, no tab bar.
-- [ ] iPad, deeper: exercise selection into the detail column, and Split
-      View/Slide Over resizing across the compact↔regular boundary (the root
-      rebuilds; check nothing is lost).
-- [ ] The `-legacyShell YES` escape hatch still works, so there is a way back if the
-      UIKit shell misbehaves in the field.
+- [ ] Nothing currently open here — the iPad items moved to §6 now that Phase 3 is
+      real work rather than a deferred question.
