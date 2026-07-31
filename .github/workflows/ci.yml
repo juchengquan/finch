@@ -137,6 +137,13 @@ jobs:
         with:
           bun-version: "1.3.11"
 
+      # UIKit takes plain String, so a user-facing literal there is never
+      # extracted and ships English in every language with no other guard
+      # failing. This is the migration's systemic l10n hazard; see
+      # ios/docs/uikit-migration-plan.md.
+      - name: i18n — UIKit strings are localized
+        run: python3 ios/scripts/uikit-strings-guard.py
+
       # i18n guard 1 of 2 — the CHEAP one (no Xcode, seconds).
       # Localizable.xcstrings is GENERATED. Hand-editing it is what let 214
       # translations end up living only in the generated file, where a routine
@@ -146,9 +153,9 @@ jobs:
         working-directory: ios
         run: |
           bun run scripts/build-xcstrings.ts
-          if ! git diff --quiet -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings; then
-            git diff --stat -- FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings
-            echo "::error file=ios/FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
+          if ! git diff --quiet -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
+            git diff --stat -- FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings
+            echo "::error file=ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings::Localizable.xcstrings does not match a fresh build from its inputs. It is GENERATED — put translations in ios/scripts/zh-manual.json, then run: bun run ios/scripts/build-xcstrings.ts"
             exit 1
           fi
 

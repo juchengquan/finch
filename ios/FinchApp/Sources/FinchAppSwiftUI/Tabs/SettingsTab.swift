@@ -23,9 +23,14 @@ struct SettingsTab: View {
     #if os(iOS)
     @State private var drill: SettingsDrill?
     #endif
+    /// False when a UIKit `UINavigationController` owns the stack (Phase 2 tabs).
+    var ownsNavigationStack: Bool = true
+    /// Asks the UIKit shell to push a converted screen; false when it is not
+    /// converted (or on Mac/iPad), and the cover below handles it as before.
+    @Environment(\.nativeRoute) private var nativeRoute
 
     var body: some View {
-        NavigationStack {
+        MaybeNavigationStack(enabled: ownsNavigationStack) {
             settingsRoot
                 .toolbar { toolbarContent }
                 // Compact iOS: rows set `drill`, presented as a right-slide cover
@@ -38,6 +43,24 @@ struct SettingsTab: View {
     }
 
     #if os(iOS)
+    /// Settings drills that a converted view controller can handle. Everything else
+    /// returns nil and keeps its SwiftUI cover.
+    private static func route(for target: SettingsDrill) -> NativeRoute? {
+        switch target {
+        case .categories: return .categories
+        case .tags: return .tags
+        case .merchants: return .merchants
+        case .currencies: return .currencies
+        case .powerTools: return .powerTools
+        case .appearance: return .appearance
+        case .notifications: return .notifications
+        case .security: return .security
+        case .backupsSync: return .backupsSync
+        case .about: return .about
+        default: return nil
+        }
+    }
+
     /// The compact drill-in cover's content (top-level → no resume shadow).
     @ViewBuilder private func settingsDrillCover(_ target: SettingsDrill) -> some View {
         NavigationStack {
@@ -58,7 +81,10 @@ struct SettingsTab: View {
     // routes taps through `drill` instead.
     @ViewBuilder private var settingsRoot: some View {
         #if os(iOS)
-        SettingsRootList(onDrill: { drill = $0 })
+        SettingsRootList(onDrill: { target in
+            if let route = Self.route(for: target), nativeRoute(route) { return }
+            drill = target
+        })
         #else
         SettingsRootList()
         #endif

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Builds FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings (zh-Hans) from:
+// Builds FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings (zh-Hans) from:
 //   1. scripts/extracted-keys.json — the authoritative LocalizedStringKey set the
 //      Swift compiler extracted (via `xcodebuild -exportLocalizations`, parsed by
 //      scripts/xliff-keys.ts). Interpolations are already %@/%lld/%1$@ specifiers.
@@ -24,7 +24,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dir, "..", "..");
-const SRC = join(REPO, "ios", "FinchApp", "Sources", "FinchApp");
+const SRC = join(REPO, "ios", "FinchApp", "Sources", "FinchShared");
 const OUT = join(SRC, "Resources", "Localizable.xcstrings");
 
 // ---- inputs ----------------------------------------------------------------

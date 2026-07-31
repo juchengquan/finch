@@ -13,7 +13,13 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: FinchApp/Sources/FinchApp
+      - path: FinchApp/Sources/FinchShared
+      - path: FinchApp/Sources/FinchAppSwiftUI
+        excludes:
+          # The SwiftUI `App` entry point — macOS only now; iOS boots from
+          # FinchAppUIKit/UIKitShell.swift (Phase 1 of the UIKit migration).
+          - "FinchApp.swift"
+      - path: FinchApp/Sources/FinchAppUIKit
       - path: Shared
     dependencies:
       - package: FinchCore
@@ -84,7 +90,8 @@ targets:
     type: application
     platform: macOS
     sources:
-      - path: FinchApp/Sources/FinchApp
+      - path: FinchApp/Sources/FinchShared
+      - path: FinchApp/Sources/FinchAppSwiftUI
       - path: Shared   # Foundation-only watch wire types; unguarded references (e.g. QuickAddCatalogBuilder) must resolve on macOS too
     dependencies:
       - package: FinchCore

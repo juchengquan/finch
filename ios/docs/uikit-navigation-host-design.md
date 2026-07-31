@@ -1,6 +1,20 @@
 # UIKit Navigation Host — iOS 26 Liquid Glass Resume-Shadow Fix (Design Spec)
 
-**Status:** design · **Date:** 2026-07-25 · **Platform:** iOS (compact / iPhone) only
+**Status:** ⚠️ **SUPERSEDED 2026-07-31 — historical record only** · **Date:**
+2026-07-25 · **Platform:** iOS (compact / iPhone) only
+
+> **The fix this spec proposes does not work.** Hosting SwiftUI screens inside a
+> `UINavigationController` (`UIKitNavStack`) was device-tested and **still showed the
+> resume shadow** — the trigger is a hosted SwiftUI scroll view at navigation depth,
+> not which framework owns the nav controller. `UIKitNavStack` and `UIKitNavLink` are
+> absent from the codebase.
+>
+> What shipped is a full screen conversion to native UIKit collection views: see
+> **`uikit-migration-plan.md`** (Phases 0–2) and `uikit-migration-verification.md`.
+>
+> The **Problem** section below remains an accurate description of the bug, and the
+> constraints it derives were re-encountered during the real migration. Read it for
+> those; do not build from its solution.
 
 ## Problem
 

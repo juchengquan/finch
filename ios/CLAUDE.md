@@ -15,8 +15,18 @@ feed them back to `frontend/`.
   Swift port of the web's `frontend/lib/db/`, kept at behavioral **parity** (see below).
   Consumed by every app target. Sources in `FinchCore/Sources/FinchCore/`, tests in
   `FinchCore/Tests/` (`FinchCoreTests` + `ParityTests`).
-- **`FinchApp/Sources/FinchApp/`** — the SwiftUI app: the `FinchStore` state shell + all
-  screens. A thin UI/state layer over `FinchCore`.
+- **`FinchApp/Sources/`** — the app layer, split three ways so iOS can move to UIKit
+  while macOS stays on SwiftUI (see `docs/uikit-migration-plan.md`):
+  - **`FinchShared/`** — `FinchStore`, routing, notifications, sync, Spotlight,
+    security, App Intents, pure logic, **and the string catalogs**
+    (`Resources/*.xcstrings`). Compiled by **both** `FinchApp` and `FinchMac`.
+  - **`FinchAppSwiftUI/`** — every SwiftUI view. Compiled by both today; iOS drops
+    files (via `excludes:` in `project.yml`) as each screen is converted, while
+    `FinchMac` keeps them permanently.
+  - **`FinchAppUIKit/`** — UIKit code. **iOS only.**
+
+  A file belongs to the view layer if it declares `: View`, `: ViewModifier`,
+  `-> some View`, `: App` or `: Scene`; everything else is shared.
 - **`Shared/`** — `WatchSnapshotPayload*` (Foundation-only; compiled into both the phone
   app and the Watch app so the Watch needs no `FinchCore`).
 - **`FinchWidget/`, `FinchWatch/`, `FinchWatchComplication/`, `FinchShare/`** — the
@@ -352,7 +362,7 @@ Privacy mode masks every `display*` helper with `"••••"`.
 ### i18n
 
 Localization is **generated, not hand-edited.** English is the source; **the only translation
-target is `zh-Hans`** (`FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings` +
+target is `zh-Hans`** (`FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings` +
 `AppShortcuts.xcstrings`). Untranslated keys fall back to English at runtime. Pipeline (Bun,
 documented atop `scripts/build-xcstrings.ts`): `xcodebuild -exportLocalizations` → `xliff-keys.ts`
 (→ `extracted-keys.json`, the authoritative key set) → `build-xcstrings.ts` rebuilds the catalog

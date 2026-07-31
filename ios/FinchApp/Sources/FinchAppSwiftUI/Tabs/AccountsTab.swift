@@ -30,6 +30,14 @@ private enum AccountsDrill: Identifiable {
 struct AccountsTab: View {
     @EnvironmentObject private var store: FinchStore
     @EnvironmentObject private var router: DeepLinkRouter
+    /// Installed by the UIKit shell; false everywhere else, so macOS, the iPad
+    /// split and previews keep the SwiftUI navigation they already had.
+    @Environment(\.nativeRoute) private var nativeRoute
+
+    /// False when a UIKit `UINavigationController` owns this tab's navigation
+    /// (migration Phase 1). Wrapping the root in its own stack there would double
+    /// the bars.
+    var ownsNavigationStack: Bool = true
     /// Non-nil → three-column selection mode (drives the shell's detail column).
     var selection: Binding<String?>? = nil
     @State private var showingReconcile = false
@@ -56,7 +64,7 @@ struct AccountsTab: View {
     #endif
 
     var body: some View {
-        NavigationStack(path: $path) {
+        MaybeNavigationStack(enabled: ownsNavigationStack, path: $path) {
             listContent
             #if os(iOS)
             .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
@@ -196,7 +204,9 @@ struct AccountsTab: View {
         ToolbarItem(placement: .secondaryAction) {
             #if os(iOS)
             if selection == nil {
-                Button { drill = .holdings } label: { Label("Holdings", systemImage: "chart.bar") }
+                Button {
+                    if !nativeRoute(.holdings) { drill = .holdings }
+                } label: { Label("Holdings", systemImage: "chart.bar") }
             } else {
                 NavigationLink { HoldingsView() } label: { Label("Holdings", systemImage: "chart.bar") }
             }
@@ -254,7 +264,7 @@ struct AccountsTab: View {
                     // the whole row tappable.
                     Button {
                         #if os(iOS)
-                        drill = .account(account.id)
+                        if !nativeRoute(.account(account.id)) { drill = .account(account.id) }
                         #else
                         path.append(account.id)
                         #endif
@@ -281,7 +291,9 @@ struct AccountsTab: View {
             #if os(iOS)
             // Compact: drill-in cover (no resume shadow). iPad: push in the list column.
             if selection == nil {
-                Button { drill = .activity } label: {
+                Button {
+                    if !nativeRoute(.activity) { drill = .activity }
+                } label: {
                     Label("All Transactions", systemImage: "list.bullet")
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -702,5 +714,29 @@ private struct AddAccountGroupSheet: View {
             }
             dismiss()
         } catch { errorMessage = i18nMessage(error) }
+    }
+}
+
+
+/// Embeds `content` in a `NavigationStack` only when the caller still owns
+/// navigation. Used during the UIKit migration: the UIKit shell provides the
+/// `UINavigationController`, so the SwiftUI root must not add a second stack.
+struct MaybeNavigationStack<Content: View>: View {
+    let enabled: Bool
+    /// Nil for a stack that carries no push path — Settings drills via covers, so it
+    /// has nothing to bind.
+    var path: Binding<[String]>? = nil
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if enabled {
+            if let path {
+                NavigationStack(path: path) { content() }
+            } else {
+                NavigationStack { content() }
+            }
+        } else {
+            content()
+        }
     }
 }

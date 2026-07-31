@@ -24,10 +24,16 @@ struct BudgetsTab: View {
     @EnvironmentObject private var router: DeepLinkRouter
     /// Non-nil → three-column selection mode (drives the shell's detail column).
     var selection: Binding<String?>? = nil
+    /// False when a UIKit `UINavigationController` owns the stack (Phase 2 tabs);
+    /// wrapping it again would double the nav bars. Same seam as `AccountsTab`.
+    var ownsNavigationStack: Bool = true
     @State private var showingAdd = false
     @State private var addingGroup = false
     @State private var editing: BudgetRow?
     @State private var quickAddFor: BudgetRow?     // leading swipe → Add sheet, category prefilled
+    /// Asks the UIKit shell to push a converted screen; false when it is not
+    /// converted (or on Mac/iPad), and the SwiftUI cover/push handles it as before.
+    @Environment(\.nativeRoute) private var nativeRoute
     #if os(iOS)
     @State private var drill: BudgetsDrill?           // compact-mode drill (cover, not push)
     #endif
@@ -46,7 +52,7 @@ struct BudgetsTab: View {
     #endif
 
     var body: some View {
-NavigationStack(path: $path) {
+        MaybeNavigationStack(enabled: ownsNavigationStack, path: $path) {
             listContent
             #if os(iOS)
             .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
@@ -203,7 +209,9 @@ NavigationStack(path: $path) {
                     // the Accounts rows; contentShape keeps the whole row tappable.
                     Button {
                         #if os(iOS)
-                        if selection == nil { drill = .detail(budget.id) } else { path.append(budget.id) }
+                        if selection == nil {
+                            if !nativeRoute(.budget(budget.id)) { drill = .detail(budget.id) }
+                        } else { path.append(budget.id) }
                         #else
                         path.append(budget.id)
                         #endif
@@ -419,7 +427,7 @@ NavigationStack(path: $path) {
     /// iPad/macOS: push via NavigationStack path.
     private func openBudget(_ id: String) {
         #if os(iOS)
-        drill = .detail(id)
+        if !nativeRoute(.budget(id)) { drill = .detail(id) }
         #else
         path = [id]
         #endif
