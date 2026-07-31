@@ -58,7 +58,8 @@ struct ScheduledCalendarView: View {
                     monthAnchor: $monthAnchor, selectedDay: $selectedDay,
                     wallToday: store.wallToday,
                     amountsForRange: { from, through in amountsAll.filter { $0.key >= from && $0.key <= through } },
-                    format: { store.displayExactBase($0) })
+                    format: { store.displayExactBase($0) },
+                    masked: store.privacyMode)
             }
             detailSections(byDay: byDay, posted: posted)
         }

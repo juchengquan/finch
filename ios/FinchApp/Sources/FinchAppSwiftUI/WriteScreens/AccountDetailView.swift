@@ -180,7 +180,8 @@ struct AccountDetailView: View {
                 amountsForRange: { from, through in
                     MonthGrouping.dailyIncomeExpense(txns.filter { $0.date >= from && $0.date <= through })
                 },
-                format: { store.displayExactBase($0) })
+                format: { store.displayExactBase($0) },
+                masked: store.privacyMode)
         } footer: {
             Text("Money in · out of this account, transfers included.")
         }
