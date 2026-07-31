@@ -62,7 +62,7 @@ cd "$REPO/ios" || exit 1
 # --- 1. i18n guard 1: catalog reproducible (seconds, no Xcode) ---------------
 step "i18n - catalog is reproducible from its inputs"
 if bun run scripts/build-xcstrings.ts >/dev/null 2>&1 \
-   && git -C "$REPO" diff --quiet -- ios/FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings; then
+   && git -C "$REPO" diff --quiet -- ios/FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings; then
   pass "catalog matches its inputs"
 else
   fail "Localizable.xcstrings does not match a fresh build"
@@ -105,6 +105,13 @@ fi
 # SET (what matters is whether a string is missing, not byte-identical
 # formatting) and keeps the fresh extraction in /tmp, so a failure never mutates
 # your working tree.
+step "i18n - UIKit strings are localized"
+if python3 "$REPO/ios/scripts/uikit-strings-guard.py"; then
+  pass "no bare UIKit strings"
+else
+  fail "UIKit strings bypass extraction"
+fi
+
 step "i18n - extracted keys are current"
 rm -rf /tmp/finch-loc
 if xcodebuild -exportLocalizations -project FinchApp.xcodeproj -scheme FinchApp \
@@ -167,7 +174,7 @@ printf '\n\033[1m-- summary --\033[0m\n'
 # blanket `git add ios` has shipped it before. Warn while it's still cheap.
 if ! git -C "$REPO" diff --quiet -- 'ios/**/*.xcstrings' 2>/dev/null; then
   printf '\033[33mNOTE: xcodebuild churned the .xcstrings catalogs during this run (formatting only).\n'
-  printf 'Discard before committing:  git checkout -- "ios/FinchApp/Sources/FinchApp/Resources/*.xcstrings"\033[0m\n'
+  printf 'Discard before committing:  git checkout -- "ios/FinchApp/Sources/FinchShared/Resources/*.xcstrings"\033[0m\n'
 fi
 
 if [ ${#FAILED[@]} -eq 0 ]; then

@@ -1,5 +1,25 @@
 # UIKit Navigation Host — Phase 1 (Infra + Budgets Pilot) Implementation Plan
 
+> # ⚠️ SUPERSEDED — 2026-07-31. Historical record only.
+>
+> **This approach was abandoned. It does not fix the bug.** `UIKitNavStack` — hosting
+> SwiftUI screens inside a `UINavigationController` — was device-tested and **still
+> showed the resume shadow**. The shadow tracks navigation *depth* and the presence of
+> a hosted SwiftUI scroll view, not which framework owns the navigation controller, so
+> wrapping the same SwiftUI screens in UIKit chrome changes nothing.
+>
+> Neither `UIKitNavStack` nor `UIKitNavLink` exists in the codebase — grep returns
+> nothing. What shipped instead is a full screen conversion: see
+> **`uikit-migration-plan.md`**, Phases 0–2.
+>
+> **Its phase numbering conflicts with the live plan and will mislead you.** Here
+> Phase 2 = Settings and Phase 3 = Accounts. In `uikit-migration-plan.md` — the one to
+> follow — Phase 2 = convert the pushed destinations and Phase 3 = iPad.
+>
+> Kept because the design constraints it records (toolbar/searchable bridging, the
+> lock-overlay security gate, the ledger-push seam) were re-encountered and remain
+> accurate.
+
 > **Execution model — inline, device-gated (not subagent dispatch).** The acceptance
 > gate is on a physical device (the iOS 26 resume shadow does not reproduce faithfully
 > on the simulator), and the agent cannot codesign — so tasks run inline in this

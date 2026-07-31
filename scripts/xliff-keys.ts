@@ -21,7 +21,7 @@ const XL = "/tmp/finch-loc/zh-Hans.xcloc/Localized Contents/zh-Hans.xliff";
 const xml = readFileSync(XL, "utf8");
 
 // Grab the <file original="...Localizable.xcstrings" ...> ... </file> block.
-const start = xml.indexOf('original="FinchApp/Sources/FinchApp/Resources/Localizable.xcstrings"');
+const start = xml.indexOf('original="FinchApp/Sources/FinchShared/Resources/Localizable.xcstrings"');
 const fileOpen = xml.lastIndexOf("<file", start);
 const fileClose = xml.indexOf("</file>", start);
 const block = xml.slice(fileOpen, fileClose);

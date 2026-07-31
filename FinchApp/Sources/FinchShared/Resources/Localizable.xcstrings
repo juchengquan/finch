@@ -270,6 +270,7 @@
         }
       }
     },
+    "%lld integrity problem(s). Use Settings › About › Force import to override (iOS only).": {},
     "%lld matched · %lld new": {
       "localizations": {
         "zh-Hans": {
@@ -1895,6 +1896,7 @@
         }
       }
     },
+    "Couldn't read that backup — it may still be downloading from iCloud.": {},
     "Couldn't switch: %@": {
       "localizations": {
         "zh-Hans": {
@@ -4415,6 +4417,7 @@
         }
       }
     },
+    "None yet": {},
     "Not enough history": {
       "localizations": {
         "zh-Hans": {
@@ -5535,6 +5538,16 @@
         }
       }
     },
+    "Search transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索交易"
+          }
+        }
+      }
+    },
     "Security": {
       "localizations": {
         "zh-Hans": {
@@ -5945,6 +5958,7 @@
         }
       }
     },
+    "Subscribed to %lld ledgers": {},
     "Swipe right on a backup to restore it, left to delete it. Restoring replaces all current data — your current data is backed up first.": {
       "localizations": {
         "zh-Hans": {
@@ -7006,6 +7020,7 @@
         }
       }
     },
+    "iCloud account required": {},
     "left to spend": {
       "localizations": {
         "zh-Hans": {
@@ -7169,7 +7184,8 @@
         }
       }
     },
-    "∞": {}
+    "∞": {},
+    "＋ Save": {}
   },
   "version": "1.0"
 }
