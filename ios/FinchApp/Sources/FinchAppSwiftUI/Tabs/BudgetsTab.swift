@@ -169,7 +169,11 @@ struct BudgetsTab: View {
     }
 
     @ViewBuilder private var listContent: some View {
-        if store.budgets.isEmpty {
+        if !store.txnsReady {
+            // Launch-only: budget "spent" comes from the deferred txns projection,
+            // so every bar would read $0 for ~600ms then fill. Spin instead.
+            ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if store.budgets.isEmpty {
             EmptyState(tab: .budgets,
                        description: store.ledgers.isEmpty ? nil : "Tap + to create a budget.")
         } else {

@@ -22,7 +22,11 @@ struct InsightsTab: View {
     var body: some View {
         NavigationStack {
             Group {
-                if store.txns.isEmpty && store.accounts.isEmpty {
+                if !store.txnsReady {
+                    // Launch-only: the txns projection is deferred off first paint,
+                    // so charts would render empty for ~600ms then pop. Spin instead.
+                    ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if store.txns.isEmpty && store.accounts.isEmpty {
                     ContentUnavailableView {
                         Label("No insights yet", systemImage: "chart.line.uptrend.xyaxis")
                     } description: {

@@ -231,8 +231,15 @@ struct AccountDetailView: View {
         }
         if confirmed.isEmpty {
             Section("Transactions") {
-                Text(searchQuery.isEmpty ? "No transactions" : "No matching transactions")
-                    .font(.caption).foregroundStyle(.secondary)
+                if !store.txnsReady && searchQuery.isEmpty {
+                    // Launch-only: txns projection deferred off first paint. The
+                    // balance header above is already correct (current_balance),
+                    // so only this list waits — spin rather than say "No transactions".
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else {
+                    Text(searchQuery.isEmpty ? "No transactions" : "No matching transactions")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         } else if groupByMonth {
             ForEach(MonthGrouping.sections(confirmed)) { section in
