@@ -320,6 +320,18 @@ more given what Phase 2's conversions actually cost.
 
    Trap: name the stored property `appTab`, not `tab` — `UIViewController.tab` is
    `UITab?` on iOS 18+ and the override fails to compile.
+
+   **OPEN BUG — the Scheduled calendar mode. `ScheduledCalendarView` is NOT a leaf: it
+   returns a `List`.** Its own comment says the `topRow` parameter exists so the mode
+   toggle "lives inside THIS List — keeping the List the nav stack's primary scroll
+   view". Hosting it in a `UIHostingConfiguration` cell therefore fails twice: the List
+   collapses to near-zero height (an empty white card, seen on the simulator), and a
+   hosted SwiftUI *scroll view* is reproducer B — the very thing this migration exists
+   to remove.
+   List mode is fine; only the calendar branch is affected.
+   **The fix is to convert `ScheduledCalendarView` to UIKit**, not to wrap it harder.
+   Check every "leaf" the same way before hosting it: `MonthCashCalendar` genuinely is
+   one, which is why `AccountDetailVC` gets away with hosting it.
 3. **Budgets** — `BudgetDetailVC` already exists for the detail side.
 4. **Accounts** — last, and by far the biggest. `AccountsTab` is ~570 lines: collapsible
    groups, search, drag reorder, swipe actions on two edges, context menus. Budget it
