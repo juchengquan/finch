@@ -32,6 +32,28 @@ enum LaunchSequence {
             wipeLiveStateForTesting(store)
         }
         let disableNotifications = UserDefaults.standard.bool(forKey: "disableNotifications")
+
+        // The navigation launch flags, for the same reason and by the same rule.
+        // `-initialTab <accounts|activity|budgets|insights|scheduled|settings|ledger>`
+        // opens straight to that tab, so simulator screenshots and UI checks can reach a
+        // non-default one; `ledger` is not a bar slot, and both shells resolve it to the
+        // corner push. `-openAdd YES` opens the Add-transaction sheet, the same state the
+        // `finch://add` deep link sets. Foundation maps `-key value` launch arguments into
+        // UserDefaults' argument domain.
+        //
+        // These sat in the SwiftUI `App.init` until now, which is precisely the dead-code
+        // trap described above: `FinchApp.swift` is excluded from the iOS target, so the
+        // flags worked on macOS and silently did nothing on iOS — the platform they exist
+        // to drive. Setting the state here, before first paint, is picked up by both
+        // shells: SwiftUI observes the router directly, and the UIKit shell's `bindRouter`
+        // sinks on `$selectedTab` / `$showAddTransaction`.
+        if let raw = UserDefaults.standard.string(forKey: "initialTab"),
+           let tab = AppTab(rawValue: raw) {
+            router.selectedTab = tab
+        }
+        if UserDefaults.standard.bool(forKey: "openAdd") {
+            router.showAddTransaction = true
+        }
         #else
         let disableNotifications = false
         #endif
