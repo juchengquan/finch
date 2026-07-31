@@ -86,7 +86,14 @@ struct ActivityFeedView: View {
     var body: some View {
         Group {
             if store.txns.isEmpty {
-                EmptyState(tab: .activity)
+                // Distinguish "still projecting" (launch defers the txns list off the
+                // first-paint path — see FinchStore.reprojectActiveLedger) from a
+                // genuinely empty ledger, so we don't flash "No transactions".
+                if !store.txnsReady {
+                    ProgressView().controlSize(.large)
+                } else {
+                    EmptyState(tab: .activity)
+                }
             } else {
                 List(selection: selection ?? $kbSel) {
                     modePickerRow

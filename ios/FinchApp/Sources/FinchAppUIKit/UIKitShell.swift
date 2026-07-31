@@ -45,24 +45,10 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
         w.makeKeyAndVisible()
         window = w
 
-        // The SwiftUI entry point ran all of this from `.task`; it is the same work
-        // in the same order, just not tied to a view's lifetime.
+        // Shared with the SwiftUI entry point. This used to be a hand-copy of that
+        // sequence, which is how it missed the first-paint fix — see LaunchSequence.
         Task { @MainActor in
-            store.isHydrating = true
-            store.bootstrap()
-            PhoneWatchLink.shared.activate()
-            gate.start()
-            if !gate.isLocked {
-                await SpotlightIndexer.shared.indexAll(store: store)
-            }
-            store.isHydrating = false
-            NotificationService.shared.configure(store: store, router: router)
-            await NotificationService.shared.requestPermissionIfNeeded()
-            await NotificationService.shared.refresh()
-            AutoBackupManager.shared.configure(store: store)
-            ICloudSync.shared.start()
-            await CloudKitSyncCoordinator.shared.start()
-            PendingAttachmentImporter.importPending(into: store)
+            await LaunchSequence.run(store: store, router: router, gate: gate)
         }
 
         observeLock()
