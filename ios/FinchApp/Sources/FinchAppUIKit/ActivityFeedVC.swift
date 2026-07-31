@@ -169,6 +169,12 @@ final class ActivityFeedVC: UIViewController {
                     }
                     .pickerStyle(.segmented)
                 }
+                // No card behind it. An insetGrouped list gives every cell the
+                // grouped background, which wrapped the picker in a white rounded
+                // card the SwiftUI row doesn't have — and cost ~20pt of vertical
+                // rhythm, pushing everything below it down.
+                .margins(.vertical, 0)
+                cell.backgroundConfiguration = .clear()
                 cell.accessories = []
                 return
             }
@@ -429,7 +435,10 @@ final class ActivityFeedVC: UIViewController {
         let sc = UISearchController(searchResultsController: nil)
         sc.searchResultsUpdater = self
         sc.obscuresBackgroundDuringPresentation = false
-        sc.searchBar.placeholder = String(localized: "Search transactions")
+        // Plain "Search" everywhere, matching the SwiftUI screens and the other
+        // converted ones — the bar sits under a title that already says what is
+        // being searched.
+        sc.searchBar.placeholder = String(localized: "Search")
         navigationItem.searchController = sc
         navigationItem.hidesSearchBarWhenScrolling = false   // matches displayMode: .always
     }
