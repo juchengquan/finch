@@ -518,7 +518,8 @@ struct SpendingHeatmapCard: View {
                 Text("No spending").font(.caption).foregroundStyle(.secondary)
             } else {
                 CalendarHeatmap(values: days.map { ($0.date, $0.value) },
-                                format: { store.displayMoneyBase($0) })
+                                format: { store.displayMoneyBase($0) },
+                                masked: store.privacyMode)
             }
         }
     }
